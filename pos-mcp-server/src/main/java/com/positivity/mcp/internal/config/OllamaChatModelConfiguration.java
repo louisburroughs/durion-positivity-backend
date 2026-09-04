@@ -63,12 +63,18 @@ public class OllamaChatModelConfiguration {
     /**
      * Builds the Ollama chat model.
      *
-     * <p><strong>{@code numCtx} is always sent explicitly (#1683).</strong> Ollama otherwise applies
-     * the host's {@code OLLAMA_CONTEXT_LENGTH} (4096 by default), and silently drops the front of
-     * the context — the system prompt — once the assembled prompt exceeds it. One analytics turn
-     * (layered system prompt + tool schemas + RAG snippets + chat memory + tool results) is well
-     * past 4096, so a host default would truncate exactly the layer prompt tuning edits. Tune per
-     * host with {@code OLLAMA_NUM_CTX} rather than relying on the server setting.
+     * <p><strong>{@code numCtx} is always sent explicitly (#1683).</strong> Ollama silently drops
+     * the front of the context — the system prompt — once the assembled prompt exceeds the window,
+     * with no error and no log line. One analytics turn (layered system prompt + tool schemas + RAG
+     * snippets + chat memory + tool results) is well past 4096, so an inherited window would
+     * truncate exactly the layer prompt tuning edits.
+     *
+     * <p>What "not sent" inherits depends on the backend: a self-hosted daemon applies its own
+     * {@code OLLAMA_CONTEXT_LENGTH} (4096 unless raised), while the hosted ollama.com backend the
+     * alpha chat base-url points at applies a per-model default we neither set nor can read back.
+     * Sending it explicitly is what makes the window ours in both cases — though it is a request,
+     * not a guarantee: a backend may still cap it below what we ask for, which is why the
+     * verification procedure in {@code docs/gate-verification-runbook.md} exists.
      *
      * <p>Temperature defaults to 0: the analytics workload is graded at n=1, so sampling only adds
      * run-to-run variance to results we compare across builds.

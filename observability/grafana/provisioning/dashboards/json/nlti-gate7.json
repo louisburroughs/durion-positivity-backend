@@ -204,7 +204,7 @@
       "id": 12,
       "type": "timeseries",
       "title": "Requests served with no tier decision",
-      "description": "Proxy for 'the tiered router did not run': telemetry events where routing.tier is absent. Expected to be ~0 when MCP_MODEL_TIERING_ENABLED=true; a rising share means requests are bypassing the router.",
+      "description": "Proxy for 'the tiered router did not run': telemetry events where routing.tier is absent. Expected to be ~0 when MCP_MODEL_TIERING_ENABLED=true; a rising share means requests are bypassing the router. NOTE (#1683): tiering is currently DORMANT (the flag defaults to false, because both T2 tiers resolved to the same model), so this panel is expected to read 100% and that is the intended configuration, not a defect. See pos-mcp-server/docs/gate4-tiered-router-design.md.",
       "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 6, "w": 9, "x": 15, "y": 17 },
       "targets": [

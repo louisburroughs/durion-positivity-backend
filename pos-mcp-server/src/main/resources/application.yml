@@ -21,11 +21,16 @@ spring:
           # run-to-run variance to the "did that PR help?" comparison. Override per host with
           # OLLAMA_CHAT_TEMPERATURE if a workload ever needs sampling.
           temperature: ${OLLAMA_CHAT_TEMPERATURE:0.0}
-          # #1683: always send num_ctx. Left unset, Ollama applies the host's
-          # OLLAMA_CONTEXT_LENGTH (4096 by default) and truncates the FRONT of the context —
-          # the system prompt — once the assembled prompt exceeds it. One analytics turn
-          # (layered prompt + tool schemas + RAG snippets + memory + tool results) is well past
-          # 4096. Raise/lower per host with OLLAMA_NUM_CTX; do not rely on the server default.
+          # #1683: always send num_ctx rather than letting the backend pick the window.
+          # Ollama truncates the FRONT of the context — the system prompt — once the assembled
+          # prompt exceeds it, with no error and no log line, and one analytics turn (layered
+          # prompt + tool schemas + RAG snippets + memory + tool results) is well past 4096.
+          # What "unset" inherits depends on the backend: a self-hosted daemon applies its own
+          # OLLAMA_CONTEXT_LENGTH (4096 unless raised — gate3-openapi-bridge-design.md records
+          # needing 16384 on the alpha CPU host for exactly this reason), while the hosted
+          # ollama.com backend that the alpha chat base-url points at applies its own per-model
+          # default, which we neither set nor can read back. Sending it explicitly is what makes
+          # the window OURS in both cases. Tune per host with OLLAMA_NUM_CTX.
           num-ctx: ${OLLAMA_NUM_CTX:32768}
         timeout: ${OLLAMA_CHAT_TIMEOUT:180s}
         streaming-timeout: ${OLLAMA_STREAMING_CHAT_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}

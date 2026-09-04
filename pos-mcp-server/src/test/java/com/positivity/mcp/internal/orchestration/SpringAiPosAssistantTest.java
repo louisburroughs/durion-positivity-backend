@@ -29,6 +29,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
@@ -453,5 +454,49 @@ class SpringAiPosAssistantTest {
                 null);
 
         assertThat(assistant.chat("user-1::ROLE_ADMIN", "hello", "ctx")).isEqualTo("answer");
+    }
+
+    /**
+     * #1683 follow-up. Spring AI 2.0's {@code OllamaChatModel.buildRequestPrompt} attaches the
+     * model's default options ONLY when {@code prompt.getOptions() == null}; a non-null runtime
+     * options object is used verbatim, with no merge against the defaults. Every production turn
+     * takes the non-null branch ({@code chat} always passes {@code toolCallingOptions(...)}), so
+     * the {@code numCtx}/{@code temperature} configured on the chat model reach the wire purely
+     * because {@code mutate()} copies them. Nothing else asserts that, and the wire-level tests in
+     * {@code OllamaChatModelConfigurationTest} exercise the null-options path only — so without
+     * this test, a change that dropped either option from the per-request copy would silently
+     * un-fix #1683 with the whole suite still green.
+     */
+    @Test
+    void toolCallingOptions_preservesContextWindowAndTemperatureFromTheModelDefaults() {
+        OllamaChatOptions defaults = OllamaChatOptions.builder()
+                .model("gpt-oss:120b")
+                .temperature(0.0d)
+                .numCtx(32768)
+                .build();
+
+        ChatOptions perRequest = SpringAiPosAssistant.toolCallingOptions(defaults, List.of());
+
+        assertThat(perRequest).isInstanceOf(OllamaChatOptions.class);
+        OllamaChatOptions ollamaPerRequest = (OllamaChatOptions) perRequest;
+        assertThat(ollamaPerRequest.getNumCtx()).isEqualTo(32768);
+        assertThat(ollamaPerRequest.getTemperature()).isEqualTo(0.0d);
+        assertThat(ollamaPerRequest.getModel()).isEqualTo("gpt-oss:120b");
+    }
+
+    /**
+     * The generic fallback branch drops every provider-specific option — it copies only the model
+     * name. That is correct for a non-Ollama {@link ChatOptions} (there is no {@code numCtx} to
+     * carry), but it means reaching this branch with an Ollama backend would silently restore the
+     * unset-{@code num_ctx} behaviour #1683 fixed. Pinned here so the trade-off is visible rather
+     * than discovered.
+     */
+    @Test
+    void toolCallingOptions_genericDefaultsCarryOnlyTheModelName() {
+        ChatOptions perRequest = SpringAiPosAssistant.toolCallingOptions(
+                ChatOptions.builder().model("some-model").temperature(0.4d).build(), List.of());
+
+        assertThat(perRequest).isNotInstanceOf(OllamaChatOptions.class);
+        assertThat(perRequest.getModel()).isEqualTo("some-model");
     }
 }

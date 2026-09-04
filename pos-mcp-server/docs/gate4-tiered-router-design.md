@@ -1,7 +1,8 @@
 # Gate 4 — Tiered Model Router (implementation-ready design)
 
 > **Status:** IMPLEMENTED (PR #1199, 2026-08-08 — #1192 CLOSED): router wired into both chat
-> managers behind `mcp.model.tiering-enabled` (default true), `TieredChatModelResolver`
+> managers behind `mcp.model.tiering-enabled` (default true at the time; **now false** — see
+> the dormancy note below), `TieredChatModelResolver`
 > (`mcp.model.router/simple/complex`, blank = default model), tier-suffixed agent cache keys,
 > shared T0 fast path for blocking + streaming, router/tier telemetry; 14 tiering tests.
 > Live verification (routing %, latency, quality) still open — see runbook §B.7 and the Gate 4
@@ -27,7 +28,8 @@
 > `MCP_MODEL_TIERING_ENABLED=true`. Enabling the flag on its own only restores the wasted call.
 > While dormant, keep `NltiModelTierStarved` and `NltiRoutingMixShift` silenced — they assume
 > tiering is on and the flag is not visible to LogQL (`docs/alerts/nlti-alerts.md`).
-> Route each request to the cheapest model tier that preserves quality + safety.
+
+Route each request to the cheapest model tier that preserves quality + safety.
 
 ## Why
 Measured: `qwen3.5:cloud` takes ~28s for a trivial completion (reasoning model). Using it for routing

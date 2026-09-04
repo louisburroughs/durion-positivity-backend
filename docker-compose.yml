@@ -968,8 +968,10 @@ services:
       OLLAMA_CHAT_BASE_URL: ${OLLAMA_CHAT_BASE_URL:-https://ollama.com}
       OLLAMA_EMBEDDING_BASE_URL: ${OLLAMA_EMBEDDING_BASE_URL:-http://ollama:11434}
       OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-gpt-oss:120b}
-      # #1683: sent explicitly so the prompt is never silently truncated to the Ollama host's
-      # OLLAMA_CONTEXT_LENGTH (4096 by default); temperature 0 keeps the analytics gate reproducible.
+      # #1683: the context window is requested explicitly instead of inheriting whatever the
+      # backend would pick (a self-hosted daemon's OLLAMA_CONTEXT_LENGTH, or ollama.com's own
+      # per-model default). It is a request, not a guarantee -- a backend may still cap it, which
+      # the runbook's truncation check exists to detect. Temperature 0 keeps gate runs reproducible.
       OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-32768}
       OLLAMA_CHAT_TEMPERATURE: ${OLLAMA_CHAT_TEMPERATURE:-0.0}
       OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-bge-m3}

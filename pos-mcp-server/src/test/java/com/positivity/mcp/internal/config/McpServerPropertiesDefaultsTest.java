@@ -12,6 +12,7 @@ import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.PropertySource;
+import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.ClassPathResource;
 
 class McpServerPropertiesDefaultsTest {
@@ -84,7 +85,7 @@ class McpServerPropertiesDefaultsTest {
         // (the system prompt) at the host's OLLAMA_CONTEXT_LENGTH, with no error and no log.
         for (String profile : List.of("application.yml", "application-dev.yml", "application-alpha.yml")) {
             new ApplicationContextRunner()
-                    .withInitializer(loadYaml(profile))
+                    .withInitializer(loadYamlWithoutAmbientEnvironment(profile))
                     .run(ctx -> assertThat(ctx.getEnvironment().getProperty("spring.ai.ollama.chat.options.num-ctx"))
                             .as("num-ctx in %s", profile)
                             .isEqualTo("32768"));
@@ -96,7 +97,7 @@ class McpServerPropertiesDefaultsTest {
     void allProfiles_runTheExecutorDeterministically() {
         for (String profile : List.of("application.yml", "application-dev.yml", "application-alpha.yml")) {
             new ApplicationContextRunner()
-                    .withInitializer(loadYaml(profile))
+                    .withInitializer(loadYamlWithoutAmbientEnvironment(profile))
                     .run(ctx -> assertThat(
                                     ctx.getEnvironment().getProperty("spring.ai.ollama.chat.options.temperature"))
                             .as("temperature in %s", profile)
@@ -111,7 +112,7 @@ class McpServerPropertiesDefaultsTest {
         // the same model, so a classification call per turn buys a decision with one outcome.
         // Re-enabling tiering is only worth it once mcp.model.simple names a real smaller model.
         new ApplicationContextRunner()
-                .withInitializer(loadYaml("application.yml"))
+                .withInitializer(loadYamlWithoutAmbientEnvironment("application.yml"))
                 .run(ctx -> {
                     assertThat(ctx.getEnvironment().getProperty("mcp.model.tiering-enabled"))
                             .isEqualTo("false");
@@ -120,6 +121,34 @@ class McpServerPropertiesDefaultsTest {
                     assertThat(ctx.getEnvironment().getProperty("mcp.model.complex"))
                             .isEmpty();
                 });
+    }
+
+    /**
+     * Like {@link #loadYaml}, but strips the ambient {@code systemEnvironment} and
+     * {@code systemProperties} sources first.
+     *
+     * <p>Required for the #1683 assertions, which check a SHIPPED DEFAULT. Those YAML values are
+     * themselves placeholders ({@code ${OLLAMA_NUM_CTX:32768}} and friends) resolved through the
+     * same {@code Environment}, and {@code addLast} leaves {@code systemEnvironment} outranking the
+     * YAML — so with the plain loader an exported {@code OLLAMA_CHAT_TEMPERATURE=0.2} (this
+     * change's own documented rollback) or {@code MCP_MODEL_SIMPLE=gpt-oss:20b} (its own documented
+     * revival step) turned the suite red on a developer's machine while the config was perfectly
+     * correct. An operator override is legitimate; what these tests pin is what the repo ships when
+     * nobody overrides anything, so the ambient environment must not participate.
+     */
+    private static org.springframework.context.ApplicationContextInitializer<
+                    org.springframework.context.ConfigurableApplicationContext>
+            loadYamlWithoutAmbientEnvironment(String... resourcePaths) {
+        org.springframework.context.ApplicationContextInitializer<
+                        org.springframework.context.ConfigurableApplicationContext>
+                delegate = loadYaml(resourcePaths);
+        return ctx -> {
+            org.springframework.core.env.MutablePropertySources sources =
+                    ctx.getEnvironment().getPropertySources();
+            sources.remove(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME);
+            sources.remove(StandardEnvironment.SYSTEM_PROPERTIES_PROPERTY_SOURCE_NAME);
+            delegate.initialize(ctx);
+        };
     }
 
     private static org.springframework.context.ApplicationContextInitializer<

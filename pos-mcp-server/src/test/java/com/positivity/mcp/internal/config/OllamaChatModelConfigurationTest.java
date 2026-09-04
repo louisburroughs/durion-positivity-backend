@@ -2,6 +2,8 @@ package com.positivity.mcp.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -103,10 +105,7 @@ class OllamaChatModelConfigurationTest {
 
         model.call(new Prompt("hi"));
 
-        assertThat(requestBodies).singleElement().satisfies(body -> {
-            assertThat(body).contains("\"num_ctx\":32768");
-            assertThat(body).contains("\"temperature\":0.0");
-        });
+        assertSentOptions(32768, 0.0d);
     }
 
     @Test
@@ -116,10 +115,7 @@ class OllamaChatModelConfigurationTest {
 
         model.stream(new Prompt("hi")).blockLast(Duration.ofSeconds(10));
 
-        assertThat(requestBodies).singleElement().satisfies(body -> {
-            assertThat(body).contains("\"num_ctx\":32768");
-            assertThat(body).contains("\"temperature\":0.0");
-        });
+        assertSentOptions(32768, 0.0d);
     }
 
     /**
@@ -132,9 +128,23 @@ class OllamaChatModelConfigurationTest {
 
         model.call(new Prompt("hi"));
 
+        assertSentOptions(8192, 0.7d);
+    }
+
+    /**
+     * Parses the captured request body and asserts the numeric option values, rather than matching
+     * raw JSON substrings. A substring assertion on {@code "temperature":0.7} holds only because
+     * Jackson happens to render that double unpadded — a serializer change or a field-type change
+     * would break the test while the behaviour stayed correct.
+     */
+    private void assertSentOptions(int expectedNumCtx, double expectedTemperature) {
         assertThat(requestBodies).singleElement().satisfies(body -> {
-            assertThat(body).contains("\"num_ctx\":8192");
-            assertThat(body).contains("\"temperature\":0.7");
+            JsonNode options = new ObjectMapper().readTree(body).path("options");
+            assertThat(options.path("num_ctx").isMissingNode())
+                    .as("num_ctx must always be sent (#1683), never left to the backend default")
+                    .isFalse();
+            assertThat(options.path("num_ctx").intValue()).isEqualTo(expectedNumCtx);
+            assertThat(options.path("temperature").doubleValue()).isEqualTo(expectedTemperature);
         });
     }
 }
