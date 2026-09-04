@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.peoplecontact.internal.client.SecurityServiceException;
 import com.positivity.peoplecontact.internal.exception.NotFoundException;
+import com.positivity.peoplecontact.internal.exception.PeopleContactValidationException;
 import com.positivity.peoplecontact.internal.exception.PersonHasLinkedUsersException;
 import com.positivity.peoplecontact.internal.exception.PersonNotFoundException;
 import com.positivity.peoplecontact.internal.exception.SemanticValidationException;
 import com.positivity.peoplecontact.internal.exception.UserAlreadyLinkedException;
 import com.positivity.peoplecontact.internal.exception.UserPersonLinkNotFoundException;
+import com.positivity.shared.error.ApiError;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
@@ -49,10 +51,15 @@ import org.springframework.web.server.ResponseStatusException;
  * exhaustively for that reason.
  *
  * <p>
- * Four distinctions in it carry real meaning and are called out individually
- * below: 409 versus 404 on delete, 422 versus 400 on validation, the catch-all's
- * refusal to echo the underlying message, and the routing and binding handlers'
- * rule of naming the offending parameter but never the submitted value.
+ * Three distinctions in it carry real meaning and are called out individually
+ * below: 409 versus 404 on delete, 422 versus 400 on validation, and the routing
+ * and binding handlers' rule of naming the offending parameter but never the
+ * submitted value. A fourth — an unmapped exception never echoing its own
+ * message — now belongs to {@code pos-web-common}'s platform-wide fallback
+ * (issue #1694): this advice deliberately has no {@code Exception.class}
+ * catch-all of its own, and {@code PeopleContactValidationException}'s 400
+ * contract plus that fallback's 500 are proven end-to-end in {@code
+ * PersonAccessControllerErrorHandlingTest}, not here.
  */
 @DisplayName("PeopleExceptionHandler — the module's error contract")
 class PeopleExceptionHandlerTest {
@@ -77,7 +84,6 @@ class PeopleExceptionHandlerTest {
             args("PersonHasLinkedUsersException", new PersonHasLinkedUsersException(PERSON_ID), HttpStatus.CONFLICT),
             args("UserAlreadyLinkedException", new UserAlreadyLinkedException("jsmith"), HttpStatus.CONFLICT),
             args("IllegalStateException", new IllegalStateException("wrong state"), HttpStatus.CONFLICT),
-            args("IllegalArgumentException", new IllegalArgumentException("bad input"), HttpStatus.BAD_REQUEST),
             args(
                     "SemanticValidationException",
                     new SemanticValidationException("start after end"),
@@ -91,6 +97,9 @@ class PeopleExceptionHandlerTest {
 
     private ProblemDetail dispatch(Exception exception) {
         // Mirrors what @ExceptionHandler resolution does, without standing up an MVC context.
+        // PeopleContactValidationException is deliberately not reachable from here: unlike every
+        // exception in this table it answers an ApiError envelope, not a ProblemDetail — it has
+        // its own dedicated test below, the same way SecurityServiceException does.
         return switch (exception) {
             case PersonNotFoundException e -> handler.handlePersonNotFound(e);
             case UserPersonLinkNotFoundException e -> handler.handleLinkNotFound(e);
@@ -101,8 +110,7 @@ class PeopleExceptionHandlerTest {
             case SemanticValidationException e -> handler.handleSemanticValidation(e);
             case AccessDeniedException e -> handler.handleAccessDenied(e);
             case IllegalStateException e -> handler.handleIllegalState(e);
-            case IllegalArgumentException e -> handler.handleIllegalArgument(e);
-            default -> handler.handleUnexpectedException(exception);
+            default -> throw new IllegalStateException("Unmapped exception in test table: " + exception);
         };
     }
 
@@ -142,17 +150,40 @@ class PeopleExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("the catch-all reports a generic message rather than the exception's own")
-    void unexpectedExceptionDoesNotLeakItsMessage() {
-        ProblemDetail problem =
-                handler.handleUnexpectedException(new RuntimeException("jdbc://user:hunter2@db/people failed"));
+    @DisplayName("a genuine client-validation failure is 400 VALIDATION_ERROR, echoing its own message")
+    void peopleContactValidationIsABadRequestCarryingItsOwnMessage() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Correlation-Id", "  ");
 
-        // An unhandled exception's message is written by code that never expected a client to
-        // read it, so it routinely contains connection strings, SQL, or internal identifiers.
-        // It goes to the log; the client gets a fixed string.
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
-        assertThat(problem.getDetail()).isEqualTo("Internal server error");
-        assertThat(problem.getDetail()).doesNotContain("hunter2");
+        ResponseEntity<ApiError> response = handler.handlePeopleContactValidation(
+                new PeopleContactValidationException("roleCode is required"), request);
+
+        // Unlike an unmapped exception, this one is this module's own, well-formed contract
+        // failure: the caller gets its exact message back, not a generic one.
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("VALIDATION_ERROR");
+        assertThat(response.getBody().message()).isEqualTo("roleCode is required");
+        // A blank inbound header is treated as absent: a generated correlation id, not blank,
+        // and it must appear identically in both the body and the response header (ADR-0017 §4).
+        assertThat(response.getBody().correlationId()).isNotBlank();
+        assertThat(response.getHeaders().getFirst("X-Correlation-Id"))
+                .isEqualTo(response.getBody().correlationId());
+    }
+
+    @Test
+    @DisplayName("an inbound correlation id is echoed rather than replaced")
+    void peopleContactValidationEchoesInboundCorrelationId() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Correlation-Id", "01234567-89ab-7000-8000-0123456789ab");
+
+        ResponseEntity<ApiError> response =
+                handler.handlePeopleContactValidation(new PeopleContactValidationException("bad input"), request);
+
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().correlationId()).isEqualTo("01234567-89ab-7000-8000-0123456789ab");
+        assertThat(response.getHeaders().getFirst("X-Correlation-Id"))
+                .isEqualTo("01234567-89ab-7000-8000-0123456789ab");
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.positivity.peoplecontact.internal.client.SecurityServiceClient;
 import com.positivity.peoplecontact.internal.client.dto.RoleDto;
 import com.positivity.peoplecontact.internal.client.dto.UserRoleAssignmentRequest;
 import com.positivity.peoplecontact.internal.client.dto.UserRoleDto;
+import com.positivity.peoplecontact.internal.exception.PeopleContactValidationException;
 import com.positivity.peoplecontact.internal.exception.PersonNotFoundException;
 import com.positivity.peoplecontact.internal.repository.PersonRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -101,7 +102,7 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
 
     private void validateDateWindow(LocalDateTime startDate, LocalDateTime endDate) {
         if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("endDate must be greater than or equal to startDate");
+            throw new PeopleContactValidationException("endDate must be greater than or equal to startDate");
         }
     }
 }

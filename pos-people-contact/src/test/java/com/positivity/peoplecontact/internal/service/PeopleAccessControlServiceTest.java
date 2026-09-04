@@ -11,6 +11,7 @@ import com.positivity.peoplecontact.internal.client.SecurityServiceClient;
 import com.positivity.peoplecontact.internal.client.dto.RoleDto;
 import com.positivity.peoplecontact.internal.client.dto.User;
 import com.positivity.peoplecontact.internal.client.dto.UserRoleDto;
+import com.positivity.peoplecontact.internal.exception.PeopleContactValidationException;
 import com.positivity.peoplecontact.internal.exception.PersonNotFoundException;
 import com.positivity.peoplecontact.internal.repository.PersonRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -143,8 +144,8 @@ class PeopleAccessControlServiceTest {
         LocalDateTime endDate = LocalDateTime.parse("2026-02-15T10:00:00"); // before
         // startDate
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
+        PeopleContactValidationException exception = assertThrows(
+                PeopleContactValidationException.class,
                 () -> peopleAccessControlService.assignRoleToPerson(
                         testPersonId, "MANAGER", testLocationId, startDate, endDate));
 

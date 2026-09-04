@@ -2,11 +2,14 @@ package com.positivity.peoplecontact.internal.controller;
 
 import com.positivity.peoplecontact.internal.client.SecurityServiceException;
 import com.positivity.peoplecontact.internal.exception.NotFoundException;
+import com.positivity.peoplecontact.internal.exception.PeopleContactValidationException;
 import com.positivity.peoplecontact.internal.exception.PersonHasLinkedUsersException;
 import com.positivity.peoplecontact.internal.exception.PersonNotFoundException;
 import com.positivity.peoplecontact.internal.exception.SemanticValidationException;
 import com.positivity.peoplecontact.internal.exception.UserAlreadyLinkedException;
 import com.positivity.peoplecontact.internal.exception.UserPersonLinkNotFoundException;
+import com.positivity.shared.error.ApiError;
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
@@ -15,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -37,6 +41,8 @@ public class PeopleExceptionHandler {
     private final Clock clock;
 
     private static final String TIMESTAMP_PROPERTY = "timestamp";
+    private static final String X_CORRELATION_ID = "X-Correlation-Id";
+    private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
 
     @ExceptionHandler(PersonNotFoundException.class)
     public ProblemDetail handlePersonNotFound(PersonNotFoundException ex) {
@@ -81,11 +87,23 @@ public class PeopleExceptionHandler {
         return problem;
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ProblemDetail handleIllegalArgument(IllegalArgumentException ex) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return problem;
+    /**
+     * Genuine client input-validation failures raised by this module's own controllers,
+     * services, and {@link com.positivity.peoplecontact.internal.client.SecurityServiceClient}
+     * (see {@link PeopleContactValidationException}). This class deliberately does NOT map bare
+     * {@code IllegalArgumentException} (issue #1694): that type is not exclusive to this
+     * module's validation — Hibernate/JPA throw it for an invalid query and {@code
+     * UUID.fromString} throws it on malformed stored data, and catching it here would turn a
+     * server-side defect into a client-facing 400 that leaks internal class names and query
+     * text. An unexpected {@code IllegalArgumentException} now falls through to {@code
+     * pos-web-common}'s platform-wide {@code GlobalApiExceptionHandler} fallback, which answers
+     * a generic, correlated 500 instead of echoing the exception's own message.
+     */
+    @ExceptionHandler(PeopleContactValidationException.class)
+    public ResponseEntity<ApiError> handlePeopleContactValidation(
+            PeopleContactValidationException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        return buildResponse(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage(), correlationId);
     }
 
     @ExceptionHandler(IllegalStateException.class)
@@ -109,11 +127,12 @@ public class PeopleExceptionHandler {
         return problem;
     }
 
-    // Without these handlers, Spring MVC's routing/binding exceptions fall through to the
-    // Exception catch-all below and every unknown path or malformed parameter surfaces as a
-    // 500 (issue #820). The details deliberately do not echo request data (path, parameter
-    // values): reflecting user-controlled input is flagged as XSS-prone (SonarCloud S5131),
-    // and the request path is already available in the ProblemDetail `instance` field.
+    // Without these handlers, Spring MVC's routing/binding exceptions fall through to
+    // pos-web-common's platform-wide catch-all and every unknown path or malformed parameter
+    // surfaces as a generic 500 (issue #820). The details deliberately do not echo request data
+    // (path, parameter values): reflecting user-controlled input is flagged as XSS-prone
+    // (SonarCloud S5131), and the request path is already available in the ProblemDetail
+    // `instance` field.
     @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
     public ProblemDetail handleNoEndpoint() {
         ProblemDetail problem =
@@ -174,13 +193,29 @@ public class PeopleExceptionHandler {
         return problem;
     }
 
-    @ExceptionHandler(Exception.class)
-    public ProblemDetail handleUnexpectedException(Exception ex) {
-        log.error("Unhandled exception in People API", ex);
-        ProblemDetail problem =
-                ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return problem;
+    // No @ExceptionHandler(Exception.class) catch-all here (issue #1694): a module-local
+    // blanket handler pre-empts pos-web-common's GlobalApiExceptionHandler, which is registered
+    // at Ordered.LOWEST_PRECEDENCE specifically so any service-specific advice runs first and
+    // it only sees what nothing else handled. Anything this advice does not map now falls
+    // through to that platform fallback — a generic, correlated 500 INTERNAL_ERROR that never
+    // echoes the exception's own message, with DataIntegrityViolationException mapped to
+    // 409/422 per ADR-0056 §2.
+
+    private ResponseEntity<ApiError> buildResponse(
+            HttpStatus status, String code, String message, String correlationId) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        return new ResponseEntity<>(
+                ApiError.of(code, message, status.value(), Instant.now(clock).toString(), correlationId),
+                headers,
+                status);
+    }
+
+    private String resolveCorrelationId(HttpServletRequest request) {
+        String header = request.getHeader(X_CORRELATION_ID);
+        return (header != null && !header.isBlank())
+                ? header
+                : UUIDv7Generator.generate().toString();
     }
 
     private HttpStatus determineHttpStatus(SecurityServiceException ex) {

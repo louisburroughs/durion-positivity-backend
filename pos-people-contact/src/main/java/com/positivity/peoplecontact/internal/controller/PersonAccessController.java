@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.peoplecontact.internal.client.dto.RoleDto;
 import com.positivity.peoplecontact.internal.client.dto.UserRoleDto;
 import com.positivity.peoplecontact.internal.dto.PersonRoleAssignmentRequest;
+import com.positivity.peoplecontact.internal.exception.PeopleContactValidationException;
 import com.positivity.peoplecontact.internal.security.PeopleContactPermissions;
 import com.positivity.peoplecontact.internal.service.PeopleAccessControlService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -158,7 +159,7 @@ public class PersonAccessController {
                     @RequestBody
                     PersonRoleAssignmentRequest request) {
         if (request.getRoleCode() == null || request.getRoleCode().isBlank()) {
-            throw new IllegalArgumentException("roleCode is required");
+            throw new PeopleContactValidationException("roleCode is required");
         }
         UserRoleDto created = peopleAccessControlService.assignRoleToPerson(
                 personUuid,

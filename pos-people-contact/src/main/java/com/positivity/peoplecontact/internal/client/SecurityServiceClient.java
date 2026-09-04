@@ -8,6 +8,8 @@ import com.positivity.peoplecontact.internal.client.dto.ScopeType;
 import com.positivity.peoplecontact.internal.client.dto.User;
 import com.positivity.peoplecontact.internal.client.dto.UserRoleAssignmentRequest;
 import com.positivity.peoplecontact.internal.client.dto.UserRoleDto;
+import com.positivity.peoplecontact.internal.exception.PeopleContactValidationException;
+import com.positivity.peoplecontact.internal.exception.SecurityServiceContractException;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -46,7 +48,14 @@ public class SecurityServiceClient {
                 .uri("/v1/users")
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 400, (request, response) -> {
-                    throw new IllegalArgumentException("Invalid username for security lookup: " + username);
+                    // GET /v1/users sends no query parameter — username is never transmitted and
+                    // filtered client-side below — so a 400 here cannot be caused by the
+                    // username argument. It means this call's shape no longer matches what
+                    // pos-security-service expects: a contract/version drift, not caller error.
+                    throw new SecurityServiceContractException(
+                            "pos-security-service rejected GET /v1/users as malformed, but this request carries "
+                                    + "no caller-supplied value (looking up username=" + username + "); likely a "
+                                    + "request-shape contract drift with pos-security-service");
                 })
                 .onStatus(statusCode -> statusCode.value() == 401 || statusCode.value() == 403, (request, response) -> {
                     int statusCode = response.getStatusCode().value();
@@ -107,7 +116,14 @@ public class SecurityServiceClient {
                         .build())
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 400, (request, response) -> {
-                    throw new IllegalArgumentException("Invalid scope for role lookup: " + scope);
+                    // scope only ever arrives here as one of this module's own hardcoded
+                    // constants (LOCATION/GLOBAL, see PeopleAccessControlServiceImpl) — never
+                    // end-user input — so a 400 means this module's own contract with
+                    // pos-security-service has drifted, not that a caller sent something bad.
+                    throw new SecurityServiceContractException(
+                            "pos-security-service rejected GET /v1/roles?scopeType=" + scope + " as malformed, but "
+                                    + "scope is a module-internal constant, never caller input; likely a "
+                                    + "request-shape contract drift with pos-security-service");
                 })
                 .onStatus(statusCode -> statusCode.value() == 404, (request, response) -> {
                     throw new jakarta.persistence.EntityNotFoundException(
@@ -145,7 +161,7 @@ public class SecurityServiceClient {
                         .build(userId))
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 400, (request, response) -> {
-                    throw new IllegalArgumentException(
+                    throw new PeopleContactValidationException(
                             "Invalid request while listing assignments for userId: " + userId);
                 })
                 .onStatus(statusCode -> statusCode.value() == 404, (request, response) -> {
@@ -178,7 +194,7 @@ public class SecurityServiceClient {
         try {
             userIdUuid = request.getUserId();
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid userId format: " + request.getUserId(), e);
+            throw new PeopleContactValidationException("Invalid userId format: " + request.getUserId(), e);
         }
 
         // Build the proper RoleAssignmentRequest matching the API contract
@@ -202,7 +218,7 @@ public class SecurityServiceClient {
                 .body(apiRequest)
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 400, (httpRequest, httpResponse) -> {
-                    throw new IllegalArgumentException(
+                    throw new PeopleContactValidationException(
                             "Invalid role assignment request for userId: " + request.getUserId());
                 })
                 .onStatus(statusCode -> statusCode.value() == 404, (httpRequest, httpResponse) -> {
@@ -277,7 +293,7 @@ public class SecurityServiceClient {
                         .build(assignmentId))
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 400, (request, response) -> {
-                    throw new IllegalArgumentException(
+                    throw new PeopleContactValidationException(
                             "Invalid role revocation request for userId: " + userId + ", roleCode: " + roleCode);
                 })
                 .onStatus(statusCode -> statusCode.value() == 404, (request, response) -> {

@@ -13,6 +13,7 @@ import com.positivity.peoplecontact.internal.dto.ResolvePersonResponse;
 import com.positivity.peoplecontact.internal.entity.PersonContactPoint;
 import com.positivity.peoplecontact.internal.enums.ContactPointType;
 import com.positivity.peoplecontact.internal.enums.PartyType;
+import com.positivity.peoplecontact.internal.exception.PeopleContactValidationException;
 import com.positivity.peoplecontact.internal.exception.PersonHasLinkedUsersException;
 import com.positivity.peoplecontact.internal.repository.PartyPostalAddressRepository;
 import com.positivity.peoplecontact.internal.repository.PersonContactPointRepository;
@@ -409,7 +410,7 @@ class PersonServiceImplTest {
                     .build();
 
             assertThatThrownBy(() -> service.resolvePerson(request))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(PeopleContactValidationException.class)
                     .hasMessageContaining("At least one of email, phone, lastName, or firstName");
         }
     }

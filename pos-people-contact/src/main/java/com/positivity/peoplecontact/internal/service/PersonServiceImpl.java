@@ -5,6 +5,7 @@ import com.positivity.peoplecontact.internal.dto.ResolvePersonRequest;
 import com.positivity.peoplecontact.internal.dto.ResolvePersonResponse;
 import com.positivity.peoplecontact.internal.entity.PersonContactPoint;
 import com.positivity.peoplecontact.internal.enums.PartyType;
+import com.positivity.peoplecontact.internal.exception.PeopleContactValidationException;
 import com.positivity.peoplecontact.internal.exception.PersonHasLinkedUsersException;
 import com.positivity.peoplecontact.internal.repository.PartyPostalAddressRepository;
 import com.positivity.peoplecontact.internal.repository.PersonContactPointRepository;
@@ -155,7 +156,8 @@ public class PersonServiceImpl implements PersonService {
         String firstName = normalizeText(request.getFirstName());
 
         if (email == null && phone == null && lastName == null && firstName == null) {
-            throw new IllegalArgumentException("At least one of email, phone, lastName, or firstName is required");
+            throw new PeopleContactValidationException(
+                    "At least one of email, phone, lastName, or firstName is required");
         }
 
         int threshold = resolveThreshold(request.getThreshold());
