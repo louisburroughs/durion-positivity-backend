@@ -38,7 +38,8 @@ import org.springframework.test.web.servlet.MvcResult;
  * <h3>ADR Compliance</h3>
  * <ul>
  * <li><strong>ADR-0017</strong>: HTTP status codes — 200 success, 401 bad
- * credentials, 400 validation failure.</li>
+ * credentials, 400 validation failure, 403 {@code USER_HAS_NO_ROLES} for a
+ * role-less account (§2 question 1, #1725).</li>
  * <li><strong>ADR-0011 / ADR-0014</strong>: Login endpoint is permit-all;
  * no upstream gateway auth token required for this endpoint.</li>
  * </ul>
@@ -162,7 +163,8 @@ class AuthControllerIT extends BaseContractIntegrationTest {
     // =========================================================
 
     @Test
-    @DisplayName("T1 [RED]: valid credentials → HTTP 200, non-blank tokens, perm_bits claim, no authorities claim")
+    @DisplayName("T1 [RED]: valid credentials → HTTP 200, non-blank tokens, perm_bits claim, roles claim is exactly"
+            + " the seeded role, no authorities claim")
     void login_validCredentials_returns200WithTokenPairAndPermBits() throws Exception {
         String body = objectMapper.writeValueAsString(new LoginRequest(TEST_USERNAME, TEST_PASSWORD));
 
