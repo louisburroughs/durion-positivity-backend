@@ -1239,6 +1239,41 @@ class ForwardWindowCoverageTest(unittest.TestCase):
         self.assertEqual(verdict, "FAIL")
 
 
+class TransportResilienceTest(unittest.TestCase):
+    """A transport failure is data about one turn, not grounds for losing the run.
+
+    On 2026-09-05 an SSM tunnel dropped during question 2 of 12. urllib raises RemoteDisconnected
+    unwrapped — it is a ConnectionResetError, not a URLError — so it escaped both handlers, the
+    exception propagated out of the runner, and question 1's completed result was discarded along
+    with the ten never attempted. No run.json was written at all.
+    """
+
+    def _ask_raising(self, exc):
+        def fake_urlopen(request, timeout=None):
+            raise exc
+
+        with mock.patch.object(runner.urllib.request, "urlopen", fake_urlopen):
+            return runner.ask("http://x", "t", "1", "hello", 30)
+
+    def test_a_dropped_connection_is_recorded_not_raised(self):
+        import http.client
+
+        outcome = self._ask_raising(http.client.RemoteDisconnected("closed without response"))
+
+        self.assertEqual(outcome["answer"], "")
+        self.assertIn("RemoteDisconnected", outcome["error"])
+
+    def test_a_reset_connection_is_recorded_not_raised(self):
+        outcome = self._ask_raising(ConnectionResetError("reset by peer"))
+
+        self.assertIn("ConnectionResetError", outcome["error"])
+
+    def test_a_refused_connection_is_recorded_not_raised(self):
+        outcome = self._ask_raising(ConnectionRefusedError("refused"))
+
+        self.assertIn("ConnectionRefusedError", outcome["error"])
+
+
 class TurnIsolationTest(unittest.TestCase):
     """#1735: twelve questions from one actor shared one twelve-turn memory."""
 
