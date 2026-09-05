@@ -555,9 +555,19 @@ public class WorkorderServiceImpl implements WorkorderService {
         // Validate customer matches workorder. This is payload validation against the addressed
         // resource (ADR-0017 §1), not a stateful conflict: the workorder itself is approvable, the
         // caller simply supplied the wrong customerId in the request body.
+        //
+        // The workorder's own customerId is deliberately kept out of the client-facing message and
+        // logged instead. WORKORDER_APPROVE is a distinct permission from WORKORDER_VIEW, so a
+        // caller holding only the former could otherwise probe any workorderId with a wrong
+        // customerId and read the true owner back out of the ApiError message.
         if (!workorder.getCustomerId().equals(customerId)) {
-            throw new WorkorderRequestValidationException("Customer ID mismatch: workorder belongs to customer "
-                    + workorder.getCustomerId() + ", but approval attempted for customer " + customerId);
+            log.warn(
+                    "Customer ID mismatch approving workorder {}: belongs to customer {}, approval attempted for {}",
+                    workorderId,
+                    workorder.getCustomerId(),
+                    customerId);
+            throw new WorkorderRequestValidationException(
+                    "Customer ID mismatch: the customerId in the request is not this workorder's customer.");
         }
 
         // Validate workorder can be approved (must be in DRAFT status)

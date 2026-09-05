@@ -483,10 +483,19 @@ public class EstimateServiceImpl implements EstimateService {
         // Validate customer matches estimate. This is payload validation against the addressed
         // resource (ADR-0017 §1), not a stateful conflict: the estimate itself is approvable, the
         // caller simply supplied the wrong customerId in the request body.
+        //
+        // The estimate's own customerId is deliberately kept out of the client-facing message and
+        // logged instead. ESTIMATE_APPROVE is a distinct permission from ESTIMATE_VIEW, so a caller
+        // holding only the former could otherwise probe any estimateId with a wrong customerId and
+        // read the true owner back out of the ApiError message.
         if (!estimate.getCustomerId().equals(customerId)) {
-            throw new WorkorderRequestValidationException("Customer ID mismatch: estimate belongs to customer "
-                    + estimate.getCustomerId() + ", but approval attempted for customer "
-                    + customerId);
+            log.warn(
+                    "Customer ID mismatch approving estimate {}: belongs to customer {}, approval attempted for {}",
+                    estimateId,
+                    estimate.getCustomerId(),
+                    customerId);
+            throw new WorkorderRequestValidationException(
+                    "Customer ID mismatch: the customerId in the request is not this estimate's customer.");
         }
 
         if (!estimate.canApprove()) {
