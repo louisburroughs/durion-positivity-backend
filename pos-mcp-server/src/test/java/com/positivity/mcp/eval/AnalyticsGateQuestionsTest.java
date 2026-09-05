@@ -78,7 +78,7 @@ class AnalyticsGateQuestionsTest {
             Paths.get(System.getProperty("user.dir"), "src/test/resources/facade-contract.yaml");
 
     /** Plan §6 is a twenty-question matrix; the file carries all twenty, gated or not. */
-    private static final int PLAN_QUESTION_COUNT = 22;
+    private static final int PLAN_QUESTION_COUNT = 25;
 
     private static final Set<String> WINDOW_SHAPES = Set.of("calendar", "rolling", "point-in-time", "mixed");
 

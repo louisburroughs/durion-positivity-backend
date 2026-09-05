@@ -488,3 +488,62 @@ So the denominator is fully attributable and the seed contribution is re-derivab
 co-tenant volume moves. A drifted total that still leaves seed revenue at 47,600 is
 environment churn, not a seed regression.
 
+## Q23 — most-ordered SKUs across placed purchase orders
+
+Measured 2026-09-05, exit 0, zero SQL errors. #1689 band 5 (top-N by derived metric).
+
+Status filter `IN ('APPROVED','FULLY_RECEIVED')` — orders actually placed.
+
+| rank | sku_id | units ordered | lines | POs |
+|---|---|---|---|---|
+| 1 | `01a02a71-c245-76ee-a286-f4b1e096ed53` | 290 | 2 | 2 |
+| 2 | `01a02a71-c1b0-79ef-8722-0b5e06c19815` | 280 | 2 | 2 |
+| 3 | `01a02a71-c105-73df-bc44-7409b29e53e3` | 270 | 2 | 2 |
+
+(4th 260, 5th 250 — a clean descending ladder, so rank order is unambiguous.)
+
+### The status trap, which is the graded part
+
+| status | orders | units |
+|---|---|---|
+| FULLY_RECEIVED | 168 | 5,498 |
+| APPROVED | 144 | 2,351 |
+| DRAFT | 70 | 70 |
+| **CANCELLED** | 20 | **3,450** |
+
+**Cancelled orders carry more units than approved ones.** A status-blind answer sums 11,369 units against a correct 7,849 — wrong by 45%, and wrong in the ranking too, while looking entirely plausible. This is why the question names "approved or received" explicitly.
+
+Ordered is **not** usage: replenishment orders to the policy maximum and rounds up to `orderMultiple`, so this ranks max levels and vendor packaging, not demand (#1781).
+
+## Q24 — units on order but not yet received
+
+Measured 2026-09-05, exit 0. #1689 band 4.
+
+| measure | units |
+|---|---|
+| ordered | 7,849 |
+| **still open** | **2,351** |
+| received (derived) | 5,498 |
+
+Top SKUs by open units: 145 / 140 / 135 / 130 / 125, same SKU order as Q23.
+
+**The column trap:** a model reaching for `quantity_decimal` answers "how much did we order" — 7,849, over three times the outstanding figure. Both numbers are plausible; only 2,351 answers the question. Cross-foot: 2,351 + 5,498 = 7,849, and 2,351 equals the APPROVED unit total above, since FULLY_RECEIVED orders have nothing open.
+
+`quantity_decimal − open_quantity_decimal` is a cross-check on what arrived, never the citation — the authoritative received quantity is `goods_receipt_line.quantity_received` in `pos_inventory_db` (#1781).
+
+## Q25 — replenishment policy coverage
+
+Measured 2026-09-05, exit 0.
+
+| | |
+|---|---|
+| stocked product-locations | **185** |
+| active replenishment policies | **1** — `OIL-5W30-5QT`, min 20, max 40 |
+| stock rows for that SKU | **0** |
+
+Asked this way round on purpose. "What is running low" is the natural question and is not gradeable here: one policy means the answer is one element or empty, and a model naming the only policied SKU scores without checking a quantity. Inverted, the coverage gap becomes the graded fact — count and SKU are both exact and neither is guessable.
+
+The third figure is the reason a "running low" answer is currently **empty rather than one row**: the policy's location carries no stock summary. That is a legitimate policy-before-stock state (`ReplenishmentServiceImpl.currentOnHand` ends `.orElse(ZERO)` by design), not a defect.
+
+"Running low" itself is ATP-at-now below the policy minimum per the ratified glossary (`BusinessGlossary` 2026-09-05.2) — deliberately not the engine's projected-available-at-lead-horizon.
+
