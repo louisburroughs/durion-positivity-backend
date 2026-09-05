@@ -5,9 +5,12 @@ import com.positivity.mcp.internal.dto.LlmApiConfigRequest;
 import com.positivity.mcp.internal.dto.LlmApiConfigResponse;
 import com.positivity.mcp.internal.security.McpPermissions;
 import com.positivity.mcp.internal.service.LlmApiConfigService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.UUID;
@@ -82,10 +85,15 @@ class LlmApiConfigController {
                     Preconditions: a configuration with the given id must exist.
                     Required inputs: id (UUID) as a path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 200 when the configuration exists; an unknown id is not mapped to a 404 by this module \
-                    and currently surfaces as a 500 error.
+                    Returns 200 when the configuration exists, and 404 LLM_API_NOT_FOUND in the ApiError \
+                    envelope when the id is unknown.
                     """,
             tags = {"LLM API Configuration"})
+    @ApiResponse(responseCode = "200", description = "The configuration for the requested id.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No LLM API configuration exists for the requested id (LLM_API_NOT_FOUND).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     ResponseEntity<LlmApiConfigResponse> get(@PathVariable @NonNull UUID id) {
         return ResponseEntity.ok(service.get(id));
     }
@@ -109,10 +117,15 @@ class LlmApiConfigController {
                     Required inputs: apiId (stable string identifier), model, baseUrl and apiKey; headers is an \
                     optional map of extra HTTP headers and defaults to empty.
                     Emits a MCP_LLM_API_CREATE event and stores the credential for later provider calls.
-                    Returns 201 with the stored configuration; a duplicate apiId is rejected, though this module \
-                    surfaces that failure as a 500 rather than a 409.
+                    Returns 201 with the stored configuration, and 409 LLM_API_ID_CONFLICT in the ApiError \
+                    envelope when another configuration already uses the requested apiId.
                     """,
             tags = {"LLM API Configuration"})
+    @ApiResponse(responseCode = "201", description = "The stored configuration.")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Another configuration already uses the requested apiId (LLM_API_ID_CONFLICT).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     ResponseEntity<LlmApiConfigResponse> create(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "LLM provider endpoint, model and credential to register.",
@@ -147,10 +160,20 @@ class LlmApiConfigController {
                     Required inputs: id (UUID) as a path parameter plus a full body with apiId, model, baseUrl and \
                     apiKey; headers defaults to empty when omitted, so a partial body is not merged.
                     Emits a MCP_LLM_API_UPDATE event.
-                    Returns 200 with the updated configuration; an unknown id or a duplicate apiId is rejected, \
-                    though this module surfaces both as a 500 rather than a 404 or 409.
+                    Returns 200 with the updated configuration, 404 LLM_API_NOT_FOUND when the id is unknown, \
+                    and 409 LLM_API_ID_CONFLICT when another configuration already uses the requested apiId — \
+                    both in the ApiError envelope.
                     """,
             tags = {"LLM API Configuration"})
+    @ApiResponse(responseCode = "200", description = "The updated configuration.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No LLM API configuration exists for the requested id (LLM_API_NOT_FOUND).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Another configuration already uses the requested apiId (LLM_API_ID_CONFLICT).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     ResponseEntity<LlmApiConfigResponse> update(
             @PathVariable @NonNull UUID id,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

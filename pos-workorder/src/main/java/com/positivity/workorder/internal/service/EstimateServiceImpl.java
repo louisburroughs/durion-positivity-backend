@@ -37,7 +37,6 @@ import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.EstimateSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
-import jakarta.persistence.EntityNotFoundException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -68,7 +67,6 @@ import tools.jackson.databind.ObjectMapper;
 public class EstimateServiceImpl implements EstimateService {
     private final Clock clock;
 
-    private static final String ESTIMATE_NOT_FOUND = "Estimate not found: ";
     private final EstimateRepository estimateRepository;
     private final EstimateItemRepository estimateItemRepository;
     private final EstimateSnapshotRepository estimateSnapshotRepository;
@@ -358,9 +356,8 @@ public class EstimateServiceImpl implements EstimateService {
     @Override
     @Transactional
     public EstimateResponse approveEstimate(UUID estimateId, UUID approvedByCustomerId) {
-        Estimate estimate = estimateRepository
-                .findById(estimateId)
-                .orElseThrow(() -> new EntityNotFoundException(ESTIMATE_NOT_FOUND + estimateId));
+        Estimate estimate =
+                estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId));
 
         if (!estimate.canApprove()) {
             throw new IllegalStateException("Estimate cannot be approved in current state: " + estimate.getStatus());
@@ -477,9 +474,8 @@ public class EstimateServiceImpl implements EstimateService {
             String notes,
             @Nullable String purchaseOrderNumber,
             @Nullable List<com.positivity.workorder.internal.dto.LineItemApprovalDto> lineItemApprovals) {
-        Estimate estimate = estimateRepository
-                .findById(estimateId)
-                .orElseThrow(() -> new EntityNotFoundException(ESTIMATE_NOT_FOUND + estimateId));
+        Estimate estimate =
+                estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId));
 
         // Validate customer matches estimate
         if (!estimate.getCustomerId().equals(customerId)) {
@@ -652,9 +648,8 @@ public class EstimateServiceImpl implements EstimateService {
     @Override
     @Transactional
     public EstimateResponse submitForApproval(UUID estimateId, String username) {
-        Estimate estimate = estimateRepository
-                .findById(estimateId)
-                .orElseThrow(() -> new EntityNotFoundException(ESTIMATE_NOT_FOUND + estimateId));
+        Estimate estimate =
+                estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId));
 
         // Validate estimate is in correct state
         if (estimate.getStatus() != EstimateStatus.DRAFT) {
@@ -984,15 +979,13 @@ public class EstimateServiceImpl implements EstimateService {
     @NonNull
     public EstimateItemResponse updateEstimateItem(
             @NonNull UUID estimateId, @NonNull UUID itemId, @NonNull UpdateEstimateItemRequest request) {
-        Estimate estimate = estimateRepository
-                .findById(estimateId)
-                .orElseThrow(() -> new EntityNotFoundException(ESTIMATE_NOT_FOUND + estimateId));
+        Estimate estimate =
+                estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId));
         requireDraftEstimateForItemUpdate(estimate);
 
         EstimateItem item = estimateItemRepository
                 .findByIdAndEstimate_IdAndDeletedFalse(itemId, estimateId)
-                .orElseThrow(() ->
-                        new EntityNotFoundException("Item not found: " + itemId + " for estimate: " + estimateId));
+                .orElseThrow(() -> new EstimateItemNotFoundException(itemId, estimateId));
 
         // PATCH presence is decided on the raw field (null means "leave alone"); the value used
         // for the gate and the persisted column is always the normalized one, so a client that

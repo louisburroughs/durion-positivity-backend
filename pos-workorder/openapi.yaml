@@ -2036,8 +2036,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateResponse'
-          description: Estimate not found.
+                $ref: '#/components/schemas/ApiError'
+          description: Estimate not found (ESTIMATE_NOT_FOUND).
         '409':
           content:
             application/json:
@@ -2227,8 +2227,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateItemResponse'
-          description: Estimate not found
+                $ref: '#/components/schemas/ApiError'
+          description: Estimate not found (ESTIMATE_NOT_FOUND)
         '409':
           content:
             application/json:
@@ -2361,8 +2361,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateItemResponse'
-          description: Estimate or item not found
+                $ref: '#/components/schemas/ApiError'
+          description: Estimate or item not found (ESTIMATE_NOT_FOUND / ESTIMATE_ITEM_NOT_FOUND)
         '409':
           content:
             application/json:
@@ -2658,8 +2658,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateResponse'
-          description: Estimate not found
+                $ref: '#/components/schemas/ApiError'
+          description: Estimate not found (ESTIMATE_NOT_FOUND)
       security:
       - bearerAuth:
         - workorder:estimate:submit

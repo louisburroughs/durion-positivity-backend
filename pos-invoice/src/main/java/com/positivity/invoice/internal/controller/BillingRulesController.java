@@ -4,9 +4,11 @@ import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.BillingRulesDTO;
 import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.BillingRulesService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -61,11 +63,18 @@ public class BillingRulesController {
                     defaulted when the commercial account was provisioned.
                     Required inputs: partyId (UUID) as a path parameter; there is no request body.
                     Emits a BILLING_RULES_GET audit event; no state changes — this is a read-only projection.
-                    Returns 404 when no billing rules are configured for the party, and 400 with an empty body when \
-                    partyId is not a well-formed UUID.
+                    Returns 404 with an empty body when no billing rules are configured for the party, and 400 \
+                    with an empty body when partyId is not a well-formed UUID.
                     """)
     @ApiResponse(responseCode = "200", description = "Billing rules found")
-    @ApiResponse(responseCode = "404", description = "No billing rules configured for this party")
+    @ApiResponse(
+            responseCode = "400",
+            description = "partyId is not a well-formed UUID; the body is empty.",
+            content = @Content)
+    @ApiResponse(
+            responseCode = "404",
+            description = "No billing rules configured for this party; the body is empty.",
+            content = @Content)
     public ResponseEntity<BillingRulesDTO> getBillingRules(@PathVariable @NonNull String partyId) {
         // Validate partyId format
         if (!VALID_UUID_PATTERN.matcher(partyId).matches()) {
@@ -96,12 +105,17 @@ public class BillingRulesController {
                     PER_VEHICLE, SINGLE_INVOICE); updatedBy is taken from the security context, never from the body.
                     Emits a BILLING_RULES_UPSERT event and publishes a billing-rules-updated notification; due dates \
                     of already-finalized invoices are never recomputed from a terms change.
-                    Returns 201 when the record is created, 200 when an existing record is updated, and 400 with an \
-                    empty body when partyId is not a well-formed UUID.
+                    Returns 201 when the record is created and 200 when an existing record is updated. A \
+                    paymentTermsCode outside the vocabulary answers 400 VALIDATION_ERROR in the ApiError \
+                    envelope; a partyId that is not a well-formed UUID answers 400 with an empty body.
                     """)
     @ApiResponse(responseCode = "200", description = "Billing rules updated")
     @ApiResponse(responseCode = "201", description = "Billing rules created")
-    @ApiResponse(responseCode = "400", description = "Invalid billing rules data")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid billing rules data — VALIDATION_ERROR for an unknown paymentTermsCode,"
+                    + " or an empty body when partyId is not a well-formed UUID.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BillingRulesDTO> upsertBillingRules(
             @PathVariable @NonNull String partyId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
