@@ -17,7 +17,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,7 +25,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.FieldSource;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -47,7 +45,7 @@ import org.springframework.web.server.ResponseStatusException;
  * mapping is also the easiest thing in the module to get subtly wrong: the
  * handlers are near-identical four-line blocks, so a copy-paste that leaves the
  * wrong {@code HttpStatus} behind still compiles, still returns a well-formed
- * ProblemDetail, and simply lies about what happened. The table below is checked
+ * ApiError, and simply lies about what happened. The table below is checked
  * exhaustively for that reason.
  *
  * <p>
@@ -95,21 +93,26 @@ class PeopleExceptionHandlerTest {
         return org.junit.jupiter.params.provider.Arguments.of(name, exception, expected);
     }
 
-    private ProblemDetail dispatch(Exception exception) {
+    private static MockHttpServletRequest request() {
+        return new MockHttpServletRequest();
+    }
+
+    private ResponseEntity<ApiError> dispatch(Exception exception) {
         // Mirrors what @ExceptionHandler resolution does, without standing up an MVC context.
-        // PeopleContactValidationException is deliberately not reachable from here: unlike every
-        // exception in this table it answers an ApiError envelope, not a ProblemDetail — it has
-        // its own dedicated test below, the same way SecurityServiceException does.
+        // Since #1716 every handler answers the same ApiError envelope, so PeopleContactValidation
+        // is reachable here too — the shape split that kept it out of this table is gone.
+        MockHttpServletRequest request = request();
         return switch (exception) {
-            case PersonNotFoundException e -> handler.handlePersonNotFound(e);
-            case UserPersonLinkNotFoundException e -> handler.handleLinkNotFound(e);
-            case PersonHasLinkedUsersException e -> handler.handlePersonHasLinkedUsers(e);
-            case UserAlreadyLinkedException e -> handler.handleUserAlreadyLinked(e);
-            case NotFoundException e -> handler.handleNotFound(e);
-            case EntityNotFoundException e -> handler.handleEntityNotFound(e);
-            case SemanticValidationException e -> handler.handleSemanticValidation(e);
-            case AccessDeniedException e -> handler.handleAccessDenied(e);
-            case IllegalStateException e -> handler.handleIllegalState(e);
+            case PersonNotFoundException e -> handler.handlePersonNotFound(e, request);
+            case UserPersonLinkNotFoundException e -> handler.handleLinkNotFound(e, request);
+            case PersonHasLinkedUsersException e -> handler.handlePersonHasLinkedUsers(e, request);
+            case UserAlreadyLinkedException e -> handler.handleUserAlreadyLinked(e, request);
+            case NotFoundException e -> handler.handleNotFound(e, request);
+            case EntityNotFoundException e -> handler.handleEntityNotFound(e, request);
+            case SemanticValidationException e -> handler.handleSemanticValidation(e, request);
+            case AccessDeniedException e -> handler.handleAccessDenied(e, request);
+            case PeopleContactValidationException e -> handler.handlePeopleContactValidation(e, request);
+            case IllegalStateException e -> handler.handleIllegalState(e, request);
             default -> throw new IllegalStateException("Unmapped exception in test table: " + exception);
         };
     }
@@ -118,35 +121,54 @@ class PeopleExceptionHandlerTest {
     @FieldSource("mappings")
     @DisplayName("every handled exception maps to its documented status")
     void exceptionsMapToStatuses(String name, Exception exception, HttpStatus expected) {
-        ProblemDetail problem = dispatch(exception);
+        ResponseEntity<ApiError> response = dispatch(exception);
 
-        assertThat(problem.getStatus()).as(name).isEqualTo(expected.value());
+        assertThat(response.getStatusCode()).as(name).isEqualTo(expected);
+        assertThat(response.getBody()).as(name).isNotNull();
+        // #1716, ADR-0017 §3: every response is the ApiError envelope, so every one carries a
+        // machine-readable code and the status twice — once in the envelope, once on the wire.
+        assertThat(response.getBody().code()).as(name).isNotBlank();
+        assertThat(response.getBody().status()).as(name).isEqualTo(expected.value());
         // Every response carries a timestamp from the injected Clock, not from wall time — the
         // reason the handler takes a Clock at all is so this is assertable.
-        assertThat(problem.getProperties()).containsEntry("timestamp", NOW);
+        assertThat(response.getBody().timestamp()).as(name).isEqualTo(NOW.toString());
+        // ADR-0017 §4: the correlation id is in the body AND the header, and is the same value.
+        // Before #1716 these responses carried no correlation id at all, so a failure here
+        // could not be tied to its log entry.
+        assertThat(response.getBody().correlationId()).as(name).isNotBlank();
+        assertThat(response.getHeaders().getFirst("X-Correlation-Id"))
+                .as(name)
+                .isEqualTo(response.getBody().correlationId());
     }
 
     @Test
     @DisplayName("deleting a person who still has linked users is a 409 that says how to proceed")
     void personWithLinkedUsersIsAConflictWithNextAction() {
-        ProblemDetail problem = handler.handlePersonHasLinkedUsers(new PersonHasLinkedUsersException(PERSON_ID));
+        ResponseEntity<ApiError> response =
+                handler.handlePersonHasLinkedUsers(new PersonHasLinkedUsersException(PERSON_ID), request());
 
         // 409 rather than 404 or 400: the person exists and the request is well-formed, it is
         // the current state that forbids the delete. The nextAction is the difference between
-        // a caller retrying blindly and a caller unlinking first.
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
-        assertThat(problem.getProperties()).containsEntry("nextAction", PersonHasLinkedUsersException.NEXT_ACTION);
+        // a caller retrying blindly and a caller unlinking first. It was a ProblemDetail
+        // extension property before #1716; the envelope has a first-class field for it.
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("PERSON_HAS_LINKED_USERS");
+        assertThat(response.getBody().nextAction()).isEqualTo(PersonHasLinkedUsersException.NEXT_ACTION);
     }
 
     @Test
     @DisplayName("a semantically invalid but well-formed request is 422, not 400")
     void semanticValidationIsUnprocessable() {
-        ProblemDetail problem = handler.handleSemanticValidation(new SemanticValidationException("start after end"));
+        ResponseEntity<ApiError> response =
+                handler.handleSemanticValidation(new SemanticValidationException("start after end"), request());
 
         // 400 says "I could not parse this"; 422 says "I understood it and it is wrong". A
         // client retrying a 400 changes its syntax, a client retrying a 422 changes its data.
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT.value());
-        assertThat(problem.getDetail()).isEqualTo("start after end");
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("SEMANTIC_VALIDATION_ERROR");
+        assertThat(response.getBody().message()).isEqualTo("start after end");
     }
 
     @Test
@@ -189,33 +211,38 @@ class PeopleExceptionHandlerTest {
     @Test
     @DisplayName("an unknown path is a 404 that does not echo the path back")
     void unknownEndpointIsNotFoundWithoutEchoingInput() {
-        ProblemDetail problem = handler.handleNoEndpoint();
+        ResponseEntity<ApiError> response = handler.handleNoEndpoint(request());
 
         // Deliberate (issue #820 and SonarCloud S5131): without this handler every unknown path
-        // fell through to the catch-all as a 500. The detail stays constant because reflecting
-        // a user-supplied path into the response body is an XSS vector; the path is already in
-        // ProblemDetail's `instance` field.
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
-        assertThat(problem.getDetail()).isEqualTo("No endpoint for the requested path");
+        // fell through to the catch-all as a 500. The message stays constant because reflecting
+        // a user-supplied path into the response body is an XSS vector. #1716 dropped the
+        // ProblemDetail `instance` field along with the shape, so the path is now only in the
+        // access log — an accepted loss, since echoing it was never safe here anyway.
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo("No endpoint for the requested path");
     }
 
     @Test
-    @DisplayName("malformed JSON answers a body-shaped error naming the request path")
+    @DisplayName("malformed JSON answers the same envelope as everything else, and drops the path")
     void malformedJsonIsABadRequestBody() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setRequestURI("/v1/people/persons");
 
-        ResponseEntity<Map<String, Object>> response = handler.handleHttpMessageNotReadable(
+        ResponseEntity<ApiError> response = handler.handleHttpMessageNotReadable(
                 new HttpMessageNotReadableException("boom", null, null), (HttpServletRequest) request);
 
-        // This is the one handler that answers with a plain map instead of a ProblemDetail, so
-        // its shape is pinned separately — a client parsing it sees different field names.
+        // Before #1716 this was the one handler answering an ad-hoc Map with error/path keys — a
+        // third error shape inside one advice. It is now the same envelope as every other
+        // response, and the request path is no longer echoed (SonarCloud S5131, the same rule
+        // the routing handlers already followed).
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody())
-                .containsEntry("message", "Malformed JSON request")
-                .containsEntry("path", "/v1/people/persons")
-                .containsEntry("status", HttpStatus.BAD_REQUEST.value())
-                .containsEntry("timestamp", NOW);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("VALIDATION_ERROR");
+        assertThat(response.getBody().message()).isEqualTo("Malformed JSON request");
+        assertThat(response.getBody().status()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(response.getBody().timestamp()).isEqualTo(NOW.toString());
+        assertThat(response.getBody().toString()).doesNotContain("/v1/people/persons");
     }
 
     @ParameterizedTest(name = "security-service {0} → {1}")
@@ -239,46 +266,61 @@ class PeopleExceptionHandlerTest {
     })
     @DisplayName("a failure from pos-security-service is translated, never passed through blindly")
     void securityServiceStatusesAreTranslated(int downstream, int expected) {
-        ProblemDetail problem =
-                handler.handleSecurityServiceException(new SecurityServiceException("downstream said no", downstream));
+        ResponseEntity<ApiError> response = handler.handleSecurityServiceException(
+                new SecurityServiceException("downstream said no", downstream), request());
 
-        assertThat(problem.getStatus()).isEqualTo(expected);
+        assertThat(response.getStatusCode().value()).isEqualTo(expected);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("SECURITY_SERVICE_ERROR");
     }
 
     @Test
     @DisplayName("a ResponseStatusException keeps its status and prefers its reason over its message")
     void responseStatusExceptionKeepsItsStatus() {
-        ProblemDetail withReason =
-                handler.handleResponseStatusException(new ResponseStatusException(HttpStatus.GONE, "record purged"));
-        assertThat(withReason.getStatus()).isEqualTo(HttpStatus.GONE.value());
-        assertThat(withReason.getDetail()).isEqualTo("record purged");
+        ResponseEntity<ApiError> withReason = handler.handleResponseStatusException(
+                new ResponseStatusException(HttpStatus.GONE, "record purged"), request());
+        assertThat(withReason.getStatusCode()).isEqualTo(HttpStatus.GONE);
+        assertThat(withReason.getBody()).isNotNull();
+        assertThat(withReason.getBody().message()).isEqualTo("record purged");
+        // The code is derived from the status Spring chose, so a caller still gets something
+        // machine-readable for a status this advice never mapped by hand.
+        assertThat(withReason.getBody().code()).isEqualTo("GONE");
 
         // With no reason the exception's own message is used, which includes the status text —
         // less useful, but it must not be null.
-        ProblemDetail withoutReason =
-                handler.handleResponseStatusException(new ResponseStatusException(HttpStatus.GONE));
-        assertThat(withoutReason.getStatus()).isEqualTo(HttpStatus.GONE.value());
-        assertThat(withoutReason.getDetail()).isNotBlank();
+        ResponseEntity<ApiError> withoutReason =
+                handler.handleResponseStatusException(new ResponseStatusException(HttpStatus.GONE), request());
+        assertThat(withoutReason.getStatusCode()).isEqualTo(HttpStatus.GONE);
+        assertThat(withoutReason.getBody()).isNotNull();
+        assertThat(withoutReason.getBody().message()).isNotBlank();
     }
 
     @Test
     @DisplayName("parameter problems name the offending parameter without echoing its value")
     void parameterProblemsNameTheParameterOnly() {
-        ProblemDetail missing =
-                handler.handleMissingParameter(new MissingServletRequestParameterException("personId", "UUID"));
+        ResponseEntity<ApiError> missing = handler.handleMissingParameter(
+                new MissingServletRequestParameterException("personId", "UUID"), request());
 
-        assertThat(missing.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-        assertThat(missing.getDetail()).isEqualTo("Missing required parameter 'personId'");
+        assertThat(missing.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(missing.getBody()).isNotNull();
+        assertThat(missing.getBody().message()).isEqualTo("Missing required parameter 'personId'");
 
-        ProblemDetail mismatch = handler.handleTypeMismatch(new MethodArgumentTypeMismatchException(
-                "<script>alert(1)</script>", UUID.class, "personId", null, new IllegalArgumentException("bad uuid")));
+        ResponseEntity<ApiError> mismatch = handler.handleTypeMismatch(
+                new MethodArgumentTypeMismatchException(
+                        "<script>alert(1)</script>",
+                        UUID.class,
+                        "personId",
+                        null,
+                        new IllegalArgumentException("bad uuid")),
+                request());
 
         // The parameter *name* is safe to echo because it comes from our own method signature.
         // The submitted value is attacker-controlled and is deliberately left out — reflecting
         // it into the response body is the XSS vector SonarCloud S5131 flags.
-        assertThat(mismatch.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-        assertThat(mismatch.getDetail()).isEqualTo("Invalid value for parameter 'personId'");
-        assertThat(mismatch.getDetail()).doesNotContain("script");
+        assertThat(mismatch.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(mismatch.getBody()).isNotNull();
+        assertThat(mismatch.getBody().message()).isEqualTo("Invalid value for parameter 'personId'");
+        assertThat(mismatch.getBody().message()).doesNotContain("script");
     }
 
     @Test
@@ -289,15 +331,20 @@ class PeopleExceptionHandlerTest {
         BeanPropertyBindingResult binding = new BeanPropertyBindingResult(new Object(), "person");
         binding.reject("person.email.invalid", "email must be a valid address");
 
-        ProblemDetail problem = handler.handleValidation(new MethodArgumentNotValidException(parameter, binding));
+        ResponseEntity<ApiError> response =
+                handler.handleValidation(new MethodArgumentNotValidException(parameter, binding), request());
 
         // Whatever the binding failure was, the client is told "Validation failed" and nothing
         // about internal field names or message codes. That is a deliberate trade — it costs
         // the caller detail, and it keeps the module's internal property names out of a
-        // response any unauthenticated caller can provoke.
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-        assertThat(problem.getDetail()).isEqualTo("Validation failed");
-        assertThat(problem.getProperties()).containsEntry("timestamp", NOW);
+        // response any unauthenticated caller can provoke. #1716 changed the envelope, not this
+        // trade: fieldErrors stays empty here, unlike the modules with no such constraint.
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("VALIDATION_ERROR");
+        assertThat(response.getBody().message()).isEqualTo("Validation failed");
+        assertThat(response.getBody().fieldErrors()).isNull();
+        assertThat(response.getBody().timestamp()).isEqualTo(NOW.toString());
     }
 
     @SuppressWarnings("unused")

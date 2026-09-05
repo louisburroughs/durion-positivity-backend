@@ -289,6 +289,24 @@ Every code below is new in issue #1716: this module's advice answered Spring's b
 | `TUS_OFFSET_CONFLICT` | 409 | Resumable-upload offset does not match the server's; the response also carries `Tus-Resumable: 1.0.0` |
 | `TUS_UPLOAD_EXPIRED` | 410 | The resumable upload has expired and must be restarted; the response also carries `Tus-Resumable: 1.0.0` |
 
+### pos-people-contact
+
+Every code below is new in issue #1716: this module's advice answered Spring's bare `ProblemDetail` (and, for malformed JSON, an ad-hoc `Map`) until then, so its errors carried a `detail` string, no `code`, and no correlation id at all. The statuses are unchanged.
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `VALIDATION_ERROR` | 400 | Request-shape or field validation failure — this module's own `PeopleContactValidationException`, a bean-validation rejection, a missing or mistyped request parameter, or malformed JSON. `fieldErrors` is deliberately **not** populated here: the binding result names internal property names and this response is provokable by any caller |
+| `FORBIDDEN` | 403 | Caller lacks the required permission |
+| `PERSON_NOT_FOUND` | 404 | No person exists for the requested id |
+| `USER_PERSON_LINK_NOT_FOUND` | 404 | No user-person link exists for the requested username |
+| `NOT_FOUND` | 404 | A referenced record does not exist (the module's generic `NotFoundException` / JPA `EntityNotFoundException`) |
+| `NO_ENDPOINT` | 404 | No handler is mapped to the requested path. The path is not echoed back (SonarCloud S5131) |
+| `PERSON_HAS_LINKED_USERS` | 409 | The person still has linked user accounts and cannot be deleted; `nextAction` names the recovery |
+| `USER_ALREADY_LINKED` | 409 | The user is already linked to a person |
+| `INVALID_STATE` | 409 | The record's current state does not allow the requested operation |
+| `SEMANTIC_VALIDATION_ERROR` | 422 | The request is well-formed but semantically wrong (for example a start date after an end date) |
+| `SECURITY_SERVICE_ERROR` | varies | A failure calling `pos-security-service`. The downstream status is translated, never passed through blindly — an unrecognised 4xx becomes 400 and an unrecognised 5xx becomes 500 |
+
 ---
 
 ## Client Handling Guidelines

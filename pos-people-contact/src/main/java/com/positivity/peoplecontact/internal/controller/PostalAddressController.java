@@ -5,6 +5,7 @@ import com.positivity.peoplecontact.internal.dto.PostalAddressDto;
 import com.positivity.peoplecontact.internal.enums.PartyType;
 import com.positivity.peoplecontact.internal.security.PeopleContactPermissions;
 import com.positivity.peoplecontact.internal.service.PostalAddressService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -15,7 +16,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -52,10 +52,7 @@ public class PostalAddressController {
     @ApiResponse(
             responseCode = "404",
             description = "No address on file for the person.",
-            content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_CONTACT_PERSON_ADDRESS_GET", apiVersion = "1")
     @GetMapping("/v1/people/{personId}/postal-address")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -92,17 +89,11 @@ public class PostalAddressController {
     @ApiResponse(
             responseCode = "404",
             description = "Person not found.",
-            content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
             description = "line1 missing or countryCode not a valid ISO 3166-1 alpha-2 code.",
-            content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_CONTACT_PERSON_ADDRESS_PUT", apiVersion = "1")
     @PutMapping("/v1/people/{personId}/postal-address")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -177,10 +168,7 @@ public class PostalAddressController {
     @ApiResponse(
             responseCode = "404",
             description = "No address on file for the organization.",
-            content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_CONTACT_ORG_ADDRESS_GET", apiVersion = "1")
     @GetMapping("/v1/organizations/{organizationId}/postal-address")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -215,10 +203,7 @@ public class PostalAddressController {
     @ApiResponse(
             responseCode = "422",
             description = "line1 missing or countryCode not a valid ISO 3166-1 alpha-2 code.",
-            content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_CONTACT_ORG_ADDRESS_PUT", apiVersion = "1")
     @PutMapping("/v1/organizations/{organizationId}/postal-address")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
