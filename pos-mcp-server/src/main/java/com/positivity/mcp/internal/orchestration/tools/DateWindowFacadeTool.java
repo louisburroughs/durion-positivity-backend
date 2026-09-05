@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
+import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.security.common.LogSanitizer;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -15,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -45,8 +47,16 @@ public class DateWindowFacadeTool {
 
     private final Clock clock;
 
+    private final @Nullable RequestScopedUserContext requestScopedUserContext;
+
     public DateWindowFacadeTool(@NonNull Clock clock) {
+        this(clock, null);
+    }
+
+    @Autowired
+    public DateWindowFacadeTool(@NonNull Clock clock, @Nullable RequestScopedUserContext requestScopedUserContext) {
         this.clock = clock;
+        this.requestScopedUserContext = requestScopedUserContext;
     }
 
     @Tool(
@@ -113,7 +123,15 @@ public class DateWindowFacadeTool {
         // names a shape unambiguously it wins over the model's own argument. The classifier
         // abstains on anything it is not sure of, and an abstention leaves the model's choice
         // untouched — so this can correct a known-wrong reading without inventing a new one.
-        Optional<WindowPhraseClassifier.Classification> fromPhrase = WindowPhraseClassifier.classify(phrase);
+        // Prefer the request's own user message over the model's copy of it. Asked for the
+        // wording of a range the model sends a normalised snippet — "in the last six months" and
+        // "over the last six months" both arrive as "last six months" — and the preposition it
+        // drops is the whole discriminator (#1675, proved on the 2026-09-05 gate traces). The
+        // model-supplied phrase stays as a fallback for callers with no request context.
+        String wording = requestScopedUserContext == null
+                ? phrase
+                : requestScopedUserContext.currentUserMessage().orElse(phrase);
+        Optional<WindowPhraseClassifier.Classification> fromPhrase = WindowPhraseClassifier.classify(wording);
         if (fromPhrase.isPresent()) {
             WindowPhraseClassifier.Classification c = fromPhrase.get();
             if (c.shape() != parsedShape || c.unit() != parsedUnit || c.count() != count) {
@@ -126,7 +144,7 @@ public class DateWindowFacadeTool {
                         c.shape(),
                         c.unit(),
                         c.count(),
-                        LogSanitizer.forLog(phrase));
+                        LogSanitizer.forLog(wording));
             }
             parsedShape = c.shape();
             parsedUnit = c.unit();
