@@ -29,7 +29,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
@@ -457,11 +456,10 @@ public class EstimateController {
             description = "Estimate cannot be approved in current state, or the customerId in the request does "
                     + "not match the estimate's own customer.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    // Empty @Content is deliberate, not an omission: this method catches EntityNotFoundException
-    // locally and answers a bodiless 404, so declaring no schema is what the endpoint actually does.
-    // Without it springdoc infers EstimateResponse and the spec advertises the success DTO as the
-    // error body. The bodiless 404 is itself a defect (no ApiError, no correlationId) tracked in #1753.
-    @ApiResponse(responseCode = "404", description = "Estimate not found.", content = @Content)
+    @ApiResponse(
+            responseCode = "404",
+            description = "Estimate not found (ESTIMATE_NOT_FOUND).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
             description = "Purchase order number is required for this customer account (PURCHASE_ORDER_REQUIRED).",
@@ -504,9 +502,6 @@ public class EstimateController {
                     request.getPurchaseOrderNumber(),
                     request.getLineItemApprovals()); // CAP:003 - Pass selective line item approvals
             return ResponseEntity.ok(approved);
-        } catch (EntityNotFoundException e) {
-            log.warn("Estimate {} not found: {}", estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (IllegalStateException e) {
             log.warn("Failed to approve estimate {}: {}", estimateId, e.getMessage());
             return ResponseEntity.badRequest().build();
@@ -609,10 +604,6 @@ public class EstimateController {
                     e.getErrorCode(),
                     e.getMessage());
             throw e;
-
-        } catch (EntityNotFoundException _) {
-            log.warn("Estimate {} not found", estimateId);
-            throw new EstimateNotFoundException(estimateId);
         }
     }
 
@@ -720,7 +711,10 @@ public class EstimateController {
                     """)
     @ApiResponse(responseCode = "200", description = "Estimate submitted for approval successfully")
     @ApiResponse(responseCode = "400", description = "Estimate is incomplete or not in DRAFT state")
-    @ApiResponse(responseCode = "404", description = "Estimate not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Estimate not found (ESTIMATE_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{estimateId}/submit-for-approval")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SUBMIT", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -736,9 +730,6 @@ public class EstimateController {
             String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
             EstimateResponse submitted = estimateService.submitForApproval(estimateId, username);
             return ResponseEntity.ok(submitted);
-        } catch (EntityNotFoundException e) {
-            log.warn("Estimate {} not found: {}", estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (IllegalStateException e) {
             log.warn("Failed to submit estimate {} for approval: {}", estimateId, e.getMessage());
             return ResponseEntity.badRequest().build();
@@ -796,7 +787,10 @@ public class EstimateController {
             value = {
                 @ApiResponse(responseCode = "200", description = "Line item added successfully"),
                 @ApiResponse(responseCode = "400", description = "Validation error or invalid request"),
-                @ApiResponse(responseCode = "404", description = "Estimate not found"),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Estimate not found (ESTIMATE_NOT_FOUND)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "422",
                         description = "uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), "
@@ -834,16 +828,16 @@ public class EstimateController {
         } catch (org.springframework.web.server.ResponseStatusException e) {
             if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
                 log.warn("Estimate {} not found when adding item: {}", estimateId, e.getReason());
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+                // #1713 documents this 404 as an ApiError, so it must not answer a bodiless one.
+                // EstimateNotFoundException is what GlobalExceptionHandler already maps to a 404
+                // ESTIMATE_NOT_FOUND envelope with a correlation id.
+                throw new EstimateNotFoundException(estimateId);
             }
             if (e.getStatusCode() == HttpStatus.BAD_REQUEST) {
                 log.warn("Validation error adding item to estimate {}: {}", estimateId, e.getReason());
                 return ResponseEntity.badRequest().build();
             }
             throw e;
-        } catch (jakarta.persistence.EntityNotFoundException e) {
-            log.warn("Estimate {} not found when adding item: {}", estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (IllegalStateException e) {
             log.warn("State error adding item to estimate {}: {}", estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
@@ -871,7 +865,10 @@ public class EstimateController {
             value = {
                 @ApiResponse(responseCode = "200", description = "Line item updated successfully"),
                 @ApiResponse(responseCode = "400", description = "Validation error or invalid request"),
-                @ApiResponse(responseCode = "404", description = "Estimate or item not found"),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Estimate or item not found (ESTIMATE_NOT_FOUND / ESTIMATE_ITEM_NOT_FOUND)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "422",
                         description = "uomCode has no conversion row for the product (UOM_CONVERSION_UNDEFINED), "
@@ -908,9 +905,6 @@ public class EstimateController {
         try {
             EstimateItemResponse item = estimateService.updateEstimateItem(estimateId, itemId, request);
             return ResponseEntity.ok(item);
-        } catch (EntityNotFoundException e) {
-            log.warn("Estimate or item not found: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (IllegalStateException e) {
             log.warn("State error updating item {} on estimate {}: {}", itemId, estimateId, e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).build();

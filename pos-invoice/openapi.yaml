@@ -95,7 +95,7 @@ paths:
 
         Emits a BILLING_RULES_GET audit event; no state changes — this is a read-only projection.
 
-        Returns 404 when no billing rules are configured for the party, and 400 with an empty body when partyId is not a well-formed UUID.
+        Returns 404 with an empty body when no billing rules are configured for the party, and 400 with a VALIDATION_ERROR ApiError when partyId is not a well-formed UUID.
 
         '
       operationId: getBillingRules
@@ -112,12 +112,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/BillingRulesDTO'
           description: Billing rules found
-        '404':
+        '400':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillingRulesDTO'
-          description: No billing rules configured for this party
+                $ref: '#/components/schemas/ApiError'
+          description: partyId is not a well-formed UUID.
+        '404':
+          description: No billing rules configured for this party; the body is empty.
       security:
       - bearerAuth:
         - invoice:billing-rules
@@ -137,7 +139,7 @@ paths:
 
         Emits a BILLING_RULES_UPSERT event and publishes a billing-rules-updated notification; due dates of already-finalized invoices are never recomputed from a terms change.
 
-        Returns 201 when the record is created, 200 when an existing record is updated, and 400 with an empty body when partyId is not a well-formed UUID.
+        Returns 201 when the record is created and 200 when an existing record is updated. A paymentTermsCode outside the vocabulary answers 400 VALIDATION_ERROR in the ApiError envelope; a partyId that is not a well-formed UUID answers the same 400 VALIDATION_ERROR envelope.
 
         '
       operationId: upsertBillingRules
@@ -180,8 +182,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillingRulesDTO'
-          description: Invalid billing rules data
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid billing rules data — VALIDATION_ERROR for an unknown paymentTermsCode or a partyId that is not a well-formed UUID.
       security:
       - bearerAuth:
         - invoice:billing-rules
