@@ -56,6 +56,14 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/v1/auth")
 @RequiredArgsConstructor
 public class JwtController {
+
+    /**
+     * Client-facing message for a token-issuance request whose subject does not resolve to a
+     * user. Deliberately says nothing about the subject or about why it was rejected — see the
+     * comment at the throw site (issue #1715).
+     */
+    private static final String TOKEN_REQUEST_REJECTED = "Token issuance request is invalid";
+
     private final JwtService jwtService;
     private final UserService userService;
 
@@ -119,11 +127,21 @@ public class JwtController {
                 request.subject(),
                 request.roles() != null ? request.roles().size() : 0);
 
+        // The 400 body must not say *why* the subject was rejected: echoing "User not found for
+        // subject: X" turned this endpoint into an account-existence oracle for any caller holding
+        // security:token:issue_internal (issue #1715). The subject rides along as the exception's
+        // logDetail, which GlobalExceptionHandler logs against the response's correlation id and
+        // never puts in the ApiError body (ADR-0056 §1: rejected values are never echoed).
+        // The status stays 400 rather than becoming 404: this module already answers 400 for an
+        // unresolvable user reference (UserServiceImpl#assignRoles, #updateUser) and both
+        // endpoints document 400 for a subject with no user, so one condition keeps one status
+        // across entry points (ADR-0017 §2).
         var user = userService
                 .getUserByUsername(request.subject())
-                .orElseThrow(() -> new SecurityValidationException("User not found for subject: " + request.subject()));
+                .orElseThrow(() -> new SecurityValidationException(
+                        TOKEN_REQUEST_REJECTED, "no user exists for subject: " + request.subject()));
         if (user.getId() == null) {
-            throw new IllegalStateException("User exists but id is missing for subject: " + request.subject());
+            throw new IllegalStateException("Resolved user record is missing an id");
         }
 
         String token = jwtService.generateToken(
@@ -194,11 +212,21 @@ public class JwtController {
                 request.subject(),
                 request.roles() != null ? request.roles().size() : 0);
 
+        // The 400 body must not say *why* the subject was rejected: echoing "User not found for
+        // subject: X" turned this endpoint into an account-existence oracle for any caller holding
+        // security:token:issue_internal (issue #1715). The subject rides along as the exception's
+        // logDetail, which GlobalExceptionHandler logs against the response's correlation id and
+        // never puts in the ApiError body (ADR-0056 §1: rejected values are never echoed).
+        // The status stays 400 rather than becoming 404: this module already answers 400 for an
+        // unresolvable user reference (UserServiceImpl#assignRoles, #updateUser) and both
+        // endpoints document 400 for a subject with no user, so one condition keeps one status
+        // across entry points (ADR-0017 §2).
         var user = userService
                 .getUserByUsername(request.subject())
-                .orElseThrow(() -> new SecurityValidationException("User not found for subject: " + request.subject()));
+                .orElseThrow(() -> new SecurityValidationException(
+                        TOKEN_REQUEST_REJECTED, "no user exists for subject: " + request.subject()));
         if (user.getId() == null) {
-            throw new IllegalStateException("User exists but id is missing for subject: " + request.subject());
+            throw new IllegalStateException("Resolved user record is missing an id");
         }
 
         JwtService.TokenPair tokenPair = jwtService.generateTokenPair(

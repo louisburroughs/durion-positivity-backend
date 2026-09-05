@@ -6,11 +6,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.securityservice.internal.dto.UserAuthContext;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
 import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
@@ -23,6 +25,7 @@ import jakarta.servlet.FilterChain;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,6 +36,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -182,6 +186,86 @@ class JwtControllerErrorHandlingTest {
                 .doesNotContain(leakCanary)
                 .doesNotContain("UnknownPathException")
                 .doesNotContain("jti");
+    }
+
+    /**
+     * Issue #1715: the 400 for a token-issuance subject that does not exist must not say so. The
+     * old body echoed {@code "User not found for subject: " + subject}, which let any caller
+     * holding {@code security:token:issue_internal} enumerate which accounts exist by comparing
+     * that message against the answer for a subject that does exist. The message is now generic
+     * and identical either way; the subject survives only in the correlated WARN log
+     * (ADR-0056 §1 — rejected values are never echoed).
+     */
+    @Test
+    @WithMockUser(authorities = "security:token:issue_internal")
+    @DisplayName("issueInternalToken hides whether the subject exists: the 400 body never names it or the reason")
+    void issueInternalTokenDoesNotDiscloseWhetherTheSubjectExists() throws Exception {
+        when(userService.getUserByUsername("ghost.account")).thenReturn(Optional.empty());
+
+        String body = mockMvc.perform(post("/v1/auth/internal/token")
+                        .with(csrf())
+                        .header("X-Correlation-Id", CORRELATION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"subject\":\"ghost.account\",\"roles\":[\"SHOP_MGR\"]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string("X-Correlation-Id", CORRELATION_ID))
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("Token issuance request is invalid"))
+                .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(body)
+                .doesNotContain("ghost.account")
+                .doesNotContain("not found")
+                .doesNotContain("User");
+    }
+
+    @Test
+    @WithMockUser(authorities = "security:token:issue_internal")
+    @DisplayName("generateTokenPair hides whether the subject exists on the same terms as issueInternalToken")
+    void generateTokenPairDoesNotDiscloseWhetherTheSubjectExists() throws Exception {
+        when(userService.getUserByUsername("ghost.account")).thenReturn(Optional.empty());
+
+        String body = mockMvc.perform(post("/v1/auth/token-pair")
+                        .with(csrf())
+                        .header("X-Correlation-Id", CORRELATION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"subject\":\"ghost.account\",\"roles\":[\"SHOP_MGR\"]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("Token issuance request is invalid"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(body).doesNotContain("ghost.account").doesNotContain("not found");
+    }
+
+    /**
+     * The other half of issue #1715's oracle: the message for a subject that DOES exist but whose
+     * stored record has no id must be indistinguishable in the same way — it previously echoed
+     * "User exists but id is missing for subject: X".
+     */
+    @Test
+    @WithMockUser(authorities = "security:token:issue_internal")
+    @DisplayName("issueInternalToken does not name the subject when the resolved user record has no id")
+    void issueInternalTokenDoesNotNameTheSubjectWhenTheUserRecordHasNoId() throws Exception {
+        UserAuthContext idlessUser =
+                UserAuthContext.builder().username("real.account").build();
+        when(userService.getUserByUsername("real.account")).thenReturn(Optional.of(idlessUser));
+
+        String body = mockMvc.perform(post("/v1/auth/internal/token")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"subject\":\"real.account\",\"roles\":[\"SHOP_MGR\"]}"))
+                .andExpect(status().isBadRequest())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(body).doesNotContain("real.account");
     }
 
     /** Clock for {@code GlobalExceptionHandler} and {@code pos-web-common}'s advice, plus method security. */

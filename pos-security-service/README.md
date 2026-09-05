@@ -171,6 +171,24 @@ Every non-2xx response this service maps itself (`GlobalExceptionHandler`) carri
 through one helper, and `GlobalExceptionHandlerTest` fails if a new handler is added without
 joining its header assertion (#1729).
 
+Two rules constrain what those bodies may contain and where they can come from (#1715):
+
+- **Nothing escapes the filter chain unenveloped.** `JwtAuthenticationFilter` and
+  `GatewayHeaderAuthenticationFilter` run before the dispatcher, so no `@ControllerAdvice` — not
+  this module's and not `pos-web-common`'s — can see what they throw; the container would answer
+  with its own default page instead of the envelope (ADR-0056 §1). Both therefore fail closed:
+  any token- or header-processing failure (a `perm_bits` claim that no longer decodes, a stale
+  `perm_ver`, a subject that no longer resolves to a user) clears the security context and lets
+  the chain continue, so `JsonAuthenticationEntryPoint` renders the enveloped, correlated 401.
+  Presenting a broken bearer token never falls back to gateway-header authorities.
+- **An error message never reveals whether an account exists.** The token-issuance endpoints
+  (`POST /v1/auth/internal/token`, `POST /v1/auth/token-pair`) answer an unresolvable subject with
+  a generic `400 VALIDATION_ERROR` that names neither the subject nor the reason; the subject goes
+  to the correlated WARN log via `SecurityValidationException`'s `logDetail`, never into the body
+  (ADR-0056 §1 — rejected values are never echoed). The status stays `400` rather than `404`, so
+  that an unresolvable user reference answers the same way here as it does in `UserServiceImpl`
+  (ADR-0017 §2, one condition one status).
+
 The published `openapi.yaml` lists only the error statuses an operation can actually produce.
 Because the advice is module-wide, springdoc would otherwise attach its 400/401/403/404/409 to
 every operation (#1721); `pos-security-common`'s `ProducibleResponsesOperationCustomizer` prunes
