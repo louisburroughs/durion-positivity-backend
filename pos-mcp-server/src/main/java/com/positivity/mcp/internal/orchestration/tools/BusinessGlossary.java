@@ -24,7 +24,9 @@ import org.jspecify.annotations.NonNull;
  * {@code TOOL_USE} rule ("ask when an argument is missing") is a mechanical trigger on a missing
  * identifier; this is a semantic one, and the two are not the same test.
  *
- * <p><strong>Ratified by the repository owner on 2026-09-05</strong>, reviewing the full term set
+ * <p><strong>Ratified by @louisburroughs on 2026-09-05</strong> (issue #1688, PR #1777; the
+ * ratification is recorded as a comment on #1688 so it survives any rewrite of this file),
+ * reviewing the full term set
  * against the alternatives for each — notably <em>best customers</em> as contribution margin rather
  * than plain revenue, the deliberate <b>best</b>/<b>largest</b> split, the trailing-30-day window on
  * technician productivity, the six-month threshold on "haven't been back", and the rule that stock
