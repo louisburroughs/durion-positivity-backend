@@ -214,6 +214,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                 .statusCode(400)
                 .body("code", equalTo("INVALID_ARGUMENT"))
                 .body("correlationId", notNullValue())
+                .header("X-Correlation-Id", notNullValue())
                 .log()
                 .ifValidationFails();
     }
@@ -236,6 +237,35 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                 .statusCode(409)
                 .body("code", equalTo("CONFLICT"))
                 .body("correlationId", notNullValue())
+                .header("X-Correlation-Id", notNullValue())
+                .log()
+                .ifValidationFails();
+    }
+
+    // AP-015 covers the other half of #1753: approveEstimate had a second local catch, on
+    // jakarta's EntityNotFoundException, that answered a bodiless 404 behind an @ApiResponse
+    // promising an ApiError. The service now throws EstimateNotFoundException and the advice
+    // envelopes it. Asserting the status alone is what let the empty body survive on the sibling
+    // branch, so this pins the code, the correlationId and the header the same way AP-013/AP-014 do.
+    @Test
+    @DisplayName("AP-015: Reject approval - estimate does not exist")
+    void testApproveEstimate_NotFound() {
+        initTestIds();
+        UUID unknownEstimateId = UUID.randomUUID();
+
+        String approvalPayload =
+                buildApprovalPayload(testCustomerId, "Test Signer", "Approving a missing estimate", null, null);
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(approvalPayload)
+                .when()
+                .post("/v1/workorders/estimates/{id}/approval", unknownEstimateId)
+                .then()
+                .statusCode(404)
+                .body("code", equalTo("ESTIMATE_NOT_FOUND"))
+                .body("correlationId", notNullValue())
+                .header("X-Correlation-Id", notNullValue())
                 .log()
                 .ifValidationFails();
     }
