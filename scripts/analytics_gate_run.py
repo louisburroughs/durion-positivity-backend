@@ -508,7 +508,9 @@ def run_bands(url, token, api_version, document, timeout):
     """
     results = []
     for question in document["questions"]:
-        outcome = ask(url, token, api_version, question["utterance"], timeout)
+        outcome = ask(
+            url, token, api_version, question["utterance"], timeout, conversation_id=conversation_id_for(question)
+        )
         observed = classify_outcome(outcome["answer"])
         expected = question["expected_outcome"]
         results.append(
@@ -529,9 +531,10 @@ def run_bands(url, token, api_version, document, timeout):
 def run_sequences(url, token, api_version, document, timeout):
     """Runs each sequence's turns in order on one conversation.
 
-    No session identifier is needed: SessionAgentManager keys chat memory on (username, role), so
-    consecutive calls with the same token already share a conversation. That is also why the
-    single-turn gate is not single-turn (#1735).
+    Each sequence names its own conversation, so its turns share a memory and different sequences
+    do not bleed into each other. Before #1735 no identifier was possible — the server keyed memory
+    on (username, role) alone, which gave these sequences the continuity they need by accident and
+    gave the single-turn gate a continuity it must not have.
 
     Turns are recorded, not auto-scored. Whether "their" resolved to the right customer is a
     judgement, and a regex over the answer would pin the wrong thing — so each turn carries its
@@ -540,8 +543,11 @@ def run_sequences(url, token, api_version, document, timeout):
     results = []
     for sequence in document["sequences"]:
         turns = []
+        sequence_conversation_id = f"seq-{sequence['sequence_id']}"
         for index, turn in enumerate(sequence["turns"]):
-            outcome = ask(url, token, api_version, turn["utterance"], timeout)
+            outcome = ask(
+                url, token, api_version, turn["utterance"], timeout, conversation_id=sequence_conversation_id
+            )
             turns.append(
                 {
                     "index": index + 1,
@@ -571,8 +577,40 @@ def select(questions, only, include_excluded):
     return [q for q in questions if q["in_chat_path_gate"]]
 
 
-def ask(url, token, api_version, message, timeout):
-    body = json.dumps({"message": message}).encode("utf-8")
+def turn_conversation_id(args, fixture_id):
+    """The conversation a single-turn question belongs to, or None to keep the server default.
+
+    Off unless --isolate-turns is passed. #1757 adds the server side; until a deploy carries it,
+    sending the field could be rejected by the running build, and a transport error on every
+    question is worse than the shared-memory bias this corrects. Once alpha carries #1757 this
+    should become the default and the flag should go.
+    """
+    if not getattr(args, "isolate_turns", False):
+        return None
+    return f"{args.run_id}-{fixture_id}"
+
+
+def conversation_id_for(question):
+    """Band fixtures are independent single-turn probes, so each gets its own conversation."""
+    return f"bands-{question['fixture_id']}"
+
+
+def ask(url, token, api_version, message, timeout, conversation_id=None):
+    """Sends one turn.
+
+    #1735: the server keys conversation memory on (username, role) alone unless the request names
+    a conversation, so twelve questions asked by one actor land in one twelve-turn history and no
+    question in this corpus is the independent single-turn test it is written as. Passing a
+    distinct conversation_id per question is what makes them independent.
+
+    The field is only sent when a caller asks for it, because a server that predates #1757 does not
+    know it and may reject the body outright — which would turn every question into a transport
+    error rather than an answer.
+    """
+    payload = {"message": message}
+    if conversation_id is not None:
+        payload["conversationId"] = conversation_id
+    body = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(url, data=body, method="POST")
     request.add_header("Content-Type", "application/json")
     request.add_header("Accept", "application/json")
@@ -1291,6 +1329,17 @@ def main(argv=None):
         help="questions (default), bands (#1689 outcome bands), or sequences (#1690 multi-turn)",
     )
     parser.add_argument(
+        "--isolate-turns",
+        action="store_true",
+        help="send a distinct conversationId per question so each is an independent single turn "
+        "(#1735); needs a server carrying #1757",
+    )
+    parser.add_argument(
+        "--run-id",
+        default=None,
+        help="prefix for per-question conversation ids; defaults to a timestamp",
+    )
+    parser.add_argument(
         "--expect-role",
         default=None,
         help=f"abort unless the token carries this role (default {EXPECTED_ROLE_DEFAULT}); "
@@ -1318,6 +1367,9 @@ def main(argv=None):
     # MCP_BEARER_TOKEN from the same file worked.
     if args.expect_role is None:
         args.expect_role = os.environ.get("MCP_EXPECTED_ROLE", EXPECTED_ROLE_DEFAULT)
+    if args.run_id is None:
+        args.run_id = datetime.now(timezone.utc).strftime("gate-%Y%m%dT%H%M%SZ")
+
     token = args.token or os.environ.get("MCP_BEARER_TOKEN")
     if not args.replay_report and not token:
         sys.exit("no bearer token: pass --token or set MCP_BEARER_TOKEN (or --env-file)")
@@ -1439,7 +1491,14 @@ def main(argv=None):
             except ValueError as exc:
                 parser.error(str(exc))
         else:
-            outcome = ask(args.url, token, api_version, question["utterance"], args.timeout)
+            outcome = ask(
+                args.url,
+                token,
+                api_version,
+                question["utterance"],
+                args.timeout,
+                conversation_id=turn_conversation_id(args, question["fixture_id"]),
+            )
             tool_calls = None
         expected_plan = question.get("expected_plan")
         plan_check = check_expected_plan(expected_plan, tool_calls)
