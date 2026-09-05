@@ -124,14 +124,14 @@ public class PersonAccessController {
                         description = "Invalid request",
                         content =
                                 @Content(
-                                        mediaType = "application/problem+json",
+                                        mediaType = "application/json",
                                         schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "404",
                         description = "Person or role not found",
                         content =
                                 @Content(
-                                        mediaType = "application/problem+json",
+                                        mediaType = "application/json",
                                         schema = @Schema(implementation = ApiError.class)))
             })
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -193,13 +193,11 @@ public class PersonAccessController {
     @ApiResponse(
             responseCode = "400",
             description = "Invalid request for revoking role assignment",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Person or role assignment not found",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:role:revoke"})

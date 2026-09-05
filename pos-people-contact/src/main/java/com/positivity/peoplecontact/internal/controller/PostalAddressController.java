@@ -52,8 +52,7 @@ public class PostalAddressController {
     @ApiResponse(
             responseCode = "404",
             description = "No address on file for the person.",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_CONTACT_PERSON_ADDRESS_GET", apiVersion = "1")
     @GetMapping("/v1/people/{personId}/postal-address")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -90,13 +89,11 @@ public class PostalAddressController {
     @ApiResponse(
             responseCode = "404",
             description = "Person not found.",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
             description = "line1 missing or countryCode not a valid ISO 3166-1 alpha-2 code.",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_CONTACT_PERSON_ADDRESS_PUT", apiVersion = "1")
     @PutMapping("/v1/people/{personId}/postal-address")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -171,8 +168,7 @@ public class PostalAddressController {
     @ApiResponse(
             responseCode = "404",
             description = "No address on file for the organization.",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_CONTACT_ORG_ADDRESS_GET", apiVersion = "1")
     @GetMapping("/v1/organizations/{organizationId}/postal-address")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -207,8 +203,7 @@ public class PostalAddressController {
     @ApiResponse(
             responseCode = "422",
             description = "line1 missing or countryCode not a valid ISO 3166-1 alpha-2 code.",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_CONTACT_ORG_ADDRESS_PUT", apiVersion = "1")
     @PutMapping("/v1/organizations/{organizationId}/postal-address")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

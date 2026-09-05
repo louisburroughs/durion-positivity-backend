@@ -67,6 +67,12 @@ public class PeopleExceptionHandler {
     /**
      * Keeps the recovery hint the {@code ProblemDetail} carried as an extension property; the
      * envelope has a first-class {@code nextAction} field for exactly this (ADR-0017 §3).
+     *
+     * <p>This is the one handler that builds its response inline rather than through {@link
+     * #buildResponse}, so it repeats that method's null-message fallback: {@code message} is
+     * required by the envelope, and a handler that can answer with a null one would break the
+     * contract for every client that reads it. {@link PersonHasLinkedUsersException} always sets
+     * a message today; the guard is here so that staying true does not depend on remembering.
      */
     @ExceptionHandler(PersonHasLinkedUsersException.class)
     public ResponseEntity<ApiError> handlePersonHasLinkedUsers(
@@ -76,7 +82,7 @@ public class PeopleExceptionHandler {
                 .header(X_CORRELATION_ID, correlationId)
                 .body(ApiError.guided(
                         "PERSON_HAS_LINKED_USERS",
-                        ex.getMessage(),
+                        ex.getMessage() != null ? ex.getMessage() : HttpStatus.CONFLICT.getReasonPhrase(),
                         HttpStatus.CONFLICT.value(),
                         Instant.now(clock).toString(),
                         correlationId,
