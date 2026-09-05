@@ -973,8 +973,11 @@ class RunModeTest(unittest.TestCase):
             }],
         }
         asked = []
-        def fake_ask(url, token, version, message, timeout):
+        conversations = []
+
+        def fake_ask(url, token, version, message, timeout, conversation_id=None):
             asked.append(message)
+            conversations.append(conversation_id)
             return {"answer": "ok", "error": None, "elapsed_s": 1.0}
 
         with mock.patch.object(runner, "ask", side_effect=fake_ask):
@@ -982,6 +985,10 @@ class RunModeTest(unittest.TestCase):
 
         # Order is the point: turn 2 only means anything after turn 1 has run on the same memory.
         self.assertEqual(asked, ["open work orders for Harbor Tool?", "what is their outstanding balance?"])
+        # And the shared memory is now named rather than inherited from the actor (#1735): every
+        # turn in one sequence carries the same id, which is what makes "their" resolvable.
+        self.assertEqual(len(set(conversations)), 1)
+        self.assertIsNotNone(conversations[0])
         turns = results[0]["turns"]
         self.assertEqual([t["index"] for t in turns], [1, 2])
         # The criteria travel with the result so a grader can apply them without the corpus.
@@ -1024,6 +1031,81 @@ class RunModeTest(unittest.TestCase):
             self.assertIn("UNSCORED", body)
             self.assertIn("| sequence | turn | utterance | must_reference | fails_if |", body)
             self.assertNotIn("| verdict |", body)
+
+
+class TurnIsolationTest(unittest.TestCase):
+    """#1735: twelve questions from one actor shared one twelve-turn memory."""
+
+    @staticmethod
+    def _args(**kw):
+        base = {"isolate_turns": False, "run_id": "gate-X"}
+        base.update(kw)
+        return argparse.Namespace(**base)
+
+    def test_off_by_default_so_an_undeployed_server_is_not_sent_an_unknown_field(self):
+        # #1757 adds the server side. Until a deploy carries it, sending conversationId could be
+        # rejected outright, turning every question into a transport error — strictly worse than
+        # the shared-memory bias this corrects.
+        self.assertIsNone(runner.turn_conversation_id(self._args(), "q01"))
+
+    def test_each_question_gets_its_own_conversation_when_enabled(self):
+        args = self._args(isolate_turns=True)
+
+        first = runner.turn_conversation_id(args, "q01")
+        second = runner.turn_conversation_id(args, "q02")
+
+        self.assertIsNotNone(first)
+        self.assertNotEqual(first, second)
+
+    def test_ids_are_unique_per_run_so_two_runs_do_not_share_a_memory(self):
+        first = runner.turn_conversation_id(self._args(isolate_turns=True, run_id="gate-A"), "q01")
+        second = runner.turn_conversation_id(self._args(isolate_turns=True, run_id="gate-B"), "q01")
+
+        self.assertNotEqual(first, second)
+
+    def test_the_field_is_omitted_from_the_body_when_no_id_is_given(self):
+        captured = {}
+
+        class FakeResponse:
+            def read(self):
+                return json.dumps({"response": "ok"}).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_urlopen(request, timeout=None):
+            captured["body"] = json.loads(request.data.decode())
+            return FakeResponse()
+
+        with mock.patch.object(runner.urllib.request, "urlopen", fake_urlopen):
+            runner.ask("http://x", "t", "1", "hello", 30)
+
+        self.assertNotIn("conversationId", captured["body"])
+
+    def test_the_field_is_sent_when_an_id_is_given(self):
+        captured = {}
+
+        class FakeResponse:
+            def read(self):
+                return json.dumps({"response": "ok"}).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_urlopen(request, timeout=None):
+            captured["body"] = json.loads(request.data.decode())
+            return FakeResponse()
+
+        with mock.patch.object(runner.urllib.request, "urlopen", fake_urlopen):
+            runner.ask("http://x", "t", "1", "hello", 30, conversation_id="gate-X-q01")
+
+        self.assertEqual(captured["body"]["conversationId"], "gate-X-q01")
 
 
 if __name__ == "__main__":
