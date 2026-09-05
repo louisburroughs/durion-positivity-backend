@@ -3,7 +3,6 @@ package com.positivity.order.internal.controller;
 import com.positivity.order.internal.exception.InvalidSkuException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
-import com.positivity.order.internal.exception.SalesOrderStateConflictException;
 import com.positivity.order.internal.exception.SalesOrderUnprocessableException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -132,26 +131,6 @@ public class SalesOrderExceptionHandler {
                         "ORDER_UNPROCESSABLE",
                         ex.getMessage(),
                         422,
-                        Instant.now(clock).toString(),
-                        correlationId));
-    }
-
-    /**
-     * A well-formed cart request another resource's state refuses — today, a new order against a
-     * terminal whose register session is mid-close. ADR-0017 §2 makes a stateful collision a 409,
-     * which is what the module's other three advices already answered for this kind of failure
-     * and what this one did not (#1730).
-     */
-    @ExceptionHandler(SalesOrderStateConflictException.class)
-    public ResponseEntity<ApiError> handleStateConflict(
-            SalesOrderStateConflictException ex, HttpServletRequest request) {
-        String correlationId = correlationId(request);
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .header(X_CORRELATION_ID, correlationId)
-                .body(ApiError.of(
-                        "ORDER_STATE_CONFLICT",
-                        ex.getMessage(),
-                        HttpStatus.CONFLICT.value(),
                         Instant.now(clock).toString(),
                         correlationId));
     }

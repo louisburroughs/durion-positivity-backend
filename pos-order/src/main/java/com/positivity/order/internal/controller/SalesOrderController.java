@@ -19,10 +19,13 @@ import com.positivity.order.internal.service.model.CreateCartResult;
 import com.positivity.order.internal.service.model.OrderDiscountCommand;
 import com.positivity.order.internal.service.model.SalesOrderLineSummary;
 import com.positivity.order.internal.service.model.SalesOrderSummary;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -73,10 +76,30 @@ public class SalesOrderController {
                     Emits an ORDER_CART_CREATE event and records the initial DRAFT status-history row.
                     Returns 201 on creation, 200 when a replayed Idempotency-Key returns the original cart, 400 \
                     when locationId cannot be resolved or depositSourceType/depositSourceId is only half supplied, \
-                    409 when the key was previously used with a different payload or the terminal's session is \
-                    being closed, and 422 when the customer or vehicle cannot be validated.
+                    409 when the key was previously used with a different payload, and 422 when the customer or \
+                    vehicle cannot be validated or the terminal's register session is being closed.
                     """,
             tags = {"Sales Orders"})
+    @ApiResponse(responseCode = "201", description = "Cart created.")
+    @ApiResponse(responseCode = "200", description = "A replayed Idempotency-Key returned the original cart.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "locationId cannot be resolved, or depositSourceType/depositSourceId is only half "
+                    + "supplied (ORDER_INVALID_ARGUMENT).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The Idempotency-Key was previously used with a different payload.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "The customer or vehicle cannot be validated, or the terminal's register session is "
+                    + "being closed (ORDER_UNPROCESSABLE).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/carts")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_CREATE + "')")
     @EmitEvent(id = "ORDER_CART_CREATE", apiVersion = "1")
@@ -495,10 +518,33 @@ public class SalesOrderController {
                     cart, and source lines already linked to the cart are skipped, making the call replay-safe.
                     Required inputs: sourceType (ESTIMATE or WORKORDER) and sourceId, both in the body.
                     Emits an ORDER_LINK_SOURCE event, recomputes order totals, and marks tax stale.
-                    Returns 404 when the order does not exist, 400 when sourceType is unknown, 409 when the order \
-                    is not DRAFT, and 422 when a WORKORDER link is attempted without a customer on the cart.
+                    Returns 404 when the order does not exist, 400 when sourceType is unknown or sourceId is not \
+                    a UUID, 409 when the order is not DRAFT, and 422 when a WORKORDER link is attempted without a \
+                    customer on the cart or when the source document does not resolve in the replica.
                     """,
             tags = {"Sales Orders"})
+    @ApiResponse(responseCode = "200", description = "Source lines imported into the cart.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "sourceType is unknown, or sourceId is not a document UUID (ORDER_INVALID_ARGUMENT).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Insufficient permissions.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Order not found (ORDER_NOT_FOUND).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The order is not DRAFT.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "A WORKORDER link without a customer on the cart, or a source document that does not "
+                    + "resolve in the replica (ORDER_UNPROCESSABLE).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PatchMapping("/carts/{orderId}/source")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_EDIT + "')")
     @EmitEvent(id = "ORDER_LINK_SOURCE", apiVersion = "1")

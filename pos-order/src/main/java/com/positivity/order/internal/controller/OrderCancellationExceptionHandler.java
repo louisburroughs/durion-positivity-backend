@@ -1,5 +1,6 @@
 package com.positivity.order.internal.controller;
 
+import com.positivity.order.internal.exception.OrderCancellationReviewRequiredException;
 import com.positivity.order.internal.exception.OrderCancellationStateConflictException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.shared.error.ApiError;
@@ -60,6 +61,36 @@ public class OrderCancellationExceptionHandler {
                         HttpStatus.CONFLICT.value(),
                         Instant.now(clock).toString(),
                         correlationId));
+    }
+
+    /**
+     * The retry failed again and the order is now parked at {@code CANCEL_REQUIRES_MANUAL_REVIEW}
+     * with the review-required fact published. 500 is what this endpoint's own documentation
+     * promises for the outcome: the cause is a downstream reversal that did not succeed, and
+     * there is nothing the caller can change about its request.
+     *
+     * <p>#1730: the service used to rethrow a bare {@link IllegalStateException} here and let
+     * pos-web-common's platform advice answer it. That produced the right status only for as long
+     * as no advice in the module mapped the bare type, and the body could not say the order had
+     * been parked. Mapping it explicitly puts the status on the exception class and lets
+     * {@code nextAction} carry the recovery the prose describes.
+     */
+    @ExceptionHandler(OrderCancellationReviewRequiredException.class)
+    public ResponseEntity<ApiError> handleCancellationReviewRequired(
+            OrderCancellationReviewRequiredException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        log.error("Order cancellation retry requires manual review: correlationId={}", correlationId, ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.guided(
+                        "ORDER_CANCEL_REVIEW_REQUIRED",
+                        ex.getMessage(),
+                        HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        null,
+                        OrderCancellationReviewRequiredException.NEXT_ACTION,
+                        null));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

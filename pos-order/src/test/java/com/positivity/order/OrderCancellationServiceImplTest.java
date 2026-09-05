@@ -18,6 +18,7 @@ import com.positivity.order.internal.client.WorkorderStatusResult;
 import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderStatus;
+import com.positivity.order.internal.exception.OrderCancellationReviewRequiredException;
 import com.positivity.order.internal.exception.OrderCancellationStateConflictException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
@@ -343,7 +344,37 @@ class OrderCancellationServiceImplTest {
                 .thenReturn(new PaymentReversalResult(false, null, "still down"));
 
         assertThatThrownBy(() -> orderCancellationService.retryCancellation(ORDER_ID, "idem-key-2"))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(OrderCancellationReviewRequiredException.class);
+        assertThat(order.getStatus()).isEqualTo(SalesOrderStatus.CANCEL_REQUIRES_MANUAL_REVIEW);
+        verify(orderDomainEventPublisher)
+                .publishCancelReviewRequired(eq(order), org.mockito.ArgumentMatchers.anyString());
+    }
+
+    /**
+     * CC-010c covers the *other* arm of retryCancellation's catch, which CC-010b does not reach.
+     *
+     * <p>#1730 re-typed the "settled payments but no invoice reference" guard inside
+     * reverseSettledPayments off bare IllegalStateException and onto
+     * OrderCancellationStateConflictException, which deliberately does not extend it. The catch
+     * was widened to name both types so those orders keep getting parked for review — but nothing
+     * exercised that second arm, so narrowing the catch back to one type would have passed the
+     * suite while silently stopping the parking. This test fails if that happens: without the
+     * OrderCancellationStateConflictException in the catch, the guard propagates as a 409 and the
+     * order is left at CANCEL_FAILED_BILLING with no review-required fact.
+     */
+    @Test
+    @DisplayName("CC-010c: retry with settled payments but no invoice reference also parks for review")
+    void retryCancellation_settledPaymentsWithoutInvoice_parksForManualReview() {
+        SalesOrder order = draftOrder();
+        order.setStatus(SalesOrderStatus.CANCEL_FAILED_BILLING);
+        order.setInvoiceId(null);
+        when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+        when(salesOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentRecordRepository.findByOrderId(ORDER_ID))
+                .thenReturn(List.of(settledRecord(new BigDecimal("80.00"))));
+
+        assertThatThrownBy(() -> orderCancellationService.retryCancellation(ORDER_ID, "idem-key-3"))
+                .isInstanceOf(OrderCancellationReviewRequiredException.class);
         assertThat(order.getStatus()).isEqualTo(SalesOrderStatus.CANCEL_REQUIRES_MANUAL_REVIEW);
         verify(orderDomainEventPublisher)
                 .publishCancelReviewRequired(eq(order), org.mockito.ArgumentMatchers.anyString());

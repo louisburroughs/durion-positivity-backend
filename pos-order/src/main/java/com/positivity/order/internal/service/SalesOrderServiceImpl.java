@@ -19,7 +19,6 @@ import com.positivity.order.internal.exception.InvalidSkuException;
 import com.positivity.order.internal.exception.OrderVoidBlockedException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
-import com.positivity.order.internal.exception.SalesOrderStateConflictException;
 import com.positivity.order.internal.exception.SalesOrderUnprocessableException;
 import com.positivity.order.internal.repository.ExtBillingRulesRepository;
 import com.positivity.order.internal.repository.ExtCustomerRepository;
@@ -129,7 +128,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         if (registerSessionRepository
                 .findFirstByTerminalIdAndStatus(command.terminalId(), RegisterSessionStatus.CLOSING)
                 .isPresent()) {
-            throw new SalesOrderStateConflictException("Terminal " + command.terminalId()
+            throw new SalesOrderUnprocessableException("Terminal " + command.terminalId()
                     + " has a register session being closed; no new orders until the close completes");
         }
         RegisterSession openSession = registerSessionRepository

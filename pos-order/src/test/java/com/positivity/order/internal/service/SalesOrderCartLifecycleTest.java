@@ -41,7 +41,6 @@ import com.positivity.order.internal.exception.InvalidSkuException;
 import com.positivity.order.internal.exception.OrderVoidBlockedException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
-import com.positivity.order.internal.exception.SalesOrderStateConflictException;
 import com.positivity.order.internal.exception.SalesOrderUnprocessableException;
 import com.positivity.order.internal.repository.ExtBillingRulesRepository;
 import com.positivity.order.internal.repository.ExtCustomerRepository;
@@ -440,7 +439,7 @@ class SalesOrderCartLifecycleTest {
                             .build()));
 
             assertThatThrownBy(() -> service.createCart(createCommand()))
-                    .isInstanceOf(SalesOrderStateConflictException.class)
+                    .isInstanceOf(SalesOrderUnprocessableException.class)
                     .hasMessageContaining("register session being closed");
         }
 

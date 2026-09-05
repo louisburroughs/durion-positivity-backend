@@ -11,6 +11,7 @@ import com.positivity.order.internal.config.OrderDomainEventPublisher;
 import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderStatus;
+import com.positivity.order.internal.exception.OrderCancellationReviewRequiredException;
 import com.positivity.order.internal.exception.OrderCancellationStateConflictException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
@@ -144,7 +145,7 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
             salesOrderRepository.save(order);
             domainEventPublisher.publishCancelReviewRequired(order, failureReason);
             log.error("Order {} cancellation requires manual review: {}", orderId, e.getMessage());
-            throw new IllegalStateException(failureReason);
+            throw new OrderCancellationReviewRequiredException(failureReason);
         }
 
         completeCancellation(order, actor);

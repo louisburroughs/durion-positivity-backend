@@ -23,7 +23,6 @@ import com.positivity.order.internal.exception.ReturnOrderUnprocessableException
 import com.positivity.order.internal.exception.ReturnRequestValidationException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
-import com.positivity.order.internal.exception.SalesOrderStateConflictException;
 import com.positivity.order.internal.exception.SalesOrderUnprocessableException;
 import com.positivity.order.internal.exception.SessionCloseBlockedException;
 import com.positivity.order.internal.exception.TaxUnavailableException;
@@ -225,17 +224,19 @@ class OrderExceptionHandlerTest {
         }
 
         @Test
-        @DisplayName("maps a stateful collision to 409, the same status the module's other advices answer")
-        void stateConflictIsAConflictHereToo() {
-            // #1730: this is the drift the issue reported. A collision with another resource's
-            // state answered 422 here and 409 in the return/cancellation/purchase advices; it is
-            // 409 everywhere now, per ADR-0017 §2.
+        @DisplayName("a referenced resource's state is 422 here, not 409")
+        void referencedResourceStateIsUnprocessable() {
+            // ADR-0017 §2 as reworded on 2026-09-04 (#1725): §2's 409 list is closed, and covers
+            // only the *target* resource's identity, version or lifecycle status. A new cart
+            // refused because the terminal's register session is mid-close is refused by a
+            // *referenced* resource's state, which §2 puts at 422 — "resource state alone never
+            // selects 409". An earlier revision of this PR moved it the other way.
             assertEnvelope(
-                    salesOrder.handleStateConflict(
-                            new SalesOrderStateConflictException("Terminal T1 has a register session being closed"),
+                    salesOrder.handleUnprocessableRequest(
+                            new SalesOrderUnprocessableException("Terminal T1 has a register session being closed"),
                             request),
-                    HttpStatus.CONFLICT,
-                    "ORDER_STATE_CONFLICT");
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "ORDER_UNPROCESSABLE");
         }
 
         @Test

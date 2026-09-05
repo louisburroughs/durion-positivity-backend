@@ -99,7 +99,7 @@ paths:
 
         Emits an ORDER_CART_CREATE event and records the initial DRAFT status-history row.
 
-        Returns 201 on creation, 200 when a replayed Idempotency-Key returns the original cart, 400 when locationId cannot be resolved or depositSourceType/depositSourceId is only half supplied, 409 when the key was previously used with a different payload or the terminal''s session is being closed, and 422 when the customer or vehicle cannot be validated.
+        Returns 201 on creation, 200 when a replayed Idempotency-Key returns the original cart, 400 when locationId cannot be resolved or depositSourceType/depositSourceId is only half supplied, 409 when the key was previously used with a different payload, and 422 when the customer or vehicle cannot be validated or the terminal''s register session is being closed.
 
         '
       operationId: createCart
@@ -133,7 +133,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SalesOrderResponse'
-          description: OK
+          description: A replayed Idempotency-Key returned the original cart.
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderResponse'
+          description: Cart created.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: locationId cannot be resolved, or depositSourceType/depositSourceId is only half supplied (ORDER_INVALID_ARGUMENT).
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Insufficient permissions.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The Idempotency-Key was previously used with a different payload.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The customer or vehicle cannot be validated, or the terminal's register session is being closed (ORDER_UNPROCESSABLE).
       security:
       - bearerAuth: []
       summary: Create a Sales Order Cart
@@ -645,7 +675,7 @@ paths:
 
         Emits an ORDER_LINK_SOURCE event, recomputes order totals, and marks tax stale.
 
-        Returns 404 when the order does not exist, 400 when sourceType is unknown, 409 when the order is not DRAFT, and 422 when a WORKORDER link is attempted without a customer on the cart.
+        Returns 404 when the order does not exist, 400 when sourceType is unknown or sourceId is not a UUID, 409 when the order is not DRAFT, and 422 when a WORKORDER link is attempted without a customer on the cart or when the source document does not resolve in the replica.
 
         '
       operationId: linkOrderSource
@@ -675,7 +705,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SalesOrderResponse'
-          description: OK
+          description: Source lines imported into the cart.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: sourceType is unknown, or sourceId is not a document UUID (ORDER_INVALID_ARGUMENT).
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Insufficient permissions.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Order not found (ORDER_NOT_FOUND).
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The order is not DRAFT.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A WORKORDER link without a customer on the cart, or a source document that does not resolve in the replica (ORDER_UNPROCESSABLE).
       security:
       - bearerAuth: []
       summary: Link a Source Document to an Order
