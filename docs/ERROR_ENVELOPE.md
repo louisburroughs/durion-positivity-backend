@@ -211,6 +211,8 @@ Any service may therefore return these in addition to its module codes below.
 | `BAD_CREDENTIALS` | 401 | Username or password is incorrect |
 | `FORBIDDEN` | 403 | Caller lacks required permissions |
 | `USER_HAS_NO_ROLES` | 403 | Credentials or refresh token are valid, but the account currently has no roles assigned; answered the same on login and refresh (ADR-0017 §2 question 1, #1725). `nextAction` tells the caller to have an administrator assign a role |
+| `VALIDATION_ERROR` | 400 | This module's own field/reference validation failure (`SecurityValidationException`): a blank required field, a malformed permission key or bitset, an unsupported `perm_ver`, or a role/user reference that does not resolve. Aligned onto the fleet-wide spelling in #1730; it answered `INVALID_REQUEST` between #1694 and #1730 |
+| `INVALID_REQUEST` | 400 | Request-binding failure raised by the framework before the controller runs — an unreadable body, a missing query parameter, a bean-validation rejection. A pre-existing code with consumers, so #1730 deliberately did **not** rename it. Clients that switch on validation codes should handle both this and `VALIDATION_ERROR` |
 
 ### pos-accounting
 | Code | Status | Description |
@@ -301,6 +303,9 @@ async function handleApiError(response: Response): Promise<never> {
   switch (error.code) {
     case 'VALIDATION_ERROR':
     case 'VALIDATION_FAILED':
+    // pos-security-service raises INVALID_REQUEST for framework-level request-binding
+    // failures; it carries no fieldErrors, so displayFieldErrors falls back to an empty list.
+    case 'INVALID_REQUEST':
       // Display field-level errors to the user
       displayFieldErrors(error.fieldErrors ?? []);
       break;
