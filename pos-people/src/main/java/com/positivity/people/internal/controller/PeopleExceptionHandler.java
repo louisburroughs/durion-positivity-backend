@@ -219,7 +219,6 @@ public class PeopleExceptionHandler {
     private ResponseEntity<ApiError> buildResponse(
             HttpStatus status, String code, String message, HttpServletRequest request, HttpServletResponse response) {
         String correlationId = resolveCorrelationId(request);
-        response.setHeader(X_CORRELATION_ID, correlationId);
         return ResponseEntity.status(status)
                 .header(X_CORRELATION_ID, correlationId)
                 .body(ApiError.of(

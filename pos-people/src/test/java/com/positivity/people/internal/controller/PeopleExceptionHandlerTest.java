@@ -65,7 +65,11 @@ class PeopleExceptionHandlerTest {
         assertThat(body.status()).isEqualTo(expectedStatus.value());
         assertThat(body.timestamp()).isEqualTo(NOW.toString());
         assertThat(body.correlationId()).isNotBlank();
-        assertThat(response.getHeader("X-Correlation-Id")).isEqualTo(body.correlationId());
+        // Asserted on the ResponseEntity, not the servlet response: when a ResponseEntity declares a
+        // header Spring replaces whatever the servlet response held, so the entity's value is the one
+        // that reaches the client. Asserting the servlet write instead would pass even if the header
+        // the caller actually receives were dropped (#1716).
+        assertThat(result.getHeaders().getFirst("X-Correlation-Id")).isEqualTo(body.correlationId());
         return body;
     }
 
@@ -127,7 +131,7 @@ class PeopleExceptionHandlerTest {
         assertThat(body.message()).isEqualTo("bad input");
         assertThat(body.status()).isEqualTo(HttpStatus.BAD_REQUEST.value());
         assertThat(body.correlationId()).isNotBlank();
-        assertThat(response.getHeader("X-Correlation-Id")).isEqualTo(body.correlationId());
+        assertThat(result.getHeaders().getFirst("X-Correlation-Id")).isEqualTo(body.correlationId());
     }
 
     @Test
@@ -141,7 +145,7 @@ class PeopleExceptionHandlerTest {
 
         assertThat(result.getBody()).isNotNull();
         assertThat(result.getBody().correlationId()).isEqualTo("019507b4-1f3a-7000-8e04-5c9d3a4f6e12");
-        assertThat(response.getHeader("X-Correlation-Id")).isEqualTo("019507b4-1f3a-7000-8e04-5c9d3a4f6e12");
+        assertThat(result.getHeaders().getFirst("X-Correlation-Id")).isEqualTo("019507b4-1f3a-7000-8e04-5c9d3a4f6e12");
     }
 
     /**
@@ -164,7 +168,7 @@ class PeopleExceptionHandlerTest {
         assertThat(body.message()).isEqualTo("Employee is already DISABLED or TERMINATED");
         assertThat(body.status()).isEqualTo(HttpStatus.CONFLICT.value());
         assertThat(body.correlationId()).isNotBlank();
-        assertThat(response.getHeader("X-Correlation-Id")).isEqualTo(body.correlationId());
+        assertThat(result.getHeaders().getFirst("X-Correlation-Id")).isEqualTo(body.correlationId());
     }
 
     @Test
