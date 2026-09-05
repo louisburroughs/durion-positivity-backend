@@ -276,6 +276,19 @@ Any service may therefore return these in addition to its module codes below.
 | `RESOURCE_NOT_FOUND` | 404 | Vehicle or care-preference document not found |
 | `VEHICLE_VIN_CONFLICT` | 409 | An active vehicle already holds the requested VIN — a stateful collision (issue #1694; split out of the former blanket `IllegalArgumentException` 400 catch-all, which had reported this same case as 400) |
 
+### pos-bulk-loader
+
+Every code below is new in issue #1716: this module's advice answered Spring's bare `ProblemDetail` until then, so its errors carried a `detail` string and no `code` at all. The statuses are unchanged.
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `VALIDATION_ERROR` | 400 | Bean-validation failure, with `fieldErrors` naming each offending field (previously flattened into one semicolon-joined `detail` string) |
+| `FORBIDDEN` | 403 | The caller does not own the bulk-load job (`JobOwnershipViolationException`) |
+| `BULK_JOB_NOT_FOUND` | 404 | No bulk-load job, mapping, upload or review row exists for the requested id |
+| `BULK_JOB_INVALID_STATE` | 409 | The job's current status does not allow the requested transition |
+| `TUS_OFFSET_CONFLICT` | 409 | Resumable-upload offset does not match the server's; the response also carries `Tus-Resumable: 1.0.0` |
+| `TUS_UPLOAD_EXPIRED` | 410 | The resumable upload has expired and must be restarted; the response also carries `Tus-Resumable: 1.0.0` |
+
 ---
 
 ## Client Handling Guidelines

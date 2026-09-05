@@ -9,6 +9,7 @@ import com.positivity.bulkloader.internal.service.ColumnMappingService;
 import com.positivity.bulkloader.internal.service.FileStorageService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -22,7 +23,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -96,16 +96,12 @@ public class FileUploadController {
             responseCode = "404",
             description = "Job not found",
             content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Job is in a terminal state and cannot accept uploads",
             content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<FileUploadResponse> uploadFile(
             @PathVariable @NonNull UUID jobId, @RequestParam("file") @NonNull MultipartFile file) throws IOException {
         String operatorId = currentOperatorId();
@@ -161,23 +157,17 @@ public class FileUploadController {
             responseCode = "403",
             description = "Job does not belong to the authenticated operator",
             content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Job not found",
             content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Invalid state transition",
             content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BulkLoadJobResponse> startProcessing(@PathVariable @NonNull UUID jobId) {
         String operatorId = currentOperatorId();
         bulkLoadJobService.startProcessing(jobId, operatorId, currentAuthorizationHeader());

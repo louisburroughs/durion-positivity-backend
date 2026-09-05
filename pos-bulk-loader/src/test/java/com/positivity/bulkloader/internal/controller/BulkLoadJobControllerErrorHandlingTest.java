@@ -59,10 +59,16 @@ class BulkLoadJobControllerErrorHandlingTest {
         when(bulkLoadJobService.getJob(eq(JOB_ID), any()))
                 .thenThrow(new IllegalStateException("Job cannot be processed before a locationId is assigned"));
 
+        // #1716: the ApiError envelope (code/message/status/timestamp/correlationId), not a bare
+        // ProblemDetail. ADR-0017 §3 makes ApiError the contract for every non-2xx body.
         mockMvc.perform(get("/v1/bulk-jobs/{jobId}", JOB_ID).header("X-Correlation-Id", "corr-conflict-1"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.detail").value("Job cannot be processed before a locationId is assigned"))
+                .andExpect(jsonPath("$.code").value("BULK_JOB_INVALID_STATE"))
+                .andExpect(jsonPath("$.message").value("Job cannot be processed before a locationId is assigned"))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
                 .andExpect(jsonPath("$.correlationId").value("corr-conflict-1"))
+                .andExpect(jsonPath("$.detail").doesNotExist())
                 .andExpect(header().string("X-Correlation-Id", "corr-conflict-1"));
     }
 
