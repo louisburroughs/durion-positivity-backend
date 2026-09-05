@@ -632,13 +632,18 @@ class EstimateControllerTest {
         }
 
         @Test
-        void mapsAResponseStatusExceptionFromTheAddPathOntoItsOwnStatus() {
+        void translatesANotFoundResponseStatusExceptionSoTheAdviceCanEnvelopeIt() {
+            // #1713: this endpoint documents its 404 as an ApiError, so the not-found branch must
+            // not answer a bodiless ResponseEntity. It re-throws as EstimateNotFoundException, which
+            // GlobalExceptionHandler maps to a 404 ESTIMATE_NOT_FOUND envelope — the same shape the
+            // sibling test below pins for a service-thrown EstimateNotFoundException.
             doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "no estimate"))
                     .when(estimateService)
                     .addEstimateItem(any(), any(), anyString());
-            assertThat(controller.addEstimateItem(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+            assertThatThrownBy(() -> controller.addEstimateItem(ESTIMATE_ID, null))
+                    .isInstanceOf(EstimateNotFoundException.class);
 
+            // The 400 branch is unchanged and still answers directly; it is out of #1713's scope.
             doThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "bad item"))
                     .when(estimateService)
                     .addEstimateItem(any(), any(), anyString());
