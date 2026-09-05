@@ -95,13 +95,11 @@ public class FileUploadController {
     @ApiResponse(
             responseCode = "404",
             description = "Job not found",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Job is in a terminal state and cannot accept uploads",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<FileUploadResponse> uploadFile(
             @PathVariable @NonNull UUID jobId, @RequestParam("file") @NonNull MultipartFile file) throws IOException {
         String operatorId = currentOperatorId();
@@ -156,18 +154,15 @@ public class FileUploadController {
     @ApiResponse(
             responseCode = "403",
             description = "Job does not belong to the authenticated operator",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Job not found",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Invalid state transition",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BulkLoadJobResponse> startProcessing(@PathVariable @NonNull UUID jobId) {
         String operatorId = currentOperatorId();
         bulkLoadJobService.startProcessing(jobId, operatorId, currentAuthorizationHeader());

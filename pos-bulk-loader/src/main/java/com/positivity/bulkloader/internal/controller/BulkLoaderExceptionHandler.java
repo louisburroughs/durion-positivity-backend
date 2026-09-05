@@ -47,7 +47,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * defeating the platform fallback's correlated-500 guarantee.
  *
  * <p>Per ADR-0017 §4 every response below carries the correlation id in both the body and the
- * {@code X-Correlation-Id} response header.
+ * {@code X-Correlation-Id} response header. That header is set once, on the returned {@code
+ * ResponseEntity}. Writing it onto the {@code HttpServletResponse} as well would be redundant
+ * rather than additive — when a {@code ResponseEntity} declares a header, Spring replaces whatever
+ * the servlet response already held for that name, so the entity's value is the one that reaches
+ * the client either way. {@code Tus-Resumable} is different and is set on the servlet response,
+ * because the entity does not declare it.
  *
  * <p>#1716: these handlers answered Spring's bare {@code ProblemDetail} until now. ADR-0017 §3
  * makes the {@link ApiError} envelope ({@code code}, {@code message}, {@code status}, {@code
@@ -114,7 +119,6 @@ public class BulkLoaderExceptionHandler {
                         fe.getField(), fe.getDefaultMessage() != null ? fe.getDefaultMessage() : "Invalid value"))
                 .toList();
         String correlationId = resolveCorrelationId(request);
-        response.setHeader(X_CORRELATION_ID, correlationId);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .header(X_CORRELATION_ID, correlationId)
                 .body(ApiError.withFieldErrors(
@@ -129,7 +133,6 @@ public class BulkLoaderExceptionHandler {
     private ResponseEntity<ApiError> envelope(
             HttpStatus status, String code, String message, HttpServletRequest request, HttpServletResponse response) {
         String correlationId = resolveCorrelationId(request);
-        response.setHeader(X_CORRELATION_ID, correlationId);
         return ResponseEntity.status(status)
                 .header(X_CORRELATION_ID, correlationId)
                 .body(ApiError.of(

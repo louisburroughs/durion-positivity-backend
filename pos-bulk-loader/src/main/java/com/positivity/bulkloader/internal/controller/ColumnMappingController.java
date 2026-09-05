@@ -58,13 +58,11 @@ public class ColumnMappingController {
     @ApiResponse(
             responseCode = "403",
             description = "Job does not belong to the authenticated operator",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Job not found",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<ColumnMappingResponse>> getMappings(@PathVariable @NonNull UUID jobId) {
         String operatorId = currentOperatorId();
         return ResponseEntity.ok(columnMappingService.getMappingsForJob(jobId, operatorId));
@@ -95,13 +93,11 @@ public class ColumnMappingController {
     @ApiResponse(
             responseCode = "403",
             description = "Job does not belong to the authenticated operator",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Job not found",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<ColumnMappingResponse>> approveMappings(
             @PathVariable @NonNull UUID jobId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

@@ -68,13 +68,11 @@ public class ReviewQueueController {
     @ApiResponse(
             responseCode = "403",
             description = "Job does not belong to the authenticated operator",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Job not found",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<AuditRecordResponse>> getAuditRecords(@PathVariable @NonNull UUID jobId) {
         bulkLoadJobService.getJob(jobId, currentOperatorId());
         return ResponseEntity.ok(reviewQueueService.getAuditRecords(jobId));
@@ -98,13 +96,11 @@ public class ReviewQueueController {
     @ApiResponse(
             responseCode = "403",
             description = "Job does not belong to the authenticated operator",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Job not found",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Resource> downloadErrorReport(@PathVariable @NonNull UUID jobId) {
         bulkLoadJobService.getJob(jobId, currentOperatorId());
         Resource report = reviewQueueService.generateErrorReport(jobId);
@@ -138,23 +134,19 @@ public class ReviewQueueController {
     @ApiResponse(
             responseCode = "400",
             description = "Invalid correction request",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "Job does not belong to the authenticated operator",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Job not found",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Job is not in a state that accepts corrections",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BulkCorrectionResponse> submitCorrections(
             @PathVariable @NonNull UUID jobId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -207,23 +199,19 @@ public class ReviewQueueController {
     @ApiResponse(
             responseCode = "400",
             description = "Invalid correction request",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "Job does not belong to the authenticated operator",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Job not found",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Job is not in a state that accepts corrections",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CorrectionResultDto> submitSingleCorrection(
             @io.swagger.v3.oas.annotations.Parameter(description = "ID of the bulk load job", required = true)
                     @PathVariable

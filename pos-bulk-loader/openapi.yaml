@@ -216,13 +216,13 @@ paths:
           description: Audit records returned
         '403':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job does not belong to the authenticated operator
         '404':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job not found
@@ -342,25 +342,25 @@ paths:
           description: Corrections submitted successfully
         '400':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Invalid correction request
         '403':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job does not belong to the authenticated operator
         '404':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job not found
         '409':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job is not in a state that accepts corrections
@@ -421,25 +421,25 @@ paths:
           description: Correction processed
         '400':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Invalid correction request
         '403':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job does not belong to the authenticated operator
         '404':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job not found
         '409':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job is not in a state that accepts corrections
@@ -485,13 +485,13 @@ paths:
           description: CSV error report downloaded
         '403':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job does not belong to the authenticated operator
         '404':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job not found
@@ -538,13 +538,13 @@ paths:
           description: Mappings returned
         '403':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job does not belong to the authenticated operator
         '404':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job not found
@@ -606,13 +606,13 @@ paths:
           description: Mappings approved
         '403':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job does not belong to the authenticated operator
         '404':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job not found
@@ -657,19 +657,19 @@ paths:
           description: Job transitioned to PROCESSING
         '403':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job does not belong to the authenticated operator
         '404':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job not found
         '409':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Invalid state transition
@@ -841,13 +841,13 @@ paths:
           description: File uploaded and content detected
         '404':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job not found
         '409':
           content:
-            application/problem+json:
+            application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Job is in a terminal state and cannot accept uploads
