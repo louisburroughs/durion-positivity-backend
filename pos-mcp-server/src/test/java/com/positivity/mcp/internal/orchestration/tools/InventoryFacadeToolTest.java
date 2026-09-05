@@ -39,7 +39,8 @@ class InventoryFacadeToolTest {
                 BASE_URL,
                 contract("checkStock").template(),
                 contract("searchInventory").template(),
-                contract("getLocationStock").template());
+                contract("getLocationStock").template(),
+                "/inventory/v1/inventory/replenishment/policies");
     }
 
     @Test

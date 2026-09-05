@@ -437,6 +437,7 @@ pos:
     stock-uri-template: ${POS_INVENTORY_STOCK_URI_TEMPLATE:/inventory/v1/inventory/availability/by-sku?productSku={productSku}}
     search-uri-template: ${POS_INVENTORY_SEARCH_URI_TEMPLATE:/inventory/v1/inventory/availability/by-sku?productSku={productSku}}
     location-stock-uri-template: ${POS_INVENTORY_LOCATION_STOCK_URI_TEMPLATE:/inventory/v1/inventory/locations/{locationId}/inventory-inquiry}
+    replenishment-policies-uri-template: ${POS_INVENTORY_REPLENISHMENT_POLICIES_URI_TEMPLATE:/inventory/v1/inventory/replenishment/policies}
   invoice:
     base-url: ${POS_INVOICE_BASE_URL:http://pos-api-gateway}
     invoice-uri-template: ${POS_INVOICE_URI_TEMPLATE:/invoice/v1/invoices/{invoiceId}}

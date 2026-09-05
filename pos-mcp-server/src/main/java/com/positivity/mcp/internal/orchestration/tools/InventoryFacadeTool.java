@@ -17,17 +17,21 @@ public class InventoryFacadeTool {
     private final String stockUriTemplate;
     private final String inventorySearchUriTemplate;
     private final String locationStockUriTemplate;
+    private final String replenishmentPoliciesUriTemplate;
 
     public InventoryFacadeTool(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
             @Value("${pos.inventory.base-url}") @NonNull String baseUrl,
             @Value("${pos.inventory.stock-uri-template}") @NonNull String stockUriTemplate,
             @Value("${pos.inventory.search-uri-template}") @NonNull String inventorySearchUriTemplate,
-            @Value("${pos.inventory.location-stock-uri-template}") @NonNull String locationStockUriTemplate) {
+            @Value("${pos.inventory.location-stock-uri-template}") @NonNull String locationStockUriTemplate,
+            @Value("${pos.inventory.replenishment-policies-uri-template}") @NonNull
+                    String replenishmentPoliciesUriTemplate) {
         this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
         this.stockUriTemplate = stockUriTemplate;
         this.inventorySearchUriTemplate = inventorySearchUriTemplate;
         this.locationStockUriTemplate = locationStockUriTemplate;
+        this.replenishmentPoliciesUriTemplate = replenishmentPoliciesUriTemplate;
     }
 
     @Tool(
@@ -67,6 +71,31 @@ public class InventoryFacadeTool {
         return restClient
                 .get()
                 .uri(locationStockUriTemplate, Map.of("locationId", locationId))
+                .retrieve()
+                .body(String.class);
+    }
+
+    @Tool(
+            description = "List replenishment policies — the reorder rules that define what \"running low\" "
+                    + "means. Each policy names an item SKU, a location, a minimumQuantity and a "
+                    + "maximumQuantity, and whether it is active. An item is running low when its "
+                    + "available-to-promise quantity is below its ACTIVE policy's minimumQuantity; an item "
+                    + "with no active policy is never classified as low, so check coverage here before "
+                    + "concluding that nothing is low. Combine with checkStock or getLocationStock for the "
+                    + "available quantity. Returns the first page only.")
+    public String listReplenishmentPolicies(
+            @ToolParam(description = "Optional location id (UUID) to narrow to one location", required = false)
+                    String locationId) {
+        if (locationId == null || locationId.isBlank()) {
+            return restClient
+                    .get()
+                    .uri(replenishmentPoliciesUriTemplate)
+                    .retrieve()
+                    .body(String.class);
+        }
+        return restClient
+                .get()
+                .uri(replenishmentPoliciesUriTemplate + "?locationId={locationId}", Map.of("locationId", locationId))
                 .retrieve()
                 .body(String.class);
     }

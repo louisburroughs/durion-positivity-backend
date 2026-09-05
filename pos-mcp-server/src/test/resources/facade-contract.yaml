@@ -310,6 +310,14 @@ InventoryFacadeTool.getLocationStock:
   route: inventory
   downstreamPath: "/v1/inventory/locations/{}/inventory-inquiry"
 
+InventoryFacadeTool.listReplenishmentPolicies:
+  verb: GET
+  baseUrlProperty: pos.inventory.base-url
+  templateProperty: pos.inventory.replenishment-policies-uri-template
+  template: "/inventory/v1/inventory/replenishment/policies"
+  route: inventory
+  downstreamPath: "/v1/inventory/replenishment/policies"
+
 InvoiceFacadeTool.getInvoice:
   verb: GET
   baseUrlProperty: pos.invoice.base-url
