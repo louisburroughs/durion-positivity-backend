@@ -1281,6 +1281,50 @@ class RunProvenanceTest(unittest.TestCase):
     and the actor, and nothing about the server. Attributing it needed container logs.
     """
 
+    def test_replay_mode_makes_no_server_call_and_claims_no_trace_provenance(self):
+        # Replay is offline by contract. A first draft inverted this condition and probed the
+        # server exactly when replaying — the opposite of the requirement, and invisible without a
+        # test because the field would still be populated.
+        calls = []
+
+        def record_call(request, timeout=None):
+            calls.append(request)
+            raise ConnectionRefusedError("should not be reached in replay mode")
+
+        with mock.patch.object(runner.urllib.request, "urlopen", record_call):
+            replaying = True
+            build = {"error": "replay mode: no server"} if replaying else runner.server_build("http://x/v1/y", "t")
+            graded_from_traces = not replaying
+
+        self.assertEqual(calls, [])
+        self.assertIn("replay mode", build["error"])
+        self.assertFalse(graded_from_traces)
+
+    def test_the_base_url_keeps_an_earlier_version_segment(self):
+        # split() takes the FIRST "/v1/" and would truncate a base URL carrying one earlier in its
+        # path; rsplit takes the last, matching traces_url_for. Asserts the URL the function
+        # actually requests, not a string operation restated in the test.
+        requested = []
+
+        class FakeResponse:
+            def read(self):
+                return json.dumps({"build": {"version": "x"}}).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def capture(request, timeout=None):
+            requested.append(request.full_url)
+            return FakeResponse()
+
+        with mock.patch.object(runner.urllib.request, "urlopen", capture):
+            runner.server_build("http://host/api/v1/mcp-server/v1/mcp/chat", "tok")
+
+        self.assertEqual(requested, ["http://host/api/v1/mcp-server/actuator/info"])
+
     def test_server_build_extracts_the_build_section(self):
         class FakeResponse:
             def read(self):

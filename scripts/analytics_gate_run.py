@@ -1451,7 +1451,9 @@ def server_build(chat_url, token):
     recorded the questions blob and the actor, and nothing about the service. Returns a reason
     string rather than raising: not knowing the build must not stop a run.
     """
-    base = chat_url.split("/v1/")[0]
+    # rsplit, matching traces_url_for: split() takes the FIRST "/v1/" and would truncate a base
+    # URL that happens to contain one earlier in its path.
+    base = chat_url.rsplit("/v1/", 1)[0]
     request = urllib.request.Request(f"{base}/actuator/info")
     request.add_header("Authorization", f"Bearer {token}")
     request.add_header("Accept", "application/json")
@@ -1634,8 +1636,11 @@ def main(argv=None):
         "graded_as_of": run_as_of.isoformat(),
         "questions_file": provenance,
         "actor": actor,
-        "server_build": server_build(args.url, token),
-        "graded_from_traces": True,
+        # Replay mode is offline by contract: it reads recorded fixtures and makes no HTTP call, so
+        # it must not probe the server for a build, and it has no live traces to claim provenance
+        # over. Both fields say "not applicable" rather than guessing.
+        "server_build": {"error": "replay mode: no server"} if replaying else server_build(args.url, token),
+        "graded_from_traces": not replaying,
         "void": bool(role_mismatch),
         "results": [],
     }
