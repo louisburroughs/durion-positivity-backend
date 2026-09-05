@@ -164,7 +164,8 @@ class StreamingSessionAgentManagerTest {
                 "http://api-gateway",
                 "/inventory/v1/inventory/stock/{sku}",
                 "/inventory/v1/inventory/search?q={query}",
-                "/inventory/v1/inventory/locations/{locationId}/stock");
+                "/inventory/v1/inventory/locations/{locationId}/stock",
+                "/inventory/v1/inventory/replenishment/policies");
         orderFacadeTool = new OrderFacadeTool(
                 RestClient.builder(),
                 "http://api-gateway",
