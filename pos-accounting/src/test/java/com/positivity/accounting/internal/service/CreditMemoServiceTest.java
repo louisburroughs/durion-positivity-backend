@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -12,10 +13,14 @@ import static org.mockito.Mockito.when;
 import com.positivity.accounting.internal.config.CreditMemoGLConfig;
 import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
 import com.positivity.accounting.internal.dto.CreditMemoResponse;
+import com.positivity.accounting.internal.dto.ResolvedDisplayReference;
+import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
+import com.positivity.accounting.internal.enums.DisplayReferenceType;
+import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import java.math.BigDecimal;
@@ -23,6 +28,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -80,6 +86,17 @@ class CreditMemoServiceTest {
     @Mock
     private CreditMemoGLConfig glConfig;
 
+    /** Issue #1779: the CM-{YYYYMM} display-reference counter and its first-use bootstrap. */
+    @Mock
+    private AccountingSequenceRepository sequenceRepository;
+
+    @Mock
+    private AccountingSequenceProvisioner sequenceProvisioner;
+
+    /** Issue #1779: invoice/customer display resolution; stubbed empty unless a test says otherwise. */
+    @Mock
+    private DisplayReferenceResolver displayReferenceResolver;
+
     @InjectMocks
     private CreditMemoServiceImpl service;
 
@@ -127,6 +144,20 @@ class CreditMemoServiceTest {
         testInvoice = replicaInvoice(
                 "FINALIZED", "110.00", "10.00", Instant.now(TEST_CLOCK).minusSeconds(86400));
 
+        // Issue #1779: the per-month CM-{YYYYMM} counter backing creditMemoReference. Lenient —
+        // read-path tests never assign a reference.
+        AccountingSequence sequence = new AccountingSequence();
+        sequence.setScopeKey("CM-202401");
+        sequence.setNextValue(1L);
+        lenient().when(sequenceRepository.findByScopeKey(anyString())).thenReturn(Optional.of(sequence));
+
+        // Issue #1779: display resolution is exercised by its own tests; the rest of this class
+        // asserts ledger behavior against an empty resolver, which is also the production
+        // behavior when nothing is known — display fields come back null, never a UUID.
+        lenient()
+                .when(displayReferenceResolver.resolve(any(DisplayReferenceType.class), anyCollection()))
+                .thenReturn(Map.of());
+
         // Mock GL config (lenient - not all tests reach GL posting)
         lenient().when(glConfig.getRevenueAccountId()).thenReturn(testRevenueAccountId);
         lenient().when(glConfig.getTaxPayableAccountId()).thenReturn(testTaxAccountId);
@@ -135,6 +166,92 @@ class CreditMemoServiceTest {
         // Mock period service (lenient - not all tests reach period checks)
         lenient().when(periodService.isPriorPeriod(any())).thenReturn(false);
         lenient().when(periodService.getCurrentPeriodId()).thenReturn("2026-02");
+    }
+
+    @Test
+    @DisplayName("Assigns a CM-{YYYYMM}-{n} display reference from the per-month counter (issue #1779)")
+    void assignsCreditMemoDisplayReference() {
+        stubReplica(testInvoice, "110.00");
+        AccountingSequence sequence = new AccountingSequence();
+        sequence.setScopeKey("CM-202401");
+        sequence.setNextValue(7L);
+        when(sequenceRepository.findByScopeKey("CM-202401")).thenReturn(Optional.of(sequence));
+        when(creditMemoRepository.save(any(CreditMemo.class))).thenReturn(testCreditMemo);
+
+        service.createCreditMemo(testRequest, "test-user");
+
+        ArgumentCaptor<CreditMemo> captor = ArgumentCaptor.forClass(CreditMemo.class);
+        verify(creditMemoRepository).save(captor.capture());
+        // Scope comes from the memo's own creation month under the fixed test clock (2024-01),
+        // and the counter is advanced so the next memo cannot reuse the number.
+        assertThat(captor.getValue().getCreditMemoReference()).isEqualTo("CM-202401-7");
+        assertThat(sequence.getNextValue()).isEqualTo(8L);
+    }
+
+    @Test
+    @DisplayName("Bootstraps the month counter on its first use (issue #1779)")
+    void bootstrapsCreditMemoReferenceCounterOnFirstUse() {
+        stubReplica(testInvoice, "110.00");
+        AccountingSequence bootstrapped = new AccountingSequence();
+        bootstrapped.setScopeKey("CM-202401");
+        bootstrapped.setNextValue(1L);
+        // First use of the scope: absent, then present after the provisioner's isolated insert.
+        when(sequenceRepository.findByScopeKey("CM-202401"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(bootstrapped));
+        when(creditMemoRepository.save(any(CreditMemo.class))).thenReturn(testCreditMemo);
+
+        service.createCreditMemo(testRequest, "test-user");
+
+        verify(sequenceProvisioner).provision("CM-202401");
+        ArgumentCaptor<CreditMemo> captor = ArgumentCaptor.forClass(CreditMemo.class);
+        verify(creditMemoRepository).save(captor.capture());
+        assertThat(captor.getValue().getCreditMemoReference()).isEqualTo("CM-202401-1");
+    }
+
+    @Test
+    @DisplayName("Resolved invoice and customer display values reach the response (issue #1779)")
+    void populatesDisplayValuesOnResponse() {
+        testCreditMemo.setCreditMemoReference("CM-202401-7");
+        when(creditMemoRepository.findById(testCreditMemoId)).thenReturn(Optional.of(testCreditMemo));
+        when(invoiceBalanceCalculator.findInvoice(testInvoiceId)).thenReturn(Optional.of(testInvoice));
+        when(invoiceBalanceCalculator.balanceDue(testInvoice)).thenReturn(new BigDecimal("55.00"));
+        when(displayReferenceResolver.resolve(eq(DisplayReferenceType.INVOICE), anyCollection()))
+                .thenReturn(Map.of(testInvoiceId, ResolvedDisplayReference.ofReference("INV-2026-004417")));
+        when(displayReferenceResolver.resolve(eq(DisplayReferenceType.CUSTOMER), anyCollection()))
+                .thenReturn(
+                        Map.of(testCustomerId, new ResolvedDisplayReference("Northside Fleet Services", "C-10427")));
+
+        CreditMemoResponse response = service.getCreditMemo(testCreditMemoId);
+
+        assertThat(response.getCreditMemoReference()).isEqualTo("CM-202401-7");
+        assertThat(response.getOriginalInvoiceReference()).isEqualTo("INV-2026-004417");
+        assertThat(response.getCustomerDisplayName()).isEqualTo("Northside Fleet Services");
+        assertThat(response.getCustomerReference()).isEqualTo("C-10427");
+        // The identifiers are untouched — display values are additive.
+        assertThat(response.getCreditMemoId()).isEqualTo(testCreditMemoId);
+        assertThat(response.getOriginalInvoiceId()).isEqualTo(testInvoiceId);
+        assertThat(response.getCustomerId()).isEqualTo(testCustomerId);
+    }
+
+    @Test
+    @DisplayName("Unresolvable display values stay null rather than falling back to a UUID (issue #1779)")
+    void leavesUnresolvableDisplayValuesNull() {
+        testCreditMemo.setCreditMemoReference(null);
+        when(creditMemoRepository.findById(testCreditMemoId)).thenReturn(Optional.of(testCreditMemo));
+        when(invoiceBalanceCalculator.findInvoice(testInvoiceId)).thenReturn(Optional.of(testInvoice));
+        when(invoiceBalanceCalculator.balanceDue(testInvoice)).thenReturn(new BigDecimal("55.00"));
+        // Resolver knows neither the invoice nor the party (the class-level stub returns empty).
+
+        CreditMemoResponse response = service.getCreditMemo(testCreditMemoId);
+
+        assertThat(response.getCreditMemoReference()).isNull();
+        assertThat(response.getOriginalInvoiceReference()).isNull();
+        assertThat(response.getCustomerDisplayName()).isNull();
+        assertThat(response.getCustomerReference()).isNull();
+        // The exact defect #1779 fixes: no display field may carry an identifier as text.
+        assertThat(response.getOriginalInvoiceReference()).isNotEqualTo(testInvoiceId.toString());
+        assertThat(response.getCustomerDisplayName()).isNotEqualTo(testCustomerId.toString());
     }
 
     @Test

@@ -95,6 +95,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     private final PostingEngineOrchestrator postingEngineOrchestrator;
     private final AccountingSequenceRepository sequenceRepository;
     private final AccountingSequenceProvisioner sequenceProvisioner;
+    private final EventPayloadReferenceProjector eventPayloadReferenceProjector;
 
     /** Scope-key prefix for the per-month {@code accounting_event.eventReference} counter. */
     private static final String EVENT_REFERENCE_SCOPE_PREFIX = "AE-";
@@ -229,7 +230,13 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         AccountingEvent event = accountingEventRepository
                 .findById(eventId)
                 .orElseThrow(() -> new EventNotFoundException(EVENT_NOT_FOUND_PREFIX + eventId));
-        return AccountingEventMapper.toEventResponse(event);
+        AccountingEventResponse response = AccountingEventMapper.toEventResponse(event);
+        // Detail-only display projection (issue #1778): the raw payload above is returned
+        // unchanged for audit and diagnostics; this adds the human-readable identity of the
+        // UUID-backed values inside it, so screens need not show raw UUIDs or reach across a
+        // domain boundary to label them. List responses stay lean and omit it.
+        response.setPayloadReferences(eventPayloadReferenceProjector.project(event.getPayload()));
+        return response;
     }
 
     /**

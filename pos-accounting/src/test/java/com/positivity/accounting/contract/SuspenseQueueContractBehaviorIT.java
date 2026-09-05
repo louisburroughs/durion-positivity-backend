@@ -28,6 +28,7 @@ import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -88,6 +89,21 @@ class SuspenseQueueContractBehaviorIT extends BaseContractIntegrationTest {
         glAccountRepository.deleteAll();
 
         createDefaultMappingForSuccessfulReprocessing();
+    }
+
+    /**
+     * Clean up what {@link #setUp()} seeded. Without this, the default_gl_mapping rows created
+     * here (and the gl_account rows they reference by FK) outlive the class, and the next IT to
+     * clear gl_account without clearing its children first fails on the FK — a cross-class
+     * ordering dependency that only shows up when a new test class changes the run order.
+     */
+    @AfterEach
+    void tearDown() {
+        journalEntryLineRepository.deleteAll();
+        journalEntryRepository.deleteAll();
+        defaultGLMappingRepository.deleteAll();
+        statementLineMappingRepository.deleteAll();
+        glAccountRepository.deleteAll();
     }
 
     // ===============================================

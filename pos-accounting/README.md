@@ -40,6 +40,15 @@ General-ledger accounting service for the Durion Positivity ETSMS platform. Mana
 - `POST /v1/payment-applications` — apply a payment to an invoice
 - `POST /v1/ap-payments` — record an accounts-payable payment
 - `POST /v1/credit-memos` — create a credit memo
+
+### Display references on responses
+
+Responses that carry an entity UUID also carry a display-ready value for it, so screens never have to render a raw identifier (issues #1778, #1779):
+
+- Credit memo list and detail add `creditMemoReference`, `originalInvoiceReference`, `customerDisplayName` and `customerReference` beside the existing ids.
+- Accounting event **detail** adds `payloadReferences`: a typed projection of the UUID-backed values recognized inside the raw payload (invoice, customer, organization, location, journal entry, vendor, vendor bill), each with a `path` locating it in the payload. The raw payload itself is returned unchanged; list responses omit the projection.
+
+Every display value is resolved from data accounting already holds — its own records and its event-fed `ext_invoice` / `ext_customer_party` replicas (ADR-0044) — so nothing is fetched across a domain wall. **A display value is null when accounting cannot resolve it; a UUID is never copied into a display field as fallback text.** Identifiers stay in the contract for commands, links and audit traceability.
 - `GET /v1/reporting/income-statement` — income statement report
 - `GET /v1/reporting/balance-sheet` — balance sheet report
 - `GET /v1/reporting/drilldown/journal-lines/{accountId}` — drill into GL lines
@@ -222,6 +231,8 @@ Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`:
 - `V20__create_credit_memo_tax.sql` — per-jurisdiction attribution of a credit memo's reversed tax, frozen at creation (issue #996)
 - `V21__customer_credit_lifecycle.sql` — customer-credit consumption model: status + applied/refunded totals + `customer_credit_transaction` draw-downs (issue #992)
 - `V32__ext_invoice_workorder_id_nullable.sql` — drops `ext_invoice.workorder_id NOT NULL`: order-fronted/counter-sale/standalone-billing invoices carry no originating workorder and must still replicate into A/R aging and collections (issue #1651)
+- `V34__create_ext_customer_party.sql` — read-only replica of pos-customer party identity (display name + customer number), fed by `customer.events.v1`; the source of the customer display values on accounting responses (issue #1779)
+- `V35__credit_memo_reference.sql` — `credit_memo.credit_memo_reference` display number (`CM-{YYYYMM}-{n}`), assigned from the `accounting_sequence` counter and backfilled for existing memos (issue #1779)
 - `R__seed_reference_accounting.sql` — repeatable seed for reference data, including the 9-account COA
 
 ## Development

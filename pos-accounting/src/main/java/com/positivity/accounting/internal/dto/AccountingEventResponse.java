@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -101,6 +102,16 @@ public class AccountingEventResponse {
             requiredMode = NOT_REQUIRED,
             nullable = true)
     private String eventReference;
+
+    @Schema(
+            description = "Display projection for the UUID-backed values recognized inside the raw payload "
+                    + "(issue #1778). The payload above is unchanged and remains the audit record; this list "
+                    + "carries the human-readable identity of each recognized reference, with null display "
+                    + "values where accounting cannot resolve one. Populated on the event detail endpoint "
+                    + "only — list responses omit it.",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
+    private List<EventPayloadReference> payloadReferences;
 
     // ========== Suspense Queue Fields (CAP:055) ==========
     @Schema(
