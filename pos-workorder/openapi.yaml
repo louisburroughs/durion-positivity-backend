@@ -488,7 +488,7 @@ paths:
       operationId: getJobTimeTotals
       parameters:
       - description: Start date (inclusive)
-        example: 2026-03-01
+        example: '2026-03-01'
         in: query
         name: startDate
         required: true
@@ -496,7 +496,7 @@ paths:
           format: date
           type: string
       - description: End date (inclusive)
-        example: 2026-03-02
+        example: '2026-03-02'
         in: query
         name: endDate
         required: true
@@ -591,7 +591,7 @@ paths:
                   labor:
                     quantity: 1.5
                     unit: HOURS
-                  performedAt: 2026-08-13 16:30:00+00:00
+                  performedAt: '2026-08-13T16:30:00Z'
                   source:
                     sourceReferenceId: job-4711
                     system: MOBILE_APP
@@ -1027,7 +1027,7 @@ paths:
       operationId: getReopenedWorkorderAnalytics
       parameters:
       - description: Completion-date range start (YYYY-MM-DD), inclusive
-        example: 2026-06-01
+        example: '2026-06-01'
         in: query
         name: startDate
         required: true
@@ -1035,7 +1035,7 @@ paths:
           format: date
           type: string
       - description: Completion-date range end (YYYY-MM-DD), inclusive
-        example: 2026-06-30
+        example: '2026-06-30'
         in: query
         name: endDate
         required: true
@@ -1115,7 +1115,7 @@ paths:
       operationId: getTechnicianLaborAnalytics
       parameters:
       - description: Window start date (YYYY-MM-DD), inclusive
-        example: 2026-06-01
+        example: '2026-06-01'
         in: query
         name: startDate
         required: true
@@ -1123,7 +1123,7 @@ paths:
           format: date
           type: string
       - description: Window end date (YYYY-MM-DD), inclusive
-        example: 2026-06-30
+        example: '2026-06-30'
         in: query
         name: endDate
         required: true
@@ -1989,7 +1989,7 @@ paths:
 
         Emits a WORKORDER_ESTIMATE_APPROVE event.
 
-        Returns 404 when the estimate does not exist, 400 when the status is not PENDING_APPROVAL, 409 when the customer does not match the estimate''s own customer, and 422 when a required purchase order is missing.
+        Returns 404 when the estimate does not exist, 400 when the customerId in the request does not match the estimate''s own customer, 409 when the status is not PENDING_APPROVAL, and 422 when a required purchase order is missing.
 
         '
       operationId: approveEstimate
@@ -2031,24 +2031,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Estimate cannot be approved in current state.
+          description: The customerId in the request does not match the estimate's own customer.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateResponse'
-          description: Estimate not found.
+                $ref: '#/components/schemas/ApiError'
+          description: Estimate not found (ESTIMATE_NOT_FOUND).
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'Customer ID mismatch: estimate belongs to a different customer.'
+          description: Estimate is not in PENDING_APPROVAL, so it cannot be approved in its current state (CONFLICT).
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Purchase order number is required for this customer account (PURCHASE_ORDER_REQUIRED).
       security:
       - bearerAuth:
@@ -2227,8 +2227,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateItemResponse'
-          description: Estimate not found
+                $ref: '#/components/schemas/ApiError'
+          description: Estimate not found (ESTIMATE_NOT_FOUND)
         '409':
           content:
             application/json:
@@ -2361,8 +2361,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateItemResponse'
-          description: Estimate or item not found
+                $ref: '#/components/schemas/ApiError'
+          description: Estimate or item not found (ESTIMATE_NOT_FOUND / ESTIMATE_ITEM_NOT_FOUND)
         '409':
           content:
             application/json:
@@ -2658,8 +2658,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateResponse'
-          description: Estimate not found
+                $ref: '#/components/schemas/ApiError'
+          description: Estimate not found (ESTIMATE_NOT_FOUND)
       security:
       - bearerAuth:
         - workorder:estimate:submit
@@ -2945,7 +2945,7 @@ paths:
           - CANCELLED
           type: string
       - description: Range start date (YYYY-MM-DD), inclusive
-        example: 2026-06-01
+        example: '2026-06-01'
         in: query
         name: startDate
         required: false
@@ -2953,7 +2953,7 @@ paths:
           format: date
           type: string
       - description: Range end date (YYYY-MM-DD), inclusive
-        example: 2026-06-30
+        example: '2026-06-30'
         in: query
         name: endDate
         required: false
@@ -3081,7 +3081,7 @@ paths:
                 description: End of day
                 value:
                   notes: All site visits complete
-                  workDate: 2026-08-13
+                  workDate: '2026-08-13'
             schema:
               $ref: '#/components/schemas/SubmitTravelSegmentsRequest'
         description: Submission context for the day's travel segments.
@@ -3133,8 +3133,8 @@ paths:
               Trim end time:
                 description: Trim end time
                 value:
-                  adjustedEndAt: 2026-08-13 13:35:00+00:00
-                  adjustedStartAt: 2026-08-13 13:00:00+00:00
+                  adjustedEndAt: '2026-08-13T13:35:00Z'
+                  adjustedStartAt: '2026-08-13T13:00:00Z'
                   adjustmentReason: Technician forgot to stop the segment at arrival
             schema:
               $ref: '#/components/schemas/CreateTravelSegmentAdjustmentRequest'
@@ -3539,7 +3539,7 @@ paths:
 
         Emits a WORKORDER_APPROVE event and marks the workorder fact changed for downstream replication.
 
-        Returns 404 when the workorder does not exist, 400 when the status is not DRAFT, and 409 when the customer does not match the workorder''s own customer.
+        Returns 404 when the workorder does not exist, 400 when the customerId in the request does not match the workorder''s own customer, and 409 when the status is not DRAFT.
 
         '
       operationId: approveWorkorder
@@ -3580,19 +3580,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Work order cannot be approved in current state.
+          description: The customerId in the request does not match the workorder's own customer.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Work order not found.
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'Customer ID mismatch: workorder belongs to a different customer.'
+          description: Work order is not in DRAFT, so it cannot be approved in its current state (CONFLICT).
       security:
       - bearerAuth:
         - workorder:workorder:approve
@@ -6392,7 +6392,7 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440000
           type: string
         fieldErrors:
-          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
           items:
             $ref: '#/components/schemas/FieldError'
           type: array
@@ -6419,7 +6419,7 @@ components:
           type: string
         timestamp:
           description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
+          example: '2026-03-17T14:30:00.000Z'
           type: string
       required:
       - code
@@ -6614,7 +6614,7 @@ components:
       properties:
         assignedAt:
           description: When the technician was assigned
-          example: 2024-01-27 14:30:00
+          example: '2024-01-27T14:30:00'
           format: date-time
           type: string
         assignedBy:
@@ -6639,7 +6639,7 @@ components:
           type: string
         unassignedAt:
           description: When the technician was unassigned (null for current assignment)
-          example: 2024-01-27 16:00:00
+          example: '2024-01-27T16:00:00'
           format: date-time
           type: string
       type: object
@@ -6676,7 +6676,7 @@ components:
       properties:
         breakEndAt:
           description: Break end timestamp
-          example: 2026-01-15 10:00:00+00:00
+          example: '2026-01-15T10:00:00Z'
           format: date-time
           type: string
         breakSegmentId:
@@ -6686,7 +6686,7 @@ components:
           type: string
         breakStartAt:
           description: Break start timestamp
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         breakType:
@@ -6790,7 +6790,7 @@ components:
       properties:
         completedAt:
           description: Timestamp when completion was recorded
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         currentStatus:
@@ -7241,12 +7241,12 @@ components:
       properties:
         adjustedEndAt:
           description: Adjusted travel segment end timestamp
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         adjustedStartAt:
           description: Adjusted travel segment start timestamp
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         adjustmentReason:
@@ -7295,12 +7295,12 @@ components:
           type: boolean
         date:
           description: The date this dashboard is for
-          example: 2026-01-15
+          example: '2026-01-15'
           format: date
           type: string
         lastRefreshed:
           description: Timestamp when data was last refreshed
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         locationId:
@@ -7421,7 +7421,7 @@ components:
           type: string
         approvedAt:
           description: Date and time the estimate was approved
-          example: 2026-01-15 09:30:00
+          example: '2026-01-15T09:30:00'
           format: date-time
           type: string
         approvedBy:
@@ -7431,7 +7431,7 @@ components:
           type: string
         createdAt:
           description: Date and time the estimate was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         createdByUserId:
@@ -7468,7 +7468,7 @@ components:
           type: string
         expiresAt:
           description: Date and time the approval window expires
-          example: 2026-01-15 09:30:00
+          example: '2026-01-15T09:30:00'
           format: date-time
           type: string
         id:
@@ -7503,7 +7503,7 @@ components:
           type: string
         submittedAt:
           description: Date and time the estimate was submitted for approval
-          example: 2026-01-15 09:30:00
+          example: '2026-01-15T09:30:00'
           format: date-time
           type: string
         submittedBy:
@@ -7546,7 +7546,7 @@ components:
       properties:
         capturedAt:
           description: Snapshot capture timestamp
-          example: 2026-01-15 09:30:00
+          example: '2026-01-15T09:30:00'
           format: date-time
           type: string
         capturedById:
@@ -7598,7 +7598,7 @@ components:
       properties:
         createdAt:
           description: Creation timestamp
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         currencyUomId:
@@ -7619,7 +7619,7 @@ components:
           type: string
         expiresAt:
           description: Estimate expiry timestamp
-          example: 2026-01-15 09:30:00
+          example: '2026-01-15T09:30:00'
           format: date-time
           type: string
         id:
@@ -7764,7 +7764,7 @@ components:
           type: string
         createdAt:
           description: Creation timestamp (UTC).
-          example: 2026-02-27 12:00:00+00:00
+          example: '2026-02-27T12:00:00Z'
           format: date-time
           type: string
         estimateId:
@@ -7881,7 +7881,7 @@ components:
           type: string
         breakExpectedReturn:
           description: Expected return time when the mechanic is on break
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         currentStatus:
@@ -8029,12 +8029,12 @@ components:
           type: string
         scheduledEndAt:
           description: Scheduled end time
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         scheduledStartAt:
           description: Scheduled start time
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         version:
@@ -8163,7 +8163,7 @@ components:
       properties:
         end:
           description: End timestamp of the PTO period
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         ptoId:
@@ -8176,7 +8176,7 @@ components:
           type: string
         start:
           description: Start timestamp of the PTO period
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
       required:
@@ -8248,7 +8248,7 @@ components:
           type: string
         reopenedAt:
           description: Reopen timestamp
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         workorderId:
@@ -8577,7 +8577,7 @@ components:
           type: string
         workDate:
           description: Work date whose travel segments are being submitted
-          example: 2026-01-15
+          example: '2026-01-15'
           format: date
           type: string
       required:
@@ -8691,7 +8691,7 @@ components:
       properties:
         assignedAt:
           description: When the technician was assigned
-          example: 2024-01-27 14:30:00
+          example: '2024-01-27T14:30:00'
           format: date-time
           type: string
         assignedBy:
@@ -8725,7 +8725,7 @@ components:
           type: string
         reassignedAt:
           description: When technician was reassigned
-          example: 2024-01-27 15:30:00
+          example: '2024-01-27T15:30:00'
           format: date-time
           type: string
         reassignedBy:
@@ -8807,12 +8807,12 @@ components:
           type: string
         adjustedEndAt:
           description: Adjusted end timestamp of the travel segment
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         adjustedStartAt:
           description: Adjusted start timestamp of the travel segment
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         adjustmentId:
@@ -8830,7 +8830,7 @@ components:
           type: string
         approvedAt:
           description: Timestamp when the adjustment was approved
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         approvedByUserId:
@@ -8839,7 +8839,7 @@ components:
           type: string
         createdAt:
           description: Timestamp when the adjustment was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         travelSegmentId:
@@ -8871,7 +8871,7 @@ components:
           type: integer
         createdAt:
           description: Timestamp when the segment was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         createdBy:
@@ -8885,7 +8885,7 @@ components:
           type: integer
         endAt:
           description: Timestamp when the travel segment ended
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         fromLocationId:
@@ -8895,7 +8895,7 @@ components:
           type: string
         lastModifiedAt:
           description: Timestamp when the segment was last modified
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         lastModifiedBy:
@@ -8933,7 +8933,7 @@ components:
           type: string
         startAt:
           description: Timestamp when the travel segment started
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         status:
@@ -8964,7 +8964,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the segment was last updated
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         workOrderId:
@@ -9085,7 +9085,7 @@ components:
           $ref: '#/components/schemas/LaborQuantity'
         performedAt:
           description: Timestamp when labor was performed
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         source:
@@ -9117,7 +9117,7 @@ components:
           type: string
         performedAt:
           description: Timestamp when labor was performed
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         quantity:
@@ -9302,7 +9302,7 @@ components:
           $ref: '#/components/schemas/WorkorderCapabilities'
         createdAt:
           description: Creation timestamp
-          example: 2024-01-27 10:00:00+00:00
+          example: '2024-01-27T10:00:00Z'
           format: date-time
           type: string
         createdBy:
@@ -9367,7 +9367,7 @@ components:
           type: array
         startedAt:
           description: Start timestamp
-          example: 2024-01-27 14:30:00+00:00
+          example: '2024-01-27T14:30:00Z'
           format: date-time
           type: string
         status:
@@ -9503,7 +9503,7 @@ components:
           type: string
         createdAt:
           description: Creation timestamp
-          example: 2024-01-27 14:30:00+00:00
+          example: '2024-01-27T14:30:00Z'
           format: date-time
           type: string
         createdBy:
@@ -9512,7 +9512,7 @@ components:
           type: string
         endTime:
           description: Labor session end time (null if still active)
-          example: 2024-01-27 16:30:00
+          example: '2024-01-27T16:30:00'
           format: date-time
           type: string
         hoursWorked:
@@ -9530,7 +9530,7 @@ components:
           type: string
         startTime:
           description: Labor session start time
-          example: 2024-01-27 14:30:00
+          example: '2024-01-27T14:30:00'
           format: date-time
           type: string
         technicianId:
@@ -9628,7 +9628,7 @@ components:
           type: string
         performedAt:
           description: Adjustment timestamp
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         performedBy:
@@ -9765,7 +9765,7 @@ components:
           type: string
         performedAt:
           description: Event timestamp
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         performedBy:
@@ -9800,12 +9800,12 @@ components:
       properties:
         createdAt:
           description: Timestamp the pick list was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         dueAt:
           description: Timestamp the pick list is due
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         pickListId:
@@ -9824,7 +9824,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp the pick list was last updated
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         workorderId:
@@ -10017,7 +10017,7 @@ components:
       properties:
         createdAt:
           description: Creation timestamp
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         customerId:
@@ -10176,12 +10176,12 @@ components:
           type: string
         transitionedAt:
           description: Timestamp when the status transition occurred
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         workStartedAt:
           description: Timestamp when work was started on the workorder
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         workorderId:
@@ -10405,7 +10405,7 @@ components:
           type: string
         scheduledDate:
           description: Date the workorder is scheduled for
-          example: 2026-01-15
+          example: '2026-01-15'
           format: date
           type: string
         status:

@@ -9,6 +9,7 @@ import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.internal.service.PeopleAvailabilityService;
 import com.positivity.people.internal.service.StaffingAssignmentService;
 import com.positivity.people.internal.service.UserPersonTranslationService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -21,7 +22,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -96,10 +96,7 @@ public class PeopleAvailabilityController {
     @ApiResponse(
             responseCode = "404",
             description = "No primary location assignment found and no top-level default location available.",
-            content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/me/primary-location")
     @EmitEvent(id = "PEOPLE_PRIMARY_LOCATION_GET", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -138,10 +135,7 @@ public class PeopleAvailabilityController {
     @ApiResponse(
             responseCode = "404",
             description = "No person linked to the current user.",
-            content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/me/locations")
     @EmitEvent(id = "PEOPLE_ME_LOCATIONS_LIST", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -197,10 +191,7 @@ public class PeopleAvailabilityController {
     @ApiResponse(
             responseCode = "404",
             description = "No primary location assignment found for the person.",
-            content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/{personId}/primary-location")
     @EmitEvent(id = "PEOPLE_PERSON_PRIMARY_LOCATION_GET", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

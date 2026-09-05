@@ -6,6 +6,8 @@ permissions:
     description: "Execute a synchronous chat request via Spring AI assistant runtime"
   - name: "mcp:chat:stream"
     description: "Execute a streaming SSE chat request via Spring AI assistant runtime"
+  - name: "mcp:eval_trace:view"
+    description: "Read recorded eval turn traces (offered tools, tool calls, assembled prompt)"
   - name: "mcp:document:ingest"
     description: "Ingest a document into the RAG vector store"
   - name: "mcp:llm_api:create"

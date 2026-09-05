@@ -324,7 +324,7 @@ paths:
         schema:
           type: string
       - description: Optional since-updated-at filter
-        example: 2026-01-01 00:00:00+00:00
+        example: '2026-01-01T00:00:00Z'
         in: query
         name: sinceUpdatedAt
         required: false
@@ -1830,7 +1830,7 @@ paths:
                   - priority: 1
                     ruleType: SERVICE_AREA
                     serviceAreaId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03
-                    validFrom: 2026-06-18
+                    validFrom: '2026-06-18'
                   name: Van 7
                   notes: Equipped with hydraulic lift
                   status: ACTIVE
@@ -2146,8 +2146,8 @@ paths:
                   - priority: 1
                     ruleType: SERVICE_AREA
                     serviceAreaId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03
-                    validFrom: 2026-06-18
-                    validTo: 2026-12-31
+                    validFrom: '2026-06-18'
+                    validTo: '2026-12-31'
             schema:
               type: object
         description: Envelope holding the complete replacement rule set under the "rules" key; existing rules not present here are deleted.
@@ -2711,7 +2711,7 @@ components:
           type: string
         createdAt:
           description: Timestamp when the bay was created (ISO 8601)
-          example: 2026-06-18 08:00:00+00:00
+          example: '2026-06-18T08:00:00Z'
           format: date-time
           type: string
         id:
@@ -2721,7 +2721,7 @@ components:
           type: string
         lastModifiedAt:
           description: Timestamp when the bay was last modified (ISO 8601)
-          example: 2026-06-18 08:00:00+00:00
+          example: '2026-06-18T08:00:00Z'
           format: date-time
           type: string
         locationId:
@@ -2957,12 +2957,12 @@ components:
           type: string
         validFrom:
           description: Date from which the rule is effective
-          example: 2026-06-18
+          example: '2026-06-18'
           format: date
           type: string
         validTo:
           description: Date until which the rule is effective
-          example: 2026-12-31
+          example: '2026-12-31'
           format: date
           type: string
       required:
@@ -3002,12 +3002,12 @@ components:
           type: string
         validFrom:
           description: Date from which the rule is effective
-          example: 2026-06-18
+          example: '2026-06-18'
           format: date
           type: string
         validTo:
           description: Date until which the rule is effective
-          example: 2026-12-31
+          example: '2026-12-31'
           format: date
           type: string
       required:
@@ -3045,7 +3045,7 @@ components:
       properties:
         date:
           description: Date on which the location is closed
-          example: 2026-12-25
+          example: '2026-12-25'
           format: date
           type: string
         reason:
@@ -3246,7 +3246,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the location was last updated (ISO 8601)
-          example: 2026-06-18 08:00:00+00:00
+          example: '2026-06-18T08:00:00Z'
           format: date-time
           type: string
       required:
@@ -3556,7 +3556,7 @@ components:
           type: array
         createdAt:
           description: Timestamp when the mobile unit was created (ISO 8601)
-          example: 2026-06-18 08:00:00+00:00
+          example: '2026-06-18T08:00:00Z'
           format: date-time
           type: string
         id:
@@ -3583,7 +3583,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the mobile unit was last updated (ISO 8601)
-          example: 2026-06-18 08:00:00+00:00
+          example: '2026-06-18T08:00:00Z'
           format: date-time
           type: string
       required:
@@ -3834,7 +3834,7 @@ components:
           type: boolean
         createdAt:
           description: Timestamp when the service area was created (ISO 8601)
-          example: 2026-06-18 08:00:00+00:00
+          example: '2026-06-18T08:00:00Z'
           format: date-time
           type: string
         description:
@@ -3857,7 +3857,7 @@ components:
           type: array
         updatedAt:
           description: Timestamp when the service area was last updated (ISO 8601)
-          example: 2026-06-18 08:00:00+00:00
+          example: '2026-06-18T08:00:00Z'
           format: date-time
           type: string
       required:
@@ -4306,7 +4306,7 @@ components:
           type: number
         createdAt:
           description: Timestamp when the policy was created (ISO 8601)
-          example: 2026-06-18 08:00:00+00:00
+          example: '2026-06-18T08:00:00Z'
           format: date-time
           type: string
         id:
@@ -4324,7 +4324,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the policy was last updated (ISO 8601)
-          example: 2026-06-18 08:00:00+00:00
+          example: '2026-06-18T08:00:00Z'
           format: date-time
           type: string
       required:

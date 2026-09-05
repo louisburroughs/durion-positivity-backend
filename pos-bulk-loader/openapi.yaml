@@ -120,7 +120,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Operator already has an active job
       security:
       - bearerAuth:
@@ -165,13 +165,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Job does not belong to the authenticated operator
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Job not found
       security:
       - bearerAuth:
@@ -216,15 +216,15 @@ paths:
           description: Audit records returned
         '403':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job does not belong to the authenticated operator
         '404':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job not found
       security:
       - bearerAuth:
@@ -269,19 +269,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Job does not belong to the authenticated operator
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Job not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Job is already in terminal state
       security:
       - bearerAuth:
@@ -342,27 +342,27 @@ paths:
           description: Corrections submitted successfully
         '400':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid correction request
         '403':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job does not belong to the authenticated operator
         '404':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job not found
         '409':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job is not in a state that accepts corrections
       security:
       - bearerAuth:
@@ -421,27 +421,27 @@ paths:
           description: Correction processed
         '400':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid correction request
         '403':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job does not belong to the authenticated operator
         '404':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job not found
         '409':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job is not in a state that accepts corrections
       security:
       - bearerAuth:
@@ -485,15 +485,15 @@ paths:
           description: CSV error report downloaded
         '403':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job does not belong to the authenticated operator
         '404':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job not found
       security:
       - bearerAuth:
@@ -538,15 +538,15 @@ paths:
           description: Mappings returned
         '403':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job does not belong to the authenticated operator
         '404':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job not found
       security:
       - bearerAuth:
@@ -606,15 +606,15 @@ paths:
           description: Mappings approved
         '403':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job does not belong to the authenticated operator
         '404':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job not found
       security:
       - bearerAuth:
@@ -657,21 +657,21 @@ paths:
           description: Job transitioned to PROCESSING
         '403':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job does not belong to the authenticated operator
         '404':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job not found
         '409':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid state transition
       security:
       - bearerAuth:
@@ -716,19 +716,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Job does not belong to the authenticated operator
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Job not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkLoadJobResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Job is not in FAILED or PARTIAL state
       security:
       - bearerAuth:
@@ -841,15 +841,15 @@ paths:
           description: File uploaded and content detected
         '404':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job not found
         '409':
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Job is in a terminal state and cannot accept uploads
       security:
       - bearerAuth:
@@ -1038,12 +1038,60 @@ paths:
       - bulkImport:upload:execute
 components:
   schemas:
+    ApiError:
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+          type: string
+        correlationId:
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+          type: string
+        fieldErrors:
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
+          items:
+            $ref: '#/components/schemas/FieldError'
+          type: array
+        message:
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+          type: string
+        nextAction:
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+          type: string
+        referenceId:
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+          type: string
+        status:
+          description: HTTP status code
+          example: 404
+          format: int32
+          type: integer
+        supportAction:
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+          type: string
+        timestamp:
+          description: ISO 8601 UTC timestamp of the error
+          example: '2026-03-17T14:30:00.000Z'
+          type: string
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+      type: object
     AuditRecordResponse:
       description: Audit record for a single row processed during a bulk load job
       properties:
         createdAt:
           description: Timestamp when the audit record was created (ISO 8601)
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         entityId:
@@ -1210,12 +1258,12 @@ components:
       properties:
         completedAt:
           description: Timestamp when processing completed (ISO 8601)
-          example: 2026-01-15 09:45:00+00:00
+          example: '2026-01-15T09:45:00Z'
           format: date-time
           type: string
         createdAt:
           description: Timestamp when the job was created (ISO 8601)
-          example: 2026-01-15 09:25:00+00:00
+          example: '2026-01-15T09:25:00Z'
           format: date-time
           type: string
         domainType:
@@ -1273,7 +1321,7 @@ components:
           type: integer
         startedAt:
           description: Timestamp when processing started (ISO 8601)
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         status:
@@ -1303,7 +1351,7 @@ components:
           type: integer
         updatedAt:
           description: Timestamp when the job was last updated (ISO 8601)
-          example: 2026-01-15 09:45:00+00:00
+          example: '2026-01-15T09:45:00Z'
           format: date-time
           type: string
       required:
@@ -1335,7 +1383,7 @@ components:
           type: number
         createdAt:
           description: Timestamp when the mapping was created (ISO 8601)
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         id:
@@ -1464,6 +1512,21 @@ components:
       - auditRecordId
       - status
       type: object
+    FieldError:
+      description: Validation error for a specific request field
+      properties:
+        field:
+          description: Field name
+          example: quantity
+          type: string
+        message:
+          description: Validation failure message
+          example: must be greater than 0
+          type: string
+      required:
+      - field
+      - message
+      type: object
     FileUploadResponse:
       description: Result of uploading a source file for a bulk load job
       properties:
@@ -1542,24 +1605,6 @@ components:
           $ref: '#/components/schemas/SortObject'
         unpaged:
           type: boolean
-      type: object
-    ProblemDetail:
-      properties:
-        detail:
-          type: string
-        instance:
-          format: uri
-          type: string
-        properties:
-          type: object
-        status:
-          format: int32
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
       type: object
     SortObject:
       properties:

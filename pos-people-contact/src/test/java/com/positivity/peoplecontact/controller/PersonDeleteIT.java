@@ -132,7 +132,8 @@ class PersonDeleteIT {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody()).isNotNull();
-        assertThat((String) response.getBody().get("detail")).contains("linked user");
+        assertThat(response.getBody()).containsEntry("code", "PERSON_HAS_LINKED_USERS");
+        assertThat((String) response.getBody().get("message")).contains("linked user");
         assertThat((String) response.getBody().get("nextAction")).contains("Unlink");
         // Nothing was deleted: the person, its link, and its contact points survive.
         assertThat(personRepository.findById(person.getId())).isPresent();

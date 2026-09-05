@@ -11,10 +11,14 @@ import com.positivity.people.internal.service.PeopleAvailabilityService;
 import com.positivity.people.internal.service.StaffingAssignmentService;
 import com.positivity.people.internal.service.UserPersonTranslationService;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -26,7 +30,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * the service resolves a null name.
  */
 @WebMvcTest(PeopleAvailabilityController.class)
-@Import(TestSecurityConfig.class)
+@Import({TestSecurityConfig.class, PeopleAvailabilityControllerTest.FixedClockConfig.class})
 @ActiveProfiles("test")
 @SuppressWarnings({"java:S6813", "java:S100", "java:S1192"})
 class PeopleAvailabilityControllerTest {
@@ -36,9 +40,6 @@ class PeopleAvailabilityControllerTest {
 
     @Autowired
     MockMvc mockMvc;
-
-    @MockitoBean
-    Clock clock;
 
     @MockitoBean
     PeopleAvailabilityService peopleAvailabilityService;
@@ -96,5 +97,20 @@ class PeopleAvailabilityControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.locationId").value(LOCATION_ID.toString()))
                 .andExpect(jsonPath("$.locationName").doesNotExist());
+    }
+
+    /**
+     * A real fixed {@code Clock}, not a mock. {@code PeopleExceptionHandler} reads it on every
+     * error response ({@code Instant.now(clock)}), and an unstubbed mock returns {@code null} —
+     * which made the advice itself throw, so the original exception surfaced as unhandled
+     * (issue #1716). Fixed rather than {@code systemUTC} so timestamps stay deterministic.
+     */
+    @TestConfiguration
+    static class FixedClockConfig {
+
+        @Bean
+        Clock clock() {
+            return Clock.fixed(Instant.parse("2026-03-01T00:00:00Z"), ZoneOffset.UTC);
+        }
     }
 }

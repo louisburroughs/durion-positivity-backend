@@ -14,13 +14,10 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -33,6 +30,19 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+/**
+ * Module-local exception advice for pos-people-contact.
+ *
+ * <p>#1716: every handler here answered Spring's bare {@link org.springframework.http.ProblemDetail}
+ * until now — no {@code code}, and no correlation id at all, so a failure could not be tied to
+ * its log entry. ADR-0017 §3 makes the {@link ApiError} envelope the contract for every non-2xx
+ * body and §4 requires the correlation id in both the body and the {@code X-Correlation-Id}
+ * header. #1694 had converted only the handler it touched
+ * ({@code PeopleContactValidationException}), leaving this advice internally inconsistent — some
+ * responses enveloped, most not — which is the drift ADR-0056's "Alternatives Considered" calls
+ * out by name. Every handler now routes through the same {@code buildResponse}, so a new one
+ * cannot quietly reintroduce a second shape. Statuses are unchanged throughout.
+ */
 @Slf4j
 @RestControllerAdvice
 @RequiredArgsConstructor
@@ -40,55 +50,60 @@ public class PeopleExceptionHandler {
 
     private final Clock clock;
 
-    private static final String TIMESTAMP_PROPERTY = "timestamp";
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
-    private static final String CORRELATION_ID_PROPERTY = "correlationId";
     private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
+    private static final String NOT_FOUND = "NOT_FOUND";
 
     @ExceptionHandler(PersonNotFoundException.class)
-    public ResponseEntity<ProblemDetail> handlePersonNotFound(PersonNotFoundException ex, HttpServletRequest request) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return respondProblem(request, problem);
+    public ResponseEntity<ApiError> handlePersonNotFound(PersonNotFoundException ex, HttpServletRequest request) {
+        return buildResponse(HttpStatus.NOT_FOUND, "PERSON_NOT_FOUND", ex.getMessage(), request);
     }
 
     @ExceptionHandler(UserPersonLinkNotFoundException.class)
-    public ResponseEntity<ProblemDetail> handleLinkNotFound(
-            UserPersonLinkNotFoundException ex, HttpServletRequest request) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return respondProblem(request, problem);
+    public ResponseEntity<ApiError> handleLinkNotFound(UserPersonLinkNotFoundException ex, HttpServletRequest request) {
+        return buildResponse(HttpStatus.NOT_FOUND, "USER_PERSON_LINK_NOT_FOUND", ex.getMessage(), request);
     }
 
+    /**
+     * Keeps the recovery hint the {@code ProblemDetail} carried as an extension property; the
+     * envelope has a first-class {@code nextAction} field for exactly this (ADR-0017 §3).
+     *
+     * <p>This is the one handler that builds its response inline rather than through {@link
+     * #buildResponse}, so it repeats that method's null-message fallback: {@code message} is
+     * required by the envelope, and a handler that can answer with a null one would break the
+     * contract for every client that reads it. {@link PersonHasLinkedUsersException} always sets
+     * a message today; the guard is here so that staying true does not depend on remembering.
+     */
     @ExceptionHandler(PersonHasLinkedUsersException.class)
-    public ResponseEntity<ProblemDetail> handlePersonHasLinkedUsers(
+    public ResponseEntity<ApiError> handlePersonHasLinkedUsers(
             PersonHasLinkedUsersException ex, HttpServletRequest request) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        problem.setProperty("nextAction", PersonHasLinkedUsersException.NEXT_ACTION);
-        return respondProblem(request, problem);
+        String correlationId = resolveCorrelationId(request);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.guided(
+                        "PERSON_HAS_LINKED_USERS",
+                        ex.getMessage() != null ? ex.getMessage() : HttpStatus.CONFLICT.getReasonPhrase(),
+                        HttpStatus.CONFLICT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        null,
+                        PersonHasLinkedUsersException.NEXT_ACTION,
+                        null));
     }
 
     @ExceptionHandler(UserAlreadyLinkedException.class)
-    public ResponseEntity<ProblemDetail> handleUserAlreadyLinked(
-            UserAlreadyLinkedException ex, HttpServletRequest request) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return respondProblem(request, problem);
+    public ResponseEntity<ApiError> handleUserAlreadyLinked(UserAlreadyLinkedException ex, HttpServletRequest request) {
+        return buildResponse(HttpStatus.CONFLICT, "USER_ALREADY_LINKED", ex.getMessage(), request);
     }
 
     @ExceptionHandler(NotFoundException.class)
-    public ResponseEntity<ProblemDetail> handleNotFound(NotFoundException ex, HttpServletRequest request) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return respondProblem(request, problem);
+    public ResponseEntity<ApiError> handleNotFound(NotFoundException ex, HttpServletRequest request) {
+        return buildResponse(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage(), request);
     }
 
     @ExceptionHandler(EntityNotFoundException.class)
-    public ResponseEntity<ProblemDetail> handleEntityNotFound(EntityNotFoundException ex, HttpServletRequest request) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return respondProblem(request, problem);
+    public ResponseEntity<ApiError> handleEntityNotFound(EntityNotFoundException ex, HttpServletRequest request) {
+        return buildResponse(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage(), request);
     }
 
     /**
@@ -106,101 +121,94 @@ public class PeopleExceptionHandler {
     @ExceptionHandler(PeopleContactValidationException.class)
     public ResponseEntity<ApiError> handlePeopleContactValidation(
             PeopleContactValidationException ex, HttpServletRequest request) {
-        String correlationId = resolveCorrelationId(request);
-        return buildResponse(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage(), correlationId);
+        return buildResponse(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage(), request);
     }
 
     @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ProblemDetail> handleIllegalState(IllegalStateException ex, HttpServletRequest request) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return respondProblem(request, problem);
+    public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex, HttpServletRequest request) {
+        return buildResponse(HttpStatus.CONFLICT, "INVALID_STATE", ex.getMessage(), request);
     }
 
     @ExceptionHandler(SemanticValidationException.class)
-    public ResponseEntity<ProblemDetail> handleSemanticValidation(
+    public ResponseEntity<ApiError> handleSemanticValidation(
             SemanticValidationException ex, HttpServletRequest request) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return respondProblem(request, problem);
+        return buildResponse(HttpStatus.UNPROCESSABLE_CONTENT, "SEMANTIC_VALIDATION_ERROR", ex.getMessage(), request);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ProblemDetail> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return respondProblem(request, problem);
+    public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+        return buildResponse(HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage(), request);
     }
 
     // Without these handlers, Spring MVC's routing/binding exceptions fall through to
     // pos-web-common's platform-wide catch-all and every unknown path or malformed parameter
-    // surfaces as a generic 500 (issue #820). The details deliberately do not echo request data
+    // surfaces as a generic 500 (issue #820). The messages deliberately do not echo request data
     // (path, parameter values): reflecting user-controlled input is flagged as XSS-prone
-    // (SonarCloud S5131), and the request path is already available in the ProblemDetail
-    // `instance` field.
+    // (SonarCloud S5131). The parameter NAME is not user-controlled — Spring only raises these
+    // for parameters the handler method declares — so naming it is safe and is what makes the
+    // message actionable.
     @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
-    public ResponseEntity<ProblemDetail> handleNoEndpoint(HttpServletRequest request) {
-        ProblemDetail problem =
-                ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "No endpoint for the requested path");
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return respondProblem(request, problem);
+    public ResponseEntity<ApiError> handleNoEndpoint(HttpServletRequest request) {
+        return buildResponse(HttpStatus.NOT_FOUND, "NO_ENDPOINT", "No endpoint for the requested path", request);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ResponseEntity<ProblemDetail> handleTypeMismatch(
+    public ResponseEntity<ApiError> handleTypeMismatch(
             MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.BAD_REQUEST, "Invalid value for parameter '" + ex.getName() + "'");
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return respondProblem(request, problem);
+        return buildResponse(
+                HttpStatus.BAD_REQUEST,
+                VALIDATION_ERROR,
+                "Invalid value for parameter '" + ex.getName() + "'",
+                request);
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)
-    public ResponseEntity<ProblemDetail> handleMissingParameter(
+    public ResponseEntity<ApiError> handleMissingParameter(
             MissingServletRequestParameterException ex, HttpServletRequest request) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.BAD_REQUEST, "Missing required parameter '" + ex.getParameterName() + "'");
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return respondProblem(request, problem);
+        return buildResponse(
+                HttpStatus.BAD_REQUEST,
+                VALIDATION_ERROR,
+                "Missing required parameter '" + ex.getParameterName() + "'",
+                request);
     }
 
+    /**
+     * The message stays the fixed "Validation failed" and {@code fieldErrors} is deliberately
+     * left empty. #1716 changes the envelope, not this trade: the binding result names this
+     * module's internal property names, and this response is provokable by any caller, so
+     * {@code PeopleExceptionHandlerTest.validationReportsFixedDetail} pins the omission on
+     * purpose. Modules with no such constraint (pos-bulk-loader, pos-mcp-server) do populate
+     * {@code fieldErrors}.
+     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ProblemDetail> handleValidation(
-            MethodArgumentNotValidException ex, HttpServletRequest request) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Validation failed");
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return respondProblem(request, problem);
+    public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
+        return buildResponse(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, "Validation failed", request);
     }
 
+    /**
+     * #1716: this answered an ad-hoc {@code Map} with {@code error}/{@code path} keys — a third
+     * error shape in the same advice. The request path is dropped rather than echoed, for the
+     * XSS reason above.
+     */
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<Map<String, Object>> handleHttpMessageNotReadable(
+    public ResponseEntity<ApiError> handleHttpMessageNotReadable(
             HttpMessageNotReadableException ex, HttpServletRequest request) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put(TIMESTAMP_PROPERTY, Instant.now(clock));
-        body.put("status", HttpStatus.BAD_REQUEST.value());
-        body.put("error", "Bad Request");
-        body.put("path", request.getRequestURI());
-        body.put("message", "Malformed JSON request");
-        return respond(request, HttpStatus.BAD_REQUEST, body);
+        return buildResponse(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, "Malformed JSON request", request);
     }
 
     @ExceptionHandler(SecurityServiceException.class)
-    public ResponseEntity<ProblemDetail> handleSecurityServiceException(
+    public ResponseEntity<ApiError> handleSecurityServiceException(
             SecurityServiceException ex, HttpServletRequest request) {
         HttpStatus status = determineHttpStatus(ex);
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, ex.getMessage());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return respondProblem(request, problem);
+        return buildResponse(status, "SECURITY_SERVICE_ERROR", ex.getMessage(), request);
     }
 
     @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<ProblemDetail> handleResponseStatusException(
+    public ResponseEntity<ApiError> handleResponseStatusException(
             ResponseStatusException ex, HttpServletRequest request) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.valueOf(ex.getStatusCode().value()),
-                ex.getReason() == null ? ex.getMessage() : ex.getReason());
-        problem.setProperty(TIMESTAMP_PROPERTY, Instant.now(clock));
-        return respondProblem(request, problem);
+        HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
+        String message = ex.getReason() == null ? ex.getMessage() : ex.getReason();
+        return buildResponse(status, statusCodeName(status), message, request);
     }
 
     // No @ExceptionHandler(Exception.class) catch-all here (issue #1694): a module-local
@@ -211,41 +219,25 @@ public class PeopleExceptionHandler {
     // echoes the exception's own message, with DataIntegrityViolationException mapped to
     // 409/422 per ADR-0056 §2.
 
+    /** Derives a stable envelope code from a status Spring chose, e.g. 404 -> NOT_FOUND. */
+    private static String statusCodeName(HttpStatus status) {
+        return status.name();
+    }
+
     private ResponseEntity<ApiError> buildResponse(
-            HttpStatus status, String code, String message, String correlationId) {
+            HttpStatus status, String code, String message, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
         return new ResponseEntity<>(
-                ApiError.of(code, message, status.value(), Instant.now(clock).toString(), correlationId),
+                ApiError.of(
+                        code,
+                        message != null ? message : status.getReasonPhrase(),
+                        status.value(),
+                        Instant.now(clock).toString(),
+                        correlationId),
                 headers,
                 status);
-    }
-
-    /**
-     * Sole path for handlers whose body is a {@link ProblemDetail} rather than an {@link
-     * ApiError}: attaches the {@code X-Correlation-Id} header and the matching {@code correlationId}
-     * property on the body (echo-or-generate, ADR-0017 §4) without altering the status or the
-     * fields the caller already set.
-     */
-    private ResponseEntity<ProblemDetail> respondProblem(HttpServletRequest request, ProblemDetail problem) {
-        String correlationId = resolveCorrelationId(request);
-        problem.setProperty(CORRELATION_ID_PROPERTY, correlationId);
-        return respond(HttpStatus.valueOf(problem.getStatus()), problem, correlationId);
-    }
-
-    /**
-     * Sole path for handlers whose body is neither an {@link ApiError} nor a {@link
-     * ProblemDetail} (currently {@link #handleHttpMessageNotReadable}): attaches the {@code
-     * X-Correlation-Id} header without altering the status or body the caller already built.
-     */
-    private <T> ResponseEntity<T> respond(HttpServletRequest request, HttpStatus status, T body) {
-        return respond(status, body, resolveCorrelationId(request));
-    }
-
-    private <T> ResponseEntity<T> respond(HttpStatus status, T body, String correlationId) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.add(X_CORRELATION_ID, correlationId);
-        return new ResponseEntity<>(body, headers, status);
     }
 
     private String resolveCorrelationId(HttpServletRequest request) {

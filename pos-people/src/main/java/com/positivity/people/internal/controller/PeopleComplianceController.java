@@ -4,6 +4,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.people.internal.dto.InactivePersonActiveUserResponse;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.internal.service.PeopleComplianceService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -50,8 +51,14 @@ public class PeopleComplianceController {
                             array =
                                     @ArraySchema(
                                             schema = @Schema(implementation = InactivePersonActiveUserResponse.class))))
-    @ApiResponse(responseCode = "403", description = "Forbidden")
-    @ApiResponse(responseCode = "500", description = "Unexpected server error")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "500",
+            description = "Unexpected server error",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "REPORT_INACTIVE_PERSON_ACTIVE_USER_GENERATED", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

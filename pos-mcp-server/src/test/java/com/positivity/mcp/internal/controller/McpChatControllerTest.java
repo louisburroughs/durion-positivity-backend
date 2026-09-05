@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -80,7 +81,7 @@ class McpChatControllerTest {
     @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
     @DisplayName("POST /v1/mcp/chat with message returns 200 and response payload")
     void chat_withMessage_returns200() throws Exception {
-        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString()))
+        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
                 .thenReturn("assistant reply");
         var authentication = new UsernamePasswordAuthenticationToken(
                 "test-user",
@@ -111,7 +112,7 @@ class McpChatControllerTest {
                 Set.of("ROLE_ADMIN", McpPermissions.MCP_CHAT_EXECUTE),
                 Set.of(McpPermissions.MCP_CHAT_EXECUTE, "AUTHENTICATED"));
         when(currentUserContextResolver.resolve(any(Authentication.class))).thenReturn(adminContext);
-        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString()))
+        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
                 .thenReturn("assistant reply");
         var authentication = new UsernamePasswordAuthenticationToken(
                 "admin.alpha",
@@ -133,14 +134,15 @@ class McpChatControllerTest {
                         argThat(context -> context.username().equals("admin.alpha")
                                 && context.userId().equals(adminContext.userId())
                                 && context.primaryRole().equals("ROLE_ADMIN")),
-                        org.mockito.ArgumentMatchers.eq("test"));
+                        org.mockito.ArgumentMatchers.eq("test"),
+                        nullable(String.class));
     }
 
     @Test
     @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
     @DisplayName("POST /v1/mcp/chat orchestration failure returns 500 ApiError envelope")
     void chat_orchestrationFailure_returns500ApiError() throws Exception {
-        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString()))
+        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
                 .thenThrow(new RuntimeException("boom"));
 
         // #1694: NltiExceptionHandler no longer carries a blanket @ExceptionHandler(Exception.class),
@@ -170,7 +172,36 @@ class McpChatControllerTest {
 
         // #1711: the 500 envelope is identical whether the failure came from orchestration or from
         // an NPE earlier in the controller, so without this the test passes while covering neither.
-        verify(agentOrchestrationService).chat(any(CurrentUserContext.class), anyString());
+        verify(agentOrchestrationService).chat(any(CurrentUserContext.class), anyString(), nullable(String.class));
+    }
+
+    @Test
+    @WithMockUser(username = "test-user", authorities = McpPermissions.MCP_CHAT_EXECUTE)
+    @DisplayName("POST /v1/mcp/chat forwards conversationId to the orchestrator (#1735)")
+    void chat_forwardsConversationId() throws Exception {
+        when(agentOrchestrationService.chat(any(CurrentUserContext.class), anyString(), nullable(String.class)))
+                .thenReturn("assistant reply");
+        var authentication = new UsernamePasswordAuthenticationToken(
+                "test-user",
+                "n/a",
+                List.of(
+                        new SimpleGrantedAuthority("ROLE_USER"),
+                        new SimpleGrantedAuthority(McpPermissions.MCP_CHAT_EXECUTE)));
+
+        mockMvc.perform(post("/v1/mcp/chat")
+                        .principal(authentication)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"test\",\"conversationId\":\"gate-q07\"}"))
+                .andExpect(status().isOk());
+
+        // Without this the field could be accepted, documented and silently dropped, which reads
+        // as a working feature from outside and changes nothing about the shared memory.
+        verify(agentOrchestrationService)
+                .chat(
+                        any(CurrentUserContext.class),
+                        org.mockito.ArgumentMatchers.eq("test"),
+                        org.mockito.ArgumentMatchers.eq("gate-q07"));
     }
 
     @Test

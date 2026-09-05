@@ -24,6 +24,7 @@ import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsistencyException;
 import com.positivity.workorder.internal.exception.PromotionValidationException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
+import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.service.EstimateService;
 import com.positivity.workorder.internal.service.IdempotencyService;
 import com.positivity.workorder.internal.service.WorkorderService;
@@ -381,9 +382,14 @@ class EstimateControllerTest {
 
         @Test
         void mapsSubmissionFailuresOntoNotFoundOrBadRequest() {
-            doThrow(new EntityNotFoundException("gone")).when(estimateService).submitForApproval(any(), anyString());
-            assertThat(controller.submitForApproval(ESTIMATE_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+            // #1713: the controller no longer catches a not-found to build a bodiless 404. The
+            // module's own type propagates to GlobalExceptionHandler, which answers the enveloped,
+            // correlated 404 required by ADR-0017 §3/§4.
+            doThrow(new EstimateNotFoundException(ESTIMATE_ID))
+                    .when(estimateService)
+                    .submitForApproval(any(), anyString());
+            assertThatThrownBy(() -> controller.submitForApproval(ESTIMATE_ID))
+                    .isInstanceOf(EstimateNotFoundException.class);
 
             doThrow(new IllegalStateException("not a draft"))
                     .when(estimateService)
@@ -417,20 +423,28 @@ class EstimateControllerTest {
         }
 
         @Test
-        void mapsApprovalFailuresOntoNotFoundOrBadRequest() {
+        void propagatesApprovalFailuresInsteadOfCatchingThem() {
             ApproveEstimateRequest request =
                     ApproveEstimateRequest.builder().customerId(CUSTOMER_ID).build();
-            doThrow(new EntityNotFoundException("gone"))
+            // The call is direct, so no advice runs: these assertions cover propagation out of
+            // the controller only, and the resulting envelopes are asserted over the wire in the
+            // contract ITs.
+            //
+            // #1713: propagates instead of being caught here and answered as a bodiless 404.
+            doThrow(new EstimateNotFoundException(ESTIMATE_ID))
                     .when(estimateService)
                     .approveEstimate(any(), any(), any(), any(), any(), any(), any(), any());
-            assertThat(controller.approveEstimate(ESTIMATE_ID, request).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+            assertThatThrownBy(() -> controller.approveEstimate(ESTIMATE_ID, request))
+                    .isInstanceOf(EstimateNotFoundException.class);
 
-            doThrow(new IllegalStateException("PO required"))
+            // #1753: the invalid-state refusal propagates too. It was previously caught here and
+            // answered as a bodiless 400 that the OpenAPI contract nonetheless documented as an
+            // ApiError.
+            doThrow(new WorkorderResourceConflictException("Estimate cannot be approved in current state: DRAFT"))
                     .when(estimateService)
                     .approveEstimate(any(), any(), any(), any(), any(), any(), any(), any());
-            assertThat(controller.approveEstimate(ESTIMATE_ID, request).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThatThrownBy(() -> controller.approveEstimate(ESTIMATE_ID, request))
+                    .isInstanceOf(WorkorderResourceConflictException.class);
         }
     }
 
@@ -560,9 +574,15 @@ class EstimateControllerTest {
          */
         @Test
         void surfacesEachFailureAsItsOwnTypedException() {
+            // #1713: the translation `catch (EntityNotFoundException) -> EstimateNotFoundException`
+            // is gone. Nothing in this module throws the JPA type any more, so the only way to see
+            // one here is a genuine persistence fault (a broken lazy proxy, say) — which must not
+            // be relabelled as a client 404. It propagates as itself and the platform catch-all
+            // answers a generic, correlated 500 (ADR-0056 §1, the #1694 principle).
             doThrow(new EntityNotFoundException("gone")).when(workorderService).createWorkorder(ESTIMATE_ID, null);
             assertThatThrownBy(() -> controller.promoteEstimateToWorkorder(ESTIMATE_ID, null))
-                    .isInstanceOf(EstimateNotFoundException.class);
+                    .isInstanceOf(EntityNotFoundException.class)
+                    .isNotInstanceOf(EstimateNotFoundException.class);
 
             doThrow(new EstimateNotFoundException(ESTIMATE_ID))
                     .when(workorderService)
@@ -619,13 +639,18 @@ class EstimateControllerTest {
         }
 
         @Test
-        void mapsAResponseStatusExceptionFromTheAddPathOntoItsOwnStatus() {
+        void translatesANotFoundResponseStatusExceptionSoTheAdviceCanEnvelopeIt() {
+            // #1713: this endpoint documents its 404 as an ApiError, so the not-found branch must
+            // not answer a bodiless ResponseEntity. It re-throws as EstimateNotFoundException, which
+            // GlobalExceptionHandler maps to a 404 ESTIMATE_NOT_FOUND envelope — the same shape the
+            // sibling test below pins for a service-thrown EstimateNotFoundException.
             doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "no estimate"))
                     .when(estimateService)
                     .addEstimateItem(any(), any(), anyString());
-            assertThat(controller.addEstimateItem(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+            assertThatThrownBy(() -> controller.addEstimateItem(ESTIMATE_ID, null))
+                    .isInstanceOf(EstimateNotFoundException.class);
 
+            // The 400 branch is unchanged and still answers directly; it is out of #1713's scope.
             doThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "bad item"))
                     .when(estimateService)
                     .addEstimateItem(any(), any(), anyString());
@@ -635,11 +660,12 @@ class EstimateControllerTest {
 
         @Test
         void mapsTheOtherAddFailuresOntoNotFoundBadRequestAndConflict() {
-            doThrow(new EntityNotFoundException("gone"))
+            // #1713: propagates for the enveloped 404 (ADR-0017 §3/§4).
+            doThrow(new EstimateNotFoundException(ESTIMATE_ID))
                     .when(estimateService)
                     .addEstimateItem(any(), any(), anyString());
-            assertThat(controller.addEstimateItem(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+            assertThatThrownBy(() -> controller.addEstimateItem(ESTIMATE_ID, null))
+                    .isInstanceOf(EstimateNotFoundException.class);
 
             doThrow(new WorkorderRequestValidationException("bad quantity"))
                     .when(estimateService)
@@ -665,9 +691,13 @@ class EstimateControllerTest {
 
         @Test
         void mapsUpdateFailuresOntoNotFoundBadRequestAndConflict() {
-            doThrow(new EntityNotFoundException("gone")).when(estimateService).updateEstimateItem(any(), any(), any());
-            assertThat(controller.updateEstimateItem(ESTIMATE_ID, ITEM_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.NOT_FOUND);
+            // #1713: a missing estimate and a missing line are distinct enveloped 404s now
+            // (ESTIMATE_NOT_FOUND / ESTIMATE_ITEM_NOT_FOUND), not one shared bodiless status.
+            doThrow(new EstimateItemNotFoundException(ITEM_ID, ESTIMATE_ID))
+                    .when(estimateService)
+                    .updateEstimateItem(any(), any(), any());
+            assertThatThrownBy(() -> controller.updateEstimateItem(ESTIMATE_ID, ITEM_ID, null))
+                    .isInstanceOf(EstimateItemNotFoundException.class);
 
             doThrow(new WorkorderRequestValidationException("bad quantity"))
                     .when(estimateService)

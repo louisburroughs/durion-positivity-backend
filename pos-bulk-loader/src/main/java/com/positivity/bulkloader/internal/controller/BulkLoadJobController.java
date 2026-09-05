@@ -5,9 +5,11 @@ import com.positivity.bulkloader.internal.dto.BulkLoadJobResponse;
 import com.positivity.bulkloader.internal.security.BulkImportPermissions;
 import com.positivity.bulkloader.internal.service.BulkLoadJobService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -64,7 +66,10 @@ public class BulkLoadJobController {
                     in progress.
                     """)
     @ApiResponse(responseCode = "201", description = "Job created")
-    @ApiResponse(responseCode = "409", description = "Operator already has an active job")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Operator already has an active job",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BulkLoadJobResponse> createJob(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =
@@ -101,8 +106,14 @@ public class BulkLoadJobController {
                     Returns 404 when no job exists with the supplied id for the authenticated operator.
                     """)
     @ApiResponse(responseCode = "200", description = "Job found")
-    @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
-    @ApiResponse(responseCode = "404", description = "Job not found")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Job does not belong to the authenticated operator",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Job not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BulkLoadJobResponse> getJob(@PathVariable @NonNull UUID jobId) {
         String operatorId = currentOperatorId();
         return ResponseEntity.ok(bulkLoadJobService.getJob(jobId, operatorId));
@@ -145,9 +156,18 @@ public class BulkLoadJobController {
                     the job is already COMPLETED, PARTIAL, CANCELLED or FAILED.
                     """)
     @ApiResponse(responseCode = "200", description = "Job cancelled")
-    @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
-    @ApiResponse(responseCode = "404", description = "Job not found")
-    @ApiResponse(responseCode = "409", description = "Job is already in terminal state")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Job does not belong to the authenticated operator",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Job not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Job is already in terminal state",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BulkLoadJobResponse> cancelJob(@PathVariable @NonNull UUID jobId) {
         String operatorId = currentOperatorId();
         return ResponseEntity.ok(bulkLoadJobService.cancelJob(jobId, operatorId));
@@ -170,9 +190,18 @@ public class BulkLoadJobController {
                     the job is not in FAILED or PARTIAL state or the operator already has an active job.
                     """)
     @ApiResponse(responseCode = "200", description = "Job reset and re-queued for retry")
-    @ApiResponse(responseCode = "403", description = "Job does not belong to the authenticated operator")
-    @ApiResponse(responseCode = "404", description = "Job not found")
-    @ApiResponse(responseCode = "409", description = "Job is not in FAILED or PARTIAL state")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Job does not belong to the authenticated operator",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Job not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Job is not in FAILED or PARTIAL state",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BulkLoadJobResponse> retryJob(
             @io.swagger.v3.oas.annotations.Parameter(
                             description = "ID of the failed or partially-failed bulk load job to retry",

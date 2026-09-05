@@ -150,7 +150,7 @@ paths:
                   make: Honda
                   model: Civic
                   overlapGroup: WHEEL-OFF
-                  publishedAt: 2026-09-01
+                  publishedAt: '2026-09-01'
                   timeType: DURION_STANDARD
                   vehicleYear: 2019-2023
             schema:
@@ -241,7 +241,7 @@ paths:
                   make: Honda
                   model: Civic
                   overlapGroup: WHEEL-OFF
-                  publishedAt: 2026-09-01
+                  publishedAt: '2026-09-01'
                   timeType: DURION_STANDARD
                   vehicleYear: 2019-2023
             schema:
@@ -312,7 +312,7 @@ paths:
         name: updatedSince
         required: false
         schema:
-          example: 2026-08-01 00:00:00+00:00
+          example: '2026-08-01T00:00:00Z'
           format: date-time
           type: string
       - description: Maximum facts to emit in this call (1–1000).
@@ -816,7 +816,7 @@ paths:
         name: updatedSince
         required: false
         schema:
-          example: 2026-08-01 00:00:00+00:00
+          example: '2026-08-01T00:00:00Z'
           format: date-time
           type: string
       - description: Maximum facts to emit in this call, 1-1000.
@@ -1009,7 +1009,7 @@ paths:
         name: asOf
         required: false
         schema:
-          example: 2026-08-14
+          example: '2026-08-14'
           format: date
           type: string
       responses:
@@ -1553,7 +1553,7 @@ paths:
         name: updatedSince
         required: false
         schema:
-          example: 2026-08-01 00:00:00+00:00
+          example: '2026-08-01T00:00:00Z'
           format: date-time
           type: string
       - description: Maximum facts to emit in this call (1–1000).
@@ -1935,7 +1935,7 @@ paths:
               Location-context resolution:
                 description: Location-context resolution
                 value:
-                  asOf: 2026-09-15
+                  asOf: '2026-09-15'
                   currency: USD
                   locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
                   productId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
@@ -2131,7 +2131,7 @@ paths:
                 value:
                   conditionType: NONE
                   createdByUserId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
-                  effectiveStartAt: 2026-09-01 00:00:00+00:00
+                  effectiveStartAt: '2026-09-01T00:00:00Z'
                   pricingLogic: '{"amounts":{"USD":"129.99"},"defaultCurrency":"USD"}'
                   priority: 10
                   targetId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
@@ -2237,7 +2237,7 @@ paths:
                 description: Reprice with version guard
                 value:
                   createdByUserId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
-                  effectiveStartAt: 2026-09-01 00:00:00+00:00
+                  effectiveStartAt: '2026-09-01T00:00:00Z'
                   pricingLogic: '{"amounts":{"USD":"119.99"},"defaultCurrency":"USD"}'
                   priority: 10
                   targetId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
@@ -3583,7 +3583,7 @@ paths:
               Discontinue at year end:
                 description: Discontinue at year end
                 value:
-                  effectiveDate: 2026-12-31
+                  effectiveDate: '2026-12-31'
                   lifecycleState: DISCONTINUED
                   overrideReason: Manufacturer ended production
             schema:
@@ -3704,7 +3704,7 @@ paths:
                   amount: 149.99
                   createdByUserId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
                   currency: USD
-                  effectiveStartDate: 2026-09-01
+                  effectiveStartDate: '2026-09-01'
             schema:
               $ref: '#/components/schemas/CreateMsrpRequestDto'
         description: 'New MSRP window: amount, ISO currency and effective dates; omit effectiveEndDate for an open-ended price.'
@@ -3831,8 +3831,8 @@ paths:
                   amount: 139.99
                   createdByUserId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
                   currency: USD
-                  effectiveEndDate: 2026-12-31
-                  effectiveStartDate: 2026-09-01
+                  effectiveEndDate: '2026-12-31'
+                  effectiveStartDate: '2026-09-01'
                   version: 0
             schema:
               $ref: '#/components/schemas/UpdateMsrpRequestDto'
@@ -4355,7 +4355,7 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440000
           type: string
         fieldErrors:
-          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
           items:
             $ref: '#/components/schemas/FieldError'
           type: array
@@ -4382,7 +4382,7 @@ components:
           type: string
         timestamp:
           description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
+          example: '2026-03-17T14:30:00.000Z'
           type: string
       required:
       - code
@@ -4396,7 +4396,7 @@ components:
       properties:
         asOf:
           description: Timestamp of availability data
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         availableToPromiseQuantity:
@@ -4815,12 +4815,12 @@ components:
           type: string
         effectiveEndDate:
           description: Date the MSRP stops being effective
-          example: 2026-12-31
+          example: '2026-12-31'
           format: date
           type: string
         effectiveStartDate:
           description: Date the MSRP becomes effective
-          example: 2026-01-15
+          example: '2026-01-15'
           format: date
           type: string
       required:
@@ -5015,7 +5015,7 @@ components:
           type: string
         timestamp:
           description: Timestamp the cost change occurred
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
       required:
@@ -5090,7 +5090,7 @@ components:
           type: string
         sourceRevision:
           description: Feed revision the rows carry
-          example: 2026-09-01
+          example: '2026-09-01'
           type: string
         standardsWritten:
           description: Standards inserted (new or superseding replacements) this run
@@ -5224,7 +5224,7 @@ components:
           type: string
         sourceRevision:
           description: Provenance revision.
-          example: 2026-09-01
+          example: '2026-09-01'
           type: string
         status:
           description: Whether a time was found, and if not, why not.
@@ -5243,7 +5243,7 @@ components:
       properties:
         asOf:
           description: Timestamp of lead time data
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         confidence:
@@ -5350,7 +5350,7 @@ components:
       properties:
         approvedAt:
           description: Timestamp the override was approved
-          example: 2026-01-15 10:00:00+00:00
+          example: '2026-01-15T10:00:00Z'
           format: date-time
           type: string
         approvedByUserId:
@@ -5377,7 +5377,7 @@ components:
           type: number
         createdAt:
           description: Timestamp the override was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         createdByUserId:
@@ -5414,7 +5414,7 @@ components:
           type: string
         rejectedAt:
           description: Timestamp the override was rejected
-          example: 2026-01-15 10:05:00+00:00
+          example: '2026-01-15T10:05:00Z'
           format: date-time
           type: string
         rejectedBy:
@@ -5567,7 +5567,7 @@ components:
       properties:
         createdAt:
           description: Timestamp the price book was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         default:
@@ -5603,7 +5603,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp the price book was last updated
-          example: 2026-01-16 11:00:00+00:00
+          example: '2026-01-16T11:00:00Z'
           format: date-time
           type: string
         version:
@@ -5641,12 +5641,12 @@ components:
           type: string
         effectiveEndAt:
           description: Instant the rule stops being effective
-          example: 2026-12-31 23:59:59+00:00
+          example: '2026-12-31T23:59:59Z'
           format: date-time
           type: string
         effectiveStartAt:
           description: Instant the rule becomes effective
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         pricingLogic:
@@ -5699,7 +5699,7 @@ components:
           type: string
         createdAt:
           description: Timestamp the rule was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         createdByUserId:
@@ -5709,12 +5709,12 @@ components:
           type: string
         effectiveEndAt:
           description: Instant the rule stops being effective
-          example: 2026-12-31 23:59:59+00:00
+          example: '2026-12-31T23:59:59Z'
           format: date-time
           type: string
         effectiveStartAt:
           description: Instant the rule becomes effective
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         priceBookId:
@@ -5759,7 +5759,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp the rule was last updated
-          example: 2026-01-16 11:00:00+00:00
+          example: '2026-01-16T11:00:00Z'
           format: date-time
           type: string
         version:
@@ -5783,7 +5783,7 @@ components:
       properties:
         asOf:
           description: Timestamp of pricing data
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         confidence:
@@ -5951,7 +5951,7 @@ components:
           type: string
         generatedAt:
           description: Timestamp when this response was generated
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         pricing:
@@ -5999,7 +5999,7 @@ components:
           type: string
         createdAt:
           description: Created timestamp
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         description:
@@ -6026,7 +6026,7 @@ components:
           type: array
         lastStateChangedAt:
           description: Last lifecycle state change instant
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         lastStateChangedBy:
@@ -6048,7 +6048,7 @@ components:
           type: string
         lifecycleStateEffectiveAt:
           description: Lifecycle state effective instant
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         longDescription:
@@ -6143,7 +6143,7 @@ components:
           type: string
         updatedAt:
           description: Updated timestamp
-          example: 2026-01-16 11:00:00+00:00
+          example: '2026-01-16T11:00:00Z'
           format: date-time
           type: string
         warranty:
@@ -6185,7 +6185,7 @@ components:
       properties:
         lastStateChangedAt:
           description: Last lifecycle state change instant
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         lastStateChangedBy:
@@ -6207,7 +6207,7 @@ components:
           type: string
         lifecycleStateEffectiveAt:
           description: Lifecycle state effective instant
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         productId:
@@ -6234,12 +6234,12 @@ components:
           type: string
         effectiveAt:
           description: Effective instant for lifecycle change
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         effectiveDate:
           description: Effective date for lifecycle change (date-only)
-          example: 2026-01-15
+          example: '2026-01-15'
           format: date
           type: string
         lifecycleState:
@@ -6266,7 +6266,7 @@ components:
           type: string
         createdAt:
           description: Timestamp the MSRP was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         currency:
@@ -6275,12 +6275,12 @@ components:
           type: string
         effectiveEndDate:
           description: Date the MSRP stops being effective
-          example: 2026-12-31
+          example: '2026-12-31'
           format: date
           type: string
         effectiveStartDate:
           description: Date the MSRP becomes effective
-          example: 2026-01-15
+          example: '2026-01-15'
           format: date
           type: string
         msrpId:
@@ -6295,7 +6295,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp the MSRP was last updated
-          example: 2026-01-16 11:00:00+00:00
+          example: '2026-01-16T11:00:00Z'
           format: date-time
           type: string
         updatedBy:
@@ -6322,7 +6322,7 @@ components:
       properties:
         effectiveAt:
           description: Replacement effective instant
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         notes:
@@ -6376,7 +6376,7 @@ components:
           - 'null'
         lifecycleStateEffectiveAt:
           description: UTC instant the current lifecycle state took effect; only populated for detailed search
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type:
           - string
@@ -6399,14 +6399,14 @@ components:
           - 'null'
         msrpEffectiveEndDate:
           description: End of the active MSRP effective window; null for open-ended, no active MSRP, or lean search
-          example: 2026-12-31
+          example: '2026-12-31'
           format: date
           type:
           - string
           - 'null'
         msrpEffectiveStartDate:
           description: Start of the active MSRP effective window; null when no active MSRP or for lean search
-          example: 2026-01-15
+          example: '2026-01-15'
           format: date
           type:
           - string
@@ -6481,7 +6481,7 @@ components:
       properties:
         createdAt:
           description: Created timestamp
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         factorToBase:
@@ -6518,7 +6518,7 @@ components:
           type: string
         updatedAt:
           description: Updated timestamp
-          example: 2026-01-16 11:00:00+00:00
+          example: '2026-01-16T11:00:00Z'
           format: date-time
           type: string
       required:
@@ -6612,7 +6612,7 @@ components:
       properties:
         effectiveAt:
           description: Replacement option effective instant
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         notes:
@@ -6643,7 +6643,7 @@ components:
       properties:
         asOf:
           description: Date for which the price should be resolved (defaults to today when omitted)
-          example: 2026-06-18
+          example: '2026-06-18'
           format: date
           type: string
         currency:
@@ -6810,7 +6810,7 @@ components:
           type: string
         publishedAt:
           description: Date the time was published or decided; omitted means undated
-          example: 2026-09-01
+          example: '2026-09-01'
           format: date
           type: string
         submodel:
@@ -6951,7 +6951,7 @@ components:
       properties:
         createdAt:
           description: Created timestamp
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         id:
@@ -6975,7 +6975,7 @@ components:
           type: array
         updatedAt:
           description: Updated timestamp
-          example: 2026-01-16 11:00:00+00:00
+          example: '2026-01-16T11:00:00Z'
           format: date-time
           type: string
       required:
@@ -7039,7 +7039,7 @@ components:
       properties:
         asOf:
           description: When the supplier fact was obtained. Present only when the vendor answered — a degraded component carries no timestamp, because there is no vendor statement to date. A cached answer carries the age of the fact, not of the cache hit.
-          example: 2026-08-14 12:00:00+00:00
+          example: '2026-08-14T12:00:00Z'
           format: date-time
           type: string
         availableQuantity:
@@ -7057,7 +7057,7 @@ components:
           type: string
         earliestDeliveryDate:
           description: Earliest date the vendor promised any quantity, when it stated one.
-          example: 2026-08-20
+          example: '2026-08-20'
           format: date
           type: string
         status:
@@ -7103,7 +7103,7 @@ components:
           type: string
         effectiveFrom:
           description: Inclusive first day the values apply; a vendor-local date.
-          example: 2026-02-01
+          example: '2026-02-01'
           format: date
           type: string
         fetchedAt:
@@ -7146,7 +7146,7 @@ components:
           type: number
         sourceDocumentDate:
           description: Vendor document date.
-          example: 2026-05-12
+          example: '2026-05-12'
           format: date
           type: string
         sourceDocumentId:
@@ -7352,7 +7352,7 @@ components:
           type: number
         createdAt:
           description: Timestamp the conversion was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         createdBy:
@@ -7374,7 +7374,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp the conversion was last updated
-          example: 2026-01-16 11:00:00+00:00
+          example: '2026-01-16T11:00:00Z'
           format: date-time
           type: string
       required:
@@ -7414,12 +7414,12 @@ components:
           type: string
         effectiveEndDate:
           description: Date the MSRP stops being effective (null means open-ended)
-          example: 2026-12-31
+          example: '2026-12-31'
           format: date
           type: string
         effectiveStartDate:
           description: Date the MSRP becomes effective
-          example: 2026-01-01
+          example: '2026-01-01'
           format: date
           type: string
         version:

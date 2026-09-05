@@ -283,18 +283,21 @@ public class WorkorderController {
                     defaults to image/png.
                     Emits a WORKORDER_APPROVE event and marks the workorder fact changed for downstream \
                     replication.
-                    Returns 404 when the workorder does not exist, 400 when the status is not DRAFT, and 409 \
-                    when the customer does not match the workorder's own customer.
+                    Returns 404 when the workorder does not exist, 400 when the customerId in the request does \
+                    not match the workorder's own customer, and 409 when the status is not DRAFT.
                     """)
     @ApiResponse(responseCode = "200", description = "Work order approved successfully with signature captured.")
     @ApiResponse(
             responseCode = "400",
-            description = "Work order cannot be approved in current state.",
+            description = "The customerId in the request does not match the workorder's own customer.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Work order not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Work order not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Customer ID mismatch: workorder belongs to a different customer.",
+            description = "Work order is not in DRAFT, so it cannot be approved in its current state (CONFLICT).",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Approving customer's identity and captured signature artifacts.",
@@ -321,18 +324,14 @@ public class WorkorderController {
                     UUID workorderId,
             @Parameter(description = "Approval request with customer ID and signature capture") @Valid @RequestBody
                     ApproveWorkorderRequest request) {
-        try {
-            var approved = workorderService.approveWorkorder(
-                    workorderId,
-                    request.getCustomerId(),
-                    request.getSignatureData(),
-                    request.getSignatureMimeType(),
-                    request.getSignerName(),
-                    request.getNotes());
-            return ResponseEntity.ok(approved);
-        } catch (IllegalStateException _) {
-            return ResponseEntity.badRequest().build();
-        }
+        var approved = workorderService.approveWorkorder(
+                workorderId,
+                request.getCustomerId(),
+                request.getSignatureData(),
+                request.getSignatureMimeType(),
+                request.getSignerName(),
+                request.getNotes());
+        return ResponseEntity.ok(approved);
     }
 
     @Operation(operationId = "completeWorkorder", summary = "Complete a Workorder", description = """

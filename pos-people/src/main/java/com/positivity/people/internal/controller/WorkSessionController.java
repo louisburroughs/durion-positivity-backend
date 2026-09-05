@@ -6,10 +6,12 @@ import com.positivity.people.internal.dto.WorkSessionDto;
 import com.positivity.people.internal.dto.WorkSessionRequest;
 import com.positivity.people.internal.dto.WorkSessionSubmitRequest;
 import com.positivity.people.internal.service.WorkSessionService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -115,7 +117,10 @@ public class WorkSessionController {
                     including under concurrent break-start races.
                     """)
     @ApiResponse(responseCode = "200", description = "Break started successfully.")
-    @ApiResponse(responseCode = "404", description = "Work session not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Work session not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_WORK_SESSION_BREAK_START", apiVersion = "1")
     @PostMapping("/{id}/breaks/start")
     @PreAuthorize("isAuthenticated()")
@@ -142,7 +147,8 @@ public class WorkSessionController {
     @ApiResponse(responseCode = "200", description = "Break stopped successfully.")
     @ApiResponse(
             responseCode = "409",
-            description = "No open break exists for the session, including when the session id itself is unknown.")
+            description = "No open break exists for the session, including when the session id itself is unknown.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_WORK_SESSION_BREAK_STOP", apiVersion = "1")
     @PostMapping("/{id}/breaks/stop")
     @PreAuthorize("isAuthenticated()")
@@ -169,8 +175,14 @@ public class WorkSessionController {
                     Returns 404 when the session does not exist, and 409 when the session is not in ENDED status.
                     """)
     @ApiResponse(responseCode = "200", description = "Work session submitted successfully.")
-    @ApiResponse(responseCode = "404", description = "Work session not found.")
-    @ApiResponse(responseCode = "409", description = "Work session is not in a submittable state.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Work session not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Work session is not in a submittable state.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_WORK_SESSION_SUBMIT", apiVersion = "1")
     @PostMapping("/{id}/submit")
     @PreAuthorize("isAuthenticated()")

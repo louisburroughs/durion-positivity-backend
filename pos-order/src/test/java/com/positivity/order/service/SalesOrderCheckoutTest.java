@@ -26,6 +26,7 @@ import com.positivity.order.internal.exception.CartIdempotencyConflictException;
 import com.positivity.order.internal.exception.InvalidCustomerException;
 import com.positivity.order.internal.exception.InvoicingUnavailableException;
 import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
+import com.positivity.order.internal.exception.SalesOrderUnprocessableException;
 import com.positivity.order.internal.repository.OrderStatusHistoryRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
@@ -248,7 +249,7 @@ class SalesOrderCheckoutTest {
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
 
         assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-key-1"))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(SalesOrderUnprocessableException.class)
                 .hasMessageContaining("empty");
         assertThat(order.getStatus()).isEqualTo(SalesOrderStatus.DRAFT);
     }

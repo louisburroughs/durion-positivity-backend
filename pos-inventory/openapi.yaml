@@ -309,7 +309,7 @@ paths:
                 description: Single-line ASN
                 value:
                   asnReferenceNumber: ASN-2026-000123
-                  expectedArrivalDate: 2026-08-15
+                  expectedArrivalDate: '2026-08-15'
                   lineItems:
                   - lotNumber: LOT-2026-0042
                     poId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
@@ -320,7 +320,7 @@ paths:
                     unitOfMeasure: EA
                   relatedPoIds:
                   - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
-                  shipDate: 2026-08-10
+                  shipDate: '2026-08-10'
                   vendorId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
             schema:
               $ref: '#/components/schemas/CreateAsnRequest'
@@ -1833,7 +1833,7 @@ paths:
                 value:
                   locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
                   planName: Q1 perishables count
-                  scheduledDate: 2026-09-15
+                  scheduledDate: '2026-09-15'
                   zoneIds:
                   - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
             schema:
@@ -2288,7 +2288,7 @@ paths:
                   autoCreatePlan: true
                   frequencyDays: 30
                   locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
-                  nextDueDate: 2026-09-01
+                  nextDueDate: '2026-09-01'
                   skuCategory: BRAKES
                   zoneId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
             schema:
@@ -2449,7 +2449,7 @@ paths:
                 value:
                   active: true
                   frequencyDays: 14
-                  nextDueDate: 2026-09-01
+                  nextDueDate: '2026-09-01'
             schema:
               $ref: '#/components/schemas/UpdateCycleCountScheduleRequest'
         description: Partial update; only non-null fields are applied to the schedule.
@@ -3637,8 +3637,8 @@ paths:
               Re-date with early alert:
                 description: Re-date with early alert
                 value:
-                  alertDate: 2027-01-01
-                  expirationDate: 2027-01-31
+                  alertDate: '2027-01-01'
+                  expirationDate: '2027-01-31'
             schema:
               $ref: '#/components/schemas/LotExpirationUpdateRequest'
         description: Expiration and alert-window dates to set; a null clears the corresponding date.
@@ -3976,7 +3976,7 @@ paths:
               Pick list for a workorder:
                 description: Pick list for a workorder
                 value:
-                  dueAt: 2026-08-20 09:30:00+00:00
+                  dueAt: '2026-08-20T09:30:00Z'
                   priority: 5
                   reservationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a11
                   workorderId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
@@ -5537,7 +5537,7 @@ paths:
                 description: Lot-tracked line received in full
                 value:
                   lines:
-                  - expirationDate: 2027-01-31
+                  - expirationDate: '2027-01-31'
                     lineId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a06
                     lotNumber: LOT-2026-0042
                     receivedQuantity: 8
@@ -5828,7 +5828,7 @@ paths:
               Snooze for one week:
                 description: Snooze for one week
                 value:
-                  snoozedUntil: 2026-08-20 00:00:00+00:00
+                  snoozedUntil: '2026-08-20T00:00:00Z'
             schema:
               $ref: '#/components/schemas/SnoozeReplenishmentPolicyRequest'
         description: Snooze instant to set, or a null snoozedUntil to clear the snooze.
@@ -8766,7 +8766,7 @@ components:
           type: string
         approvedAt:
           description: Timestamp when the adjustment was approved, if approved
-          example: 2026-01-15 10:05:00+00:00
+          example: '2026-01-15T10:05:00Z'
           format: date-time
           type: string
         approvedByUserId:
@@ -8783,7 +8783,7 @@ components:
           type: number
         createdAt:
           description: Timestamp when the adjustment was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         createdByUserId:
@@ -8801,7 +8801,7 @@ components:
           type: string
         postedAt:
           description: Timestamp when the adjustment was posted to the inventory ledger, if posted
-          example: 2026-01-15 10:10:00+00:00
+          example: '2026-01-15T10:10:00Z'
           format: date-time
           type: string
         quantityChange:
@@ -8818,7 +8818,7 @@ components:
           type: string
         rejectedAt:
           description: Timestamp when the adjustment was rejected, if rejected
-          example: 2026-01-15 10:05:00+00:00
+          example: '2026-01-15T10:05:00Z'
           format: date-time
           type: string
         rejectedByUserId:
@@ -8862,7 +8862,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the adjustment was last updated
-          example: 2026-01-15 10:05:00+00:00
+          example: '2026-01-15T10:05:00Z'
           format: date-time
           type: string
         variancePercentage:
@@ -8898,7 +8898,7 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440000
           type: string
         fieldErrors:
-          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
           items:
             $ref: '#/components/schemas/FieldError'
           type: array
@@ -8925,7 +8925,7 @@ components:
           type: string
         timestamp:
           description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
+          example: '2026-03-17T14:30:00.000Z'
           type: string
       required:
       - code
@@ -9019,7 +9019,7 @@ components:
           type: string
         createdAt:
           description: Timestamp when the ASN was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         createdBy:
@@ -9028,7 +9028,7 @@ components:
           type: string
         expectedArrivalDate:
           description: Expected arrival date of the shipment at the destination
-          example: 2026-01-20
+          example: '2026-01-20'
           format: date
           type: string
         lineItems:
@@ -9038,7 +9038,7 @@ components:
           type: array
         shipDate:
           description: Date the shipment left the vendor
-          example: 2026-01-15
+          example: '2026-01-15'
           format: date
           type: string
         status:
@@ -9435,7 +9435,7 @@ components:
           type: string
         createdAt:
           description: Timestamp when the consumption was recorded
-          example: 2026-01-20 14:05:00+00:00
+          example: '2026-01-20T14:05:00Z'
           format: date-time
           type: string
         ledgerEntryIds:
@@ -9548,7 +9548,7 @@ components:
           type: string
         createdAt:
           description: Timestamp when the row was created
-          example: 2026-07-01 00:00:00+00:00
+          example: '2026-07-01T00:00:00Z'
           format: date-time
           type: string
         method:
@@ -9572,7 +9572,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the row was last updated
-          example: 2026-07-01 00:00:00+00:00
+          example: '2026-07-01T00:00:00Z'
           format: date-time
           type: string
       required:
@@ -9609,7 +9609,7 @@ components:
           type: string
         countedAt:
           description: Measurement timestamp — when the count was physically taken and recorded
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         cycleCountTaskId:
@@ -9699,7 +9699,7 @@ components:
           type: string
         countedAt:
           description: Timestamp when the count was recorded
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         expectedQuantity:
@@ -9894,7 +9894,7 @@ components:
           type: string
         expectedArrivalDate:
           description: Expected arrival date of the shipment at the destination
-          example: 2026-01-20
+          example: '2026-01-20'
           format: date
           type: string
         lineItems:
@@ -9913,7 +9913,7 @@ components:
           type: array
         shipDate:
           description: Date the shipment left the vendor
-          example: 2026-01-15
+          example: '2026-01-15'
           format: date
           type: string
         vendorId:
@@ -9942,7 +9942,7 @@ components:
           type: string
         scheduledDate:
           description: Date on which the cycle count is scheduled to occur
-          example: 2026-01-15
+          example: '2026-01-15'
           format: date
           type: string
         zoneIds:
@@ -9978,7 +9978,7 @@ components:
           type: string
         nextDueDate:
           description: First date the schedule is due for counting
-          example: 2026-08-01
+          example: '2026-08-01'
           format: date
           type: string
         skuCategory:
@@ -10109,7 +10109,7 @@ components:
       properties:
         dueAt:
           description: Timestamp by which the pick list should be completed
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         priority:
@@ -10464,7 +10464,7 @@ components:
           type: string
         scheduledDate:
           description: Exact date to schedule the count for. Must be strictly in the future. Prefer scheduledDaysOut for a file that will be replayed, since a fixed date rots.
-          example: 2026-06-01
+          example: '2026-06-01'
           format: date
           type: string
         scheduledDaysOut:
@@ -10489,7 +10489,7 @@ components:
       properties:
         createdAt:
           description: Timestamp when the plan was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         createdBy:
@@ -10498,7 +10498,7 @@ components:
           type: string
         dueDate:
           description: Due date this schedule-created plan covers (null for manual plans)
-          example: 2026-08-01
+          example: '2026-08-01'
           format: date
           type: string
         locationId:
@@ -10528,7 +10528,7 @@ components:
           type: string
         scheduledDate:
           description: Date on which the cycle count is scheduled to occur
-          example: 2026-01-15
+          example: '2026-01-15'
           format: date
           type: string
         status:
@@ -10537,7 +10537,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the plan was last updated
-          example: 2026-01-15 10:05:00+00:00
+          example: '2026-01-15T10:05:00Z'
           format: date-time
           type: string
         zoneIds:
@@ -10571,7 +10571,7 @@ components:
           type: boolean
         createdAt:
           description: Timestamp when the schedule was created
-          example: 2026-07-01 09:30:00+00:00
+          example: '2026-07-01T09:30:00Z'
           format: date-time
           type: string
         createdBy:
@@ -10590,7 +10590,7 @@ components:
           type: string
         nextDueDate:
           description: Next date the schedule is due for counting
-          example: 2026-08-01
+          example: '2026-08-01'
           format: date
           type: string
         scheduleId:
@@ -10604,7 +10604,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the schedule was last updated
-          example: 2026-07-15 10:05:00+00:00
+          example: '2026-07-15T10:05:00Z'
           format: date-time
           type: string
         zoneId:
@@ -10681,7 +10681,7 @@ components:
           type: integer
         createdAt:
           description: Timestamp when the task was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         expectedQuantity:
@@ -10729,7 +10729,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the task was last updated
-          example: 2026-01-15 10:05:00+00:00
+          example: '2026-01-15T10:05:00Z'
           format: date-time
           type: string
       required:
@@ -10755,7 +10755,7 @@ components:
           type: boolean
         createdAt:
           description: Timestamp when this configuration was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         createdBy:
@@ -10782,7 +10782,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when this configuration was last updated
-          example: 2026-01-15 10:05:00+00:00
+          example: '2026-01-15T10:05:00Z'
           format: date-time
           type: string
       required:
@@ -10956,7 +10956,7 @@ components:
           type: string
         createdAt:
           description: Timestamp when the goods receipt was created
-          example: 2026-01-20 14:05:00+00:00
+          example: '2026-01-20T14:05:00Z'
           format: date-time
           type: string
         createdBy:
@@ -11051,7 +11051,7 @@ components:
           type: number
         timestamp:
           description: Business timestamp of the inventory event
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         transactionUserId:
@@ -11073,7 +11073,7 @@ components:
           type: number
         asOfTimestamp:
           description: Timestamp when this calculation was performed
-          example: 2026-01-12 22:00:00+00:00
+          example: '2026-01-12T22:00:00Z'
           format: date-time
           type: string
         atpQty:
@@ -11157,7 +11157,7 @@ components:
           type: number
         createdAt:
           description: Timestamp when the entry record was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         eventType:
@@ -11223,7 +11223,7 @@ components:
           type: string
         timestamp:
           description: Business timestamp of the inventory event
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         toLocationId:
@@ -11245,7 +11245,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the entry record was last updated
-          example: 2026-01-15 09:35:00+00:00
+          example: '2026-01-15T09:35:00Z'
           format: date-time
           type: string
       required:
@@ -11261,7 +11261,7 @@ components:
       properties:
         asOf:
           description: Timestamp when lead-time data was last refreshed
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         confidence:
@@ -11505,12 +11505,12 @@ components:
       properties:
         alertDate:
           description: Date the lot enters its expiring-soon alert window (null means no early alert)
-          example: 2027-01-01
+          example: '2027-01-01'
           format: date
           type: string
         expirationDate:
           description: Expiration date of the lot (null clears it)
-          example: 2027-01-31
+          example: '2027-01-31'
           format: date
           type: string
       type: object
@@ -11543,7 +11543,7 @@ components:
           type: string
         expirationDate:
           description: Expiration date; null until the expiry flows (E3) populate it
-          example: 2027-01-31
+          example: '2027-01-31'
           format: date
           type: string
         lotId:
@@ -11557,7 +11557,7 @@ components:
           type: string
         receivedAt:
           description: When the lot was first received into stock
-          example: 2026-07-01 12:00:00+00:00
+          example: '2026-07-01T12:00:00Z'
           format: date-time
           type: string
         status:
@@ -11696,12 +11696,12 @@ components:
       properties:
         createdAt:
           description: Timestamp when the pick list was created
-          example: 2026-01-15 08:00:00+00:00
+          example: '2026-01-15T08:00:00Z'
           format: date-time
           type: string
         dueAt:
           description: Timestamp by which the pick list should be completed
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         pickListId:
@@ -11726,7 +11726,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the pick list was last updated
-          example: 2026-01-15 08:45:00+00:00
+          example: '2026-01-15T08:45:00Z'
           format: date-time
           type: string
         workorderId:
@@ -11837,7 +11837,7 @@ components:
           type: string
         createdAt:
           description: Creation timestamp
-          example: 2026-07-23 09:30:00+00:00
+          example: '2026-07-23T09:30:00Z'
           format: date-time
           type: string
         dismissalReason:
@@ -11846,7 +11846,7 @@ components:
           type: string
         earliestExpectedDate:
           description: Earliest date the purchase could plausibly arrive (suggestion date + lead time)
-          example: 2026-08-01
+          example: '2026-08-01'
           format: date
           type: string
         itemSKU:
@@ -11909,7 +11909,7 @@ components:
           type: integer
         updatedAt:
           description: Last update timestamp
-          example: 2026-07-23 09:30:00+00:00
+          example: '2026-07-23T09:30:00Z'
           format: date-time
           type: string
         vendorPackSize:
@@ -12003,7 +12003,7 @@ components:
           type: string
         executedAt:
           description: Timestamp when the putaway was executed
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           type: string
         ledgerEntryId:
           description: Identifier of the inventory ledger entry recorded for the move
@@ -12207,7 +12207,7 @@ components:
           type: string
         createdAt:
           description: Timestamp when the putaway task was created
-          example: 2026-01-15 08:00:00+00:00
+          example: '2026-01-15T08:00:00Z'
           format: date-time
           type: string
         fallbackReason:
@@ -12257,7 +12257,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the putaway task was last updated
-          example: 2026-01-15 08:45:00+00:00
+          example: '2026-01-15T08:45:00Z'
           format: date-time
           type: string
       required:
@@ -12388,7 +12388,7 @@ components:
           type: string
         expirationDate:
           description: Optional expiration date of the received lot (odoo-parity E3). Stamped on the lot on first receipt for LOT-tracked products; ignored for untracked products and for lots that already exist (correct an existing lot via the lot-management endpoint)
-          example: 2027-01-31
+          example: '2027-01-31'
           format: date
           type: string
         lineId:
@@ -12483,7 +12483,7 @@ components:
       properties:
         createdAt:
           description: Timestamp when the receiving session was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         createdByUserId:
@@ -12624,7 +12624,7 @@ components:
       properties:
         deadlineDate:
           description: Earliest date at which the projected available quantity goes below zero; absent when the policy is not triggered or no stock-out is projected within the lead-time horizon
-          example: 2026-01-20
+          example: '2026-01-20'
           type: string
         itemSKU:
           description: SKU of the item the policy applies to
@@ -12632,7 +12632,7 @@ components:
           type: string
         leadHorizonDate:
           description: UTC date of the lead-time horizon the projection was evaluated at
-          example: 2026-01-20
+          example: '2026-01-20'
           type: string
         leadTimeSource:
           description: Where the resolved lead time came from
@@ -12705,7 +12705,7 @@ components:
           type: boolean
         createdAt:
           description: Timestamp at which the replenishment policy was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           type: string
         itemSKU:
           description: SKU of the item the replenishment policy applies to
@@ -12746,7 +12746,7 @@ components:
           type: string
         snoozedUntil:
           description: Instant until which the policy is snoozed (excluded from replenishment evaluation); absent or past means the policy is evaluated normally
-          example: 2026-02-01 00:00:00+00:00
+          example: '2026-02-01T00:00:00Z'
           type: string
       required:
       - active
@@ -12778,7 +12778,7 @@ components:
           type: integer
         scanAt:
           description: Timestamp at which the scan ran
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           type: string
         suggestionsCreated:
           description: Number of new purchase suggestions created for PURCHASE-preferring policies (odoo-parity F4)
@@ -12819,11 +12819,11 @@ components:
           type: string
         createdAt:
           description: Timestamp at which the replenishment task was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           type: string
         deadlineDate:
           description: Earliest date at which the projected available quantity goes below zero (stock-out deadline used for prioritization); absent when no stock-out is projected within the lead-time horizon
-          example: 2026-01-20
+          example: '2026-01-20'
           type: string
         decisionReason:
           description: Explanation of why this replenishment was decided
@@ -12954,7 +12954,7 @@ components:
       properties:
         processedAt:
           description: Timestamp when the return was processed
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         processedLines:
@@ -13407,7 +13407,7 @@ components:
           type: string
         expectedResolutionDate:
           description: Estimated date the shortage would be resolved via this option
-          example: 2026-08-01
+          example: '2026-08-01'
           format: date
           type: string
         optionType:
@@ -13466,7 +13466,7 @@ components:
           type: string
         resolvedAt:
           description: Timestamp when the shortage was resolved
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         status:
@@ -13751,7 +13751,7 @@ components:
       properties:
         snoozedUntil:
           description: Future instant until which the policy is excluded from replenishment evaluation; null clears an existing snooze
-          example: 2026-02-01 00:00:00+00:00
+          example: '2026-02-01T00:00:00Z'
           format: date-time
           type: string
       type: object
@@ -13834,7 +13834,7 @@ components:
           type: string
         createdAt:
           description: Timestamp when the row was created
-          example: 2026-07-01 00:00:00+00:00
+          example: '2026-07-01T00:00:00Z'
           format: date-time
           type: string
         scopeType:
@@ -13860,7 +13860,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the row was last updated
-          example: 2026-07-01 00:00:00+00:00
+          example: '2026-07-01T00:00:00Z'
           format: date-time
           type: string
       required:
@@ -14275,7 +14275,7 @@ components:
       properties:
         movedAt:
           description: Timestamp when the inventory was moved
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         movedItems:
@@ -14481,7 +14481,7 @@ components:
           type: integer
         nextDueDate:
           description: New next due date
-          example: 2026-09-01
+          example: '2026-09-01'
           format: date
           type: string
         skuCategory:

@@ -53,6 +53,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -191,6 +192,7 @@ _STATEMENT_LABELS = {
     "current to date": "CURRENT_TO_DATE",
     "prior complete": "PRIOR_COMPLETE",
     "calendar span": "CALENDAR_SPAN",
+    "next": "FORWARD",
     "absolute": "ABSOLUTE",
 }
 # The comparison window carries its own label, so a question expecting one can check the model
@@ -285,7 +287,191 @@ def classify_outcome(answer):
     return "answered"
 
 
-def grade_window(question, answer, as_of):
+
+# ── window shape from the recorded tool trace (#1743) ────────────────────────
+#
+# The grader used to read the shape out of the model's ANSWER, on the assumption that the
+# DATE_WINDOW contract to quote the resolver statement holds. On 2026-09-04 it did not: six of
+# twelve questions quoted nothing while the service log showed sixteen correct resolver calls. The
+# shape was resolved, recorded, and unreadable by the thing grading it.
+#
+# The tool trace carries it at the tool boundary instead, which is where it is a fact rather than a
+# disclosure the model may or may not make.
+
+TRACE_PATH = "/v1/eval/turn-traces"
+_WINDOW_TOOLS = {"resolveDateWindow", "resolvenamedperiod", "resolvedatewindow", "resolveNamedPeriod"}
+
+
+def traces_url_for(chat_url):
+    """The turn-trace endpoint on the same host and context path as the chat endpoint."""
+    marker = "/v1/mcp/chat"
+    if chat_url.endswith(marker):
+        return chat_url[: -len(marker)] + TRACE_PATH
+    return chat_url.rsplit("/v1/", 1)[0] + TRACE_PATH
+
+
+def fetch_traces(traces_url, token, since, timeout=60):
+    """The caller's traces since `since`, or [] with a reason when unavailable.
+
+    Never raises: a run whose traces cannot be fetched must still grade from answers rather than
+    dying. The reason is returned so the record can say WHY it fell back, instead of a reader having
+    to guess whether the endpoint is missing, forbidden, or simply empty.
+    """
+    # urlencode, and Z rather than +00:00: an unencoded "+" decodes to a space, so Spring would
+    # fail to parse @RequestParam Instant and answer 400 — and the runner would silently fall back
+    # to answer parsing on every run, exactly the behaviour this change exists to replace.
+    query = urllib.parse.urlencode(
+        {"since": since.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "limit": 200}
+    )
+    request = urllib.request.Request(f"{traces_url}?{query}")
+    request.add_header("Authorization", f"Bearer {token}")
+    request.add_header("X-API-Version", os.environ.get("MCP_API_VERSION", "1"))
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8")), None
+    except urllib.error.HTTPError as error:
+        return [], f"HTTP {error.code} from {traces_url}"
+    except Exception as error:  # noqa: BLE001 - any transport failure falls back identically
+        return [], f"{type(error).__name__} from {traces_url}"
+
+
+def _span_count(result, unit):
+    """How many whole `unit` periods the resolved window covers, from its own dates.
+
+    The resolver's result carries startDate/endDate but not unit or count, so this is the only
+    evidence available about a corrected window's length. Returns None when it cannot be derived,
+    which the caller treats as "unknown" rather than "matches".
+
+    "Whole" is enforced, not assumed: a calendar unit only yields a count when the window actually
+    starts on a period boundary and ends on the day before the next one. A partial span returns
+    None and therefore cannot match an expected count — if the resolver ever produced a
+    part-month CALENDAR_SPAN, counting its months inclusively would hand back the expected number
+    and PASS a broken window.
+    """
+    start, end = result.get("startDate"), result.get("endDate")
+    if not start or not end or not unit:
+        return None
+    try:
+        s_d = datetime.strptime(start, "%Y-%m-%d").date()
+        e_d = datetime.strptime(end, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+    if e_d < s_d:
+        return None
+    if unit in {"MONTH", "QUARTER", "YEAR"}:
+        # Must span whole calendar months: first day of one, last day of another.
+        if s_d.day != 1 or (e_d + timedelta(days=1)).day != 1:
+            return None
+        months = (e_d.year - s_d.year) * 12 + (e_d.month - s_d.month) + 1
+        if unit == "MONTH":
+            return months
+        if unit == "QUARTER":
+            return months // 3 if months % 3 == 0 else None
+        return months // 12 if months % 12 == 0 else None
+    if unit in {"DAY", "WEEK"}:
+        days = (e_d - s_d).days + 1
+        return days if unit == "DAY" else (days // 7 if days % 7 == 0 else None)
+    return None
+
+
+def window_from_trace(trace):
+    """The window a turn actually resolved, read from its recorded tool calls.
+
+    Reads each call's RESULT, not its arguments. Those were the same thing until #1675: the model
+    named a shape and the resolver computed it. The server now corrects a shape the wording
+    contradicts, so the argument is what was asked for and the result is what the downstream query
+    actually used — and only the latter is what the corpus means.
+
+    Grading the argument made a working fix look broken: on 2026-09-05 the server resolved q12 and
+    q15 as CALENDAR_SPAN while the model had asked for ROLLING, and the gate reported FAIL on both.
+    It fails the other way too, and worse — a correction that silently stopped working would still
+    read as PASS whenever the model happened to send the right shape.
+
+    `model_shape` is kept alongside so a divergence stays visible rather than being smoothed away;
+    the model's own classification is still worth knowing, it is just not the thing under test.
+
+    Returns a list of {shape, unit, count, comparison, model_shape, failed} in call order. A
+    bucketed question resolves several, so this keeps them all and lets the caller decide what
+    satisfies the expectation.
+
+    `failed` marks a resolver call that threw: its other fields are all None, because no window was
+    resolved. Callers must check it — treating such an entry as a resolved window is what let a
+    failed call grade PASS.
+    """
+    resolved = []
+    for call in trace.get("toolCalls") or []:
+        name = (call.get("name") or "").lower()
+        if name not in {tool.lower() for tool in _WINDOW_TOOLS}:
+            continue
+        # A resolver that threw produced NO window: ToolInvocationRecorder records it as
+        # result=null with `error` set. Falling back to the arguments here would grade the model's
+        # request as though it had been resolved — so a call that failed outright would PASS
+        # whenever the model happened to ask for the right shape. Marked rather than dropped,
+        # because a turn whose resolver failed must not read as "no window expectation".
+        if call.get("error"):
+            resolved.append({
+                "shape": None,
+                "unit": None,
+                "count": None,
+                "comparison": None,
+                "model_shape": None,
+                "failed": True,
+            })
+            continue
+        try:
+            arguments = json.loads(call.get("arguments") or "{}")
+        except (TypeError, ValueError):
+            continue
+        try:
+            result = json.loads(call.get("result") or "{}")
+        except (TypeError, ValueError):
+            result = {}
+        if not isinstance(result, dict):
+            result = {}
+
+        if "period" in arguments and "shape" not in arguments:
+            # resolveNamedPeriod names an absolute period rather than a relative shape.
+            resolved.append({
+                "shape": "ABSOLUTE",
+                "unit": None,
+                "count": None,
+                "comparison": None,
+                "model_shape": None,
+                "failed": False,
+            })
+            continue
+
+        model_shape = arguments.get("shape")
+        # The result is authoritative; the argument is the fallback for a trace recorded before
+        # #1675, or a call whose result did not parse.
+        shape = result.get("shape") or model_shape
+        if not shape:
+            continue
+        count = arguments.get("count")
+        count = int(count) if isinstance(count, (int, str)) and str(count).isdigit() else None
+        unit = str(arguments["unit"]).upper() if arguments.get("unit") else None
+        corrected = bool(model_shape) and str(model_shape).upper() != str(shape).upper()
+        if corrected:
+            # The same classifier that corrected the shape also sets unit and count, and the result
+            # JSON carries neither — only dates. Keeping the requested unit/count here would grade a
+            # corrected window against the request that was overridden, turning a regression the old
+            # code caught loudly into a silent PASS. Derive what the dates prove; leave the rest
+            # None so it cannot match instead of matching wrongly.
+            count = _span_count(result, unit) or None
+        resolved.append(
+            {
+                "shape": str(shape).upper(),
+                "unit": unit,
+                "count": count,
+                "comparison": str(arguments["comparison"]).upper() if arguments.get("comparison") else None,
+                "model_shape": str(model_shape).upper() if model_shape else None,
+                "failed": False,
+            }
+        )
+    return resolved
+
+
+def grade_window(question, answer, as_of, resolved=None):
     """Grades the window a question was answered on.
 
     Endpoints are deliberately not compared for relative windows. They are a derived consequence of
@@ -304,25 +490,45 @@ def grade_window(question, answer, as_of):
             if not answer:
                 # A transport failure is not a window failure. Keeping them separable is the whole
                 # point of grading per stage.
-                return "UNGRADED", "no answer to read an as-of date from"
+                return "UNGRADED", "[answer] no answer to read an as-of date from"
             target = as_of + timedelta(days=int(expected["as_of_offset_days"]))
             if target.isoformat() in normalise_typography(answer):
                 return "PASS", f"answer states the as-of date {target.isoformat()}"
             return "FAIL", f"expected the as-of date {target.isoformat()} to appear in the answer"
-        return "UNGRADED", expected.get("note") or "no window expectation recorded"
+        return "UNGRADED", "[corpus] " + (expected.get("note") or "no window expectation recorded")
 
-    statements = parse_statements(answer)
-    observed = observed_shapes(answer)
+    if resolved is not None:
+        statements = resolved
+        failed = [s for s in statements if s.get("failed")]
+        if failed:
+            # The resolver threw, so no window reached the downstream query. UNGRADED would be the
+            # softer verdict, but the run summary only fails on FAIL — a broken resolver would then
+            # still produce a green run, which is the outcome this harness exists to prevent.
+            return "FAIL", (
+                f"[trace] {len(failed)} window-resolver call(s) failed, so no window was resolved "
+                "for this turn"
+            )
+        observed = []
+        for statement in resolved:
+            if statement["shape"] in _STATEMENT_LABELS.values() and statement["shape"] not in observed:
+                observed.append(statement["shape"])
+        source = "trace"
+    else:
+        statements = parse_statements(answer)
+        observed = observed_shapes(answer)
+        source = "answer"
     if not observed:
         return "UNGRADED", (
-            "the answer quotes no resolver statement, so the shape cannot be read from it "
-            "(the DATE_WINDOW contract requires quoting it)"
+            "[trace] no window was resolved in the tool trace for this turn"
+            if source == "trace"
+            else "[answer] the answer quotes no resolver statement and no tool trace was available, "
+            "so the shape cannot be read (the DATE_WINDOW contract requires quoting it)"
         )
 
     acceptable = {wanted, *expected.get("also_accept", [])}
     matching = [s for s in statements if s["shape"] in acceptable]
     if not matching:
-        return "FAIL", f"expected {wanted}, answer quotes {observed}"
+        return "FAIL", f"[{source}] expected {wanted}, observed {observed}"
 
     # Shape alone is not the decision recorded on #1709 — it asks for the triple. A question
     # answered on ONE calendar month where six were specified is the wrong window, and grading only
@@ -348,12 +554,18 @@ def grade_window(question, answer, as_of):
 
     wanted_comparison = expected.get("comparison")
     if wanted_comparison and wanted_comparison != "NONE":
-        if not any(s["shape"] == wanted_comparison for s in statements):
+        # The answer path emits comparison labels in `shape` (parse_statements merges both label
+        # maps); the trace path keeps them in their own key. Checking only `shape` meant a
+        # trace-graded question could never satisfy an expected comparison — q15 is the only
+        # question that declares one, and it failed on this whatever its shape resolved to.
+        if not any(
+            s.get("shape") == wanted_comparison or s.get("comparison") == wanted_comparison for s in statements
+        ):
             problems.append(f"comparison: expected a {wanted_comparison} window, answer quotes none")
 
     if problems:
-        return "FAIL", f"shape {wanted} matched, but " + "; ".join(problems)
-    return "PASS", f"expected {wanted}, answer quotes {observed}"
+        return "FAIL", f"[{source}] shape {wanted} matched, but " + "; ".join(problems)
+    return "PASS", f"[{source}] expected {wanted}, observed {observed}"
 
 
 def questions_provenance(path):
@@ -395,6 +607,81 @@ def questions_provenance(path):
     }
 
 
+
+# ── behaviour bands and multi-turn sequences (#1688, #1689, #1690) ───────────
+#
+# Both corpora shipped as data with nothing to execute them. A fixture nothing runs is
+# documentation, so these are the two run modes that turn them into measurements.
+
+BANDS_PATH = "pos-mcp-server/src/test/resources/eval/analytics-gate/BEHAVIOUR_BANDS.json"
+SEQUENCES_PATH = "pos-mcp-server/src/test/resources/eval/analytics-gate/MULTI_TURN.json"
+
+
+def run_bands(url, token, api_version, document, timeout):
+    """Asks each band question once and scores the OUTCOME, not the content.
+
+    An impossible question is passed by a refusal and failed by an answer, however plausible that
+    answer looks — which is the whole reason the band exists. Until it did, a correct refusal and a
+    genuine failure scored identically.
+    """
+    results = []
+    for question in document["questions"]:
+        outcome = ask(
+            url, token, api_version, question["utterance"], timeout, conversation_id=conversation_id_for(question)
+        )
+        observed = classify_outcome(outcome["answer"])
+        expected = question["expected_outcome"]
+        results.append(
+            {
+                "fixture_id": question["fixture_id"],
+                "band": question["band"],
+                "utterance": question["utterance"],
+                "expected_outcome": expected,
+                "observed_outcome": observed,
+                "verdict": "PASS" if observed == expected else "FAIL",
+                **outcome,
+            }
+        )
+        print(f"  {question['fixture_id']} {question['band']}: expected {expected}, got {observed}", flush=True)
+    return results
+
+
+def run_sequences(url, token, api_version, document, timeout):
+    """Runs each sequence's turns in order on one conversation.
+
+    Each sequence names its own conversation, so its turns share a memory and different sequences
+    do not bleed into each other. Before #1735 no identifier was possible — the server keyed memory
+    on (username, role) alone, which gave these sequences the continuity they need by accident and
+    gave the single-turn gate a continuity it must not have.
+
+    Turns are recorded, not auto-scored. Whether "their" resolved to the right customer is a
+    judgement, and a regex over the answer would pin the wrong thing — so each turn carries its
+    fixture's `must_reference` and `fails_if` alongside the reply for a grader to apply.
+    """
+    results = []
+    for sequence in document["sequences"]:
+        turns = []
+        sequence_conversation_id = f"seq-{sequence['sequence_id']}"
+        for index, turn in enumerate(sequence["turns"]):
+            outcome = ask(
+                url, token, api_version, turn["utterance"], timeout, conversation_id=sequence_conversation_id
+            )
+            turns.append(
+                {
+                    "index": index + 1,
+                    "utterance": turn["utterance"],
+                    "expect": turn.get("expect"),
+                    "must_reference": turn.get("must_reference"),
+                    "fails_if": turn.get("fails_if"),
+                    "observed_outcome": classify_outcome(outcome["answer"]),
+                    **outcome,
+                }
+            )
+            print(f"  {sequence['sequence_id']} turn {index + 1}: {turns[-1]['observed_outcome']}", flush=True)
+        results.append({"sequence_id": sequence["sequence_id"], "carries": sequence["carries"], "turns": turns})
+    return results
+
+
 def select(questions, only, include_excluded):
     if only:
         wanted = {q.strip() for q in only.split(",") if q.strip()}
@@ -408,8 +695,40 @@ def select(questions, only, include_excluded):
     return [q for q in questions if q["in_chat_path_gate"]]
 
 
-def ask(url, token, api_version, message, timeout):
-    body = json.dumps({"message": message}).encode("utf-8")
+def turn_conversation_id(args, fixture_id):
+    """The conversation a single-turn question belongs to, or None to keep the server default.
+
+    Off unless --isolate-turns is passed. #1757 adds the server side; until a deploy carries it,
+    sending the field could be rejected by the running build, and a transport error on every
+    question is worse than the shared-memory bias this corrects. Once alpha carries #1757 this
+    should become the default and the flag should go.
+    """
+    if not getattr(args, "isolate_turns", False):
+        return None
+    return f"{args.run_id}-{fixture_id}"
+
+
+def conversation_id_for(question):
+    """Band fixtures are independent single-turn probes, so each gets its own conversation."""
+    return f"bands-{question['fixture_id']}"
+
+
+def ask(url, token, api_version, message, timeout, conversation_id=None):
+    """Sends one turn.
+
+    #1735: the server keys conversation memory on (username, role) alone unless the request names
+    a conversation, so twelve questions asked by one actor land in one twelve-turn history and no
+    question in this corpus is the independent single-turn test it is written as. Passing a
+    distinct conversation_id per question is what makes them independent.
+
+    The field is only sent when a caller asks for it, because a server that predates #1757 does not
+    know it and may reject the body outright — which would turn every question into a transport
+    error rather than an answer.
+    """
+    payload = {"message": message}
+    if conversation_id is not None:
+        payload["conversationId"] = conversation_id
+    body = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(url, data=body, method="POST")
     request.add_header("Content-Type", "application/json")
     request.add_header("Accept", "application/json")
@@ -934,7 +1253,7 @@ def write_markdown(out_dir, record):
             f"Replay report: `{record['replay_report']}` - questions graded:"
             f" {len(record['results'])}",
             (
-                f"Window grading: {record['summary'].get('window_counts')}"
+                f"Window grading: {record['summary'].get('window_counts')} (source: {record.get('trace_source')})"
             ),
             (
                 f"Overall verdict: **{record['summary']['verdict']}**"
@@ -1011,6 +1330,104 @@ def write_markdown(out_dir, record):
     (out_dir / "run.md").write_text("\n".join(lines), encoding="utf-8")
 
 
+
+def render_alternate_markdown(record):
+    """Renders the band/sequence record as the run.md the --out contract promises.
+
+    The sequences table deliberately shows must_reference / fails_if instead of a verdict column:
+    this mode is UNSCORED by design, and a report that looked scored would invite the reader to
+    trust a judgement no code here made.
+    """
+    lines = [
+        f"# analytics gate — {record['mode']} mode",
+        "",
+        f"- started: {record['started_at']}",
+        f"- endpoint: {record['endpoint']}",
+        f"- corpus: {record['corpus']}",
+        f"- actor: {record['actor'].get('subject', record['actor'].get('error', 'unknown'))}",
+        f"- verdict: **{record['summary']['verdict']}**",
+        "",
+    ]
+
+    if record["mode"] == "bands":
+        lines += [
+            f"{record['summary']['passed']} passed, {record['summary']['failed']} failed; "
+            f"observed outcomes {record['summary']['by_outcome']}",
+            "",
+            "| fixture | band | expected | observed | verdict |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+        for result in record["results"]:
+            lines.append(
+                f"| {result['fixture_id']} | {result['band']} | {result['expected_outcome']} "
+                f"| {result['observed_outcome']} | {result['verdict']} |"
+            )
+    else:
+        lines += [
+            f"{record['summary']['sequences']} sequences, {record['summary']['turns']} turns. "
+            f"{record['summary']['note']}",
+            "",
+            "| sequence | turn | utterance | must_reference | fails_if |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+        for sequence in record["sequences"]:
+            for index, turn in enumerate(sequence["turns"], start=1):
+                lines.append(
+                    f"| {sequence['sequence_id']} | {index} | {turn['utterance']} "
+                    f"| {turn.get('must_reference', '')} | {turn.get('fails_if', '')} |"
+                )
+
+    return "\n".join(lines) + "\n"
+
+
+def run_alternate_mode(args, token):
+    """Executes the behaviour-band or multi-turn corpus and writes its own record.
+
+    Kept separate from the question path rather than folded into it: these score an OUTCOME and a
+    conversation, not a number against ground truth, and forcing them through a grader built for
+    single-turn numeric answers would misreport both.
+    """
+    repo_root = Path(__file__).resolve().parents[1]
+    corpus = repo_root / (BANDS_PATH if args.mode == "bands" else SEQUENCES_PATH)
+    document = json.loads(corpus.read_text(encoding="utf-8"))
+    api_version = os.environ.get("MCP_API_VERSION", "1")
+
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    record = {
+        "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "endpoint": args.url,
+        "mode": args.mode,
+        "corpus": str(corpus.relative_to(repo_root)),
+        "actor": actor_provenance(token) if token else {"error": "no token"},
+    }
+
+    if args.mode == "bands":
+        record["results"] = run_bands(args.url, token, api_version, document, args.timeout)
+        counts = Counter(result["verdict"] for result in record["results"])
+        record["summary"] = {
+            "verdict": "PASS" if counts.get("FAIL", 0) == 0 else "FAIL",
+            "passed": counts.get("PASS", 0),
+            "failed": counts.get("FAIL", 0),
+            "by_outcome": dict(sorted(Counter(r["observed_outcome"] for r in record["results"]).items())),
+        }
+    else:
+        record["sequences"] = run_sequences(args.url, token, api_version, document, args.timeout)
+        # Deliberately no automatic verdict: whether a follow-up carried its context is a judgement,
+        # and inventing a machine verdict here would be a number nobody should trust.
+        record["summary"] = {
+            "verdict": "UNSCORED",
+            "sequences": len(record["sequences"]),
+            "turns": sum(len(s["turns"]) for s in record["sequences"]),
+            "note": "each turn carries must_reference / fails_if for a grader to apply",
+        }
+
+    (out_dir / "run.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    (out_dir / "run.md").write_text(render_alternate_markdown(record), encoding="utf-8")
+    print(f"\nwrote {out_dir / 'run.json'} and {out_dir / 'run.md'}  summary={record['summary']}")
+    return None
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--out", required=True, help="directory for run.json / run.md")
@@ -1018,6 +1435,28 @@ def main(argv=None):
     parser.add_argument("--url", default=os.environ.get("MCP_CHAT_URL", DEFAULT_URL))
     parser.add_argument("--token", default=None, help="bearer token; prefer MCP_BEARER_TOKEN")
     parser.add_argument("--env-file", default=None, help="KEY=VALUE file to read config from")
+    parser.add_argument(
+        "--traces-url",
+        default=os.environ.get("MCP_TRACES_URL"),
+        help="turn-trace endpoint; defaults to the chat URL's host with /v1/eval/turn-traces",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["questions", "bands", "sequences"],
+        default="questions",
+        help="questions (default), bands (#1689 outcome bands), or sequences (#1690 multi-turn)",
+    )
+    parser.add_argument(
+        "--isolate-turns",
+        action="store_true",
+        help="send a distinct conversationId per question so each is an independent single turn "
+        "(#1735); needs a server carrying #1757",
+    )
+    parser.add_argument(
+        "--run-id",
+        default=None,
+        help="prefix for per-question conversation ids; defaults to a timestamp",
+    )
     parser.add_argument(
         "--expect-role",
         default=None,
@@ -1046,6 +1485,9 @@ def main(argv=None):
     # MCP_BEARER_TOKEN from the same file worked.
     if args.expect_role is None:
         args.expect_role = os.environ.get("MCP_EXPECTED_ROLE", EXPECTED_ROLE_DEFAULT)
+    if args.run_id is None:
+        args.run_id = datetime.now(timezone.utc).strftime("gate-%Y%m%dT%H%M%SZ")
+
     token = args.token or os.environ.get("MCP_BEARER_TOKEN")
     if not args.replay_report and not token:
         sys.exit("no bearer token: pass --token or set MCP_BEARER_TOKEN (or --env-file)")
@@ -1088,6 +1530,9 @@ def main(argv=None):
                 "--expect-role '' to skip this check, or --allow-role-mismatch to run anyway."
             )
 
+    if args.mode in {"bands", "sequences"}:
+        return run_alternate_mode(args, token)
+
     questions_path = Path(args.questions).resolve()
     document = json.loads(questions_path.read_text(encoding="utf-8"))
     selected = select(document["questions"], args.only, args.all)
@@ -1122,6 +1567,7 @@ def main(argv=None):
     # every day but one. eval_as_of stays in the record as documentation of when the ground-truth
     # figures were computed; it no longer constrains grading.
     run_as_of = datetime.now(timezone.utc).date()
+    run_started_at = datetime.now(timezone.utc) - timedelta(minutes=5)
 
     record = {
         "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -1163,7 +1609,14 @@ def main(argv=None):
             except ValueError as exc:
                 parser.error(str(exc))
         else:
-            outcome = ask(args.url, token, api_version, question["utterance"], args.timeout)
+            outcome = ask(
+                args.url,
+                token,
+                api_version,
+                question["utterance"],
+                args.timeout,
+                conversation_id=turn_conversation_id(args, question["fixture_id"]),
+            )
             tool_calls = None
         expected_plan = question.get("expected_plan")
         plan_check = check_expected_plan(expected_plan, tool_calls)
@@ -1181,13 +1634,40 @@ def main(argv=None):
         }
         if grading is not None:
             result.update(grading)
-        verdict, detail = grade_window(question, result.get("answer"), run_as_of)
-        result["window_check"] = {"verdict": verdict, "detail": detail}
+        result["window_check"] = None  # graded after the run, once traces can be fetched
         record["results"].append(result)
         print(f"  {outcome['elapsed_s']}s"
               + (f" — {outcome['error']}" if outcome["error"] else "")
               + (f" — {plan_check}" if plan_check and plan_check.startswith("FAIL") else ""),
               flush=True)
+
+    # Grade windows AFTER the loop: traces are written as each turn completes, so one fetch at the
+    # end covers the whole run instead of a request per question (#1743).
+    resolved_by_utterance = {}
+    trace_note = "replay mode: no live traces"
+    if replay_by_fixture is None and token:
+        traces, failure = fetch_traces(args.traces_url or traces_url_for(args.url), token, run_started_at)
+        if failure:
+            trace_note = f"falling back to answer parsing — {failure}"
+        else:
+            for trace in traces:
+                message = trace.get("userMessage")
+                if message:
+                    # setdefault with the possibly-EMPTY list: a trace that resolved no window is
+                    # evidence that none was resolved, which must not be mistaken for "no trace".
+                    resolved_by_utterance.setdefault(message, window_from_trace(trace))
+            trace_note = f"{len(traces)} trace(s) fetched, {len(resolved_by_utterance)} with a resolved window"
+    record["trace_source"] = trace_note
+
+    for result in record["results"]:
+        resolved = resolved_by_utterance.get(result["utterance"])
+        verdict, detail = grade_window(
+            {"fixture_id": result["fixture_id"], "window": result["window"]},
+            result.get("answer"),
+            run_as_of,
+            resolved,
+        )
+        result["window_check"] = {"verdict": verdict, "detail": detail}
 
     if replay_by_fixture is not None:
         outcome_counts = Counter(result["outcome"] for result in record["results"])

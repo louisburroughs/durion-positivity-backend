@@ -25,5 +25,15 @@ public final class McpPermissions {
     public static final String MCP_CHAT_STREAM = "mcp:chat:stream";
     public static final String MCP_CHAT_EXECUTE = "mcp:chat:execute";
 
+    /**
+     * Read recorded eval turn traces (#1706).
+     *
+     * <p>Its own permission rather than reusing an existing one: a trace carries the assembled
+     * system prompt, the caller's message and every tool result, so it is strictly more sensitive
+     * than the chat permission that produced it. A caller who may chat must not thereby be able to
+     * read back prompts.
+     */
+    public static final String MCP_EVAL_TRACE_VIEW = "mcp:eval_trace:view";
+
     private McpPermissions() {}
 }

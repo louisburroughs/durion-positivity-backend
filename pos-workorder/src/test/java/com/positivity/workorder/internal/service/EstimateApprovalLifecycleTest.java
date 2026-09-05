@@ -31,7 +31,6 @@ import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.EstimateSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
-import jakarta.persistence.EntityNotFoundException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -227,7 +226,7 @@ class EstimateApprovalLifecycleTest {
             givenEstimate(estimate(EstimateStatus.DRAFT));
 
             assertThatThrownBy(() -> service.approveEstimate(ESTIMATE_ID, CUSTOMER_ID))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(WorkorderResourceConflictException.class)
                     .hasMessageContaining("Estimate cannot be approved in current state: DRAFT");
         }
 
@@ -236,8 +235,9 @@ class EstimateApprovalLifecycleTest {
         void rejectsUnknownEstimate() {
             when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.empty());
 
+            // #1713: the module's own mapped type, not the JPA framework type nothing mapped.
             assertThatThrownBy(() -> service.approveEstimate(ESTIMATE_ID, CUSTOMER_ID))
-                    .isInstanceOf(EntityNotFoundException.class)
+                    .isInstanceOf(EstimateNotFoundException.class)
                     .hasMessageContaining("Estimate not found");
         }
 
@@ -263,7 +263,7 @@ class EstimateApprovalLifecycleTest {
 
             assertThatThrownBy(() -> service.approveEstimate(
                             ESTIMATE_ID, OTHER_CUSTOMER_ID, "sig", "image/png", "Someone Else", null))
-                    .isInstanceOf(WorkorderResourceConflictException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessageContaining("Customer ID mismatch");
         }
 
@@ -563,8 +563,9 @@ class EstimateApprovalLifecycleTest {
         void rejectsUnknownEstimate() {
             when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.empty());
 
+            // #1713: the module's own mapped type, not the JPA framework type nothing mapped.
             assertThatThrownBy(() -> service.submitForApproval(ESTIMATE_ID, "jane.smith"))
-                    .isInstanceOf(EntityNotFoundException.class);
+                    .isInstanceOf(EstimateNotFoundException.class);
         }
 
         @Test

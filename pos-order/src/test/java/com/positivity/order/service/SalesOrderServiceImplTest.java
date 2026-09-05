@@ -24,6 +24,7 @@ import com.positivity.order.internal.entity.SourceType;
 import com.positivity.order.internal.exception.InvalidSkuException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
+import com.positivity.order.internal.exception.SalesOrderUnprocessableException;
 import com.positivity.order.internal.repository.OrderStatusHistoryRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
@@ -173,7 +174,7 @@ class SalesOrderServiceImplTest {
                         .build()));
 
         assertThatThrownBy(() -> createCart("clerk-001", "terminal-001", null, null))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(SalesOrderUnprocessableException.class);
     }
 
     @Test

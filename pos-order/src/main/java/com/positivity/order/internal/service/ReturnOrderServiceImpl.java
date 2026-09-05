@@ -19,6 +19,8 @@ import com.positivity.order.internal.entity.SourceType;
 import com.positivity.order.internal.exception.OverCapReturnException;
 import com.positivity.order.internal.exception.ReturnLineNotReturnableException;
 import com.positivity.order.internal.exception.ReturnOrderNotFoundException;
+import com.positivity.order.internal.exception.ReturnOrderStateConflictException;
+import com.positivity.order.internal.exception.ReturnOrderUnprocessableException;
 import com.positivity.order.internal.exception.ReturnRequestValidationException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.WarrantyReturnRoutingException;
@@ -101,7 +103,7 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
                 .findById(command.originalOrderId())
                 .orElseThrow(() -> new SalesOrderNotFoundException(command.originalOrderId()));
         if (original.getStatus() != SalesOrderStatus.COMPLETED) {
-            throw new IllegalStateException("Returns are only allowed against COMPLETED orders; order "
+            throw new ReturnOrderStateConflictException("Returns are only allowed against COMPLETED orders; order "
                     + original.getOrderId() + " is " + original.getStatus());
         }
         RefundMethod refundMethod = parseRefundMethod(command.refundMethod());
@@ -260,8 +262,9 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
                 .findById(originalOrderId)
                 .orElseThrow(() -> new SalesOrderNotFoundException(originalOrderId));
         if (original.getStatus() != SalesOrderStatus.COMPLETED) {
-            throw new IllegalStateException("Returnable lines are only available for COMPLETED orders; order "
-                    + original.getOrderId() + " is " + original.getStatus());
+            throw new ReturnOrderStateConflictException(
+                    "Returnable lines are only available for COMPLETED orders; order " + original.getOrderId() + " is "
+                            + original.getStatus());
         }
         List<SalesOrderLine> soldLines = salesOrderLineRepository.findByOrder_OrderId(original.getOrderId());
         List<UUID> lineIds =
@@ -288,8 +291,8 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
     public @NonNull ReturnOrderSummary approveReturn(@NonNull UUID returnOrderId) {
         ReturnOrder returnOrder = require(returnOrderId);
         if (returnOrder.getStatus() != ReturnOrderStatus.PENDING_APPROVAL) {
-            throw new IllegalStateException("Only a PENDING_APPROVAL return can be approved; " + returnOrderId + " is "
-                    + returnOrder.getStatus());
+            throw new ReturnOrderStateConflictException("Only a PENDING_APPROVAL return can be approved; "
+                    + returnOrderId + " is " + returnOrder.getStatus());
         }
         UUID reviewerUserId = SecurityContextHelper.getCurrentUserIdAsUuidOrDefault(
                 UUID.fromString("00000000-0000-0000-0000-000000000000"));
@@ -305,8 +308,8 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
     public @NonNull ReturnOrderSummary rejectReturn(@NonNull UUID returnOrderId, @NonNull String reason) {
         ReturnOrder returnOrder = require(returnOrderId);
         if (returnOrder.getStatus() != ReturnOrderStatus.PENDING_APPROVAL) {
-            throw new IllegalStateException("Only a PENDING_APPROVAL return can be rejected; " + returnOrderId + " is "
-                    + returnOrder.getStatus());
+            throw new ReturnOrderStateConflictException("Only a PENDING_APPROVAL return can be rejected; "
+                    + returnOrderId + " is " + returnOrder.getStatus());
         }
         returnOrder.setStatus(ReturnOrderStatus.REJECTED);
         returnOrder.setRejectionReason(reason);
@@ -322,7 +325,7 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
             return toSummary(returnOrder);
         }
         if (returnOrder.getStatus() != ReturnOrderStatus.RETURN_REQUESTED) {
-            throw new IllegalStateException(
+            throw new ReturnOrderStateConflictException(
                     "Return saga requires RETURN_REQUESTED; " + returnOrderId + " is " + returnOrder.getStatus());
         }
         return runSaga(returnOrder);
@@ -336,8 +339,8 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
             return toSummary(returnOrder);
         }
         if (returnOrder.getStatus() != ReturnOrderStatus.REFUND_FAILED) {
-            throw new IllegalStateException("Return retry only allowed from REFUND_FAILED; " + returnOrderId + " is "
-                    + returnOrder.getStatus());
+            throw new ReturnOrderStateConflictException("Return retry only allowed from REFUND_FAILED; " + returnOrderId
+                    + " is " + returnOrder.getStatus());
         }
         return runSaga(returnOrder);
     }
@@ -388,7 +391,7 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
                             returnOrder,
                             returnOrder.getRefundMethod() + " refund requires a customer on the return",
                             actor);
-                    throw new IllegalStateException(
+                    throw new ReturnOrderUnprocessableException(
                             returnOrder.getRefundMethod() + " refund requires a customer on the return");
                 }
                 log.info(
@@ -407,7 +410,7 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
         }
         if (returnOrder.getOriginalInvoiceId() == null) {
             parkRefundFailed(returnOrder, "No invoice on the original order to refund against", actor);
-            throw new IllegalStateException("No invoice on the original order to refund against");
+            throw new ReturnOrderUnprocessableException("No invoice on the original order to refund against");
         }
         Map<UUID, BigDecimal> netByIntent = netSettledByIntent(returnOrder.getOriginalOrderId());
         BigDecimal remaining = returnOrder.getTotalRefund();
@@ -442,7 +445,8 @@ public class ReturnOrderServiceImpl implements ReturnOrderService {
                     returnOrder,
                     "Insufficient settled original tender to refund " + returnOrder.getTotalRefund(),
                     actor);
-            throw new IllegalStateException("Insufficient settled original tender to refund the return total");
+            throw new ReturnOrderUnprocessableException(
+                    "Insufficient settled original tender to refund the return total");
         }
     }
 

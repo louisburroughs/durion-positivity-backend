@@ -73,8 +73,11 @@ class BillingRulesServiceImplTest {
         dto.setInvoiceDeliveryMethod(InvoiceDeliveryMethod.EMAIL);
         dto.setInvoiceGroupingStrategy(InvoiceGroupingStrategy.PER_WORKORDER);
 
+        // #1713: the module's own validation type, not a bare IllegalArgumentException — the latter
+        // reached the platform catch-all and answered 500 for a documented 400.
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> billingRulesService.saveBillingRules(dto, "tester"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(com.positivity.invoice.internal.exception.InvoiceRequestValidationException.class)
+                .isNotInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("paymentTermsCode");
     }
 

@@ -7,6 +7,7 @@ import com.positivity.peoplecontact.internal.dto.PersonRoleAssignmentRequest;
 import com.positivity.peoplecontact.internal.exception.PeopleContactValidationException;
 import com.positivity.peoplecontact.internal.security.PeopleContactPermissions;
 import com.positivity.peoplecontact.internal.service.PeopleAccessControlService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -21,7 +22,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -124,15 +124,15 @@ public class PersonAccessController {
                         description = "Invalid request",
                         content =
                                 @Content(
-                                        mediaType = "application/problem+json",
-                                        schema = @Schema(implementation = ProblemDetail.class))),
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "404",
                         description = "Person or role not found",
                         content =
                                 @Content(
-                                        mediaType = "application/problem+json",
-                                        schema = @Schema(implementation = ProblemDetail.class)))
+                                        mediaType = "application/json",
+                                        schema = @Schema(implementation = ApiError.class)))
             })
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -193,17 +193,11 @@ public class PersonAccessController {
     @ApiResponse(
             responseCode = "400",
             description = "Invalid request for revoking role assignment",
-            content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Person or role assignment not found",
-            content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:role:revoke"})

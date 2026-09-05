@@ -64,7 +64,25 @@ public final class OpenApiValidationInventoryLoader {
                     "annotationDepth: EXEMPT requires an annotationDepthReason for module: " + moduleName);
         }
 
-        return new OpenApiModulePolicy(mode, reason, annotationDepth, annotationDepthReason);
+        Object errorSchemaValue = policyMap.get("errorSchema");
+        OpenApiModulePolicy.ErrorSchemaMode errorSchema;
+        if (errorSchemaValue == null) {
+            errorSchema = OpenApiModulePolicy.ErrorSchemaMode.REPORT_ONLY;
+        } else if (errorSchemaValue instanceof String errorSchemaString && !errorSchemaString.isBlank()) {
+            errorSchema = OpenApiModulePolicy.ErrorSchemaMode.valueOf(errorSchemaString);
+        } else {
+            throw new IllegalArgumentException("Expected non-blank errorSchema for module: " + moduleName);
+        }
+
+        String errorSchemaReason = optionalString(policyMap.get("errorSchemaReason"), "errorSchemaReason", moduleName);
+        if (errorSchema == OpenApiModulePolicy.ErrorSchemaMode.EXEMPT
+                && (errorSchemaReason == null || errorSchemaReason.isBlank())) {
+            throw new IllegalArgumentException(
+                    "errorSchema: EXEMPT requires an errorSchemaReason for module: " + moduleName);
+        }
+
+        return new OpenApiModulePolicy(
+                mode, reason, annotationDepth, annotationDepthReason, errorSchema, errorSchemaReason);
     }
 
     private static String optionalString(Object value, @NonNull String key, @NonNull String moduleName) {

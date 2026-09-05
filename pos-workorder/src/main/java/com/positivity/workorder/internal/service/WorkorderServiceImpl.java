@@ -33,6 +33,7 @@ import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PartLineNotFoundException;
 import com.positivity.workorder.internal.exception.ServiceLineNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
@@ -552,16 +553,31 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .findById(workorderId)
                 .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
-        // Validate customer matches workorder
+        // Validate customer matches workorder. This is payload validation against the addressed
+        // resource (ADR-0017 §1), not a stateful conflict: the workorder itself is approvable, the
+        // caller simply supplied the wrong customerId in the request body.
+        //
+        // The workorder's own customerId is deliberately kept out of the client-facing message and
+        // logged instead. WORKORDER_APPROVE is a distinct permission from WORKORDER_VIEW, so a
+        // caller holding only the former could otherwise probe any workorderId with a wrong
+        // customerId and read the true owner back out of the ApiError message.
         if (!workorder.getCustomerId().equals(customerId)) {
-            throw new WorkorderResourceConflictException("Customer ID mismatch: workorder belongs to customer "
-                    + workorder.getCustomerId() + ", but approval attempted for customer " + customerId);
+            log.warn(
+                    "Customer ID mismatch approving workorder {}: belongs to customer {}, approval attempted for {}",
+                    workorderId,
+                    workorder.getCustomerId(),
+                    customerId);
+            throw new WorkorderRequestValidationException(
+                    "Customer ID mismatch: the customerId in the request is not this workorder's customer.");
         }
 
         // Validate workorder can be approved (must be in DRAFT status)
         if (workorder.getStatus() != WorkorderStatus.DRAFT) {
-            throw new IllegalStateException("Workorder cannot be approved in current state: " + workorder.getStatus()
-                    + ". Workorders can only be approved from DRAFT status.");
+            // Invalid lifecycle transition -> 409 (ADR-0017 §2 names it explicitly). The same
+            // request body succeeds once the workorder is back in DRAFT, so this is the resource's
+            // state refusing the operation, not a problem with the payload.
+            throw new WorkorderResourceConflictException("Workorder cannot be approved in current state: "
+                    + workorder.getStatus() + ". Workorders can only be approved from DRAFT status.");
         }
 
         // Transition to APPROVED status

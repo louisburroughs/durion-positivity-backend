@@ -95,7 +95,7 @@ paths:
 
         Emits a BILLING_RULES_GET audit event; no state changes — this is a read-only projection.
 
-        Returns 404 when no billing rules are configured for the party, and 400 with an empty body when partyId is not a well-formed UUID.
+        Returns 404 with an empty body when no billing rules are configured for the party, and 400 with a VALIDATION_ERROR ApiError when partyId is not a well-formed UUID.
 
         '
       operationId: getBillingRules
@@ -112,12 +112,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/BillingRulesDTO'
           description: Billing rules found
-        '404':
+        '400':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillingRulesDTO'
-          description: No billing rules configured for this party
+                $ref: '#/components/schemas/ApiError'
+          description: partyId is not a well-formed UUID.
+        '404':
+          description: No billing rules configured for this party; the body is empty.
       security:
       - bearerAuth:
         - invoice:billing-rules
@@ -137,7 +139,7 @@ paths:
 
         Emits a BILLING_RULES_UPSERT event and publishes a billing-rules-updated notification; due dates of already-finalized invoices are never recomputed from a terms change.
 
-        Returns 201 when the record is created, 200 when an existing record is updated, and 400 with an empty body when partyId is not a well-formed UUID.
+        Returns 201 when the record is created and 200 when an existing record is updated. A paymentTermsCode outside the vocabulary answers 400 VALIDATION_ERROR in the ApiError envelope; a partyId that is not a well-formed UUID answers the same 400 VALIDATION_ERROR envelope.
 
         '
       operationId: upsertBillingRules
@@ -180,8 +182,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BillingRulesDTO'
-          description: Invalid billing rules data
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid billing rules data — VALIDATION_ERROR for an unknown paymentTermsCode or a partyId that is not a well-formed UUID.
       security:
       - bearerAuth:
         - invoice:billing-rules
@@ -262,7 +264,7 @@ paths:
       operationId: getInvoicingLag
       parameters:
       - description: Window start date (YYYY-MM-DD, inclusive)
-        example: 2026-06-01
+        example: '2026-06-01'
         in: query
         name: startDate
         required: true
@@ -270,7 +272,7 @@ paths:
           format: date
           type: string
       - description: Window end date (YYYY-MM-DD, inclusive)
-        example: 2026-06-30
+        example: '2026-06-30'
         in: query
         name: endDate
         required: true
@@ -320,7 +322,7 @@ paths:
       operationId: getRevenueByCustomer
       parameters:
       - description: Window start date (YYYY-MM-DD, inclusive)
-        example: 2026-06-01
+        example: '2026-06-01'
         in: query
         name: startDate
         required: true
@@ -328,7 +330,7 @@ paths:
           format: date
           type: string
       - description: Window end date (YYYY-MM-DD, inclusive)
-        example: 2026-06-30
+        example: '2026-06-30'
         in: query
         name: endDate
         required: true
@@ -708,7 +710,7 @@ paths:
           - CANCELLED
           type: string
       - description: Issued-date window start, inclusive (YYYY-MM-DD); evaluated against Invoice.finalizedAt (optional)
-        example: 2026-06-01
+        example: '2026-06-01'
         in: query
         name: issuedFrom
         required: false
@@ -716,7 +718,7 @@ paths:
           format: date
           type: string
       - description: Issued-date window end, inclusive (YYYY-MM-DD); evaluated against Invoice.finalizedAt (optional)
-        example: 2026-06-30
+        example: '2026-06-30'
         in: query
         name: issuedTo
         required: false
@@ -1917,7 +1919,7 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440000
           type: string
         fieldErrors:
-          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
           items:
             $ref: '#/components/schemas/FieldError'
           type: array
@@ -1944,7 +1946,7 @@ components:
           type: string
         timestamp:
           description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
+          example: '2026-03-17T14:30:00.000Z'
           type: string
       required:
       - code
@@ -1981,7 +1983,7 @@ components:
       properties:
         createdAt:
           description: Timestamp when the record was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         id:
@@ -2019,7 +2021,7 @@ components:
           type: boolean
         updatedAt:
           description: Timestamp when the record was last updated
-          example: 2026-01-16 11:45:00+00:00
+          example: '2026-01-16T11:45:00Z'
           format: date-time
           type: string
         updatedBy:
@@ -2323,7 +2325,7 @@ components:
           type: string
         createdAt:
           description: Timestamp when the adjustment was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         externalReference:
@@ -2426,7 +2428,7 @@ components:
           type: string
         createdAt:
           description: Timestamp when the invoice was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         estimateId:
@@ -2436,7 +2438,7 @@ components:
           type: string
         finalizedAt:
           description: Timestamp when the invoice was finalized
-          example: 2026-01-16 12:00:00+00:00
+          example: '2026-01-16T12:00:00Z'
           format: date-time
           type: string
         finalizedBy:
@@ -2471,7 +2473,7 @@ components:
           type: string
         revertedAt:
           description: Timestamp when the invoice was reverted to draft
-          example: 2026-01-16 13:00:00+00:00
+          example: '2026-01-16T13:00:00Z'
           format: date-time
           type: string
         revertedBy:
@@ -2502,7 +2504,7 @@ components:
           type: number
         updatedAt:
           description: Timestamp when the invoice was last updated
-          example: 2026-01-16 11:45:00+00:00
+          example: '2026-01-16T11:45:00Z'
           format: date-time
           type: string
         workorderId:
@@ -2528,7 +2530,7 @@ components:
           type: string
         createdAt:
           description: Creation timestamp (UTC).
-          example: 2026-02-27 12:00:00+00:00
+          example: '2026-02-27T12:00:00Z'
           format: date-time
           type: string
         estimateId:
@@ -2647,7 +2649,7 @@ components:
           type: string
         invoiceCreatedAt:
           description: Creation timestamp of the owning invoice
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         invoiceId:
@@ -2732,7 +2734,7 @@ components:
       properties:
         createdAt:
           description: Creation timestamp
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         customerName:
@@ -2779,7 +2781,7 @@ components:
       properties:
         endDate:
           description: Window end date (inclusive)
-          example: 2026-06-30
+          example: '2026-06-30'
           format: date
           type: string
         rows:
@@ -2789,7 +2791,7 @@ components:
           type: array
         startDate:
           description: Window start date (inclusive)
-          example: 2026-06-01
+          example: '2026-06-01'
           format: date
           type: string
       required:
@@ -3126,7 +3128,7 @@ components:
           type: number
         completedAt:
           description: Timestamp when the refund completed
-          example: 2026-01-17 10:15:00+00:00
+          example: '2026-01-17T10:15:00Z'
           format: date-time
           type: string
         externalReference:
@@ -3202,7 +3204,7 @@ components:
       properties:
         endDate:
           description: Window end date (inclusive)
-          example: 2026-06-30
+          example: '2026-06-30'
           format: date
           type: string
         limit:
@@ -3217,7 +3219,7 @@ components:
           type: array
         startDate:
           description: Window start date (inclusive)
-          example: 2026-06-01
+          example: '2026-06-01'
           format: date
           type: string
         truncated:
@@ -3248,7 +3250,7 @@ components:
           type: integer
         lastInvoiceDate:
           description: Creation timestamp of this customer's most recent contributing invoice in the window
-          example: 2026-06-30 18:12:00+00:00
+          example: '2026-06-30T18:12:00Z'
           format: date-time
           type: string
         name:

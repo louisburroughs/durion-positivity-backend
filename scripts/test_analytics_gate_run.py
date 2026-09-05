@@ -1,7 +1,8 @@
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 import os
 import tempfile
+import argparse
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -705,7 +706,8 @@ class WindowGradingTest(unittest.TestCase):
             self._q({"shape": None, "note": "mixed window"}), "rolling: 2026-01-01 to 2026-02-01 — x", date(2026, 9, 1)
         )
         self.assertEqual(verdict, "UNGRADED")
-        self.assertEqual(detail, "mixed window")
+        # Now source-tagged, so a reader can tell a corpus decision from a grading outcome.
+        self.assertEqual(detail, "[corpus] mixed window")
 
     def test_observed_shapes_deduplicates_and_preserves_order(self):
         # All on one line: a greedy clause used to swallow everything after the first statement.
@@ -776,6 +778,493 @@ class OutcomeClassificationTest(unittest.TestCase):
         allowed = set(document["outcomes"]) | {"empty"}
         for question in document["questions"]:
             self.assertIn(question["expected_outcome"], allowed, question["fixture_id"])
+
+
+
+class TraceWindowGradingTest(unittest.TestCase):
+    """#1743: read the window from the tool trace, not from whatever the prose disclosed."""
+
+    @staticmethod
+    def _q(expected):
+        return {"fixture_id": "qx", "window": {"expected": expected}}
+
+    @staticmethod
+    def _trace(calls, message="how did vendor spend compare?"):
+        return {"userMessage": message, "toolCalls": calls}
+
+    def test_reads_shape_unit_and_count_from_a_resolver_call(self):
+        resolved = runner.window_from_trace(
+            self._trace([{"name": "resolveDateWindow",
+                          "arguments": '{"shape":"CALENDAR_SPAN","unit":"MONTH","count":6,"comparison":"YEAR_EARLIER"}'}])
+        )
+
+        self.assertEqual(
+            resolved,
+            [{
+                "shape": "CALENDAR_SPAN",
+                "unit": "MONTH",
+                "count": 6,
+                "comparison": "YEAR_EARLIER",
+                "model_shape": "CALENDAR_SPAN",
+                "failed": False,
+            }],
+        )
+
+    def test_grades_the_resolved_shape_not_the_shape_the_model_asked_for(self):
+        # The live case from 2026-09-05: the model asked for ROLLING, the server corrected it from
+        # the caller's wording (#1675) and resolved a calendar span, and the gate reported FAIL on a
+        # correct result. Grading the argument also fails the other way — a correction that stopped
+        # working would still read PASS whenever the model happened to send the right shape.
+        resolved = runner.window_from_trace(
+            self._trace([{
+                "name": "resolveDateWindow",
+                "arguments": '{"shape":"ROLLING","unit":"MONTH","count":6,"phrase":"last six months"}',
+                "result": '{"startDate":"2026-03-01","endDate":"2026-08-31","shape":"CALENDAR_SPAN"}',
+            }])
+        )
+
+        self.assertEqual(resolved[0]["shape"], "CALENDAR_SPAN")
+        # The model's own classification stays visible rather than being smoothed away.
+        self.assertEqual(resolved[0]["model_shape"], "ROLLING")
+
+    def test_falls_back_to_the_argument_when_the_result_has_no_shape(self):
+        # A pre-#1675 trace: the result parses and carries dates, but no corrected shape. The
+        # earlier version of this test fed "not json" and asserted only the shape, which held with
+        # the production change reverted too — it pinned nothing. Asserting the whole dict makes it
+        # fail on revert via model_shape, and exercises the path the docstring actually names.
+        resolved = runner.window_from_trace(
+            self._trace([{
+                "name": "resolveDateWindow",
+                "arguments": '{"shape":"ROLLING","unit":"DAY","count":90}',
+                "result": '{"startDate":"2026-06-07","endDate":"2026-09-05"}',
+            }])
+        )
+
+        self.assertEqual(
+            resolved,
+            [{
+                "shape": "ROLLING",
+                "unit": "DAY",
+                "count": 90,
+                "comparison": None,
+                "model_shape": "ROLLING",
+                "failed": False,
+            }],
+        )
+
+    def test_a_result_that_is_not_a_json_object_falls_back_without_crashing(self):
+        # The isinstance guard shipped with no coverage. JSON null, a list and a bare scalar are all
+        # valid JSON and none of them is a result object.
+        for payload in ("not json", "null", "[]", '"CALENDAR_SPAN"'):
+            with self.subTest(result=payload):
+                resolved = runner.window_from_trace(
+                    self._trace([{
+                        "name": "resolveDateWindow",
+                        "arguments": '{"shape":"ROLLING","unit":"MONTH","count":6}',
+                        "result": payload,
+                    }])
+                )
+                self.assertEqual(resolved[0]["shape"], "ROLLING")
+
+    def test_a_resolver_call_that_threw_is_not_graded_as_a_resolved_window(self):
+        # ToolInvocationRecorder records a thrown tool call as result=null with `error` set. Reading
+        # the arguments there would grade the model's REQUEST as though it had been resolved, so a
+        # call that failed outright would PASS whenever the model asked for the right shape.
+        resolved = runner.window_from_trace(
+            self._trace([{
+                "name": "resolveDateWindow",
+                "arguments": '{"shape":"CALENDAR_SPAN","unit":"MONTH","count":6}',
+                "result": None,
+                "error": "InvalidToolArgumentException: unknown comparison 'LAST_YEAR'",
+            }])
+        )
+
+        self.assertTrue(resolved[0]["failed"])
+        self.assertIsNone(resolved[0]["shape"])
+
+    def test_a_failed_resolver_call_fails_the_turn_rather_than_passing_it(self):
+        question = self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6})
+        resolved = runner.window_from_trace(
+            self._trace([{
+                "name": "resolveDateWindow",
+                "arguments": '{"shape":"CALENDAR_SPAN","unit":"MONTH","count":6}',
+                "result": None,
+                "error": "boom",
+            }])
+        )
+
+        verdict, detail = runner.grade_window(question, "irrelevant", "2026-09-05", resolved=resolved)
+
+        # FAIL rather than UNGRADED on purpose: the run summary only fails on FAIL, so an
+        # UNGRADED-on-error policy would let a broken resolver still produce a green run.
+        self.assertEqual(verdict, "FAIL")
+        self.assertIn("failed", detail)
+
+    def test_a_corrected_shape_takes_its_count_from_the_resolved_dates(self):
+        # The classifier sets shape, unit AND count, but the result carries only dates. Keeping the
+        # requested count here would grade a corrected window against the request it overrode: a
+        # count regression 6 -> 3 would read PASS, where the pre-#1675 code caught it loudly.
+        question = self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6})
+        resolved = runner.window_from_trace(
+            self._trace([{
+                "name": "resolveDateWindow",
+                "arguments": '{"shape":"ROLLING","unit":"MONTH","count":6}',
+                "result": '{"startDate":"2026-06-01","endDate":"2026-08-31","shape":"CALENDAR_SPAN"}',
+            }])
+        )
+
+        self.assertEqual(resolved[0]["count"], 3)
+        self.assertEqual(runner.grade_window(question, "x", "2026-09-05", resolved=resolved)[0], "FAIL")
+
+    def test_an_expected_comparison_can_be_satisfied_from_a_trace(self):
+        # The answer path emits comparison labels in `shape`; the trace path keeps them in their own
+        # key, so checking only `shape` meant q15 -- the one question declaring a comparison -- could
+        # never PASS from a trace whatever its shape resolved to.
+        question = self._q({"shape": "CALENDAR_SPAN", "comparison": "YEAR_EARLIER"})
+        resolved = [{
+            "shape": "CALENDAR_SPAN",
+            "unit": "MONTH",
+            "count": 6,
+            "comparison": "YEAR_EARLIER",
+            "model_shape": "ROLLING",
+            "failed": False,
+        }]
+
+        self.assertEqual(runner.grade_window(question, "x", "2026-09-05", resolved=resolved)[0], "PASS")
+
+    def test_a_forward_window_is_recognised_from_an_answer(self):
+        # "next" was missing from _STATEMENT_LABELS, so a turn resolving only a FORWARD window
+        # (#1681) read as "no window was resolved" -> UNGRADED, which the run summary treats as a
+        # pass. Graded from the answer path because that is where the label map is consulted.
+        question = self._q({"shape": "FORWARD", "unit": "DAY", "count": 14})
+        answer = 'Window: "next: 2026-09-05 to 2026-09-18 — the next 14 days starting today (2026-09-05)".'
+
+        verdict, detail = runner.grade_window(question, answer, "2026-09-05")
+
+        self.assertEqual(verdict, "PASS", detail)
+
+    def test_a_partial_span_yields_no_count_rather_than_a_plausible_one(self):
+        # _span_count promises WHOLE periods. Counting months inclusively across a part-month window
+        # would hand back the expected number and PASS a window the resolver had got wrong.
+        self.assertEqual(runner._span_count({"startDate": "2026-03-01", "endDate": "2026-08-31"}, "MONTH"), 6)
+        self.assertIsNone(runner._span_count({"startDate": "2026-03-15", "endDate": "2026-08-20"}, "MONTH"))
+
+    def test_a_wrong_comparison_still_fails(self):
+        question = self._q({"shape": "CALENDAR_SPAN", "comparison": "YEAR_EARLIER"})
+        resolved = [{
+            "shape": "CALENDAR_SPAN",
+            "unit": "MONTH",
+            "count": 6,
+            "comparison": "PRIOR_PERIOD",
+            "model_shape": "ROLLING",
+            "failed": False,
+        }]
+
+        self.assertEqual(runner.grade_window(question, "x", "2026-09-05", resolved=resolved)[0], "FAIL")
+
+    def test_a_named_period_call_reads_as_absolute(self):
+        resolved = runner.window_from_trace(
+            self._trace([{"name": "resolveNamedPeriod", "arguments": '{"period":"2026-03"}'}])
+        )
+
+        self.assertEqual(resolved[0]["shape"], "ABSOLUTE")
+
+    def test_ignores_tool_calls_that_are_not_window_resolvers(self):
+        resolved = runner.window_from_trace(
+            self._trace([{"name": "getVendorSpend", "arguments": '{"startDate":"2026-03-01"}'}])
+        )
+
+        self.assertEqual(resolved, [])
+
+    def test_grades_from_the_trace_even_when_the_answer_quotes_nothing(self):
+        # The exact 2026-09-04 failure: correct resolver calls, prose that discloses no window.
+        # Under answer-parsing this graded UNGRADED for six of twelve questions.
+        verdict, detail = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6}),
+            "Vendor spend was $6,720.00 across the period.",
+            date(2026, 9, 4),
+            [{"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6, "comparison": None}],
+        )
+
+        self.assertEqual(verdict, "PASS")
+        self.assertIn("[trace]", detail)
+
+    def test_a_wrong_shape_in_the_trace_fails_even_if_the_prose_sounds_right(self):
+        verdict, detail = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6}),
+            "calendar span: 2026-03-01 to 2026-08-31 — 6 whole months",
+            date(2026, 9, 4),
+            [{"shape": "ROLLING", "unit": "MONTH", "count": 6, "comparison": None}],
+        )
+
+        # The trace is the fact; the prose is a claim about it. Where they disagree, the trace wins.
+        self.assertEqual(verdict, "FAIL")
+        self.assertIn("[trace]", detail)
+
+    def test_falls_back_to_the_answer_when_no_trace_is_available(self):
+        verdict, detail = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6}),
+            "calendar span: 2026-03-01 to 2026-08-31 — 6 whole months",
+            date(2026, 9, 4),
+            None,
+        )
+
+        self.assertEqual(verdict, "PASS")
+        self.assertIn("[answer]", detail)
+
+    def test_no_trace_and_no_statement_says_both_were_missing(self):
+        verdict, detail = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN"}), "Here are the numbers.", date(2026, 9, 4), None
+        )
+
+        self.assertEqual(verdict, "UNGRADED")
+        self.assertIn("no tool trace was available", detail)
+
+    def test_fetch_traces_never_raises_and_explains_the_failure(self):
+        # A run whose traces cannot be fetched must still grade from answers rather than dying.
+        traces, failure = runner.fetch_traces("http://127.0.0.1:9/v1/eval/turn-traces", "tok", datetime.now(timezone.utc))
+
+        self.assertEqual(traces, [])
+        self.assertIsNotNone(failure)
+
+    def test_a_trace_with_no_resolver_call_is_ungraded_not_answer_parsed(self):
+        # The distinction that matters: an EMPTY resolved list means the trace exists and proves no
+        # window was resolved. Treating it as "no trace" would fall back to prose and could PASS on
+        # a claim the trace disproves.
+        verdict, detail = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6}),
+            "calendar span: 2026-03-01 to 2026-08-31 — 6 whole months",
+            date(2026, 9, 4),
+            [],
+        )
+
+        self.assertEqual(verdict, "UNGRADED")
+        self.assertIn("[trace]", detail)
+        self.assertIn("no window was resolved", detail)
+
+    def test_every_verdict_names_its_source(self):
+        expectation = {"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6}
+        cases = [
+            (self._q(expectation), "no statement here", None),                      # answer, ungraded
+            (self._q(expectation), "irrelevant", []),                               # trace, ungraded
+            (self._q({"shape": None, "note": "left unset"}), "x", None),            # corpus, ungraded
+            (self._q({"shape": None, "as_of_offset_days": 0}), None, None),         # answer, no reply
+        ]
+        for question, answer, resolved in cases:
+            _, detail = runner.grade_window(question, answer, date(2026, 9, 4), resolved)
+            self.assertRegex(detail, r"^\[(trace|answer|corpus)\]", detail)
+
+    def test_the_trace_query_is_url_encoded_and_uses_a_z_timestamp(self):
+        # An unencoded "+00:00" offset decodes to a space, so Spring cannot parse @RequestParam
+        # Instant and answers 400 — the runner would then fall back to answer parsing on every run.
+        captured = {}
+
+        class _Resp:
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return False
+            def read(self):
+                return b"[]"
+
+        def fake_urlopen(request, timeout=None):
+            captured["url"] = request.full_url
+            return _Resp()
+
+        with mock.patch.object(runner.urllib.request, "urlopen", fake_urlopen):
+            runner.fetch_traces("http://h/v1/eval/turn-traces", "tok", datetime(2026, 9, 5, 1, 0, tzinfo=timezone.utc))
+
+        self.assertIn("since=2026-09-05T01%3A00%3A00Z", captured["url"])
+        self.assertNotIn("+", captured["url"])
+
+    def test_traces_url_is_derived_from_the_chat_url(self):
+        self.assertEqual(
+            runner.traces_url_for("http://localhost:18080/mcp-server/v1/mcp/chat"),
+            "http://localhost:18080/mcp-server/v1/eval/turn-traces",
+        )
+class RunModeTest(unittest.TestCase):
+    """#1688/#1689/#1690: the corpora shipped as data with nothing to execute them."""
+
+    @staticmethod
+    def _doc_bands():
+        return {
+            "outcomes": {"declined": "d", "answered": "a", "asked": "k"},
+            "questions": [
+                {"fixture_id": "b01", "band": "impossible", "expected_outcome": "declined",
+                 "utterance": "will customers churn?"},
+                {"fixture_id": "b08", "band": "defined-metric-must-not-ask", "expected_outcome": "answered",
+                 "utterance": "who are our best customers?"},
+            ],
+        }
+
+    def test_bands_pass_on_the_expected_outcome_and_fail_otherwise(self):
+        # A refusal PASSES the impossible band; an answer fails it. Until this band existed a
+        # correct refusal and a genuine failure scored identically.
+        replies = ["I'm unable to answer that request.", "I'm unable to answer that request."]
+        with mock.patch.object(runner, "ask", side_effect=[
+                {"answer": r, "error": None, "elapsed_s": 1.0} for r in replies]):
+            results = runner.run_bands("u", "t", "1", self._doc_bands(), 30)
+
+        self.assertEqual(results[0]["verdict"], "PASS")   # impossible + declined
+        self.assertEqual(results[1]["verdict"], "FAIL")   # defined metric must ANSWER, not decline
+
+    def test_bands_fail_when_an_impossible_question_is_answered(self):
+        # The failure that matters: a confident, plausible, fabricated answer.
+        with mock.patch.object(runner, "ask", side_effect=[
+                {"answer": "| Customer | Churn risk |\n| Acme | 82% |", "error": None, "elapsed_s": 1.0},
+                {"answer": "Best customers by contribution margin: ...", "error": None, "elapsed_s": 1.0}]):
+            results = runner.run_bands("u", "t", "1", self._doc_bands(), 30)
+
+        self.assertEqual(results[0]["verdict"], "FAIL")
+        self.assertEqual(results[0]["observed_outcome"], "answered")
+        self.assertEqual(results[1]["verdict"], "PASS")
+
+    def test_sequences_run_turns_in_order_and_keep_their_grading_criteria(self):
+        document = {
+            "carries": {"entity": "e"},
+            "sequences": [{
+                "sequence_id": "s05", "carries": ["entity"],
+                "turns": [
+                    {"utterance": "open work orders for Harbor Tool?", "expect": "answered"},
+                    {"utterance": "what is their outstanding balance?", "expect": "answered",
+                     "must_reference": "Harbor Tool & Die Inc", "fails_if": "asks which customer"},
+                ],
+            }],
+        }
+        asked = []
+        conversations = []
+
+        def fake_ask(url, token, version, message, timeout, conversation_id=None):
+            asked.append(message)
+            conversations.append(conversation_id)
+            return {"answer": "ok", "error": None, "elapsed_s": 1.0}
+
+        with mock.patch.object(runner, "ask", side_effect=fake_ask):
+            results = runner.run_sequences("u", "t", "1", document, 30)
+
+        # Order is the point: turn 2 only means anything after turn 1 has run on the same memory.
+        self.assertEqual(asked, ["open work orders for Harbor Tool?", "what is their outstanding balance?"])
+        # And the shared memory is now named rather than inherited from the actor (#1735): every
+        # turn in one sequence carries the same id, which is what makes "their" resolvable.
+        self.assertEqual(len(set(conversations)), 1)
+        self.assertIsNotNone(conversations[0])
+        turns = results[0]["turns"]
+        self.assertEqual([t["index"] for t in turns], [1, 2])
+        # The criteria travel with the result so a grader can apply them without the corpus.
+        self.assertEqual(turns[1]["must_reference"], "Harbor Tool & Die Inc")
+        self.assertEqual(turns[1]["fails_if"], "asks which customer")
+
+    def test_sequences_are_not_given_a_machine_verdict(self):
+        # Whether "their" resolved correctly is a judgement; a regex verdict here would be a number
+        # nobody should trust.
+        document = {"carries": {"entity": "e"}, "sequences": [{"sequence_id": "s", "carries": ["entity"],
+                    "turns": [{"utterance": "a"}, {"utterance": "b", "must_reference": "x", "fails_if": "y"}]}]}
+        with mock.patch.object(runner, "ask", return_value={"answer": "ok", "error": None, "elapsed_s": 1.0}):
+            results = runner.run_sequences("u", "t", "1", document, 30)
+
+        self.assertNotIn("verdict", results[0])
+
+    def _run_mode(self, mode, out_dir):
+        args = argparse.Namespace(mode=mode, out=str(out_dir), url="http://x/v1/mcp/chat", timeout=30)
+        reply = {"answer": "the total is 5", "error": None, "elapsed_s": 1.0}
+        with mock.patch.object(runner, "ask", return_value=reply):
+            runner.run_alternate_mode(args, None)
+        return (out_dir / "run.json"), (out_dir / "run.md")
+
+    def test_bands_mode_writes_both_run_json_and_run_md(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_json, run_md = self._run_mode("bands", Path(tmp))
+            self.assertTrue(run_json.exists())
+            self.assertTrue(run_md.exists(), "the --out contract promises run.md, not just run.json")
+            body = run_md.read_text(encoding="utf-8")
+            self.assertIn("# analytics gate — bands mode", body)
+            self.assertIn("| fixture | band | expected | observed | verdict |", body)
+
+    def test_sequences_mode_writes_a_report_that_does_not_look_scored(self):
+        # UNSCORED is the point: a run.md with a verdict column would invite the reader to trust
+        # a judgement no code here made.
+        with tempfile.TemporaryDirectory() as tmp:
+            run_json, run_md = self._run_mode("sequences", Path(tmp))
+            self.assertTrue(run_md.exists())
+            body = run_md.read_text(encoding="utf-8")
+            self.assertIn("UNSCORED", body)
+            self.assertIn("| sequence | turn | utterance | must_reference | fails_if |", body)
+            self.assertNotIn("| verdict |", body)
+
+
+class TurnIsolationTest(unittest.TestCase):
+    """#1735: twelve questions from one actor shared one twelve-turn memory."""
+
+    @staticmethod
+    def _args(**kw):
+        base = {"isolate_turns": False, "run_id": "gate-X"}
+        base.update(kw)
+        return argparse.Namespace(**base)
+
+    def test_off_by_default_so_an_undeployed_server_is_not_sent_an_unknown_field(self):
+        # #1757 adds the server side. Until a deploy carries it, sending conversationId could be
+        # rejected outright, turning every question into a transport error — strictly worse than
+        # the shared-memory bias this corrects.
+        self.assertIsNone(runner.turn_conversation_id(self._args(), "q01"))
+
+    def test_each_question_gets_its_own_conversation_when_enabled(self):
+        args = self._args(isolate_turns=True)
+
+        first = runner.turn_conversation_id(args, "q01")
+        second = runner.turn_conversation_id(args, "q02")
+
+        self.assertIsNotNone(first)
+        self.assertNotEqual(first, second)
+
+    def test_ids_are_unique_per_run_so_two_runs_do_not_share_a_memory(self):
+        first = runner.turn_conversation_id(self._args(isolate_turns=True, run_id="gate-A"), "q01")
+        second = runner.turn_conversation_id(self._args(isolate_turns=True, run_id="gate-B"), "q01")
+
+        self.assertNotEqual(first, second)
+
+    def test_the_field_is_omitted_from_the_body_when_no_id_is_given(self):
+        captured = {}
+
+        class FakeResponse:
+            def read(self):
+                return json.dumps({"response": "ok"}).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_urlopen(request, timeout=None):
+            captured["body"] = json.loads(request.data.decode())
+            return FakeResponse()
+
+        with mock.patch.object(runner.urllib.request, "urlopen", fake_urlopen):
+            runner.ask("http://x", "t", "1", "hello", 30)
+
+        self.assertNotIn("conversationId", captured["body"])
+
+    def test_the_field_is_sent_when_an_id_is_given(self):
+        captured = {}
+
+        class FakeResponse:
+            def read(self):
+                return json.dumps({"response": "ok"}).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_urlopen(request, timeout=None):
+            captured["body"] = json.loads(request.data.decode())
+            return FakeResponse()
+
+        with mock.patch.object(runner.urllib.request, "urlopen", fake_urlopen):
+            runner.ask("http://x", "t", "1", "hello", 30, conversation_id="gate-X-q01")
+
+        self.assertEqual(captured["body"]["conversationId"], "gate-X-q01")
 
 
 if __name__ == "__main__":

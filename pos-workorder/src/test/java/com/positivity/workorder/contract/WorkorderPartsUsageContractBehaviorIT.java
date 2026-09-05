@@ -243,7 +243,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
         // When: Attempt to consume 3 units (more than issued)
         Map<String, Object> consumeRequest = Map.of("workorderPartId", partId.toString(), "quantity", 3.0);
 
-        // Then: Request is rejected with 400
+        // Then: Request is rejected with 409 (stateful conflict: quantities do not allow consume)
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(consumeRequest)
@@ -252,7 +252,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
                 .then()
                 .log()
                 .ifValidationFails()
-                .statusCode(400);
+                .statusCode(409);
 
         // Verify no consume event was created
         List<WorkorderPartUsageEvent> events = usageEventRepository.findByWorkorderPartIdOrderByPerformedAtDesc(partId);
@@ -348,7 +348,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
         // When: Attempt to return 3 units (more than available)
         Map<String, Object> returnRequest = Map.of("workorderPartId", partId.toString(), "quantity", 3.0);
 
-        // Then: Request is rejected with 400
+        // Then: Request is rejected with 409 (stateful conflict: quantities do not allow return)
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(returnRequest)
@@ -357,7 +357,7 @@ class WorkorderPartsUsageContractBehaviorIT extends BaseContractIntegrationTest 
                 .then()
                 .log()
                 .ifValidationFails()
-                .statusCode(400);
+                .statusCode(409);
 
         // Verify no return event was created
         List<WorkorderPartUsageEvent> events = usageEventRepository.findByWorkorderPartIdOrderByPerformedAtDesc(partId);

@@ -3,6 +3,7 @@ package com.positivity.order.internal.controller;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderNotTransmittableException;
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
+import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
 import com.positivity.order.internal.exception.UomConversionUndefinedException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -66,9 +67,18 @@ public class PurchaseOrderExceptionHandler {
         return respond(HttpStatus.UNPROCESSABLE_ENTITY, ex.getErrorCode(), ex.getMessage(), request);
     }
 
-    /** Lifecycle refusals: approving a non-draft, cancelling a received order. */
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ApiError> handleInvalidState(IllegalStateException ex, HttpServletRequest request) {
+    /**
+     * Lifecycle refusals: approving a non-draft, cancelling a received order. ADR-0017 §2 makes
+     * that a 409 — the code and status this case already answered.
+     *
+     * <p>#1730: this replaces a blanket {@code @ExceptionHandler(IllegalStateException.class)}
+     * that also answered 409 for an internal-invariant guard (the PO sequence exceeding the
+     * 8-character code space), which is a server-side defect. That guard stays untyped and now
+     * reaches pos-web-common's platform advice as a correlated 500.
+     */
+    @ExceptionHandler(PurchaseOrderStateConflictException.class)
+    public ResponseEntity<ApiError> handleInvalidState(
+            PurchaseOrderStateConflictException ex, HttpServletRequest request) {
         return respond(HttpStatus.CONFLICT, "PURCHASE_ORDER_INVALID_STATE", ex.getMessage(), request);
     }
 

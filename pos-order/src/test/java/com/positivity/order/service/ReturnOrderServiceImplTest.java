@@ -17,6 +17,8 @@ import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.entity.SourceType;
 import com.positivity.order.internal.exception.OverCapReturnException;
 import com.positivity.order.internal.exception.ReturnLineNotReturnableException;
+import com.positivity.order.internal.exception.ReturnOrderStateConflictException;
+import com.positivity.order.internal.exception.ReturnOrderUnprocessableException;
 import com.positivity.order.internal.exception.ReturnRequestValidationException;
 import com.positivity.order.internal.exception.WarrantyReturnRoutingException;
 import com.positivity.order.internal.repository.ReturnOrderLineRepository;
@@ -193,7 +195,8 @@ class ReturnOrderServiceImplTest {
         draft.setStatus(SalesOrderStatus.DRAFT);
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(draft));
 
-        assertThatThrownBy(() -> service.createReturn(command(1, "RESTOCK"))).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> service.createReturn(command(1, "RESTOCK")))
+                .isInstanceOf(ReturnOrderStateConflictException.class);
     }
 
     @Test
@@ -390,7 +393,7 @@ class ReturnOrderServiceImplTest {
         when(returnOrderRepository.findById(id)).thenReturn(Optional.of(ro));
         when(returnOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThatThrownBy(() -> service.processReturn(id)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> service.processReturn(id)).isInstanceOf(ReturnOrderUnprocessableException.class);
         assertThat(ro.getStatus()).isEqualTo(ReturnOrderStatus.REFUND_FAILED);
     }
 

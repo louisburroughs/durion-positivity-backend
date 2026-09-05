@@ -111,9 +111,36 @@ def _ordered(node: object, *, top_level: bool = False) -> object:
     return node
 
 
+class _OpenApiLoader(yaml.SafeLoader):
+    """SafeLoader that leaves timestamp-shaped scalars as strings.
+
+    An OpenAPI document has no datetime type: every scalar in it is a string, a
+    number, a boolean or null. PyYAML's SafeLoader nonetheless resolves a plain
+    scalar such as ``2026-03-17T14:30:00.000Z`` to a ``datetime``, and safe_dump
+    then re-emits it in YAML's own timestamp form — ``2026-03-17 14:30:00+00:00``,
+    a space instead of the T and the milliseconds gone. Round-tripping a spec
+    through this script therefore rewrote ApiError's ``timestamp`` example into a
+    value that no longer parses as RFC 3339 and contradicted the description
+    directly above it (issue #1764).
+
+    Dropping the implicit timestamp resolver keeps such scalars as ``str``. The
+    dumper still has its own resolver, so it quotes them on the way out and a
+    later load cannot re-resolve them either.
+    """
+
+
+_OpenApiLoader.yaml_implicit_resolvers = {
+    key: [(tag, regexp) for tag, regexp in resolvers if tag != "tag:yaml.org,2002:timestamp"]
+    for key, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+
+
 def sanitize_file(path: Path) -> bool:
-    text = path.read_text()
-    data = yaml.safe_load(text)
+    # UTF-8 explicitly, not the locale default: specs carry non-ASCII (safe_dump runs with
+    # allow_unicode=True), and every other repo script pins it. A runner with a different
+    # default encoding would otherwise read or write these files differently.
+    text = path.read_text(encoding="utf-8")
+    data = yaml.load(text, Loader=_OpenApiLoader)
     cleaned = _ordered(_clean(data), top_level=True)
     new_text = yaml.safe_dump(
         cleaned,
@@ -124,7 +151,7 @@ def sanitize_file(path: Path) -> bool:
     )
     if new_text == text:
         return False
-    path.write_text(new_text)
+    path.write_text(new_text, encoding="utf-8")
     return True
 
 

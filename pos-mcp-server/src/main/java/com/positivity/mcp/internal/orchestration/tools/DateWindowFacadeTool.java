@@ -4,15 +4,19 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
+import com.positivity.mcp.internal.service.RequestScopedUserContext;
+import com.positivity.security.common.LogSanitizer;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Locale;
+import java.util.Optional;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -43,8 +47,16 @@ public class DateWindowFacadeTool {
 
     private final Clock clock;
 
+    private final @Nullable RequestScopedUserContext requestScopedUserContext;
+
     public DateWindowFacadeTool(@NonNull Clock clock) {
+        this(clock, null);
+    }
+
+    @Autowired
+    public DateWindowFacadeTool(@NonNull Clock clock, @Nullable RequestScopedUserContext requestScopedUserContext) {
         this.clock = clock;
+        this.requestScopedUserContext = requestScopedUserContext;
     }
 
     @Tool(
@@ -57,20 +69,30 @@ public class DateWindowFacadeTool {
                     + "period so far, from its first day through today (\"this week/month/quarter/year\"); "
                     + "count must be 1. PRIOR_COMPLETE — the one whole period most recently ended (\"last "
                     + "month\", \"the previous quarter\"); count must be 1. CALENDAR_SPAN — N whole periods "
-                    + "ending with the last complete one (\"in/during/for the last N months\"). Units: DAY, "
-                    + "WEEK (ISO Monday-Sunday), MONTH, QUARTER, YEAR — DAY is only valid with ROLLING. "
+                    + "ending with the last complete one (\"in/during/for the last N months\"). FORWARD — N "
+                    + "units starting today and ending in the FUTURE, today included (\"in the next 14 days\", "
+                    + "\"the next three months\"); use this for anything upcoming — bills due, appointments "
+                    + "scheduled, warranties expiring — and never ask the caller for explicit dates for a "
+                    + "forward range. Units: DAY, "
+                    + "WEEK (ISO Monday-Sunday), MONTH, QUARTER, YEAR — DAY is only valid with ROLLING or FORWARD. "
                     + "Optional comparison, for a question that pairs the window with another one: "
                     + "PRIOR_PERIOD (the same shape and length immediately before the primary window) or "
                     + "YEAR_EARLIER (the primary window's exact span, one year earlier). Returns JSON: "
                     + "startDate, endDate, shape, statement (a human-readable sentence to quote verbatim), and "
-                    + "— only when a comparison was requested — comparison.startDate/endDate/statement.")
+                    + "— only when a comparison was requested — comparison.startDate/endDate/statement. Always pass "
+                    + "phrase with the user's own wording for the range: where that wording names a shape "
+                    + "outright the server resolves on it, correcting shape, unit and count, and filling "
+                    + "in a comparison if you passed NONE.")
     public String resolveDateWindow(
             @ToolParam(
-                            description = "ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, or CALENDAR_SPAN — see the tool "
-                                    + "description for what each means and which wording maps to it")
+                            description =
+                                    "ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, CALENDAR_SPAN, or FORWARD — see the tool "
+                                            + "description for what each means and which wording maps to it")
                     @NonNull
                     String shape,
-            @ToolParam(description = "DAY, WEEK, MONTH, QUARTER, or YEAR. DAY is only valid with shape=ROLLING")
+            @ToolParam(
+                            description = "DAY, WEEK, MONTH, QUARTER, or YEAR. DAY is only valid with shape=ROLLING "
+                                    + "or shape=FORWARD")
                     @NonNull
                     String unit,
             @ToolParam(
@@ -82,13 +104,66 @@ public class DateWindowFacadeTool {
                                     + "YEAR_EARLIER",
                             required = false)
                     @Nullable
-                    String comparison) {
+                    String comparison,
+            @ToolParam(
+                            description = "The user's own wording for the range, copied verbatim from their "
+                                    + "question (e.g. \"in the last six months\"). Supply this whenever the "
+                                    + "question states a range in words; it lets the server confirm the shape "
+                                    + "against the wording.",
+                            required = false)
+                    @Nullable
+                    String phrase) {
         DateWindowResolver.Shape parsedShape = parseShape(shape);
         DateWindowResolver.Unit parsedUnit = parseUnit(unit);
         DateWindowResolver.Comparison parsedComparison = parseComparison(comparison);
-        DateWindowResolver.ResolvedWindow resolved =
-                DateWindowResolver.resolve(LocalDate.now(clock), parsedShape, parsedUnit, count, parsedComparison);
-        logResolution(parsedShape, parsedUnit, count, parsedComparison, resolved);
+        int resolvedCount = count;
+
+        // #1675: the wording decides the shape, and it decides it here rather than in the model.
+        // Three rounds of prompt text did not make the classification stick, so where the phrase
+        // names a shape unambiguously it wins over the model's own argument. The classifier
+        // abstains on anything it is not sure of, and an abstention leaves the model's choice
+        // untouched — so this can correct a known-wrong reading without inventing a new one.
+        // Prefer the request's own user message over the model's copy of it. Asked for the
+        // wording of a range the model sends a normalised snippet — "in the last six months" and
+        // "over the last six months" both arrive as "last six months" — and the preposition it
+        // drops is the whole discriminator (#1675, proved on the 2026-09-05 gate traces). The
+        // model-supplied phrase stays as a fallback for callers with no request context.
+        Optional<String> requestWording =
+                requestScopedUserContext == null ? Optional.empty() : requestScopedUserContext.currentUserMessage();
+        String wording = requestWording.orElse(phrase);
+        String wordingSource = requestWording.isPresent() ? "request" : "toolArgument";
+        Optional<WindowPhraseClassifier.Classification> fromPhrase = WindowPhraseClassifier.classify(wording);
+        if (fromPhrase.isPresent()) {
+            WindowPhraseClassifier.Classification c = fromPhrase.get();
+            if (c.shape() != parsedShape || c.unit() != parsedUnit || c.count() != count) {
+                // Deliberately logs the model's own range fragment ("last six months") and never
+                // `wording`, which since #1675 may be the caller's entire message. The class
+                // contract above is that this line carries no customer identifier, and the whole
+                // utterance would break it — the fragment plus a source tag is enough to tell what
+                // was corrected and where the deciding wording came from.
+                LOGGER.info(
+                        "MCP date window shape corrected from wording: modelShape={} modelUnit={} modelCount={} "
+                                + "-> shape={} unit={} count={} source={} fragment=\"{}\"",
+                        parsedShape,
+                        parsedUnit,
+                        count,
+                        c.shape(),
+                        c.unit(),
+                        c.count(),
+                        wordingSource,
+                        LogSanitizer.forLog(phrase));
+            }
+            parsedShape = c.shape();
+            parsedUnit = c.unit();
+            resolvedCount = c.count();
+            if (parsedComparison == DateWindowResolver.Comparison.NONE) {
+                parsedComparison = c.comparison();
+            }
+        }
+
+        DateWindowResolver.ResolvedWindow resolved = DateWindowResolver.resolve(
+                LocalDate.now(clock), parsedShape, parsedUnit, resolvedCount, parsedComparison);
+        logResolution(parsedShape, parsedUnit, resolvedCount, parsedComparison, resolved);
         return write(resolved);
     }
 
@@ -166,7 +241,7 @@ public class DateWindowFacadeTool {
         } catch (IllegalArgumentException invalid) {
             throw new InvalidToolArgumentException(
                     "Unsupported shape '" + raw
-                            + "': pass one of ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, CALENDAR_SPAN",
+                            + "': pass one of ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, CALENDAR_SPAN, FORWARD",
                     invalid);
         }
     }
