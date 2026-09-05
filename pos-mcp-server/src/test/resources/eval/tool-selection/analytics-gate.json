@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "suite_notes": "THIS SUITE SCORES TOOL SELECTION, NOT ANSWERS. Each fixture asserts which tools reach the caller's top-k for an utterance; nothing here says what a correct answer contains. The answer half of the analytics gate \u2014 the verbatim questions the chat-path gate asks and the ground truth that scores them \u2014 is ../analytics-gate/QUESTIONS.json paired with ../analytics-gate/ground-truth/EXPECTED.md. The two corpora deliberately share the qNN numbering of analytics-capability-plan.md \u00a76 and are NOT interchangeable: fixtures here carry an actor with permission_codes and expected.tool_ids, some utterances differ from the asked question (q09 states its window in QUESTIONS.json and does not here, because a window does not change which tool is selected), and this file also holds control fixtures that are not analytics questions at all \u2014 q13-admin-user-account-active is an identity question pinning the #1588 admin fast path. Reading a qNN here as the gate question is a known misreading; it cost a round of window-semantics design in #1661 and is why #1671 versioned the questions separately. Each analytics question in QUESTIONS.json names its counterpart here in tool_selection_fixture_id.",
+  "suite_notes": "THIS SUITE SCORES TOOL SELECTION, NOT ANSWERS. Each fixture asserts which tools reach the caller's top-k for an utterance; nothing here says what a correct answer contains. The answer half of the analytics gate — the verbatim questions the chat-path gate asks and the ground truth that scores them — is ../analytics-gate/QUESTIONS.json paired with ../analytics-gate/ground-truth/EXPECTED.md. The two corpora deliberately share the qNN numbering of analytics-capability-plan.md §6 and are NOT interchangeable: fixtures here carry an actor with permission_codes and expected.tool_ids, some utterances differ from the asked question (q09 states its window in QUESTIONS.json and does not here, because a window does not change which tool is selected), and this file also holds control fixtures that are not analytics questions at all — q13-admin-user-account-active is an identity question pinning the #1588 admin fast path. Reading a qNN here as the gate question is a known misreading; it cost a round of window-semantics design in #1661 and is why #1671 versioned the questions separately. Each analytics question in QUESTIONS.json names its counterpart here in tool_selection_fixture_id.",
   "fixtures": [
     {
       "fixture_id": "q13-ar-pareto",
@@ -307,6 +307,58 @@
         "wave2"
       ],
       "notes": "Plan §6 Q17, budget 3. Blocked on W2 E8 (avgIssuedBillAmount column) over two windows. PROMOTED (Wave 2): the backing endpoint and facade method now exist."
+    },
+    {
+      "fixture_id": "q21-vendors-owed-with-open-purchase-orders",
+      "utterance": "Which vendors do we still owe money to, and do any of them have purchase orders still open with us?",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "accounting:coa:view",
+          "reporting:view:financial-statements"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "AccountingFacadeTool"
+        ],
+        "forbidden_tool_ids": [
+          "AdminFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "analytics-gate",
+        "facade"
+      ],
+      "notes": "#1689 band 4. Only the payables half is reachable: no facade tool exposes purchase orders, which is why the question is out of the chat-path gate."
+    },
+    {
+      "fixture_id": "q22-revenue-share-of-top-five-customers",
+      "utterance": "What share of our revenue came from our top five customers?",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "accounting:coa:view",
+          "reporting:view:financial-statements"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "InvoiceFacadeTool"
+        ],
+        "forbidden_tool_ids": [
+          "AdminFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "analytics-gate",
+        "facade"
+      ],
+      "notes": "#1689 band 5. Percentage-of-total; the denominator is the graded part."
     }
   ]
 }

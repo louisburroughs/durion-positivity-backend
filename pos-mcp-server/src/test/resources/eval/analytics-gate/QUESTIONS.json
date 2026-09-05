@@ -504,41 +504,39 @@
       "fixture_id": "q21",
       "expected_section": "Q21",
       "ground_truth_sql": "ground-truth/q21-vendors-owed-with-open-purchase-orders.sql",
+      "tool_selection_fixture_id": "q21-vendors-owed-with-open-purchase-orders",
       "utterance": "Which vendors do we still owe money to, and do any of them have purchase orders still open with us?",
+      "in_chat_path_gate": false,
+      "excluded_reason": "No purchase-order tool exists on the facade surface — AccountingFacadeTool covers the owed half via getAgedPayables, but nothing exposes purchase orders, so the assistant cannot execute the second half at all. Ground truth is measured and correct; the question waits on a PO read tool rather than on data.",
+      "plan_wave": "3",
+      "budget": 4,
       "window": {
-        "shape": "current",
-        "resolved_range": "current state as of now; no relative range in the question",
-        "stated_in_question": false,
+        "shape": "point-in-time",
+        "resolved_range": "current state as of now",
+        "stated_in_question": true,
+        "notes": "Both halves are current-state reads — unpaid bills and open purchase orders. No relative range appears, so resolveDateWindow should not be called and a resolver call here is itself worth seeing in the trace.",
         "expected": {
           "shape": null,
-          "note": "Deliberately unset. Both halves are current-state reads — unpaid vendor bills and open purchase orders — so there is no relative range to resolve and resolveDateWindow should not be called at all. A resolver call on this question is itself worth seeing in the trace."
+          "as_of_offset_days": 0,
+          "note": "Point-in-time. Graded on the as-of date, not a resolver shape."
         }
-      },
-      "expected_plan": {
-        "note": "#1689 band 4. BOTH retrievals are required: the correct verdict (no overlap) is guessable, so a model that skipped a call and asserted 'none' must not score as correct. Grade the two lists, not the conclusion alone.",
-        "tool_calls": [
-          {
-            "name": "getVendorBills",
-            "why": "unpaid vendor bills — the amounts owed"
-          },
-          {
-            "name": "searchPurchaseOrders",
-            "why": "purchase orders still open with each vendor"
-          }
-        ]
-      },
-      "expected_outcome": "answered"
+      }
     },
     {
       "fixture_id": "q22",
       "expected_section": "Q22",
       "ground_truth_sql": "ground-truth/q22-revenue-share-of-top-five-customers.sql",
+      "tool_selection_fixture_id": "q22-revenue-share-of-top-five-customers",
       "utterance": "What share of our revenue came from our top five customers?",
+      "in_chat_path_gate": false,
+      "excluded_reason": "Newly authored (#1689). Ground truth is measured and the question is executable — InvoiceFacadeTool.getRevenueByCustomer covers it — but the chat-path gate set must be matched exactly by the offline-replay corpus (#1682), and no replay fixture exists because the question has never been run live. Promote it into the gate once a turn has been recorded.",
+      "plan_wave": "2",
+      "budget": 2,
       "window": {
         "shape": "calendar",
         "resolved_range": "2025-09-01..2026-08-31",
         "stated_in_question": false,
-        "notes": "No range is stated. The glossary's default window for ranking customers is the trailing 12 complete calendar months, so the assistant should resolve it rather than ask (#1688: answer when only the range is unstated).",
+        "notes": "No range is stated. The glossary's default window for ranking customers is the trailing 12 complete calendar months, so the assistant resolves it rather than asking (#1688: answer when only the range is unstated).",
         "expected": {
           "shape": "CALENDAR_SPAN",
           "unit": "MONTH",
@@ -546,15 +544,12 @@
         }
       },
       "expected_plan": {
-        "note": "#1689 band 5. The denominator is the graded part: dividing by the top-five subtotal gives shares summing to 100%, which is plausible and wrong. A correct answer states the total revenue as well as the ranking.",
-        "tool_calls": [
-          {
-            "name": "getCustomerRevenueRanking",
-            "why": "per-customer revenue over the resolved window, and the all-customer total that is the denominator"
-          }
-        ]
-      },
-      "expected_outcome": "answered"
+        "min_tool_calls": {
+          "getRevenueByCustomer": 1
+        },
+        "per": "one call returning per-customer revenue over the resolved window; the all-customer total is the denominator",
+        "declined_reason": "shares that sum to 100% — the top-five subtotal used as the denominator instead of all revenue"
+      }
     }
   ]
 }

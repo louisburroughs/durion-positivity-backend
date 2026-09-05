@@ -5,7 +5,7 @@
 -- This is the cross-domain example #1689 names explicitly and the corpus had no coverage of:
 -- accounts payable (pos_accounting_db) joined by the reader to purchasing (pos_order_db).
 -- There is no cross-database join here and there must not be — no cross-service FKs
--- (CLAUDE.md). The two sections are resolved independently and intersected on supplierId,
+-- (CLAUDE.md). The two sections are resolved independently and intersected on vendor_id,
 -- which is exactly the two-call composition the assistant has to perform (cf. #1676, where
 -- it declined one).
 --
