@@ -33,7 +33,7 @@ import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PartLineNotFoundException;
 import com.positivity.workorder.internal.exception.ServiceLineNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
-import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
+import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
@@ -552,9 +552,11 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .findById(workorderId)
                 .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
-        // Validate customer matches workorder
+        // Validate customer matches workorder. This is payload validation against the addressed
+        // resource (ADR-0017 §1), not a stateful conflict: the workorder itself is approvable, the
+        // caller simply supplied the wrong customerId in the request body.
         if (!workorder.getCustomerId().equals(customerId)) {
-            throw new WorkorderResourceConflictException("Customer ID mismatch: workorder belongs to customer "
+            throw new WorkorderRequestValidationException("Customer ID mismatch: workorder belongs to customer "
                     + workorder.getCustomerId() + ", but approval attempted for customer " + customerId);
         }
 
