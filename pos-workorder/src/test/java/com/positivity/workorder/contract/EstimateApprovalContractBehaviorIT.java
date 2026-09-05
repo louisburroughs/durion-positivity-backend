@@ -6,12 +6,15 @@ import static org.hamcrest.Matchers.notNullValue;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
+import com.positivity.workorder.internal.entity.ExtBillingRulesReplica;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.ExtBillingRulesReplicaRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 import io.restassured.http.ContentType;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -40,6 +43,9 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private EstimateItemRepository estimateItemRepository;
+
+    @Autowired
+    private ExtBillingRulesReplicaRepository extBillingRulesReplicaRepository;
 
     private UUID testCustomerId;
     private UUID testLocationId;
@@ -205,7 +211,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
         UUID wrongCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000002");
         String approvalPayload = buildApprovalPayload(wrongCustomerId, "Test Signer", "Wrong customer", null, null);
 
-        givenWithGatewayAuth()
+        assertCorrelationIdEchoed(givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(approvalPayload)
                 .when()
@@ -213,9 +219,9 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                 .then()
                 .statusCode(400)
                 .body("code", equalTo("INVALID_ARGUMENT"))
-                .body("correlationId", notNullValue())
                 .log()
-                .ifValidationFails();
+                .ifValidationFails()
+                .extract());
     }
 
     @Test
@@ -227,7 +233,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
         String approvalPayload =
                 buildApprovalPayload(testCustomerId, "Test Signer", "Trying to approve draft", null, null);
 
-        givenWithGatewayAuth()
+        assertCorrelationIdEchoed(givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(approvalPayload)
                 .when()
@@ -235,9 +241,73 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                 .then()
                 .statusCode(409)
                 .body("code", equalTo("CONFLICT"))
-                .body("correlationId", notNullValue())
                 .log()
-                .ifValidationFails();
+                .ifValidationFails()
+                .extract());
+    }
+
+    // AP-015 covers the other half of #1753: approveEstimate had a second local catch, on
+    // jakarta's EntityNotFoundException, that answered a bodiless 404. The published contract for
+    // that response has since been corrected twice — springdoc originally inferred EstimateResponse
+    // from the success type because the @ApiResponse carried no content, #1751 replaced that with an
+    // explicitly empty @Content rather than claim a body that did not exist, and #1773 declared the
+    // ApiError once the body was real. The service now throws EstimateNotFoundException and the
+    // module advice envelopes it, but no contract test asserted the resulting envelope. Asserting
+    // the status alone is what let the empty body survive on the sibling branch, so this pins the
+    // code and the correlation id the same way AP-013/AP-014 do.
+    @Test
+    @DisplayName("AP-015: Reject approval - estimate does not exist")
+    void testApproveEstimate_NotFound() {
+        initTestIds();
+        UUID unknownEstimateId = UUID.randomUUID();
+
+        String approvalPayload =
+                buildApprovalPayload(testCustomerId, "Test Signer", "Approving a missing estimate", null, null);
+
+        assertCorrelationIdEchoed(givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(approvalPayload)
+                .when()
+                .post("/v1/workorders/estimates/{id}/approval", unknownEstimateId)
+                .then()
+                .statusCode(404)
+                .body("code", equalTo("ESTIMATE_NOT_FOUND"))
+                .log()
+                .ifValidationFails()
+                .extract());
+    }
+
+    // AP-016 completes the endpoint's error surface. approveEstimate documents four error
+    // responses (400, 404, 409, 422) and, before this, the 422 was pinned only at unit level —
+    // no contract test named PURCHASE_ORDER_REQUIRED at all. It needs no mock: PO enforcement
+    // reads the event-fed ext_billing_rules replica (ADR-0044 §6), so seeding the row for this
+    // customer is enough, and purgeTestData truncates it before every test.
+    @Test
+    @DisplayName("AP-016: Reject approval - commercial account requires a purchase order")
+    void testApproveEstimate_PurchaseOrderRequired() {
+        UUID estimateId = seedPendingApprovalEstimate();
+        extBillingRulesReplicaRepository.save(ExtBillingRulesReplica.builder()
+                .partyId(testCustomerId.toString())
+                .purchaseOrderRequired(true)
+                // updated_at is NOT NULL on the replica: pos-invoice stamps every fact it emits,
+                // so a row without one could not arrive through the consumer either.
+                .updatedAt(Instant.parse("2024-01-01T00:00:00Z"))
+                .build());
+
+        String approvalPayload =
+                buildApprovalPayload(testCustomerId, "Test Signer", "Approving without a PO", null, null);
+
+        assertCorrelationIdEchoed(givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(approvalPayload)
+                .when()
+                .post("/v1/workorders/estimates/{id}/approval", estimateId)
+                .then()
+                .statusCode(422)
+                .body("code", equalTo("PURCHASE_ORDER_REQUIRED"))
+                .log()
+                .ifValidationFails()
+                .extract());
     }
 
     // ========== SEED / HELPER METHODS ==========
