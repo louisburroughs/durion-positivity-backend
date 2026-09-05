@@ -1,10 +1,14 @@
 package com.positivity.workorder.support;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.positivity.workorder.config.TestSecurityConfig;
 import com.positivity.workorder.contract.ContractTestConfiguration;
 import io.restassured.http.ContentType;
 import io.restassured.module.mockmvc.RestAssuredMockMvc;
+import io.restassured.module.mockmvc.response.MockMvcResponse;
 import io.restassured.module.mockmvc.specification.MockMvcRequestSpecification;
+import io.restassured.response.ExtractableResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import org.junit.jupiter.api.BeforeEach;
@@ -115,6 +119,24 @@ public abstract class BaseContractIntegrationTest {
         } finally {
             jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY TRUE");
         }
+    }
+
+    /**
+     * Asserts ADR-0017 §4's correlation-id guarantee on an error response: <em>one</em> id, present
+     * in both the {@code X-Correlation-Id} header and the {@code ApiError} body.
+     *
+     * <p>Two independent {@code notNullValue()} checks are weaker than the guarantee. They pass
+     * against a handler that emits a <em>different</em> id in each place, which would defeat the
+     * only thing the id exists for — joining a client's report of a failure to the server log line
+     * that explains it. They also pass against an empty-string header. Assert the header against
+     * the body's own value instead.
+     */
+    protected static void assertCorrelationIdEchoed(ExtractableResponse<MockMvcResponse> response) {
+        String bodyCorrelationId = response.path("correlationId");
+        assertThat(bodyCorrelationId).as("ApiError.correlationId").isNotBlank();
+        assertThat(response.header("X-Correlation-Id"))
+                .as("X-Correlation-Id header must echo ApiError.correlationId")
+                .isEqualTo(bodyCorrelationId);
     }
 
     protected MockMvcRequestSpecification givenWithGatewayAuth() {

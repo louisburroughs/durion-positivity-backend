@@ -91,7 +91,7 @@ class WorkorderApprovalContractBehaviorIT extends BaseContractIntegrationTest {
         // The second is an invalid lifecycle transition: 409 per ADR-0017 §2, carrying a
         // full ApiError. The body assertions are the point of this test — the defect in
         // #1753 was an empty body behind a status that looked plausible.
-        givenWithGatewayAuth()
+        assertCorrelationIdEchoed(givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(approvalPayload(testCustomerId))
                 .when()
@@ -100,10 +100,9 @@ class WorkorderApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                 .statusCode(409)
                 .body("code", equalTo("CONFLICT"))
                 .body("message", notNullValue())
-                .body("correlationId", notNullValue())
-                .header("X-Correlation-Id", notNullValue())
                 .log()
-                .ifValidationFails();
+                .ifValidationFails()
+                .extract());
     }
 
     @Test
@@ -113,7 +112,7 @@ class WorkorderApprovalContractBehaviorIT extends BaseContractIntegrationTest {
         UUID wrongCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
         // Payload validation against the addressed resource, not a state conflict: 400.
-        givenWithGatewayAuth()
+        assertCorrelationIdEchoed(givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(approvalPayload(wrongCustomerId))
                 .when()
@@ -121,9 +120,9 @@ class WorkorderApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                 .then()
                 .statusCode(400)
                 .body("code", equalTo("INVALID_ARGUMENT"))
-                .body("correlationId", notNullValue())
                 .log()
-                .ifValidationFails();
+                .ifValidationFails()
+                .extract());
     }
 
     // ========== SEED / HELPER METHODS ==========
