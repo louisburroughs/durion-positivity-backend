@@ -285,7 +285,83 @@ def classify_outcome(answer):
     return "answered"
 
 
-def grade_window(question, answer, as_of):
+
+# ── window shape from the recorded tool trace (#1743) ────────────────────────
+#
+# The grader used to read the shape out of the model's ANSWER, on the assumption that the
+# DATE_WINDOW contract to quote the resolver statement holds. On 2026-09-04 it did not: six of
+# twelve questions quoted nothing while the service log showed sixteen correct resolver calls. The
+# shape was resolved, recorded, and unreadable by the thing grading it.
+#
+# The tool trace carries it at the tool boundary instead, which is where it is a fact rather than a
+# disclosure the model may or may not make.
+
+TRACE_PATH = "/v1/eval/turn-traces"
+_WINDOW_TOOLS = {"resolveDateWindow", "resolvenamedperiod", "resolvedatewindow", "resolveNamedPeriod"}
+
+
+def traces_url_for(chat_url):
+    """The turn-trace endpoint on the same host and context path as the chat endpoint."""
+    marker = "/v1/mcp/chat"
+    if chat_url.endswith(marker):
+        return chat_url[: -len(marker)] + TRACE_PATH
+    return chat_url.rsplit("/v1/", 1)[0] + TRACE_PATH
+
+
+def fetch_traces(traces_url, token, since, timeout=60):
+    """The caller's traces since `since`, or [] with a reason when unavailable.
+
+    Never raises: a run whose traces cannot be fetched must still grade from answers rather than
+    dying. The reason is returned so the record can say WHY it fell back, instead of a reader having
+    to guess whether the endpoint is missing, forbidden, or simply empty.
+    """
+    request = urllib.request.Request(f"{traces_url}?since={since.isoformat()}&limit=200")
+    request.add_header("Authorization", f"Bearer {token}")
+    request.add_header("X-API-Version", os.environ.get("MCP_API_VERSION", "1"))
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8")), None
+    except urllib.error.HTTPError as error:
+        return [], f"HTTP {error.code} from {traces_url}"
+    except Exception as error:  # noqa: BLE001 - any transport failure falls back identically
+        return [], f"{type(error).__name__} from {traces_url}"
+
+
+def window_from_trace(trace):
+    """The window arguments a turn actually resolved, read from its recorded tool calls.
+
+    Returns a list of {shape, unit, count, comparison} in call order. A bucketed question resolves
+    several, so this keeps them all and lets the caller decide what satisfies the expectation.
+    """
+    resolved = []
+    for call in trace.get("toolCalls") or []:
+        name = (call.get("name") or "").lower()
+        if name not in {tool.lower() for tool in _WINDOW_TOOLS}:
+            continue
+        try:
+            arguments = json.loads(call.get("arguments") or "{}")
+        except (TypeError, ValueError):
+            continue
+        if "period" in arguments and "shape" not in arguments:
+            # resolveNamedPeriod names an absolute period rather than a relative shape.
+            resolved.append({"shape": "ABSOLUTE", "unit": None, "count": None, "comparison": None})
+            continue
+        shape = arguments.get("shape")
+        if not shape:
+            continue
+        count = arguments.get("count")
+        resolved.append(
+            {
+                "shape": str(shape).upper(),
+                "unit": str(arguments["unit"]).upper() if arguments.get("unit") else None,
+                "count": int(count) if isinstance(count, (int, str)) and str(count).isdigit() else None,
+                "comparison": str(arguments["comparison"]).upper() if arguments.get("comparison") else None,
+            }
+        )
+    return resolved
+
+
+def grade_window(question, answer, as_of, resolved=None):
     """Grades the window a question was answered on.
 
     Endpoints are deliberately not compared for relative windows. They are a derived consequence of
@@ -311,18 +387,29 @@ def grade_window(question, answer, as_of):
             return "FAIL", f"expected the as-of date {target.isoformat()} to appear in the answer"
         return "UNGRADED", expected.get("note") or "no window expectation recorded"
 
-    statements = parse_statements(answer)
-    observed = observed_shapes(answer)
+    if resolved:
+        statements = resolved
+        observed = []
+        for statement in resolved:
+            if statement["shape"] in _STATEMENT_LABELS.values() and statement["shape"] not in observed:
+                observed.append(statement["shape"])
+        source = "trace"
+    else:
+        statements = parse_statements(answer)
+        observed = observed_shapes(answer)
+        source = "answer"
     if not observed:
         return "UNGRADED", (
-            "the answer quotes no resolver statement, so the shape cannot be read from it "
-            "(the DATE_WINDOW contract requires quoting it)"
+            "no window was resolved in the tool trace for this turn"
+            if source == "trace"
+            else "the answer quotes no resolver statement and no tool trace was available, so the "
+            "shape cannot be read (the DATE_WINDOW contract requires quoting it)"
         )
 
     acceptable = {wanted, *expected.get("also_accept", [])}
     matching = [s for s in statements if s["shape"] in acceptable]
     if not matching:
-        return "FAIL", f"expected {wanted}, answer quotes {observed}"
+        return "FAIL", f"[{source}] expected {wanted}, observed {observed}"
 
     # Shape alone is not the decision recorded on #1709 — it asks for the triple. A question
     # answered on ONE calendar month where six were specified is the wrong window, and grading only
@@ -352,8 +439,8 @@ def grade_window(question, answer, as_of):
             problems.append(f"comparison: expected a {wanted_comparison} window, answer quotes none")
 
     if problems:
-        return "FAIL", f"shape {wanted} matched, but " + "; ".join(problems)
-    return "PASS", f"expected {wanted}, answer quotes {observed}"
+        return "FAIL", f"[{source}] shape {wanted} matched, but " + "; ".join(problems)
+    return "PASS", f"[{source}] expected {wanted}, observed {observed}"
 
 
 def questions_provenance(path):
@@ -934,7 +1021,7 @@ def write_markdown(out_dir, record):
             f"Replay report: `{record['replay_report']}` - questions graded:"
             f" {len(record['results'])}",
             (
-                f"Window grading: {record['summary'].get('window_counts')}"
+                f"Window grading: {record['summary'].get('window_counts')} (source: {record.get('trace_source')})"
             ),
             (
                 f"Overall verdict: **{record['summary']['verdict']}**"
@@ -1018,6 +1105,11 @@ def main(argv=None):
     parser.add_argument("--url", default=os.environ.get("MCP_CHAT_URL", DEFAULT_URL))
     parser.add_argument("--token", default=None, help="bearer token; prefer MCP_BEARER_TOKEN")
     parser.add_argument("--env-file", default=None, help="KEY=VALUE file to read config from")
+    parser.add_argument(
+        "--traces-url",
+        default=os.environ.get("MCP_TRACES_URL"),
+        help="turn-trace endpoint; defaults to the chat URL's host with /v1/eval/turn-traces",
+    )
     parser.add_argument(
         "--expect-role",
         default=None,
@@ -1122,6 +1214,7 @@ def main(argv=None):
     # every day but one. eval_as_of stays in the record as documentation of when the ground-truth
     # figures were computed; it no longer constrains grading.
     run_as_of = datetime.now(timezone.utc).date()
+    run_started_at = datetime.now(timezone.utc) - timedelta(minutes=5)
 
     record = {
         "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -1181,13 +1274,39 @@ def main(argv=None):
         }
         if grading is not None:
             result.update(grading)
-        verdict, detail = grade_window(question, result.get("answer"), run_as_of)
-        result["window_check"] = {"verdict": verdict, "detail": detail}
+        result["window_check"] = None  # graded after the run, once traces can be fetched
         record["results"].append(result)
         print(f"  {outcome['elapsed_s']}s"
               + (f" — {outcome['error']}" if outcome["error"] else "")
               + (f" — {plan_check}" if plan_check and plan_check.startswith("FAIL") else ""),
               flush=True)
+
+    # Grade windows AFTER the loop: traces are written as each turn completes, so one fetch at the
+    # end covers the whole run instead of a request per question (#1743).
+    resolved_by_utterance = {}
+    trace_note = "replay mode: no live traces"
+    if replay_by_fixture is None and token:
+        traces, failure = fetch_traces(args.traces_url or traces_url_for(args.url), token, run_started_at)
+        if failure:
+            trace_note = f"falling back to answer parsing — {failure}"
+        else:
+            for trace in traces:
+                message = trace.get("userMessage")
+                windows = window_from_trace(trace)
+                if message and windows:
+                    resolved_by_utterance.setdefault(message, windows)
+            trace_note = f"{len(traces)} trace(s) fetched, {len(resolved_by_utterance)} with a resolved window"
+    record["trace_source"] = trace_note
+
+    for result in record["results"]:
+        resolved = resolved_by_utterance.get(result["utterance"])
+        verdict, detail = grade_window(
+            {"fixture_id": result["fixture_id"], "window": result["window"]},
+            result.get("answer"),
+            run_as_of,
+            resolved,
+        )
+        result["window_check"] = {"verdict": verdict, "detail": detail}
 
     if replay_by_fixture is not None:
         outcome_counts = Counter(result["outcome"] for result in record["results"])

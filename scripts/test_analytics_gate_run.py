@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 import os
 import tempfile
 import unittest
@@ -776,6 +776,101 @@ class OutcomeClassificationTest(unittest.TestCase):
         allowed = set(document["outcomes"]) | {"empty"}
         for question in document["questions"]:
             self.assertIn(question["expected_outcome"], allowed, question["fixture_id"])
+
+
+
+class TraceWindowGradingTest(unittest.TestCase):
+    """#1743: read the window from the tool trace, not from whatever the prose disclosed."""
+
+    @staticmethod
+    def _q(expected):
+        return {"fixture_id": "qx", "window": {"expected": expected}}
+
+    @staticmethod
+    def _trace(calls, message="how did vendor spend compare?"):
+        return {"userMessage": message, "toolCalls": calls}
+
+    def test_reads_shape_unit_and_count_from_a_resolver_call(self):
+        resolved = runner.window_from_trace(
+            self._trace([{"name": "resolveDateWindow",
+                          "arguments": '{"shape":"CALENDAR_SPAN","unit":"MONTH","count":6,"comparison":"YEAR_EARLIER"}'}])
+        )
+
+        self.assertEqual(
+            resolved,
+            [{"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6, "comparison": "YEAR_EARLIER"}],
+        )
+
+    def test_a_named_period_call_reads_as_absolute(self):
+        resolved = runner.window_from_trace(
+            self._trace([{"name": "resolveNamedPeriod", "arguments": '{"period":"2026-03"}'}])
+        )
+
+        self.assertEqual(resolved[0]["shape"], "ABSOLUTE")
+
+    def test_ignores_tool_calls_that_are_not_window_resolvers(self):
+        resolved = runner.window_from_trace(
+            self._trace([{"name": "getVendorSpend", "arguments": '{"startDate":"2026-03-01"}'}])
+        )
+
+        self.assertEqual(resolved, [])
+
+    def test_grades_from_the_trace_even_when_the_answer_quotes_nothing(self):
+        # The exact 2026-09-04 failure: correct resolver calls, prose that discloses no window.
+        # Under answer-parsing this graded UNGRADED for six of twelve questions.
+        verdict, detail = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6}),
+            "Vendor spend was $6,720.00 across the period.",
+            date(2026, 9, 4),
+            [{"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6, "comparison": None}],
+        )
+
+        self.assertEqual(verdict, "PASS")
+        self.assertIn("[trace]", detail)
+
+    def test_a_wrong_shape_in_the_trace_fails_even_if_the_prose_sounds_right(self):
+        verdict, detail = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6}),
+            "calendar span: 2026-03-01 to 2026-08-31 — 6 whole months",
+            date(2026, 9, 4),
+            [{"shape": "ROLLING", "unit": "MONTH", "count": 6, "comparison": None}],
+        )
+
+        # The trace is the fact; the prose is a claim about it. Where they disagree, the trace wins.
+        self.assertEqual(verdict, "FAIL")
+        self.assertIn("[trace]", detail)
+
+    def test_falls_back_to_the_answer_when_no_trace_is_available(self):
+        verdict, detail = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6}),
+            "calendar span: 2026-03-01 to 2026-08-31 — 6 whole months",
+            date(2026, 9, 4),
+            None,
+        )
+
+        self.assertEqual(verdict, "PASS")
+        self.assertIn("[answer]", detail)
+
+    def test_no_trace_and_no_statement_says_both_were_missing(self):
+        verdict, detail = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN"}), "Here are the numbers.", date(2026, 9, 4), None
+        )
+
+        self.assertEqual(verdict, "UNGRADED")
+        self.assertIn("no tool trace was available", detail)
+
+    def test_fetch_traces_never_raises_and_explains_the_failure(self):
+        # A run whose traces cannot be fetched must still grade from answers rather than dying.
+        traces, failure = runner.fetch_traces("http://127.0.0.1:9/v1/eval/turn-traces", "tok", datetime.now(timezone.utc))
+
+        self.assertEqual(traces, [])
+        self.assertIsNotNone(failure)
+
+    def test_traces_url_is_derived_from_the_chat_url(self):
+        self.assertEqual(
+            runner.traces_url_for("http://localhost:18080/mcp-server/v1/mcp/chat"),
+            "http://localhost:18080/mcp-server/v1/eval/turn-traces",
+        )
 
 
 if __name__ == "__main__":
