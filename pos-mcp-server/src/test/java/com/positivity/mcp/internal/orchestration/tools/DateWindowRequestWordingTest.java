@@ -2,6 +2,10 @@ package com.positivity.mcp.internal.orchestration.tools;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.service.RequestScopedUserContext;
@@ -96,5 +100,36 @@ class DateWindowRequestWordingTest {
                 MAPPER.readTree(tool.resolveDateWindow("ROLLING", "MONTH", 6, "PRIOR_PERIOD", "last six months"));
 
         assertThat(node.get("shape").asText()).isEqualTo("CALENDAR_SPAN");
+    }
+
+    @Test
+    @DisplayName("the correction log never carries the caller's message, only the range fragment")
+    void theCorrectionLogNeverCarriesTheUtterance() throws Exception {
+        // The class contract is that this line carries no customer identifier. Since #1675 the
+        // wording used for classification may be the caller's ENTIRE message, so logging it would
+        // quietly turn an operational log line into a PII sink. Pinning the absence, because a
+        // future edit that "logs the wording it actually used" looks like an improvement.
+        String utterance = "Which invoices for Harbor Tool & Die (contact jane.doe@harbortool.example) "
+                + "were issued in the last six months?";
+        requestContext.recordUserMessage(utterance);
+        DateWindowFacadeTool tool = new DateWindowFacadeTool(FIXED, requestContext);
+
+        Logger logger = (Logger) org.slf4j.LoggerFactory.getLogger(DateWindowFacadeTool.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        Level original = logger.getLevel();
+        logger.setLevel(Level.INFO);
+        logger.addAppender(appender);
+        try {
+            tool.resolveDateWindow("ROLLING", "MONTH", 6, "NONE", "last six months");
+        } finally {
+            logger.detachAppender(appender);
+            logger.setLevel(original);
+        }
+
+        String all =
+                appender.list.stream().map(ILoggingEvent::getFormattedMessage).reduce("", String::concat);
+        assertThat(all).doesNotContain("Harbor Tool").doesNotContain("jane.doe@harbortool.example");
+        assertThat(all).contains("source=request").contains("fragment=\"last six months\"");
     }
 }

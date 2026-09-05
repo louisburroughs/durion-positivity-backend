@@ -128,23 +128,30 @@ public class DateWindowFacadeTool {
         // "over the last six months" both arrive as "last six months" — and the preposition it
         // drops is the whole discriminator (#1675, proved on the 2026-09-05 gate traces). The
         // model-supplied phrase stays as a fallback for callers with no request context.
-        String wording = requestScopedUserContext == null
-                ? phrase
-                : requestScopedUserContext.currentUserMessage().orElse(phrase);
+        Optional<String> requestWording =
+                requestScopedUserContext == null ? Optional.empty() : requestScopedUserContext.currentUserMessage();
+        String wording = requestWording.orElse(phrase);
+        String wordingSource = requestWording.isPresent() ? "request" : "toolArgument";
         Optional<WindowPhraseClassifier.Classification> fromPhrase = WindowPhraseClassifier.classify(wording);
         if (fromPhrase.isPresent()) {
             WindowPhraseClassifier.Classification c = fromPhrase.get();
             if (c.shape() != parsedShape || c.unit() != parsedUnit || c.count() != count) {
+                // Deliberately logs the model's own range fragment ("last six months") and never
+                // `wording`, which since #1675 may be the caller's entire message. The class
+                // contract above is that this line carries no customer identifier, and the whole
+                // utterance would break it — the fragment plus a source tag is enough to tell what
+                // was corrected and where the deciding wording came from.
                 LOGGER.info(
                         "MCP date window shape corrected from wording: modelShape={} modelUnit={} modelCount={} "
-                                + "-> shape={} unit={} count={} phrase=\"{}\"",
+                                + "-> shape={} unit={} count={} source={} fragment=\"{}\"",
                         parsedShape,
                         parsedUnit,
                         count,
                         c.shape(),
                         c.unit(),
                         c.count(),
-                        LogSanitizer.forLog(wording));
+                        wordingSource,
+                        LogSanitizer.forLog(phrase));
             }
             parsedShape = c.shape();
             parsedUnit = c.unit();
