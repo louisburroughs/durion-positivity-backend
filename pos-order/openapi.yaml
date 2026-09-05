@@ -246,6 +246,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/CancellationResponse'
           description: Order cannot be cancelled in current state
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A workorder or payment-reversal leg failed downstream; the order is parked for review.
       security:
       - bearerAuth:
         - order:order:cancel
@@ -307,6 +313,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/CancellationResponse'
           description: Order not in retryable state
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The reversal failed again; the order is parked at CANCEL_REQUIRES_MANUAL_REVIEW.
       security:
       - bearerAuth:
         - order:order:cancel
@@ -2347,7 +2359,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReturnOrderResponse'
-          description: OK
+          description: Saga completed, or the return was already COMPLETED.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Return not found.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The return is not in RETURN_REQUESTED.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The refund was refused on its own terms — no invoice to refund against, insufficient settled tender, or a credit refund with no customer on the return.
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The refund leg itself failed downstream; the return is parked at REFUND_FAILED.
       security:
       - bearerAuth: []
       summary: Run the Return Refund Saga
@@ -2433,7 +2469,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReturnOrderResponse'
-          description: OK
+          description: Retry completed, or the return was already COMPLETED.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Return not found.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The return is not in REFUND_FAILED.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The refund was refused on its own terms.
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The refund leg failed downstream again; the return stays at REFUND_FAILED.
       security:
       - bearerAuth: []
       summary: Retry a Failed Return Refund

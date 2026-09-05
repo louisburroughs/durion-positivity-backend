@@ -7,9 +7,11 @@ import com.positivity.order.internal.security.OrderPermissions;
 import com.positivity.order.internal.service.OrderCancellationService;
 import com.positivity.order.internal.service.model.CancelOrderCommand;
 import com.positivity.order.internal.service.model.CancellationResult;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -65,6 +67,10 @@ public class OrderCancellationController {
     @ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @ApiResponse(responseCode = "404", description = "Order not found")
     @ApiResponse(responseCode = "409", description = "Order cannot be cancelled in current state")
+    @ApiResponse(
+            responseCode = "500",
+            description = "A workorder or payment-reversal leg failed downstream; the order is parked for review.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{orderId}/cancel")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_CANCEL + "')")
     @EmitEvent(id = "ORDER_CART_CANCEL_REQUEST", apiVersion = "1")
@@ -119,6 +125,10 @@ public class OrderCancellationController {
     @ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @ApiResponse(responseCode = "404", description = "Order not found")
     @ApiResponse(responseCode = "409", description = "Order not in retryable state")
+    @ApiResponse(
+            responseCode = "500",
+            description = "The reversal failed again; the order is parked at CANCEL_REQUIRES_MANUAL_REVIEW.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{orderId}/cancel/retry")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_CANCEL + "')")
     @EmitEvent(id = "ORDER_CART_CANCEL_RETRY", apiVersion = "1")

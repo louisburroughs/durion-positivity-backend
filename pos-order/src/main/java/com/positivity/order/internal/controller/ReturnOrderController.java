@@ -10,10 +10,13 @@ import com.positivity.order.internal.security.OrderPermissions;
 import com.positivity.order.internal.service.ReturnOrderService;
 import com.positivity.order.internal.service.model.CreateReturnCommand;
 import com.positivity.order.internal.service.model.ReturnLineCommand;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -269,6 +272,24 @@ public class ReturnOrderController {
                     with no customer on the return), and 500 when the refund leg itself fails downstream.
                     """,
             tags = {"Returns"})
+    @ApiResponse(responseCode = "200", description = "Saga completed, or the return was already COMPLETED.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Return not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The return is not in RETURN_REQUESTED.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description =
+                    "The refund was refused on its own terms — no invoice to refund against, insufficient settled tender, or a credit refund with no customer on the return.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "500",
+            description = "The refund leg itself failed downstream; the return is parked at REFUND_FAILED.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{returnOrderId}/process")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_CREATE + "')")
     @EmitEvent(id = "ORDER_RETURN_PROCESS", apiVersion = "1")
@@ -294,6 +315,23 @@ public class ReturnOrderController {
                     refused on its own terms, and 500 when the refund leg fails downstream again.
                     """,
             tags = {"Returns"})
+    @ApiResponse(responseCode = "200", description = "Retry completed, or the return was already COMPLETED.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Return not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The return is not in REFUND_FAILED.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "The refund was refused on its own terms.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "500",
+            description = "The refund leg failed downstream again; the return stays at REFUND_FAILED.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{returnOrderId}/retry")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_RETURN_CREATE + "')")
     @EmitEvent(id = "ORDER_RETURN_RETRY", apiVersion = "1")
