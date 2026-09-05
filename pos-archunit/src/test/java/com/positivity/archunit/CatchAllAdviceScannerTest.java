@@ -174,6 +174,39 @@ class CatchAllAdviceScannerTest {
         assertThat(CatchAllAdviceScanner.controllerModules(root, Set.of())).containsExactly(withController);
     }
 
+    /**
+     * The combination #1768 was about: a module that both depends on a provider and declares its
+     * own catch-all. Each half is legitimate on its own — the provider dependency is how most
+     * modules get coverage, and a standalone catch-all is how a module without the dependency
+     * gets it — so the scanner must report the two independently and let the rule judge the pair.
+     * An ApiError-shaped catch-all makes this indistinguishable from a compliant module by shape
+     * alone, which is how pos-inventory survived the #1717 enforcement.
+     */
+    @Test
+    @DisplayName("a provider dependency and a local catch-all are reported independently")
+    void aProviderDependencyAndALocalCatchAllAreBothVisible(@TempDir Path root) throws IOException {
+        Path shadowing = moduleWithAdvice(root, "pos-fake-shadowing", """
+                @RestController
+                class C {}
+
+                @RestControllerAdvice
+                class A {
+                    @ExceptionHandler(Exception.class)
+                    public ResponseEntity<ApiError> handleUnexpected(Exception ex) {
+                        return null;
+                    }
+                }
+                """);
+        writePom(shadowing, "pos-web-common");
+
+        assertThat(CatchAllAdviceScanner.dependsOnCatchAllProvider(shadowing, PROVIDERS))
+                .isTrue();
+        assertThat(CatchAllAdviceScanner.catchAllsIn(shadowing)).isNotEmpty();
+        // Shape-conformant, so the ADR-0017 §3 envelope rule alone would pass it.
+        assertThat(CatchAllAdviceScanner.catchAllsIn(shadowing))
+                .allMatch(CatchAllAdviceScanner.CatchAll::returnsApiError);
+    }
+
     private static Path moduleWithAdvice(Path root, String moduleName, String body) throws IOException {
         Path module = root.resolve(moduleName);
         Path pkg = module.resolve("src/main/java/com/positivity/fake");

@@ -12,6 +12,8 @@ import com.positivity.order.internal.entity.ExtProduct;
 import com.positivity.order.internal.entity.ExtWorkorder;
 import com.positivity.order.internal.entity.ExtWorkorderLine;
 import com.positivity.order.internal.entity.SourceType;
+import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
+import com.positivity.order.internal.exception.SalesOrderUnprocessableException;
 import com.positivity.order.internal.repository.ExtEstimateLineRepository;
 import com.positivity.order.internal.repository.ExtEstimateRepository;
 import com.positivity.order.internal.repository.ExtProductRepository;
@@ -182,16 +184,40 @@ class ReplicaSourceDocumentAdapterTest {
         assertThat(lines.getFirst().returnable()).isNull();
     }
 
+    /**
+     * Both guards are reachable from a request body: SalesOrderController#linkSource passes the
+     * caller's sourceId to SalesOrderServiceImpl#linkSource, which hands it straight to
+     * {@link com.positivity.order.internal.client.SourceDocumentPort#fetchLines}. So an
+     * unresolvable document is a client outcome, not an internal invariant, and a bare
+     * IllegalStateException would answer it with a 500 (issue #1730).
+     *
+     * <p>422 rather than 404: the order in the path does exist, and this endpoint's 404 already
+     * means "no such order". Reusing it for the referenced document would make the two outcomes
+     * indistinguishable to a caller. ADR-0017 §2 puts a well-formed request the server cannot
+     * act on at 422.
+     */
     @Test
-    @DisplayName("SDA-003: unknown document fails loudly instead of importing nothing")
-    void unknownDocument_failsLoudly() {
+    @DisplayName("SDA-003: an unresolvable document is a 422 client outcome, not a 500")
+    void unknownDocument_isUnprocessable() {
         when(extWorkorderRepository.findById(any())).thenReturn(Optional.empty());
         when(extEstimateRepository.findById(any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> adapter.fetchLines(SourceType.WORKORDER, WORKORDER_ID.toString()))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(SalesOrderUnprocessableException.class)
                 .hasMessageContaining("replica");
         assertThatThrownBy(() -> adapter.fetchLines(SourceType.ESTIMATE, ESTIMATE_ID.toString()))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(SalesOrderUnprocessableException.class);
+    }
+
+    /**
+     * A sourceId that is not a UUID is a malformed payload on its face, which ADR-0017 §1 puts
+     * at 400 — a different outcome from a well-formed id that resolves to nothing above.
+     */
+    @Test
+    @DisplayName("SDA-004: a non-UUID sourceId is a 400, not a 500")
+    void malformedSourceId_isBadRequest() {
+        assertThatThrownBy(() -> adapter.fetchLines(SourceType.WORKORDER, "not-a-uuid"))
+                .isInstanceOf(SalesOrderRequestValidationException.class)
+                .hasMessageContaining("document UUID");
     }
 }

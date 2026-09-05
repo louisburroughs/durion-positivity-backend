@@ -24,6 +24,7 @@ import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsistencyException;
 import com.positivity.workorder.internal.exception.PromotionValidationException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
+import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.service.EstimateService;
 import com.positivity.workorder.internal.service.IdempotencyService;
 import com.positivity.workorder.internal.service.WorkorderService;
@@ -422,22 +423,28 @@ class EstimateControllerTest {
         }
 
         @Test
-        void mapsApprovalFailuresOntoNotFoundOrBadRequest() {
+        void propagatesApprovalFailuresInsteadOfCatchingThem() {
             ApproveEstimateRequest request =
                     ApproveEstimateRequest.builder().customerId(CUSTOMER_ID).build();
-            // #1713: propagates to GlobalExceptionHandler for the enveloped 404 (ADR-0017 §3/§4)
-            // instead of being caught here and answered as a bodiless one.
+            // The call is direct, so no advice runs: these assertions cover propagation out of
+            // the controller only, and the resulting envelopes are asserted over the wire in the
+            // contract ITs.
+            //
+            // #1713: propagates instead of being caught here and answered as a bodiless 404.
             doThrow(new EstimateNotFoundException(ESTIMATE_ID))
                     .when(estimateService)
                     .approveEstimate(any(), any(), any(), any(), any(), any(), any(), any());
             assertThatThrownBy(() -> controller.approveEstimate(ESTIMATE_ID, request))
                     .isInstanceOf(EstimateNotFoundException.class);
 
-            doThrow(new IllegalStateException("PO required"))
+            // #1753: the invalid-state refusal propagates too. It was previously caught here and
+            // answered as a bodiless 400 that the OpenAPI contract nonetheless documented as an
+            // ApiError.
+            doThrow(new WorkorderResourceConflictException("Estimate cannot be approved in current state: DRAFT"))
                     .when(estimateService)
                     .approveEstimate(any(), any(), any(), any(), any(), any(), any(), any());
-            assertThat(controller.approveEstimate(ESTIMATE_ID, request).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThatThrownBy(() -> controller.approveEstimate(ESTIMATE_ID, request))
+                    .isInstanceOf(WorkorderResourceConflictException.class);
         }
     }
 

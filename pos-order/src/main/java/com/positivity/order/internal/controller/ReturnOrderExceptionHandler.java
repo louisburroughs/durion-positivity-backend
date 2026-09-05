@@ -3,6 +3,8 @@ package com.positivity.order.internal.controller;
 import com.positivity.order.internal.exception.OverCapReturnException;
 import com.positivity.order.internal.exception.ReturnLineNotReturnableException;
 import com.positivity.order.internal.exception.ReturnOrderNotFoundException;
+import com.positivity.order.internal.exception.ReturnOrderStateConflictException;
+import com.positivity.order.internal.exception.ReturnOrderUnprocessableException;
 import com.positivity.order.internal.exception.ReturnRequestValidationException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.WarrantyReturnRoutingException;
@@ -79,8 +81,20 @@ public class ReturnOrderExceptionHandler {
                         correlationId));
     }
 
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ApiError> handleConflict(IllegalStateException ex, HttpServletRequest request) {
+    /**
+     * A well-formed return request the current lifecycle state refuses. ADR-0017 §2 makes that a
+     * 409, which is the code and status this case already answered.
+     *
+     * <p>#1730: this replaces a blanket {@code @ExceptionHandler(IllegalStateException.class)}.
+     * The status is unchanged for genuine collisions, but that handler also answered 409 for
+     * three domain-policy refusals (now {@link ReturnOrderUnprocessableException}, 422) and for a
+     * downstream payment-reversal failure — a server-side problem reported to the caller as a
+     * conflict with state it cannot see. The bare type is no longer mapped anywhere in this
+     * module, so the reversal failure now reaches pos-web-common's platform advice as a
+     * correlated 500.
+     */
+    @ExceptionHandler(ReturnOrderStateConflictException.class)
+    public ResponseEntity<ApiError> handleConflict(ReturnOrderStateConflictException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .header(X_CORRELATION_ID, correlationId)
@@ -88,6 +102,26 @@ public class ReturnOrderExceptionHandler {
                         "RETURN_INVALID_STATE",
                         ex.getMessage(),
                         HttpStatus.CONFLICT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * A structurally valid return request a domain rule refuses on its merits: a refund method
+     * needing a customer the return does not carry, no invoice to refund against, or insufficient
+     * settled original tender. ADR-0017 §2 makes that a 422 — these answered 409 while they
+     * travelled as bare {@code IllegalStateException} (#1730).
+     */
+    @ExceptionHandler(ReturnOrderUnprocessableException.class)
+    public ResponseEntity<ApiError> handleUnprocessable(
+            ReturnOrderUnprocessableException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        "RETURN_UNPROCESSABLE",
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
                         Instant.now(clock).toString(),
                         correlationId));
     }

@@ -31,6 +31,7 @@ import com.positivity.workorder.internal.exception.EstimateItemNotFoundException
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PurchaseOrderRequiredException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
+import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
@@ -359,7 +360,11 @@ public class EstimateServiceImpl implements EstimateService {
                 estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId));
 
         if (!estimate.canApprove()) {
-            throw new IllegalStateException("Estimate cannot be approved in current state: " + estimate.getStatus());
+            // Invalid lifecycle transition -> 409 (ADR-0017 §2 names it explicitly). The same
+            // request body succeeds once the estimate reaches PENDING_APPROVAL, so this is the
+            // resource's state refusing the operation, not a problem with the payload.
+            throw new WorkorderResourceConflictException(
+                    "Estimate cannot be approved in current state: " + estimate.getStatus());
         }
 
         estimate.setStatus(EstimateStatus.APPROVED);
@@ -495,7 +500,11 @@ public class EstimateServiceImpl implements EstimateService {
         }
 
         if (!estimate.canApprove()) {
-            throw new IllegalStateException("Estimate cannot be approved in current state: " + estimate.getStatus());
+            // Invalid lifecycle transition -> 409 (ADR-0017 §2 names it explicitly). The same
+            // request body succeeds once the estimate reaches PENDING_APPROVAL, so this is the
+            // resource's state refusing the operation, not a problem with the payload.
+            throw new WorkorderResourceConflictException(
+                    "Estimate cannot be approved in current state: " + estimate.getStatus());
         }
 
         // CAP:092 Story #98: Enforce PO requirement for commercial accounts

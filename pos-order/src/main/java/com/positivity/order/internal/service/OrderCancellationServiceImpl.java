@@ -11,6 +11,8 @@ import com.positivity.order.internal.config.OrderDomainEventPublisher;
 import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderStatus;
+import com.positivity.order.internal.exception.OrderCancellationReviewRequiredException;
+import com.positivity.order.internal.exception.OrderCancellationStateConflictException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
@@ -68,7 +70,8 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
                 SalesOrderStatus.CANCEL_FAILED_BILLING);
 
         if (!cancellable.contains(order.getStatus())) {
-            throw new IllegalStateException("Order cannot be cancelled in current state: " + order.getStatus());
+            throw new OrderCancellationStateConflictException(
+                    "Order cannot be cancelled in current state: " + order.getStatus());
         }
 
         String idempotencyKey = command.idempotencyKey() != null
@@ -89,7 +92,7 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
             WorkorderStatusResult statusResult = workexecPort.checkWorkorderStatus(command.workOrderId());
             if (!statusResult.cancellable()) {
                 failTransition(order, SalesOrderStatus.CANCEL_FAILED_WORKEXEC, statusResult.nonCancellableReason());
-                throw new IllegalStateException(
+                throw new OrderCancellationStateConflictException(
                         "Workorder cannot be cancelled: " + statusResult.nonCancellableReason());
             }
 
@@ -122,22 +125,27 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
 
         if (order.getStatus() != SalesOrderStatus.CANCEL_FAILED_BILLING) {
-            throw new IllegalStateException(
+            throw new OrderCancellationStateConflictException(
                     "Order retry cancellation only allowed from CANCEL_FAILED_BILLING state: " + order.getStatus());
         }
 
         try {
             reverseSettledPayments(order, order.getCancellationReason(), idempotencyKey, actor);
-        } catch (IllegalStateException e) {
+        } catch (IllegalStateException | OrderCancellationStateConflictException e) {
             // A failed retry is terminal for automation (plan story A4): park the order for a
             // human instead of looping on CANCEL_FAILED_BILLING, and raise the alert fact.
+            //
+            // #1730 re-typed the "settled payments but no invoice reference" guard off bare
+            // IllegalStateException, so this catch names both: OrderCancellationStateConflictException
+            // deliberately does not extend it (same reasoning as #1694), and narrowing this to one
+            // type would silently stop parking those orders for review.
             String failureReason = "Payment reversal retry failed: " + e.getMessage();
             orderStateMachine.transition(order, SalesOrderStatus.CANCEL_REQUIRES_MANUAL_REVIEW, failureReason);
             order.setUpdatedBy(actor);
             salesOrderRepository.save(order);
             domainEventPublisher.publishCancelReviewRequired(order, failureReason);
             log.error("Order {} cancellation requires manual review: {}", orderId, e.getMessage());
-            throw new IllegalStateException(failureReason);
+            throw new OrderCancellationReviewRequiredException(failureReason);
         }
 
         completeCancellation(order, actor);
@@ -159,7 +167,8 @@ public class OrderCancellationServiceImpl implements OrderCancellationService {
         }
         if (order.getInvoiceId() == null) {
             markBillingFailed(order, "Settled payments but no invoice reference");
-            throw new IllegalStateException("Order has settled payments but no invoice reference to reverse against");
+            throw new OrderCancellationStateConflictException(
+                    "Order has settled payments but no invoice reference to reverse against");
         }
 
         // The transition is recorded on the CANCEL_REQUESTED path only; retries re-enter from

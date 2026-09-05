@@ -32,6 +32,7 @@ import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.exception.InvalidCustomerException;
 import com.positivity.order.internal.exception.InvalidOrderStateTransitionException;
 import com.positivity.order.internal.exception.OrderVoidBlockedException;
+import com.positivity.order.internal.exception.SalesOrderUnprocessableException;
 import com.positivity.order.internal.repository.ExtBillingRulesRepository;
 import com.positivity.order.internal.repository.ExtCustomerRepository;
 import com.positivity.order.internal.repository.ExtProductRepository;
@@ -426,7 +427,7 @@ class SalesOrderWave4Test {
                         .build()));
 
         assertThatThrownBy(() -> salesOrderService.checkout(ORDER_ID, "chk-1"))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(SalesOrderUnprocessableException.class)
                 .hasMessageContaining("serial");
     }
 

@@ -441,11 +441,22 @@ public class InventoryGlobalExceptionHandler {
         return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
     }
 
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiError> handleUnexpected(Exception ex) {
-        log.error("Unhandled inventory exception", ex);
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Unexpected error occurred");
-    }
+    // No @ExceptionHandler(Exception.class) here (issue #1768, ADR-0056 §1): Spring's
+    // ExceptionHandlerExceptionResolver picks the first applicable advice bean that has ANY
+    // matching handler method, not the most specific handler across advices. A blanket catch-all
+    // in this module-local advice therefore swallowed every unmapped exception before
+    // pos-web-common's platform-wide GlobalApiExceptionHandler could run.
+    //
+    // Being ApiError-shaped did not make that safe. What it cost was ADR-0056 §2's
+    // DataIntegrityViolationException classification, which this advice never mapped: a
+    // unique-constraint or FK collision in this module answered 500 INTERNAL_ERROR instead of
+    // 409 DUPLICATE_RESOURCE. Anything not handled above now falls through to the shared advice,
+    // which answers a generic, correlated 500 for the genuinely unexpected and classifies
+    // integrity violations properly.
+    //
+    // This module was the last holdout; the six remediated in #1694 all deleted theirs.
+    // GlobalExceptionHandlerEnforcementTest.noModuleShadowsTheSharedCatchAll now fails the build
+    // if one comes back.
 
     private ResponseEntity<ApiError> build(HttpStatus status, String code, String message) {
         String correlationId = resolveCorrelationId(null);

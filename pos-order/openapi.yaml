@@ -99,7 +99,7 @@ paths:
 
         Emits an ORDER_CART_CREATE event and records the initial DRAFT status-history row.
 
-        Returns 201 on creation, 200 when a replayed Idempotency-Key returns the original cart, 400 when locationId cannot be resolved or depositSourceType/depositSourceId is only half supplied, 409 when the key was previously used with a different payload, and 422 when the customer or vehicle cannot be validated or the terminal''s session is being closed.
+        Returns 201 on creation, 200 when a replayed Idempotency-Key returns the original cart, 400 when locationId cannot be resolved or depositSourceType/depositSourceId is only half supplied, 409 when the key was previously used with a different payload, and 422 when the customer or vehicle cannot be validated or the terminal''s register session is being closed.
 
         '
       operationId: createCart
@@ -133,7 +133,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SalesOrderResponse'
-          description: OK
+          description: A replayed Idempotency-Key returned the original cart.
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrderResponse'
+          description: Cart created.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: locationId cannot be resolved, or depositSourceType/depositSourceId is only half supplied (ORDER_INVALID_ARGUMENT).
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Insufficient permissions.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The Idempotency-Key was previously used with a different payload.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The customer or vehicle cannot be validated, or the terminal's register session is being closed (ORDER_UNPROCESSABLE).
       security:
       - bearerAuth: []
       summary: Create a Sales Order Cart
@@ -190,7 +220,7 @@ paths:
 
         Emits an ORDER_CART_CANCEL_REQUEST event; refunds are idempotent per payment intent at pos-invoice, and a failed leg parks the order at CANCEL_FAILED_WORKEXEC or CANCEL_FAILED_BILLING.
 
-        Returns 201 when the cancellation completes (or already had for the replayed key), 404 when the order does not exist, and 409 when the current status is not cancellable or a workorder or payment-reversal leg fails.
+        Returns 201 when the cancellation completes (or already had for the replayed key), 404 when the order does not exist, 409 when the current status is not cancellable or work execution reports the workorder non-cancellable, and 500 when a workorder or payment-reversal leg fails downstream — the order is still parked at CANCEL_FAILED_WORKEXEC or CANCEL_FAILED_BILLING either way, so the retry endpoint applies.
 
         '
       operationId: cancelOrder
@@ -246,6 +276,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/CancellationResponse'
           description: Order cannot be cancelled in current state
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A workorder or payment-reversal leg failed downstream; the order is parked for review.
       security:
       - bearerAuth:
         - order:order:cancel
@@ -266,7 +302,7 @@ paths:
 
         Emits an ORDER_CART_CANCEL_RETRY event; a retry that fails again transitions the order to CANCEL_REQUIRES_MANUAL_REVIEW and publishes a review-required fact instead of looping.
 
-        Returns 200 when the cancellation completes on retry, 404 when the order does not exist, and 409 when the order is not in CANCEL_FAILED_BILLING or the reversal fails again.
+        Returns 200 when the cancellation completes on retry, 404 when the order does not exist, 409 when the order is not in CANCEL_FAILED_BILLING, and 500 when the reversal fails again — which also parks the order at CANCEL_REQUIRES_MANUAL_REVIEW.
 
         '
       operationId: retryOrderCancellation
@@ -307,6 +343,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/CancellationResponse'
           description: Order not in retryable state
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The reversal failed again; the order is parked at CANCEL_REQUIRES_MANUAL_REVIEW.
       security:
       - bearerAuth:
         - order:order:cancel
@@ -363,7 +405,7 @@ paths:
 
         Emits an ORDER_CART_DISCOUNT_APPLY event, recomputes order totals, and marks tax stale.
 
-        Returns 404 when the order does not exist, 409 when the order is not DRAFT, and 422 when the type or value is invalid.
+        Returns 404 when the order does not exist, 409 when the order is not DRAFT, and 400 when the type is not PERCENT or AMOUNT or the value is not positive (and, for PERCENT, at most 100).
 
         '
       operationId: applyOrderDiscount
@@ -633,7 +675,7 @@ paths:
 
         Emits an ORDER_LINK_SOURCE event, recomputes order totals, and marks tax stale.
 
-        Returns 404 when the order does not exist, 400 when sourceType is unknown, 409 when the order is not DRAFT, and 422 when a WORKORDER link is attempted without a customer on the cart.
+        Returns 404 when the order does not exist, 400 when sourceType is unknown or sourceId is not a UUID, 409 when the order is not DRAFT, and 422 when a WORKORDER link is attempted without a customer on the cart or when the source document does not resolve in the replica.
 
         '
       operationId: linkOrderSource
@@ -663,7 +705,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SalesOrderResponse'
-          description: OK
+          description: Source lines imported into the cart.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: sourceType is unknown, or sourceId is not a document UUID (ORDER_INVALID_ARGUMENT).
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Insufficient permissions.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Order not found (ORDER_NOT_FOUND).
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The order is not DRAFT.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A WORKORDER link without a customer on the cart, or a source document that does not resolve in the replica (ORDER_UNPROCESSABLE).
       security:
       - bearerAuth: []
       summary: Link a Source Document to an Order
@@ -2330,7 +2402,7 @@ paths:
 
         Emits an ORDER_RETURN_PROCESS event and publishes an order.order.returned fact after completion, which pos-inventory consumes to restock RESTOCK-condition lines (SCRAP lines are skipped); a refund failure parks the return at REFUND_FAILED before any stock signal.
 
-        Returns 200 when the saga completes (or the return was already COMPLETED), 404 when the return does not exist, and 409 when the status is not RETURN_REQUESTED or the refund leg fails.
+        Returns 200 when the saga completes (or the return was already COMPLETED), 404 when the return does not exist, 409 when the status is not RETURN_REQUESTED, 422 when the refund is refused on its own terms (no invoice to refund against, insufficient settled tender, or a credit refund with no customer on the return), and 500 when the refund leg itself fails downstream.
 
         '
       operationId: processReturn
@@ -2347,7 +2419,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReturnOrderResponse'
-          description: OK
+          description: Saga completed, or the return was already COMPLETED.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Return not found.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The return is not in RETURN_REQUESTED.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The refund was refused on its own terms — no invoice to refund against, insufficient settled tender, or a credit refund with no customer on the return.
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The refund leg itself failed downstream; the return is parked at REFUND_FAILED.
       security:
       - bearerAuth: []
       summary: Run the Return Refund Saga
@@ -2416,7 +2512,7 @@ paths:
 
         Emits an ORDER_RETURN_RETRY event and, on success, publishes the order.order.returned fact that drives the pos-inventory restock of RESTOCK lines.
 
-        Returns 200 when the retry completes (or the return was already COMPLETED), 404 when the return does not exist, and 409 when the status is not REFUND_FAILED or the refund fails again.
+        Returns 200 when the retry completes (or the return was already COMPLETED), 404 when the return does not exist, 409 when the status is not REFUND_FAILED, 422 when the refund is refused on its own terms, and 500 when the refund leg fails downstream again.
 
         '
       operationId: retryReturn
@@ -2433,7 +2529,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReturnOrderResponse'
-          description: OK
+          description: Retry completed, or the return was already COMPLETED.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Return not found.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The return is not in REFUND_FAILED.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The refund was refused on its own terms.
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The refund leg failed downstream again; the return stays at REFUND_FAILED.
       security:
       - bearerAuth: []
       summary: Retry a Failed Return Refund

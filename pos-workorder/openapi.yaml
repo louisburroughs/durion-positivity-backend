@@ -1989,7 +1989,7 @@ paths:
 
         Emits a WORKORDER_ESTIMATE_APPROVE event.
 
-        Returns 404 when the estimate does not exist, 400 when the status is not PENDING_APPROVAL or the customerId in the request does not match the estimate''s own customer, and 422 when a required purchase order is missing.
+        Returns 404 when the estimate does not exist, 400 when the customerId in the request does not match the estimate''s own customer, 409 when the status is not PENDING_APPROVAL, and 422 when a required purchase order is missing.
 
         '
       operationId: approveEstimate
@@ -2031,13 +2031,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Estimate cannot be approved in current state, or the customerId in the request does not match the estimate's own customer.
+          description: The customerId in the request does not match the estimate's own customer.
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Estimate not found (ESTIMATE_NOT_FOUND).
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Estimate is not in PENDING_APPROVAL, so it cannot be approved in its current state (CONFLICT).
         '422':
           content:
             application/json:
@@ -3533,7 +3539,7 @@ paths:
 
         Emits a WORKORDER_APPROVE event and marks the workorder fact changed for downstream replication.
 
-        Returns 404 when the workorder does not exist, and 400 when the status is not DRAFT or the customerId in the request does not match the workorder''s own customer.
+        Returns 404 when the workorder does not exist, 400 when the customerId in the request does not match the workorder''s own customer, and 409 when the status is not DRAFT.
 
         '
       operationId: approveWorkorder
@@ -3574,13 +3580,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Work order cannot be approved in current state, or the customerId in the request does not match the workorder's own customer.
+          description: The customerId in the request does not match the workorder's own customer.
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Work order not found.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Work order is not in DRAFT, so it cannot be approved in its current state (CONFLICT).
       security:
       - bearerAuth:
         - workorder:workorder:approve

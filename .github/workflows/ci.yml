@@ -1095,16 +1095,26 @@ jobs:
         code-quality,
         code-quality-full,
       ]
-    if: always() && github.event_name != 'schedule'
+    # !cancelled() replaces the previous always(): always() deliberately runs a job even
+    # when the workflow run was cancelled, so a run superseded by the next push to the same
+    # branch reported this check as a build failure on an intermediate commit that never
+    # failed (issue #1755). !cancelled() still runs the job when an upstream job failed,
+    # which is the part always() was here for, and is GitHub's documented idiom for this.
+    # The ${{ }} wrapper is required, not decoration: a bare `!` opens a YAML tag, so
+    # `if: !cancelled() && ...` is a parse error rather than a condition.
+    if: ${{ !cancelled() && github.event_name != 'schedule' }}
 
     steps:
       - name: Check build status
         run: |
-          if [ "${{ needs.build-test.result }}" != "success" ]; then
-            echo "Build failed!"
-            exit 1
-          fi
-          echo "Build succeeded!"
+          # Report what actually happened rather than treating every non-success alike.
+          # 'skipped' is a legitimate outcome: this workflow builds only changed modules
+          # and their dependents, so a run with no matching changes never runs build-test.
+          case "${{ needs.build-test.result }}" in
+            success) echo "Build succeeded!" ;;
+            skipped) echo "Build skipped - no changed modules matched." ;;
+            *)       echo "Build ${{ needs.build-test.result }}!"; exit 1 ;;
+          esac
       # Uncomment to enable Slack notifications
       # - name: Send Slack notification
       #   if: always()

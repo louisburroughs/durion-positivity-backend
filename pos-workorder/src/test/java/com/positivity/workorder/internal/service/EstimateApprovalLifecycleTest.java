@@ -25,6 +25,7 @@ import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PurchaseOrderRequiredException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
+import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
@@ -225,7 +226,7 @@ class EstimateApprovalLifecycleTest {
             givenEstimate(estimate(EstimateStatus.DRAFT));
 
             assertThatThrownBy(() -> service.approveEstimate(ESTIMATE_ID, CUSTOMER_ID))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(WorkorderResourceConflictException.class)
                     .hasMessageContaining("Estimate cannot be approved in current state: DRAFT");
         }
 

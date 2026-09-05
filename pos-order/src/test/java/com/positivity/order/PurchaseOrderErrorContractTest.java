@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderNotTransmittableException;
+import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
 import com.positivity.order.internal.service.PurchaseOrderService;
 import com.positivity.order.internal.service.PurchaseOrderTransmissionService;
 import java.util.List;
@@ -100,7 +101,8 @@ class PurchaseOrderErrorContractTest extends BaseContractIntegrationTest {
     @DisplayName("a lifecycle refusal is a 409, as the approve and cancel endpoints document")
     void invalidLifecycleTransitionIsConflict() throws Exception {
         when(purchaseOrderService.cancelPurchaseOrder(any(), any()))
-                .thenThrow(new IllegalStateException("Cannot cancel a fully received or closed purchase order"));
+                .thenThrow(new PurchaseOrderStateConflictException(
+                        "Cannot cancel a fully received or closed purchase order"));
 
         mockMvc.perform(withGatewayAuth(
                         post("/v1/orders/purchase-orders/{poId}/cancel", PO_ID), "order:purchase_order:approve"))

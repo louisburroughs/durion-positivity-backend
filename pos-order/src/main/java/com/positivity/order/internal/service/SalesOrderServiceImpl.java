@@ -19,6 +19,7 @@ import com.positivity.order.internal.exception.InvalidSkuException;
 import com.positivity.order.internal.exception.OrderVoidBlockedException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
+import com.positivity.order.internal.exception.SalesOrderUnprocessableException;
 import com.positivity.order.internal.repository.ExtBillingRulesRepository;
 import com.positivity.order.internal.repository.ExtCustomerRepository;
 import com.positivity.order.internal.repository.ExtProductRepository;
@@ -127,7 +128,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         if (registerSessionRepository
                 .findFirstByTerminalIdAndStatus(command.terminalId(), RegisterSessionStatus.CLOSING)
                 .isPresent()) {
-            throw new IllegalStateException("Terminal " + command.terminalId()
+            throw new SalesOrderUnprocessableException("Terminal " + command.terminalId()
                     + " has a register session being closed; no new orders until the close completes");
         }
         RegisterSession openSession = registerSessionRepository
@@ -200,7 +201,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
             switch (pricingQuote.status()) {
                 case UNKNOWN_SKU -> throw new InvalidSkuException("Product not found for SKU: " + command.itemSku());
                 case UNAVAILABLE ->
-                    throw new IllegalStateException("Pricing is unavailable for SKU " + command.itemSku()
+                    throw new SalesOrderUnprocessableException("Pricing is unavailable for SKU " + command.itemSku()
                             + "; retry, or enter a manual price (requires order:line:enter_manual_price)");
                 case PRICED -> {
                     /* fall through with quote values */
@@ -328,7 +329,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
      */
     private void requireCustomerForWorkorderLink(SalesOrder order, SourceType type) {
         if (order.getCustomerId() == null && SourceType.WORKORDER.equals(type)) {
-            throw new IllegalStateException(
+            throw new SalesOrderUnprocessableException(
                     "Cannot link source: a customer must be assigned to this cart before linking a WORKORDER source");
         }
     }
@@ -401,11 +402,12 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         try {
             type = OrderDiscountType.valueOf(command.type());
         } catch (IllegalArgumentException e) {
-            throw new IllegalStateException("Order discount type must be PERCENT or AMOUNT: " + command.type());
+            throw new SalesOrderRequestValidationException(
+                    "Order discount type must be PERCENT or AMOUNT: " + command.type());
         }
         if (command.value().signum() <= 0
                 || (type == OrderDiscountType.PERCENT && command.value().compareTo(BigDecimal.valueOf(100)) > 0)) {
-            throw new IllegalStateException(
+            throw new SalesOrderRequestValidationException(
                     "Order discount value must be positive" + (type == OrderDiscountType.PERCENT ? " and <= 100" : ""));
         }
 
@@ -436,7 +438,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
         requireNoWorkorderLink(order);
         if (order.getLines().isEmpty()) {
-            throw new IllegalStateException("Cannot quote an empty cart");
+            throw new SalesOrderUnprocessableException("Cannot quote an empty cart");
         }
 
         repriceLines(order, true);
@@ -487,7 +489,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         }
 
         if (order.getLines().stream().filter(Objects::nonNull).findAny().isEmpty()) {
-            throw new IllegalStateException("Cannot check out an empty cart");
+            throw new SalesOrderUnprocessableException("Cannot check out an empty cart");
         }
         // Resolved Q8: PENDING customer validation hard-blocks financially consequential
         // transitions; the cart stays workable until CRM resolves.
@@ -720,7 +722,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                         .filter(Objects::nonNull)
                         .anyMatch(l -> SourceType.WORKORDER.equals(l.getSourceType()));
         if (workorderLinked) {
-            throw new IllegalStateException(
+            throw new SalesOrderUnprocessableException(
                     "QUOTE_NOT_ALLOWED_FOR_WORKORDER: workorder-linked orders are quoted via pos-workorder estimates");
         }
     }
@@ -740,7 +742,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 line.setPricingBreakdown(pricingQuote.breakdownJson());
                 salesOrderLineRepository.save(line);
             } else if (failOnUnavailable) {
-                throw new IllegalStateException("Pricing is unavailable for SKU " + line.getItemSku()
+                throw new SalesOrderUnprocessableException("Pricing is unavailable for SKU " + line.getItemSku()
                         + "; cannot finalize a quote on stale prices");
             }
         }
@@ -851,7 +853,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 .filter(s -> !s.isEmpty())
                 .collect(Collectors.toCollection(java.util.ArrayList::new));
         if (normalized.size() > quantity) {
-            throw new IllegalStateException(
+            throw new SalesOrderUnprocessableException(
                     "serialNumbers count (" + normalized.size() + ") exceeds line quantity (" + quantity + ")");
         }
         return normalized;
@@ -875,11 +877,11 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                     ? 0
                     : line.getSerialNumbers().size();
             if ("SERIAL".equals(trackingLevel) && captured != line.getQuantity()) {
-                throw new IllegalStateException("SKU " + line.getItemSku() + " is serial-tracked: " + line.getQuantity()
-                        + " serial number(s) required, " + captured + " captured");
+                throw new SalesOrderUnprocessableException("SKU " + line.getItemSku() + " is serial-tracked: "
+                        + line.getQuantity() + " serial number(s) required, " + captured + " captured");
             }
             if ("LOT".equals(trackingLevel) && captured < 1) {
-                throw new IllegalStateException(
+                throw new SalesOrderUnprocessableException(
                         "SKU " + line.getItemSku() + " is lot-tracked: at least one lot number is required");
             }
         }
