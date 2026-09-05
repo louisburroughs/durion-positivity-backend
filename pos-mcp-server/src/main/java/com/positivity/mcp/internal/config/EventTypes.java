@@ -44,6 +44,9 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.fastRead("NLTI_AUDIT_QUERY", "Query the NLTI audit event ledger")
                         .build(),
+                EventTypeRegistration.fastRead(
+                                "MCP_EVAL_TRACE_QUERY", "List the calling actor's recorded eval turn traces")
+                        .build(),
                 EventTypeRegistration.approval(
                                 "MCP_TOOL_PERMISSION_GRANT", "Grant a permission code to a discovered OpenAPI tool")
                         .build(),

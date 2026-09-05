@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,7 +15,9 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 
 class EvalTurnTraceRepositoryImplTest {
 
@@ -67,5 +70,30 @@ class EvalTurnTraceRepositoryImplTest {
                 List.of(),
                 "answer",
                 null);
+    }
+
+    @Test
+    void findRecordedFiltersFromTheBoundaryNewestFirstAndCapsTheRead() {
+        Instant since = Instant.parse("2026-09-04T00:00:00Z");
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+
+        repository.findRecorded(since, 50);
+
+        verify(jdbcTemplate).query(sql.capture(), ArgumentMatchers.<RowMapper<EvalTurnTrace>>any(), eq(since), eq(50));
+        // Ordering and the limit are the semantics a caller depends on: it is reading back the turns
+        // of a run that just happened, so oldest-first or an unbounded read would both be wrong.
+        assertThat(sql.getValue())
+                .contains("created_at >= ?")
+                .contains("ORDER BY created_at DESC")
+                .contains("LIMIT ?");
+    }
+
+    @Test
+    void findRecordedNeverPassesANonPositiveLimitToSql() {
+        // LIMIT 0 would return nothing and LIMIT -1 is a syntax error on Postgres; both would read
+        // as "no traces recorded", which is exactly the ambiguity this read path exists to remove.
+        repository.findRecorded(Instant.parse("2026-09-04T00:00:00Z"), 0);
+
+        verify(jdbcTemplate).query(anyString(), ArgumentMatchers.<RowMapper<EvalTurnTrace>>any(), any(), eq(1));
     }
 }
