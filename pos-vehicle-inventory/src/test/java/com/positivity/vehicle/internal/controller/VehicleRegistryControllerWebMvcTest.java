@@ -126,7 +126,11 @@ class VehicleRegistryControllerWebMvcTest {
     void getUnknownIdIsNotFound() throws Exception {
         when(vehicleService.getVehicle(VEHICLE_ID)).thenReturn(Optional.empty());
 
-        mockMvc.perform(get(PATH + "/" + VEHICLE_ID).header(AUTH, BEARER)).andExpect(status().isNotFound());
+        mockMvc.perform(get(PATH + "/" + VEHICLE_ID).header(AUTH, BEARER))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
     @Test
@@ -134,7 +138,11 @@ class VehicleRegistryControllerWebMvcTest {
     void getUnknownVinIsNotFound() throws Exception {
         when(vehicleService.getVehicleByVin(VIN)).thenReturn(Optional.empty());
 
-        mockMvc.perform(get(PATH + "/vin/" + VIN).header(AUTH, BEARER)).andExpect(status().isNotFound());
+        mockMvc.perform(get(PATH + "/vin/" + VIN).header(AUTH, BEARER))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
     @Test

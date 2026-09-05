@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.persistence.EntityNotFoundException;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,18 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("isAuthenticated()")
 @RequestMapping("/v1/vehicles-legacy")
 public class VehicleController {
+
+    /**
+     * Absence is reported by throwing rather than by {@code ResponseEntity.notFound()} or
+     * {@code ResponseEntity.of(..)}, both of which answer 404 with an empty body. #1720 made this
+     * module's error schema STRICT, so the published contract states every 4xx carries an {@link
+     * ApiError}; a bodiless 404 would leave a client parsing nothing where the spec promises a
+     * {@code code} and a {@code correlationId}. {@code VehicleExceptionHandler} maps this to 404
+     * RESOURCE_NOT_FOUND with the full envelope.
+     */
+    private static EntityNotFoundException notFound(String lookupField, String value) {
+        return new EntityNotFoundException("Vehicle not found for " + lookupField + " '" + value + "'");
+    }
 
     private static final String LEGACY_VEHICLE_EXAMPLE = """
             {"make":"Honda",
@@ -97,7 +110,7 @@ public class VehicleController {
                     a deleted vehicle is gone rather than flagged inactive.
                     Required inputs: id (UUID) as a path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 with an empty body when no legacy vehicle exists for the supplied id.
+                    Returns 404 with a RESOURCE_NOT_FOUND ApiError when no legacy vehicle exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Vehicle found and returned.")
     @ApiResponse(
@@ -109,10 +122,7 @@ public class VehicleController {
             @Parameter(description = "ID of the vehicle to retrieve", example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b")
                     @PathVariable
                     UUID id) {
-        return vehicleLegacyService
-                .getVehicle(id)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        return ResponseEntity.ok(vehicleLegacyService.getVehicle(id).orElseThrow(() -> notFound("id", id.toString())));
     }
 
     @Operation(operationId = "listVehiclesLegacy", summary = "Get all vehicles", description = """
@@ -140,8 +150,8 @@ public class VehicleController {
                     Required inputs: id (UUID) as a path parameter plus make, model and year in the body (year \
                     between 1886 and the current year plus one); vin and vehicleType are optional.
                     Emits a VEHICLE_UPDATE event; no replica fact is published from the legacy surface.
-                    Returns 404 with an empty body when the id is unknown, and 400 with a VALIDATION_ERROR ApiError \
-                    when make, model or year is missing or invalid.
+                    Returns 404 with a RESOURCE_NOT_FOUND ApiError when the id is unknown, and 400 with a \
+                    VALIDATION_ERROR ApiError when make, model or year is missing or invalid.
                     """)
     @ApiResponse(responseCode = "200", description = "Vehicle updated successfully.")
     @ApiResponse(
@@ -166,8 +176,8 @@ public class VehicleController {
                                                             value = LEGACY_VEHICLE_EXAMPLE)))
                     @RequestBody
                     VehicleLegacyRequest updated) {
-        // ResponseEntity.of: 200 + body when present, 404 when empty (Sonar S6863).
-        return ResponseEntity.of(vehicleLegacyService.updateVehicle(id, updated));
+        return ResponseEntity.ok(
+                vehicleLegacyService.updateVehicle(id, updated).orElseThrow(() -> notFound("id", id.toString())));
     }
 
     @Operation(operationId = "deleteVehicleLegacy", summary = "Delete vehicle by ID", description = """
@@ -179,7 +189,8 @@ public class VehicleController {
                     this API.
                     Required inputs: id (UUID) as a path parameter; there is no request body.
                     Emits a VEHICLE_DELETE event; no replica fact is published from the legacy surface.
-                    Returns 204 on successful deletion, and 404 with an empty body when the id is unknown.
+                    Returns 204 on successful deletion, and 404 with a RESOURCE_NOT_FOUND ApiError when the id is \
+                    unknown.
                     """)
     @ApiResponse(responseCode = "204", description = "Vehicle deleted successfully.")
     @ApiResponse(
@@ -193,7 +204,7 @@ public class VehicleController {
                     @PathVariable
                     UUID id) {
         if (!vehicleLegacyService.deleteVehicle(id)) {
-            return ResponseEntity.notFound().build();
+            throw notFound("id", id.toString());
         }
         return ResponseEntity.noContent().build();
     }
@@ -242,8 +253,8 @@ public class VehicleController {
                     trimmed VIN, not a normalized or partial match.
                     Required inputs: vin as a non-blank path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 with an empty body when no legacy vehicle carries the VIN, and 400 with a \
-                    VALIDATION_ERROR ApiError when the VIN is blank.
+                    Returns 404 with a RESOURCE_NOT_FOUND ApiError when no legacy vehicle carries the VIN, and \
+                    400 with a VALIDATION_ERROR ApiError when the VIN is blank.
                     """)
     @ApiResponse(responseCode = "200", description = "Vehicle found and returned.")
     @ApiResponse(
@@ -254,8 +265,7 @@ public class VehicleController {
     public ResponseEntity<VehicleLegacyResponse> getVehicleByVIN(
             @Parameter(description = "VIN of the vehicle to retrieve", example = "1HGCM82633A004352") @PathVariable
                     String vin) {
-        // ResponseEntity.of: 200 + body when present, 404 when empty (Sonar S6863).
-        return ResponseEntity.of(vehicleLegacyService.getVehicleByVin(vin));
+        return ResponseEntity.ok(vehicleLegacyService.getVehicleByVin(vin).orElseThrow(() -> notFound("VIN", vin)));
     }
 
     @Operation(operationId = "updateVehicleLegacyByVin", summary = "Update vehicle by VIN", description = """
@@ -268,8 +278,8 @@ public class VehicleController {
                     Required inputs: vin as a path parameter plus make, model and year in the body (year between \
                     1886 and the current year plus one); vehicleType is optional.
                     Emits a VEHICLE_UPDATE event; no replica fact is published from the legacy surface.
-                    Returns 404 with an empty body when no legacy vehicle carries the VIN, and 400 with a \
-                    VALIDATION_ERROR ApiError when a required body field is missing or invalid.
+                    Returns 404 with a RESOURCE_NOT_FOUND ApiError when no legacy vehicle carries the VIN, and 400 \
+                    with a VALIDATION_ERROR ApiError when a required body field is missing or invalid.
                     """)
     @ApiResponse(responseCode = "200", description = "Vehicle updated successfully.")
     @ApiResponse(
@@ -293,8 +303,8 @@ public class VehicleController {
                                                             value = LEGACY_VEHICLE_EXAMPLE)))
                     @RequestBody
                     VehicleLegacyRequest updated) {
-        // ResponseEntity.of: 200 + body when present, 404 when empty (Sonar S6863).
-        return ResponseEntity.of(vehicleLegacyService.updateVehicleByVin(vin, updated));
+        return ResponseEntity.ok(
+                vehicleLegacyService.updateVehicleByVin(vin, updated).orElseThrow(() -> notFound("VIN", vin)));
     }
 
     @Operation(operationId = "deleteVehicleLegacyByVin", summary = "Delete vehicle by VIN", description = """
@@ -307,8 +317,8 @@ public class VehicleController {
                     recoverable through this API.
                     Required inputs: vin as a non-blank path parameter; there is no request body.
                     Emits a VEHICLE_DELETE event; no replica fact is published from the legacy surface.
-                    Returns 204 on successful deletion, and 404 with an empty body when no legacy vehicle carries \
-                    the VIN.
+                    Returns 204 on successful deletion, and 404 with a RESOURCE_NOT_FOUND ApiError when no legacy \
+                    vehicle carries the VIN.
                     """)
     @ApiResponse(responseCode = "204", description = "Vehicle deleted successfully.")
     @ApiResponse(
@@ -321,7 +331,7 @@ public class VehicleController {
             @Parameter(description = "VIN of the vehicle to delete", example = "1HGCM82633A004352") @PathVariable
                     String vin) {
         if (!vehicleLegacyService.deleteVehicleByVin(vin)) {
-            return ResponseEntity.notFound().build();
+            throw notFound("VIN", vin);
         }
         return ResponseEntity.noContent().build();
     }

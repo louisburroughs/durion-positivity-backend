@@ -147,7 +147,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 404 with an empty body when no registry record carries the normalized VIN, and 400 with a VALIDATION_FAILED ApiError when the path VIN is not exactly 17 characters.
+        Returns 404 with a RESOURCE_NOT_FOUND ApiError when no registry record carries the normalized VIN, and 400 with a VALIDATION_FAILED ApiError when the path VIN is not exactly 17 characters.
 
         '
       operationId: getVehicleByVin
@@ -231,7 +231,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 404 with an empty body when no registry record exists for the supplied vehicleId.
+        Returns 404 with a RESOURCE_NOT_FOUND ApiError when no registry record exists for the supplied vehicleId.
 
         '
       operationId: getVehicle
@@ -461,7 +461,7 @@ paths:
 
         Emits a VEHICLE_DELETE event; no replica fact is published from the legacy surface.
 
-        Returns 204 on successful deletion, and 404 with an empty body when no legacy vehicle carries the VIN.
+        Returns 204 on successful deletion, and 404 with a RESOURCE_NOT_FOUND ApiError when no legacy vehicle carries the VIN.
 
         '
       operationId: deleteVehicleLegacyByVin
@@ -500,7 +500,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 404 with an empty body when no legacy vehicle carries the VIN, and 400 with a VALIDATION_ERROR ApiError when the VIN is blank.
+        Returns 404 with a RESOURCE_NOT_FOUND ApiError when no legacy vehicle carries the VIN, and 400 with a VALIDATION_ERROR ApiError when the VIN is blank.
 
         '
       operationId: getVehicleLegacyByVin
@@ -543,7 +543,7 @@ paths:
 
         Emits a VEHICLE_UPDATE event; no replica fact is published from the legacy surface.
 
-        Returns 404 with an empty body when no legacy vehicle carries the VIN, and 400 with a VALIDATION_ERROR ApiError when a required body field is missing or invalid.
+        Returns 404 with a RESOURCE_NOT_FOUND ApiError when no legacy vehicle carries the VIN, and 400 with a VALIDATION_ERROR ApiError when a required body field is missing or invalid.
 
         '
       operationId: updateVehicleLegacyByVin
@@ -603,7 +603,7 @@ paths:
 
         Emits a VEHICLE_DELETE event; no replica fact is published from the legacy surface.
 
-        Returns 204 on successful deletion, and 404 with an empty body when the id is unknown.
+        Returns 204 on successful deletion, and 404 with a RESOURCE_NOT_FOUND ApiError when the id is unknown.
 
         '
       operationId: deleteVehicleLegacy
@@ -643,7 +643,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 404 with an empty body when no legacy vehicle exists for the supplied id.
+        Returns 404 with a RESOURCE_NOT_FOUND ApiError when no legacy vehicle exists for the supplied id.
 
         '
       operationId: getVehicleLegacy
@@ -687,7 +687,7 @@ paths:
 
         Emits a VEHICLE_UPDATE event; no replica fact is published from the legacy surface.
 
-        Returns 404 with an empty body when the id is unknown, and 400 with a VALIDATION_ERROR ApiError when make, model or year is missing or invalid.
+        Returns 404 with a RESOURCE_NOT_FOUND ApiError when the id is unknown, and 400 with a VALIDATION_ERROR ApiError when make, model or year is missing or invalid.
 
         '
       operationId: updateVehicleLegacy
@@ -950,7 +950,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 404 with an empty body when no preference document exists for the vehicle.
+        Returns 404 with a RESOURCE_NOT_FOUND ApiError when no preference document exists for the vehicle.
 
         '
       operationId: getVehiclePreferences

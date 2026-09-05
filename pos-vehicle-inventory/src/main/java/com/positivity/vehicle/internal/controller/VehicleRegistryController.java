@@ -16,6 +16,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -54,6 +55,18 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("isAuthenticated()")
 @RequestMapping("/v1/vehicle-registry")
 public class VehicleRegistryController {
+
+    /**
+     * Absence is reported by throwing rather than by {@code ResponseEntity.notFound()}, which
+     * answers 404 with an empty body. #1720 made this module's error schema STRICT, so the
+     * published contract states every 4xx carries an {@link ApiError}; a bodiless 404 would leave
+     * a client parsing nothing where the spec promises a {@code code} and a {@code correlationId}.
+     * The update and delete paths already reach this shape by letting the service's own
+     * {@code EntityNotFoundException} out; these read paths now match them.
+     */
+    private static EntityNotFoundException notFound(String lookupField, String value) {
+        return new EntityNotFoundException("Vehicle not found for " + lookupField + " '" + value + "'");
+    }
 
     private static final String CREATE_VEHICLE_EXAMPLE = """
             {"accountId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
@@ -141,7 +154,8 @@ public class VehicleRegistryController {
                     so callers must check the isActive flag.
                     Required inputs: vehicleId (UUID) as a path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 with an empty body when no registry record exists for the supplied vehicleId.
+                    Returns 404 with a RESOURCE_NOT_FOUND ApiError when no registry record exists for the supplied \
+                    vehicleId.
                     """)
     @ApiResponse(responseCode = "200", description = "Vehicle retrieved successfully.")
     @ApiResponse(
@@ -155,10 +169,8 @@ public class VehicleRegistryController {
     @GetMapping("/{vehicleId}")
     public ResponseEntity<VehicleResponse> getVehicle(
             @Parameter(description = "Vehicle UUID", required = true) @PathVariable @NotNull UUID vehicleId) {
-        return vehicleService
-                .getVehicle(vehicleId)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        return ResponseEntity.ok(
+                vehicleService.getVehicle(vehicleId).orElseThrow(() -> notFound("vehicleId", vehicleId.toString())));
     }
 
     @Operation(operationId = "getVehicleByVin", summary = "Get vehicle by VIN", description = """
@@ -170,8 +182,9 @@ public class VehicleRegistryController {
                     deactivated vehicles are both returned.
                     Required inputs: vin as a path parameter, exactly 17 characters; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 with an empty body when no registry record carries the normalized VIN, and 400 \
-                    with a VALIDATION_FAILED ApiError when the path VIN is not exactly 17 characters.
+                    Returns 404 with a RESOURCE_NOT_FOUND ApiError when no registry record carries the normalized \
+                    VIN, and 400 with a VALIDATION_FAILED ApiError when the path VIN is not exactly 17 \
+                    characters.
                     """)
     @ApiResponse(responseCode = "200", description = "Vehicle retrieved successfully.")
     @ApiResponse(
@@ -186,10 +199,7 @@ public class VehicleRegistryController {
     public ResponseEntity<VehicleResponse> getVehicleByVin(
             @Parameter(description = "Vehicle VIN", required = true) @PathVariable @NotBlank @Size(min = 17, max = 17)
                     String vin) {
-        return vehicleService
-                .getVehicleByVin(vin)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        return ResponseEntity.ok(vehicleService.getVehicleByVin(vin).orElseThrow(() -> notFound("VIN", vin)));
     }
 
     @Operation(operationId = "updateVehicle", summary = "Update vehicle", description = """

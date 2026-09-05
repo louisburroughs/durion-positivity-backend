@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -71,7 +72,8 @@ public class VehiclePreferencesController {
                     vehicles start with no preferences.
                     Required inputs: vehicleId (UUID) as a path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 with an empty body when no preference document exists for the vehicle.
+                    Returns 404 with a RESOURCE_NOT_FOUND ApiError when no preference document exists for the \
+                    vehicle.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -90,10 +92,10 @@ public class VehiclePreferencesController {
             @Parameter(description = "Vehicle ID") @PathVariable UUID vehicleId) {
 
         log.info("GET /v1/vehicles/{}/preferences", vehicleId);
-        return preferencesService
+        return ResponseEntity.ok(preferencesService
                 .getPreferences(vehicleId)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() ->
+                        new EntityNotFoundException("No care preferences stored for vehicle '" + vehicleId + "'")));
     }
 
     @Operation(
