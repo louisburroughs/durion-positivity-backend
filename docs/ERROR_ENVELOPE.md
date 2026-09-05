@@ -291,22 +291,6 @@ Every code below is new in issue #1716: this module's advice answered Spring's b
 | `TUS_OFFSET_CONFLICT` | 409 | Resumable-upload offset does not match the server's; the response also carries `Tus-Resumable: 1.0.0` |
 | `TUS_UPLOAD_EXPIRED` | 410 | The resumable upload has expired and must be restarted; the response also carries `Tus-Resumable: 1.0.0` |
 
-### pos-people
-
-`VALIDATION_ERROR` and `RESOURCE_STATE_CONFLICT` predate issue #1716 (added by #1694). The rest are new in #1716: those handlers answered Spring's bare `ProblemDetail` — or, for malformed JSON, an ad-hoc `Map` — so they carried no `code` and no correlation id. The statuses are unchanged.
-
-| Code | Status | Description |
-|------|--------|-------------|
-| `VALIDATION_ERROR` | 400 | Request-shape or field validation failure — this module's own `RequestValidationException`, a bean-validation or `@Validated` parameter rejection, a missing or mistyped request parameter, or malformed JSON. `fieldErrors` is deliberately **not** populated: the binding result names internal property names and this response is provokable by any caller |
-| `FORBIDDEN` | 403 | Caller lacks the required permission |
-| `PERSON_NOT_FOUND` | 404 | No person exists for the requested id |
-| `WORK_SESSION_NOT_FOUND` | 404 | No work session exists for the requested id |
-| `NOT_FOUND` | 404 | A referenced record does not exist (the module's generic `NotFoundException` / JPA `EntityNotFoundException`) |
-| `NO_ENDPOINT` | 404 | No handler is mapped to the requested path. The path is not echoed back (SonarCloud S5131) |
-| `RESOURCE_STATE_CONFLICT` | 409 | The resource's current status blocks the requested transition (issue #1694; a typed lifecycle guard, not bare `IllegalStateException`) |
-| `INVALID_STATE` | 409 | Whatever still reaches the module's bare `IllegalStateException` mapping |
-| `SEMANTIC_VALIDATION_ERROR` | 422 | The request is well-formed but semantically wrong (for example a start date after an end date) |
-
 ### pos-people-contact
 
 Every code below is new in issue #1716: this module's advice answered Spring's bare `ProblemDetail` (and, for malformed JSON, an ad-hoc `Map`) until then, so its errors carried a `detail` string, no `code`, and no correlation id at all. The statuses are unchanged.
