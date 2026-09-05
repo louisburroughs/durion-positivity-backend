@@ -3,6 +3,7 @@ package com.positivity.invoice.internal.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -87,6 +88,39 @@ class BillingRulesControllerErrorHandlingTest {
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty())
                 .andExpect(header().exists("X-Correlation-Id"));
+    }
+
+    /**
+     * The malformed-partyId branch was the one place where this controller's 400s disagreed with
+     * each other: the endpoint documents its 400 as an {@link
+     * com.positivity.shared.error.ApiError}, and an unknown paymentTermsCode delivers one, but a
+     * partyId failing the UUID pattern answered a bodiless 400 from the controller itself. Both
+     * are ADR-0017 §1 request-shape rejections and both now answer the same way.
+     */
+    @Test
+    @DisplayName("a malformed partyId answers 400 with the same envelope an unknown paymentTermsCode does")
+    void malformedPartyIdAnswers400WithTheEnvelope() throws Exception {
+        when(billingRulesService.getCurrentUsername()).thenReturn("test-user");
+
+        mockMvc.perform(withAuth(put("/v1/billing/rules/{partyId}", "not-a-uuid")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(BODY)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(header().exists("X-Correlation-Id"));
+    }
+
+    @Test
+    @DisplayName("a malformed partyId on the read path answers the envelope too")
+    void malformedPartyIdOnReadAnswers400WithTheEnvelope() throws Exception {
+        mockMvc.perform(withAuth(get("/v1/billing/rules/{partyId}", "not-a-uuid")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
     /**

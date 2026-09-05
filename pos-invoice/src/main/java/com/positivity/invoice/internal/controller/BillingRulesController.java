@@ -2,6 +2,7 @@ package com.positivity.invoice.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.BillingRulesDTO;
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.BillingRulesService;
 import com.positivity.shared.error.ApiError;
@@ -40,6 +41,19 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasAuthority('" + InvoicePermissions.BILLING_RULES + "')")
 public class BillingRulesController {
 
+    /**
+     * ADR-0017 §1 puts a malformed path variable in the same class as any other request-shape
+     * rejection, so it answers the same way the unknown-paymentTermsCode rejection does — through
+     * {@link BillingRulesExceptionHandler}, as a 400 VALIDATION_ERROR {@link ApiError} carrying a
+     * correlation id. Returning {@code ResponseEntity.badRequest().build()} here instead left the
+     * endpoint documenting one 400 shape and answering with two.
+     *
+     * <p>The value is not echoed back: it is caller-supplied and would land in a response body.
+     */
+    private static InvoiceRequestValidationException malformedPartyId() {
+        return new InvoiceRequestValidationException("partyId must be a well-formed UUID");
+    }
+
     private static final Logger log = LoggerFactory.getLogger(BillingRulesController.class);
 
     // Pattern for valid UUID format to prevent injection attacks
@@ -64,13 +78,13 @@ public class BillingRulesController {
                     Required inputs: partyId (UUID) as a path parameter; there is no request body.
                     Emits a BILLING_RULES_GET audit event; no state changes — this is a read-only projection.
                     Returns 404 with an empty body when no billing rules are configured for the party, and 400 \
-                    with an empty body when partyId is not a well-formed UUID.
+                    with a VALIDATION_ERROR ApiError when partyId is not a well-formed UUID.
                     """)
     @ApiResponse(responseCode = "200", description = "Billing rules found")
     @ApiResponse(
             responseCode = "400",
-            description = "partyId is not a well-formed UUID; the body is empty.",
-            content = @Content)
+            description = "partyId is not a well-formed UUID.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "No billing rules configured for this party; the body is empty.",
@@ -79,7 +93,7 @@ public class BillingRulesController {
         // Validate partyId format
         if (!VALID_UUID_PATTERN.matcher(partyId).matches()) {
             log.warn("Invalid partyId format in getBillingRules");
-            return ResponseEntity.badRequest().build();
+            throw malformedPartyId();
         }
 
         log.debug("GET /v1/billing/rules/{}", partyId);
@@ -107,14 +121,15 @@ public class BillingRulesController {
                     of already-finalized invoices are never recomputed from a terms change.
                     Returns 201 when the record is created and 200 when an existing record is updated. A \
                     paymentTermsCode outside the vocabulary answers 400 VALIDATION_ERROR in the ApiError \
-                    envelope; a partyId that is not a well-formed UUID answers 400 with an empty body.
+                    envelope; a partyId that is not a well-formed UUID answers the same 400 VALIDATION_ERROR \
+                    envelope.
                     """)
     @ApiResponse(responseCode = "200", description = "Billing rules updated")
     @ApiResponse(responseCode = "201", description = "Billing rules created")
     @ApiResponse(
             responseCode = "400",
-            description = "Invalid billing rules data — VALIDATION_ERROR for an unknown paymentTermsCode,"
-                    + " or an empty body when partyId is not a well-formed UUID.",
+            description = "Invalid billing rules data — VALIDATION_ERROR for an unknown paymentTermsCode"
+                    + " or a partyId that is not a well-formed UUID.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BillingRulesDTO> upsertBillingRules(
             @PathVariable @NonNull String partyId,
@@ -142,7 +157,7 @@ public class BillingRulesController {
         // Validate partyId format
         if (!VALID_UUID_PATTERN.matcher(partyId).matches()) {
             log.warn("Invalid partyId format in upsertBillingRules");
-            return ResponseEntity.badRequest().build();
+            throw malformedPartyId();
         }
 
         // Get userId from SecurityContext via service
