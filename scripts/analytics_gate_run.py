@@ -696,14 +696,22 @@ def select(questions, only, include_excluded):
 
 
 def turn_conversation_id(args, fixture_id):
-    """The conversation a single-turn question belongs to, or None to keep the server default.
+    """The conversation a single-turn question belongs to, or None for the shared server default.
 
-    Off unless --isolate-turns is passed. #1757 adds the server side; until a deploy carries it,
-    sending the field could be rejected by the running build, and a transport error on every
-    question is worse than the shared-memory bias this corrects. Once alpha carries #1757 this
-    should become the default and the flag should go.
+    On by default since #1757 deployed. It was opt-in only while the server could not accept a
+    conversationId, because a transport error on every question would have been worse than the
+    shared-memory bias it corrects; that reason expired when alpha took the field.
+
+    Isolation is what makes a run reproducible, which is the property everything downstream needs.
+    Sharing one conversation across the corpus let question N be shaped by the N-1 before it: on
+    2026-09-05 the same build answered q05 correctly under isolation and deflected it under the
+    shared key, in runs minutes apart. A gate whose number moves with question order cannot be
+    compared against another build, another model, or its own previous run.
+
+    --no-isolate-turns restores the shared key. It exists to reproduce a historical run or to
+    measure the sharing effect deliberately, not as a fallback.
     """
-    if not getattr(args, "isolate_turns", False):
+    if not getattr(args, "isolate_turns", True):
         return None
     return f"{args.run_id}-{fixture_id}"
 
@@ -1428,7 +1436,13 @@ def run_alternate_mode(args, token):
     return None
 
 
-def main(argv=None):
+def build_parser():
+    """The CLI parser, extracted so tests can assert real defaults.
+
+    It lived inside main(), so a test wanting to check a default had to hand-build a
+    Namespace — which pins whatever the test author typed, not what the CLI does. That is
+    how test_off_by_default kept passing after the default flipped.
+    """
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--out", required=True, help="directory for run.json / run.md")
     parser.add_argument("--questions", default=str(QUESTIONS_PATH))
@@ -1448,9 +1462,18 @@ def main(argv=None):
     )
     parser.add_argument(
         "--isolate-turns",
+        dest="isolate_turns",
         action="store_true",
+        default=True,
         help="send a distinct conversationId per question so each is an independent single turn "
-        "(#1735); needs a server carrying #1757",
+        "(#1735). On by default; the server has accepted the field since #1757.",
+    )
+    parser.add_argument(
+        "--no-isolate-turns",
+        dest="isolate_turns",
+        action="store_false",
+        help="run the whole corpus on one shared conversation, the pre-#1757 behaviour. For "
+        "reproducing a historical run or measuring the sharing effect — not a fallback.",
     )
     parser.add_argument(
         "--run-id",
@@ -1476,6 +1499,11 @@ def main(argv=None):
     parser.add_argument("--only", default=None, help="comma-separated fixture ids, e.g. q09,q12")
     parser.add_argument("--all", action="store_true", help="also ask the excluded questions")
     parser.add_argument("--timeout", type=int, default=180, help="per-turn timeout, seconds")
+    return parser
+
+
+def main(argv=None):
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     if args.env_file:
