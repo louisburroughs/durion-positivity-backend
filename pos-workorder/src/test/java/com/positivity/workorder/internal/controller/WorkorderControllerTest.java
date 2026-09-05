@@ -23,6 +23,7 @@ import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.PartLineNotFoundException;
 import com.positivity.workorder.internal.exception.ServiceLineNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.service.WorkorderCountService;
 import com.positivity.workorder.internal.service.WorkorderInvoiceService;
 import com.positivity.workorder.internal.service.WorkorderService;
@@ -205,15 +206,17 @@ class WorkorderControllerTest {
         }
 
         @Test
-        void reportsBadRequestWhenAnApprovalIsNotAllowed() {
+        void letsAnApprovalRefusalReachTheGlobalHandler() {
             ApproveWorkorderRequest request =
                     ApproveWorkorderRequest.builder().customerId(CUSTOMER_ID).build();
-            doThrow(new IllegalStateException("not a draft"))
+            doThrow(new WorkorderResourceConflictException("Workorder cannot be approved in current state: APPROVED"))
                     .when(workorderService)
                     .approveWorkorder(any(), any(), any(), any(), any(), any());
 
-            assertThat(controller.approveWorkorder(WORKORDER_ID, request).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            // #1753: previously caught here and answered as a bodiless 400 with the message
+            // discarded entirely. It now reaches GlobalExceptionHandler for an enveloped 409.
+            assertThatThrownBy(() -> controller.approveWorkorder(WORKORDER_ID, request))
+                    .isInstanceOf(WorkorderResourceConflictException.class);
         }
 
         @Test

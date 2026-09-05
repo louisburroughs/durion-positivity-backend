@@ -34,6 +34,7 @@ import com.positivity.workorder.internal.exception.PartLineNotFoundException;
 import com.positivity.workorder.internal.exception.ServiceLineNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
+import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
@@ -572,8 +573,11 @@ public class WorkorderServiceImpl implements WorkorderService {
 
         // Validate workorder can be approved (must be in DRAFT status)
         if (workorder.getStatus() != WorkorderStatus.DRAFT) {
-            throw new IllegalStateException("Workorder cannot be approved in current state: " + workorder.getStatus()
-                    + ". Workorders can only be approved from DRAFT status.");
+            // Invalid lifecycle transition -> 409 (ADR-0017 §2 names it explicitly). The same
+            // request body succeeds once the workorder is back in DRAFT, so this is the resource's
+            // state refusing the operation, not a problem with the payload.
+            throw new WorkorderResourceConflictException("Workorder cannot be approved in current state: "
+                    + workorder.getStatus() + ". Workorders can only be approved from DRAFT status.");
         }
 
         // Transition to APPROVED status
