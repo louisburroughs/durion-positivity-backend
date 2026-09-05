@@ -722,8 +722,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
      * the memory beneath the actor, which is what lets a caller ask independent questions without
      * each one inheriting the last eleven.
      */
-    static @NonNull String memoryKey(@NonNull String userId, @NonNull String role, @Nullable String conversationId) {
-        String base = userId + MEMORY_KEY_SEPARATOR + role;
+    static @NonNull String memoryKey(@NonNull String username, @NonNull String role, @Nullable String conversationId) {
+        String base = username + MEMORY_KEY_SEPARATOR + role;
         return conversationId == null || conversationId.isBlank() ? base : base + MEMORY_KEY_SEPARATOR + conversationId;
     }
 

@@ -28,7 +28,7 @@ public interface AgentOrchestrationService {
      *
      * @param conversationId opaque caller-chosen id, or null for the shared per-(user, role) memory
      */
-    default String chat(
+    default @NonNull String chat(
             @NonNull CurrentUserContext currentUserContext, @NonNull String message, @Nullable String conversationId) {
         return chat(currentUserContext, message);
     }
