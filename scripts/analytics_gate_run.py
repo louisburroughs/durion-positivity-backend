@@ -192,6 +192,7 @@ _STATEMENT_LABELS = {
     "current to date": "CURRENT_TO_DATE",
     "prior complete": "PRIOR_COMPLETE",
     "calendar span": "CALENDAR_SPAN",
+    "next": "FORWARD",
     "absolute": "ABSOLUTE",
 }
 # The comparison window carries its own label, so a question expecting one can check the model
@@ -334,35 +335,137 @@ def fetch_traces(traces_url, token, since, timeout=60):
         return [], f"{type(error).__name__} from {traces_url}"
 
 
-def window_from_trace(trace):
-    """The window arguments a turn actually resolved, read from its recorded tool calls.
+def _span_count(result, unit):
+    """How many whole `unit` periods the resolved window covers, from its own dates.
 
-    Returns a list of {shape, unit, count, comparison} in call order. A bucketed question resolves
-    several, so this keeps them all and lets the caller decide what satisfies the expectation.
+    The resolver's result carries startDate/endDate but not unit or count, so this is the only
+    evidence available about a corrected window's length. Returns None when it cannot be derived,
+    which the caller treats as "unknown" rather than "matches".
+
+    "Whole" is enforced, not assumed: a calendar unit only yields a count when the window actually
+    starts on a period boundary and ends on the day before the next one. A partial span returns
+    None and therefore cannot match an expected count — if the resolver ever produced a
+    part-month CALENDAR_SPAN, counting its months inclusively would hand back the expected number
+    and PASS a broken window.
+    """
+    start, end = result.get("startDate"), result.get("endDate")
+    if not start or not end or not unit:
+        return None
+    try:
+        s_d = datetime.strptime(start, "%Y-%m-%d").date()
+        e_d = datetime.strptime(end, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+    if e_d < s_d:
+        return None
+    if unit in {"MONTH", "QUARTER", "YEAR"}:
+        # Must span whole calendar months: first day of one, last day of another.
+        if s_d.day != 1 or (e_d + timedelta(days=1)).day != 1:
+            return None
+        months = (e_d.year - s_d.year) * 12 + (e_d.month - s_d.month) + 1
+        if unit == "MONTH":
+            return months
+        if unit == "QUARTER":
+            return months // 3 if months % 3 == 0 else None
+        return months // 12 if months % 12 == 0 else None
+    if unit in {"DAY", "WEEK"}:
+        days = (e_d - s_d).days + 1
+        return days if unit == "DAY" else (days // 7 if days % 7 == 0 else None)
+    return None
+
+
+def window_from_trace(trace):
+    """The window a turn actually resolved, read from its recorded tool calls.
+
+    Reads each call's RESULT, not its arguments. Those were the same thing until #1675: the model
+    named a shape and the resolver computed it. The server now corrects a shape the wording
+    contradicts, so the argument is what was asked for and the result is what the downstream query
+    actually used — and only the latter is what the corpus means.
+
+    Grading the argument made a working fix look broken: on 2026-09-05 the server resolved q12 and
+    q15 as CALENDAR_SPAN while the model had asked for ROLLING, and the gate reported FAIL on both.
+    It fails the other way too, and worse — a correction that silently stopped working would still
+    read as PASS whenever the model happened to send the right shape.
+
+    `model_shape` is kept alongside so a divergence stays visible rather than being smoothed away;
+    the model's own classification is still worth knowing, it is just not the thing under test.
+
+    Returns a list of {shape, unit, count, comparison, model_shape, failed} in call order. A
+    bucketed question resolves several, so this keeps them all and lets the caller decide what
+    satisfies the expectation.
+
+    `failed` marks a resolver call that threw: its other fields are all None, because no window was
+    resolved. Callers must check it — treating such an entry as a resolved window is what let a
+    failed call grade PASS.
     """
     resolved = []
     for call in trace.get("toolCalls") or []:
         name = (call.get("name") or "").lower()
         if name not in {tool.lower() for tool in _WINDOW_TOOLS}:
             continue
+        # A resolver that threw produced NO window: ToolInvocationRecorder records it as
+        # result=null with `error` set. Falling back to the arguments here would grade the model's
+        # request as though it had been resolved — so a call that failed outright would PASS
+        # whenever the model happened to ask for the right shape. Marked rather than dropped,
+        # because a turn whose resolver failed must not read as "no window expectation".
+        if call.get("error"):
+            resolved.append({
+                "shape": None,
+                "unit": None,
+                "count": None,
+                "comparison": None,
+                "model_shape": None,
+                "failed": True,
+            })
+            continue
         try:
             arguments = json.loads(call.get("arguments") or "{}")
         except (TypeError, ValueError):
             continue
+        try:
+            result = json.loads(call.get("result") or "{}")
+        except (TypeError, ValueError):
+            result = {}
+        if not isinstance(result, dict):
+            result = {}
+
         if "period" in arguments and "shape" not in arguments:
             # resolveNamedPeriod names an absolute period rather than a relative shape.
-            resolved.append({"shape": "ABSOLUTE", "unit": None, "count": None, "comparison": None})
+            resolved.append({
+                "shape": "ABSOLUTE",
+                "unit": None,
+                "count": None,
+                "comparison": None,
+                "model_shape": None,
+                "failed": False,
+            })
             continue
-        shape = arguments.get("shape")
+
+        model_shape = arguments.get("shape")
+        # The result is authoritative; the argument is the fallback for a trace recorded before
+        # #1675, or a call whose result did not parse.
+        shape = result.get("shape") or model_shape
         if not shape:
             continue
         count = arguments.get("count")
+        count = int(count) if isinstance(count, (int, str)) and str(count).isdigit() else None
+        unit = str(arguments["unit"]).upper() if arguments.get("unit") else None
+        corrected = bool(model_shape) and str(model_shape).upper() != str(shape).upper()
+        if corrected:
+            # The same classifier that corrected the shape also sets unit and count, and the result
+            # JSON carries neither — only dates. Keeping the requested unit/count here would grade a
+            # corrected window against the request that was overridden, turning a regression the old
+            # code caught loudly into a silent PASS. Derive what the dates prove; leave the rest
+            # None so it cannot match instead of matching wrongly.
+            count = _span_count(result, unit) or None
         resolved.append(
             {
                 "shape": str(shape).upper(),
-                "unit": str(arguments["unit"]).upper() if arguments.get("unit") else None,
-                "count": int(count) if isinstance(count, (int, str)) and str(count).isdigit() else None,
+                "unit": unit,
+                "count": count,
                 "comparison": str(arguments["comparison"]).upper() if arguments.get("comparison") else None,
+                "model_shape": str(model_shape).upper() if model_shape else None,
+                "failed": False,
             }
         )
     return resolved
@@ -396,6 +499,15 @@ def grade_window(question, answer, as_of, resolved=None):
 
     if resolved is not None:
         statements = resolved
+        failed = [s for s in statements if s.get("failed")]
+        if failed:
+            # The resolver threw, so no window reached the downstream query. UNGRADED would be the
+            # softer verdict, but the run summary only fails on FAIL — a broken resolver would then
+            # still produce a green run, which is the outcome this harness exists to prevent.
+            return "FAIL", (
+                f"[trace] {len(failed)} window-resolver call(s) failed, so no window was resolved "
+                "for this turn"
+            )
         observed = []
         for statement in resolved:
             if statement["shape"] in _STATEMENT_LABELS.values() and statement["shape"] not in observed:
@@ -442,7 +554,13 @@ def grade_window(question, answer, as_of, resolved=None):
 
     wanted_comparison = expected.get("comparison")
     if wanted_comparison and wanted_comparison != "NONE":
-        if not any(s["shape"] == wanted_comparison for s in statements):
+        # The answer path emits comparison labels in `shape` (parse_statements merges both label
+        # maps); the trace path keeps them in their own key. Checking only `shape` meant a
+        # trace-graded question could never satisfy an expected comparison — q15 is the only
+        # question that declares one, and it failed on this whatever its shape resolved to.
+        if not any(
+            s.get("shape") == wanted_comparison or s.get("comparison") == wanted_comparison for s in statements
+        ):
             problems.append(f"comparison: expected a {wanted_comparison} window, answer quotes none")
 
     if problems:
