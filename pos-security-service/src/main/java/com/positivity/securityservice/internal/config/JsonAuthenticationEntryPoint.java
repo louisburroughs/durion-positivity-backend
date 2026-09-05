@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -60,8 +61,17 @@ class JsonAuthenticationEntryPoint implements AuthenticationEntryPoint {
             message = "Invalid username or password";
         }
 
-        String correlationId = request.getHeader("X-Correlation-Id");
+        // Prefer the id JwtAuthenticationFilter already resolved for this request. That filter
+        // logs *why* the token was rejected but the body here says only INVALID_CREDENTIALS, so
+        // without a shared id the reason and the response the caller quotes cannot be joined —
+        // and when the client sent no header, each would otherwise mint a different id
+        // (ADR-0017 §4, issue #1715).
+        Object filterCorrelationId = request.getAttribute(JwtAuthenticationFilter.CORRELATION_ID_ATTRIBUTE);
+        String correlationId = filterCorrelationId instanceof String s && !s.isBlank() ? s : null;
         if (correlationId == null) {
+            correlationId = request.getHeader("X-Correlation-Id");
+        }
+        if (correlationId == null || correlationId.isBlank()) {
             correlationId = UUID.randomUUID().toString();
         }
 
@@ -84,6 +94,7 @@ class JsonAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("application/json;charset=UTF-8");
+        response.setHeader("X-Correlation-Id", correlationId);
         objectMapper.writeValue(response.getWriter(), body);
     }
 }

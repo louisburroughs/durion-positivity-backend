@@ -254,7 +254,18 @@ public class GlobalExceptionHandler {
             SecurityValidationException ex, WebRequest request) {
 
         String correlationId = extractCorrelationId(request);
-        log.warn("Validation error (correlationId={}): {}", correlationId, ex.getMessage());
+        // A SecurityValidationException carrying a logDetail has a deliberately generic message
+        // because the real reason is information the caller must not receive (issue #1715): the
+        // detail goes to the log keyed by the correlation id, never into the response body.
+        // Logged at WARN, not ERROR, because this is a 4xx client outcome and every other
+        // validation failure in this advice logs at WARN; ADR-0046 retains WARN at the same full
+        // fidelity as ERROR, so the diagnostic value is unchanged.
+        String logDetail = ex.getLogDetail();
+        if (logDetail != null) {
+            log.warn("Validation error (correlationId={}): {} — {}", correlationId, ex.getMessage(), logDetail);
+        } else {
+            log.warn("Validation error (correlationId={}): {}", correlationId, ex.getMessage());
+        }
 
         return respond(
                 HttpStatus.BAD_REQUEST,
