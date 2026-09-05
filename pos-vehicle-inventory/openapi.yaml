@@ -130,6 +130,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/VehicleFactReplayResultDto'
           description: What this page emitted and where to resume.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A parameter is malformed.
       security:
       - bearerAuth: []
       summary: Re-emit Vehicle Facts for Replica Consumers

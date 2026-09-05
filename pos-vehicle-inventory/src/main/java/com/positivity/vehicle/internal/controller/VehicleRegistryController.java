@@ -320,6 +320,10 @@ public class VehicleRegistryController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = VehicleFactReplayResultDto.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "A parameter is malformed.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VehicleFactReplayResultDto> replayVehicleFacts(
             @Parameter(description = "Resume after this vehicle id.") @RequestParam(required = false)
                     UUID afterVehicleId,
