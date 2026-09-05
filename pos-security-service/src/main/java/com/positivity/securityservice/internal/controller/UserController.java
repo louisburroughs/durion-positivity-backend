@@ -136,13 +136,13 @@ public class UserController {
                         Required inputs: id (UUID) as a path parameter; username, password, and roles are all optional, \
                         and omitted or blank fields are left unchanged.
                         Emits a SECURITY_USER_UPDATE event; a supplied password is re-hashed before storage.
-                        Returns 400 with INVALID_REQUEST when the user or a named role cannot be found; the miss \
+                        Returns 400 with VALIDATION_ERROR when the user or a named role cannot be found; the miss \
                         surfaces as 400 rather than 404.
                         """)
     @ApiResponse(responseCode = "200", description = "User updated successfully.")
     @ApiResponse(
             responseCode = "400",
-            description = "User or named role not found (INVALID_REQUEST); the miss surfaces as 400, not 404.")
+            description = "User or named role not found (VALIDATION_ERROR); the miss surfaces as 400, not 404.")
     @EmitEvent(id = "SECURITY_USER_UPDATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -250,13 +250,13 @@ public class UserController {
                         Required inputs: username as a path parameter and roles, an array of existing role names, in \
                         the body; the set replaces all current direct roles.
                         Emits a SECURITY_USER_ASSIGN_ROLES event.
-                        Returns 400 with INVALID_REQUEST when the user or a named role cannot be found; the miss \
+                        Returns 400 with VALIDATION_ERROR when the user or a named role cannot be found; the miss \
                         surfaces as 400 rather than 404.
                         """)
     @ApiResponse(responseCode = "200", description = "User roles updated successfully.")
     @ApiResponse(
             responseCode = "400",
-            description = "User or named role not found (INVALID_REQUEST); the miss surfaces as 400, not 404.")
+            description = "User or named role not found (VALIDATION_ERROR); the miss surfaces as 400, not 404.")
     @EmitEvent(id = "SECURITY_USER_ASSIGN_ROLES", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
