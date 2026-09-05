@@ -45,7 +45,7 @@ class LlmApiConfigControllerErrorHandlingTest {
             {"apiId":"openai-gpt4o",
              "model":"gpt-4o",
              "baseUrl":"https://api.openai.com/v1",
-             "apiKey":"sk-proj-xxxxxxxxxxxxxxxx"}
+             "apiKey":"test-api-key"}
             """;
 
     @Autowired
