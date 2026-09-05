@@ -1,8 +1,6 @@
 package com.positivity.workorder.contract;
 
-import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 
 import com.positivity.workorder.internal.entity.Estimate;
@@ -71,6 +69,13 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                 .ifValidationFails();
     }
 
+    // The three submit-for-approval cases below pin 400, the status that endpoint actually
+    // returns today, rather than the 409 the approval endpoints moved to in #1753. They are a
+    // different endpoint with its own local catch, and its three refusals are not one question:
+    // "not in DRAFT" is a lifecycle transition (409 by ADR-0017 §2), while "no line items" and
+    // "totals not calculated" are completeness rules on a valid payload, which reads closer to
+    // 422. Deciding that needs its own pass; pinning the real status here at least stops the
+    // assertion from passing on a 500.
     @Test
     @DisplayName("AP-002: Reject submit for approval - estimate has no line items")
     void testSubmitForApproval_NoLineItems() {
@@ -80,7 +85,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post("/v1/workorders/estimates/{id}/submit-for-approval", estimateId)
                 .then()
-                .statusCode(anyOf(is(400), is(500)))
+                .statusCode(400)
                 .log()
                 .ifValidationFails();
     }
@@ -94,7 +99,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post("/v1/workorders/estimates/{id}/submit-for-approval", estimateId)
                 .then()
-                .statusCode(anyOf(is(400), is(500)))
+                .statusCode(400)
                 .log()
                 .ifValidationFails();
     }
@@ -108,7 +113,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post("/v1/workorders/estimates/{id}/submit-for-approval", estimateId)
                 .then()
-                .statusCode(anyOf(is(400), is(500)))
+                .statusCode(400)
                 .log()
                 .ifValidationFails();
     }
@@ -207,6 +212,8 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                 .post("/v1/workorders/estimates/{id}/approval", estimateId)
                 .then()
                 .statusCode(400)
+                .body("code", equalTo("INVALID_ARGUMENT"))
+                .body("correlationId", notNullValue())
                 .log()
                 .ifValidationFails();
     }
@@ -226,7 +233,9 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post("/v1/workorders/estimates/{id}/approval", estimateId)
                 .then()
-                .statusCode(anyOf(is(400), is(500)))
+                .statusCode(409)
+                .body("code", equalTo("CONFLICT"))
+                .body("correlationId", notNullValue())
                 .log()
                 .ifValidationFails();
     }

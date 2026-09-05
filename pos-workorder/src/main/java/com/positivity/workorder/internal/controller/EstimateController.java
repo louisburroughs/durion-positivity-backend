@@ -446,19 +446,23 @@ public class EstimateController {
                     signatureData, signerName, notes, purchaseOrderNumber, and lineItemApprovals are optional, \
                     and signatureMimeType defaults to image/png.
                     Emits a WORKORDER_ESTIMATE_APPROVE event.
-                    Returns 404 when the estimate does not exist, 400 when the status is not PENDING_APPROVAL or \
-                    the customerId in the request does not match the estimate's own customer, and 422 when a \
-                    required purchase order is missing.
+                    Returns 404 when the estimate does not exist, 400 when the customerId in the request does \
+                    not match the estimate's own customer, 409 when the status is not PENDING_APPROVAL, and 422 \
+                    when a required purchase order is missing.
                     """)
     @ApiResponse(responseCode = "200", description = "Estimate approved successfully with signature captured.")
     @ApiResponse(
             responseCode = "400",
-            description = "Estimate cannot be approved in current state, or the customerId in the request does "
-                    + "not match the estimate's own customer.",
+            description = "The customerId in the request does not match the estimate's own customer.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Estimate not found (ESTIMATE_NOT_FOUND).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Estimate is not in PENDING_APPROVAL, so it cannot be approved in its current state "
+                    + "(CONFLICT).",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -491,21 +495,16 @@ public class EstimateController {
                     @Valid
                     @RequestBody
                     ApproveEstimateRequest request) {
-        try {
-            EstimateResponse approved = estimateService.approveEstimate(
-                    estimateId,
-                    request.getCustomerId(),
-                    request.getSignatureData(),
-                    request.getSignatureMimeType(),
-                    request.getSignerName(),
-                    request.getNotes(),
-                    request.getPurchaseOrderNumber(),
-                    request.getLineItemApprovals()); // CAP:003 - Pass selective line item approvals
-            return ResponseEntity.ok(approved);
-        } catch (IllegalStateException e) {
-            log.warn("Failed to approve estimate {}: {}", estimateId, e.getMessage());
-            return ResponseEntity.badRequest().build();
-        }
+        EstimateResponse approved = estimateService.approveEstimate(
+                estimateId,
+                request.getCustomerId(),
+                request.getSignatureData(),
+                request.getSignatureMimeType(),
+                request.getSignerName(),
+                request.getNotes(),
+                request.getPurchaseOrderNumber(),
+                request.getLineItemApprovals()); // CAP:003 - Pass selective line item approvals
+        return ResponseEntity.ok(approved);
     }
 
     @Operation(operationId = "promoteEstimate", summary = "Promote Approved Estimate to Workorder", description = """
