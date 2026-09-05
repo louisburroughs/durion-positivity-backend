@@ -199,6 +199,20 @@ public class CustomerEventsListener {
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         UUID partyId = payload.partyId();
 
+        // party_type and status are NOT NULL in ext_customer_party, and this entity has an
+        // assigned @Id with no @Version, so save() routes through merge() and the insert is
+        // deferred to flush — a constraint violation would surface at commit, AFTER the
+        // catch-and-skip below and after the processed_events row is written. The whole
+        // transaction including the dedupe row would then roll back and the container would
+        // redeliver the same offset forever. This class promises malformed payloads are skipped,
+        // not that they block the partition, so reject the fact here where the skip still works.
+        if (isBlank(payload.partyType()) || isBlank(payload.status())) {
+            log.warn(
+                    "Skipping customer-party event partyId={} with blank partyType/status; the replica requires both",
+                    partyId);
+            return;
+        }
+
         ExtCustomerParty existing = partyRepository.findById(partyId).orElse(null);
         if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
             log.debug(
@@ -219,6 +233,10 @@ public class CustomerEventsListener {
                 .updatedAt(Instant.now(clock))
                 .build());
         log.info("Updated ext_customer_party replica partyId={} version={}", partyId, aggregateVersion);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     /**

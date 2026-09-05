@@ -148,10 +148,15 @@ public class EventPayloadReferenceProjector {
                                 log.debug("Stopped payload reference walk: reference limit {} reached", MAX_REFERENCES);
                                 return;
                             }
+                            // A scalar reference has nothing beneath it: done with this key.
+                            continue;
                         }
-                        // A recognized key holding a non-UUID value is left unprojected; the raw
-                        // payload still carries it verbatim for diagnostics.
-                        continue;
+                        // A recognized key whose value is not a UUID is left unprojected — the raw
+                        // payload still carries it verbatim for diagnostics — but the walk must
+                        // still descend into it. Producers legitimately wrap a reference in an
+                        // object ({"customerId": {"id": "...", "invoiceId": "..."}}), and
+                        // returning here would silently drop every reference nested beneath a
+                        // recognized key.
                     }
                     walk(entry.getValue(), childPath, depth + 1, found);
                 }

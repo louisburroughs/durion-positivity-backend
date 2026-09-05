@@ -138,6 +138,11 @@ class CreditMemoServiceTest {
         testCreditMemo.setCreatedByUserId("test-user");
         testCreditMemo.setPriorPeriodAdjustment(false);
         testCreditMemo.setCurrency("USD");
+        // credit_memo.creation_timestamp is NOT NULL, so a persisted memo always carries one; the
+        // fixture stands in for what repository.save() returns. Since #1779 the display reference
+        // is assigned after GL posting, from the saved entity's own timestamp, so a fixture
+        // without it no longer models anything the database could hold.
+        testCreditMemo.setCreationTimestamp(Instant.now(TEST_CLOCK));
 
         // Replica row for the invoice (owned by pos-invoice, fed via invoice.events.v1).
         // Stored scalar tax of 10.00 on a 110.00 total => net (pre-tax) amount of 100.00.
@@ -178,13 +183,15 @@ class CreditMemoServiceTest {
         when(sequenceRepository.findByScopeKey("CM-202401")).thenReturn(Optional.of(sequence));
         when(creditMemoRepository.save(any(CreditMemo.class))).thenReturn(testCreditMemo);
 
-        service.createCreditMemo(testRequest, "test-user");
+        CreditMemoResponse response = service.createCreditMemo(testRequest, "test-user");
 
-        ArgumentCaptor<CreditMemo> captor = ArgumentCaptor.forClass(CreditMemo.class);
-        verify(creditMemoRepository).save(captor.capture());
         // Scope comes from the memo's own creation month under the fixed test clock (2024-01),
-        // and the counter is advanced so the next memo cannot reuse the number.
-        assertThat(captor.getValue().getCreditMemoReference()).isEqualTo("CM-202401-7");
+        // and the counter is advanced so the next memo cannot reuse the number. Asserted on the
+        // response and the persisted entity rather than the captured save() argument: since the
+        // assignment moved after GL posting it lands on the entity save() returned, flushed by
+        // dirty checking.
+        assertThat(response.getCreditMemoReference()).isEqualTo("CM-202401-7");
+        assertThat(testCreditMemo.getCreditMemoReference()).isEqualTo("CM-202401-7");
         assertThat(sequence.getNextValue()).isEqualTo(8L);
     }
 
@@ -201,12 +208,10 @@ class CreditMemoServiceTest {
                 .thenReturn(Optional.of(bootstrapped));
         when(creditMemoRepository.save(any(CreditMemo.class))).thenReturn(testCreditMemo);
 
-        service.createCreditMemo(testRequest, "test-user");
+        CreditMemoResponse response = service.createCreditMemo(testRequest, "test-user");
 
         verify(sequenceProvisioner).provision("CM-202401");
-        ArgumentCaptor<CreditMemo> captor = ArgumentCaptor.forClass(CreditMemo.class);
-        verify(creditMemoRepository).save(captor.capture());
-        assertThat(captor.getValue().getCreditMemoReference()).isEqualTo("CM-202401-1");
+        assertThat(response.getCreditMemoReference()).isEqualTo("CM-202401-1");
     }
 
     @Test
@@ -321,6 +326,7 @@ class CreditMemoServiceTest {
         savedMemo.setCreatedByUserId("test-user");
         savedMemo.setCurrency("USD");
         savedMemo.setPriorPeriodAdjustment(false);
+        savedMemo.setCreationTimestamp(Instant.now(TEST_CLOCK));
 
         stubReplica(testInvoice, "110.00");
         when(creditMemoRepository.save(any(CreditMemo.class))).thenReturn(savedMemo);

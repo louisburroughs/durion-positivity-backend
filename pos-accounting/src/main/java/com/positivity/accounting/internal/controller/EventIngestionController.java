@@ -150,6 +150,10 @@ public class EventIngestionController {
                     Preconditions: the event must exist.
                     Required inputs: eventId (UUID) as a path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
+                    The payload is returned unchanged for audit; payloadReferences adds a display projection of \
+                    the UUID-backed values recognized inside it, whose displayName and displayReference are null \
+                    when accounting cannot resolve them and are never the UUID rendered as text. \
+                    listAccountingEvents omits payloadReferences.
                     Returns 404 EVENT_NOT_FOUND when no accounting event exists for the supplied id.
                     """,
             tags = {"Accounting Events"})

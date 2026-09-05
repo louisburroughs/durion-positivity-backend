@@ -223,6 +223,27 @@ class CustomerEventsListenerTest {
         verify(processedEvents).save(any());
     }
 
+    @Test
+    @DisplayName("A party fact with blank required fields is skipped, not left to poison the partition")
+    void skipsPartyEventMissingRequiredReplicaFields() {
+        when(processedEvents.existsById("e-party-5")).thenReturn(false);
+
+        // ext_customer_party.party_type/status are NOT NULL. The entity has an assigned @Id and no
+        // @Version, so save() merges and the insert is deferred to flush — a violation would
+        // surface at commit, after the catch-and-skip and after the processed_events row, rolling
+        // the dedupe row back too and making the container redeliver this offset forever.
+        listener.onCustomerEvent("""
+                {"eventId":"e-party-5","eventType":"customer.party.updated","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":2,
+                 "payload":{"partyId":"%s","partyType":"COMMERCIAL","status":"  ",
+                            "displayName":"Northside","requirementsMet":true}}
+                """.formatted(PARTY_ID, PARTY_ID));
+
+        verify(partyReplica, never()).save(any());
+        // Still marked processed: the fact is unusable, but skipping it must not replay forever.
+        verify(processedEvents).save(any());
+    }
+
     private String partyUpdatedEvent(String eventId, long version, String displayName, String customerNumber) {
         return """
                 {"eventId":"%s","eventType":"customer.party.updated","schemaVersion":1,

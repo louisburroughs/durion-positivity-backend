@@ -204,6 +204,27 @@ class EventPayloadReferenceProjectorTest {
         assertThat(byPath(projection, "lineItems[1].customerId").getId()).isEqualTo(CUSTOMER_ID);
     }
 
+    @Test
+    @DisplayName("A recognized key holding an object is walked, not treated as a dead end")
+    void walksIntoObjectValuedRecognizedKey() {
+        lenient()
+                .when(displayReferenceResolver.resolve(any(DisplayReferenceType.class), anyCollection()))
+                .thenReturn(Map.of());
+
+        // Producers legitimately wrap a reference in an object. The walk used to `continue`
+        // unconditionally on a recognized key, so everything nested under one was dropped with no
+        // log line — the outer key is unusable AND its contents vanished.
+        Map<String, Object> payload =
+                Map.of("customerId", Map.of("id", CUSTOMER_ID.toString(), "invoiceId", INVOICE_ID.toString()));
+
+        List<EventPayloadReference> projection = projector.project(payload);
+
+        assertThat(projection).hasSize(1);
+        assertThat(byPath(projection, "customerId.invoiceId").getId()).isEqualTo(INVOICE_ID);
+        assertThat(byPath(projection, "customerId.invoiceId").getReferenceType())
+                .isEqualTo(DisplayReferenceType.INVOICE);
+    }
+
     private static EventPayloadReference byPath(List<EventPayloadReference> projection, String path) {
         return projection.stream()
                 .filter(reference -> path.equals(reference.getPath()))

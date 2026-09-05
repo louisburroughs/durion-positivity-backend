@@ -140,6 +140,17 @@ public class CreditMemoServiceImpl implements CreditMemoService {
 
         postGlEntries(creditMemo, request, creditCalculation.taxReversed(), priorPeriodInfo);
 
+        // Display reference assigned last, deliberately (issue #1779, matching
+        // EventIngestionServiceImpl.submitEvent's placement for #1680). The scope row is read
+        // FOR UPDATE and held to commit, so assigning it inside buildCreditMemo would serialize
+        // every concurrent memo in the month behind this memo's tax attribution and GL posting
+        // rather than behind a counter increment. It also keeps this transaction from holding
+        // CM-{YYYYMM} while postGlEntries acquires JE-{YYYYMM}, so the two scopes are never held
+        // at once. Set on the still-managed entity and flushed by dirty checking; no second save
+        // is needed since this method is transactional. Placed after the GL post, which throws on
+        // failure, so a rolled-back memo never consumes a number.
+        assignCreditMemoReference(creditMemo);
+
         // The balance is derived from accounting's own records (ADR-0044 R6): the POSTED memo
         // saved above already reduces it — nothing to tell pos-invoice.
         BigDecimal balanceAfter = balanceDue.subtract(creditMemo.calculateTotalAmount());
@@ -313,7 +324,6 @@ public class CreditMemoServiceImpl implements CreditMemoService {
         // a month boundary could be numbered into a month its own timestamp does not fall in.
         creditMemo.setCreationTimestamp(Instant.now(clock));
         creditMemo.setPostedTimestamp(Instant.now(clock));
-        assignCreditMemoReference(creditMemo);
         return creditMemo;
     }
 

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -11,21 +12,32 @@ import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.entity.ExtCustomerParty;
 import com.positivity.accounting.internal.entity.ExtInvoice;
+import com.positivity.accounting.internal.entity.GLAccount;
+import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
+import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.ExtCustomerPartyRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
+import com.positivity.accounting.internal.repository.GLAccountRepository;
+import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.service.InvoiceBalanceCalculator;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
@@ -52,6 +64,19 @@ public class CreditMemoDisplayReferenceContractBehaviorIT extends BaseContractIn
     private static final UUID NAMED_CUSTOMER_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f0003");
     private static final UUID UNKNOWN_CUSTOMER_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f0004");
 
+    /** Any JSON key that names display text, paired with its string value. */
+    private static final Pattern DISPLAY_FIELD_WITH_STRING_VALUE =
+            Pattern.compile("\"(\\w*(?:[Rr]eference|DisplayName|[Nn]ame))\"\\s*:\\s*\"([^\"]*)\"");
+
+    private static final Pattern UUID_SHAPED =
+            Pattern.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+
+    /** Matches the credit-memo GL accounts configured by the `test` profile. */
+    private static final UUID REVENUE_ACCOUNT_ID = UUID.fromString("01234567-89ab-cdef-0123-456789abcdef");
+
+    private static final UUID TAX_PAYABLE_ACCOUNT_ID = UUID.fromString("fedcba98-7654-3210-fedc-ba9876543210");
+    private static final UUID AR_ACCOUNT_ID = UUID.fromString("11111111-2222-3333-4444-555555555555");
+
     private static final String INVOICE_NUMBER = "INV-2026-004417";
     private static final String CUSTOMER_NAME = "Northside Fleet Services";
     private static final String CUSTOMER_NUMBER = "C-10427";
@@ -65,14 +90,31 @@ public class CreditMemoDisplayReferenceContractBehaviorIT extends BaseContractIn
     @Autowired
     private ExtCustomerPartyRepository extCustomerPartyRepository;
 
+    @Autowired
+    private GLAccountRepository glAccountRepository;
+
+    @Autowired
+    private JournalEntryLineRepository journalEntryLineRepository;
+
+    @Autowired
+    private JournalEntryRepository journalEntryRepository;
+
+    @Autowired
+    private DefaultGLMappingRepository defaultGLMappingRepository;
+
     @MockitoBean
     private InvoiceBalanceCalculator invoiceBalanceCalculator;
 
     @BeforeEach
     void setUp() {
+        journalEntryLineRepository.deleteAll();
+        journalEntryRepository.deleteAll();
         creditMemoRepository.deleteAll();
         extInvoiceRepository.deleteAll();
         extCustomerPartyRepository.deleteAll();
+        // Children before parents: default_gl_mapping FKs gl_account.
+        defaultGLMappingRepository.deleteAll();
+        glAccountRepository.deleteAll();
 
         // The balance calculator is not what this test is about; keep the read paths quiet.
         when(invoiceBalanceCalculator.findInvoice(any(UUID.class))).thenReturn(Optional.empty());
@@ -96,9 +138,14 @@ public class CreditMemoDisplayReferenceContractBehaviorIT extends BaseContractIn
 
     @AfterEach
     void tearDown() {
+        journalEntryLineRepository.deleteAll();
+        journalEntryRepository.deleteAll();
         creditMemoRepository.deleteAll();
         extInvoiceRepository.deleteAll();
         extCustomerPartyRepository.deleteAll();
+        // Children before parents: default_gl_mapping FKs gl_account.
+        defaultGLMappingRepository.deleteAll();
+        glAccountRepository.deleteAll();
     }
 
     @Test
@@ -199,18 +246,104 @@ public class CreditMemoDisplayReferenceContractBehaviorIT extends BaseContractIn
                 .andExpect(jsonPath("$.content[1].customerDisplayName").value(CUSTOMER_NAME));
     }
 
+    @Test
+    @DisplayName("Creating a memo assigns a real CM-{YYYYMM}-{n} reference, and the next one increments")
+    void createAssignsAndIncrementsTheReference() throws Exception {
+        // Everything above persists CreditMemo rows with a literal reference, which proves only
+        // that a stored string round-trips. This exercises the assignment path for real: scope-key
+        // derivation, sequence bootstrap on first use of the month, the locked read/increment, and
+        // the uq_credit_memo_reference uniqueness the migration adds.
+        seedInvoiceForCreation();
+
+        String first = createCreditMemo("25.00");
+        String second = createCreditMemo("25.00");
+
+        assertThat(first).matches("CM-\\d{6}-\\d+");
+        assertThat(second).matches("CM-\\d{6}-\\d+");
+        assertThat(second).isNotEqualTo(first);
+
+        String scope = first.substring(0, first.lastIndexOf('-'));
+        assertThat(second).startsWith(scope + "-");
+        long firstN = Long.parseLong(first.substring(first.lastIndexOf('-') + 1));
+        long secondN = Long.parseLong(second.substring(second.lastIndexOf('-') + 1));
+        assertThat(secondN).isEqualTo(firstN + 1);
+
+        // Both persisted, both distinct: the unique index is satisfied by real assignment, not by
+        // the test handing out its own values.
+        assertThat(creditMemoRepository.findAll())
+                .extracting(CreditMemo::getCreditMemoReference)
+                .containsExactlyInAnyOrder(first, second);
+    }
+
     /**
-     * No display field may carry any of this test's identifiers. Checking the serialized body
-     * rather than a parsed field means a future field that fell back to a UUID would fail here
-     * too, not just the four fields asserted above.
+     * Put the creation path in a workable state: the configured GL accounts must exist, and the
+     * balance calculator must answer a finalized invoice with room to credit. Everything else in
+     * this class is a read-path test and needs neither.
+     */
+    private void seedInvoiceForCreation() {
+        glAccountRepository.save(glAccount(REVENUE_ACCOUNT_ID, "4000-000", "Revenue", AccountType.REVENUE));
+        glAccountRepository.save(glAccount(TAX_PAYABLE_ACCOUNT_ID, "2200-000", "Tax Payable", AccountType.LIABILITY));
+        glAccountRepository.save(glAccount(AR_ACCOUNT_ID, "1200-000", "Accounts Receivable", AccountType.ASSET));
+
+        ExtInvoice invoice = replicaInvoice(NAMED_INVOICE_ID, INVOICE_NUMBER);
+        when(invoiceBalanceCalculator.findInvoice(NAMED_INVOICE_ID)).thenReturn(Optional.of(invoice));
+        when(invoiceBalanceCalculator.isArEligible(any(ExtInvoice.class))).thenReturn(true);
+        when(invoiceBalanceCalculator.balanceDue(any(ExtInvoice.class))).thenReturn(new BigDecimal("110.00"));
+    }
+
+    private GLAccount glAccount(UUID id, String code, String name, AccountType accountType) {
+        GLAccount account = new GLAccount();
+        account.setGlAccountId(id);
+        account.setAccountCode(code);
+        account.setAccountName(name);
+        account.setAccountType(accountType);
+        account.setActivationDate(LocalDateTime.now(ZoneOffset.UTC).minusDays(1));
+        account.setCreatedBy(TEST_USER);
+        account.setModifiedBy(TEST_USER);
+        return account;
+    }
+
+    /**
+     * POST a credit memo against the seeded invoice and return the assigned display reference.
+     */
+    private String createCreditMemo(String creditAmount) throws Exception {
+        String request = """
+                {"originalInvoiceId":"%s","creditAmount":%s,"reasonCode":"RETURNED_GOODS",
+                 "justificationNote":"contract test"}
+                """.formatted(NAMED_INVOICE_ID, creditAmount);
+
+        String body = mockMvc.perform(withAuth(post(API_V1_CREDIT_MEMOS))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.creditMemoReference").exists())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        return objectMapper.readTree(body).get("creditMemoReference").asString();
+    }
+
+    /**
+     * No display field anywhere in the response may carry a UUID (issue #1779).
+     *
+     * <p>Scans every key of the serialized body whose name marks it as display text and fails if
+     * its value is UUID-shaped, rather than enumerating the four fields and four fixture ids this
+     * test happens to use. That distinction matters: the enumerated form passed for a fifth
+     * display field added later, or for a UUID sourced from anywhere but those four constants —
+     * a memo's own {@code creditMemoId} leaking into {@code creditMemoReference}, say.
      */
     private static void assertNoUuidInDisplayFields(String body) {
-        for (String displayField : new String[] {
-            "creditMemoReference", "originalInvoiceReference", "customerDisplayName", "customerReference"
-        }) {
-            for (UUID id : new UUID[] {NAMED_INVOICE_ID, UNNAMED_INVOICE_ID, NAMED_CUSTOMER_ID, UNKNOWN_CUSTOMER_ID}) {
-                assertThat(body).doesNotContain("\"" + displayField + "\":\"" + id + "\"");
-            }
+        Matcher displayValues = DISPLAY_FIELD_WITH_STRING_VALUE.matcher(body);
+        while (displayValues.find()) {
+            String field = displayValues.group(1);
+            String value = displayValues.group(2);
+            assertThat(UUID_SHAPED.matcher(value).matches())
+                    .as(
+                            "display field \"%s\" answered a UUID (%s); a display value must be null when "
+                                    + "accounting cannot resolve it, never the identifier as text",
+                            field, value)
+                    .isFalse();
         }
     }
 
