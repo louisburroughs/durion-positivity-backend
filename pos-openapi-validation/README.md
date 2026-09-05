@@ -29,6 +29,8 @@ The repository validation flow is:
 - the six remaining §1 elements, detected by their canonical lead-ins (`Use this tool ...`, `Preconditions: ...`, `Required inputs: ...`, `Emits ...` / `No events are emitted`, `Returns <code> when ...`, and negative guidance such as `do not use ...`)
 - request bodies carrying a `description`, an explicit `required`, and at least one example
 
+`OpenApiErrorResponseSchemaValidator` additionally checks, for modules whose `errorSchema` is not `EXEMPT`, that every 4xx/5xx response in the generated spec references the canonical `ApiError` envelope (ADR-0017 §3, issue #1720). An `@ApiResponse` for an error status that omits `content`/`schema` does not produce an empty schema — springdoc fills it in by inference, from the endpoint's own success type or from a `@ControllerAdvice` handler's return type, so the published contract tells generated clients that the error body is the 200 DTO. A response with no `content` at all is not a finding: a genuinely bodiless error is a legitimate contract and springdoc emits no schema for it. This check reads the generated spec rather than the annotations, because the inference is only visible there — and because that spec is what the Angular SDK is generated from.
+
 `OpenApiAggregateValidator` checks the aggregate spec for:
 
 - duplicate YAML keys in the aggregate file
@@ -55,7 +57,17 @@ Description depth is a second, independent dimension on the same entry:
 | `REPORT_ONLY` | Depth findings are reported and become blocking under `-Dopenapi.validation.mode=STRICT`. This is the default when the key is absent. |
 | `EXEMPT` | Depth is not checked; requires an `annotationDepthReason`. |
 
-`mode` and `annotationDepth` are deliberately separate: every module is already `STRICT` on summary/description *presence*, while ADR-0042's depth requirement was met by no module in the fleet when it was introduced (#1263). `pos-tax` and `pos-supplier` are the reference conversions at `annotationDepth: STRICT`; every other module stays `REPORT_ONLY` until its descriptions are rewritten, so a default-mode run stays green while `-Dopenapi.validation.mode=STRICT` reports the full fleet gap.
+Error-envelope conformance is a third, independent dimension on the same entry:
+
+| `errorSchema` | Meaning |
+| --- | --- |
+| `STRICT` | Error-schema findings are blocking now. |
+| `REPORT_ONLY` | Findings are reported and become blocking under `-Dopenapi.validation.mode=STRICT`. This is the default when the key is absent. |
+| `EXEMPT` | Error response schemas are not checked; requires an `errorSchemaReason`. |
+
+`pos-vehicle-inventory` is the reference conversion at `errorSchema: STRICT` (#1720). Every other module stays `REPORT_ONLY` until its error annotations carry an explicit `content = @Content(schema = @Schema(implementation = ApiError.class))`, so a default-mode run stays green while `-Dopenapi.validation.mode=STRICT` reports the full fleet gap — 701 mis-typed error responses across 18 modules at the time the check was added. The fix always belongs in the controller annotation, never in the inventory entry.
+
+`mode`, `annotationDepth` and `errorSchema` are deliberately separate: every module is already `STRICT` on summary/description *presence*, while ADR-0042's depth requirement was met by no module in the fleet when it was introduced (#1263). `pos-tax` and `pos-supplier` are the reference conversions at `annotationDepth: STRICT`; every other module stays `REPORT_ONLY` until its descriptions are rewritten, so a default-mode run stays green while `-Dopenapi.validation.mode=STRICT` reports the full fleet gap.
 
 When adding a new spec-producing module, register it at `STRICT`. That may surface real defects in the spec; the fix belongs in the controller annotations the spec is generated from, not in the inventory entry. If the module cannot be made `STRICT`-clean immediately, `REPORT_ONLY` is still better than absence.
 
@@ -102,6 +114,7 @@ Validation messages are source-attributed so you can tell whether the problem ca
 Typical message formats:
 
 - `pos-location GET /v1/locations: missing summary`
+- `pos-catalog POST /v1/products: 409 response body is ProductDto, not ApiError (ADR-0017 §3; a schema-less @ApiResponse lets springdoc infer the wrong type)`
 - `pos-documents GET /v1/documents: missing description`
 - `pos-order: spec file not found: ...`
 - `pos-order: spec file could not be parsed: ...`

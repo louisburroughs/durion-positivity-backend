@@ -1,0 +1,4 @@
+modules:
+  pos-example:
+    mode: STRICT
+    errorSchema: EXEMPT
