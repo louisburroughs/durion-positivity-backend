@@ -226,15 +226,19 @@ Two fixes are accepted:
 
 1. Scope the advice (`@RestControllerAdvice(assignableTypes = ...)`) when the mapped exceptions
    are controller-specific.
-2. Keep the module-wide advice and register an `OperationCustomizer` that prunes what an operation
-   cannot produce. `pos-security-service`'s `ProducibleResponsesOperationCustomizer` is the
-   reference: it keeps declared codes, 2xx, and 400/401/403 by structural rule (inputs present,
-   guard not `permitAll()`, guard checks an authority), and drops everything else. Pair it with a
-   spec-level test (`OpenApiErrorResponseContractTest`) so the committed `openapi.yaml` cannot drift
-   from the controllers' declarations.
+2. Keep the module-wide advice and rely on `pos-security-common`'s
+   `ProducibleResponsesOperationCustomizer`. It is auto-configured platform-wide from
+   `RequiredPermissionsOpenApiAutoConfiguration` — any service that depends on
+   `pos-security-common` gets it with no code of its own. It keeps declared codes, 2xx/default,
+   any 5xx (ADR-0056 §1 — every endpoint can fault), and 400/401/403 by structural rule (inputs
+   present, guard not `permitAll()`, guard checks an authority), and drops everything else.
+   Originating case: `pos-security-service` (issue #1721). Pair it with a spec-level contract test
+   (`pos-security-service`'s `OpenApiErrorResponseContractTest` is the reference) so the committed
+   `openapi.yaml` cannot drift from the controllers' declarations.
 
 `pos-security-common`'s `x-required-permissions` customizer is always registered, so a module may
-add its own `OperationCustomizer` beans without losing the extension.
+add its own `OperationCustomizer` beans without losing the extension. Both customizers coexist by
+default — neither is conditional on the absence of the other.
 
 ### Generating OpenAPI Specs
 

@@ -37,81 +37,74 @@ public class GlobalExceptionHandler {
 
     private static final String CODE_CRM_UNAVAILABLE = "CRM_UNAVAILABLE";
     private static final String CODE_HR_UNAVAILABLE = "HR_UNAVAILABLE";
+    private static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
     private final Clock clock;
 
     @ExceptionHandler(CrmCustomerNotFoundException.class)
     public ResponseEntity<ApiError> handleCustomerNotFound(
             CrmCustomerNotFoundException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(error("CUSTOMER_NOT_FOUND", exception.getMessage(), correlationId));
+        return respond(HttpStatus.NOT_FOUND, "CUSTOMER_NOT_FOUND", exception.getMessage(), correlationId);
     }
 
     @ExceptionHandler(CrmVehicleNotFoundException.class)
     public ResponseEntity<ApiError> handleVehicleNotFound(
             CrmVehicleNotFoundException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(error("VEHICLE_NOT_FOUND", exception.getMessage(), correlationId));
+        return respond(HttpStatus.NOT_FOUND, "VEHICLE_NOT_FOUND", exception.getMessage(), correlationId);
     }
 
     @ExceptionHandler(VehicleCustomerMismatchException.class)
     public ResponseEntity<ApiError> handleVehicleCustomerMismatch(
             VehicleCustomerMismatchException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(error("VEHICLE_CUSTOMER_MISMATCH", exception.getMessage(), correlationId));
+        return respond(HttpStatus.CONFLICT, "VEHICLE_CUSTOMER_MISMATCH", exception.getMessage(), correlationId);
     }
 
     @ExceptionHandler(AppointmentValidationException.class)
     public ResponseEntity<ApiError> handleAppointmentValidation(
             AppointmentValidationException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(error("VALIDATION_ERROR", exception.getMessage(), correlationId));
+        return respond(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", exception.getMessage(), correlationId);
     }
 
     @ExceptionHandler(SourceNotEligibleException.class)
     public ResponseEntity<ApiError> handleSourceNotEligible(
             SourceNotEligibleException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
-                .body(error(
-                        exception.getErrorCode() != null ? exception.getErrorCode() : "SOURCE_NOT_ELIGIBLE",
-                        exception.getMessage(),
-                        correlationId));
+        return respond(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                exception.getErrorCode() != null ? exception.getErrorCode() : "SOURCE_NOT_ELIGIBLE",
+                exception.getMessage(),
+                correlationId);
     }
 
     @ExceptionHandler(AppointmentStateException.class)
     public ResponseEntity<ApiError> handleAppointmentState(
             AppointmentStateException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(error("INVALID_APPOINTMENT_STATE", exception.getMessage(), correlationId));
+        return respond(HttpStatus.CONFLICT, "INVALID_APPOINTMENT_STATE", exception.getMessage(), correlationId);
     }
 
     @ExceptionHandler(AppointmentNotFoundException.class)
     public ResponseEntity<ApiError> handleAppointmentNotFound(
             AppointmentNotFoundException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(error("APPOINTMENT_NOT_FOUND", exception.getMessage(), correlationId));
+        return respond(HttpStatus.NOT_FOUND, "APPOINTMENT_NOT_FOUND", exception.getMessage(), correlationId);
     }
 
     @ExceptionHandler(LocationNotFoundException.class)
     public ResponseEntity<ApiError> handleLocationNotFound(
             LocationNotFoundException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(error("LOCATION_NOT_FOUND", exception.getMessage(), correlationId));
+        return respond(HttpStatus.NOT_FOUND, "LOCATION_NOT_FOUND", exception.getMessage(), correlationId);
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiError> handleResourceNotFound(
             ResourceNotFoundException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(error("RESOURCE_NOT_FOUND", exception.getMessage(), correlationId));
+        return respond(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", exception.getMessage(), correlationId);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -128,30 +121,29 @@ public class GlobalExceptionHandler {
                 Instant.now(clock).toString(),
                 correlationId.toString(),
                 fieldErrors);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+        return respond(HttpStatus.BAD_REQUEST, body, correlationId);
     }
 
     @ExceptionHandler({ResourceAccessException.class, RestClientException.class})
     public ResponseEntity<ApiError> handleCrmUnavailable(Exception exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(error(CODE_CRM_UNAVAILABLE, "CRM service is unavailable", correlationId));
+        return respond(
+                HttpStatus.SERVICE_UNAVAILABLE, CODE_CRM_UNAVAILABLE, "CRM service is unavailable", correlationId);
     }
 
     @ExceptionHandler(CrmUnavailableException.class)
     public ResponseEntity<ApiError> handleCrmUnavailable(
             CrmUnavailableException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(error(CODE_CRM_UNAVAILABLE, "CRM service is unavailable", correlationId));
+        return respond(
+                HttpStatus.SERVICE_UNAVAILABLE, CODE_CRM_UNAVAILABLE, "CRM service is unavailable", correlationId);
     }
 
     @ExceptionHandler(UnsupportedOperationException.class)
     public ResponseEntity<ApiError> handleNotImplemented(
             UnsupportedOperationException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
-                .body(error("NOT_IMPLEMENTED", exception.getMessage(), correlationId));
+        return respond(HttpStatus.NOT_IMPLEMENTED, "NOT_IMPLEMENTED", exception.getMessage(), correlationId);
     }
 
     /**
@@ -164,11 +156,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleTypeMismatch(
             MethodArgumentTypeMismatchException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(error(
-                        "INVALID_REQUEST",
-                        "Parameter '" + exception.getName() + "' is not a valid value",
-                        correlationId));
+        return respond(
+                HttpStatus.BAD_REQUEST,
+                "INVALID_REQUEST",
+                "Parameter '" + exception.getName() + "' is not a valid value",
+                correlationId);
     }
 
     /**
@@ -186,8 +178,24 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleShopManagerValidation(
             ShopManagerValidationException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(error("INVALID_REQUEST", exception.getMessage(), correlationId));
+        return respond(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", exception.getMessage(), correlationId);
+    }
+
+    /**
+     * Builds the standardized error response, carrying the correlation id in both the {@link
+     * ApiError} body and the {@code X-Correlation-Id} response header (ADR-0017 §4, issue #1729).
+     * This overload and {@link #respond(HttpStatus, ApiError, UUID)} are the only paths in this
+     * advice that build a {@link ResponseEntity}, so a handler added later cannot forget the
+     * header.
+     */
+    private ResponseEntity<ApiError> respond(HttpStatus status, String code, String message, UUID correlationId) {
+        return respond(status, error(code, message, correlationId), correlationId);
+    }
+
+    private ResponseEntity<ApiError> respond(HttpStatus status, ApiError body, UUID correlationId) {
+        return ResponseEntity.status(status)
+                .header(CORRELATION_ID_HEADER, correlationId.toString())
+                .body(body);
     }
 
     private ApiError error(String code, String message, UUID correlationId) {

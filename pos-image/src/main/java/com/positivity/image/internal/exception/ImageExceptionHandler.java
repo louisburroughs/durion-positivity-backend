@@ -1,10 +1,10 @@
 package com.positivity.image.internal.exception;
 
 import com.positivity.shared.error.ApiError;
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -92,6 +92,8 @@ public class ImageExceptionHandler {
 
     private static String resolveCorrelationId(HttpServletRequest request) {
         String supplied = request.getHeader(X_CORRELATION_ID);
-        return supplied == null || supplied.isBlank() ? UUID.randomUUID().toString() : supplied;
+        return supplied == null || supplied.isBlank()
+                ? UUIDv7Generator.generate().toString()
+                : supplied;
     }
 }

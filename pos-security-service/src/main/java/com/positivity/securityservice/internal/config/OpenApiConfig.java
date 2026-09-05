@@ -5,21 +5,10 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityScheme;
-import org.springdoc.core.customizers.OperationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * OpenAPI metadata and springdoc customizers for pos-security-service.
- *
- * <p>Registers {@link ProducibleResponsesOperationCustomizer} alongside pos-security-common's
- * {@code x-required-permissions} customizer (see {@code RequiredPermissionsOpenApiAutoConfiguration}). Both
- * customizers run — pos-security-common's auto-configured bean is no longer conditional on the absence of other
- * {@link OperationCustomizer} beans (issue #1721) — so this service can prune the generic
- * {@code 400}/{@code 401}/{@code 403}/{@code 404}/{@code 409} responses that {@code GlobalExceptionHandler}'s
- * unscoped {@code @ControllerAdvice} otherwise merges onto every operation, without disabling the
- * required-permissions extension.
- */
+/** OpenAPI metadata for pos-security-service. */
 @Configuration
 public class OpenApiConfig {
 
@@ -39,10 +28,5 @@ public class OpenApiConfig {
                                         .type(SecurityScheme.Type.HTTP)
                                         .scheme("bearer")
                                         .bearerFormat("JWT")));
-    }
-
-    @Bean
-    public OperationCustomizer producibleResponsesOperationCustomizer() {
-        return new ProducibleResponsesOperationCustomizer();
     }
 }

@@ -2,6 +2,7 @@ package com.positivity.securityservice.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.security.common.ProducibleResponsesOperationCustomizer;
 import com.positivity.security.common.RequiredPermissionsOpenApiAutoConfiguration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -10,12 +11,12 @@ import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 /**
- * Regression guard for issue #1721: this module registers its own {@link OperationCustomizer}
- * ({@link ProducibleResponsesOperationCustomizer}) and pos-security-common's auto-configured
- * {@code x-required-permissions} customizer must keep being registered alongside it. Before this
- * change the auto-configuration was guarded by {@code @ConditionalOnMissingBean(OperationCustomizer.class)},
- * which would have silently dropped the {@code x-required-permissions} extension from this
- * service's spec the moment a second customizer appeared.
+ * Regression guard for issue #1721: {@code pos-security-common}'s auto-configuration must contribute both
+ * {@code OperationCustomizer} beans — the required-permissions extension and the response-pruning customizer
+ * (now platform-wide, see {@link ProducibleResponsesOperationCustomizer}) — when run alongside this module's
+ * {@link OpenApiConfig}. Before the move, {@code producibleResponsesOperationCustomizer} was declared directly
+ * in {@code OpenApiConfig}; it is now sourced entirely from the auto-configuration, so this test proves the
+ * module gets it with no code of its own.
  */
 @DisplayName("OpenApiConfig customizer registration (issue #1721)")
 class OpenApiConfigTest {

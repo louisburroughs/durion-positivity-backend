@@ -29,13 +29,18 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -47,6 +52,7 @@ import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 
 /**
  * ApiError mapping for four of pos-order's six controller-scoped advices (OrderCancellationExceptionHandler
@@ -211,6 +217,88 @@ class OrderExceptionHandlerTest {
             assertThat(result.getBody().code()).isEqualTo("ORDER_FORBIDDEN");
             assertThat(result.getBody().correlationId()).isNotBlank().isNotEqualTo("   ");
         }
+
+        @Nested
+        @DisplayName("X-Correlation-Id header (ADR-0017 §4, #1729)")
+        class XCorrelationIdHeader {
+
+            @FunctionalInterface
+            interface HandlerInvocation {
+                ResponseEntity<ApiError> invoke(HttpServletRequest request);
+            }
+
+            private static Stream<Named<HandlerInvocation>> handlerInvocations() {
+                Clock fixedClock = Clock.fixed(NOW, ZoneOffset.UTC);
+                SalesOrderExceptionHandler handler = new SalesOrderExceptionHandler(fixedClock);
+
+                return Stream.of(
+                        Named.of("handleSalesOrderNotFound", (HandlerInvocation) request ->
+                                handler.handleSalesOrderNotFound(new SalesOrderNotFoundException(ID), request)),
+                        Named.of("handleTaxUnavailable", (HandlerInvocation) request ->
+                                handler.handleTaxUnavailable(new TaxUnavailableException("tax down"), request)),
+                        Named.of("handleVoidBlocked", (HandlerInvocation)
+                                request -> handler.handleVoidBlocked(new OrderVoidBlockedException(ID), request)),
+                        Named.of("handleInvoicingUnavailable", (HandlerInvocation)
+                                request -> handler.handleInvoicingUnavailable(
+                                        new InvoicingUnavailableException("invoicing down"), request)),
+                        Named.of("handleInvalidCustomer", (HandlerInvocation) request ->
+                                handler.handleInvalidCustomer(new InvalidCustomerException("unknown party"), request)),
+                        Named.of("handleInvalidSku", (HandlerInvocation) request ->
+                                handler.handleInvalidSku(new InvalidSkuException("BAD", "no such sku"), request)),
+                        Named.of("handleUnprocessableRequest", (HandlerInvocation)
+                                request -> handler.handleUnprocessableRequest(
+                                        new IllegalStateException("already closed"), request)),
+                        Named.of("handleInvalidRequest", (HandlerInvocation) request -> handler.handleInvalidRequest(
+                                new SalesOrderRequestValidationException("bad qty"), request)),
+                        Named.of("handleAccessDenied", (HandlerInvocation)
+                                request -> handler.handleAccessDenied(new AccessDeniedException("denied"), request)));
+            }
+
+            @ParameterizedTest
+            @MethodSource("handlerInvocations")
+            @DisplayName("echoes the inbound X-Correlation-Id in both header and body")
+            void echoesInboundCorrelationId(HandlerInvocation invocation) {
+                when(request.getHeader(CORRELATION_HEADER)).thenReturn("trace-2");
+
+                ResponseEntity<ApiError> response = invocation.invoke(request);
+
+                assertThat(response.getHeaders().getFirst(CORRELATION_HEADER)).isEqualTo("trace-2");
+                assertThat(response.getBody()).isNotNull();
+                assertThat(response.getHeaders().getFirst(CORRELATION_HEADER))
+                        .isEqualTo(response.getBody().correlationId());
+            }
+
+            @ParameterizedTest
+            @MethodSource("handlerInvocations")
+            @DisplayName("generates a non-blank X-Correlation-Id, consistent between header and body, when absent")
+            void generatesCorrelationIdWhenAbsent(HandlerInvocation invocation) {
+                when(request.getHeader(CORRELATION_HEADER)).thenReturn(null);
+
+                ResponseEntity<ApiError> response = invocation.invoke(request);
+
+                String header = response.getHeaders().getFirst(CORRELATION_HEADER);
+                assertThat(header).isNotBlank();
+                assertThat(response.getBody()).isNotNull();
+                assertThat(header).isEqualTo(response.getBody().correlationId());
+            }
+
+            @Test
+            @DisplayName(
+                    "every @ExceptionHandler method on SalesOrderExceptionHandler has a matching MethodSource entry")
+            void everyHandlerMethodIsCovered() {
+                long handlerMethodCount = Arrays.stream(SalesOrderExceptionHandler.class.getDeclaredMethods())
+                        .filter(method -> method.isAnnotationPresent(ExceptionHandler.class))
+                        .count();
+                long methodSourceEntryCount = handlerInvocations().count();
+
+                assertThat(methodSourceEntryCount)
+                        .as("A new @ExceptionHandler method was added to SalesOrderExceptionHandler without a "
+                                + "matching entry in SalesOrders$XCorrelationIdHeader#handlerInvocations() in "
+                                + "OrderExceptionHandlerTest — add one so the X-Correlation-Id header contract "
+                                + "stays proven for every handler")
+                        .isEqualTo(handlerMethodCount);
+            }
+        }
     }
 
     @Nested
@@ -291,6 +379,81 @@ class OrderExceptionHandlerTest {
                     HttpStatus.UNPROCESSABLE_CONTENT,
                     "RETURN_LINE_NOT_RETURNABLE");
         }
+
+        @Nested
+        @DisplayName("X-Correlation-Id header (ADR-0017 §4, #1729)")
+        class XCorrelationIdHeader {
+
+            @FunctionalInterface
+            interface HandlerInvocation {
+                ResponseEntity<ApiError> invoke(HttpServletRequest request);
+            }
+
+            private static Stream<Named<HandlerInvocation>> handlerInvocations() {
+                Clock fixedClock = Clock.fixed(NOW, ZoneOffset.UTC);
+                ReturnOrderExceptionHandler handler = new ReturnOrderExceptionHandler(fixedClock);
+
+                return Stream.of(
+                        Named.of("handleNotFound", (HandlerInvocation)
+                                request -> handler.handleNotFound(new ReturnOrderNotFoundException(ID), request)),
+                        Named.of("handleOverCap", (HandlerInvocation) request -> handler.handleOverCap(
+                                new OverCapReturnException(List.of(new OverCapReturnException.LineCap(ID, 5, 2))),
+                                request)),
+                        Named.of("handleWarrantyRouting", (HandlerInvocation) request ->
+                                handler.handleWarrantyRouting(new WarrantyReturnRoutingException(ID), request)),
+                        Named.of("handleConflict", (HandlerInvocation) request ->
+                                handler.handleConflict(new IllegalStateException("already returned"), request)),
+                        Named.of("handleInvalidRequest", (HandlerInvocation) request -> handler.handleInvalidRequest(
+                                new ReturnRequestValidationException("qty must be positive"), request)),
+                        Named.of("handleLineNotReturnable", (HandlerInvocation) request ->
+                                handler.handleLineNotReturnable(new ReturnLineNotReturnableException(ID), request)));
+            }
+
+            @ParameterizedTest
+            @MethodSource("handlerInvocations")
+            @DisplayName("echoes the inbound X-Correlation-Id in both header and body")
+            void echoesInboundCorrelationId(HandlerInvocation invocation) {
+                when(request.getHeader(CORRELATION_HEADER)).thenReturn("trace-2");
+
+                ResponseEntity<ApiError> response = invocation.invoke(request);
+
+                assertThat(response.getHeaders().getFirst(CORRELATION_HEADER)).isEqualTo("trace-2");
+                assertThat(response.getBody()).isNotNull();
+                assertThat(response.getHeaders().getFirst(CORRELATION_HEADER))
+                        .isEqualTo(response.getBody().correlationId());
+            }
+
+            @ParameterizedTest
+            @MethodSource("handlerInvocations")
+            @DisplayName("generates a non-blank X-Correlation-Id, consistent between header and body, when absent")
+            void generatesCorrelationIdWhenAbsent(HandlerInvocation invocation) {
+                when(request.getHeader(CORRELATION_HEADER)).thenReturn(null);
+
+                ResponseEntity<ApiError> response = invocation.invoke(request);
+
+                String header = response.getHeaders().getFirst(CORRELATION_HEADER);
+                assertThat(header).isNotBlank();
+                assertThat(response.getBody()).isNotNull();
+                assertThat(header).isEqualTo(response.getBody().correlationId());
+            }
+
+            @Test
+            @DisplayName(
+                    "every @ExceptionHandler method on ReturnOrderExceptionHandler has a matching MethodSource entry")
+            void everyHandlerMethodIsCovered() {
+                long handlerMethodCount = Arrays.stream(ReturnOrderExceptionHandler.class.getDeclaredMethods())
+                        .filter(method -> method.isAnnotationPresent(ExceptionHandler.class))
+                        .count();
+                long methodSourceEntryCount = handlerInvocations().count();
+
+                assertThat(methodSourceEntryCount)
+                        .as("A new @ExceptionHandler method was added to ReturnOrderExceptionHandler without a "
+                                + "matching entry in Returns$XCorrelationIdHeader#handlerInvocations() in "
+                                + "OrderExceptionHandlerTest — add one so the X-Correlation-Id header contract "
+                                + "stays proven for every handler")
+                        .isEqualTo(handlerMethodCount);
+            }
+        }
     }
 
     @Nested
@@ -334,6 +497,78 @@ class OrderExceptionHandlerTest {
                     sessions.handleAccessDenied(new AccessDeniedException("denied"), request),
                     HttpStatus.FORBIDDEN,
                     "ORDER_FORBIDDEN");
+        }
+
+        @Nested
+        @DisplayName("X-Correlation-Id header (ADR-0017 §4, #1729)")
+        class XCorrelationIdHeader {
+
+            @FunctionalInterface
+            interface HandlerInvocation {
+                ResponseEntity<ApiError> invoke(HttpServletRequest request);
+            }
+
+            private static Stream<Named<HandlerInvocation>> handlerInvocations() {
+                Clock fixedClock = Clock.fixed(NOW, ZoneOffset.UTC);
+                RegisterSessionExceptionHandler handler = new RegisterSessionExceptionHandler(fixedClock);
+
+                return Stream.of(
+                        Named.of("handleNotFound", (HandlerInvocation)
+                                request -> handler.handleNotFound(new RegisterSessionNotFoundException(ID), request)),
+                        Named.of("handleConflict", (HandlerInvocation) request -> handler.handleConflict(
+                                new RegisterSessionConflictException("terminal already open"), request)),
+                        Named.of("handleCloseBlocked", (HandlerInvocation)
+                                request -> handler.handleCloseBlocked(new SessionCloseBlockedException(ID), request)),
+                        Named.of("handleInvalidRequest", (HandlerInvocation) request -> handler.handleInvalidRequest(
+                                new RegisterSessionRequestValidationException("negative float"), request)),
+                        Named.of("handleAccessDenied", (HandlerInvocation)
+                                request -> handler.handleAccessDenied(new AccessDeniedException("denied"), request)));
+            }
+
+            @ParameterizedTest
+            @MethodSource("handlerInvocations")
+            @DisplayName("echoes the inbound X-Correlation-Id in both header and body")
+            void echoesInboundCorrelationId(HandlerInvocation invocation) {
+                when(request.getHeader(CORRELATION_HEADER)).thenReturn("trace-2");
+
+                ResponseEntity<ApiError> response = invocation.invoke(request);
+
+                assertThat(response.getHeaders().getFirst(CORRELATION_HEADER)).isEqualTo("trace-2");
+                assertThat(response.getBody()).isNotNull();
+                assertThat(response.getHeaders().getFirst(CORRELATION_HEADER))
+                        .isEqualTo(response.getBody().correlationId());
+            }
+
+            @ParameterizedTest
+            @MethodSource("handlerInvocations")
+            @DisplayName("generates a non-blank X-Correlation-Id, consistent between header and body, when absent")
+            void generatesCorrelationIdWhenAbsent(HandlerInvocation invocation) {
+                when(request.getHeader(CORRELATION_HEADER)).thenReturn(null);
+
+                ResponseEntity<ApiError> response = invocation.invoke(request);
+
+                String header = response.getHeaders().getFirst(CORRELATION_HEADER);
+                assertThat(header).isNotBlank();
+                assertThat(response.getBody()).isNotNull();
+                assertThat(header).isEqualTo(response.getBody().correlationId());
+            }
+
+            @Test
+            @DisplayName(
+                    "every @ExceptionHandler method on RegisterSessionExceptionHandler has a matching MethodSource entry")
+            void everyHandlerMethodIsCovered() {
+                long handlerMethodCount = Arrays.stream(RegisterSessionExceptionHandler.class.getDeclaredMethods())
+                        .filter(method -> method.isAnnotationPresent(ExceptionHandler.class))
+                        .count();
+                long methodSourceEntryCount = handlerInvocations().count();
+
+                assertThat(methodSourceEntryCount)
+                        .as("A new @ExceptionHandler method was added to RegisterSessionExceptionHandler without a "
+                                + "matching entry in Sessions$XCorrelationIdHeader#handlerInvocations() in "
+                                + "OrderExceptionHandlerTest — add one so the X-Correlation-Id header contract "
+                                + "stays proven for every handler")
+                        .isEqualTo(handlerMethodCount);
+            }
         }
     }
 
@@ -400,6 +635,92 @@ class OrderExceptionHandlerTest {
                     overrides.handleAccessDenied(new AccessDeniedException("denied"), request),
                     HttpStatus.FORBIDDEN,
                     "ORDER_FORBIDDEN");
+        }
+
+        @Nested
+        @DisplayName("X-Correlation-Id header (ADR-0017 §4, #1729)")
+        class XCorrelationIdHeader {
+
+            @FunctionalInterface
+            interface HandlerInvocation {
+                ResponseEntity<ApiError> invoke(HttpServletRequest request);
+            }
+
+            private static MethodArgumentNotValidException fieldValidationException() throws NoSuchMethodException {
+                BindingResult binding = new BeanPropertyBindingResult(new Object(), "request");
+                binding.addError(new FieldError("request", "overridePrice", "must be positive"));
+                return new MethodArgumentNotValidException(
+                        new org.springframework.core.MethodParameter(
+                                OrderExceptionHandlerTest.class.getDeclaredMethod("setUp"), -1),
+                        binding);
+            }
+
+            private static Stream<Named<HandlerInvocation>> handlerInvocations() throws NoSuchMethodException {
+                Clock fixedClock = Clock.fixed(NOW, ZoneOffset.UTC);
+                PriceOverrideExceptionHandler handler = new PriceOverrideExceptionHandler(fixedClock);
+                MethodArgumentNotValidException validationException = fieldValidationException();
+
+                return Stream.of(
+                        Named.of("handleOverrideNotFound", (HandlerInvocation) request ->
+                                handler.handleOverrideNotFound(new PriceOverrideNotFoundException(ID), request)),
+                        Named.of("handleInvalidOverride", (HandlerInvocation) request -> handler.handleInvalidOverride(
+                                new InvalidPriceOverrideException("below floor"), request)),
+                        Named.of("handleIdempotencyConflict", (HandlerInvocation)
+                                request -> handler.handleIdempotencyConflict(
+                                        new PriceOverrideIdempotencyConflictException("key reused"), request)),
+                        Named.of("handleInvalidRequest", (HandlerInvocation) request -> handler.handleInvalidRequest(
+                                new PriceOverrideRequestValidationException("orderId must be a UUID: not-a-uuid"),
+                                request)),
+                        Named.of("handleValidation", (HandlerInvocation)
+                                request -> handler.handleValidation(validationException, request)),
+                        Named.of("handleAccessDenied", (HandlerInvocation)
+                                request -> handler.handleAccessDenied(new AccessDeniedException("denied"), request)));
+            }
+
+            @ParameterizedTest
+            @MethodSource("handlerInvocations")
+            @DisplayName("echoes the inbound X-Correlation-Id in both header and body")
+            void echoesInboundCorrelationId(HandlerInvocation invocation) {
+                when(request.getHeader(CORRELATION_HEADER)).thenReturn("trace-2");
+
+                ResponseEntity<ApiError> response = invocation.invoke(request);
+
+                assertThat(response.getHeaders().getFirst(CORRELATION_HEADER)).isEqualTo("trace-2");
+                assertThat(response.getBody()).isNotNull();
+                assertThat(response.getHeaders().getFirst(CORRELATION_HEADER))
+                        .isEqualTo(response.getBody().correlationId());
+            }
+
+            @ParameterizedTest
+            @MethodSource("handlerInvocations")
+            @DisplayName("generates a non-blank X-Correlation-Id, consistent between header and body, when absent")
+            void generatesCorrelationIdWhenAbsent(HandlerInvocation invocation) {
+                when(request.getHeader(CORRELATION_HEADER)).thenReturn(null);
+
+                ResponseEntity<ApiError> response = invocation.invoke(request);
+
+                String header = response.getHeaders().getFirst(CORRELATION_HEADER);
+                assertThat(header).isNotBlank();
+                assertThat(response.getBody()).isNotNull();
+                assertThat(header).isEqualTo(response.getBody().correlationId());
+            }
+
+            @Test
+            @DisplayName(
+                    "every @ExceptionHandler method on PriceOverrideExceptionHandler has a matching MethodSource entry")
+            void everyHandlerMethodIsCovered() throws NoSuchMethodException {
+                long handlerMethodCount = Arrays.stream(PriceOverrideExceptionHandler.class.getDeclaredMethods())
+                        .filter(method -> method.isAnnotationPresent(ExceptionHandler.class))
+                        .count();
+                long methodSourceEntryCount = handlerInvocations().count();
+
+                assertThat(methodSourceEntryCount)
+                        .as("A new @ExceptionHandler method was added to PriceOverrideExceptionHandler without a "
+                                + "matching entry in Overrides$XCorrelationIdHeader#handlerInvocations() in "
+                                + "OrderExceptionHandlerTest — add one so the X-Correlation-Id header contract "
+                                + "stays proven for every handler")
+                        .isEqualTo(handlerMethodCount);
+            }
         }
     }
 }
