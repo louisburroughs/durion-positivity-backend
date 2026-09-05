@@ -66,6 +66,16 @@ final class WindowPhraseClassifier {
                     + UNIT_ALTERNATION + ")\\b",
             Pattern.CASE_INSENSITIVE);
 
+    /**
+     * "in/within the next N <unit>", "over the coming N <unit>" — a range that ends in the future
+     * (#1681). Kept separate from {@link #MULTI_PERIOD} because the preposition carries no
+     * rolling-vs-calendar meaning here: a forward range is always anchored on today.
+     */
+    private static final Pattern FORWARD_PERIOD = Pattern.compile(
+            "\\b(?:in|over|within|for|during)?\\s*the\\s+(?:next|coming|upcoming|following)\\s+" + "([a-z-]+|\\d+)\\s+("
+                    + UNIT_ALTERNATION + ")\\b",
+            Pattern.CASE_INSENSITIVE);
+
     /** "last month", "the previous quarter" — exactly one whole period that has ended. */
     private static final Pattern PRIOR_COMPLETE_PHRASE = Pattern.compile(
             "\\b(?:last|previous|prior)\\s+(week|month|quarter|year)\\b(?!\\s*[,]?\\s*(?:compared|versus|vs))",
@@ -106,6 +116,18 @@ final class WindowPhraseClassifier {
             return Optional.empty();
         }
         String text = phrase.toLowerCase(Locale.ROOT);
+
+        // Checked before the backward forms: "the next 14 days" must never fall through to a
+        // pattern that would read it as a range ending today (#1681).
+        Matcher forward = FORWARD_PERIOD.matcher(text);
+        if (forward.find()) {
+            Integer forwardCount = parseCount(forward.group(1));
+            if (forwardCount == null || forwardCount < 1) {
+                return Optional.empty();
+            }
+            return Optional.of(
+                    new Classification(Shape.FORWARD, parseUnit(forward.group(2)), forwardCount, Comparison.NONE));
+        }
 
         Matcher multi = MULTI_PERIOD.matcher(text);
         if (multi.find()) {

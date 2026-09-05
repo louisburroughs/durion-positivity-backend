@@ -58,6 +58,19 @@ final class DateWindowResolver {
         PRIOR_COMPLETE,
         CALENDAR_SPAN,
         /**
+         * N units starting today and ending in the future, inclusive of today ("the next 14 days",
+         * "the next three months").
+         *
+         * <p>#1681: every other shape resolves backward or to-date, so a question about upcoming
+         * obligations — bills due, appointments scheduled, warranties expiring — had no argument
+         * that meant it. The model correctly reported the gap instead of inventing dates, and that
+         * read as a prompt-following regression for three iterations.
+         *
+         * <p>Inclusive of today because a bill due today is due within the next N days by any
+         * reading a user would recognise; starting tomorrow would silently drop it.
+         */
+        FORWARD,
+        /**
          * A period the question names outright ("in 2025", "July 2026", "Q3 2026") rather than
          * one positioned relative to today. Resolved by {@link #resolveNamed(String)}, not by
          * {@link #resolve}, because it takes a period label instead of a unit and a count.
@@ -129,7 +142,10 @@ final class DateWindowResolver {
         if (count <= 0) {
             throw new InvalidToolArgumentException("count must be positive (got " + count + ")");
         }
-        if (unit == Unit.DAY && shape != Shape.ROLLING) {
+        // FORWARD is day-legal alongside ROLLING: "the next 14 days" is the wording #1681 exists
+        // for, and a forward range is anchored on today rather than on a complete calendar period,
+        // so the reason DAY is refused for the calendar shapes does not apply to it.
+        if (unit == Unit.DAY && shape != Shape.ROLLING && shape != Shape.FORWARD) {
             throw new InvalidToolArgumentException("DAY has no calendar form for shape " + shape
                     + "; pass shape=ROLLING for a day-expressed range, or a calendar unit "
                     + "(WEEK, MONTH, QUARTER, YEAR) for " + shape);
@@ -160,6 +176,10 @@ final class DateWindowResolver {
                 LocalDate currentPeriodStart = periodStartContaining(today, unit);
                 end = currentPeriodStart.minusDays(1);
                 start = shiftBack(currentPeriodStart, unit, count);
+            }
+            case FORWARD -> {
+                start = today;
+                end = shiftForward(today, unit, count).minusDays(1);
             }
             default -> throw new IllegalStateException("unhandled shape " + shape);
         }
@@ -304,6 +324,7 @@ final class DateWindowResolver {
                     case CURRENT_TO_DATE -> "current to date";
                     case PRIOR_COMPLETE -> "prior complete";
                     case CALENDAR_SPAN -> "calendar span";
+                    case FORWARD -> "next";
                     // Unreachable: resolve() rejects ABSOLUTE up front, and resolveNamed builds its
                     // own statement without calling this method.
                     case ABSOLUTE -> throw new IllegalStateException("ABSOLUTE is resolved by resolveNamed");
@@ -319,6 +340,8 @@ final class DateWindowResolver {
                         count + " whole " + unitNoun(unit, count)
                                 + " ending with the last complete " + unitNoun(unit, 1) + " ("
                                 + periodLabel(periodStartContaining(end, unit), unit) + ")";
+                    case FORWARD ->
+                        "the next " + count + " " + unitNoun(unit, count) + " starting today (" + today + ")";
                     case ABSOLUTE -> throw new IllegalStateException("ABSOLUTE is resolved by resolveNamed");
                 };
         return label + ": " + start + " to " + end + " — " + clause;
@@ -366,6 +389,16 @@ final class DateWindowResolver {
     }
 
     /** {@code date} shifted back {@code count} whole units of {@code unit}. */
+    private static LocalDate shiftForward(@NonNull LocalDate date, @NonNull Unit unit, int count) {
+        return switch (unit) {
+            case DAY -> date.plusDays(count);
+            case WEEK -> date.plusWeeks(count);
+            case MONTH -> date.plusMonths(count);
+            case QUARTER -> date.plusMonths(3L * count);
+            case YEAR -> date.plusYears(count);
+        };
+    }
+
     private static LocalDate shiftBack(@NonNull LocalDate date, @NonNull Unit unit, int count) {
         return switch (unit) {
             case DAY -> date.minusDays(count);
