@@ -1443,6 +1443,31 @@ def run_alternate_mode(args, token):
     return None
 
 
+def server_build(chat_url, token):
+    """The build the server is running, so a run says what it measured.
+
+    A gate number is only comparable against another if both name the build they ran against. On
+    2026-09-05 a deploy landed mid-run and the results were unattributable after the fact — the file
+    recorded the questions blob and the actor, and nothing about the service. Returns a reason
+    string rather than raising: not knowing the build must not stop a run.
+    """
+    # rsplit, matching traces_url_for: split() takes the FIRST "/v1/" and would truncate a base
+    # URL that happens to contain one earlier in its path.
+    base = chat_url.rsplit("/v1/", 1)[0]
+    request = urllib.request.Request(f"{base}/actuator/info")
+    request.add_header("Authorization", f"Bearer {token}")
+    request.add_header("Accept", "application/json")
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            info = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, json.JSONDecodeError) as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+    build = info.get("build") if isinstance(info, dict) else None
+    if isinstance(build, dict):
+        return {k: build.get(k) for k in ("name", "version", "time") if build.get(k)}
+    return {"error": "no build section in actuator/info"}
+
+
 def build_parser():
     """The CLI parser, extracted so tests can assert real defaults.
 
@@ -1611,6 +1636,11 @@ def main(argv=None):
         "graded_as_of": run_as_of.isoformat(),
         "questions_file": provenance,
         "actor": actor,
+        # Replay mode is offline by contract: it reads recorded fixtures and makes no HTTP call, so
+        # it must not probe the server for a build, and it has no live traces to claim provenance
+        # over. Both fields say "not applicable" rather than guessing.
+        "server_build": {"error": "replay mode: no server"} if replaying else server_build(args.url, token),
+        "graded_from_traces": not replaying,
         "void": bool(role_mismatch),
         "results": [],
     }
@@ -1684,6 +1714,15 @@ def main(argv=None):
         traces, failure = fetch_traces(args.traces_url or traces_url_for(args.url), token, run_started_at)
         if failure:
             trace_note = f"falling back to answer parsing — {failure}"
+            # Recorded as its own fact rather than folded into `void`, which means "the actor was
+            # wrong, this score is invalid" — a different claim. Answer parsing grades whatever
+            # prose the model happened to quote, so a corpus expecting trace-level evidence
+            # degrades to mostly UNGRADED, and UNGRADED does not fail the summary. On 2026-09-05 a
+            # deploy landed mid-run, the trace endpoint answered 503, eleven of twelve questions
+            # came back UNGRADED, and the output was indistinguishable from a genuine collapse in
+            # capability until the container logs were read. A reader needs to see that the run
+            # could not measure what it claims to measure.
+            record["graded_from_traces"] = False
         else:
             for trace in traces:
                 message = trace.get("userMessage")
