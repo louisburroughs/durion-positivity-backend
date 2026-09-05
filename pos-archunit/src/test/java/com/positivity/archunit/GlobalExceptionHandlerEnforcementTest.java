@@ -119,6 +119,45 @@ class GlobalExceptionHandlerEnforcementTest {
                         + " the X-Correlation-Id header.");
     }
 
+    /**
+     * ADR-0056 §1: a module covered by the shared catch-all must not declare its own.
+     *
+     * <p>Shape conformance is not enough, which is why this rule is separate from
+     * {@link #everyModuleLocalCatchAllReturnsTheApiErrorEnvelope()}. Spring's
+     * {@code ExceptionHandlerExceptionResolver} picks the first applicable advice bean that has
+     * ANY matching method — not the most specific handler across advices — so a module-local
+     * {@code @ExceptionHandler(Exception.class)} swallows every unmapped exception before
+     * pos-web-common's {@code GlobalApiExceptionHandler} runs. That takes ADR-0056 §2's
+     * {@code DataIntegrityViolationException} mapping with it: a unique-constraint or FK
+     * collision answers 500 INTERNAL_ERROR instead of 409 DUPLICATE_RESOURCE.
+     *
+     * <p>An ApiError-shaped catch-all passes the envelope rule while still doing this, which is
+     * how pos-inventory kept the defect through the #1694 sweep and how the #1717 enforcement
+     * came to vouch for it (issue #1768). The six modules #1694 remediated all deleted theirs
+     * outright; this rule is what makes that the enforced answer rather than the remembered one.
+     */
+    @Test
+    @DisplayName("a module covered by the shared catch-all does not declare its own")
+    void noModuleShadowsTheSharedCatchAll() throws IOException {
+        List<String> violations = controllerModules().stream()
+                .filter(module -> CatchAllAdviceScanner.dependsOnCatchAllProvider(module, CATCH_ALL_PROVIDERS))
+                .filter(module -> !CatchAllAdviceScanner.catchAllsIn(module).isEmpty())
+                .map(module -> module.getFileName().toString())
+                .toList();
+
+        Assertions.assertTrue(
+                violations.isEmpty(),
+                () -> "Modules that depend on a catch-all provider AND declare their own catch-all: " + violations
+                        + ". Spring resolves advices by bean order, not by handler specificity, so the module-local"
+                        + " @ExceptionHandler(Exception.class) wins and pos-web-common's GlobalApiExceptionHandler"
+                        + " never runs for that module — disabling ADR-0056 §2's DataIntegrityViolationException"
+                        + " mapping, so a duplicate key answers 500 INTERNAL_ERROR rather than 409"
+                        + " DUPLICATE_RESOURCE (issue #1768). Being ApiError-shaped does not help: the shape is"
+                        + " right and the classification is still gone. Fix: delete the module-local catch-all and"
+                        + " let the shared advice take the unmapped tail, as the six modules remediated in #1694"
+                        + " did.");
+    }
+
     private static List<Path> controllerModules() throws IOException {
         List<Path> controllerModules = CatchAllAdviceScanner.controllerModules(REPO_ROOT, EXEMPT_MODULES);
 
