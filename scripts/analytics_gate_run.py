@@ -489,6 +489,75 @@ def questions_provenance(path):
     }
 
 
+
+# ── behaviour bands and multi-turn sequences (#1688, #1689, #1690) ───────────
+#
+# Both corpora shipped as data with nothing to execute them. A fixture nothing runs is
+# documentation, so these are the two run modes that turn them into measurements.
+
+BANDS_PATH = "pos-mcp-server/src/test/resources/eval/analytics-gate/BEHAVIOUR_BANDS.json"
+SEQUENCES_PATH = "pos-mcp-server/src/test/resources/eval/analytics-gate/MULTI_TURN.json"
+
+
+def run_bands(url, token, api_version, document, timeout):
+    """Asks each band question once and scores the OUTCOME, not the content.
+
+    An impossible question is passed by a refusal and failed by an answer, however plausible that
+    answer looks — which is the whole reason the band exists. Until it did, a correct refusal and a
+    genuine failure scored identically.
+    """
+    results = []
+    for question in document["questions"]:
+        outcome = ask(url, token, api_version, question["utterance"], timeout)
+        observed = classify_outcome(outcome["answer"])
+        expected = question["expected_outcome"]
+        results.append(
+            {
+                "fixture_id": question["fixture_id"],
+                "band": question["band"],
+                "utterance": question["utterance"],
+                "expected_outcome": expected,
+                "observed_outcome": observed,
+                "verdict": "PASS" if observed == expected else "FAIL",
+                **outcome,
+            }
+        )
+        print(f"  {question['fixture_id']} {question['band']}: expected {expected}, got {observed}", flush=True)
+    return results
+
+
+def run_sequences(url, token, api_version, document, timeout):
+    """Runs each sequence's turns in order on one conversation.
+
+    No session identifier is needed: SessionAgentManager keys chat memory on (username, role), so
+    consecutive calls with the same token already share a conversation. That is also why the
+    single-turn gate is not single-turn (#1735).
+
+    Turns are recorded, not auto-scored. Whether "their" resolved to the right customer is a
+    judgement, and a regex over the answer would pin the wrong thing — so each turn carries its
+    fixture's `must_reference` and `fails_if` alongside the reply for a grader to apply.
+    """
+    results = []
+    for sequence in document["sequences"]:
+        turns = []
+        for index, turn in enumerate(sequence["turns"]):
+            outcome = ask(url, token, api_version, turn["utterance"], timeout)
+            turns.append(
+                {
+                    "index": index + 1,
+                    "utterance": turn["utterance"],
+                    "expect": turn.get("expect"),
+                    "must_reference": turn.get("must_reference"),
+                    "fails_if": turn.get("fails_if"),
+                    "observed_outcome": classify_outcome(outcome["answer"]),
+                    **outcome,
+                }
+            )
+            print(f"  {sequence['sequence_id']} turn {index + 1}: {turns[-1]['observed_outcome']}", flush=True)
+        results.append({"sequence_id": sequence["sequence_id"], "carries": sequence["carries"], "turns": turns})
+    return results
+
+
 def select(questions, only, include_excluded):
     if only:
         wanted = {q.strip() for q in only.split(",") if q.strip()}
@@ -1105,6 +1174,104 @@ def write_markdown(out_dir, record):
     (out_dir / "run.md").write_text("\n".join(lines), encoding="utf-8")
 
 
+
+def render_alternate_markdown(record):
+    """Renders the band/sequence record as the run.md the --out contract promises.
+
+    The sequences table deliberately shows must_reference / fails_if instead of a verdict column:
+    this mode is UNSCORED by design, and a report that looked scored would invite the reader to
+    trust a judgement no code here made.
+    """
+    lines = [
+        f"# analytics gate — {record['mode']} mode",
+        "",
+        f"- started: {record['started_at']}",
+        f"- endpoint: {record['endpoint']}",
+        f"- corpus: {record['corpus']}",
+        f"- actor: {record['actor'].get('subject', record['actor'].get('error', 'unknown'))}",
+        f"- verdict: **{record['summary']['verdict']}**",
+        "",
+    ]
+
+    if record["mode"] == "bands":
+        lines += [
+            f"{record['summary']['passed']} passed, {record['summary']['failed']} failed; "
+            f"observed outcomes {record['summary']['by_outcome']}",
+            "",
+            "| fixture | band | expected | observed | verdict |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+        for result in record["results"]:
+            lines.append(
+                f"| {result['fixture_id']} | {result['band']} | {result['expected_outcome']} "
+                f"| {result['observed_outcome']} | {result['verdict']} |"
+            )
+    else:
+        lines += [
+            f"{record['summary']['sequences']} sequences, {record['summary']['turns']} turns. "
+            f"{record['summary']['note']}",
+            "",
+            "| sequence | turn | utterance | must_reference | fails_if |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+        for sequence in record["sequences"]:
+            for index, turn in enumerate(sequence["turns"], start=1):
+                lines.append(
+                    f"| {sequence['sequence_id']} | {index} | {turn['utterance']} "
+                    f"| {turn.get('must_reference', '')} | {turn.get('fails_if', '')} |"
+                )
+
+    return "\n".join(lines) + "\n"
+
+
+def run_alternate_mode(args, token):
+    """Executes the behaviour-band or multi-turn corpus and writes its own record.
+
+    Kept separate from the question path rather than folded into it: these score an OUTCOME and a
+    conversation, not a number against ground truth, and forcing them through a grader built for
+    single-turn numeric answers would misreport both.
+    """
+    repo_root = Path(__file__).resolve().parents[1]
+    corpus = repo_root / (BANDS_PATH if args.mode == "bands" else SEQUENCES_PATH)
+    document = json.loads(corpus.read_text(encoding="utf-8"))
+    api_version = os.environ.get("MCP_API_VERSION", "1")
+
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    record = {
+        "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "endpoint": args.url,
+        "mode": args.mode,
+        "corpus": str(corpus.relative_to(repo_root)),
+        "actor": actor_provenance(token) if token else {"error": "no token"},
+    }
+
+    if args.mode == "bands":
+        record["results"] = run_bands(args.url, token, api_version, document, args.timeout)
+        counts = Counter(result["verdict"] for result in record["results"])
+        record["summary"] = {
+            "verdict": "PASS" if counts.get("FAIL", 0) == 0 else "FAIL",
+            "passed": counts.get("PASS", 0),
+            "failed": counts.get("FAIL", 0),
+            "by_outcome": dict(sorted(Counter(r["observed_outcome"] for r in record["results"]).items())),
+        }
+    else:
+        record["sequences"] = run_sequences(args.url, token, api_version, document, args.timeout)
+        # Deliberately no automatic verdict: whether a follow-up carried its context is a judgement,
+        # and inventing a machine verdict here would be a number nobody should trust.
+        record["summary"] = {
+            "verdict": "UNSCORED",
+            "sequences": len(record["sequences"]),
+            "turns": sum(len(s["turns"]) for s in record["sequences"]),
+            "note": "each turn carries must_reference / fails_if for a grader to apply",
+        }
+
+    (out_dir / "run.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    (out_dir / "run.md").write_text(render_alternate_markdown(record), encoding="utf-8")
+    print(f"\nwrote {out_dir / 'run.json'} and {out_dir / 'run.md'}  summary={record['summary']}")
+    return None
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--out", required=True, help="directory for run.json / run.md")
@@ -1116,6 +1283,12 @@ def main(argv=None):
         "--traces-url",
         default=os.environ.get("MCP_TRACES_URL"),
         help="turn-trace endpoint; defaults to the chat URL's host with /v1/eval/turn-traces",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["questions", "bands", "sequences"],
+        default="questions",
+        help="questions (default), bands (#1689 outcome bands), or sequences (#1690 multi-turn)",
     )
     parser.add_argument(
         "--expect-role",
@@ -1186,6 +1359,9 @@ def main(argv=None):
                 "Use the ITEST_USERNAME/ITEST_PASSWORD pair from the itest credentials file, or pass "
                 "--expect-role '' to skip this check, or --allow-role-mismatch to run anyway."
             )
+
+    if args.mode in {"bands", "sequences"}:
+        return run_alternate_mode(args, token)
 
     questions_path = Path(args.questions).resolve()
     document = json.loads(questions_path.read_text(encoding="utf-8"))

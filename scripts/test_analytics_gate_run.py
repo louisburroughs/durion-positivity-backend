@@ -2,6 +2,7 @@ import json
 from datetime import date, datetime, timezone
 import os
 import tempfile
+import argparse
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -922,6 +923,107 @@ class TraceWindowGradingTest(unittest.TestCase):
             runner.traces_url_for("http://localhost:18080/mcp-server/v1/mcp/chat"),
             "http://localhost:18080/mcp-server/v1/eval/turn-traces",
         )
+class RunModeTest(unittest.TestCase):
+    """#1688/#1689/#1690: the corpora shipped as data with nothing to execute them."""
+
+    @staticmethod
+    def _doc_bands():
+        return {
+            "outcomes": {"declined": "d", "answered": "a", "asked": "k"},
+            "questions": [
+                {"fixture_id": "b01", "band": "impossible", "expected_outcome": "declined",
+                 "utterance": "will customers churn?"},
+                {"fixture_id": "b08", "band": "defined-metric-must-not-ask", "expected_outcome": "answered",
+                 "utterance": "who are our best customers?"},
+            ],
+        }
+
+    def test_bands_pass_on_the_expected_outcome_and_fail_otherwise(self):
+        # A refusal PASSES the impossible band; an answer fails it. Until this band existed a
+        # correct refusal and a genuine failure scored identically.
+        replies = ["I'm unable to answer that request.", "I'm unable to answer that request."]
+        with mock.patch.object(runner, "ask", side_effect=[
+                {"answer": r, "error": None, "elapsed_s": 1.0} for r in replies]):
+            results = runner.run_bands("u", "t", "1", self._doc_bands(), 30)
+
+        self.assertEqual(results[0]["verdict"], "PASS")   # impossible + declined
+        self.assertEqual(results[1]["verdict"], "FAIL")   # defined metric must ANSWER, not decline
+
+    def test_bands_fail_when_an_impossible_question_is_answered(self):
+        # The failure that matters: a confident, plausible, fabricated answer.
+        with mock.patch.object(runner, "ask", side_effect=[
+                {"answer": "| Customer | Churn risk |\n| Acme | 82% |", "error": None, "elapsed_s": 1.0},
+                {"answer": "Best customers by contribution margin: ...", "error": None, "elapsed_s": 1.0}]):
+            results = runner.run_bands("u", "t", "1", self._doc_bands(), 30)
+
+        self.assertEqual(results[0]["verdict"], "FAIL")
+        self.assertEqual(results[0]["observed_outcome"], "answered")
+        self.assertEqual(results[1]["verdict"], "PASS")
+
+    def test_sequences_run_turns_in_order_and_keep_their_grading_criteria(self):
+        document = {
+            "carries": {"entity": "e"},
+            "sequences": [{
+                "sequence_id": "s05", "carries": ["entity"],
+                "turns": [
+                    {"utterance": "open work orders for Harbor Tool?", "expect": "answered"},
+                    {"utterance": "what is their outstanding balance?", "expect": "answered",
+                     "must_reference": "Harbor Tool & Die Inc", "fails_if": "asks which customer"},
+                ],
+            }],
+        }
+        asked = []
+        def fake_ask(url, token, version, message, timeout):
+            asked.append(message)
+            return {"answer": "ok", "error": None, "elapsed_s": 1.0}
+
+        with mock.patch.object(runner, "ask", side_effect=fake_ask):
+            results = runner.run_sequences("u", "t", "1", document, 30)
+
+        # Order is the point: turn 2 only means anything after turn 1 has run on the same memory.
+        self.assertEqual(asked, ["open work orders for Harbor Tool?", "what is their outstanding balance?"])
+        turns = results[0]["turns"]
+        self.assertEqual([t["index"] for t in turns], [1, 2])
+        # The criteria travel with the result so a grader can apply them without the corpus.
+        self.assertEqual(turns[1]["must_reference"], "Harbor Tool & Die Inc")
+        self.assertEqual(turns[1]["fails_if"], "asks which customer")
+
+    def test_sequences_are_not_given_a_machine_verdict(self):
+        # Whether "their" resolved correctly is a judgement; a regex verdict here would be a number
+        # nobody should trust.
+        document = {"carries": {"entity": "e"}, "sequences": [{"sequence_id": "s", "carries": ["entity"],
+                    "turns": [{"utterance": "a"}, {"utterance": "b", "must_reference": "x", "fails_if": "y"}]}]}
+        with mock.patch.object(runner, "ask", return_value={"answer": "ok", "error": None, "elapsed_s": 1.0}):
+            results = runner.run_sequences("u", "t", "1", document, 30)
+
+        self.assertNotIn("verdict", results[0])
+
+    def _run_mode(self, mode, out_dir):
+        args = argparse.Namespace(mode=mode, out=str(out_dir), url="http://x/v1/mcp/chat", timeout=30)
+        reply = {"answer": "the total is 5", "error": None, "elapsed_s": 1.0}
+        with mock.patch.object(runner, "ask", return_value=reply):
+            runner.run_alternate_mode(args, None)
+        return (out_dir / "run.json"), (out_dir / "run.md")
+
+    def test_bands_mode_writes_both_run_json_and_run_md(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_json, run_md = self._run_mode("bands", Path(tmp))
+            self.assertTrue(run_json.exists())
+            self.assertTrue(run_md.exists(), "the --out contract promises run.md, not just run.json")
+            body = run_md.read_text(encoding="utf-8")
+            self.assertIn("# analytics gate — bands mode", body)
+            self.assertIn("| fixture | band | expected | observed | verdict |", body)
+
+    def test_sequences_mode_writes_a_report_that_does_not_look_scored(self):
+        # UNSCORED is the point: a run.md with a verdict column would invite the reader to trust
+        # a judgement no code here made.
+        with tempfile.TemporaryDirectory() as tmp:
+            run_json, run_md = self._run_mode("sequences", Path(tmp))
+            self.assertTrue(run_md.exists())
+            body = run_md.read_text(encoding="utf-8")
+            self.assertIn("UNSCORED", body)
+            self.assertIn("| sequence | turn | utterance | must_reference | fails_if |", body)
+            self.assertNotIn("| verdict |", body)
 
 
 if __name__ == "__main__":
