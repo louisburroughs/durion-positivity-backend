@@ -40,6 +40,21 @@ import org.jspecify.annotations.NonNull;
  * rather than a speculative behavioural score; "backed up" is an operational lateness measure, not
  * a capacity sentiment.
  *
+ * <p><strong>Accepted divergence — "running low" (ratified by @louisburroughs, 2026-09-05,
+ * issue #1781).</strong> This glossary defines the term as available-to-promise <em>as of now</em>
+ * against the policy minimum. the inventory replenishment engine, behind the replenishment-needs endpoint, triggers on
+ * something different: on-hand carried forward to a lead-time horizon and netted against open
+ * POs, ASNs and transfers. Both readings are defensible — the engine answers "what will I run out of before the
+ * truck arrives", this answers "what is short right now" — and the owner chose ATP-at-now for the
+ * assistant.
+ *
+ * <p>The consequence is real and should not surprise anyone later: the assistant's answer to
+ * "what is running low" can differ from the replenishment-needs endpoint, and neither is wrong.
+ * The divergence was dormant when the decision was taken — every stock row then carried an
+ * {@code atp} equal to its on-hand quantity, so nothing disagreed — and wakes as soon as
+ * allocations, reservations or in-transit supply appear. Do not
+ * "fix" this definition to match the engine on the assumption that a mismatch is a bug.
+ *
  * <p>Changing any definition needs the same sign-off, and a {@link #VERSION} bump with it.
  *
  * <p>{@link #VERSION} is returned with every lookup and recorded in the tool trace, so a graded
@@ -50,7 +65,7 @@ import org.jspecify.annotations.NonNull;
 final class BusinessGlossary {
 
     /** Bump on any change to a definition, a default window, or the term set. */
-    static final String VERSION = "2026-09-05.1";
+    static final String VERSION = "2026-09-05.2";
 
     /**
      * One decided term.
