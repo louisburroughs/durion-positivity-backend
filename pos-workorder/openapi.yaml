@@ -2033,16 +2033,12 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: Estimate cannot be approved in current state, or the customerId in the request does not match the estimate's own customer.
         '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EstimateResponse'
           description: Estimate not found.
         '422':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Purchase order number is required for this customer account (PURCHASE_ORDER_REQUIRED).
       security:
       - bearerAuth:
@@ -3579,7 +3575,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkorderResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Work order not found.
       security:
       - bearerAuth:

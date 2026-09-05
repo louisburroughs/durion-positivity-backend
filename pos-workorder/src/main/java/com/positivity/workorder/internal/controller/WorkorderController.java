@@ -292,7 +292,10 @@ public class WorkorderController {
             description = "Work order cannot be approved in current state, or the customerId in the request "
                     + "does not match the workorder's own customer.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Work order not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Work order not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Approving customer's identity and captured signature artifacts.",
             required = true,

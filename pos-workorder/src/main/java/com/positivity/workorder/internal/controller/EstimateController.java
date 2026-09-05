@@ -457,10 +457,15 @@ public class EstimateController {
             description = "Estimate cannot be approved in current state, or the customerId in the request does "
                     + "not match the estimate's own customer.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(responseCode = "404", description = "Estimate not found.")
+    // Empty @Content is deliberate, not an omission: this method catches EntityNotFoundException
+    // locally and answers a bodiless 404, so declaring no schema is what the endpoint actually does.
+    // Without it springdoc infers EstimateResponse and the spec advertises the success DTO as the
+    // error body. The bodiless 404 is itself a defect (no ApiError, no correlationId) tracked in #1753.
+    @ApiResponse(responseCode = "404", description = "Estimate not found.", content = @Content)
     @ApiResponse(
             responseCode = "422",
-            description = "Purchase order number is required for this customer account (PURCHASE_ORDER_REQUIRED).")
+            description = "Purchase order number is required for this customer account (PURCHASE_ORDER_REQUIRED).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Approving customer's identity, signature artifacts, and optional line-item selections.",
             required = true,
