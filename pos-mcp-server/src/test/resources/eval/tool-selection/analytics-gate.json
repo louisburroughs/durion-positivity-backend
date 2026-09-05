@@ -359,6 +359,84 @@
         "facade"
       ],
       "notes": "#1689 band 5. Percentage-of-total; the denominator is the graded part."
+    },
+    {
+      "fixture_id": "q23-most-ordered-skus",
+      "utterance": "Across purchase orders that were approved or received, which three SKUs did we order the most units of, and how many units of each?",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "accounting:coa:view",
+          "reporting:view:financial-statements"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "OrderFacadeTool"
+        ],
+        "forbidden_tool_ids": [
+          "AdminFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "analytics-gate",
+        "facade"
+      ],
+      "notes": "#1689 band 5. Status filter is the graded part."
+    },
+    {
+      "fixture_id": "q24-units-on-order-not-received",
+      "utterance": "How many units are still on order but not yet received?",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "accounting:coa:view",
+          "reporting:view:financial-statements"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "OrderFacadeTool"
+        ],
+        "forbidden_tool_ids": [
+          "AdminFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "analytics-gate",
+        "facade"
+      ],
+      "notes": "#1689 band 4. Open quantity, not ordered quantity."
+    },
+    {
+      "fixture_id": "q25-replenishment-policy-coverage",
+      "utterance": "How many of our stocked product-locations have an active replenishment policy, and which SKU is it?",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "accounting:coa:view",
+          "reporting:view:financial-statements"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "InventoryFacadeTool"
+        ],
+        "forbidden_tool_ids": [
+          "AdminFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "analytics-gate",
+        "facade"
+      ],
+      "notes": "#1689. No tool reads replenishment_policy, which is why the question is out of the gate."
     }
   ]
 }

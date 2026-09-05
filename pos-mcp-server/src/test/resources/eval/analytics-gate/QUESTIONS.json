@@ -552,6 +552,86 @@
         "per": "one call returning per-customer revenue over the resolved window; the all-customer total is the denominator",
         "declined_reason": "shares that sum to 100% — the top-five subtotal used as the denominator instead of all revenue"
       }
+    },
+    {
+      "fixture_id": "q23",
+      "expected_section": "Q23",
+      "ground_truth_sql": "ground-truth/q23-most-ordered-skus.sql",
+      "tool_selection_fixture_id": "q23-most-ordered-skus",
+      "utterance": "Across purchase orders that were approved or received, which three SKUs did we order the most units of, and how many units of each?",
+      "in_chat_path_gate": false,
+      "excluded_reason": "Newly authored (#1689). Executable since #1785 exposed listPurchaseOrders, but the chat-path gate must be matched exactly by the offline-replay corpus and no replay fixture exists yet. Promote once a turn has been recorded.",
+      "plan_wave": "2",
+      "budget": 2,
+      "window": {
+        "shape": "point-in-time",
+        "resolved_range": "current state as of now",
+        "stated_in_question": true,
+        "notes": "No relative range — a current-state read of placed purchase orders. resolveDateWindow should not be called.",
+        "expected": {
+          "shape": null,
+          "as_of_offset_days": 0,
+          "note": "Point-in-time. Graded on the as-of date, not a resolver shape."
+        }
+      },
+      "expected_plan": {
+        "min_tool_calls": {
+          "listPurchaseOrders": 1
+        },
+        "per": "status filter is the graded part: CANCELLED alone carries 3,450 units against APPROVED's 2,351, so a status-blind sum is wrong by 45% and mis-ranks",
+        "declined_reason": "summing every status, or reading ordered quantity as usage"
+      }
+    },
+    {
+      "fixture_id": "q24",
+      "expected_section": "Q24",
+      "ground_truth_sql": "ground-truth/q24-units-on-order-not-received.sql",
+      "tool_selection_fixture_id": "q24-units-on-order-not-received",
+      "utterance": "How many units are still on order but not yet received?",
+      "in_chat_path_gate": false,
+      "excluded_reason": "Newly authored (#1689). Executable since #1785; awaiting a replay fixture before promotion, same as q23.",
+      "plan_wave": "2",
+      "budget": 2,
+      "window": {
+        "shape": "point-in-time",
+        "resolved_range": "current state as of now",
+        "stated_in_question": true,
+        "notes": "No relative range — outstanding balance as of now.",
+        "expected": {
+          "shape": null,
+          "as_of_offset_days": 0,
+          "note": "Point-in-time. Graded on the as-of date, not a resolver shape."
+        }
+      },
+      "expected_plan": {
+        "min_tool_calls": {
+          "listPurchaseOrders": 1
+        },
+        "per": "the open quantity, not the ordered quantity: 2,351 against 7,849, both plausible and only one correct",
+        "declined_reason": "answering with ordered quantity, which is over three times the outstanding figure"
+      }
+    },
+    {
+      "fixture_id": "q25",
+      "expected_section": "Q25",
+      "ground_truth_sql": "ground-truth/q25-replenishment-policy-coverage.sql",
+      "tool_selection_fixture_id": "q25-replenishment-policy-coverage",
+      "utterance": "How many of our stocked product-locations have an active replenishment policy, and which SKU is it?",
+      "in_chat_path_gate": false,
+      "excluded_reason": "No tool exposes replenishment policies. InventoryFacadeTool covers stock availability (checkStock, searchInventory, getLocationStock) and nothing reads replenishment_policy, so the assistant cannot answer the coverage half. Ground truth is measured; the question waits on a tool, like q21 waited on purchase orders before #1785.",
+      "plan_wave": "3",
+      "budget": 2,
+      "window": {
+        "shape": "point-in-time",
+        "resolved_range": "current state as of now",
+        "stated_in_question": true,
+        "notes": "No relative range — policy coverage as of now.",
+        "expected": {
+          "shape": null,
+          "as_of_offset_days": 0,
+          "note": "Point-in-time. Graded on the as-of date, not a resolver shape."
+        }
+      }
     }
   ]
 }
