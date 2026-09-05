@@ -25,7 +25,12 @@ final class CatchAllAdviceScanner {
 
     /** Matches the catch-all declaration and the handler signature that follows it. */
     private static final Pattern CATCH_ALL_HANDLER = Pattern.compile(
-            "@ExceptionHandler\\(\\s*Exception\\.class\\s*\\)" // the declaration
+            // The declaration. Spring treats several spellings as the same catch-all, and the rule is
+            // worth nothing if one of them slips past: the brace form is already used elsewhere in the
+            // reactor for multi-type handlers, and a Throwable mapping matches every Exception.
+            "@ExceptionHandler\\(\\s*(?:value\\s*=\\s*)?\\{?\\s*"
+                    + "(?:Exception|Throwable)\\.class"
+                    + "(?:\\s*,\\s*[\\w.]+\\.class)*\\s*\\}?\\s*\\)"
                     + "(?:\\s*@\\w[\\w.]*(?:\\([^)]*\\))?)*" // any further annotations on the method
                     + "\\s*(?:public|protected|private)?\\s*" // optional visibility modifier
                     + "([^;{]*?)\\s*\\w+\\s*\\(", // the return type, up to the method name

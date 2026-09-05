@@ -106,6 +106,37 @@ class CatchAllAdviceScannerTest {
     }
 
     @Test
+    @DisplayName("the brace, value= and Throwable spellings are all caught")
+    void alternativeCatchAllSpellingsAreDetected(@TempDir Path root) throws IOException {
+        // Spring treats all of these as the same catch-all. A rule that only knows the bare form is
+        // evadable by adding two characters, which would make the shape assertion worthless.
+        Path braces = moduleWithAdvice(root, "pos-fake-braces", """
+                @ExceptionHandler({Exception.class})
+                public ProblemDetail handleAny(Exception ex) { return null; }
+                """);
+        Path valueForm = moduleWithAdvice(root, "pos-fake-value", """
+                @ExceptionHandler(value = Exception.class)
+                public ProblemDetail handleAny(Exception ex) { return null; }
+                """);
+        Path throwable = moduleWithAdvice(root, "pos-fake-throwable", """
+                @ExceptionHandler(Throwable.class)
+                public ProblemDetail handleAny(Throwable ex) { return null; }
+                """);
+        Path multi = moduleWithAdvice(root, "pos-fake-multi", """
+                @ExceptionHandler({Exception.class, IllegalStateException.class})
+                public ProblemDetail handleAny(Exception ex) { return null; }
+                """);
+
+        for (Path module : List.of(braces, valueForm, throwable, multi)) {
+            assertThat(CatchAllAdviceScanner.catchAllsIn(module))
+                    .describedAs("catch-all in %s", module.getFileName())
+                    .singleElement()
+                    .extracting(CatchAllAdviceScanner.CatchAll::returnsApiError)
+                    .isEqualTo(false);
+        }
+    }
+
+    @Test
     @DisplayName("prose mentioning the annotation in a comment is not mistaken for a declaration")
     void tombstoneCommentsAreNotCatchAlls(@TempDir Path root) throws IOException {
         Path module = moduleWithAdvice(root, "pos-fake-people-contact", """
