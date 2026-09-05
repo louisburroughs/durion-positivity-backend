@@ -37,7 +37,9 @@ class OrderFacadeToolTest {
                 builder,
                 BASE_URL,
                 contract("getOrder").template(),
-                contract("listOrders").template());
+                contract("listOrders").template(),
+                "/order/v1/orders/purchase-orders",
+                "/order/v1/orders/purchase-orders/{poId}");
     }
 
     @Test
