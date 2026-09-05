@@ -97,7 +97,7 @@ class UserPersonLinkControllerIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody()).containsEntry("code", "PERSON_NOT_FOUND");
-        assertThat(response.getBody().get("message").toString()).contains("Person not found");
+        assertThat((String) response.getBody().get("message")).contains("Person not found");
     }
 
     @Test
@@ -131,11 +131,11 @@ class UserPersonLinkControllerIT {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody()).containsEntry("status", 400);
         assertThat(response.getBody()).containsEntry("code", "VALIDATION_ERROR");
-        assertThat(response.getBody().get("message").toString()).contains("Malformed JSON");
+        assertThat((String) response.getBody().get("message")).contains("Malformed JSON");
         // The request path is deliberately absent: the ad-hoc {error, path} map this handler used
         // to answer echoed it back, and #1716 dropped that along with the shape (SonarCloud S5131).
         assertThat(response.getBody()).doesNotContainKeys("error", "path");
-        assertThat(response.getBody().get("correlationId").toString()).isNotBlank();
+        assertThat((String) response.getBody().get("correlationId")).isNotBlank();
     }
 
     @Test
@@ -164,7 +164,7 @@ class UserPersonLinkControllerIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody()).containsEntry("code", "USER_PERSON_LINK_NOT_FOUND");
-        assertThat(response.getBody().get("message").toString()).contains("No person link found");
+        assertThat((String) response.getBody().get("message")).contains("No person link found");
     }
 
     @Test
@@ -200,7 +200,7 @@ class UserPersonLinkControllerIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody()).containsEntry("code", "USER_PERSON_LINK_NOT_FOUND");
-        assertThat(response.getBody().get("message").toString()).contains("No person link found");
+        assertThat((String) response.getBody().get("message")).contains("No person link found");
     }
 
     @Test
