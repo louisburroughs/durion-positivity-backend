@@ -1150,7 +1150,7 @@ paths:
                 description: Single-line order
                 value:
                   currency: USD
-                  expectedDeliveryDate: 2026-08-27
+                  expectedDeliveryDate: '2026-08-27'
                   lines:
                   - description: Stainless steel water bottle, 750ml
                     lineNumber: 1
@@ -1158,7 +1158,7 @@ paths:
                     skuId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
                     unitCostMinor: 1499
                   paymentTermsId: NET30
-                  poDate: 2026-08-13
+                  poDate: '2026-08-13'
                   shipToLocationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a05
                   vendorId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
             schema:
@@ -1406,7 +1406,7 @@ paths:
               Quantity increase:
                 description: Quantity increase
                 value:
-                  expectedDeliveryDate: 2026-09-03
+                  expectedDeliveryDate: '2026-09-03'
                   lines:
                   - description: Stainless steel water bottle, 750ml
                     lineNumber: 1
@@ -1414,7 +1414,7 @@ paths:
                     skuId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
                     unitCostMinor: 1399
                   paymentTermsId: NET30
-                  poDate: 2026-08-20
+                  poDate: '2026-08-20'
                   revisionReason: Vendor confirmed availability of larger quantity
             schema:
               $ref: '#/components/schemas/RevisePurchaseOrderRequest'
@@ -2502,7 +2502,7 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440000
           type: string
         fieldErrors:
-          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
           items:
             $ref: '#/components/schemas/FieldError'
           type: array
@@ -2529,7 +2529,7 @@ components:
           type: string
         timestamp:
           description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
+          example: '2026-03-17T14:30:00.000Z'
           type: string
       required:
       - code
@@ -2782,7 +2782,7 @@ components:
           type: string
         expectedDeliveryDate:
           description: Date the ordered goods are expected to be delivered
-          example: 2026-01-29
+          example: '2026-01-29'
           format: date
           type: string
         lines:
@@ -2797,7 +2797,7 @@ components:
           type: string
         poDate:
           description: Date the purchase order is issued
-          example: 2026-01-15
+          example: '2026-01-15'
           format: date
           type: string
         requestedBy:
@@ -3046,12 +3046,12 @@ components:
           type: boolean
         appliedAt:
           description: Timestamp when the override was applied to the line, if applied
-          example: 2026-02-21 10:06:00+00:00
+          example: '2026-02-21T10:06:00Z'
           format: date-time
           type: string
         approvedAt:
           description: Timestamp when the override was approved, if approved
-          example: 2026-02-21 10:05:12+00:00
+          example: '2026-02-21T10:05:12Z'
           format: date-time
           type: string
         approvedByUserId:
@@ -3060,7 +3060,7 @@ components:
           type: string
         createdAt:
           description: Timestamp when the override was created
-          example: 2026-02-21 09:18:40+00:00
+          example: '2026-02-21T09:18:40Z'
           format: date-time
           type: string
         discountAmount:
@@ -3106,7 +3106,7 @@ components:
           type: string
         rejectedAt:
           description: Timestamp when the override was rejected, if rejected
-          example: 2026-02-21 10:05:12+00:00
+          example: '2026-02-21T10:05:12Z'
           format: date-time
           type: string
         rejectedByUserId:
@@ -3131,7 +3131,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the override was last updated
-          example: 2026-02-21 10:05:12+00:00
+          example: '2026-02-21T10:05:12Z'
           format: date-time
           type: string
       required:
@@ -3159,7 +3159,7 @@ components:
           type: boolean
         createdAt:
           description: Timestamp when the override was created
-          example: 2026-02-21 09:18:40+00:00
+          example: '2026-02-21T09:18:40Z'
           format: date-time
           type: string
         discountAmount:
@@ -3419,7 +3419,7 @@ components:
           type: string
         approvalTimestamp:
           description: Timestamp at which the purchase order was approved
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         approverId:
@@ -3432,7 +3432,7 @@ components:
           type: string
         createdAt:
           description: Timestamp at which the purchase order was created
-          example: 2026-01-15 09:00:00+00:00
+          example: '2026-01-15T09:00:00Z'
           format: date-time
           type: string
         createdBy:
@@ -3445,7 +3445,7 @@ components:
           type: string
         expectedDeliveryDate:
           description: Date the ordered goods are expected to be delivered
-          example: 2026-01-29
+          example: '2026-01-29'
           format: date
           type: string
         grandTotalMinor:
@@ -3469,7 +3469,7 @@ components:
           type: string
         poDate:
           description: Date the purchase order was issued
-          example: 2026-01-15
+          example: '2026-01-15'
           format: date
           type: string
         poNumber:
@@ -3513,7 +3513,7 @@ components:
           type: integer
         updatedAt:
           description: Timestamp at which the purchase order was last updated
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         updatedBy:
@@ -3744,7 +3744,7 @@ components:
           type: string
         expectedDeliveryDate:
           description: Date the ordered goods are expected to be delivered
-          example: 2026-02-03
+          example: '2026-02-03'
           format: date
           type: string
         lines:
@@ -3759,7 +3759,7 @@ components:
           type: string
         poDate:
           description: Date the revised purchase order is issued
-          example: 2026-01-20
+          example: '2026-01-20'
           format: date
           type: string
         requestedBy:
@@ -3883,7 +3883,7 @@ components:
           type: string
         createdAt:
           description: Timestamp when the order was created (ISO 8601)
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         createdBy:
@@ -3971,7 +3971,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the order was last updated (ISO 8601)
-          example: 2026-01-15 09:45:00+00:00
+          example: '2026-01-15T09:45:00Z'
           format: date-time
           type: string
         updatedBy:

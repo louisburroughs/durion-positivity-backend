@@ -149,7 +149,7 @@ paths:
                 value:
                   claimType: ROAD_HAZARD
                   customerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
-                  failureDate: 2026-08-10
+                  failureDate: '2026-08-10'
                   failureDescription: Sidewall puncture, right rear tire
                   lines:
                   - description: Michelin Defender2 225/65R17
@@ -164,7 +164,7 @@ paths:
                     sourceType: INVOICE_LINE
                   locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03
                   originInvoiceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
-                  originSaleDate: 2025-11-02
+                  originSaleDate: '2025-11-02'
                   photoEvidenceUrls:
                   - https://media.example.com/claims/tire-1.jpg
                   vehicleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
@@ -327,11 +327,11 @@ paths:
                 description: Correct intake data
                 value:
                   claimType: ROAD_HAZARD
-                  failureDate: 2026-08-09
+                  failureDate: '2026-08-09'
                   failureDescription: Sidewall puncture, right rear tire — updated after inspection
                   locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03
                   originInvoiceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
-                  originSaleDate: 2025-11-02
+                  originSaleDate: '2025-11-02'
             schema:
               $ref: '#/components/schemas/ClaimUpdateRequest'
         description: Intake fields to replace on the claim; null clears origin, failure, and location fields, while claimType and photoEvidenceUrls apply only when non-null.
@@ -1321,7 +1321,7 @@ paths:
                 value:
                   carrier: UPS
                   disposition: RETURN_TO_VENDOR
-                  shippedAt: 2026-08-12 15:04:05+00:00
+                  shippedAt: '2026-08-12T15:04:05Z'
                   status: SHIPPED
                   trackingNumber: 1Z999AA10123456784
             schema:
@@ -1432,7 +1432,7 @@ paths:
                   autoRegister: false
                   coverageType: MANUFACTURER_DEFECT
                   durationMonths: 72
-                  effectiveFrom: 2025-01-01
+                  effectiveFrom: '2025-01-01'
                   laborCovered: false
                   name: Michelin passenger replacement — workmanship & materials
                   prorationMethod: TREAD_DEPTH
@@ -1631,7 +1631,7 @@ paths:
                   autoRegister: false
                   coverageType: MANUFACTURER_DEFECT
                   durationMonths: 72
-                  effectiveFrom: 2025-01-01
+                  effectiveFrom: '2025-01-01'
                   laborCovered: false
                   name: Michelin passenger replacement — workmanship & materials
                   prorationMethod: TREAD_DEPTH
@@ -1973,9 +1973,9 @@ paths:
                 value:
                   contractNumber: RH-2026-88412
                   customerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
-                  expiresAt: 2029-05-14
+                  expiresAt: '2029-05-14'
                   policyId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a30
-                  purchaseDate: 2026-05-14
+                  purchaseDate: '2026-05-14'
                   sourceInvoiceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
                   sourceInvoiceLineId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a05
                   status: ACTIVE
@@ -2086,9 +2086,9 @@ paths:
                 value:
                   contractNumber: RH-2026-88412
                   customerId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
-                  expiresAt: 2029-05-14
+                  expiresAt: '2029-05-14'
                   policyId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a30
-                  purchaseDate: 2026-05-14
+                  purchaseDate: '2026-05-14'
                   sourceInvoiceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a04
                   sourceInvoiceLineId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a05
                   status: ACTIVE

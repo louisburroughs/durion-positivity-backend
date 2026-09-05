@@ -70,14 +70,14 @@ paths:
                 value:
                   crmCustomerId: 01960003-0000-7000-8000-000000000001
                   crmVehicleId: 01960003-0000-7000-8000-000000000002
-                  endAt: 2026-06-18 10:00:00+00:00
+                  endAt: '2026-06-18T10:00:00Z'
                   locationId: 01960003-0000-7000-8000-000000000003
                   resourceId: BAY-04
                   serviceRequestIds:
                   - 01960003-0000-7000-8000-000000000004
                   sourceId: EST-2026-000045
                   sourceType: ESTIMATE
-                  startAt: 2026-06-18 08:00:00+00:00
+                  startAt: '2026-06-18T08:00:00Z'
             schema:
               $ref: '#/components/schemas/AppointmentCreateRequest'
         description: 'Booking details for the appointment: customer, vehicle, location, time window, service requests and optional originating source document.'
@@ -480,8 +480,8 @@ paths:
               Customer-requested reschedule:
                 description: Customer-requested reschedule
                 value:
-                  newEndAt: 2026-06-19 10:00:00+00:00
-                  newStartAt: 2026-06-19 08:00:00+00:00
+                  newEndAt: '2026-06-19T10:00:00Z'
+                  newStartAt: '2026-06-19T08:00:00Z'
                   notifyCustomer: true
                   reason: CUSTOMER_REQUEST
                   rescheduleReasonNotes: Customer asked to move to Friday morning
@@ -649,7 +649,7 @@ paths:
         name: date
         required: false
         schema:
-          example: 2026-09-03
+          example: '2026-09-03'
           format: date
           type: string
       responses:
@@ -1099,23 +1099,23 @@ paths:
           example: 01960003-0000-7000-8000-000000000003
           type: string
       - description: Inclusive start timestamp for date-time range filter
-        example: 2026-01-01 00:00:00+00:00
+        example: '2026-01-01T00:00:00Z'
         in: query
         name: fromDateTime
         required: false
         schema:
           description: Inclusive start timestamp for date-time range filter
-          example: 2026-01-01 00:00:00+00:00
+          example: '2026-01-01T00:00:00Z'
           format: date-time
           type: string
       - description: Inclusive end timestamp for date-time range filter
-        example: 2026-12-31 23:59:59+00:00
+        example: '2026-12-31T23:59:59Z'
         in: query
         name: toDateTime
         required: false
         schema:
           description: Inclusive end timestamp for date-time range filter
-          example: 2026-12-31 23:59:59+00:00
+          example: '2026-12-31T23:59:59Z'
           format: date-time
           type: string
       responses:
@@ -1211,7 +1211,7 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440000
           type: string
         fieldErrors:
-          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
           items:
             $ref: '#/components/schemas/FieldError'
           type: array
@@ -1238,7 +1238,7 @@ components:
           type: string
         timestamp:
           description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
+          example: '2026-03-17T14:30:00.000Z'
           type: string
       required:
       - code
@@ -1262,7 +1262,7 @@ components:
           type: string
         endAt:
           description: Appointment end instant in UTC (ISO-8601); must be after startAt
-          example: 2026-06-18 10:00:00+00:00
+          example: '2026-06-18T10:00:00Z'
           format: date-time
           type: string
         locationId:
@@ -1296,7 +1296,7 @@ components:
           type: string
         startAt:
           description: Appointment start instant in UTC (ISO-8601)
-          example: 2026-06-18 08:00:00+00:00
+          example: '2026-06-18T08:00:00Z'
           format: date-time
           type: string
         workorderLinkRef:
@@ -1329,7 +1329,7 @@ components:
           type: string
         createdAt:
           description: Timestamp the appointment was created in UTC (ISO-8601)
-          example: 2026-06-17 15:30:00+00:00
+          example: '2026-06-17T15:30:00Z'
           format: date-time
           type: string
         crmCustomerId:
@@ -1347,7 +1347,7 @@ components:
           type: object
         endAt:
           description: Appointment end instant in UTC (ISO-8601)
-          example: 2026-06-18 10:00:00+00:00
+          example: '2026-06-18T10:00:00Z'
           format: date-time
           type: string
         locationId:
@@ -1369,7 +1369,7 @@ components:
           type: array
         startAt:
           description: Appointment start instant in UTC (ISO-8601)
-          example: 2026-06-18 08:00:00+00:00
+          example: '2026-06-18T08:00:00Z'
           format: date-time
           type: string
         status:
@@ -1418,7 +1418,7 @@ components:
           type: string
         assignedAt:
           description: Instant the assignment was first created/confirmed in UTC (ISO-8601)
-          example: 2026-06-18 08:00:00+00:00
+          example: '2026-06-18T08:00:00Z'
           format: date-time
           type: string
         assignmentId:
@@ -1432,7 +1432,7 @@ components:
           type: string
         lastUpdatedAt:
           description: Instant the assignment was last modified in UTC (ISO-8601)
-          example: 2026-06-18 09:30:00+00:00
+          example: '2026-06-18T09:30:00Z'
           format: date-time
           type: string
         mechanics:
@@ -1635,7 +1635,7 @@ components:
           type: string
         overrideTimestamp:
           description: Instant the override was performed in UTC (ISO-8601)
-          example: 2026-06-18 08:00:00+00:00
+          example: '2026-06-18T08:00:00Z'
           format: date-time
           type: string
       required:
@@ -1890,12 +1890,12 @@ components:
       properties:
         newEndAt:
           description: New appointment end instant in UTC (ISO-8601); must be after newStartAt
-          example: 2026-06-19 10:00:00+00:00
+          example: '2026-06-19T10:00:00Z'
           format: date-time
           type: string
         newStartAt:
           description: New appointment start instant in UTC (ISO-8601)
-          example: 2026-06-19 08:00:00+00:00
+          example: '2026-06-19T08:00:00Z'
           format: date-time
           type: string
         notifyCustomer:
@@ -1934,7 +1934,7 @@ components:
           $ref: '#/components/schemas/ConflictDetails'
         endTime:
           description: Event end instant in UTC (ISO-8601)
-          example: 2026-06-18 15:00:00+00:00
+          example: '2026-06-18T15:00:00Z'
           format: date-time
           type: string
         eventId:
@@ -1955,7 +1955,7 @@ components:
           type: string
         startTime:
           description: Event start instant in UTC (ISO-8601)
-          example: 2026-06-18 13:00:00+00:00
+          example: '2026-06-18T13:00:00Z'
           format: date-time
           type: string
         subType:
@@ -2007,17 +2007,17 @@ components:
           type: string
         date:
           description: Calendar date of the schedule view (ISO-8601)
-          example: 2026-06-18
+          example: '2026-06-18'
           format: date
           type: string
         dayEndAt:
           description: End of the displayed day window in UTC (ISO-8601)
-          example: 2026-06-18 21:00:00+00:00
+          example: '2026-06-18T21:00:00Z'
           format: date-time
           type: string
         dayStartAt:
           description: Start of the displayed day window in UTC (ISO-8601)
-          example: 2026-06-18 12:00:00+00:00
+          example: '2026-06-18T12:00:00Z'
           format: date-time
           type: string
         locationId:
@@ -2032,7 +2032,7 @@ components:
           type: array
         viewGeneratedAt:
           description: Instant the view was generated in UTC (ISO-8601)
-          example: 2026-06-18 07:55:00+00:00
+          example: '2026-06-18T07:55:00Z'
           format: date-time
           type: string
         warnings:
@@ -2065,8 +2065,8 @@ components:
           description: Machine-readable patch describing the change (JSON)
           example:
             startAt:
-              new: 2026-06-18 11:00:00+00:00
-              old: 2026-06-18 08:00:00+00:00
+              new: '2026-06-18T11:00:00Z'
+              old: '2026-06-18T08:00:00Z'
           type: string
         changeSummaryText:
           description: Human-readable summary of the change
@@ -2101,7 +2101,7 @@ components:
           type: string
         recordedAt:
           description: Instant the audit entry was recorded in UTC (ISO-8601)
-          example: 2026-06-18 08:00:00+00:00
+          example: '2026-06-18T08:00:00Z'
           format: date-time
           type: string
         retentionYears:
@@ -2125,7 +2125,7 @@ components:
       properties:
         date:
           description: The day the unit roster is rendered as of, in the location's local calendar.
-          example: 2026-09-03
+          example: '2026-09-03'
           format: date
           type: string
         locationId:
@@ -2209,7 +2209,7 @@ components:
           type: array
         promisedAt:
           description: Time the vehicle is promised back; always null until pos-workorder owns a promise time.
-          example: 2026-09-03 17:00:00+00:00
+          example: '2026-09-03T17:00:00Z'
           format: date-time
           type: string
         status:

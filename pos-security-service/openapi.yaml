@@ -61,7 +61,7 @@ paths:
       operationId: searchAuditEvents
       parameters:
       - description: Inclusive start timestamp (ISO-8601)
-        example: 2026-01-01 00:00:00+00:00
+        example: '2026-01-01T00:00:00Z'
         in: query
         name: fromDate
         required: false
@@ -69,7 +69,7 @@ paths:
           format: date-time
           type: string
       - description: Exclusive end timestamp (ISO-8601)
-        example: 2026-12-31 23:59:59+00:00
+        example: '2026-12-31T23:59:59Z'
         in: query
         name: toDate
         required: false
@@ -1905,8 +1905,8 @@ paths:
               Location-scoped assignment:
                 description: Location-scoped assignment
                 value:
-                  effectiveEndDate: 2026-12-31 00:00:00
-                  effectiveStartDate: 2026-01-15 00:00:00
+                  effectiveEndDate: '2026-12-31T00:00:00'
+                  effectiveStartDate: '2026-01-15T00:00:00'
                   roleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
                   scopeLocationIds:
                   - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d
@@ -2061,7 +2061,7 @@ paths:
           format: uuid
           type: string
       - description: Effective end date and time for revocation. Defaults to current date and time
-        example: 2026-02-16 10:30:00
+        example: '2026-02-16T10:30:00'
         in: query
         name: endDate
         required: false
@@ -4552,7 +4552,7 @@ components:
       properties:
         accountExpiresAt:
           description: Timestamp at which the account expires
-          example: 2027-01-01 00:00:00+00:00
+          example: '2027-01-01T00:00:00Z'
           format: date-time
           type: string
         accountNonExpired:
@@ -4565,7 +4565,7 @@ components:
           type: boolean
         credentialsExpireAt:
           description: Timestamp at which the credentials expire
-          example: 2026-12-01 00:00:00+00:00
+          example: '2026-12-01T00:00:00Z'
           format: date-time
           type: string
         credentialsNonExpired:
@@ -4574,7 +4574,7 @@ components:
           type: boolean
         disabledAt:
           description: Timestamp at which the account was disabled
-          example: 2026-05-01 08:00:00+00:00
+          example: '2026-05-01T08:00:00Z'
           format: date-time
           type: string
         disabledBy:
@@ -4592,12 +4592,12 @@ components:
           type: integer
         lockedAt:
           description: Timestamp at which the account was locked
-          example: 2026-06-01 12:00:00+00:00
+          example: '2026-06-01T12:00:00Z'
           format: date-time
           type: string
         lockedUntil:
           description: Timestamp until which the account remains locked
-          example: 2026-06-01 12:30:00+00:00
+          example: '2026-06-01T12:30:00Z'
           format: date-time
           type: string
         userId:
@@ -4625,7 +4625,7 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440000
           type: string
         fieldErrors:
-          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
           items:
             $ref: '#/components/schemas/FieldError'
           type: array
@@ -4652,7 +4652,7 @@ components:
           type: string
         timestamp:
           description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
+          example: '2026-03-17T14:30:00.000Z'
           type: string
       required:
       - code
@@ -4671,7 +4671,7 @@ components:
           type: string
         timestamp:
           description: Timestamp recorded for the audit event
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
       required:
@@ -4700,7 +4700,7 @@ components:
           type: string
         fromDate:
           description: Inclusive start timestamp (ISO-8601)
-          example: 2026-01-01 00:00:00+00:00
+          example: '2026-01-01T00:00:00Z'
           format: date-time
           type: string
         locationIds:
@@ -4734,7 +4734,7 @@ components:
           type: string
         toDate:
           description: Exclusive end timestamp (ISO-8601)
-          example: 2026-12-31 23:59:59+00:00
+          example: '2026-12-31T23:59:59Z'
           format: date-time
           type: string
         workorderId:
@@ -4748,7 +4748,7 @@ components:
       properties:
         completedAt:
           description: Timestamp when the export completed (null if not yet complete)
-          example: 2026-01-15 09:35:00+00:00
+          example: '2026-01-15T09:35:00Z'
           format: date-time
           type: string
         downloadUrl:
@@ -4766,7 +4766,7 @@ components:
           type: string
         requestedAt:
           description: Timestamp when the export was requested
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         status:
@@ -4849,7 +4849,7 @@ components:
           type: string
         timestamp:
           description: Timestamp recorded for the event
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
       required:
@@ -5546,7 +5546,7 @@ components:
           type: string
         timestamp:
           description: Timestamp the snapshot was captured
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
       required:
@@ -5597,7 +5597,7 @@ components:
       properties:
         createdAt:
           description: Creation timestamp
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         createdBy:
@@ -5606,12 +5606,12 @@ components:
           type: string
         effectiveEndDate:
           description: Exclusive end of the effective window
-          example: 2026-12-31 00:00:00
+          example: '2026-12-31T00:00:00'
           format: date-time
           type: string
         effectiveStartDate:
           description: Inclusive start of the effective window
-          example: 2026-01-15 00:00:00
+          example: '2026-01-15T00:00:00'
           format: date-time
           type: string
         id:
@@ -5621,7 +5621,7 @@ components:
           type: string
         lastModifiedAt:
           description: Last-modified timestamp
-          example: 2026-01-16 11:00:00+00:00
+          example: '2026-01-16T11:00:00Z'
           format: date-time
           type: string
         lastModifiedBy:
@@ -5630,7 +5630,7 @@ components:
           type: string
         revokedAt:
           description: Timestamp at which the assignment was revoked
-          example: 2026-06-01 12:00:00+00:00
+          example: '2026-06-01T12:00:00Z'
           format: date-time
           type: string
         roleId:
@@ -5667,12 +5667,12 @@ components:
       properties:
         effectiveEndDate:
           description: Exclusive end of the effective window
-          example: 2026-12-31 00:00:00
+          example: '2026-12-31T00:00:00'
           format: date-time
           type: string
         effectiveStartDate:
           description: Inclusive start of the effective window
-          example: 2026-01-15 00:00:00
+          example: '2026-01-15T00:00:00'
           format: date-time
           type: string
         roleId:
@@ -5804,7 +5804,7 @@ components:
       properties:
         createdAt:
           description: Creation timestamp
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         createdBy:
@@ -5822,7 +5822,7 @@ components:
           type: string
         lastModifiedAt:
           description: Last-modified timestamp
-          example: 2026-01-16 11:00:00+00:00
+          example: '2026-01-16T11:00:00Z'
           format: date-time
           type: string
         lastModifiedBy:
@@ -5959,7 +5959,7 @@ components:
       properties:
         generatedAt:
           description: When this snapshot was assembled, for staleness reporting by the consumer
-          example: 2026-08-31 15:24:09+00:00
+          example: '2026-08-31T15:24:09Z'
           format: date-time
           type: string
         roles:
@@ -6108,7 +6108,7 @@ components:
           type: string
         createdAt:
           description: Case creation timestamp
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         crmCandidateCount:
@@ -6169,7 +6169,7 @@ components:
           type: string
         resolvedAt:
           description: Resolution timestamp, when resolved
-          example: 2026-01-17 14:00:00+00:00
+          example: '2026-01-17T14:00:00Z'
           format: date-time
           type: string
         resolvedBy:
@@ -6185,7 +6185,7 @@ components:
           type: string
         updatedAt:
           description: Case last-updated timestamp
-          example: 2026-01-16 11:00:00+00:00
+          example: '2026-01-16T11:00:00Z'
           format: date-time
           type: string
       required:

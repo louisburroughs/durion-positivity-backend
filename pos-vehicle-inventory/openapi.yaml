@@ -1133,7 +1133,7 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440000
           type: string
         fieldErrors:
-          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
           items:
             $ref: '#/components/schemas/FieldError'
           type: array
@@ -1160,7 +1160,7 @@ components:
           type: string
         timestamp:
           description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
+          example: '2026-03-17T14:30:00.000Z'
           type: string
       required:
       - code
@@ -1545,7 +1545,7 @@ components:
       properties:
         createdAt:
           description: Timestamp when the preference record was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         createdByUserId:
@@ -1575,7 +1575,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the preference record was last updated
-          example: 2026-01-16 14:45:00+00:00
+          example: '2026-01-16T14:45:00Z'
           format: date-time
           type: string
         updatedByUserId:
@@ -1670,7 +1670,7 @@ components:
       properties:
         createdAt:
           description: Timestamp when the vehicle record was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         id:
@@ -1688,7 +1688,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the vehicle record was last updated
-          example: 2026-01-16 14:45:00+00:00
+          example: '2026-01-16T14:45:00Z'
           format: date-time
           type: string
         vehicleType:
@@ -1722,7 +1722,7 @@ components:
           type: string
         createdAt:
           description: Record creation timestamp (UTC).
-          example: 2026-02-27 12:00:00+00:00
+          example: '2026-02-27T12:00:00Z'
           format: date-time
           type: string
         createdBy:
@@ -1775,7 +1775,7 @@ components:
           type: string
         updatedAt:
           description: Last update timestamp (UTC).
-          example: 2026-02-27 13:00:00+00:00
+          example: '2026-02-27T13:00:00Z'
           format: date-time
           type: string
         updatedBy:
