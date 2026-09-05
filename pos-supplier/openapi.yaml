@@ -79,7 +79,7 @@ paths:
         name: from
         required: true
         schema:
-          example: 2026-08-01 00:00:00+00:00
+          example: '2026-08-01T00:00:00Z'
           format: date-time
           type: string
       - description: Window end, EXCLUSIVE, and must be after 'from'. Half-open so adjacent windows tile without listing a boundary attempt twice.
@@ -87,7 +87,7 @@ paths:
         name: to
         required: true
         schema:
-          example: 2026-09-01 00:00:00+00:00
+          example: '2026-09-01T00:00:00Z'
           format: date-time
           type: string
       - description: Canonical capability key to narrow to. Omit for all capabilities. An unrecognised key is rejected rather than silently matching nothing.
@@ -2863,11 +2863,11 @@ paths:
                     requestedQuantity: 4
                     stalenessThreshold: PT15M
                     vendors:
-                    - asOf: 2026-08-14 12:00:00+00:00
-                      fetchedAt: 2026-08-14 12:00:00+00:00
+                    - asOf: '2026-08-14T12:00:00Z'
+                      fetchedAt: '2026-08-14T12:00:00Z'
                       lines:
                       - availableQuantity: 8
-                        earliestDeliveryDate: 2026-08-20
+                        earliestDeliveryDate: '2026-08-20'
                         status: AVAILABLE
                       stale: false
                       status: OK
@@ -2958,12 +2958,12 @@ paths:
                 answered:
                   description: answered
                   value:
-                    asOf: 2026-08-14 12:00:00+00:00
+                    asOf: '2026-08-14T12:00:00Z'
                     inquiryId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
                     lines:
                     - articleEan: '4019238001234'
                       availableQuantity: 8
-                      earliestDeliveryDate: 2026-08-20
+                      earliestDeliveryDate: '2026-08-20'
                       status: AVAILABLE
                     status: OK
               schema:
@@ -3070,7 +3070,7 @@ paths:
         name: dateFrom
         required: false
         schema:
-          example: 2026-08-01 00:00:00+00:00
+          example: '2026-08-01T00:00:00Z'
           format: date-time
           type: string
       - description: Window end on the intent's createdAt, EXCLUSIVE. Half-open so adjacent windows tile without listing a boundary intent twice.
@@ -3078,7 +3078,7 @@ paths:
         name: dateTo
         required: false
         schema:
-          example: 2026-09-01 00:00:00+00:00
+          example: '2026-09-01T00:00:00Z'
           format: date-time
           type: string
       - description: Zero-based page index.
@@ -3559,7 +3559,7 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440000
           type: string
         fieldErrors:
-          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
           items:
             $ref: '#/components/schemas/FieldError'
           type: array
@@ -3586,7 +3586,7 @@ components:
           type: string
         timestamp:
           description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
+          example: '2026-03-17T14:30:00.000Z'
           type: string
       required:
       - code
@@ -3849,7 +3849,7 @@ components:
           type: string
         accessedAt:
           description: When the read happened.
-          example: 2026-08-11 14:22:07.412000+00:00
+          example: '2026-08-11T14:22:07.412Z'
           format: date-time
           type: string
         accessedBy:
@@ -3983,7 +3983,7 @@ components:
           type: string
         payloadsPurgedAt:
           description: 'When retention nulled this row''s payloads (ADR-0050 §7, 400 days). Distinguishes ''purged'' from ''never captured'': metadata is retained permanently, only content expires.'
-          example: 2027-09-15 03:30:00+00:00
+          example: '2027-09-15T03:30:00Z'
           format: date-time
           type: string
         protocolFamily:
@@ -4004,7 +4004,7 @@ components:
           type: boolean
         startedAt:
           description: When the attempt began.
-          example: 2026-08-11 09:14:02.117000+00:00
+          example: '2026-08-11T09:14:02.117Z'
           format: date-time
           type: string
         supplierRef:
@@ -4397,7 +4397,7 @@ components:
           type: string
         latestEffectiveDate:
           description: Newest vendor-stated catalog document date over completed imports. Vendor document metadata, NOT retrieval time; null when no completed import stated one.
-          example: 2026-08-13
+          example: '2026-08-13'
           format: date
           type: string
         stale:
@@ -4491,7 +4491,7 @@ components:
           type: integer
         sourceDocumentDate:
           description: Vendor catalog document date, when stated.
-          example: 2026-05-12
+          example: '2026-05-12'
           format: date
           type: string
         sourceDocumentId:
@@ -4635,7 +4635,7 @@ components:
           type: string
         issuedOn:
           description: Vendor-stated issue date of the document (vendor time).
-          example: 2026-08-13
+          example: '2026-08-13'
           format: date
           type: string
         linesRejected:

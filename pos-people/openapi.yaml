@@ -116,12 +116,12 @@ paths:
                   records:
                   - employeeNumber: EMP-0001
                     firstName: Jane
-                    hireDate: 2026-01-15
+                    hireDate: '2026-01-15'
                     lastName: Smith
                     primaryEmail: jane.smith@example.com
                   - employeeNumber: EMP-0002
                     firstName: John
-                    hireDate: 2026-02-01
+                    hireDate: '2026-02-01'
                     lastName: Doe
                     primaryPhone: +1-555-123-4567
             schema:
@@ -279,7 +279,7 @@ paths:
                   duplicatePolicy: STRICT
                   employeeNumber: EMP-0001
                   firstName: Jane
-                  hireDate: 2026-01-15
+                  hireDate: '2026-01-15'
                   lastName: Smith
                   preferredName: Jane
                   status: ACTIVE
@@ -439,7 +439,7 @@ paths:
                   duplicatePolicy: BALANCED
                   employeeNumber: EMP-0001
                   firstName: Jane
-                  hireDate: 2026-01-15
+                  hireDate: '2026-01-15'
                   lastName: Smith
                   status: ON_LEAVE
             schema:
@@ -515,7 +515,7 @@ paths:
               Grace-period offboarding:
                 description: Grace-period offboarding
                 value:
-                  assignmentEndDate: 2026-03-31
+                  assignmentEndDate: '2026-03-31'
                   assignmentPolicy: GRACE_PERIOD
                   disableReason: Voluntary resignation
             schema:
@@ -609,7 +609,7 @@ paths:
               Missed clock-out:
                 description: Missed clock-out
                 value:
-                  detectedAt: 2026-02-17 08:30:00-05:00
+                  detectedAt: '2026-02-17T08:30:00-05:00'
                   employeeId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
                   exceptionCode: MISSED_CLOCK_OUT
                   resolutionNotes: Employee forgot to clock out at end of shift
@@ -928,7 +928,7 @@ paths:
       operationId: listApprovedTimeForExport
       parameters:
       - description: Start date (inclusive)
-        example: 2026-02-01
+        example: '2026-02-01'
         in: query
         name: startDate
         required: true
@@ -936,7 +936,7 @@ paths:
           format: date
           type: string
       - description: End date (inclusive)
-        example: 2026-02-07
+        example: '2026-02-07'
         in: query
         name: endDate
         required: true
@@ -1016,7 +1016,7 @@ paths:
       operationId: getAttendanceDiscrepancyReport
       parameters:
       - description: Start date (inclusive)
-        example: 2026-02-01
+        example: '2026-02-01'
         in: query
         name: startDate
         required: true
@@ -1024,7 +1024,7 @@ paths:
           format: date
           type: string
       - description: End date (inclusive)
-        example: 2026-02-07
+        example: '2026-02-07'
         in: query
         name: endDate
         required: true
@@ -1169,7 +1169,7 @@ paths:
               Primary technician assignment:
                 description: Primary technician assignment
                 value:
-                  effectiveFrom: 2026-02-16
+                  effectiveFrom: '2026-02-16'
                   isPrimary: true
                   locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
                   personId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
@@ -1323,8 +1323,8 @@ paths:
               Extend assignment end date:
                 description: Extend assignment end date
                 value:
-                  effectiveFrom: 2026-02-16
-                  effectiveTo: 2026-12-31
+                  effectiveFrom: '2026-02-16'
+                  effectiveTo: '2026-12-31'
                   isPrimary: true
                   locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
                   personId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
@@ -1455,8 +1455,8 @@ paths:
               Biweekly period:
                 description: Biweekly period
                 value:
-                  endDate: 2026-06-14
-                  startDate: 2026-06-01
+                  endDate: '2026-06-14'
+                  startDate: '2026-06-01'
                   tenantId: 01960000-0000-7000-8000-000000000001
             schema:
               $ref: '#/components/schemas/CreateTimePeriodRequest'
@@ -1581,7 +1581,7 @@ paths:
           - REJECTED
           type: string
       - description: Calendar day of the clock-in, resolved in timeZone
-        example: 2026-01-15
+        example: '2026-01-15'
         in: query
         name: workDate
         required: false
@@ -2479,7 +2479,7 @@ paths:
                 value:
                   billableMinutes: 480
                   breakMinutes: 30
-                  submittedAt: 2026-02-16 17:00:00+00:00
+                  submittedAt: '2026-02-16T17:00:00Z'
             schema:
               $ref: '#/components/schemas/WorkSessionSubmitRequest'
         description: Billable and break minute totals plus the submission timestamp for the ended session.
@@ -2650,7 +2650,7 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440000
           type: string
         fieldErrors:
-          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
           items:
             $ref: '#/components/schemas/FieldError'
           type: array
@@ -2677,7 +2677,7 @@ components:
           type: string
         timestamp:
           description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
+          example: '2026-03-17T14:30:00.000Z'
           type: string
       required:
       - code
@@ -2711,7 +2711,7 @@ components:
       properties:
         approvedAt:
           description: Approval timestamp
-          example: 2026-02-17 09:15:00+00:00
+          example: '2026-02-17T09:15:00Z'
           format: date-time
           type: string
         approvedBy:
@@ -2728,7 +2728,7 @@ components:
           type: string
         entryDate:
           description: Entry date (UTC)
-          example: 2026-02-16
+          example: '2026-02-16'
           format: date
           type: string
         hoursWorked:
@@ -2777,7 +2777,7 @@ components:
           type: string
         reportDate:
           description: Report local date
-          example: 2026-02-16
+          example: '2026-02-16'
           format: date
           type: string
         technicianId:
@@ -2819,7 +2819,7 @@ components:
       properties:
         endedAt:
           description: Timestamp the break ended
-          example: 2026-02-16 12:30:00+00:00
+          example: '2026-02-16T12:30:00Z'
           format: date-time
           type: string
         sessionId:
@@ -2829,7 +2829,7 @@ components:
           type: string
         startedAt:
           description: Timestamp the break started
-          example: 2026-02-16 12:00:00+00:00
+          example: '2026-02-16T12:00:00Z'
           format: date-time
           type: string
       required:
@@ -2974,7 +2974,7 @@ components:
           type: string
         hireDate:
           description: Date the employee was hired
-          example: 2026-01-15
+          example: '2026-01-15'
           format: date
           type: string
         lastName:
@@ -2998,7 +2998,7 @@ components:
           type: string
         terminationDate:
           description: Date the employee was terminated, if applicable
-          example: 2026-12-31
+          example: '2026-12-31'
           format: date
           type: string
       required:
@@ -3015,12 +3015,12 @@ components:
           type: boolean
         effectiveFrom:
           description: Assignment effective start date
-          example: 2026-02-16
+          example: '2026-02-16'
           format: date
           type: string
         effectiveTo:
           description: Assignment effective end date
-          example: 2026-12-31
+          example: '2026-12-31'
           format: date
           type: string
         isPrimary:
@@ -3054,12 +3054,12 @@ components:
       properties:
         endDate:
           description: Last date of the period (inclusive)
-          example: 2026-06-14
+          example: '2026-06-14'
           format: date
           type: string
         startDate:
           description: First date of the period (inclusive)
-          example: 2026-06-01
+          example: '2026-06-01'
           format: date
           type: string
         status:
@@ -3100,7 +3100,7 @@ components:
       properties:
         assignmentEndDate:
           description: End date to apply to assignments when the policy is GRACE_PERIOD
-          example: 2026-03-31
+          example: '2026-03-31'
           format: date
           type: string
         assignmentPolicy:
@@ -3226,7 +3226,7 @@ components:
           $ref: '#/components/schemas/EmployeeContactInfoDto'
         createdAt:
           description: Timestamp the employee record was created
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         employeeNumber:
@@ -3239,7 +3239,7 @@ components:
           type: string
         hireDate:
           description: Date the employee was hired
-          example: 2026-01-15
+          example: '2026-01-15'
           format: date
           type: string
         id:
@@ -3267,17 +3267,17 @@ components:
           type: string
         statusEffectiveAt:
           description: Timestamp the current status became effective
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         terminationDate:
           description: Date the employee was terminated, if applicable
-          example: 2026-12-31
+          example: '2026-12-31'
           format: date
           type: string
         updatedAt:
           description: Timestamp the employee record was last updated
-          example: 2026-02-01 14:05:00+00:00
+          example: '2026-02-01T14:05:00Z'
           format: date-time
           type: string
         warnings:
@@ -3377,7 +3377,7 @@ components:
           type: string
         personStatusEffectiveAt:
           description: When the person's status last became effective
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         username:
@@ -3471,17 +3471,17 @@ components:
           type: string
         availableOn:
           description: Date the availability was evaluated for
-          example: 2026-02-16
+          example: '2026-02-16'
           format: date
           type: string
         effectiveFrom:
           description: Date the assignment becomes effective
-          example: 2026-02-01
+          example: '2026-02-01'
           format: date
           type: string
         effectiveTo:
           description: Date the assignment ends
-          example: 2026-12-31
+          example: '2026-12-31'
           format: date
           type: string
         firstName:
@@ -3531,7 +3531,7 @@ components:
           type: string
         hireDate:
           description: Date the person was hired (ISO 8601 date)
-          example: 2026-01-15
+          example: '2026-01-15'
           minLength: 1
           type: string
         lastName:
@@ -3594,12 +3594,12 @@ components:
       properties:
         effectiveFrom:
           description: First day of the assignment; defaults to today when omitted, since a seeded roster is current as of the load rather than backdated.
-          example: 2026-02-16
+          example: '2026-02-16'
           format: date
           type: string
         effectiveTo:
           description: Last day of the assignment; open-ended when omitted
-          example: 2026-12-31
+          example: '2026-12-31'
           format: date
           type: string
         employeeNumber:
@@ -3635,7 +3635,7 @@ components:
           type: string
         createdAt:
           description: Creation timestamp in UTC
-          example: 2026-02-16 14:30:00+00:00
+          example: '2026-02-16T14:30:00Z'
           format: date-time
           type: string
         createdBy:
@@ -3644,12 +3644,12 @@ components:
           type: string
         effectiveFrom:
           description: Assignment effective start date
-          example: 2026-02-16
+          example: '2026-02-16'
           format: date
           type: string
         effectiveTo:
           description: Assignment effective end date
-          example: 2026-12-31
+          example: '2026-12-31'
           format: date
           type: string
         isPrimary:
@@ -3679,7 +3679,7 @@ components:
           type: string
         updatedAt:
           description: Last update timestamp in UTC
-          example: 2026-02-18 09:15:00+00:00
+          example: '2026-02-18T09:15:00Z'
           format: date-time
           type: string
       required:
@@ -3702,7 +3702,7 @@ components:
           type: string
         createdAt:
           description: Timestamp when the adjustment was created
-          example: 2026-02-17 08:30:00+00:00
+          example: '2026-02-17T08:30:00Z'
           format: date-time
           type: string
         createdBy:
@@ -3711,7 +3711,7 @@ components:
           type: string
         decidedAt:
           description: Timestamp when the adjustment was approved or rejected
-          example: 2026-02-17 09:15:00+00:00
+          example: '2026-02-17T09:15:00Z'
           format: date-time
           type: string
         decidedBy:
@@ -3729,12 +3729,12 @@ components:
           type: string
         proposedEndAt:
           description: Proposed new end timestamp
-          example: 2026-02-17 17:00:00+00:00
+          example: '2026-02-17T17:00:00Z'
           format: date-time
           type: string
         proposedStartAt:
           description: Proposed new start timestamp
-          example: 2026-02-17 08:00:00+00:00
+          example: '2026-02-17T08:00:00Z'
           format: date-time
           type: string
         reasonCode:
@@ -3778,12 +3778,12 @@ components:
           type: string
         proposedEndAt:
           description: Proposed new end timestamp
-          example: 2026-02-17 17:00:00-05:00
+          example: '2026-02-17T17:00:00-05:00'
           format: date-time
           type: string
         proposedStartAt:
           description: Proposed new start timestamp
-          example: 2026-02-17 08:00:00-05:00
+          example: '2026-02-17T08:00:00-05:00'
           format: date-time
           type: string
         reasonCode:
@@ -3836,7 +3836,7 @@ components:
       properties:
         detectedAt:
           description: Timestamp when the exception was detected
-          example: 2026-02-17 08:30:00+00:00
+          example: '2026-02-17T08:30:00Z'
           format: date-time
           type: string
         employeeId:
@@ -3859,7 +3859,7 @@ components:
           type: string
         resolvedAt:
           description: Timestamp when the exception was resolved
-          example: 2026-02-17 09:15:00+00:00
+          example: '2026-02-17T09:15:00Z'
           format: date-time
           type: string
         resolvedBy:
@@ -3888,7 +3888,7 @@ components:
           type: string
         workDate:
           description: Work date when the exception occurred
-          example: 2026-02-17
+          example: '2026-02-17'
           format: date
           type: string
       required:
@@ -3903,7 +3903,7 @@ components:
       properties:
         detectedAt:
           description: Timestamp when the exception was detected
-          example: 2026-02-17 08:30:00-05:00
+          example: '2026-02-17T08:30:00-05:00'
           format: date-time
           type: string
         employeeId:
@@ -4022,7 +4022,7 @@ components:
           type: string
         workDate:
           description: Calendar day of the clock-in, in the zone the query was filtered by
-          example: 2026-01-15
+          example: '2026-01-15'
           format: date
           type: string
         workSessionId:
@@ -4116,12 +4116,12 @@ components:
       properties:
         endDate:
           description: Last date of the period
-          example: 2026-02-15
+          example: '2026-02-15'
           format: date
           type: string
         startDate:
           description: First date of the period
-          example: 2026-02-01
+          example: '2026-02-01'
           format: date
           type: string
         status:
@@ -4172,12 +4172,12 @@ components:
           type: string
         sessionEndTime:
           description: Session end timestamp
-          example: 2026-02-16 17:00:00+00:00
+          example: '2026-02-16T17:00:00Z'
           format: date-time
           type: string
         sessionStartTime:
           description: Session start timestamp
-          example: 2026-02-16 08:00:00+00:00
+          example: '2026-02-16T08:00:00Z'
           format: date-time
           type: string
         timekeepingEntryId:
@@ -4229,7 +4229,7 @@ components:
           type: string
         hireDate:
           description: Date the employee was hired
-          example: 2026-01-15
+          example: '2026-01-15'
           format: date
           type: string
         lastName:
@@ -4253,7 +4253,7 @@ components:
           type: string
         terminationDate:
           description: Date the employee was terminated, if applicable
-          example: 2026-12-31
+          example: '2026-12-31'
           format: date
           type: string
       required:
@@ -4270,12 +4270,12 @@ components:
           type: boolean
         effectiveFrom:
           description: Assignment effective start date
-          example: 2026-02-16
+          example: '2026-02-16'
           format: date
           type: string
         effectiveTo:
           description: Assignment effective end date
-          example: 2026-12-31
+          example: '2026-12-31'
           format: date
           type: string
         isPrimary:
@@ -4319,7 +4319,7 @@ components:
           type: integer
         endedAt:
           description: Timestamp the session ended
-          example: 2026-02-16 17:00:00+00:00
+          example: '2026-02-16T17:00:00Z'
           format: date-time
           type: string
         personId:
@@ -4334,7 +4334,7 @@ components:
           type: string
         startedAt:
           description: Timestamp the session started
-          example: 2026-02-16 08:00:00+00:00
+          example: '2026-02-16T08:00:00Z'
           format: date-time
           type: string
         status:
@@ -4343,7 +4343,7 @@ components:
           type: string
         submittedAt:
           description: Timestamp the session was submitted
-          example: 2026-02-16 17:05:00+00:00
+          example: '2026-02-16T17:05:00Z'
           format: date-time
           type: string
       required:
@@ -4383,7 +4383,7 @@ components:
           type: integer
         submittedAt:
           description: Timestamp the session was submitted
-          example: 2026-02-16 17:00:00+00:00
+          example: '2026-02-16T17:00:00Z'
           format: date-time
           type: string
       required:

@@ -1061,7 +1061,7 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440000
           type: string
         fieldErrors:
-          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
           items:
             $ref: '#/components/schemas/FieldError'
           type: array
@@ -1088,7 +1088,7 @@ components:
           type: string
         timestamp:
           description: ISO 8601 UTC timestamp of the error
-          example: 2026-03-17 14:30:00+00:00
+          example: '2026-03-17T14:30:00.000Z'
           type: string
       required:
       - code
@@ -1124,7 +1124,7 @@ components:
           type: string
         timestamp:
           description: Timestamp when the event occurred (ISO 8601)
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
       required:
@@ -1138,10 +1138,7 @@ components:
         message: Hello
       properties:
         conversationId:
-          description: Optional conversation id. Turns sharing an id share one memory;
-            omit it to use the caller's default per-role conversation, and supply
-            a distinct id per request to ask independent questions that do not inherit
-            each other's history (#1735).
+          description: Optional conversation id. Turns sharing an id share one memory; omit it to use the caller's default per-role conversation, and supply a distinct id per request to ask independent questions that do not inherit each other's history (#1735).
           example: gate-q07
           type: string
         message:
@@ -1181,12 +1178,12 @@ components:
           type: integer
         completedAt:
           description: Timestamp when ingestion processing completed (ISO 8601)
-          example: 2026-01-15 09:30:45+00:00
+          example: '2026-01-15T09:30:45Z'
           format: date-time
           type: string
         createdAt:
           description: Timestamp when the job was created (ISO 8601)
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         documentId:
@@ -1204,7 +1201,7 @@ components:
           type: string
         startedAt:
           description: Timestamp when ingestion processing started (ISO 8601)
-          example: 2026-01-15 09:30:05+00:00
+          example: '2026-01-15T09:30:05Z'
           format: date-time
           type: string
         status:
@@ -1218,7 +1215,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the job was last updated (ISO 8601)
-          example: 2026-01-15 09:31:00+00:00
+          example: '2026-01-15T09:31:00Z'
           format: date-time
           type: string
       required:
@@ -1318,7 +1315,7 @@ components:
           type: string
         createdAt:
           description: Timestamp when the configuration was created (ISO 8601)
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         headers:
@@ -1339,7 +1336,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the configuration was last updated (ISO 8601)
-          example: 2026-01-16 11:45:00+00:00
+          example: '2026-01-16T11:45:00Z'
           format: date-time
           type: string
       required:
@@ -1505,7 +1502,7 @@ components:
           type: string
         createdAt:
           description: Timestamp when the system prompt was created (ISO 8601)
-          example: 2026-01-15 09:30:00+00:00
+          example: '2026-01-15T09:30:00Z'
           format: date-time
           type: string
         id:
@@ -1519,7 +1516,7 @@ components:
           type: string
         updatedAt:
           description: Timestamp when the system prompt was last updated (ISO 8601)
-          example: 2026-01-16 11:45:00+00:00
+          example: '2026-01-16T11:45:00Z'
           format: date-time
           type: string
       required:

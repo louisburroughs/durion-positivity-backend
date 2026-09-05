@@ -376,7 +376,7 @@ paths:
           minLength: 1
           type: string
       - description: Lower bound on publishedAt, inclusive. Defaults to 7 days ago; must not be in the future or more than 90 days in the past.
-        example: 2026-08-20 00:00:00+00:00
+        example: '2026-08-20T00:00:00Z'
         in: query
         name: since
         required: false
@@ -441,7 +441,7 @@ paths:
                   apiVersion: '1'
                   elapsedMs: 42
                   id: ORDER_ORDER_CREATE
-                  publishedAt: 2026-03-05 21:15:00+00:00
+                  publishedAt: '2026-03-05T21:15:00Z'
                   timestamp: 1730809200000
             schema:
               $ref: '#/components/schemas/EmitEventRequest'
@@ -576,7 +576,7 @@ components:
           type: string
         publishedAt:
           description: Event publication time in UTC
-          example: 2026-03-05 21:15:00+00:00
+          example: '2026-03-05T21:15:00Z'
           format: date-time
           type: string
         timestamp:
