@@ -88,7 +88,7 @@ paths:
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: No address on file for the organization.
       security:
       - bearerAuth:
@@ -149,7 +149,7 @@ paths:
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: line1 missing or countryCode not a valid ISO 3166-1 alpha-2 code.
       security:
       - bearerAuth:
@@ -321,7 +321,7 @@ paths:
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: No person linked to the current user.
       security:
       - bearerAuth:
@@ -424,19 +424,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserPersonLinkResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserPersonLinkResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Person not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserPersonLinkResponse'
+                $ref: '#/components/schemas/ApiError'
           description: User already linked to different person
       security:
       - bearerAuth:
@@ -483,9 +483,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  $ref: '#/components/schemas/UserPersonLinkResponse'
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Link or person not found
       security:
       - bearerAuth:
@@ -543,19 +541,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserPersonLinkResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserPersonLinkResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Person not found
         '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserPersonLinkResponse'
+                $ref: '#/components/schemas/ApiError'
           description: User already linked to different person
       security:
       - bearerAuth:
@@ -592,6 +590,10 @@ paths:
         '204':
           description: Link deleted successfully
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Link not found
       security:
       - bearerAuth:
@@ -635,7 +637,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PersonResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Link or person not found
       security:
       - bearerAuth:
@@ -677,13 +679,13 @@ paths:
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Person not found.
         '409':
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Person still has linked users; unlink them first.
       security:
       - bearerAuth:
@@ -728,7 +730,7 @@ paths:
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Person not found.
       security:
       - bearerAuth:
@@ -790,7 +792,7 @@ paths:
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Person not found.
       security:
       - bearerAuth:
@@ -923,7 +925,7 @@ paths:
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: No address on file for the person.
       security:
       - bearerAuth:
@@ -984,13 +986,13 @@ paths:
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Person not found.
         '422':
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: line1 missing or countryCode not a valid ISO 3166-1 alpha-2 code.
       security:
       - bearerAuth:
@@ -1037,9 +1039,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  type: string
-                type: array
+                $ref: '#/components/schemas/ApiError'
           description: Person not found
       security:
       - bearerAuth:
@@ -1148,13 +1148,13 @@ paths:
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request
         '404':
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Person or role not found
       security:
       - bearerAuth:
@@ -1205,13 +1205,13 @@ paths:
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request for revoking role assignment
         '404':
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
+                $ref: '#/components/schemas/ApiError'
           description: Person or role assignment not found
       security:
       - bearerAuth:
@@ -1263,6 +1263,54 @@ paths:
       - people-contact:role:view
 components:
   schemas:
+    ApiError:
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+          type: string
+        correlationId:
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+          type: string
+        fieldErrors:
+          description: Field-level validation errors; present (non-null) for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED; omitted for all other error types
+          items:
+            $ref: '#/components/schemas/FieldError'
+          type: array
+        message:
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+          type: string
+        nextAction:
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+          type: string
+        referenceId:
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+          type: string
+        status:
+          description: HTTP status code
+          example: 404
+          format: int32
+          type: integer
+        supportAction:
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+          type: string
+        timestamp:
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17 14:30:00+00:00
+          type: string
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+      type: object
     ContactPointDto:
       description: Typed contact point (email, phone) for a person
       properties:
@@ -1303,6 +1351,21 @@ components:
       required:
       - personId
       - username
+      type: object
+    FieldError:
+      description: Validation error for a specific request field
+      properties:
+        field:
+          description: Field name
+          example: quantity
+          type: string
+        message:
+          description: Validation failure message
+          example: must be greater than 0
+          type: string
+      required:
+      - field
+      - message
       type: object
     LinkUserToPersonRequest:
       description: Request to link a user account to a person record
@@ -1479,24 +1542,6 @@ components:
       required:
       - countryCode
       - line1
-      type: object
-    ProblemDetail:
-      properties:
-        detail:
-          type: string
-        instance:
-          format: uri
-          type: string
-        properties:
-          type: object
-        status:
-          format: int32
-          type: integer
-        title:
-          type: string
-        type:
-          format: uri
-          type: string
       type: object
     ResolvePersonRequest:
       description: Resolve person request with weighted matching inputs

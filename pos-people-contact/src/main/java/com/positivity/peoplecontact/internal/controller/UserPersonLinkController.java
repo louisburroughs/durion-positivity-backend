@@ -7,6 +7,7 @@ import com.positivity.peoplecontact.internal.dto.PersonResponse;
 import com.positivity.peoplecontact.internal.dto.UserPersonLinkResponse;
 import com.positivity.peoplecontact.internal.security.PeopleContactPermissions;
 import com.positivity.peoplecontact.internal.service.UserPersonLinkService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -58,9 +59,18 @@ public class UserPersonLinkController {
             responseCode = "200",
             description = "Link already exists and is returned",
             content = @Content(schema = @Schema(implementation = UserPersonLinkResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request")
-    @ApiResponse(responseCode = "404", description = "Person not found")
-    @ApiResponse(responseCode = "409", description = "User already linked to different person")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Person not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "User already linked to different person",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:userLink:write"})
@@ -116,9 +126,18 @@ public class UserPersonLinkController {
             responseCode = "200",
             description = "Link already exists and is returned",
             content = @Content(schema = @Schema(implementation = UserPersonLinkResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request")
-    @ApiResponse(responseCode = "404", description = "Person not found")
-    @ApiResponse(responseCode = "409", description = "User already linked to different person")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Person not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "User already linked to different person",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:userLink:write"})
@@ -160,7 +179,10 @@ public class UserPersonLinkController {
                     Returns 204 on success, and 404 when no link exists for the username.
                     """)
     @ApiResponse(responseCode = "204", description = "Link deleted successfully")
-    @ApiResponse(responseCode = "404", description = "Link not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Link not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:userLink:write"})
@@ -189,7 +211,10 @@ public class UserPersonLinkController {
             responseCode = "200",
             description = "Person found",
             content = @Content(schema = @Schema(implementation = PersonResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Link or person not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Link or person not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:userLink:view"})
@@ -212,7 +237,10 @@ public class UserPersonLinkController {
                     Returns 404 when the person does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Usernames returned")
-    @ApiResponse(responseCode = "404", description = "Person not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Person not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:userLink:view"})
@@ -240,7 +268,10 @@ public class UserPersonLinkController {
             responseCode = "200",
             description = "Links found",
             content = @Content(array = @ArraySchema(schema = @Schema(implementation = UserPersonLinkResponse.class))))
-    @ApiResponse(responseCode = "404", description = "Link or person not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Link or person not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people-contact:userLink:view"})
