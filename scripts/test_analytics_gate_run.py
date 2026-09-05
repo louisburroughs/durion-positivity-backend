@@ -932,6 +932,23 @@ class TraceWindowGradingTest(unittest.TestCase):
 
         self.assertEqual(runner.grade_window(question, "x", "2026-09-05", resolved=resolved)[0], "PASS")
 
+    def test_a_forward_window_is_recognised_from_an_answer(self):
+        # "next" was missing from _STATEMENT_LABELS, so a turn resolving only a FORWARD window
+        # (#1681) read as "no window was resolved" -> UNGRADED, which the run summary treats as a
+        # pass. Graded from the answer path because that is where the label map is consulted.
+        question = self._q({"shape": "FORWARD", "unit": "DAY", "count": 14})
+        answer = 'Window: "next: 2026-09-05 to 2026-09-18 — the next 14 days starting today (2026-09-05)".'
+
+        verdict, detail = runner.grade_window(question, answer, "2026-09-05")
+
+        self.assertEqual(verdict, "PASS", detail)
+
+    def test_a_partial_span_yields_no_count_rather_than_a_plausible_one(self):
+        # _span_count promises WHOLE periods. Counting months inclusively across a part-month window
+        # would hand back the expected number and PASS a window the resolver had got wrong.
+        self.assertEqual(runner._span_count({"startDate": "2026-03-01", "endDate": "2026-08-31"}, "MONTH"), 6)
+        self.assertIsNone(runner._span_count({"startDate": "2026-03-15", "endDate": "2026-08-20"}, "MONTH"))
+
     def test_a_wrong_comparison_still_fails(self):
         question = self._q({"shape": "CALENDAR_SPAN", "comparison": "YEAR_EARLIER"})
         resolved = [{

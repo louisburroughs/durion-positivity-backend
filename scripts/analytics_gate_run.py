@@ -341,6 +341,12 @@ def _span_count(result, unit):
     The resolver's result carries startDate/endDate but not unit or count, so this is the only
     evidence available about a corrected window's length. Returns None when it cannot be derived,
     which the caller treats as "unknown" rather than "matches".
+
+    "Whole" is enforced, not assumed: a calendar unit only yields a count when the window actually
+    starts on a period boundary and ends on the day before the next one. A partial span returns
+    None and therefore cannot match an expected count — if the resolver ever produced a
+    part-month CALENDAR_SPAN, counting its months inclusively would hand back the expected number
+    and PASS a broken window.
     """
     start, end = result.get("startDate"), result.get("endDate")
     if not start or not end or not unit:
@@ -352,13 +358,16 @@ def _span_count(result, unit):
         return None
     if e_d < s_d:
         return None
-    if unit == "MONTH":
-        return (e_d.year - s_d.year) * 12 + (e_d.month - s_d.month) + 1
-    if unit == "YEAR":
-        return e_d.year - s_d.year + 1
-    if unit == "QUARTER":
+    if unit in {"MONTH", "QUARTER", "YEAR"}:
+        # Must span whole calendar months: first day of one, last day of another.
+        if s_d.day != 1 or (e_d + timedelta(days=1)).day != 1:
+            return None
         months = (e_d.year - s_d.year) * 12 + (e_d.month - s_d.month) + 1
-        return months // 3 if months % 3 == 0 else None
+        if unit == "MONTH":
+            return months
+        if unit == "QUARTER":
+            return months // 3 if months % 3 == 0 else None
+        return months // 12 if months % 12 == 0 else None
     if unit in {"DAY", "WEEK"}:
         days = (e_d - s_d).days + 1
         return days if unit == "DAY" else (days // 7 if days % 7 == 0 else None)
@@ -381,9 +390,13 @@ def window_from_trace(trace):
     `model_shape` is kept alongside so a divergence stays visible rather than being smoothed away;
     the model's own classification is still worth knowing, it is just not the thing under test.
 
-    Returns a list of {shape, unit, count, comparison, model_shape} in call order. A bucketed
-    question resolves several, so this keeps them all and lets the caller decide what satisfies the
-    expectation.
+    Returns a list of {shape, unit, count, comparison, model_shape, failed} in call order. A
+    bucketed question resolves several, so this keeps them all and lets the caller decide what
+    satisfies the expectation.
+
+    `failed` marks a resolver call that threw: its other fields are all None, because no window was
+    resolved. Callers must check it — treating such an entry as a resolved window is what let a
+    failed call grade PASS.
     """
     resolved = []
     for call in trace.get("toolCalls") or []:
