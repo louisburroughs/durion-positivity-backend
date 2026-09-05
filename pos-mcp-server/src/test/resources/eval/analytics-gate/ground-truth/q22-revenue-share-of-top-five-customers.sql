@@ -16,31 +16,46 @@
 --   Window: trailing 12 complete calendar months ending with the last complete month, per the
 --   glossary's default window for customer ranking. With EVAL_AS_OF 2026-09-01 that is
 --   2025-09-01 .. 2026-08-31.
+--
+--   Source is ext_invoice in pos_accounting_db, the same replica q13 reads, with the same
+--   status filter and the same party_id UUID guard — a first draft here queried a table named
+--   `invoice` in pos_invoice_db, which does not exist. Document date follows q13's
+--   receivableDocumentDate coalesce so the two questions bucket an invoice into the same month.
 
--- DB: pos_invoice_db
+-- DB: pos_accounting_db
 \if :{?as_of_date}
 \else
 \set as_of_date '2026-09-01'
 \endif
 
-WITH window_bounds AS (
+WITH bounds AS (
     SELECT
         (date_trunc('month', DATE :'as_of_date') - INTERVAL '12 months')::date AS start_date,
         (date_trunc('month', DATE :'as_of_date') - INTERVAL '1 day')::date     AS end_date
 ),
-per_customer AS (
+revenue_invoices AS (
     SELECT
-        i.customer_id,
-        sum(i.total_amount) AS revenue
-    FROM invoice i, window_bounds w
-    WHERE i.status = 'FINALIZED'
-      AND i.invoice_date >= w.start_date
-      AND i.invoice_date <= w.end_date
-    GROUP BY i.customer_id
+        CAST(i.party_id AS uuid) AS customer_id,
+        COALESCE(i.total, 0)     AS total,
+        CAST(COALESCE(i.invoice_created_at, i.finalized_at, i.updated_at)
+             AT TIME ZONE 'UTC' AS date) AS document_date
+    FROM ext_invoice i
+    WHERE i.status IN ('FINALIZED', 'POSTED')
+      AND i.party_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
 ),
-total AS (SELECT coalesce(sum(revenue), 0) AS all_revenue FROM per_customer)
+in_window AS (
+    SELECT r.customer_id, r.total
+    FROM revenue_invoices r, bounds b
+    WHERE r.document_date >= b.start_date AND r.document_date <= b.end_date
+),
+per_customer AS (
+    SELECT customer_id, sum(total) AS revenue, count(*) AS invoices
+    FROM in_window GROUP BY customer_id
+),
+total AS (SELECT COALESCE(sum(revenue), 0) AS all_revenue FROM per_customer)
 SELECT
     p.customer_id,
+    p.invoices,
     p.revenue,
     round(100.0 * p.revenue / nullif(t.all_revenue, 0), 2) AS pct_of_total_revenue,
     rank() OVER (ORDER BY p.revenue DESC)                  AS revenue_rank
@@ -48,19 +63,28 @@ FROM per_customer p, total t
 ORDER BY p.revenue DESC
 LIMIT 10;
 
--- The denominator, stated separately so the share can be cross-footed and a top-five-only
--- denominator is visibly distinguishable from the all-customer one.
-WITH window_bounds AS (
+-- The denominator, stated separately: a top-five-only denominator would make the shares sum to
+-- 100%, which is the specific error this question exists to detect.
+WITH bounds AS (
     SELECT
         (date_trunc('month', DATE :'as_of_date') - INTERVAL '12 months')::date AS start_date,
         (date_trunc('month', DATE :'as_of_date') - INTERVAL '1 day')::date     AS end_date
+),
+revenue_invoices AS (
+    SELECT
+        CAST(i.party_id AS uuid) AS customer_id,
+        COALESCE(i.total, 0)     AS total,
+        CAST(COALESCE(i.invoice_created_at, i.finalized_at, i.updated_at)
+             AT TIME ZONE 'UTC' AS date) AS document_date
+    FROM ext_invoice i
+    WHERE i.status IN ('FINALIZED', 'POSTED')
+      AND i.party_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
 )
 SELECT
-    (SELECT count(DISTINCT i.customer_id) FROM invoice i, window_bounds w
-      WHERE i.status = 'FINALIZED' AND i.invoice_date >= w.start_date AND i.invoice_date <= w.end_date) AS customers,
-    (SELECT count(*) FROM invoice i, window_bounds w
-      WHERE i.status = 'FINALIZED' AND i.invoice_date >= w.start_date AND i.invoice_date <= w.end_date) AS finalized_invoices,
-    (SELECT coalesce(sum(i.total_amount),0) FROM invoice i, window_bounds w
-      WHERE i.status = 'FINALIZED' AND i.invoice_date >= w.start_date AND i.invoice_date <= w.end_date) AS total_revenue,
-    (SELECT w.start_date FROM window_bounds w) AS window_start,
-    (SELECT w.end_date   FROM window_bounds w) AS window_end;
+    count(DISTINCT r.customer_id) AS customers,
+    count(*)                      AS invoices,
+    COALESCE(sum(r.total), 0)     AS total_revenue,
+    (SELECT b.start_date FROM bounds b) AS window_start,
+    (SELECT b.end_date   FROM bounds b) AS window_end
+FROM revenue_invoices r, bounds b
+WHERE r.document_date >= b.start_date AND r.document_date <= b.end_date;
