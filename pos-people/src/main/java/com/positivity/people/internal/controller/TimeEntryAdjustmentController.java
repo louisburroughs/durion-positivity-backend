@@ -7,9 +7,11 @@ import com.positivity.people.internal.dto.TimeEntryAdjustmentResponse;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.internal.service.TimeEntryAdjustmentService;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -55,9 +57,18 @@ public class TimeEntryAdjustmentController {
                     violated.
                     """)
     @ApiResponse(responseCode = "201", description = "Adjustment created")
-    @ApiResponse(responseCode = "400", description = "Invalid request")
-    @ApiResponse(responseCode = "404", description = "Time entry not found")
-    @ApiResponse(responseCode = "409", description = "Invalid time entry state for adjustment")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Time entry not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Invalid time entry state for adjustment",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_ADJUSTMENT_CREATE", apiVersion = "1")
     @PostMapping(value = "/adjustments", consumes = "application/json", produces = "application/json")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -125,8 +136,14 @@ public class TimeEntryAdjustmentController {
                     Returns 404 when no adjustment exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Adjustment approved successfully")
-    @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions")
-    @ApiResponse(responseCode = "404", description = "Adjustment not found")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden - insufficient permissions",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Adjustment not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_ADJUSTMENT_APPROVE", apiVersion = "1")
     @PostMapping(value = "/adjustments/{adjustmentId}/approve", produces = "application/json")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

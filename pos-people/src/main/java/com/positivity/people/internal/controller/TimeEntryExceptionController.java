@@ -8,9 +8,11 @@ import com.positivity.people.internal.dto.TimeEntryExceptionResponse;
 import com.positivity.people.internal.dto.TimeEntryExceptionWaiveRequest;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.internal.service.TimeEntryExceptionService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -40,7 +42,10 @@ public class TimeEntryExceptionController {
                     Returns 200 with the new exceptionId, and 400 when the JSON payload is malformed.
                     """)
     @ApiResponse(responseCode = "200", description = "Exception created")
-    @ApiResponse(responseCode = "400", description = "Invalid request")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_CREATE", apiVersion = "1")
     @PostMapping(consumes = "application/json", produces = "application/json")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -110,8 +115,14 @@ public class TimeEntryExceptionController {
                     Returns 404 when the exception does not exist, and 409 when it is already RESOLVED or WAIVED.
                     """)
     @ApiResponse(responseCode = "200", description = "Exception acknowledged successfully")
-    @ApiResponse(responseCode = "404", description = "Exception not found")
-    @ApiResponse(responseCode = "409", description = "Exception is already RESOLVED or WAIVED")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Exception not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Exception is already RESOLVED or WAIVED",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_ACKNOWLEDGE", apiVersion = "1")
     @PostMapping(value = "/{exceptionId}/acknowledge", produces = "application/json")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -139,8 +150,14 @@ public class TimeEntryExceptionController {
                     Returns 404 when the exception does not exist, and 409 when it is already RESOLVED or WAIVED.
                     """)
     @ApiResponse(responseCode = "200", description = "Exception resolved successfully")
-    @ApiResponse(responseCode = "404", description = "Exception not found")
-    @ApiResponse(responseCode = "409", description = "Exception is already RESOLVED or WAIVED")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Exception not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Exception is already RESOLVED or WAIVED",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_RESOLVE", apiVersion = "1")
     @PostMapping(value = "/{exceptionId}/resolve", consumes = "application/json", produces = "application/json")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -182,9 +199,18 @@ public class TimeEntryExceptionController {
                     exception is already RESOLVED or WAIVED.
                     """)
     @ApiResponse(responseCode = "200", description = "Exception waived successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid request - waiveReason is required")
-    @ApiResponse(responseCode = "404", description = "Exception not found")
-    @ApiResponse(responseCode = "409", description = "Exception is already RESOLVED or WAIVED")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request - waiveReason is required",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Exception not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Exception is already RESOLVED or WAIVED",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_EXCEPTION_WAIVE", apiVersion = "1")
     @PostMapping(value = "/{exceptionId}/waive", consumes = "application/json", produces = "application/json")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

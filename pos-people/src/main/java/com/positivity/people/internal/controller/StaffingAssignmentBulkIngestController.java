@@ -11,6 +11,7 @@ import com.positivity.people.internal.dto.StaffingAssignmentResponse;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.internal.service.EmployeeService;
 import com.positivity.people.internal.service.StaffingAssignmentService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -100,8 +101,14 @@ public class StaffingAssignmentBulkIngestController
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = BulkIngestResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid request payload")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<BulkIngestResponse> bulkIngest(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Staffing assignments to create.",

@@ -6,9 +6,11 @@ import com.positivity.people.internal.dto.StaffingAssignmentResponse;
 import com.positivity.people.internal.dto.UpdateStaffingAssignmentRequest;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.internal.service.StaffingAssignmentService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -63,9 +65,18 @@ public class StaffingAssignmentController {
                     employee status is not ACTIVE.
                     """)
     @ApiResponse(responseCode = "201", description = "Assignment created.")
-    @ApiResponse(responseCode = "400", description = "Validation error.")
-    @ApiResponse(responseCode = "404", description = "Location or person not found.")
-    @ApiResponse(responseCode = "409", description = "Overlapping assignment exists.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation error.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Location or person not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Overlapping assignment exists.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_STAFFING_ASSIGNMENT_CREATE", apiVersion = "1")
     @PostMapping(ASSIGNMENTS)
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -155,7 +166,10 @@ public class StaffingAssignmentController {
                     Returns 404 when no assignment exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Assignment found.")
-    @ApiResponse(responseCode = "404", description = "Assignment not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Assignment not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping(ASSIGNMENTS + "/{assignmentId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -187,9 +201,18 @@ public class StaffingAssignmentController {
                     person's employee status is not ACTIVE.
                     """)
     @ApiResponse(responseCode = "200", description = "Assignment updated.")
-    @ApiResponse(responseCode = "400", description = "Validation error.")
-    @ApiResponse(responseCode = "404", description = "Assignment not found.")
-    @ApiResponse(responseCode = "409", description = "Overlapping assignment exists.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Validation error.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Assignment not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Overlapping assignment exists.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_STAFFING_ASSIGNMENT_UPDATE", apiVersion = "1")
     @PutMapping(ASSIGNMENTS + "/{assignmentId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -236,7 +259,10 @@ public class StaffingAssignmentController {
                     Returns 204 on success, and 404 when no assignment exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "204", description = "Assignment ended.")
-    @ApiResponse(responseCode = "404", description = "Assignment not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Assignment not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_STAFFING_ASSIGNMENT_END", apiVersion = "1")
     @DeleteMapping(ASSIGNMENTS + "/{assignmentId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
