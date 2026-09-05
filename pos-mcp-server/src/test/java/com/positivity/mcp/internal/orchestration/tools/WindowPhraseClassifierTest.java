@@ -59,6 +59,16 @@ class WindowPhraseClassifierTest {
         }
 
         @Test
+        @DisplayName("`within the last N months` abstains — the contract assigns it no shape")
+        void unlicensedPrepositionAbstains() {
+            // Only the prepositions DATE_WINDOW_LAYER_TEXT actually names are recognised. "within"
+            // is not one of them, so overriding the model here would be inventing a rule rather
+            // than applying one — the exact over-reach this classifier is scoped to avoid.
+            assertThat(WindowPhraseClassifier.classify("invoices issued within the last six months"))
+                    .isEmpty();
+        }
+
+        @Test
         @DisplayName("a day-expressed range is always rolling, whatever the preposition")
         void daysAreAlwaysRolling() {
             assertThat(WindowPhraseClassifier.classify("customers who haven't bought in the last 90 days")

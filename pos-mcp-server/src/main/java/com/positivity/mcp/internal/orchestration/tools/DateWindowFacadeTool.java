@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
+import com.positivity.security.common.LogSanitizer;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Locale;
@@ -65,7 +66,9 @@ public class DateWindowFacadeTool {
                     + "YEAR_EARLIER (the primary window's exact span, one year earlier). Returns JSON: "
                     + "startDate, endDate, shape, statement (a human-readable sentence to quote verbatim), and "
                     + "— only when a comparison was requested — comparison.startDate/endDate/statement. Always pass "
-                    + "phrase with the user's own wording for the range; the server confirms the shape against it.")
+                    + "phrase with the user's own wording for the range: where that wording names a shape "
+                    + "outright the server resolves on it, correcting shape, unit and count, and filling "
+                    + "in a comparison if you passed NONE.")
     public String resolveDateWindow(
             @ToolParam(
                             description = "ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, or CALENDAR_SPAN — see the tool "
@@ -116,7 +119,7 @@ public class DateWindowFacadeTool {
                         c.shape(),
                         c.unit(),
                         c.count(),
-                        phrase);
+                        LogSanitizer.forLog(phrase));
             }
             parsedShape = c.shape();
             parsedUnit = c.unit();

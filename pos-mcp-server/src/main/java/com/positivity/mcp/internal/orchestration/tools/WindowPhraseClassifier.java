@@ -58,11 +58,16 @@ final class WindowPhraseClassifier {
     private static final String UNIT_ALTERNATION = "day|days|week|weeks|month|months|quarter|quarters|year|years";
 
     /**
-     * "in/over/during/for/past the last N <unit>". The preposition is captured because it is the
-     * whole discriminator between rolling and calendar (#1670).
+     * "in/over/during/for the last N <unit>". The preposition is captured because it is the whole
+     * discriminator between rolling and calendar (#1670).
+     *
+     * <p>The alternation lists exactly the prepositions {@code DATE_WINDOW_LAYER_TEXT} names and no
+     * others. "within the last six months" is deliberately absent: the contract does not assign it
+     * a shape, so this abstains and the model's own choice stands. Adding a preposition here is
+     * adding a rule, and the rule belongs in the contract first.
      */
     private static final Pattern MULTI_PERIOD = Pattern.compile(
-            "\\b(in|over|during|for|within)\\s+the\\s+(?:last|past|previous|trailing)\\s+" + "([a-z-]+|\\d+)\\s+("
+            "\\b(in|over|during|for)\\s+the\\s+(?:last|past|previous|trailing)\\s+" + "([a-z-]+|\\d+)\\s+("
                     + UNIT_ALTERNATION + ")\\b",
             Pattern.CASE_INSENSITIVE);
 
