@@ -213,6 +213,42 @@ class SanitizeOpenApiTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.sanitizer = load_sanitizer_module()
 
+    def test_sanitize_file_keeps_iso_timestamp_examples_as_strings(self) -> None:
+        """Issue #1764: an ISO 8601 example must survive the round-trip verbatim.
+
+        PyYAML's safe_load resolves a plain scalar like 2026-03-17T14:30:00.000Z to a
+        datetime, and safe_dump then re-emits it as "2026-03-17 14:30:00+00:00" — a
+        space instead of the T, the milliseconds gone, and no longer parsable as
+        RFC 3339. springdoc emits the example correctly; this script was destroying
+        it, in every module spec, for ApiError.timestamp.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "openapi.yaml"
+            output.write_text(
+                "openapi: 3.1.0\n"
+                "info:\n  version: v1\n  title: Test\n"
+                "components:\n"
+                "  schemas:\n"
+                "    ApiError:\n"
+                "      type: object\n"
+                "      properties:\n"
+                "        timestamp:\n"
+                "          type: string\n"
+                "          example: 2026-03-17T14:30:00.000Z\n",
+                encoding="utf-8",
+            )
+
+            self.sanitizer.sanitize_file(output)
+            text = output.read_text(encoding="utf-8")
+
+            example = yaml.safe_load(text)["components"]["schemas"]["ApiError"]["properties"][
+                "timestamp"
+            ]["example"]
+            self.assertIsInstance(example, str)
+            self.assertEqual(example, "2026-03-17T14:30:00.000Z")
+            # Quoted on the way out, so a later safe_load cannot re-resolve it either.
+            self.assertIn("'2026-03-17T14:30:00.000Z'", text)
+
     def test_sanitize_file_is_deterministic_for_mapping_order(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir) / "openapi.yaml"
