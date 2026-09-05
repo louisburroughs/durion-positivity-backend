@@ -3,21 +3,30 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.config.CreditMemoGLConfig;
 import com.positivity.accounting.internal.dto.CreateCreditMemoRequest;
 import com.positivity.accounting.internal.dto.CreditMemoResponse;
+import com.positivity.accounting.internal.dto.ResolvedDisplayReference;
+import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
+import com.positivity.accounting.internal.enums.DisplayReferenceType;
+import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -63,8 +72,14 @@ public class CreditMemoServiceImpl implements CreditMemoService {
 
     private static final BigDecimal ZERO_TAX = new BigDecimal("0.00");
 
+    /** Sequence-scope prefix for the per-month {@code credit_memo.creditMemoReference} counter. */
+    private static final String CREDIT_MEMO_REFERENCE_SCOPE_PREFIX = "CM-";
+
     private final CreditMemoRepository creditMemoRepository;
     private final ExtInvoiceTaxRepository extInvoiceTaxRepository;
+    private final AccountingSequenceRepository sequenceRepository;
+    private final AccountingSequenceProvisioner sequenceProvisioner;
+    private final DisplayReferenceResolver displayReferenceResolver;
     private final CreditMemoTaxAttributionService creditMemoTaxAttributionService;
     private final InvoiceBalanceCalculator invoiceBalanceCalculator;
     private final GLPostingService glPostingService;
@@ -124,6 +139,17 @@ public class CreditMemoServiceImpl implements CreditMemoService {
                 creditCalculation.finalCredit());
 
         postGlEntries(creditMemo, request, creditCalculation.taxReversed(), priorPeriodInfo);
+
+        // Display reference assigned last, deliberately (issue #1779, matching
+        // EventIngestionServiceImpl.submitEvent's placement for #1680). The scope row is read
+        // FOR UPDATE and held to commit, so assigning it inside buildCreditMemo would serialize
+        // every concurrent memo in the month behind this memo's tax attribution and GL posting
+        // rather than behind a counter increment. It also keeps this transaction from holding
+        // CM-{YYYYMM} while postGlEntries acquires JE-{YYYYMM}, so the two scopes are never held
+        // at once. Set on the still-managed entity and flushed by dirty checking; no second save
+        // is needed since this method is transactional. Placed after the GL post, which throws on
+        // failure, so a rolled-back memo never consumes a number.
+        assignCreditMemoReference(creditMemo);
 
         // The balance is derived from accounting's own records (ADR-0044 R6): the POSTED memo
         // saved above already reduces it — nothing to tell pos-invoice.
@@ -292,6 +318,11 @@ public class CreditMemoServiceImpl implements CreditMemoService {
         creditMemo.setOriginalPeriodId(priorPeriodInfo.originalPeriodId());
         // pos-invoice carries no currency (single-currency platform); AR records default USD.
         creditMemo.setCurrency(DEFAULT_CURRENCY);
+        // Set explicitly from the injected clock rather than leaving it to @PrePersist's
+        // TimeSource read (ADR-0013): the display reference assigned below buckets the memo by
+        // its creation month, and the two must agree on the same instant or a memo created near
+        // a month boundary could be numbered into a month its own timestamp does not fall in.
+        creditMemo.setCreationTimestamp(Instant.now(clock));
         creditMemo.setPostedTimestamp(Instant.now(clock));
         return creditMemo;
     }
@@ -372,7 +403,10 @@ public class CreditMemoServiceImpl implements CreditMemoService {
             creditMemos = creditMemoRepository.findAll(pageable);
         }
 
-        return creditMemos.map(cm -> buildResponse(cm, null)); // Balance unavailable in list view
+        // Resolve display values once for the whole page (issue #1779): two IN queries, not two
+        // per row. Balance stays unavailable in the list view, as before.
+        DisplayLookup display = resolveDisplayValues(creditMemos.getContent());
+        return creditMemos.map(cm -> buildResponse(cm, null, display));
     }
 
     /**
@@ -476,13 +510,125 @@ public class CreditMemoServiceImpl implements CreditMemoService {
         return buildResponse(creditMemo, balanceAfter);
     }
 
+    // ===== DISPLAY REFERENCE ASSIGNMENT (issue #1779) =====
+
     /**
-     * Build CreditMemoResponse from entity.
+     * Assigns the display reference {@code CM-{YYYYMM}-{seq}} from the per-month
+     * {@code accounting_sequence} counter, reusing the same counter table and
+     * {@link AccountingSequenceProvisioner} bootstrap machinery as
+     * {@code EventIngestionServiceImpl.assignEventReference} (#1680) and
+     * {@code JournalEntryServiceImpl.assignEntryNumber} (#942).
+     *
+     * <p>Scope key is {@code CM-{YYYYMM}} derived from the memo's creation timestamp, so the
+     * reference always matches the creation month shown in the UI. The counter row is read under
+     * {@code FOR UPDATE} and incremented inside the caller's transaction ({@code createCreditMemo}
+     * is transactional), so a rollback of the creation rolls the increment back with it and the
+     * number is never consumed.
+     *
+     * @param creditMemo the memo being built; its {@code creditMemoReference} is set as a side
+     *                   effect
+     */
+    private void assignCreditMemoReference(CreditMemo creditMemo) {
+        String scopeKey = creditMemoReferenceScopeKey(creditMemo.getCreationTimestamp());
+        AccountingSequence sequence = sequenceRepository
+                .findByScopeKey(scopeKey)
+                .orElseGet(() -> provisionAndRelockCreditMemoReference(scopeKey));
+        long assigned = sequence.getNextValue();
+        sequence.setNextValue(assigned + 1);
+        creditMemo.setCreditMemoReference(scopeKey + "-" + assigned);
+    }
+
+    /**
+     * First use of a month scope: bootstrap the counter row in an isolated transaction
+     * ({@link AccountingSequenceProvisioner}), then lock it in the current transaction. A
+     * concurrent bootstrapper losing the unique-key race falls through to the locked re-read of
+     * the winner's committed row.
+     */
+    private AccountingSequence provisionAndRelockCreditMemoReference(String scopeKey) {
+        try {
+            sequenceProvisioner.provision(scopeKey);
+        } catch (DataIntegrityViolationException raceLost) {
+            log.debug("Lost accounting_sequence bootstrap race for scope {}; re-reading winner's row", scopeKey);
+        }
+        return sequenceRepository
+                .findByScopeKey(scopeKey)
+                .orElseThrow(() ->
+                        new IllegalStateException("accounting_sequence row missing after bootstrap: " + scopeKey));
+    }
+
+    /**
+     * Sequence scope key {@code CM-{YYYYMM}} for a creation instant, interpreted in UTC (this
+     * module's house convention for Instant &lt;-&gt; calendar conversions, and what
+     * {@code V35__credit_memo_reference.sql} backfilled existing rows with).
+     */
+    private static String creditMemoReferenceScopeKey(Instant creationTimestamp) {
+        ZonedDateTime created = creationTimestamp.atZone(ZoneOffset.UTC);
+        return String.format(
+                "%s%04d%02d", CREDIT_MEMO_REFERENCE_SCOPE_PREFIX, created.getYear(), created.getMonthValue());
+    }
+
+    /**
+     * Batch-resolve the invoice and customer display values for a set of memos (issue #1779) —
+     * two {@code IN} queries per response regardless of page size, never one lookup per row.
+     */
+    private DisplayLookup resolveDisplayValues(Collection<CreditMemo> creditMemos) {
+        return new DisplayLookup(
+                displayReferenceResolver.resolve(
+                        DisplayReferenceType.INVOICE,
+                        creditMemos.stream()
+                                .map(CreditMemo::getOriginalInvoiceId)
+                                .toList()),
+                displayReferenceResolver.resolve(
+                        DisplayReferenceType.CUSTOMER,
+                        creditMemos.stream().map(CreditMemo::getCustomerId).toList()));
+    }
+
+    /**
+     * Display values for one page of memos, keyed by the identifier they belong to. A reference
+     * accounting could not resolve is simply absent, and reads back as
+     * {@link ResolvedDisplayReference#EMPTY} — so the response carries nulls, never a UUID
+     * rendered as display text.
+     */
+    private record DisplayLookup(
+            Map<UUID, ResolvedDisplayReference> invoices, Map<UUID, ResolvedDisplayReference> customers) {
+
+        ResolvedDisplayReference invoice(UUID invoiceId) {
+            return invoiceId == null
+                    ? ResolvedDisplayReference.EMPTY
+                    : invoices.getOrDefault(invoiceId, ResolvedDisplayReference.EMPTY);
+        }
+
+        ResolvedDisplayReference customer(UUID customerId) {
+            return customerId == null
+                    ? ResolvedDisplayReference.EMPTY
+                    : customers.getOrDefault(customerId, ResolvedDisplayReference.EMPTY);
+        }
+    }
+
+    /**
+     * Build CreditMemoResponse from entity, resolving this memo's display values on its own.
+     * List responses must use the batch overload instead.
      */
     private CreditMemoResponse buildResponse(CreditMemo creditMemo, BigDecimal invoiceBalanceAfter) {
+        return buildResponse(creditMemo, invoiceBalanceAfter, resolveDisplayValues(List.of(creditMemo)));
+    }
+
+    /**
+     * Build CreditMemoResponse from entity against display values already resolved for the whole
+     * page (issue #1779).
+     */
+    private CreditMemoResponse buildResponse(
+            CreditMemo creditMemo, BigDecimal invoiceBalanceAfter, DisplayLookup display) {
+        ResolvedDisplayReference invoiceDisplay = display.invoice(creditMemo.getOriginalInvoiceId());
+        ResolvedDisplayReference customerDisplay = display.customer(creditMemo.getCustomerId());
+
         CreditMemoResponse response = new CreditMemoResponse();
         response.setCreditMemoId(creditMemo.getCreditMemoId());
+        response.setCreditMemoReference(creditMemo.getCreditMemoReference());
         response.setOriginalInvoiceId(creditMemo.getOriginalInvoiceId());
+        response.setOriginalInvoiceReference(invoiceDisplay.displayReference());
+        response.setCustomerDisplayName(customerDisplay.displayName());
+        response.setCustomerReference(customerDisplay.displayReference());
         response.setCustomerId(creditMemo.getCustomerId());
         response.setCreditAmount(creditMemo.getCreditAmount());
         response.setTaxAmountReversed(creditMemo.getTaxAmountReversed());

@@ -17,6 +17,7 @@ import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
+import com.positivity.accounting.internal.repository.DefaultGLMappingRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
@@ -63,6 +64,9 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
     private GLAccountRepository glAccountRepository;
 
     @Autowired
+    private DefaultGLMappingRepository defaultGLMappingRepository;
+
+    @Autowired
     private JournalEntryRepository journalEntryRepository;
 
     @Autowired
@@ -86,6 +90,9 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         journalEntryRepository.deleteAll();
         creditMemoRepository.deleteAll();
         statementLineMappingRepository.deleteAll();
+        // Children before parents: default_gl_mapping FKs gl_account, so a mapping row left by an
+        // earlier IT class would make the gl_account clear below fail on the constraint.
+        defaultGLMappingRepository.deleteAll();
         glAccountRepository.deleteAll();
 
         // Default replica state (ADR-0044 #842): a FINALIZED $110 invoice with a $110
@@ -118,6 +125,9 @@ public class CreditMemoContractBehaviorIT extends BaseContractIntegrationTest {
         journalEntryRepository.deleteAll();
         creditMemoRepository.deleteAll();
         statementLineMappingRepository.deleteAll();
+        // Children before parents: default_gl_mapping FKs gl_account, so a mapping row left by an
+        // earlier IT class would make the gl_account clear below fail on the constraint.
+        defaultGLMappingRepository.deleteAll();
         glAccountRepository.deleteAll();
     }
 

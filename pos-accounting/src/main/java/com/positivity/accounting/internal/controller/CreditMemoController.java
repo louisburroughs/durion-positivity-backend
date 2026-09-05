@@ -242,6 +242,9 @@ public class CreditMemoController {
                     Required inputs: none; customerId, originalInvoiceId and status (DRAFT, POSTED, APPLIED, \
                     VOIDED) are optional filters, with standard page, size and sort parameters.
                     Emits an ACCOUNTING_CREDIT_MEMO_LIST audit event; no state changes.
+                    Responses carry display-ready values alongside the identifiers (creditMemoReference, originalInvoiceReference, \
+                    customerDisplayName, customerReference); each is null when accounting cannot resolve it and is never a UUID \
+                    rendered as text.
                     Returns 400 when pagination or filter parameters are invalid.
                     """,
             tags = {"Credit Memos"})
@@ -292,6 +295,9 @@ public class CreditMemoController {
                     Preconditions: the credit memo must exist.
                     Required inputs: creditMemoId (UUID) as a path parameter; there is no request body.
                     Emits an ACCOUNTING_CREDIT_MEMO_GET audit event; no state changes.
+                    Responses carry display-ready values alongside the identifiers (creditMemoReference, originalInvoiceReference, \
+                    customerDisplayName, customerReference); each is null when accounting cannot resolve it and is never a UUID \
+                    rendered as text.
                     Returns 404 when no credit memo exists for the supplied id.
                     """,
             tags = {"Credit Memos"})

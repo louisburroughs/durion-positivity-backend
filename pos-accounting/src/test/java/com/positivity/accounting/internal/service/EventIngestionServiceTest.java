@@ -73,6 +73,10 @@ class EventIngestionServiceTest {
     @Mock
     private AccountingSequenceProvisioner sequenceProvisioner;
 
+    /** Issue #1778: payload display projection, attached to the detail response only. */
+    @Mock
+    private EventPayloadReferenceProjector eventPayloadReferenceProjector;
+
     @InjectMocks
     private EventIngestionServiceImpl service;
 

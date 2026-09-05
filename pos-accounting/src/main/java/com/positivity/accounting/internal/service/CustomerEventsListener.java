@@ -1,11 +1,15 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.entity.ExtCustomerBillingRules;
+import com.positivity.accounting.internal.entity.ExtCustomerParty;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.repository.ExtCustomerBillingRulesRepository;
+import com.positivity.accounting.internal.repository.ExtCustomerPartyRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.customer.BillingRulesUpdatedV1;
+import com.positivity.domainevents.customer.CustomerPartyDeletedV1;
+import com.positivity.domainevents.customer.CustomerPartyUpdatedV1;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -26,8 +30,10 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Consumes {@code customer.events.v1} into accounting's read-only replicas (ADR-0044, #842).
  *
- * <p>Currently materializes {@code customer.billing-rules.updated} into
- * {@code ext_customer_billing_rules}; other event types are ignored. Idempotent via
+ * <p>Materializes {@code customer.billing-rules.updated} into {@code ext_customer_billing_rules}
+ * and, since issue #1779, {@code customer.party.updated}/{@code customer.party.deleted} into
+ * {@code ext_customer_party} — the display name and customer number accounting responses show in
+ * place of a party UUID. Other event types on the topic are ignored. Idempotent via
  * {@code processed_events} (same transaction as the replica upsert). Transient DB errors propagate
  * to the container error handler for retry/DLQ; malformed payloads are logged and skipped (poison
  * messages must not block the partition).
@@ -51,6 +57,7 @@ public class CustomerEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtCustomerBillingRulesRepository billingRulesRepository;
+    private final ExtCustomerPartyRepository partyRepository;
     private final Counter payloadRejectedCounter;
 
     public CustomerEventsListener(
@@ -58,11 +65,13 @@ public class CustomerEventsListener {
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtCustomerBillingRulesRepository billingRulesRepository,
+            ExtCustomerPartyRepository partyRepository,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.billingRulesRepository = billingRulesRepository;
+        this.partyRepository = partyRepository;
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -87,7 +96,7 @@ public class CustomerEventsListener {
             return;
         }
         String eventType = envelope.path("eventType").stringValue(null);
-        if (!BillingRulesUpdatedV1.EVENT_TYPE.equals(eventType)) {
+        if (!isHandled(eventType)) {
             log.debug("Ignoring customer event type={}", eventType);
             return;
         }
@@ -102,7 +111,12 @@ public class CustomerEventsListener {
         }
 
         try {
-            applyBillingRulesUpdate(envelope);
+            switch (eventType) {
+                case BillingRulesUpdatedV1.EVENT_TYPE -> applyBillingRulesUpdate(envelope);
+                case CustomerPartyUpdatedV1.EVENT_TYPE -> applyPartyUpdated(envelope);
+                case CustomerPartyDeletedV1.EVENT_TYPE -> applyPartyDeleted(envelope);
+                default -> throw new IllegalStateException("Unhandled customer event type: " + eventType);
+            }
         } catch (TransientDataAccessException e) {
             // Retry with backoff / DLQ via the container error handler (ADR-0044 §4).
             throw e;
@@ -110,9 +124,9 @@ public class CustomerEventsListener {
             if (payloadRejectedCounter != null) {
                 payloadRejectedCounter.increment();
             }
-            log.error("Rejected malformed billing-rules event payload eventId={}: {}", eventId, e.getMessage(), e);
+            log.error("Rejected malformed customer event payload eventId={}: {}", eventId, e.getMessage(), e);
         } catch (Exception e) {
-            log.warn("Skipping malformed billing-rules event eventId={}", eventId, e);
+            log.warn("Skipping malformed customer event eventId={}", eventId, e);
         }
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
@@ -161,5 +175,79 @@ public class CustomerEventsListener {
                 .updatedAt(Instant.now(clock))
                 .build());
         log.info("Updated ext_customer_billing_rules replica partyId={} version={}", partyId, aggregateVersion);
+    }
+
+    /**
+     * Types this consumer materializes. Everything else on {@code customer.events.v1} is another
+     * consumer's concern and is skipped before the {@code processed_events} insert — unchanged
+     * from the pre-#1779 behavior for the types this module still ignores.
+     */
+    private static boolean isHandled(String eventType) {
+        return BillingRulesUpdatedV1.EVENT_TYPE.equals(eventType)
+                || CustomerPartyUpdatedV1.EVENT_TYPE.equals(eventType)
+                || CustomerPartyDeletedV1.EVENT_TYPE.equals(eventType);
+    }
+
+    /**
+     * Materializes party identity into {@code ext_customer_party} (issue #1779), so accounting
+     * responses can show a customer's name or number instead of the party UUID. Same
+     * {@link ReplicaVersionGuard} semantics as the billing-rules replica above.
+     */
+    private void applyPartyUpdated(JsonNode envelope) {
+        CustomerPartyUpdatedV1 payload =
+                objectMapper.treeToValue(envelope.path("payload"), CustomerPartyUpdatedV1.class);
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+        UUID partyId = payload.partyId();
+
+        // party_type and status are NOT NULL in ext_customer_party, and this entity has an
+        // assigned @Id with no @Version, so save() routes through merge() and the insert is
+        // deferred to flush — a constraint violation would surface at commit, AFTER the
+        // catch-and-skip below and after the processed_events row is written. The whole
+        // transaction including the dedupe row would then roll back and the container would
+        // redeliver the same offset forever. This class promises malformed payloads are skipped,
+        // not that they block the partition, so reject the fact here where the skip still works.
+        if (isBlank(payload.partyType()) || isBlank(payload.status())) {
+            log.warn(
+                    "Skipping customer-party event partyId={} with blank partyType/status; the replica requires both",
+                    partyId);
+            return;
+        }
+
+        ExtCustomerParty existing = partyRepository.findById(partyId).orElse(null);
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), aggregateVersion)) {
+            log.debug(
+                    "Skipping stale customer-party event partyId={} eventVersion={} replicaVersion={}",
+                    partyId,
+                    aggregateVersion,
+                    existing.getAggregateVersion());
+            return;
+        }
+
+        partyRepository.save(ExtCustomerParty.builder()
+                .partyId(partyId)
+                .partyType(payload.partyType())
+                .displayName(payload.displayName())
+                .customerNumber(payload.customerNumber())
+                .status(payload.status())
+                .aggregateVersion(aggregateVersion)
+                .updatedAt(Instant.now(clock))
+                .build());
+        log.info("Updated ext_customer_party replica partyId={} version={}", partyId, aggregateVersion);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    /**
+     * The owner deleted the party: drop the replica row. Accounting records referencing the party
+     * are untouched — they keep their {@code customerId} and simply stop resolving a display
+     * name, which is the correct outcome (a null display value, never a UUID substituted for it).
+     */
+    private void applyPartyDeleted(JsonNode envelope) {
+        CustomerPartyDeletedV1 payload =
+                objectMapper.treeToValue(envelope.path("payload"), CustomerPartyDeletedV1.class);
+        partyRepository.deleteById(payload.partyId());
+        log.info("Deleted ext_customer_party replica partyId={}", payload.partyId());
     }
 }

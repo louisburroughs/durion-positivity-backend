@@ -55,7 +55,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_credit_memo_original_invoice", columnList = "original_invoice_id"),
             @Index(name = "idx_credit_memo_customer", columnList = "customer_id"),
             @Index(name = "idx_credit_memo_status", columnList = "status"),
-            @Index(name = "idx_credit_memo_posted_timestamp", columnList = "posted_timestamp")
+            @Index(name = "idx_credit_memo_posted_timestamp", columnList = "posted_timestamp"),
+            @Index(name = "uq_credit_memo_reference", columnList = "credit_memo_reference", unique = true)
         })
 public class CreditMemo {
 
@@ -65,6 +66,18 @@ public class CreditMemo {
     @UUIDv7Id
     @Column(name = "credit_memo_id", nullable = false, updatable = false)
     private UUID creditMemoId;
+
+    /**
+     * Short human-readable label ({@code CM-{YYYYMM}-{n}}, e.g. {@code CM-202609-7}) shown in
+     * place of the raw {@code creditMemoId} UUID (issue #1779). Assigned at creation from the
+     * per-month {@code accounting_sequence} counter, reusing the numbering machinery behind
+     * {@code accounting_event.event_reference} (#1680) and {@code journal_entry.entry_number}
+     * (#942). {@code creditMemoId} stays the canonical identifier (ADR-0027); this is purely an
+     * additional display field, so it is nullable — assignment is a service-layer concern, not a
+     * database invariant.
+     */
+    @Column(name = "credit_memo_reference", length = 20)
+    private String creditMemoReference;
 
     @Column(name = "original_invoice_id", nullable = false, updatable = false)
     private UUID originalInvoiceId;

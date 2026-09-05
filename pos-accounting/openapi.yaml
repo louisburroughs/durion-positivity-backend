@@ -1139,6 +1139,8 @@ paths:
 
         Emits an ACCOUNTING_CREDIT_MEMO_LIST audit event; no state changes.
 
+        Responses carry display-ready values alongside the identifiers (creditMemoReference, originalInvoiceReference, customerDisplayName, customerReference); each is null when accounting cannot resolve it and is never a UUID rendered as text.
+
         Returns 400 when pagination or filter parameters are invalid.
 
         '
@@ -1288,6 +1290,8 @@ paths:
         Required inputs: creditMemoId (UUID) as a path parameter; there is no request body.
 
         Emits an ACCOUNTING_CREDIT_MEMO_GET audit event; no state changes.
+
+        Responses carry display-ready values alongside the identifiers (creditMemoReference, originalInvoiceReference, customerDisplayName, customerReference); each is null when accounting cannot resolve it and is never a UUID rendered as text.
 
         Returns 404 when no credit memo exists for the supplied id.
 
@@ -2328,6 +2332,8 @@ paths:
         Required inputs: eventId (UUID) as a path parameter; there is no request body.
 
         No events are emitted and no state changes; this is a read-only projection.
+
+        The payload is returned unchanged for audit; payloadReferences adds a display projection of the UUID-backed values recognized inside it, whose displayName and displayReference are null when accounting cannot resolve them and are never the UUID rendered as text. listAccountingEvents omits payloadReferences.
 
         Returns 404 EVENT_NOT_FOUND when no accounting event exists for the supplied id.
 
@@ -8355,6 +8361,13 @@ components:
         payload:
           description: Event-specific payload content
           type: object
+        payloadReferences:
+          description: 'Display projection for the UUID-backed values recognized inside the raw payload (issue #1778). The payload above is unchanged and remains the audit record; this list carries the human-readable identity of each recognized reference, with null display values where accounting cannot resolve one. Populated on the event detail endpoint only — list responses omit it.'
+          items:
+            $ref: '#/components/schemas/EventPayloadReference'
+          type:
+          - array
+          - 'null'
         processedAt:
           description: Timestamp when the event was processed (ISO 8601)
           example: '2026-06-18T08:00:05Z'
@@ -9534,15 +9547,33 @@ components:
           example: 01960003-0000-7000-8000-000000000001
           format: uuid
           type: string
+        creditMemoReference:
+          description: Short human-readable reference for the credit memo, shown in place of the raw creditMemoId UUID (CM-{YYYYMM}-{n}). Assigned at creation, and backfilled for memos that predate the field, so it is normally present. Nullable because assignment is a service-layer concern rather than a database invariant; when absent, render nothing rather than falling back to the UUID.
+          example: CM-202609-7
+          type:
+          - string
+          - 'null'
         currency:
           description: ISO 4217 currency code
           example: USD
           type: string
+        customerDisplayName:
+          description: Customer display name resolved from accounting's customer-party replica. Null when the owner knows no name for the party or the replica has not seen it; never the customer UUID as fallback text.
+          example: Northside Fleet Services
+          type:
+          - string
+          - 'null'
         customerId:
           description: Identifier of the customer the credit memo applies to
           example: 01960003-0000-7000-8000-000000000003
           format: uuid
           type: string
+        customerReference:
+          description: Stable human-facing customer number resolved from accounting's customer-party replica. Null when the owner never numbered the party or the replica has not seen it; never the customer UUID as fallback text.
+          example: C-10427
+          type:
+          - string
+          - 'null'
         invoiceBalanceAfter:
           description: Invoice outstanding balance after the credit was applied
           example: 0.0
@@ -9556,6 +9587,12 @@ components:
           example: 01960003-0000-7000-8000-000000000002
           format: uuid
           type: string
+        originalInvoiceReference:
+          description: Human-readable number of the original invoice, resolved from accounting's invoice replica. Null when the replica holds no number for the invoice; never the invoice UUID as fallback text.
+          example: INV-2026-004417
+          type:
+          - string
+          - 'null'
         originalPeriodId:
           description: Identifier of the original accounting period
           example: 2026-05
@@ -9971,6 +10008,47 @@ components:
       required:
       - fields
       - version
+      type: object
+    EventPayloadReference:
+      description: Display projection for one UUID-backed value found in the event's raw payload. Display values are null when unavailable and are never replaced by the UUID.
+      properties:
+        displayName:
+          description: Human-readable name for the reference, e.g. a customer display name or a location label. Null when accounting holds no name for it.
+          example: Northside Fleet Services
+          type:
+          - string
+          - 'null'
+        displayReference:
+          description: Stable business reference or number for the reference, e.g. an invoice number, customer number or journal-entry number. Null when accounting holds none.
+          example: C-10427
+          type:
+          - string
+          - 'null'
+        id:
+          description: The identifier as it appears in the raw payload. Always present — this is the value the display fields describe, and it stays available for routing and audit.
+          example: 01960003-0000-7000-8000-000000000003
+          format: uuid
+          type: string
+        path:
+          description: Dot-separated path of the value inside the raw payload, e.g. "billDetails.vendorId". Array elements are indexed, e.g. "lines[0].locationId".
+          example: billDetails.vendorId
+          type: string
+        referenceType:
+          description: Kind of entity the identifier refers to, as recognized from the payload key.
+          enum:
+          - INVOICE
+          - CUSTOMER
+          - ORGANIZATION
+          - LOCATION
+          - JOURNAL_ENTRY
+          - VENDOR
+          - VENDOR_BILL
+          example: VENDOR
+          type: string
+      required:
+      - id
+      - path
+      - referenceType
       type: object
     EventProcessingLogEntry:
       description: A single entry in an accounting event's processing audit log

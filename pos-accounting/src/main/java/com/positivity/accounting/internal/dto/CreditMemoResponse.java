@@ -13,6 +13,12 @@ import lombok.Data;
 
 /**
  * Response containing Credit Memo details.
+ *
+ * <p>Carries display-ready values alongside every identifier (issue #1779): screens render
+ * {@code creditMemoReference}, {@code originalInvoiceReference}, {@code customerDisplayName} and
+ * {@code customerReference}, while the UUIDs stay in the contract for commands, links and audit
+ * traceability. Every display value is nullable and is null when accounting cannot resolve it — a
+ * UUID is never copied into a display field as fallback text.
  */
 @Data
 @Schema(description = "Response containing credit memo details")
@@ -26,6 +32,17 @@ public class CreditMemoResponse {
     private UUID creditMemoId;
 
     @Schema(
+            description = "Short human-readable reference for the credit memo, shown in place of the raw "
+                    + "creditMemoId UUID (CM-{YYYYMM}-{n}). Assigned at creation, and backfilled for memos "
+                    + "that predate the field, so it is normally present. Nullable because assignment is a "
+                    + "service-layer concern rather than a database invariant; when absent, render nothing "
+                    + "rather than falling back to the UUID.",
+            example = "CM-202609-7",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
+    private String creditMemoReference;
+
+    @Schema(
             description = "Identifier of the original invoice the credit memo references",
             example = "01960003-0000-7000-8000-000000000002",
             requiredMode = REQUIRED)
@@ -33,10 +50,37 @@ public class CreditMemoResponse {
     private UUID originalInvoiceId;
 
     @Schema(
+            description = "Human-readable number of the original invoice, resolved from accounting's invoice "
+                    + "replica. Null when the replica holds no number for the invoice; never the invoice UUID "
+                    + "as fallback text.",
+            example = "INV-2026-004417",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
+    private String originalInvoiceReference;
+
+    @Schema(
             description = "Identifier of the customer the credit memo applies to",
             example = "01960003-0000-7000-8000-000000000003",
             requiredMode = NOT_REQUIRED)
     private UUID customerId;
+
+    @Schema(
+            description = "Customer display name resolved from accounting's customer-party replica. Null when "
+                    + "the owner knows no name for the party or the replica has not seen it; never the customer "
+                    + "UUID as fallback text.",
+            example = "Northside Fleet Services",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
+    private String customerDisplayName;
+
+    @Schema(
+            description = "Stable human-facing customer number resolved from accounting's customer-party "
+                    + "replica. Null when the owner never numbered the party or the replica has not seen it; "
+                    + "never the customer UUID as fallback text.",
+            example = "C-10427",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
+    private String customerReference;
 
     @Schema(description = "Credit amount", example = "1250.00", requiredMode = REQUIRED)
     @NotNull
