@@ -192,6 +192,7 @@ _STATEMENT_LABELS = {
     "current to date": "CURRENT_TO_DATE",
     "prior complete": "PRIOR_COMPLETE",
     "calendar span": "CALENDAR_SPAN",
+    "next": "FORWARD",
     "absolute": "ABSOLUTE",
 }
 # The comparison window carries its own label, so a question expecting one can check the model
@@ -334,6 +335,36 @@ def fetch_traces(traces_url, token, since, timeout=60):
         return [], f"{type(error).__name__} from {traces_url}"
 
 
+def _span_count(result, unit):
+    """How many whole `unit` periods the resolved window covers, from its own dates.
+
+    The resolver's result carries startDate/endDate but not unit or count, so this is the only
+    evidence available about a corrected window's length. Returns None when it cannot be derived,
+    which the caller treats as "unknown" rather than "matches".
+    """
+    start, end = result.get("startDate"), result.get("endDate")
+    if not start or not end or not unit:
+        return None
+    try:
+        s_d = datetime.strptime(start, "%Y-%m-%d").date()
+        e_d = datetime.strptime(end, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+    if e_d < s_d:
+        return None
+    if unit == "MONTH":
+        return (e_d.year - s_d.year) * 12 + (e_d.month - s_d.month) + 1
+    if unit == "YEAR":
+        return e_d.year - s_d.year + 1
+    if unit == "QUARTER":
+        months = (e_d.year - s_d.year) * 12 + (e_d.month - s_d.month) + 1
+        return months // 3 if months % 3 == 0 else None
+    if unit in {"DAY", "WEEK"}:
+        days = (e_d - s_d).days + 1
+        return days if unit == "DAY" else (days // 7 if days % 7 == 0 else None)
+    return None
+
+
 def window_from_trace(trace):
     """The window a turn actually resolved, read from its recorded tool calls.
 
@@ -359,6 +390,21 @@ def window_from_trace(trace):
         name = (call.get("name") or "").lower()
         if name not in {tool.lower() for tool in _WINDOW_TOOLS}:
             continue
+        # A resolver that threw produced NO window: ToolInvocationRecorder records it as
+        # result=null with `error` set. Falling back to the arguments here would grade the model's
+        # request as though it had been resolved — so a call that failed outright would PASS
+        # whenever the model happened to ask for the right shape. Marked rather than dropped,
+        # because a turn whose resolver failed must not read as "no window expectation".
+        if call.get("error"):
+            resolved.append({
+                "shape": None,
+                "unit": None,
+                "count": None,
+                "comparison": None,
+                "model_shape": None,
+                "failed": True,
+            })
+            continue
         try:
             arguments = json.loads(call.get("arguments") or "{}")
         except (TypeError, ValueError):
@@ -372,9 +418,14 @@ def window_from_trace(trace):
 
         if "period" in arguments and "shape" not in arguments:
             # resolveNamedPeriod names an absolute period rather than a relative shape.
-            resolved.append(
-                {"shape": "ABSOLUTE", "unit": None, "count": None, "comparison": None, "model_shape": None}
-            )
+            resolved.append({
+                "shape": "ABSOLUTE",
+                "unit": None,
+                "count": None,
+                "comparison": None,
+                "model_shape": None,
+                "failed": False,
+            })
             continue
 
         model_shape = arguments.get("shape")
@@ -384,13 +435,24 @@ def window_from_trace(trace):
         if not shape:
             continue
         count = arguments.get("count")
+        count = int(count) if isinstance(count, (int, str)) and str(count).isdigit() else None
+        unit = str(arguments["unit"]).upper() if arguments.get("unit") else None
+        corrected = bool(model_shape) and str(model_shape).upper() != str(shape).upper()
+        if corrected:
+            # The same classifier that corrected the shape also sets unit and count, and the result
+            # JSON carries neither — only dates. Keeping the requested unit/count here would grade a
+            # corrected window against the request that was overridden, turning a regression the old
+            # code caught loudly into a silent PASS. Derive what the dates prove; leave the rest
+            # None so it cannot match instead of matching wrongly.
+            count = _span_count(result, unit) or None
         resolved.append(
             {
                 "shape": str(shape).upper(),
-                "unit": str(arguments["unit"]).upper() if arguments.get("unit") else None,
-                "count": int(count) if isinstance(count, (int, str)) and str(count).isdigit() else None,
+                "unit": unit,
+                "count": count,
                 "comparison": str(arguments["comparison"]).upper() if arguments.get("comparison") else None,
                 "model_shape": str(model_shape).upper() if model_shape else None,
+                "failed": False,
             }
         )
     return resolved
@@ -424,6 +486,15 @@ def grade_window(question, answer, as_of, resolved=None):
 
     if resolved is not None:
         statements = resolved
+        failed = [s for s in statements if s.get("failed")]
+        if failed:
+            # The resolver threw, so no window reached the downstream query. UNGRADED would be the
+            # softer verdict, but the run summary only fails on FAIL — a broken resolver would then
+            # still produce a green run, which is the outcome this harness exists to prevent.
+            return "FAIL", (
+                f"[trace] {len(failed)} window-resolver call(s) failed, so no window was resolved "
+                "for this turn"
+            )
         observed = []
         for statement in resolved:
             if statement["shape"] in _STATEMENT_LABELS.values() and statement["shape"] not in observed:
@@ -470,7 +541,13 @@ def grade_window(question, answer, as_of, resolved=None):
 
     wanted_comparison = expected.get("comparison")
     if wanted_comparison and wanted_comparison != "NONE":
-        if not any(s["shape"] == wanted_comparison for s in statements):
+        # The answer path emits comparison labels in `shape` (parse_statements merges both label
+        # maps); the trace path keeps them in their own key. Checking only `shape` meant a
+        # trace-graded question could never satisfy an expected comparison — q15 is the only
+        # question that declares one, and it failed on this whatever its shape resolved to.
+        if not any(
+            s.get("shape") == wanted_comparison or s.get("comparison") == wanted_comparison for s in statements
+        ):
             problems.append(f"comparison: expected a {wanted_comparison} window, answer quotes none")
 
     if problems:
