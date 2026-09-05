@@ -59,8 +59,12 @@ public class DateWindowFacadeTool {
                     + "period so far, from its first day through today (\"this week/month/quarter/year\"); "
                     + "count must be 1. PRIOR_COMPLETE — the one whole period most recently ended (\"last "
                     + "month\", \"the previous quarter\"); count must be 1. CALENDAR_SPAN — N whole periods "
-                    + "ending with the last complete one (\"in/during/for the last N months\"). Units: DAY, "
-                    + "WEEK (ISO Monday-Sunday), MONTH, QUARTER, YEAR — DAY is only valid with ROLLING. "
+                    + "ending with the last complete one (\"in/during/for the last N months\"). FORWARD — N "
+                    + "units starting today and ending in the FUTURE, today included (\"in the next 14 days\", "
+                    + "\"the next three months\"); use this for anything upcoming — bills due, appointments "
+                    + "scheduled, warranties expiring — and never ask the caller for explicit dates for a "
+                    + "forward range. Units: DAY, "
+                    + "WEEK (ISO Monday-Sunday), MONTH, QUARTER, YEAR — DAY is only valid with ROLLING or FORWARD. "
                     + "Optional comparison, for a question that pairs the window with another one: "
                     + "PRIOR_PERIOD (the same shape and length immediately before the primary window) or "
                     + "YEAR_EARLIER (the primary window's exact span, one year earlier). Returns JSON: "
@@ -71,11 +75,14 @@ public class DateWindowFacadeTool {
                     + "in a comparison if you passed NONE.")
     public String resolveDateWindow(
             @ToolParam(
-                            description = "ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, or CALENDAR_SPAN — see the tool "
-                                    + "description for what each means and which wording maps to it")
+                            description =
+                                    "ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, CALENDAR_SPAN, or FORWARD — see the tool "
+                                            + "description for what each means and which wording maps to it")
                     @NonNull
                     String shape,
-            @ToolParam(description = "DAY, WEEK, MONTH, QUARTER, or YEAR. DAY is only valid with shape=ROLLING")
+            @ToolParam(
+                            description = "DAY, WEEK, MONTH, QUARTER, or YEAR. DAY is only valid with shape=ROLLING "
+                                    + "or shape=FORWARD")
                     @NonNull
                     String unit,
             @ToolParam(
@@ -209,7 +216,7 @@ public class DateWindowFacadeTool {
         } catch (IllegalArgumentException invalid) {
             throw new InvalidToolArgumentException(
                     "Unsupported shape '" + raw
-                            + "': pass one of ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, CALENDAR_SPAN",
+                            + "': pass one of ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, CALENDAR_SPAN, FORWARD",
                     invalid);
         }
     }
