@@ -335,10 +335,24 @@ def fetch_traces(traces_url, token, since, timeout=60):
 
 
 def window_from_trace(trace):
-    """The window arguments a turn actually resolved, read from its recorded tool calls.
+    """The window a turn actually resolved, read from its recorded tool calls.
 
-    Returns a list of {shape, unit, count, comparison} in call order. A bucketed question resolves
-    several, so this keeps them all and lets the caller decide what satisfies the expectation.
+    Reads each call's RESULT, not its arguments. Those were the same thing until #1675: the model
+    named a shape and the resolver computed it. The server now corrects a shape the wording
+    contradicts, so the argument is what was asked for and the result is what the downstream query
+    actually used — and only the latter is what the corpus means.
+
+    Grading the argument made a working fix look broken: on 2026-09-05 the server resolved q12 and
+    q15 as CALENDAR_SPAN while the model had asked for ROLLING, and the gate reported FAIL on both.
+    It fails the other way too, and worse — a correction that silently stopped working would still
+    read as PASS whenever the model happened to send the right shape.
+
+    `model_shape` is kept alongside so a divergence stays visible rather than being smoothed away;
+    the model's own classification is still worth knowing, it is just not the thing under test.
+
+    Returns a list of {shape, unit, count, comparison, model_shape} in call order. A bucketed
+    question resolves several, so this keeps them all and lets the caller decide what satisfies the
+    expectation.
     """
     resolved = []
     for call in trace.get("toolCalls") or []:
@@ -349,11 +363,24 @@ def window_from_trace(trace):
             arguments = json.loads(call.get("arguments") or "{}")
         except (TypeError, ValueError):
             continue
+        try:
+            result = json.loads(call.get("result") or "{}")
+        except (TypeError, ValueError):
+            result = {}
+        if not isinstance(result, dict):
+            result = {}
+
         if "period" in arguments and "shape" not in arguments:
             # resolveNamedPeriod names an absolute period rather than a relative shape.
-            resolved.append({"shape": "ABSOLUTE", "unit": None, "count": None, "comparison": None})
+            resolved.append(
+                {"shape": "ABSOLUTE", "unit": None, "count": None, "comparison": None, "model_shape": None}
+            )
             continue
-        shape = arguments.get("shape")
+
+        model_shape = arguments.get("shape")
+        # The result is authoritative; the argument is the fallback for a trace recorded before
+        # #1675, or a call whose result did not parse.
+        shape = result.get("shape") or model_shape
         if not shape:
             continue
         count = arguments.get("count")
@@ -363,6 +390,7 @@ def window_from_trace(trace):
                 "unit": str(arguments["unit"]).upper() if arguments.get("unit") else None,
                 "count": int(count) if isinstance(count, (int, str)) and str(count).isdigit() else None,
                 "comparison": str(arguments["comparison"]).upper() if arguments.get("comparison") else None,
+                "model_shape": str(model_shape).upper() if model_shape else None,
             }
         )
     return resolved

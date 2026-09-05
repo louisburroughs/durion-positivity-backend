@@ -800,8 +800,44 @@ class TraceWindowGradingTest(unittest.TestCase):
 
         self.assertEqual(
             resolved,
-            [{"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6, "comparison": "YEAR_EARLIER"}],
+            [{
+                "shape": "CALENDAR_SPAN",
+                "unit": "MONTH",
+                "count": 6,
+                "comparison": "YEAR_EARLIER",
+                "model_shape": "CALENDAR_SPAN",
+            }],
         )
+
+    def test_grades_the_resolved_shape_not_the_shape_the_model_asked_for(self):
+        # The live case from 2026-09-05: the model asked for ROLLING, the server corrected it from
+        # the caller's wording (#1675) and resolved a calendar span, and the gate reported FAIL on a
+        # correct result. Grading the argument also fails the other way — a correction that stopped
+        # working would still read PASS whenever the model happened to send the right shape.
+        resolved = runner.window_from_trace(
+            self._trace([{
+                "name": "resolveDateWindow",
+                "arguments": '{"shape":"ROLLING","unit":"MONTH","count":6,"phrase":"last six months"}',
+                "result": '{"startDate":"2026-03-01","endDate":"2026-08-31","shape":"CALENDAR_SPAN"}',
+            }])
+        )
+
+        self.assertEqual(resolved[0]["shape"], "CALENDAR_SPAN")
+        # The model's own classification stays visible rather than being smoothed away.
+        self.assertEqual(resolved[0]["model_shape"], "ROLLING")
+
+    def test_falls_back_to_the_argument_when_the_result_has_no_shape(self):
+        # Traces recorded before #1675 carry no corrected shape, and a call whose result did not
+        # parse should not silently drop the window entirely.
+        resolved = runner.window_from_trace(
+            self._trace([{
+                "name": "resolveDateWindow",
+                "arguments": '{"shape":"ROLLING","unit":"DAY","count":90}',
+                "result": "not json",
+            }])
+        )
+
+        self.assertEqual(resolved[0]["shape"], "ROLLING")
 
     def test_a_named_period_call_reads_as_absolute(self):
         resolved = runner.window_from_trace(
