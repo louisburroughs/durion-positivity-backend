@@ -7,6 +7,7 @@ import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Locale;
+import java.util.Optional;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -63,7 +64,8 @@ public class DateWindowFacadeTool {
                     + "PRIOR_PERIOD (the same shape and length immediately before the primary window) or "
                     + "YEAR_EARLIER (the primary window's exact span, one year earlier). Returns JSON: "
                     + "startDate, endDate, shape, statement (a human-readable sentence to quote verbatim), and "
-                    + "— only when a comparison was requested — comparison.startDate/endDate/statement.")
+                    + "— only when a comparison was requested — comparison.startDate/endDate/statement. Always pass "
+                    + "phrase with the user's own wording for the range; the server confirms the shape against it.")
     public String resolveDateWindow(
             @ToolParam(
                             description = "ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, or CALENDAR_SPAN — see the tool "
@@ -82,13 +84,51 @@ public class DateWindowFacadeTool {
                                     + "YEAR_EARLIER",
                             required = false)
                     @Nullable
-                    String comparison) {
+                    String comparison,
+            @ToolParam(
+                            description = "The user's own wording for the range, copied verbatim from their "
+                                    + "question (e.g. \"in the last six months\"). Supply this whenever the "
+                                    + "question states a range in words; it lets the server confirm the shape "
+                                    + "against the wording.",
+                            required = false)
+                    @Nullable
+                    String phrase) {
         DateWindowResolver.Shape parsedShape = parseShape(shape);
         DateWindowResolver.Unit parsedUnit = parseUnit(unit);
         DateWindowResolver.Comparison parsedComparison = parseComparison(comparison);
-        DateWindowResolver.ResolvedWindow resolved =
-                DateWindowResolver.resolve(LocalDate.now(clock), parsedShape, parsedUnit, count, parsedComparison);
-        logResolution(parsedShape, parsedUnit, count, parsedComparison, resolved);
+        int resolvedCount = count;
+
+        // #1675: the wording decides the shape, and it decides it here rather than in the model.
+        // Three rounds of prompt text did not make the classification stick, so where the phrase
+        // names a shape unambiguously it wins over the model's own argument. The classifier
+        // abstains on anything it is not sure of, and an abstention leaves the model's choice
+        // untouched — so this can correct a known-wrong reading without inventing a new one.
+        Optional<WindowPhraseClassifier.Classification> fromPhrase = WindowPhraseClassifier.classify(phrase);
+        if (fromPhrase.isPresent()) {
+            WindowPhraseClassifier.Classification c = fromPhrase.get();
+            if (c.shape() != parsedShape || c.unit() != parsedUnit || c.count() != count) {
+                LOGGER.info(
+                        "MCP date window shape corrected from wording: modelShape={} modelUnit={} modelCount={} "
+                                + "-> shape={} unit={} count={} phrase=\"{}\"",
+                        parsedShape,
+                        parsedUnit,
+                        count,
+                        c.shape(),
+                        c.unit(),
+                        c.count(),
+                        phrase);
+            }
+            parsedShape = c.shape();
+            parsedUnit = c.unit();
+            resolvedCount = c.count();
+            if (parsedComparison == DateWindowResolver.Comparison.NONE) {
+                parsedComparison = c.comparison();
+            }
+        }
+
+        DateWindowResolver.ResolvedWindow resolved = DateWindowResolver.resolve(
+                LocalDate.now(clock), parsedShape, parsedUnit, resolvedCount, parsedComparison);
+        logResolution(parsedShape, parsedUnit, resolvedCount, parsedComparison, resolved);
         return write(resolved);
     }
 
