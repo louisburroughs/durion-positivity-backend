@@ -169,6 +169,61 @@ class OpenApiModuleValidatorTest {
     }
 
     @Test
+    void reportsErrorResponsesTypedAsSuccessDtosWhenErrorSchemaIsStrict() {
+        var issues = validator.validate(
+                "pos-documents",
+                Path.of("src/test/resources/openapi/fixtures/module/mistyped-error-schema-module.yaml"),
+                new OpenApiModulePolicy(
+                        OpenApiModulePolicy.Mode.STRICT,
+                        null,
+                        OpenApiModulePolicy.DepthMode.EXEMPT,
+                        "fixture",
+                        OpenApiModulePolicy.ErrorSchemaMode.STRICT,
+                        null));
+
+        assertThat(issues)
+                .extracting(OpenApiValidationIssue::message)
+                .containsExactly("pos-documents PUT /v1/documents/{id}: 400 response body is DocumentResponse,"
+                        + " not ApiError (ADR-0017 §3; a schema-less @ApiResponse lets springdoc infer the"
+                        + " wrong type)");
+        assertThat(issues).allSatisfy(issue -> assertThat(issue.mode()).isEqualTo(OpenApiModulePolicy.Mode.STRICT));
+    }
+
+    @Test
+    void tagsErrorSchemaIssuesAsReportOnlyWhenErrorSchemaIsReportOnly() {
+        var issues = validator.validate(
+                "pos-documents",
+                Path.of("src/test/resources/openapi/fixtures/module/mistyped-error-schema-module.yaml"),
+                new OpenApiModulePolicy(
+                        OpenApiModulePolicy.Mode.STRICT,
+                        null,
+                        OpenApiModulePolicy.DepthMode.EXEMPT,
+                        "fixture",
+                        OpenApiModulePolicy.ErrorSchemaMode.REPORT_ONLY,
+                        null));
+
+        assertThat(issues).hasSize(1);
+        assertThat(issues)
+                .allSatisfy(issue -> assertThat(issue.mode()).isEqualTo(OpenApiModulePolicy.Mode.REPORT_ONLY));
+    }
+
+    @Test
+    void skipsErrorSchemaChecksWhenErrorSchemaIsExempt() {
+        var issues = validator.validate(
+                "pos-documents",
+                Path.of("src/test/resources/openapi/fixtures/module/mistyped-error-schema-module.yaml"),
+                new OpenApiModulePolicy(
+                        OpenApiModulePolicy.Mode.STRICT,
+                        null,
+                        OpenApiModulePolicy.DepthMode.EXEMPT,
+                        "fixture",
+                        OpenApiModulePolicy.ErrorSchemaMode.EXEMPT,
+                        "fixture"));
+
+        assertThat(issues).isEmpty();
+    }
+
+    @Test
     void throwsForMalformedSpecFile() {
         assertThatThrownBy(() -> validator.validate(
                         "pos-order",

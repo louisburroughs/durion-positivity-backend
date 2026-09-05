@@ -17,6 +17,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
@@ -51,7 +52,7 @@ class DateWindowFacadeToolTest {
     @DisplayName("resolveDateWindow uses the shared clock and returns startDate/endDate/shape/statement")
     void resolveDateWindow_returnsStartEndShapeAndStatement() {
         // q01 (analytics-gate QUESTIONS.json): "last month" as of 2026-09-03 -> 2026-08-01..2026-08-31.
-        JsonNode result = parse(tool.resolveDateWindow("PRIOR_COMPLETE", "MONTH", 1, null));
+        JsonNode result = parse(tool.resolveDateWindow("PRIOR_COMPLETE", "MONTH", 1, null, null));
 
         assertThat(result.get("startDate").asText()).isEqualTo("2026-08-01");
         assertThat(result.get("endDate").asText()).isEqualTo("2026-08-31");
@@ -64,8 +65,8 @@ class DateWindowFacadeToolTest {
     @Test
     @DisplayName("resolveDateWindow omits the comparison field when comparison is NONE or absent")
     void resolveDateWindow_omitsComparisonWhenNotRequested() {
-        JsonNode withoutArg = parse(tool.resolveDateWindow("CALENDAR_SPAN", "MONTH", 6, null));
-        JsonNode explicitNone = parse(tool.resolveDateWindow("CALENDAR_SPAN", "MONTH", 6, "NONE"));
+        JsonNode withoutArg = parse(tool.resolveDateWindow("CALENDAR_SPAN", "MONTH", 6, null, null));
+        JsonNode explicitNone = parse(tool.resolveDateWindow("CALENDAR_SPAN", "MONTH", 6, "NONE", null));
 
         assertThat(withoutArg.has("comparison")).isFalse();
         assertThat(explicitNone.has("comparison")).isFalse();
@@ -76,7 +77,7 @@ class DateWindowFacadeToolTest {
     void resolveDateWindow_includesComparisonWhenRequested() {
         // q15: "over the last six months compared with the same six months last year", calendar-shape
         // primary per the #1670 mixed-comparison precedence, YEAR_EARLIER comparison.
-        JsonNode result = parse(tool.resolveDateWindow("CALENDAR_SPAN", "MONTH", 6, "YEAR_EARLIER"));
+        JsonNode result = parse(tool.resolveDateWindow("CALENDAR_SPAN", "MONTH", 6, "YEAR_EARLIER", null));
 
         assertThat(result.get("startDate").asText()).isEqualTo("2026-03-01");
         assertThat(result.get("endDate").asText()).isEqualTo("2026-08-31");
@@ -91,7 +92,7 @@ class DateWindowFacadeToolTest {
     @Test
     @DisplayName("resolveDateWindow is case-insensitive and tolerates surrounding whitespace on its arguments")
     void resolveDateWindow_isCaseInsensitiveOnArguments() {
-        JsonNode result = parse(tool.resolveDateWindow(" rolling ", " day ", 7, " none "));
+        JsonNode result = parse(tool.resolveDateWindow(" rolling ", " day ", 7, " none ", null));
 
         assertThat(result.get("shape").asText()).isEqualTo("ROLLING");
         assertThat(result.get("startDate").asText()).isEqualTo("2026-08-28");
@@ -102,15 +103,17 @@ class DateWindowFacadeToolTest {
     @DisplayName("resolveDateWindow rejects an unrecognized shape with a self-correcting message")
     void resolveDateWindow_rejectsUnrecognizedShape() {
         assertThatExceptionOfType(InvalidToolArgumentException.class)
-                .isThrownBy(() -> tool.resolveDateWindow("SOMETIME_SOON", "MONTH", 1, null))
-                .withMessageContaining("ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, CALENDAR_SPAN");
+                .isThrownBy(() -> tool.resolveDateWindow("SOMETIME_SOON", "MONTH", 1, null, null))
+                // FORWARD must appear too: the message is what a model self-corrects from, and
+                // omitting a supported shape tells it that shape does not exist.
+                .withMessageContaining("ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, CALENDAR_SPAN, FORWARD");
     }
 
     @Test
     @DisplayName("resolveDateWindow rejects an unrecognized unit with a self-correcting message")
     void resolveDateWindow_rejectsUnrecognizedUnit() {
         assertThatExceptionOfType(InvalidToolArgumentException.class)
-                .isThrownBy(() -> tool.resolveDateWindow("ROLLING", "FORTNIGHT", 1, null))
+                .isThrownBy(() -> tool.resolveDateWindow("ROLLING", "FORTNIGHT", 1, null, null))
                 .withMessageContaining("DAY, WEEK, MONTH, QUARTER, YEAR");
     }
 
@@ -118,7 +121,7 @@ class DateWindowFacadeToolTest {
     @DisplayName("resolveDateWindow rejects an unrecognized comparison with a self-correcting message")
     void resolveDateWindow_rejectsUnrecognizedComparison() {
         assertThatExceptionOfType(InvalidToolArgumentException.class)
-                .isThrownBy(() -> tool.resolveDateWindow("ROLLING", "MONTH", 1, "LAST_QUARTER"))
+                .isThrownBy(() -> tool.resolveDateWindow("ROLLING", "MONTH", 1, "LAST_QUARTER", null))
                 .withMessageContaining("NONE, PRIOR_PERIOD, YEAR_EARLIER");
     }
 
@@ -126,7 +129,7 @@ class DateWindowFacadeToolTest {
     @DisplayName("resolveDateWindow propagates the resolver's DAY-with-a-calendar-shape rejection")
     void resolveDateWindow_propagatesDayCalendarShapeRejection() {
         assertThatExceptionOfType(InvalidToolArgumentException.class)
-                .isThrownBy(() -> tool.resolveDateWindow("CALENDAR_SPAN", "DAY", 90, null))
+                .isThrownBy(() -> tool.resolveDateWindow("CALENDAR_SPAN", "DAY", 90, null, null))
                 .withMessageContaining("DAY has no calendar form");
     }
 
@@ -142,7 +145,7 @@ class DateWindowFacadeToolTest {
     @DisplayName("resolveDateWindow logs the classified shape alongside the dates it produced")
     void resolveDateWindow_logsTheClassifiedShapeAndResolvedDates() {
         try (LogCapture captured = new LogCapture()) {
-            tool.resolveDateWindow("CALENDAR_SPAN", "MONTH", 12, "YEAR_EARLIER");
+            tool.resolveDateWindow("CALENDAR_SPAN", "MONTH", 12, "YEAR_EARLIER", null);
 
             assertThat(captured.events()).hasSize(1);
             ILoggingEvent logged = captured.events().getFirst();
@@ -162,7 +165,7 @@ class DateWindowFacadeToolTest {
     @DisplayName("resolveDateWindow logs comparison=NONE when no comparison was requested")
     void resolveDateWindow_logsNoneWhenNoComparisonRequested() {
         try (LogCapture captured = new LogCapture()) {
-            tool.resolveDateWindow("PRIOR_COMPLETE", "MONTH", 1, null);
+            tool.resolveDateWindow("PRIOR_COMPLETE", "MONTH", 1, null, null);
 
             assertThat(captured.events().getFirst().getFormattedMessage())
                     .contains("comparison=NONE")
@@ -180,7 +183,7 @@ class DateWindowFacadeToolTest {
     @DisplayName("resolveDateWindow logs the comparison window's own dates, not just its mode")
     void resolveDateWindow_logsTheComparisonWindowDates() {
         try (LogCapture captured = new LogCapture()) {
-            tool.resolveDateWindow("CALENDAR_SPAN", "MONTH", 6, "PRIOR_PERIOD");
+            tool.resolveDateWindow("CALENDAR_SPAN", "MONTH", 6, "PRIOR_PERIOD", null);
 
             assertThat(captured.events().getFirst().getFormattedMessage())
                     .contains("startDate=2026-03-01 endDate=2026-08-31")
@@ -197,7 +200,7 @@ class DateWindowFacadeToolTest {
     void resolveDateWindow_logsNothingWhenRejected() {
         try (LogCapture captured = new LogCapture()) {
             assertThatExceptionOfType(InvalidToolArgumentException.class)
-                    .isThrownBy(() -> tool.resolveDateWindow("CALENDAR_SPAN", "DAY", 90, null));
+                    .isThrownBy(() -> tool.resolveDateWindow("CALENDAR_SPAN", "DAY", 90, null, null));
 
             assertThat(captured.events()).isEmpty();
         }
@@ -315,5 +318,61 @@ class DateWindowFacadeToolTest {
         assertThatThrownBy(() -> tool.resolveNamedPeriod("last month"))
                 .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("resolveDateWindow");
+    }
+
+    @Nested
+    @DisplayName("#1675: the wording overrides the model's shape argument")
+    class PhraseOverridesShape {
+
+        @Test
+        @DisplayName("q12 — `in the last six months` sent as ROLLING resolves as a calendar span")
+        void calendarPrepositionWins() throws Exception {
+            // Exactly what the 2026-09-05 gate captured at the tool boundary: the model classified
+            // ROLLING for wording the rule assigns to the calendar.
+            JsonNode node = MAPPER.readTree(tool.resolveDateWindow(
+                    "ROLLING", "MONTH", 6, "NONE", "Of the invoices we issued in the last six months"));
+
+            assertThat(node.get("shape").asText()).isEqualTo("CALENDAR_SPAN");
+        }
+
+        @Test
+        @DisplayName("q15 — a named comparison pulls a rolling primary onto the calendar")
+        void namedComparisonWins() throws Exception {
+            JsonNode node = MAPPER.readTree(tool.resolveDateWindow(
+                    "ROLLING",
+                    "MONTH",
+                    6,
+                    "YEAR_EARLIER",
+                    "largest vendors by spend over the last six months compared with the same six months last year"));
+
+            assertThat(node.get("shape").asText()).isEqualTo("CALENDAR_SPAN");
+            assertThat(node.has("comparison")).isTrue();
+        }
+
+        @Test
+        @DisplayName("`over the last six months` alone is left rolling — the override is not a blanket rewrite")
+        void rollingWordingStaysRolling() throws Exception {
+            JsonNode node = MAPPER.readTree(
+                    tool.resolveDateWindow("ROLLING", "MONTH", 6, "NONE", "revenue over the last six months"));
+
+            assertThat(node.get("shape").asText()).isEqualTo("ROLLING");
+        }
+
+        @Test
+        @DisplayName("wording the classifier cannot read leaves the model's own choice untouched")
+        void abstentionPreservesModelChoice() throws Exception {
+            JsonNode node =
+                    MAPPER.readTree(tool.resolveDateWindow("ROLLING", "MONTH", 6, "NONE", "how are we doing lately?"));
+
+            assertThat(node.get("shape").asText()).isEqualTo("ROLLING");
+        }
+
+        @Test
+        @DisplayName("a null phrase is the pre-#1675 contract and still works")
+        void nullPhraseIsBackwardCompatible() throws Exception {
+            JsonNode node = MAPPER.readTree(tool.resolveDateWindow("PRIOR_COMPLETE", "MONTH", 1, "NONE", null));
+
+            assertThat(node.get("shape").asText()).isEqualTo("PRIOR_COMPLETE");
+        }
     }
 }

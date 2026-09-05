@@ -3801,7 +3801,7 @@ paths:
 
         Emits a SECURITY_USER_UPDATE event; a supplied password is re-hashed before storage.
 
-        Returns 400 with INVALID_REQUEST when the user or a named role cannot be found; the miss surfaces as 400 rather than 404.
+        Returns 400 with VALIDATION_ERROR when the user or a named role cannot be found; the miss surfaces as 400 rather than 404.
 
         '
       operationId: updateUser
@@ -3840,7 +3840,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: User or named role not found (INVALID_REQUEST); the miss surfaces as 400, not 404.
+          description: User or named role not found (VALIDATION_ERROR); the miss surfaces as 400, not 404.
         '401':
           content:
             application/json:
@@ -4487,7 +4487,7 @@ paths:
 
         Emits a SECURITY_USER_ASSIGN_ROLES event.
 
-        Returns 400 with INVALID_REQUEST when the user or a named role cannot be found; the miss surfaces as 400 rather than 404.
+        Returns 400 with VALIDATION_ERROR when the user or a named role cannot be found; the miss surfaces as 400 rather than 404.
 
         '
       operationId: assignUserRolesByUsername
@@ -4524,7 +4524,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: User or named role not found (INVALID_REQUEST); the miss surfaces as 400, not 404.
+          description: User or named role not found (VALIDATION_ERROR); the miss surfaces as 400, not 404.
         '401':
           content:
             application/json:

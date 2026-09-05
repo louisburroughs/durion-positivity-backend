@@ -37,6 +37,31 @@ class OpenApiValidationInventoryLoaderTest {
     }
 
     @Test
+    void defaultsErrorSchemaToReportOnlyAndReadsExplicitStrict() {
+        OpenApiValidationInventory inventory =
+                OpenApiValidationInventoryLoader.load(Path.of("src/test/resources/openapi/module-inventory.yaml"));
+
+        // pos-vehicle-inventory is the reference conversion for ADR-0017 §3's error-envelope rule
+        // (#1720); every other module has no errorSchema key and exercises the REPORT_ONLY default,
+        // so a default-mode run stays green while -Dopenapi.validation.mode=STRICT reports the gap.
+        assertThat(inventory.policyFor("pos-vehicle-inventory").errorSchema())
+                .isEqualTo(OpenApiModulePolicy.ErrorSchemaMode.STRICT);
+        assertThat(inventory.policyFor("pos-accounting").errorSchema())
+                .isEqualTo(OpenApiModulePolicy.ErrorSchemaMode.REPORT_ONLY);
+        assertThat(inventory.policyFor("pos-api-gateway").errorSchema())
+                .isEqualTo(OpenApiModulePolicy.ErrorSchemaMode.REPORT_ONLY);
+    }
+
+    @Test
+    void throwsWhenErrorSchemaIsExemptWithoutReason() {
+        Path path = Path.of("src/test/resources/openapi/error-schema-exempt-without-reason.yaml");
+
+        assertThatThrownBy(() -> OpenApiValidationInventoryLoader.load(path))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("errorSchemaReason");
+    }
+
+    @Test
     void throwsWhenAnnotationDepthIsExemptWithoutReason() {
         Path path = Path.of("src/test/resources/openapi/depth-exempt-without-reason.yaml");
 

@@ -43,7 +43,7 @@ import org.springframework.test.web.servlet.MockMvc;
  *
  * <ul>
  *   <li>{@link SecurityValidationException} keeps this module's genuine-client-error contract
- *       (400 {@code INVALID_REQUEST}, message echoed) — the blanket
+ *       (400 {@code VALIDATION_ERROR}, message echoed) — the blanket
  *       {@code @ExceptionHandler(IllegalArgumentException.class)} that used to catch this is
  *       gone.
  *   <li>{@link NoRolesAssignedException} answers the 403 {@code USER_HAS_NO_ROLES} mapping
@@ -102,7 +102,7 @@ class JwtControllerErrorHandlingTest {
     }
 
     @Test
-    @DisplayName("a SecurityValidationException failure still answers 400 INVALID_REQUEST with its own message")
+    @DisplayName("a SecurityValidationException failure answers 400 VALIDATION_ERROR with its own message")
     void aSecurityValidationFailureAnswers400WithItsOwnMessageAndCode() throws Exception {
         when(jwtService.refreshAccessToken(anyString()))
                 .thenThrow(new SecurityValidationException("Invalid refresh token"));
@@ -113,7 +113,7 @@ class JwtControllerErrorHandlingTest {
                         .content("{\"refreshToken\":\"not-a-real-token\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(header().string("X-Correlation-Id", CORRELATION_ID))
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.message").value("Invalid refresh token"))
                 .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID));
     }

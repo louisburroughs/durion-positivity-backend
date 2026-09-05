@@ -7,16 +7,18 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.order.BaseContractIntegrationTest;
+import com.positivity.order.BaseControllerSliceTest;
 import com.positivity.order.internal.exception.ReturnLineNotReturnableException;
 import com.positivity.order.internal.exception.ReturnRequestValidationException;
 import com.positivity.order.internal.service.ReturnOrderService;
+import com.positivity.security.common.GatewaySecurityConfig;
+import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * Issue #1694: {@link ReturnOrderExceptionHandler} no longer has a blanket
@@ -28,17 +30,15 @@ import org.springframework.test.web.servlet.MockMvc;
  * falls through to {@code pos-web-common}'s {@code GlobalApiExceptionHandler}, which answers a
  * generic, correlated 500 that never echoes the exception's own text.
  *
- * <p>Uses the module's full-context integration pattern ({@link BaseContractIntegrationTest}) —
- * see {@link RegisterSessionControllerErrorHandlingTest} for why a {@code @WebMvcTest} slice does
- * not work here.
+ * <p>Runs as a {@code @WebMvcTest} slice on {@link com.positivity.order.BaseControllerSliceTest},
+ * whose Javadoc records why this module could not be sliced before #1723.
  */
 @DisplayName("Return-order endpoints answer the errors they document (#1694)")
-class ReturnOrderControllerErrorHandlingTest extends BaseContractIntegrationTest {
+@WebMvcTest(ReturnOrderController.class)
+@Import({GatewaySecurityConfig.class, WebCommonErrorAutoConfiguration.class, BaseControllerSliceTest.SliceConfig.class})
+class ReturnOrderControllerErrorHandlingTest extends BaseControllerSliceTest {
 
     private static final UUID RETURN_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b03");
-
-    @Autowired
-    private MockMvc mockMvc;
 
     @MockitoBean
     private ReturnOrderService returnOrderService;
