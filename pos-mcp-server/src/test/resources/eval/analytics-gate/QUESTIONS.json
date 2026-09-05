@@ -499,6 +499,35 @@
           "note": "Not yet annotated; outside the chat-path gate set. Left unset rather than guessed so a wrong expectation cannot be mistaken for ground truth."
         }
       }
+    },
+    {
+      "fixture_id": "q21",
+      "expected_section": "Q21",
+      "ground_truth_sql": "ground-truth/q21-vendors-owed-with-open-purchase-orders.sql",
+      "utterance": "Which vendors do we still owe money to, and do any of them have purchase orders still open with us?",
+      "window": {
+        "shape": "current",
+        "resolved_range": "current state as of now; no relative range in the question",
+        "stated_in_question": false,
+        "expected": {
+          "shape": null,
+          "note": "Deliberately unset. Both halves are current-state reads — unpaid vendor bills and open purchase orders — so there is no relative range to resolve and resolveDateWindow should not be called at all. A resolver call on this question is itself worth seeing in the trace."
+        }
+      },
+      "expected_plan": {
+        "note": "#1689 band 4. BOTH retrievals are required: the correct verdict (no overlap) is guessable, so a model that skipped a call and asserted 'none' must not score as correct. Grade the two lists, not the conclusion alone.",
+        "tool_calls": [
+          {
+            "name": "getVendorBills",
+            "why": "unpaid vendor bills — the amounts owed"
+          },
+          {
+            "name": "searchPurchaseOrders",
+            "why": "purchase orders still open with each vendor"
+          }
+        ]
+      },
+      "expected_outcome": "answered"
     }
   ]
 }

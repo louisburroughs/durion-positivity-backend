@@ -403,3 +403,48 @@ feature of the data an answer may flag).
   Q19/Q20 composition semantics.
 - Known boundary quirk mirrored, not smoothed: E5's labor-hours JPA `Between` upper bound
   is inclusive of the end+1d midnight instant (no seed row sits on it).
+
+## Q21 — vendors owed money, and whether any have open purchase orders
+
+Measured 2026-09-05 via `run_ground_truth.sh q21-vendors-owed-with-open-purchase-orders.sql`
+(exit 0, both sections, zero SQL errors). #1689 band 4 — the cross-domain example that issue
+names and the corpus had no coverage of.
+
+**Section 1 — unpaid vendor bills (`pos_accounting_db`, status APPROVED):**
+
+| vendor_id | unpaid bills | amount owed | earliest due | latest due |
+|---|---|---|---|---|
+| `d1c3e5a5-dc2c-5f6b-8139-8925c147e3c5` (Cascade Auto Warehouse) | 2 | 2,600.0000 | 2026-09-08 | 2026-09-12 |
+| `7268ed6c-9d68-586b-bba6-24e8f368db9f` (Evergreen Parts Supply) | 1 | 800.0000 | 2026-09-04 | 2026-09-04 |
+| `dbf6dae0-1caa-5d5b-b234-18856f126b7b` (Summit Lubricants) | 1 | 400.0000 | 2026-09-15 | 2026-09-15 |
+
+Cross-foot: 4 unpaid bills, **3,800.0000** total. (72 further bills are PAID, 82,320.0000 — not owed.)
+
+**Section 2 — open purchase orders (`pos_order_db`, status APPROVED):**
+
+| vendor_id | open POs |
+|---|---|
+| `b1d93eb1-e79d-7abf-af7a-7768afe99a8a` | 144 |
+
+PO population: 168 FULLY_RECEIVED, 144 APPROVED, 70 DRAFT, 20 CANCELLED (402 total).
+
+**Expected answer: the intersection is EMPTY.** No vendor both has an unpaid bill and an open
+purchase order. The three owed vendors carry no open POs; the single vendor with open POs owes
+nothing.
+
+### Grading note — why "none" alone must not pass
+
+The correct verdict is guessable without doing any work, so a fixture that accepts a bare "none"
+would score a model that made no tool calls. **The expected answer is the two lists plus the
+empty intersection**: the three owed vendors with their amounts, the fact that open POs exist but
+for a different vendor, and the conclusion. `expected_plan` requires both retrievals, so
+#1682-style plan grading catches a model that skipped one and guessed.
+
+### Provenance caveat
+
+The three owed vendors carry UUIDv5-style ids (`…-5f6b-`, `…-586b-`, `…-5d5b-`) matching the
+TRACKB seed's deterministic vendors; the 144-PO vendor is a UUIDv7 (`b1d93eb1-e79d-7abf-…`),
+i.e. runtime-created co-tenant data rather than seed. Per the co-tenancy policy above that is
+accepted, not cleaned — but it means **this question's empty intersection is an environment
+fact, not a designed seed invariant**. If a future seed gives an owed vendor an open PO, or the
+co-tenant PO block is cleared, re-run and refresh. Treat drift here as environment churn first.
