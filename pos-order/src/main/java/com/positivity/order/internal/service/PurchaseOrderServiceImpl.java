@@ -14,6 +14,7 @@ import com.positivity.order.internal.entity.PurchaseOrderTransmissionEvent;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
+import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
 import com.positivity.order.internal.repository.PurchaseOrderTransmissionEventRepository;
 import java.math.BigDecimal;
@@ -234,7 +235,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             @NonNull UUID poId, @NonNull ApprovePurchaseOrderRequest request, @NonNull String actorId) {
         PurchaseOrderEntity po = getPoOrThrow(poId);
         if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
-            throw new IllegalStateException("Only DRAFT purchase orders can be approved");
+            throw new PurchaseOrderStateConflictException("Only DRAFT purchase orders can be approved");
         }
 
         // Approval is the moment the order becomes a commitment, and the moment its open
@@ -288,7 +289,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     public @NonNull PurchaseOrderResponse cancelPurchaseOrder(@NonNull UUID poId, @NonNull String actorId) {
         PurchaseOrderEntity po = getPoOrThrow(poId);
         if (po.getStatus() == PurchaseOrderStatus.FULLY_RECEIVED || po.getStatus() == PurchaseOrderStatus.CLOSED) {
-            throw new IllegalStateException("Cannot cancel a fully received or closed purchase order");
+            throw new PurchaseOrderStateConflictException("Cannot cancel a fully received or closed purchase order");
         }
 
         po.setStatus(PurchaseOrderStatus.CANCELLED);

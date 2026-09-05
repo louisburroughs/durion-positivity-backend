@@ -176,6 +176,13 @@ Any service may therefore return these in addition to its module codes below.
 | `ORDER_CANCELLATION_INVALID` | 409 | Order cannot be cancelled in its current state |
 | `ORDER_FORBIDDEN` | 403 | Caller lacks required order permissions |
 | `RETURN_LINE_NOT_RETURNABLE` | 422 | Requested return line is not returnable per policy (issue #1694; split out of the former blanket `RETURN_INVALID_ARGUMENT` 422 catch-all) |
+| `ORDER_STATE_CONFLICT` | 409 | A well-formed cart request another resource's state refuses — today, a new order against a terminal whose register session is CLOSING. Answered 422 until issue #1730, which is the drift that issue reported: the module's other three advices already answered 409 for this kind of failure |
+| `ORDER_UNPROCESSABLE` | 422 | A structurally valid cart request a domain rule refuses on its merits: an empty cart at quote or checkout, an unresolvable price, a WORKORDER link without a customer, a quote on a workorder-linked order, or serial/lot identifiers that do not match the line quantity. Replaces the former `UNPROCESSABLE_REQUEST`, which also covered request-shape errors (now 400 `ORDER_INVALID_ARGUMENT`) and the collision above (issue #1730) |
+| `RETURN_INVALID_STATE` | 409 | A well-formed return request the current lifecycle state refuses. Unchanged status, but issue #1730 narrowed it: it no longer also covers domain-policy refusals or downstream refund failures |
+| `RETURN_UNPROCESSABLE` | 422 | A structurally valid return request refused on its own terms: no invoice to refund against, insufficient settled original tender, or a credit refund method with no customer on the return. These answered 409 until issue #1730, which told a caller its request collided with state when retrying unchanged could never work |
+| `PURCHASE_ORDER_INVALID_STATE` | 409 | Approving a non-DRAFT purchase order, or cancelling one already fully received or closed. Unchanged status; issue #1730 stopped it also covering an internal sequence-overflow guard, which is now a correlated 500 |
+
+Note (issue #1730): bare `IllegalStateException` is no longer mapped by any advice in this module. It carried stateful collisions, domain-policy refusals, request-shape errors and downstream failures all at once, so the four scoped advices had settled on two different wrong statuses for it. Each meaning now has its own type; whatever still throws the bare type — a failed payment reversal, a failed workorder cancellation, a sequence overflow — reaches the platform advice as a correlated 500 `INTERNAL_ERROR`, which is what those server-side failures always were.
 
 ### pos-invoice
 | Code | Status | Description |

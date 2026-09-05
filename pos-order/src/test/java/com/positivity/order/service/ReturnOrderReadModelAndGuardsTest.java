@@ -23,6 +23,8 @@ import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderLine;
 import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.entity.SourceType;
+import com.positivity.order.internal.exception.ReturnOrderStateConflictException;
+import com.positivity.order.internal.exception.ReturnOrderUnprocessableException;
 import com.positivity.order.internal.repository.ReturnOrderLineRepository;
 import com.positivity.order.internal.repository.ReturnOrderRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
@@ -195,7 +197,7 @@ class ReturnOrderReadModelAndGuardsTest {
             when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(open));
 
             assertThatThrownBy(() -> service.returnableLines(ORDER_ID))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(ReturnOrderStateConflictException.class)
                     .hasMessageContaining("COMPLETED");
         }
     }
@@ -210,7 +212,7 @@ class ReturnOrderReadModelAndGuardsTest {
             stubReturn(ReturnOrderStatus.RETURN_REQUESTED);
 
             assertThatThrownBy(() -> service.approveReturn(RETURN_ID))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(ReturnOrderStateConflictException.class)
                     .hasMessageContaining("PENDING_APPROVAL");
         }
 
@@ -220,7 +222,7 @@ class ReturnOrderReadModelAndGuardsTest {
             stubReturn(ReturnOrderStatus.COMPLETED);
 
             assertThatThrownBy(() -> service.rejectReturn(RETURN_ID, "changed mind"))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(ReturnOrderStateConflictException.class)
                     .hasMessageContaining("PENDING_APPROVAL");
         }
 
@@ -231,7 +233,7 @@ class ReturnOrderReadModelAndGuardsTest {
 
             // A return still awaiting approval must not be refundable by calling process directly.
             assertThatThrownBy(() -> service.processReturn(RETURN_ID))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(ReturnOrderStateConflictException.class)
                     .hasMessageContaining("RETURN_REQUESTED");
         }
 
@@ -250,7 +252,7 @@ class ReturnOrderReadModelAndGuardsTest {
             stubReturn(ReturnOrderStatus.RETURN_REQUESTED);
 
             assertThatThrownBy(() -> service.retryReturn(RETURN_ID))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(ReturnOrderStateConflictException.class)
                     .hasMessageContaining("REFUND_FAILED");
         }
 
@@ -339,7 +341,7 @@ class ReturnOrderReadModelAndGuardsTest {
                     .thenReturn(new PaymentReversalResult(true, "REFUND", "ok"));
 
             assertThatThrownBy(() -> service.processReturn(RETURN_ID))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(ReturnOrderUnprocessableException.class)
                     .hasMessageContaining("Insufficient settled original tender");
 
             // The 100.00 that did reverse is not rolled back here -- the transaction is, by the
@@ -353,7 +355,7 @@ class ReturnOrderReadModelAndGuardsTest {
             ReturnOrder returnOrder = stubRefundableReturn("50.0000", RefundMethod.ORIGINAL_TENDER, null);
 
             assertThatThrownBy(() -> service.processReturn(RETURN_ID))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(ReturnOrderUnprocessableException.class)
                     .hasMessageContaining("No invoice");
 
             assertThat(returnOrder.getStatus()).isEqualTo(ReturnOrderStatus.REFUND_FAILED);
@@ -374,7 +376,7 @@ class ReturnOrderReadModelAndGuardsTest {
             ReturnOrder returnOrder = stubRefundableReturn("50.0000", RefundMethod.STORE_CREDIT, INVOICE_ID);
 
             assertThatThrownBy(() -> service.processReturn(RETURN_ID))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(ReturnOrderUnprocessableException.class)
                     .hasMessageContaining("requires a customer");
 
             assertThat(returnOrder.getStatus()).isEqualTo(ReturnOrderStatus.REFUND_FAILED);

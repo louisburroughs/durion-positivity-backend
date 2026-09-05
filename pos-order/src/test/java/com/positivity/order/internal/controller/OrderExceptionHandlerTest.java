@@ -18,9 +18,13 @@ import com.positivity.order.internal.exception.RegisterSessionNotFoundException;
 import com.positivity.order.internal.exception.RegisterSessionRequestValidationException;
 import com.positivity.order.internal.exception.ReturnLineNotReturnableException;
 import com.positivity.order.internal.exception.ReturnOrderNotFoundException;
+import com.positivity.order.internal.exception.ReturnOrderStateConflictException;
+import com.positivity.order.internal.exception.ReturnOrderUnprocessableException;
 import com.positivity.order.internal.exception.ReturnRequestValidationException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
+import com.positivity.order.internal.exception.SalesOrderStateConflictException;
+import com.positivity.order.internal.exception.SalesOrderUnprocessableException;
 import com.positivity.order.internal.exception.SessionCloseBlockedException;
 import com.positivity.order.internal.exception.TaxUnavailableException;
 import com.positivity.order.internal.exception.WarrantyReturnRoutingException;
@@ -54,11 +58,14 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
  *
  * <p>
  * Each advice is deliberately scoped with {@code assignableTypes} so it does not
- * shadow its siblings, and that scoping is the reason the same exception type
- * maps to different codes and statuses per endpoint family — an
- * {@link IllegalStateException} is a 422 on the sales-order endpoints and a 409
- * on the returns endpoints. Clients branch on those codes, so this test pins the
- * pairings rather than trusting them to stay aligned by convention.
+ * shadow its siblings. Until #1730 that scoping also let one exception type mean
+ * different things per endpoint family: a bare {@link IllegalStateException} was a
+ * 422 on the sales-order endpoints and a 409 on the returns endpoints, because the
+ * type carried stateful collisions, domain-policy refusals, request-shape errors and
+ * outright downstream failures all at once, and neither status was right for the mix.
+ * It is no longer mapped by any advice in this module. Each meaning now has its own
+ * type, and the status follows ADR-0017 §1/§2 rather than the endpoint family.
+ * Clients branch on these codes, so this test pins the pairings.
  *
  * <p>
  * The other property worth pinning is that the correlation id appears on both
@@ -103,6 +110,48 @@ class OrderExceptionHandlerTest {
         assertThat(result.getBody().correlationId()).isEqualTo("trace-1");
         // The header must carry the same id, since that is what a caller reports back.
         assertThat(result.getHeaders().getFirst(CORRELATION_HEADER)).isEqualTo("trace-1");
+    }
+
+    /**
+     * The guarantee the rest of this class depends on (#1730): no advice in this module maps bare
+     * {@link IllegalStateException} any more. While one did, the type meant four different things
+     * at once — a stateful collision, a domain-policy refusal, a request-shape error, and an
+     * outright downstream failure — so the four scoped advices had settled on two different wrong
+     * statuses for it, which is the drift #1730 reported.
+     *
+     * <p>What still throws it is server-side only: a failed payment reversal, a failed workorder
+     * cancellation, a purchase-order sequence overflow, an event-serialisation failure. Those
+     * reach pos-web-common's platform advice as a correlated 500, which is what they always were.
+     * Re-adding a handler for the bare type here would silently relabel them as client errors
+     * again, so this test fails if one appears.
+     */
+    @Test
+    @DisplayName("no advice in this module maps bare IllegalStateException (#1730)")
+    void noAdviceMapsBareIllegalStateException() {
+        List<Class<?>> advices = List.of(
+                SalesOrderExceptionHandler.class,
+                ReturnOrderExceptionHandler.class,
+                OrderCancellationExceptionHandler.class,
+                PurchaseOrderExceptionHandler.class,
+                RegisterSessionExceptionHandler.class,
+                PriceOverrideExceptionHandler.class,
+                OrderStateExceptionHandler.class);
+
+        List<String> offenders = advices.stream()
+                .flatMap(advice -> java.util.Arrays.stream(advice.getDeclaredMethods())
+                        .filter(method -> {
+                            var annotation = method.getAnnotation(
+                                    org.springframework.web.bind.annotation.ExceptionHandler.class);
+                            return annotation != null
+                                    && java.util.Arrays.asList(annotation.value())
+                                            .contains(IllegalStateException.class);
+                        })
+                        .map(method -> advice.getSimpleName() + "#" + method.getName()))
+                .toList();
+
+        assertThat(offenders)
+                .as("bare IllegalStateException must stay unmapped so server-side failures answer a correlated 500")
+                .isEmpty();
     }
 
     @Nested
@@ -162,12 +211,31 @@ class OrderExceptionHandlerTest {
         }
 
         @Test
-        @DisplayName("maps a rejected state transition to 422 UNPROCESSABLE_REQUEST")
-        void illegalState() {
+        @DisplayName("maps a domain-policy refusal to 422 ORDER_UNPROCESSABLE")
+        void unprocessableRequest() {
+            // #1730: a structurally valid cart request a rule refuses on its merits — an empty
+            // cart, an unresolvable price, a serial/lot count that does not match the quantity.
+            // 422 is unchanged for this case; what changed is that it no longer also covers
+            // request-shape errors (400) or stateful collisions (409).
             assertEnvelope(
-                    salesOrder.handleUnprocessableRequest(new IllegalStateException("already closed"), request),
+                    salesOrder.handleUnprocessableRequest(
+                            new SalesOrderUnprocessableException("Cannot quote an empty cart"), request),
                     HttpStatus.UNPROCESSABLE_CONTENT,
-                    "UNPROCESSABLE_REQUEST");
+                    "ORDER_UNPROCESSABLE");
+        }
+
+        @Test
+        @DisplayName("maps a stateful collision to 409, the same status the module's other advices answer")
+        void stateConflictIsAConflictHereToo() {
+            // #1730: this is the drift the issue reported. A collision with another resource's
+            // state answered 422 here and 409 in the return/cancellation/purchase advices; it is
+            // 409 everywhere now, per ADR-0017 §2.
+            assertEnvelope(
+                    salesOrder.handleStateConflict(
+                            new SalesOrderStateConflictException("Terminal T1 has a register session being closed"),
+                            request),
+                    HttpStatus.CONFLICT,
+                    "ORDER_STATE_CONFLICT");
         }
 
         @Test
@@ -261,12 +329,29 @@ class OrderExceptionHandlerTest {
         }
 
         @Test
-        @DisplayName("maps a rejected state transition to 409, unlike the sales-order advice's 422")
-        void illegalStateIsAConflictHere() {
+        @DisplayName("maps a rejected state transition to 409, the same status every advice now answers")
+        void stateConflictIsAConflictHere() {
             assertEnvelope(
-                    returns.handleConflict(new IllegalStateException("already returned"), request),
+                    returns.handleConflict(
+                            new ReturnOrderStateConflictException("Only a PENDING_APPROVAL return can be approved"),
+                            request),
                     HttpStatus.CONFLICT,
                     "RETURN_INVALID_STATE");
+        }
+
+        @Test
+        @DisplayName("maps a domain-policy refusal to 422, where it used to share the 409")
+        void unprocessableIsNotAConflict() {
+            // #1730: "no invoice to refund against" is not a collision with current state — the
+            // request is refused on its own terms, so retrying it unchanged can never work.
+            // ADR-0017 §2 makes that a 422; it answered 409 while it travelled as bare
+            // IllegalStateException.
+            assertEnvelope(
+                    returns.handleUnprocessable(
+                            new ReturnOrderUnprocessableException("No invoice on the original order to refund against"),
+                            request),
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "RETURN_UNPROCESSABLE");
         }
 
         @Test

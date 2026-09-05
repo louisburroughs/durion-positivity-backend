@@ -18,6 +18,7 @@ import com.positivity.order.internal.client.WorkorderStatusResult;
 import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderStatus;
+import com.positivity.order.internal.exception.OrderCancellationStateConflictException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
@@ -213,7 +214,7 @@ class OrderCancellationServiceImplTest {
                 .thenReturn(new WorkorderStatusResult("IN_PROGRESS", false, "Work already started"));
 
         assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(WORKORDER_ID)))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(OrderCancellationStateConflictException.class);
         assertThat(order.getStatus()).isEqualTo(SalesOrderStatus.CANCEL_FAILED_WORKEXEC);
     }
 
@@ -261,7 +262,7 @@ class OrderCancellationServiceImplTest {
                 .thenReturn(List.of(settledRecord(new BigDecimal("80.00"))));
 
         assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null)))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(OrderCancellationStateConflictException.class);
         assertThat(order.getStatus()).isEqualTo(SalesOrderStatus.CANCEL_FAILED_BILLING);
     }
 
@@ -293,7 +294,7 @@ class OrderCancellationServiceImplTest {
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
 
         assertThatThrownBy(() -> orderCancellationService.cancelOrder(ORDER_ID, cancelCommand(null)))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(OrderCancellationStateConflictException.class)
                 .hasMessageContaining("cancel");
     }
 
@@ -356,7 +357,7 @@ class OrderCancellationServiceImplTest {
         when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
 
         assertThatThrownBy(() -> orderCancellationService.retryCancellation(ORDER_ID, "idem-key-1"))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(OrderCancellationStateConflictException.class);
     }
 
     @Test

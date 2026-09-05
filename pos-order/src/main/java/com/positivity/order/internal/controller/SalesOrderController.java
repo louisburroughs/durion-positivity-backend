@@ -73,8 +73,8 @@ public class SalesOrderController {
                     Emits an ORDER_CART_CREATE event and records the initial DRAFT status-history row.
                     Returns 201 on creation, 200 when a replayed Idempotency-Key returns the original cart, 400 \
                     when locationId cannot be resolved or depositSourceType/depositSourceId is only half supplied, \
-                    409 when the key was previously used with a different payload, and 422 when the customer or \
-                    vehicle cannot be validated or the terminal's session is being closed.
+                    409 when the key was previously used with a different payload or the terminal's session is \
+                    being closed, and 422 when the customer or vehicle cannot be validated.
                     """,
             tags = {"Sales Orders"})
     @PostMapping("/carts")
@@ -294,8 +294,8 @@ public class SalesOrderController {
                     Required inputs: type (PERCENT or AMOUNT) and a positive value — a PERCENT value must not \
                     exceed 100; reasonCode is optional.
                     Emits an ORDER_CART_DISCOUNT_APPLY event, recomputes order totals, and marks tax stale.
-                    Returns 404 when the order does not exist, 409 when the order is not DRAFT, and 422 when the \
-                    type or value is invalid.
+                    Returns 404 when the order does not exist, 409 when the order is not DRAFT, and 400 when the \
+                    type is not PERCENT or AMOUNT or the value is not positive (and, for PERCENT, at most 100).
                     """,
             tags = {"Sales Orders"})
     @PutMapping("/carts/{orderId}/discount")

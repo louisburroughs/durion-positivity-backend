@@ -264,7 +264,9 @@ public class ReturnOrderController {
                     completion, which pos-inventory consumes to restock RESTOCK-condition lines (SCRAP lines are \
                     skipped); a refund failure parks the return at REFUND_FAILED before any stock signal.
                     Returns 200 when the saga completes (or the return was already COMPLETED), 404 when the return \
-                    does not exist, and 409 when the status is not RETURN_REQUESTED or the refund leg fails.
+                    does not exist, 409 when the status is not RETURN_REQUESTED, 422 when the refund is refused on \
+                    its own terms (no invoice to refund against, insufficient settled tender, or a credit refund \
+                    with no customer on the return), and 500 when the refund leg itself fails downstream.
                     """,
             tags = {"Returns"})
     @PostMapping("/{returnOrderId}/process")
@@ -288,7 +290,8 @@ public class ReturnOrderController {
                     Emits an ORDER_RETURN_RETRY event and, on success, publishes the order.order.returned fact \
                     that drives the pos-inventory restock of RESTOCK lines.
                     Returns 200 when the retry completes (or the return was already COMPLETED), 404 when the \
-                    return does not exist, and 409 when the status is not REFUND_FAILED or the refund fails again.
+                    return does not exist, 409 when the status is not REFUND_FAILED, 422 when the refund is \
+                    refused on its own terms, and 500 when the refund leg fails downstream again.
                     """,
             tags = {"Returns"})
     @PostMapping("/{returnOrderId}/retry")
