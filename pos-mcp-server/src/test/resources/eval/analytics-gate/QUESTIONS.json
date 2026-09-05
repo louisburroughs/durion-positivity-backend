@@ -400,12 +400,14 @@
       "budget": 2,
       "window": {
         "shape": "rolling",
-        "resolved_range": "due 2026-09-01..2026-09-15 (14 days inclusive, forward from the as-of)",
+        "resolved_range": "due 2026-09-05..2026-09-18 (14 days inclusive, forward from the as-of)",
         "stated_in_question": true,
-        "notes": "A day-expressed range has no calendar form (#1670) — forward-rolling from the as-of date.",
+        "notes": "A day-expressed range has no calendar form (#1670), and this one runs FORWARD from the as-of date rather than backward. #1681 added the FORWARD shape; before it, no argument the model could send meant \"the next 14 days\".",
         "expected": {
-          "shape": null,
-          "note": "Left unset deliberately. The question asks for bills due in the NEXT 14 days, and the resolver has no forward shape — ROLLING is start = today - N + 1, end = today. A ROLLING expectation would therefore pass an answer that used the wrong, backward window and leave a correct forward answer ungraded. Needs either a forward shape in the resolver or an endpoint-based expectation; the day-count edge is separately open in #1681."
+          "shape": "FORWARD",
+          "unit": "DAY",
+          "count": 14,
+          "note": "Graded since #1681. The previous note said the resolver had no forward shape and left this unset, which was correct then and stopped being correct when FORWARD landed — so the only forward question in the corpus was scoring UNGRADED, and the summary does not fail on UNGRADED. A ROLLING resolution must FAIL here: it is the backward window, and the two were indistinguishable while this was unset."
         }
       }
     },

@@ -1192,6 +1192,53 @@ class RunModeTest(unittest.TestCase):
             self.assertNotIn("| verdict |", body)
 
 
+class ForwardWindowCoverageTest(unittest.TestCase):
+    """#1766: #1681 added the FORWARD shape and nothing in the gate grades it.
+
+    q16 is the only forward question in the corpus and its expectation was left unset with a note
+    saying the resolver had no forward shape. That stopped being true when #1681 landed, so the
+    forward path shipped with zero coverage — a regression that broke FORWARD would surface as
+    UNGRADED, which the run summary does not fail on.
+    """
+
+    def _q16(self):
+        path = (
+            Path(__file__).resolve().parents[1]
+            / "pos-mcp-server/src/test/resources/eval/analytics-gate/QUESTIONS.json"
+        )
+        document = json.loads(path.read_text(encoding="utf-8"))
+        return next(q for q in document["questions"] if q["fixture_id"] == "q16")
+
+    def test_q16_declares_a_forward_expectation(self):
+        expected = self._q16()["window"]["expected"]
+
+        self.assertEqual(expected.get("shape"), "FORWARD")
+        self.assertEqual(expected.get("unit"), "DAY")
+        self.assertEqual(expected.get("count"), 14)
+
+    def test_a_forward_resolution_passes_q16(self):
+        resolved = [{
+            "shape": "FORWARD", "unit": "DAY", "count": 14,
+            "comparison": None, "model_shape": "FORWARD", "failed": False,
+        }]
+
+        verdict, detail = runner.grade_window(self._q16(), "irrelevant", "2026-09-05", resolved=resolved)
+
+        self.assertEqual(verdict, "PASS", detail)
+
+    def test_a_backward_rolling_resolution_fails_q16(self):
+        # The whole point: before #1681 a ROLLING expectation would have passed an answer built on
+        # the wrong, backward window. Now the two are distinguishable and the wrong one must fail.
+        resolved = [{
+            "shape": "ROLLING", "unit": "DAY", "count": 14,
+            "comparison": None, "model_shape": "ROLLING", "failed": False,
+        }]
+
+        verdict, _ = runner.grade_window(self._q16(), "irrelevant", "2026-09-05", resolved=resolved)
+
+        self.assertEqual(verdict, "FAIL")
+
+
 class TurnIsolationTest(unittest.TestCase):
     """#1735: twelve questions from one actor shared one twelve-turn memory."""
 
