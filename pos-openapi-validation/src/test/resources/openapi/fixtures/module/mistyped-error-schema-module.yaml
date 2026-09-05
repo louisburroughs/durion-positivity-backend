@@ -1,0 +1,36 @@
+openapi: "3.0.3"
+info:
+  title: pos-documents
+  version: "1.0"
+paths:
+  /v1/documents/{id}:
+    put:
+      summary: Update a document
+      description: Replaces a stored document.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentResponse"
+        "404":
+          description: Not found; the body is empty.
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+components:
+  schemas:
+    DocumentResponse:
+      type: object
+    ApiError:
+      type: object

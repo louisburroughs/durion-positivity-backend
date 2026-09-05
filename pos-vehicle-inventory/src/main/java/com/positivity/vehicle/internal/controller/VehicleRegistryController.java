@@ -144,7 +144,10 @@ public class VehicleRegistryController {
                     Returns 404 with an empty body when no registry record exists for the supplied vehicleId.
                     """)
     @ApiResponse(responseCode = "200", description = "Vehicle retrieved successfully.")
-    @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Vehicle not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.REGISTRY_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -171,7 +174,10 @@ public class VehicleRegistryController {
                     with a VALIDATION_FAILED ApiError when the path VIN is not exactly 17 characters.
                     """)
     @ApiResponse(responseCode = "200", description = "Vehicle retrieved successfully.")
-    @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Vehicle not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.REGISTRY_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -204,8 +210,14 @@ public class VehicleRegistryController {
                     constraints.
                     """)
     @ApiResponse(responseCode = "200", description = "Vehicle updated successfully.")
-    @ApiResponse(responseCode = "400", description = "Invalid vehicle request.")
-    @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid vehicle request.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Vehicle not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.REGISTRY_UPDATE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -248,7 +260,10 @@ public class VehicleRegistryController {
                     vehicleId is unknown.
                     """)
     @ApiResponse(responseCode = "204", description = "Vehicle deleted successfully.")
-    @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Vehicle not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.REGISTRY_DELETE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

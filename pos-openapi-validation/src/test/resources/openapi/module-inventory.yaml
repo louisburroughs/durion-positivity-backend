@@ -38,6 +38,11 @@ modules:
   pos-vehicle-inventory:
     mode: STRICT
     annotationDepth: STRICT
+    # Reference conversion for ADR-0017 §3's error-envelope rule (issue #1720): every 4xx/5xx
+    # response in this module's spec now references ApiError, so the check is blocking here.
+    # Every other module defaults to REPORT_ONLY until its error annotations carry an explicit
+    # schema; run with -Dopenapi.validation.mode=STRICT to see the remaining fleet gap.
+    errorSchema: STRICT
   pos-warranty:
     mode: STRICT
     annotationDepth: STRICT

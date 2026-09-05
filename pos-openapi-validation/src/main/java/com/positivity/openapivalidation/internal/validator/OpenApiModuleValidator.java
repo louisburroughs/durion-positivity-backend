@@ -15,13 +15,21 @@ import org.jspecify.annotations.NonNull;
 public class OpenApiModuleValidator {
 
     private final OpenApiAnnotationDepthValidator depthValidator;
+    private final OpenApiErrorResponseSchemaValidator errorSchemaValidator;
 
     public OpenApiModuleValidator() {
-        this(new OpenApiAnnotationDepthValidator());
+        this(new OpenApiAnnotationDepthValidator(), new OpenApiErrorResponseSchemaValidator());
     }
 
     public OpenApiModuleValidator(@NonNull OpenApiAnnotationDepthValidator depthValidator) {
+        this(depthValidator, new OpenApiErrorResponseSchemaValidator());
+    }
+
+    public OpenApiModuleValidator(
+            @NonNull OpenApiAnnotationDepthValidator depthValidator,
+            @NonNull OpenApiErrorResponseSchemaValidator errorSchemaValidator) {
         this.depthValidator = depthValidator;
+        this.errorSchemaValidator = errorSchemaValidator;
     }
 
     public @NonNull List<OpenApiValidationIssue> validate(
@@ -49,7 +57,10 @@ public class OpenApiModuleValidator {
         return List.copyOf(issues);
     }
 
-    /** The per-operation checks: spec shape (summary, description), then ADR-0042 depth. */
+    /**
+     * The per-operation checks: spec shape (summary, description), ADR-0042 depth, then
+     * ADR-0017 §3's error-envelope rule (#1720).
+     */
     private void checkOperation(
             String module,
             OpenApiModulePolicy policy,
@@ -67,6 +78,11 @@ public class OpenApiModuleValidator {
         if (policy.annotationDepth() != OpenApiModulePolicy.DepthMode.EXEMPT) {
             for (String finding : depthValidator.check(operation)) {
                 issues.add(new OpenApiValidationIssue(module, policy.depthIssueMode(), prefix + " " + finding));
+            }
+        }
+        if (policy.errorSchema() != OpenApiModulePolicy.ErrorSchemaMode.EXEMPT) {
+            for (String finding : errorSchemaValidator.check(operation)) {
+                issues.add(new OpenApiValidationIssue(module, policy.errorSchemaIssueMode(), prefix + " " + finding));
             }
         }
     }

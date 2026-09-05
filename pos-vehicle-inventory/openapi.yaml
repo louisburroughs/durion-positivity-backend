@@ -171,7 +171,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Vehicle not found.
       security:
       - bearerAuth: []
@@ -208,6 +208,10 @@ paths:
         '204':
           description: Vehicle deleted successfully.
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Vehicle not found.
       security:
       - bearerAuth: []
@@ -250,7 +254,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Vehicle not found.
       security:
       - bearerAuth: []
@@ -307,13 +311,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid vehicle request.
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Vehicle not found.
       security:
       - bearerAuth: []
@@ -473,6 +477,10 @@ paths:
         '204':
           description: Vehicle deleted successfully.
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Vehicle not found.
       security:
       - bearerAuth: []
@@ -515,7 +523,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleLegacyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Vehicle not found.
       security:
       - bearerAuth: []
@@ -574,7 +582,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleLegacyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Vehicle not found.
       security:
       - bearerAuth: []
@@ -612,6 +620,10 @@ paths:
         '204':
           description: Vehicle deleted successfully.
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: Vehicle not found.
       security:
       - bearerAuth: []
@@ -655,7 +667,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleLegacyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Vehicle not found.
       security:
       - bearerAuth: []
@@ -715,7 +727,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleLegacyResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Vehicle not found.
       security:
       - bearerAuth: []
@@ -776,7 +788,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid request envelope.
       security:
       - bearerAuth:
@@ -835,7 +847,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SearchVehiclesResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid search query
       security:
       - bearerAuth: []
@@ -884,7 +896,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SearchVehiclesResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid search query
       security:
       - bearerAuth: []
@@ -961,7 +973,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+                $ref: '#/components/schemas/ApiError'
           description: No preferences found for this vehicle
       security:
       - bearerAuth: []
@@ -1019,7 +1031,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+                $ref: '#/components/schemas/ApiError'
           description: No existing preferences to merge into
       security:
       - bearerAuth: []
@@ -1086,13 +1098,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Invalid preference data
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleCarePreferenceResponse'
+                $ref: '#/components/schemas/ApiError'
           description: Vehicle not found
       security:
       - bearerAuth: []

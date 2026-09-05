@@ -1,6 +1,7 @@
 package com.positivity.vehicle.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.vehicle.internal.dto.VehicleLegacyRequest;
 import com.positivity.vehicle.internal.dto.VehicleLegacyResponse;
 import com.positivity.vehicle.internal.service.VehicleLegacyService;
@@ -8,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
@@ -98,7 +100,10 @@ public class VehicleController {
                     Returns 404 with an empty body when no legacy vehicle exists for the supplied id.
                     """)
     @ApiResponse(responseCode = "200", description = "Vehicle found and returned.")
-    @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Vehicle not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/{id}")
     public ResponseEntity<VehicleLegacyResponse> getVehicle(
             @Parameter(description = "ID of the vehicle to retrieve", example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b")
@@ -139,7 +144,10 @@ public class VehicleController {
                     when make, model or year is missing or invalid.
                     """)
     @ApiResponse(responseCode = "200", description = "Vehicle updated successfully.")
-    @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Vehicle not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "VEHICLE_UPDATE", apiVersion = "1")
     @PutMapping("/{id}")
     public ResponseEntity<VehicleLegacyResponse> updateVehicle(
@@ -174,7 +182,10 @@ public class VehicleController {
                     Returns 204 on successful deletion, and 404 with an empty body when the id is unknown.
                     """)
     @ApiResponse(responseCode = "204", description = "Vehicle deleted successfully.")
-    @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Vehicle not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "VEHICLE_DELETE", apiVersion = "1")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteVehicle(
@@ -235,7 +246,10 @@ public class VehicleController {
                     VALIDATION_ERROR ApiError when the VIN is blank.
                     """)
     @ApiResponse(responseCode = "200", description = "Vehicle found and returned.")
-    @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Vehicle not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/vin/{vin}")
     public ResponseEntity<VehicleLegacyResponse> getVehicleByVIN(
             @Parameter(description = "VIN of the vehicle to retrieve", example = "1HGCM82633A004352") @PathVariable
@@ -258,7 +272,10 @@ public class VehicleController {
                     VALIDATION_ERROR ApiError when a required body field is missing or invalid.
                     """)
     @ApiResponse(responseCode = "200", description = "Vehicle updated successfully.")
-    @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Vehicle not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "VEHICLE_UPDATE", apiVersion = "1")
     @PutMapping("/vin/{vin}")
     public ResponseEntity<VehicleLegacyResponse> updateVehicleByVIN(
@@ -294,7 +311,10 @@ public class VehicleController {
                     the VIN.
                     """)
     @ApiResponse(responseCode = "204", description = "Vehicle deleted successfully.")
-    @ApiResponse(responseCode = "404", description = "Vehicle not found.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Vehicle not found.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "VEHICLE_DELETE", apiVersion = "1")
     @DeleteMapping("/vin/{vin}")
     public ResponseEntity<Void> deleteVehicleByVIN(
