@@ -49,8 +49,10 @@ class PersonAccessControllerIT extends BaseIntegrationTest {
         mockMvc.perform(withAuth(get("/v1/people/{personUuid}/access/roles", personUuid)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
-                .andExpect(jsonPath("$.detail").value("Person not found with id: " + personUuid))
-                .andExpect(jsonPath("$.timestamp").exists());
+                .andExpect(jsonPath("$.code").value("PERSON_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Person not found with id: " + personUuid))
+                .andExpect(jsonPath("$.timestamp").exists())
+                .andExpect(jsonPath("$.correlationId").exists());
     }
 
     @Test
