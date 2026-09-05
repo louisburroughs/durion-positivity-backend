@@ -1201,11 +1201,22 @@ class TurnIsolationTest(unittest.TestCase):
         base.update(kw)
         return argparse.Namespace(**base)
 
-    def test_off_by_default_so_an_undeployed_server_is_not_sent_an_unknown_field(self):
-        # #1757 adds the server side. Until a deploy carries it, sending conversationId could be
-        # rejected outright, turning every question into a transport error — strictly worse than
-        # the shared-memory bias this corrects.
-        self.assertIsNone(runner.turn_conversation_id(self._args(), "q01"))
+    def test_isolation_is_on_by_default_from_the_real_parser(self):
+        # Built from the ACTUAL parser, not a hand-made Namespace. The previous version of this
+        # test constructed args with isolate_turns=False and asserted None, so it passed whatever
+        # the default was — it pinned the explicit-off path while claiming to pin the default.
+        args = runner.build_parser().parse_args(["--out", "/tmp/x"])
+        args.run_id = "gate-X"
+
+        self.assertTrue(args.isolate_turns)
+        self.assertEqual(runner.turn_conversation_id(args, "q01"), "gate-X-q01")
+
+    def test_no_isolate_turns_restores_the_shared_conversation(self):
+        args = runner.build_parser().parse_args(["--out", "/tmp/x", "--no-isolate-turns"])
+        args.run_id = "gate-X"
+
+        self.assertFalse(args.isolate_turns)
+        self.assertIsNone(runner.turn_conversation_id(args, "q01"))
 
     def test_each_question_gets_its_own_conversation_when_enabled(self):
         args = self._args(isolate_turns=True)
