@@ -10,12 +10,20 @@ import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.exception.WorkSessionNotFoundException;
 import com.positivity.shared.error.ApiError;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.validation.ConstraintViolationException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Arrays;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Named;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +34,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -322,5 +331,154 @@ class PeopleExceptionHandlerTest {
     @SuppressWarnings("unused")
     private static void sample(String value) {
         // Signature-only holder for MethodParameter.
+    }
+
+    // ---------------------------------------------------------------
+    // X-Correlation-Id header (ADR-0017 §4, #1729) — proves the single `buildResponse`
+    // helper puts the correlation id in both the body and the header for EVERY
+    // @ExceptionHandler method, and guards against a future handler forgetting it.
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("X-Correlation-Id header (ADR-0017 §4, #1729)")
+    class XCorrelationIdHeader {
+
+        private static final String CORRELATION_ID = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3fcc05";
+
+        @FunctionalInterface
+        interface HandlerInvocation {
+            ResponseEntity<ApiError> invoke(MockHttpServletRequest request, MockHttpServletResponse response);
+        }
+
+        private static MockHttpServletRequest requestWithHeader() {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.addHeader("X-Correlation-Id", CORRELATION_ID);
+            return request;
+        }
+
+        private static MockHttpServletRequest requestWithoutHeader() {
+            return new MockHttpServletRequest();
+        }
+
+        private static MockHttpServletRequest requestWithBlankHeader() {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.addHeader("X-Correlation-Id", "   ");
+            return request;
+        }
+
+        /**
+         * One entry per {@code @ExceptionHandler} method on {@link PeopleExceptionHandler}. Uses
+         * a standalone handler instance so this factory method can stay static, as required by
+         * {@code @MethodSource} outside a {@code PER_CLASS} test instance lifecycle.
+         */
+        private static Stream<Named<HandlerInvocation>> handlerInvocations() throws NoSuchMethodException {
+            PeopleExceptionHandler handler = new PeopleExceptionHandler(Clock.fixed(NOW, ZoneOffset.UTC));
+            MethodArgumentTypeMismatchException mismatch = new MethodArgumentTypeMismatchException(
+                    "not-a-uuid", UUID.class, "employeeId", methodParameter(), new IllegalArgumentException("nope"));
+            MethodArgumentNotValidException invalid = new MethodArgumentNotValidException(
+                    methodParameter(), new BeanPropertyBindingResult(new Object(), "request"));
+
+            return Stream.of(
+                    Named.of("handlePersonNotFound", (HandlerInvocation) (request, response) ->
+                            handler.handlePersonNotFound(new PersonNotFoundException(PERSON_ID), request, response)),
+                    Named.of("handleNotFound", (HandlerInvocation) (request, response) ->
+                            handler.handleNotFound(new NotFoundException("no such thing"), request, response)),
+                    Named.of("handleWorkSessionNotFound", (HandlerInvocation)
+                            (request, response) -> handler.handleWorkSessionNotFound(
+                                    new WorkSessionNotFoundException("no session"), request, response)),
+                    Named.of("handleEntityNotFound", (HandlerInvocation) (request, response) ->
+                            handler.handleEntityNotFound(new EntityNotFoundException("gone"), request, response)),
+                    Named.of("handleRequestValidation", (HandlerInvocation)
+                            (request, response) -> handler.handleRequestValidation(
+                                    new RequestValidationException("bad input"), request, response)),
+                    Named.of("handleResourceStateConflict", (HandlerInvocation)
+                            (request, response) -> handler.handleResourceStateConflict(
+                                    new ResourceStateConflictException("conflict"), request, response)),
+                    Named.of("handleIllegalState", (HandlerInvocation) (request, response) ->
+                            handler.handleIllegalState(new IllegalStateException("dup"), request, response)),
+                    Named.of("handleSemanticValidation", (HandlerInvocation)
+                            (request, response) -> handler.handleSemanticValidation(
+                                    new SemanticValidationException("bad dates"), request, response)),
+                    Named.of("handleAccessDenied", (HandlerInvocation) (request, response) ->
+                            handler.handleAccessDenied(new AccessDeniedException("nope"), request, response)),
+                    Named.of("handleNoEndpoint", (HandlerInvocation) handler::handleNoEndpoint),
+                    Named.of("handleTypeMismatch", (HandlerInvocation)
+                            (request, response) -> handler.handleTypeMismatch(mismatch, request, response)),
+                    Named.of("handleMissingParameter", (HandlerInvocation)
+                            (request, response) -> handler.handleMissingParameter(
+                                    new MissingServletRequestParameterException("locationId", "UUID"),
+                                    request,
+                                    response)),
+                    Named.of("handleValidation", (HandlerInvocation)
+                            (request, response) -> handler.handleValidation(invalid, request, response)),
+                    Named.of("handleConstraintViolation", (HandlerInvocation)
+                            (request, response) -> handler.handleConstraintViolation(
+                                    new ConstraintViolationException("invalid", Set.of()), request, response)),
+                    Named.of("handleHttpMessageNotReadable", (HandlerInvocation)
+                            (request, response) -> handler.handleHttpMessageNotReadable(
+                                    new HttpMessageNotReadableException(
+                                            "boom", (org.springframework.http.HttpInputMessage) null),
+                                    request,
+                                    response)),
+                    Named.of("handleResponseStatusException", (HandlerInvocation)
+                            (request, response) -> handler.handleResponseStatusException(
+                                    new ResponseStatusException(HttpStatus.CONFLICT, "already open"),
+                                    request,
+                                    response)));
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("echoes the inbound X-Correlation-Id in both header and body")
+        void echoesInboundCorrelationId(HandlerInvocation invocation) {
+            ResponseEntity<ApiError> response = invocation.invoke(requestWithHeader(), new MockHttpServletResponse());
+
+            assertThat(response.getHeaders().getFirst("X-Correlation-Id")).isEqualTo(CORRELATION_ID);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getHeaders().getFirst("X-Correlation-Id"))
+                    .isEqualTo(response.getBody().correlationId());
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a non-blank X-Correlation-Id, consistent between header and body, when absent")
+        void generatesCorrelationIdWhenAbsent(HandlerInvocation invocation) {
+            ResponseEntity<ApiError> response =
+                    invocation.invoke(requestWithoutHeader(), new MockHttpServletResponse());
+
+            String header = response.getHeaders().getFirst("X-Correlation-Id");
+            assertThat(header).isNotBlank();
+            assertThat(response.getBody()).isNotNull();
+            assertThat(header).isEqualTo(response.getBody().correlationId());
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+        void generatesCorrelationIdWhenBlank(HandlerInvocation invocation) {
+            ResponseEntity<ApiError> response =
+                    invocation.invoke(requestWithBlankHeader(), new MockHttpServletResponse());
+
+            String header = response.getHeaders().getFirst("X-Correlation-Id");
+            assertThat(header).isNotBlank();
+            assertThat(header).isNotEqualTo("   ");
+            assertThat(response.getBody()).isNotNull();
+            assertThat(header).isEqualTo(response.getBody().correlationId());
+        }
+
+        @Test
+        @DisplayName("every @ExceptionHandler method on PeopleExceptionHandler has a matching MethodSource entry")
+        void everyHandlerMethodIsCovered() throws NoSuchMethodException {
+            long handlerMethodCount = Arrays.stream(PeopleExceptionHandler.class.getDeclaredMethods())
+                    .filter(method -> method.isAnnotationPresent(ExceptionHandler.class))
+                    .count();
+            long methodSourceEntryCount = handlerInvocations().count();
+
+            assertThat(methodSourceEntryCount)
+                    .as("A new @ExceptionHandler method was added to PeopleExceptionHandler without a matching "
+                            + "entry in XCorrelationIdHeader#handlerInvocations() in PeopleExceptionHandlerTest — "
+                            + "add one so the X-Correlation-Id header contract stays proven for every handler")
+                    .isEqualTo(handlerMethodCount);
+        }
     }
 }

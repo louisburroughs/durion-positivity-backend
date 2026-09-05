@@ -16,13 +16,18 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Named;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.FieldSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +37,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -350,5 +356,150 @@ class PeopleExceptionHandlerTest {
     @SuppressWarnings("unused")
     private void validationTarget(String value) {
         // Exists only to give MethodParameter above something real to point at.
+    }
+
+    // ---------------------------------------------------------------
+    // X-Correlation-Id header (ADR-0017 §4, #1729) — proves the single `buildResponse`
+    // helper (plus the inline handlePersonHasLinkedUsers response, which sets the header the
+    // same way) puts the correlation id in both the body and the header for EVERY
+    // @ExceptionHandler method, and guards against a future handler forgetting it.
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("X-Correlation-Id header (ADR-0017 §4, #1729)")
+    class XCorrelationIdHeader {
+
+        private static final String CORRELATION_ID = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3fcc05";
+
+        @FunctionalInterface
+        interface HandlerInvocation {
+            ResponseEntity<ApiError> invoke(MockHttpServletRequest request);
+        }
+
+        private static MockHttpServletRequest requestWithHeader() {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.addHeader("X-Correlation-Id", CORRELATION_ID);
+            return request;
+        }
+
+        private static MockHttpServletRequest requestWithoutHeader() {
+            return new MockHttpServletRequest();
+        }
+
+        private static MockHttpServletRequest requestWithBlankHeader() {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.addHeader("X-Correlation-Id", "   ");
+            return request;
+        }
+
+        private static MethodParameter methodParameter() throws NoSuchMethodException {
+            return new MethodParameter(
+                    PeopleExceptionHandlerTest.class.getDeclaredMethod("validationTarget", String.class), 0);
+        }
+
+        /**
+         * One entry per {@code @ExceptionHandler} method on {@link PeopleExceptionHandler}. Uses
+         * a standalone handler instance so this factory method can stay static, as required by
+         * {@code @MethodSource} outside a {@code PER_CLASS} test instance lifecycle.
+         */
+        private static Stream<Named<HandlerInvocation>> handlerInvocations() throws NoSuchMethodException {
+            PeopleExceptionHandler handler = new PeopleExceptionHandler(Clock.fixed(NOW, ZoneOffset.UTC));
+            MethodArgumentTypeMismatchException mismatch = new MethodArgumentTypeMismatchException(
+                    "not-a-uuid", UUID.class, "personId", methodParameter(), new IllegalArgumentException("nope"));
+            MethodArgumentNotValidException invalid = new MethodArgumentNotValidException(
+                    methodParameter(), new BeanPropertyBindingResult(new Object(), "request"));
+
+            return Stream.of(
+                    Named.of("handlePersonNotFound", (HandlerInvocation)
+                            request -> handler.handlePersonNotFound(new PersonNotFoundException(PERSON_ID), request)),
+                    Named.of("handleLinkNotFound", (HandlerInvocation) request ->
+                            handler.handleLinkNotFound(new UserPersonLinkNotFoundException("jsmith"), request)),
+                    Named.of("handlePersonHasLinkedUsers", (HandlerInvocation) request ->
+                            handler.handlePersonHasLinkedUsers(new PersonHasLinkedUsersException(PERSON_ID), request)),
+                    Named.of("handleUserAlreadyLinked", (HandlerInvocation) request ->
+                            handler.handleUserAlreadyLinked(new UserAlreadyLinkedException("jsmith"), request)),
+                    Named.of("handleNotFound", (HandlerInvocation)
+                            request -> handler.handleNotFound(new NotFoundException("no such thing"), request)),
+                    Named.of("handleEntityNotFound", (HandlerInvocation)
+                            request -> handler.handleEntityNotFound(new EntityNotFoundException("gone"), request)),
+                    Named.of("handlePeopleContactValidation", (HandlerInvocation)
+                            request -> handler.handlePeopleContactValidation(
+                                    new PeopleContactValidationException("bad input"), request)),
+                    Named.of("handleIllegalState", (HandlerInvocation)
+                            request -> handler.handleIllegalState(new IllegalStateException("wrong state"), request)),
+                    Named.of(
+                            "handleSemanticValidation", (HandlerInvocation) request -> handler.handleSemanticValidation(
+                                    new SemanticValidationException("start after end"), request)),
+                    Named.of("handleAccessDenied", (HandlerInvocation)
+                            request -> handler.handleAccessDenied(new AccessDeniedException("nope"), request)),
+                    Named.of("handleNoEndpoint", (HandlerInvocation) handler::handleNoEndpoint),
+                    Named.of("handleTypeMismatch", (HandlerInvocation)
+                            request -> handler.handleTypeMismatch(mismatch, request)),
+                    Named.of("handleMissingParameter", (HandlerInvocation) request -> handler.handleMissingParameter(
+                            new MissingServletRequestParameterException("personId", "UUID"), request)),
+                    Named.of("handleValidation", (HandlerInvocation)
+                            request -> handler.handleValidation(invalid, request)),
+                    Named.of("handleHttpMessageNotReadable", (HandlerInvocation)
+                            request -> handler.handleHttpMessageNotReadable(
+                                    new HttpMessageNotReadableException("boom", null, null), request)),
+                    Named.of("handleSecurityServiceException", (HandlerInvocation)
+                            request -> handler.handleSecurityServiceException(
+                                    new SecurityServiceException("downstream said no", 404), request)),
+                    Named.of("handleResponseStatusException", (HandlerInvocation)
+                            request -> handler.handleResponseStatusException(
+                                    new ResponseStatusException(HttpStatus.GONE, "record purged"), request)));
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("echoes the inbound X-Correlation-Id in both header and body")
+        void echoesInboundCorrelationId(HandlerInvocation invocation) {
+            ResponseEntity<ApiError> response = invocation.invoke(requestWithHeader());
+
+            assertThat(response.getHeaders().getFirst("X-Correlation-Id")).isEqualTo(CORRELATION_ID);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getHeaders().getFirst("X-Correlation-Id"))
+                    .isEqualTo(response.getBody().correlationId());
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a non-blank X-Correlation-Id, consistent between header and body, when absent")
+        void generatesCorrelationIdWhenAbsent(HandlerInvocation invocation) {
+            ResponseEntity<ApiError> response = invocation.invoke(requestWithoutHeader());
+
+            String header = response.getHeaders().getFirst("X-Correlation-Id");
+            assertThat(header).isNotBlank();
+            assertThat(response.getBody()).isNotNull();
+            assertThat(header).isEqualTo(response.getBody().correlationId());
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+        void generatesCorrelationIdWhenBlank(HandlerInvocation invocation) {
+            ResponseEntity<ApiError> response = invocation.invoke(requestWithBlankHeader());
+
+            String header = response.getHeaders().getFirst("X-Correlation-Id");
+            assertThat(header).isNotBlank();
+            assertThat(header).isNotEqualTo("   ");
+            assertThat(response.getBody()).isNotNull();
+            assertThat(header).isEqualTo(response.getBody().correlationId());
+        }
+
+        @Test
+        @DisplayName("every @ExceptionHandler method on PeopleExceptionHandler has a matching MethodSource entry")
+        void everyHandlerMethodIsCovered() throws NoSuchMethodException {
+            long handlerMethodCount = Arrays.stream(PeopleExceptionHandler.class.getDeclaredMethods())
+                    .filter(method -> method.isAnnotationPresent(ExceptionHandler.class))
+                    .count();
+            long methodSourceEntryCount = handlerInvocations().count();
+
+            assertThat(methodSourceEntryCount)
+                    .as("A new @ExceptionHandler method was added to PeopleExceptionHandler without a matching "
+                            + "entry in XCorrelationIdHeader#handlerInvocations() in PeopleExceptionHandlerTest — "
+                            + "add one so the X-Correlation-Id header contract stays proven for every handler")
+                    .isEqualTo(handlerMethodCount);
+        }
     }
 }

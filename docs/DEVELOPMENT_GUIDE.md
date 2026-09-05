@@ -96,6 +96,29 @@ sdk env                 # Force environment switch
 sdk current java        # Check active version
 ```
 
+### Java 25 in Claude Code cloud sessions
+
+Cloud session containers ship OpenJDK 21, and the network policy blocks both
+SDKMAN and Adoptium, so `.sdkmanrc` cannot be honoured there.
+`scripts/setup-jdk25.sh` installs Oracle JDK 25 (NFTC) from
+`download.oracle.com` instead. It is idempotent and used in two places:
+
+1. **Cloud environment setup script** — paste the script's contents into the
+   **Setup script** field of the environment at
+   [claude.ai/code](https://claude.ai/code). It runs once per environment
+   cache build, and the resulting filesystem (JDK plus the
+   `/etc/profile.d/zz-jdk25.sh` drop-in it writes) is snapshotted and reused,
+   so every later session starts on Java 25 with no download. This is the
+   place to configure it — a setup script covers every session in the
+   environment, including multi-repo sessions.
+2. **SessionStart hook** — `.claude/hooks/session-start.sh` calls the same
+   script. It only fires when this repo is the session's project directory,
+   so treat it as a fallback for sessions started before the snapshot was
+   rebuilt.
+
+Local checkouts are unaffected: the hook exits immediately unless
+`CLAUDE_CODE_REMOTE=true`.
+
 ---
 
 ## Build Configuration
@@ -226,15 +249,19 @@ Two fixes are accepted:
 
 1. Scope the advice (`@RestControllerAdvice(assignableTypes = ...)`) when the mapped exceptions
    are controller-specific.
-2. Keep the module-wide advice and register an `OperationCustomizer` that prunes what an operation
-   cannot produce. `pos-security-service`'s `ProducibleResponsesOperationCustomizer` is the
-   reference: it keeps declared codes, 2xx, and 400/401/403 by structural rule (inputs present,
-   guard not `permitAll()`, guard checks an authority), and drops everything else. Pair it with a
-   spec-level test (`OpenApiErrorResponseContractTest`) so the committed `openapi.yaml` cannot drift
-   from the controllers' declarations.
+2. Keep the module-wide advice and rely on `pos-security-common`'s
+   `ProducibleResponsesOperationCustomizer`. It is auto-configured platform-wide from
+   `RequiredPermissionsOpenApiAutoConfiguration` — any service that depends on
+   `pos-security-common` gets it with no code of its own. It keeps declared codes, 2xx/default,
+   any 5xx (ADR-0056 §1 — every endpoint can fault), and 400/401/403 by structural rule (inputs
+   present, guard not `permitAll()`, guard checks an authority), and drops everything else.
+   Originating case: `pos-security-service` (issue #1721). Pair it with a spec-level contract test
+   (`pos-security-service`'s `OpenApiErrorResponseContractTest` is the reference) so the committed
+   `openapi.yaml` cannot drift from the controllers' declarations.
 
 `pos-security-common`'s `x-required-permissions` customizer is always registered, so a module may
-add its own `OperationCustomizer` beans without losing the extension.
+add its own `OperationCustomizer` beans without losing the extension. Both customizers coexist by
+default — neither is conditional on the absence of the other.
 
 ### Generating OpenAPI Specs
 

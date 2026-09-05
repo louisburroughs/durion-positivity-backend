@@ -18,13 +18,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 /**
  * Exception handler for GL Posting failures.
  *
- * <p>Responses carry a correlation id in both the {@code ApiError} body and the
- * {@code X-Correlation-Id} response header, per ADR-0017 §4: an inbound header is echoed, and a
- * UUIDv7 is generated when the client sent none. This mirrors the {@code build()}/
- * {@code resolveCorrelationId()} pair in {@code AccountingExceptionHandler} and
- * {@link APPaymentExceptionHandler} — this advice was outside the scope of the #1694 fix that
- * introduced it there and used to answer {@code correlationId: null} with no header at all
- * (issue #1719), leaving GL posting failures, the failures most worth tracing, untraceable.
+ * <p>Every response built by this advice carries the correlation id in both the {@link ApiError}
+ * body and the {@code X-Correlation-Id} response header (ADR-0017 §4, issue #1729). The private
+ * {@code build} helper is the sole path that builds an {@link ApiError}, so a handler added later
+ * cannot forget the header. Previously this advice passed a hardcoded {@code null} correlation id
+ * and never set the header at all.
  */
 @RestControllerAdvice(basePackages = "com.positivity.accounting.internal.controller")
 @RequiredArgsConstructor
