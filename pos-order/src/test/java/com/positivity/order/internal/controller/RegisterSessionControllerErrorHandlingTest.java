@@ -28,11 +28,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * {@code GlobalApiExceptionHandler}, which answers a generic, correlated 500 that never echoes the
  * exception's own text.
  *
- * <p>A {@code @WebMvcTest} slice does not work for this module: {@code PosOrderApplication}
- * declares {@code @EnableJpaRepositories} directly (rather than relying on Spring Boot's own
- * auto-configuration), which a web slice cannot exclude and which then fails to find an
- * {@code entityManagerFactory} bean. So this follows the module's existing full-context pattern
- * ({@link BaseContractIntegrationTest}, see {@code PurchaseOrderErrorContractTest}) instead.
+ * <p>Runs as a {@code @WebMvcTest} slice on {@link com.positivity.order.BaseControllerSliceTest},
+ * whose Javadoc records why this module could not be sliced before #1723.
  */
 @DisplayName("Register-session endpoints answer the errors they document (#1694)")
 @WebMvcTest(RegisterSessionController.class)

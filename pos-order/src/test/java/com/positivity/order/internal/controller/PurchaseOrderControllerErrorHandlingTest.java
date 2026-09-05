@@ -30,9 +30,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * to {@code pos-web-common}'s {@code GlobalApiExceptionHandler}, which answers a generic,
  * correlated 500 that never echoes the exception's own text.
  *
- * <p>Uses the module's existing full-context integration pattern
- * ({@link BaseContractIntegrationTest}, see {@code PurchaseOrderErrorContractTest}, whose
- * not-found/conflict/422 coverage this file complements).
+ * <p>Runs as a {@code @WebMvcTest} slice on {@link com.positivity.order.BaseControllerSliceTest},
+ * whose Javadoc records why this module could not be sliced before #1723.
  */
 @DisplayName("Purchase-order endpoints answer the errors they document — issue #1694 additions")
 @WebMvcTest(PurchaseOrderController.class)

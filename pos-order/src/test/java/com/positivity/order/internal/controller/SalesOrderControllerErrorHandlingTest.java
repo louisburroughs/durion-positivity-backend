@@ -28,9 +28,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * advice and falls through to {@code pos-web-common}'s {@code GlobalApiExceptionHandler}, which
  * answers a generic, correlated 500 that never echoes the exception's own text.
  *
- * <p>Uses the module's full-context integration pattern ({@link BaseContractIntegrationTest}) —
- * see {@link RegisterSessionControllerErrorHandlingTest} for why a {@code @WebMvcTest} slice does
- * not work here.
+ * <p>Runs as a {@code @WebMvcTest} slice on {@link com.positivity.order.BaseControllerSliceTest},
+ * whose Javadoc records why this module could not be sliced before #1723.
  */
 @DisplayName("Sales-order endpoints answer the errors they document (#1694)")
 @WebMvcTest(SalesOrderController.class)

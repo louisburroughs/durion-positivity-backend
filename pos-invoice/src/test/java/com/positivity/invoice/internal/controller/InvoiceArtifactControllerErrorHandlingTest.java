@@ -36,11 +36,10 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * GlobalApiExceptionHandler}, which answers a generic, correlated 500 that never echoes the
  * exception's own text.
  *
- * <p>A {@code @WebMvcTest} slice does not work for this module: {@code PosInvoiceApplication}
- * declares {@code @EnableJpaRepositories} directly, which a web slice cannot exclude and which
- * then fails to find an {@code entityManagerFactory} bean. So this follows the module's existing
- * full-context pattern (see {@code OrderInvoiceContractBehaviorIT}) instead, authenticating via
- * the gateway's {@code X-User}/{@code X-Authorities} headers rather than {@code @WithMockUser}.
+ * <p>Runs as a {@code @WebMvcTest} slice wired by {@link com.positivity.invoice.ControllerSliceConfig},
+ * whose Javadoc records why this module could not be sliced before #1723. Authentication goes
+ * through the gateway's {@code X-User}/{@code X-Authorities} headers rather than
+ * {@code @WithMockUser}.
  */
 @WebMvcTest(InvoiceArtifactController.class)
 @Import({GatewaySecurityConfig.class, WebCommonErrorAutoConfiguration.class, ControllerSliceConfig.class})
