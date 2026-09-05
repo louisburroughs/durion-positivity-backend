@@ -425,6 +425,7 @@ public class GlobalExceptionHandler {
      * semantics for an already-taken account.
      */
     @ExceptionHandler(DuplicateUsernameException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
     public ResponseEntity<ApiError> handleDuplicateUsernameException(
             DuplicateUsernameException ex, WebRequest request) {
 
