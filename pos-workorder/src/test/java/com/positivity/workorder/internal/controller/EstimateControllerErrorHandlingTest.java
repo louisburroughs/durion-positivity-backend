@@ -20,10 +20,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Issue #1713 (part 3), pos-workorder. {@code EstimateServiceImpl} threw
@@ -106,6 +108,32 @@ class EstimateControllerErrorHandlingTest {
                         .content(BODY))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(header().exists("X-Correlation-Id"));
+    }
+
+    /**
+     * The 404 on this endpoint is documented as an {@code ApiError} (#1713), but the controller
+     * caught the service's {@code ResponseStatusException} and answered a bodiless 404 — one status
+     * with two wire shapes, which is the mismatch a review pass rejected on
+     * {@code BillingRulesController} in this same PR.
+     */
+    @Test
+    @WithMockUser(authorities = "workorder:estimate:update")
+    @DisplayName("adding an item to a missing estimate answers an enveloped, correlated 404")
+    void addingAnItemToAMissingEstimateAnswersEnvelopedNotFound() throws Exception {
+        when(estimateService.addEstimateItem(any(UUID.class), any(), anyString()))
+                .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Estimate not found"));
+
+        mockMvc.perform(post("/v1/workorders/estimates/{estimateId}/items", ESTIMATE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"itemType":"LABOR","description":"Brake inspection","quantity":1,\
+                                "unitPrice":129.99,"taxCode":"LABOR_STANDARD"}
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ESTIMATE_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty())
                 .andExpect(header().exists("X-Correlation-Id"));
     }

@@ -830,7 +830,10 @@ public class EstimateController {
         } catch (org.springframework.web.server.ResponseStatusException e) {
             if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
                 log.warn("Estimate {} not found when adding item: {}", estimateId, e.getReason());
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+                // #1713 documents this 404 as an ApiError, so it must not answer a bodiless one.
+                // EstimateNotFoundException is what GlobalExceptionHandler already maps to a 404
+                // ESTIMATE_NOT_FOUND envelope with a correlation id.
+                throw new EstimateNotFoundException(estimateId);
             }
             if (e.getStatusCode() == HttpStatus.BAD_REQUEST) {
                 log.warn("Validation error adding item to estimate {}: {}", estimateId, e.getReason());
