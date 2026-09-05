@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.order.internal.exception.OrderCancellationStateConflictException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.security.OrderPermissions;
 import com.positivity.order.internal.service.OrderCancellationService;
@@ -154,7 +155,8 @@ class OrderCancellationControllerTest extends BaseContractIntegrationTest {
     @DisplayName("CC-C05: POST /{orderId}/cancel when order not cancellable → 409 Conflict")
     void cancelOrder_invalidState_returns409() throws Exception {
         when(orderCancellationService.cancelOrder(eq(ORDER_ID), any()))
-                .thenThrow(new IllegalStateException("Order cannot be cancelled in current state: COMPLETED"));
+                .thenThrow(new OrderCancellationStateConflictException(
+                        "Order cannot be cancelled in current state: COMPLETED"));
 
         mockMvc.perform(withGatewayAuth(
                         post("/v1/orders/carts/{orderId}/cancel", ORDER_ID)

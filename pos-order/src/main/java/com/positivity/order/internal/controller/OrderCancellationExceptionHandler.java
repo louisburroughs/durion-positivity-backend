@@ -1,5 +1,7 @@
 package com.positivity.order.internal.controller;
 
+import com.positivity.order.internal.exception.OrderCancellationReviewRequiredException;
+import com.positivity.order.internal.exception.OrderCancellationStateConflictException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -36,9 +38,20 @@ public class OrderCancellationExceptionHandler {
                         correlationId));
     }
 
-    @ExceptionHandler(IllegalStateException.class)
+    /**
+     * A well-formed cancellation request the order's current state refuses. ADR-0017 §2 makes
+     * that a 409 — the code and status this case already answered.
+     *
+     * <p>#1730: this replaces a blanket {@code @ExceptionHandler(IllegalStateException.class)}
+     * that also answered 409 for two downstream call failures ("workorder cancellation failed",
+     * "payment reversal failed"). Those are server-side problems, and a 409 told the caller its
+     * request conflicted with state — so it would not retry, and nothing surfaced the failure as
+     * a 5xx. They stay untyped and now reach pos-web-common's platform advice as a correlated
+     * 500.
+     */
+    @ExceptionHandler(OrderCancellationStateConflictException.class)
     public ResponseEntity<ApiError> handleInvalidCancellationState(
-            IllegalStateException ex, HttpServletRequest request) {
+            OrderCancellationStateConflictException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .header(X_CORRELATION_ID, correlationId)
@@ -48,6 +61,36 @@ public class OrderCancellationExceptionHandler {
                         HttpStatus.CONFLICT.value(),
                         Instant.now(clock).toString(),
                         correlationId));
+    }
+
+    /**
+     * The retry failed again and the order is now parked at {@code CANCEL_REQUIRES_MANUAL_REVIEW}
+     * with the review-required fact published. 500 is what this endpoint's own documentation
+     * promises for the outcome: the cause is a downstream reversal that did not succeed, and
+     * there is nothing the caller can change about its request.
+     *
+     * <p>#1730: the service used to rethrow a bare {@link IllegalStateException} here and let
+     * pos-web-common's platform advice answer it. That produced the right status only for as long
+     * as no advice in the module mapped the bare type, and the body could not say the order had
+     * been parked. Mapping it explicitly puts the status on the exception class and lets
+     * {@code nextAction} carry the recovery the prose describes.
+     */
+    @ExceptionHandler(OrderCancellationReviewRequiredException.class)
+    public ResponseEntity<ApiError> handleCancellationReviewRequired(
+            OrderCancellationReviewRequiredException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        log.error("Order cancellation retry requires manual review: correlationId={}", correlationId, ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.guided(
+                        "ORDER_CANCEL_REVIEW_REQUIRED",
+                        ex.getMessage(),
+                        HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        null,
+                        OrderCancellationReviewRequiredException.NEXT_ACTION,
+                        null));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

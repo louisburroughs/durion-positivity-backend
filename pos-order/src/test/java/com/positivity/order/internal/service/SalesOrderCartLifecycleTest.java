@@ -41,6 +41,7 @@ import com.positivity.order.internal.exception.InvalidSkuException;
 import com.positivity.order.internal.exception.OrderVoidBlockedException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
+import com.positivity.order.internal.exception.SalesOrderUnprocessableException;
 import com.positivity.order.internal.repository.ExtBillingRulesRepository;
 import com.positivity.order.internal.repository.ExtCustomerRepository;
 import com.positivity.order.internal.repository.ExtProductRepository;
@@ -438,7 +439,7 @@ class SalesOrderCartLifecycleTest {
                             .build()));
 
             assertThatThrownBy(() -> service.createCart(createCommand()))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(SalesOrderUnprocessableException.class)
                     .hasMessageContaining("register session being closed");
         }
 
@@ -674,7 +675,7 @@ class SalesOrderCartLifecycleTest {
             when(pricingPort.quoteForSku(anyString(), anyInt(), any(), any())).thenReturn(PricingQuote.unavailable());
             assertThatThrownBy(() -> service.addItem(
                             ORDER_ID, new AddItemCommand("SKU-1", 1, null, null, null, null, null, null)))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(SalesOrderUnprocessableException.class)
                     .hasMessageContaining("Pricing is unavailable");
         }
 
@@ -709,7 +710,7 @@ class SalesOrderCartLifecycleTest {
             assertThatThrownBy(() -> service.addItem(
                             ORDER_ID,
                             new AddItemCommand("SKU-1", 1, null, null, null, null, null, List.of("S1", "S2"))))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(SalesOrderUnprocessableException.class)
                     .hasMessageContaining("exceeds line quantity");
         }
 
@@ -1031,7 +1032,7 @@ class SalesOrderCartLifecycleTest {
             givenOrder(order(SalesOrderStatus.DRAFT));
 
             assertThatThrownBy(() -> service.linkSource(ORDER_ID, "WORKORDER", "WO-1"))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(SalesOrderUnprocessableException.class)
                     .hasMessageContaining("a customer must be assigned");
         }
 
@@ -1110,7 +1111,7 @@ class SalesOrderCartLifecycleTest {
 
             assertThatThrownBy(() -> service.applyOrderDiscount(
                             ORDER_ID, new OrderDiscountCommand("BOGUS", BigDecimal.TEN, null)))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(SalesOrderRequestValidationException.class)
                     .hasMessageContaining("must be PERCENT or AMOUNT");
         }
 
@@ -1121,12 +1122,12 @@ class SalesOrderCartLifecycleTest {
 
             assertThatThrownBy(() -> service.applyOrderDiscount(
                             ORDER_ID, new OrderDiscountCommand("AMOUNT", BigDecimal.ZERO, null)))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(SalesOrderRequestValidationException.class)
                     .hasMessageContaining("must be positive");
 
             assertThatThrownBy(() -> service.applyOrderDiscount(
                             ORDER_ID, new OrderDiscountCommand("PERCENT", new BigDecimal("101"), null)))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(SalesOrderRequestValidationException.class)
                     .hasMessageContaining("and <= 100");
         }
 
@@ -1173,7 +1174,7 @@ class SalesOrderCartLifecycleTest {
             givenOrder(order(SalesOrderStatus.DRAFT));
 
             assertThatThrownBy(() -> service.quote(ORDER_ID))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(SalesOrderUnprocessableException.class)
                     .hasMessageContaining("Cannot quote an empty cart");
         }
 
@@ -1186,7 +1187,7 @@ class SalesOrderCartLifecycleTest {
             givenOrder(order);
 
             assertThatThrownBy(() -> service.quote(ORDER_ID))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(SalesOrderUnprocessableException.class)
                     .hasMessageContaining("QUOTE_NOT_ALLOWED_FOR_WORKORDER");
         }
 
@@ -1199,7 +1200,7 @@ class SalesOrderCartLifecycleTest {
             givenOrder(order);
 
             assertThatThrownBy(() -> service.quote(ORDER_ID))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(SalesOrderUnprocessableException.class)
                     .hasMessageContaining("QUOTE_NOT_ALLOWED_FOR_WORKORDER");
         }
 
@@ -1212,7 +1213,7 @@ class SalesOrderCartLifecycleTest {
             when(pricingPort.quoteForSku(anyString(), anyInt(), any(), any())).thenReturn(PricingQuote.unavailable());
 
             assertThatThrownBy(() -> service.quote(ORDER_ID))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(SalesOrderUnprocessableException.class)
                     .hasMessageContaining("cannot finalize a quote on stale prices");
         }
 
@@ -1365,7 +1366,7 @@ class SalesOrderCartLifecycleTest {
             givenOrder(order);
 
             assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", null))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(SalesOrderUnprocessableException.class)
                     .hasMessageContaining("Cannot check out an empty cart");
         }
 
@@ -1426,7 +1427,7 @@ class SalesOrderCartLifecycleTest {
                             .build()));
 
             assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", null))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(SalesOrderUnprocessableException.class)
                     .hasMessageContaining("is serial-tracked");
         }
 
@@ -1442,7 +1443,7 @@ class SalesOrderCartLifecycleTest {
                             .build()));
 
             assertThatThrownBy(() -> service.checkout(ORDER_ID, "co-1", null))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(SalesOrderUnprocessableException.class)
                     .hasMessageContaining("is lot-tracked");
         }
 

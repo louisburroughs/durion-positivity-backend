@@ -3,6 +3,7 @@ package com.positivity.order.internal.controller;
 import com.positivity.order.internal.exception.InvalidSkuException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
+import com.positivity.order.internal.exception.SalesOrderUnprocessableException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
@@ -107,13 +108,27 @@ public class SalesOrderExceptionHandler {
                         correlationId));
     }
 
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ApiError> handleUnprocessableRequest(IllegalStateException ex, HttpServletRequest request) {
+    /**
+     * A domain rule refusing a structurally valid cart request on its merits — an empty cart, an
+     * unresolvable price, a serial/lot count that does not match the line quantity. ADR-0017 §2
+     * makes that a 422.
+     *
+     * <p>#1730: this replaces a blanket {@code @ExceptionHandler(IllegalStateException.class)}
+     * that answered 422 for everything that type carried here, including two request-shape errors
+     * ADR-0017 §1 makes a 400, one stateful collision §2 makes a 409, and — in the sibling
+     * advices, which had settled on 409 — outright downstream failures. The bare type is no
+     * longer mapped anywhere in this module, so anything still throwing it reaches
+     * pos-web-common's platform advice as a correlated 500. Same reasoning as #1694, applied to
+     * {@code IllegalStateException}.
+     */
+    @ExceptionHandler(SalesOrderUnprocessableException.class)
+    public ResponseEntity<ApiError> handleUnprocessableRequest(
+            SalesOrderUnprocessableException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
         return ResponseEntity.status(422)
                 .header(X_CORRELATION_ID, correlationId)
                 .body(ApiError.of(
-                        "UNPROCESSABLE_REQUEST",
+                        "ORDER_UNPROCESSABLE",
                         ex.getMessage(),
                         422,
                         Instant.now(clock).toString(),

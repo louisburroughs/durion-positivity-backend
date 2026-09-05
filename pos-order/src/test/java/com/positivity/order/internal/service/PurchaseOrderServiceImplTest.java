@@ -16,6 +16,7 @@ import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
+import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
 import com.positivity.order.internal.repository.PurchaseOrderTransmissionEventRepository;
 import java.math.BigDecimal;
@@ -193,7 +194,7 @@ class PurchaseOrderServiceImplTest {
         when(purchaseOrderRepository.findById(PO_ID))
                 .thenReturn(Optional.of(existingOrder(PurchaseOrderStatus.APPROVED)));
         assertThatThrownBy(() -> service.approvePurchaseOrder(PO_ID, request, ACTOR))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(PurchaseOrderStateConflictException.class);
     }
 
     @Test
@@ -224,7 +225,7 @@ class PurchaseOrderServiceImplTest {
 
             // The goods are already here. Cancelling would deny an obligation the vendor has met.
             assertThatThrownBy(() -> service.cancelPurchaseOrder(PO_ID, ACTOR))
-                    .isInstanceOf(IllegalStateException.class);
+                    .isInstanceOf(PurchaseOrderStateConflictException.class);
         }
         verify(purchaseOrderFactPublisher, never()).publish(any(), any());
     }

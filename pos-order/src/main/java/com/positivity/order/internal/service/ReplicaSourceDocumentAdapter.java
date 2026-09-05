@@ -6,6 +6,8 @@ import com.positivity.order.internal.entity.ExtEstimateLine;
 import com.positivity.order.internal.entity.ExtProduct;
 import com.positivity.order.internal.entity.ExtWorkorderLine;
 import com.positivity.order.internal.entity.SourceType;
+import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
+import com.positivity.order.internal.exception.SalesOrderUnprocessableException;
 import com.positivity.order.internal.repository.ExtEstimateLineRepository;
 import com.positivity.order.internal.repository.ExtEstimateRepository;
 import com.positivity.order.internal.repository.ExtProductRepository;
@@ -57,7 +59,7 @@ public class ReplicaSourceDocumentAdapter implements SourceDocumentPort {
 
     private List<SourceDocumentLine> workorderLines(UUID workorderId) {
         if (extWorkorderRepository.findById(workorderId).isEmpty()) {
-            throw new IllegalStateException("Workorder " + workorderId
+            throw new SalesOrderUnprocessableException("Workorder " + workorderId
                     + " is not present in the replica; verify the id or retry once the event feed catches up");
         }
         return extWorkorderLineRepository.findByWorkorderId(workorderId).stream()
@@ -68,7 +70,7 @@ public class ReplicaSourceDocumentAdapter implements SourceDocumentPort {
 
     private List<SourceDocumentLine> estimateLines(UUID estimateId) {
         if (extEstimateRepository.findById(estimateId).isEmpty()) {
-            throw new IllegalStateException("Estimate " + estimateId
+            throw new SalesOrderUnprocessableException("Estimate " + estimateId
                     + " is not present in the replica; verify the id or retry once the event feed catches up");
         }
         // Spec R7.1: only approved items are contractual.
@@ -139,7 +141,7 @@ public class ReplicaSourceDocumentAdapter implements SourceDocumentPort {
         try {
             return UUID.fromString(sourceId);
         } catch (IllegalArgumentException e) {
-            throw new IllegalStateException("sourceId must be a document UUID: " + sourceId);
+            throw new SalesOrderRequestValidationException("sourceId must be a document UUID: " + sourceId);
         }
     }
 

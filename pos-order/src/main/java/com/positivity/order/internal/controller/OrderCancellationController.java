@@ -7,9 +7,11 @@ import com.positivity.order.internal.security.OrderPermissions;
 import com.positivity.order.internal.service.OrderCancellationService;
 import com.positivity.order.internal.service.model.CancelOrderCommand;
 import com.positivity.order.internal.service.model.CancellationResult;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -54,8 +56,10 @@ public class OrderCancellationController {
                     pos-invoice, and a failed leg parks the order at CANCEL_FAILED_WORKEXEC or \
                     CANCEL_FAILED_BILLING.
                     Returns 201 when the cancellation completes (or already had for the replayed key), 404 when \
-                    the order does not exist, and 409 when the current status is not cancellable or a workorder or \
-                    payment-reversal leg fails.
+                    the order does not exist, 409 when the current status is not cancellable or work execution \
+                    reports the workorder non-cancellable, and 500 when a workorder or payment-reversal leg fails \
+                    downstream — the order is still parked at CANCEL_FAILED_WORKEXEC or CANCEL_FAILED_BILLING \
+                    either way, so the retry endpoint applies.
                     """,
             tags = {"Order Cancellation"})
     @ApiResponse(responseCode = "201", description = "Cancellation initiated")
@@ -63,6 +67,10 @@ public class OrderCancellationController {
     @ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @ApiResponse(responseCode = "404", description = "Order not found")
     @ApiResponse(responseCode = "409", description = "Order cannot be cancelled in current state")
+    @ApiResponse(
+            responseCode = "500",
+            description = "A workorder or payment-reversal leg failed downstream; the order is parked for review.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{orderId}/cancel")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_CANCEL + "')")
     @EmitEvent(id = "ORDER_CART_CANCEL_REQUEST", apiVersion = "1")
@@ -108,14 +116,19 @@ public class OrderCancellationController {
                     derived.
                     Emits an ORDER_CART_CANCEL_RETRY event; a retry that fails again transitions the order to \
                     CANCEL_REQUIRES_MANUAL_REVIEW and publishes a review-required fact instead of looping.
-                    Returns 200 when the cancellation completes on retry, 404 when the order does not exist, and \
-                    409 when the order is not in CANCEL_FAILED_BILLING or the reversal fails again.
+                    Returns 200 when the cancellation completes on retry, 404 when the order does not exist, 409 \
+                    when the order is not in CANCEL_FAILED_BILLING, and 500 when the reversal fails again — which \
+                    also parks the order at CANCEL_REQUIRES_MANUAL_REVIEW.
                     """,
             tags = {"Order Cancellation"})
     @ApiResponse(responseCode = "200", description = "Retry accepted")
     @ApiResponse(responseCode = "403", description = "Insufficient permissions")
     @ApiResponse(responseCode = "404", description = "Order not found")
     @ApiResponse(responseCode = "409", description = "Order not in retryable state")
+    @ApiResponse(
+            responseCode = "500",
+            description = "The reversal failed again; the order is parked at CANCEL_REQUIRES_MANUAL_REVIEW.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{orderId}/cancel/retry")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_CANCEL + "')")
     @EmitEvent(id = "ORDER_CART_CANCEL_RETRY", apiVersion = "1")
