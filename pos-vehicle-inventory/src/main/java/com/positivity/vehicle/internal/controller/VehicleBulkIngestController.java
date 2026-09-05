@@ -8,6 +8,8 @@ import com.positivity.events.EmitEvent;
 import com.positivity.shared.dto.CreateVehicleRequest;
 import com.positivity.shared.error.ApiError;
 import com.positivity.vehicle.internal.dto.VehicleBulkIngestRecord;
+import com.positivity.vehicle.internal.exception.VehicleValidationException;
+import com.positivity.vehicle.internal.exception.VehicleVinConflictException;
 import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
 import com.positivity.vehicle.internal.service.VehicleService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,9 +20,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,7 +37,6 @@ import org.springframework.web.bind.annotation.RestController;
         scopes = {"vehicle-inventory:registry:create"})
 @RequestMapping("/v1/vehicles")
 @RequiredArgsConstructor
-@Slf4j
 @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.REGISTRY_CREATE + "')")
 @Tag(name = "Vehicle Bulk Ingest API", description = "Bulk import vehicle records")
 public class VehicleBulkIngestController extends AbstractBulkIngestController<VehicleBulkIngestRecord> {
@@ -73,9 +74,12 @@ public class VehicleBulkIngestController extends AbstractBulkIngestController<Ve
                     is optional on the envelope.
                     Emits a VEHICLE_BULK_INGEST event, and every successfully created row also queues a \
                     vehicle.vehicle.updated fact on the vehicle.events.v1 outbox for downstream replicas.
-                    Returns 200 with per-row results even when some rows fail, since row failures carry the \
-                    VEHICLE_INGEST_FAILED error code instead of an error status, and 400 with a VALIDATION_FAILED \
-                    ApiError when the envelope is missing jobId or locationId or the records array is empty.
+                    Returns 200 with per-row results even when some rows fail, since row failures carry an error \
+                    code instead of an error status: VEHICLE_INGEST_FAILED for a row the registry rejected, whose \
+                    errorMessage names what is wrong with that row, or INGEST_INTERNAL_ERROR for a row lost to a \
+                    server-side fault, whose errorMessage carries only a correlationId to quote. Returns 400 with a \
+                    VALIDATION_FAILED ApiError when the envelope is missing jobId or locationId or the records array \
+                    is empty.
                     """)
     @ApiResponse(responseCode = "200", description = "Batch processed; check per-record success and failure counts.")
     @ApiResponse(
@@ -135,13 +139,7 @@ public class VehicleBulkIngestController extends AbstractBulkIngestController<Ve
                         .build());
                 successCount++;
             } catch (Exception exception) {
-                log.warn("Failed to ingest vehicle record at row {}: {}", i, exception.getMessage(), exception);
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode("VEHICLE_INGEST_FAILED")
-                        .errorMessage(errorMessage(exception))
-                        .build());
+                results.add(rowFailure(i, exception));
                 failureCount++;
             }
         }
@@ -154,8 +152,26 @@ public class VehicleBulkIngestController extends AbstractBulkIngestController<Ve
                 .build();
     }
 
-    private String errorMessage(@NonNull Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? "Vehicle ingest failed" : message;
+    /**
+     * The failures {@link VehicleService#createVehicle} raises about the record itself: a VIN
+     * that is not 17 valid characters, and a VIN already held by an active vehicle. Both are what
+     * {@link com.positivity.vehicle.internal.config.VehicleExceptionHandler} answers as a 4xx on
+     * the single-vehicle endpoint, so both describe the caller's own row and are safe to return
+     * verbatim. Everything else — a Hibernate error, a malformed stored UUID — is a server-side
+     * fault and is reported generically against a correlation id instead (issue #1718).
+     */
+    @Override
+    protected Collection<Class<? extends Throwable>> rowRejectionTypes() {
+        return List.of(VehicleValidationException.class, VehicleVinConflictException.class);
+    }
+
+    @Override
+    protected String rowRejectionCode() {
+        return "VEHICLE_INGEST_FAILED";
+    }
+
+    @Override
+    protected String rowRejectionFallbackMessage() {
+        return "Vehicle ingest failed";
     }
 }

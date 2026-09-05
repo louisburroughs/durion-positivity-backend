@@ -237,7 +237,11 @@ class FileUploadProcessEndToEndTest {
                 .andExpect(jsonPath("$.id").value(JOB_ID.toString()))
                 .andExpect(jsonPath("$.processedRows").value(2))
                 .andExpect(jsonPath("$.successCount").value(1))
-                .andExpect(jsonPath("$.failureCount").value(1));
+                .andExpect(jsonPath("$.failureCount").value(1))
+                // Issue #1712: the terminal status the listener wrote must survive startProcessing,
+                // which used to stamp PROCESSING over it after the (synchronous) launch returned —
+                // leaving a finished run reading as PROCESSING for ever beside these very counts.
+                .andExpect(jsonPath("$.status").value("PARTIAL"));
 
         // The good row (row 1, 0-indexed) is the only one posted — the bad row never reaches the
         // writer at all, so the chunk the owning service sees is exactly as if row 0 were absent.

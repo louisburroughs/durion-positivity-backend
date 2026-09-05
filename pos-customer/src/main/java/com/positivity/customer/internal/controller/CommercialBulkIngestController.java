@@ -11,6 +11,10 @@ import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.enums.PartyRelationshipRole;
 import com.positivity.customer.internal.enums.PreferredContactMethod;
+import com.positivity.customer.internal.exception.CrmDuplicateResourceException;
+import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
+import com.positivity.customer.internal.exception.CrmUnprocessableEntityException;
+import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.internal.service.PartyRelationshipService;
 import com.positivity.customer.internal.service.PartyService;
@@ -22,6 +26,7 @@ import jakarta.validation.Valid;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -149,13 +154,7 @@ public class CommercialBulkIngestController extends AbstractBulkIngestController
                         .build());
                 successCount++;
             } catch (Exception exception) {
-                log.warn("Failed to ingest commercial record at row {}: {}", i, exception.getMessage(), exception);
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode("COMMERCIAL_INGEST_FAILED")
-                        .errorMessage(errorMessage(exception))
-                        .build());
+                results.add(rowFailure(i, exception));
                 failureCount++;
             }
         }
@@ -222,8 +221,31 @@ public class CommercialBulkIngestController extends AbstractBulkIngestController
                 userId);
     }
 
-    private String errorMessage(@NonNull Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? "Commercial ingest failed" : message;
+    /**
+     * The failures raised about the record itself by the three calls a commercial row makes —
+     * account creation, contact creation and the relationship that links them. All are the module's
+     * own CRM exception types, the ones
+     * {@link com.positivity.customer.internal.config.CrmExceptionHandler} answers as a 4xx;
+     * {@code ResponseStatusException} carrying a 4xx is recognised platform-wide by
+     * {@link com.positivity.bulkingest.BulkIngestFailures} and needs no entry. Everything else is a
+     * server-side fault and is reported generically against a correlation id instead (issue #1718).
+     */
+    @Override
+    protected Collection<Class<? extends Throwable>> rowRejectionTypes() {
+        return List.of(
+                CrmValidationException.class,
+                CrmUnprocessableEntityException.class,
+                CrmDuplicateResourceException.class,
+                CrmResourceNotFoundException.class);
+    }
+
+    @Override
+    protected String rowRejectionCode() {
+        return "COMMERCIAL_INGEST_FAILED";
+    }
+
+    @Override
+    protected String rowRejectionFallbackMessage() {
+        return "Commercial ingest failed";
     }
 }

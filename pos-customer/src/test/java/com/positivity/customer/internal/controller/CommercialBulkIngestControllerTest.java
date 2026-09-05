@@ -1,6 +1,8 @@
 package com.positivity.customer.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -172,26 +174,35 @@ class CommercialBulkIngestControllerTest {
                 .andExpect(jsonPath("$.totalSubmitted").value(2))
                 .andExpect(jsonPath("$.successCount").value(1))
                 .andExpect(jsonPath("$.failureCount").value(1))
-                .andExpect(jsonPath("$.results[0].errorCode").value("COMMERCIAL_INGEST_FAILED"));
+                .andExpect(jsonPath("$.results[0].errorCode").value("COMMERCIAL_INGEST_FAILED"))
+                .andExpect(jsonPath("$.results[0].errorMessage").value("bad"));
     }
 
+    /**
+     * Issue #1718: the contact leg of a commercial row failing for a server-side reason must not
+     * put that exception's text in the 200 body. Only the correlation id crosses the wire.
+     */
     @Test
-    void bulkIngest_whenContactAttachThrows_recordsFailure() throws Exception {
+    void bulkIngest_whenContactAttachThrows_reportsGenericFailureAndTheCorrelationId() throws Exception {
         CommercialBulkIngestRecord ingestRecord = new CommercialBulkIngestRecord();
         ingestRecord.setLegalName("Piedmont Freight Carriers LLC");
         ingestRecord.setContactFirstName("Dale");
         ingestRecord.setContactLastName("Whitfield");
 
         when(partyService.createCommercialAccount(any())).thenReturn(accountResponse());
-        when(personService.createPerson(any(), any())).thenThrow(new IllegalStateException("person create failed"));
+        when(personService.createPerson(any(), any()))
+                .thenThrow(new IllegalStateException("could not execute statement [insert into crm_person ...]"));
 
         mockMvc.perform(post("/v1/customer/commercial/bulk-ingest")
+                        .header("X-Correlation-Id", "corr-from-caller")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(requestOf(ingestRecord))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.successCount").value(0))
                 .andExpect(jsonPath("$.failureCount").value(1))
-                .andExpect(jsonPath("$.results[0].errorCode").value("COMMERCIAL_INGEST_FAILED"));
+                .andExpect(jsonPath("$.results[0].errorCode").value("INGEST_INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].errorMessage", containsString("corr-from-caller")))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("crm_person"))));
     }
 
     @Test

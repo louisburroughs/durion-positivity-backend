@@ -3,6 +3,8 @@ package com.positivity.bulkloader.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -120,6 +122,42 @@ class BulkLoadJobServiceImplTest {
         assertThat(job.getStartedAt()).isNotNull();
         verify(bulkLoadBatchLauncher).launch(job, "Bearer token-123");
         verify(jobRepository).save(job);
+    }
+
+    /**
+     * Issue #1712: the batch runs synchronously (no {@code TaskExecutor} is configured), so
+     * {@code BulkLoadJobExecutionListener#afterJob} has already written the terminal status — on
+     * this same managed entity instance — by the time {@code launch} returns. Stamping PROCESSING
+     * after the launch overwrote it, and every finished job then read as PROCESSING for ever
+     * while its row counters said the run was done. The launcher here stands in for that
+     * listener, so the test fails if the two writes are ever reordered again.
+     */
+    @Test
+    void startProcessing_whenLaunchCompletesTheRun_leavesTheTerminalStatusIntact() {
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.UPLOADING);
+        job.setOriginalFilePath("00000000-0000-0000-0000-000000000001/products.csv");
+        job.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doAnswer(invocation -> {
+                    BulkLoadJob launched = invocation.getArgument(0);
+                    assertThat(launched.getStatus())
+                            .as("the job must already read as PROCESSING while the run is in flight")
+                            .isEqualTo(JobStatus.PROCESSING);
+                    launched.setStatus(JobStatus.COMPLETED);
+                    launched.setSuccessCount(12L);
+                    launched.setProcessedRows(12L);
+                    return null;
+                })
+                .when(bulkLoadBatchLauncher)
+                .launch(any(BulkLoadJob.class), nullable(String.class));
+
+        service.startProcessing(JOB_ID, OPERATOR_ID, "Bearer token-123");
+
+        assertThat(job.getStatus()).isEqualTo(JobStatus.COMPLETED);
+        assertThat(job.getStartedAt()).isNotNull();
+        assertThat(job.getSuccessCount()).isEqualTo(12L);
     }
 
     @Test

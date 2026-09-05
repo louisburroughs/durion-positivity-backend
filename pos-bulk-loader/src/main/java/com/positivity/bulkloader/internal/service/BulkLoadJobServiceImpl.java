@@ -181,10 +181,18 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
         if (job.getLocationId() == null) {
             throw new IllegalStateException("Job cannot be processed before a locationId is assigned");
         }
-        bulkLoadBatchLauncher.launch(job, authorizationHeader);
+        // PROCESSING is stamped *before* the launch, not after (issue #1712). The module
+        // configures no TaskExecutor or JobLauncher bean, so Spring Boot Batch's default
+        // JobOperator runs the job on a SyncTaskExecutor — the whole import finishes, and
+        // BulkLoadJobExecutionListener#afterJob writes the terminal status, before launch()
+        // returns. Writing PROCESSING afterwards clobbered that terminal status on the very same
+        // managed entity instance, so every finished job read as PROCESSING for ever while its
+        // row counts said otherwise. In this order the listener has the last word, and the order
+        // stays correct if the launch is ever made asynchronous.
         job.setStatus(JobStatus.PROCESSING);
         job.setStartedAt(Instant.now(clock));
         jobRepository.save(job);
+        bulkLoadBatchLauncher.launch(job, authorizationHeader);
     }
 
     private BulkLoadJob findOrThrow(UUID jobId) {

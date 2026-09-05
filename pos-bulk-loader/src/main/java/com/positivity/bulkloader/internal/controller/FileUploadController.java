@@ -137,20 +137,24 @@ public class FileUploadController {
     @PreAuthorize("hasAuthority('" + BulkImportPermissions.UPLOAD_EXECUTE + "')")
     @EmitEvent(id = "BULK_LOADER_JOB_START", apiVersion = "1")
     @Operation(operationId = "startJobProcessing", summary = "Launch a Bulk Load Job", description = """
-                    Starts asynchronous Spring Batch processing for a bulk load job and transitions it to PROCESSING.
-                    Use this tool once the uploaded file is persisted and the mappings are acceptable; do not treat \
-                    the 200 response as import completion, and poll getBulkLoadJob instead because the batch run \
-                    continues in the background.
+                    Runs the Spring Batch import for a bulk load job and returns the job once the run has finished.
+                    Use this tool once the uploaded file is persisted and the mappings are acceptable; the returned \
+                    job already carries the run's outcome, so call getBulkLoadJob to re-read a job later rather than \
+                    to wait for this one. The run is synchronous and holds the connection for its whole duration, \
+                    so a large file can take a long time to answer.
                     Preconditions: the job must belong to the authenticated operator, be in CREATED, UPLOADING or \
                     MAPPING_REVIEW state, and already have both a persisted uploaded file and a locationId assigned.
                     Required inputs: jobId (UUID) as a path parameter; there is no request body, and the caller's \
                     Authorization bearer token is forwarded to downstream domain services for the row-level writes.
-                    Emits a BULK_LOADER_JOB_START event, launches the Spring Batch job, and stamps startedAt; row \
-                    counters on the job update as chunks are processed.
+                    Emits a BULK_LOADER_JOB_START event, stamps startedAt and moves the job to PROCESSING, then runs \
+                    the import and leaves the job in COMPLETED, PARTIAL or FAILED with its row counters set; rows \
+                    the loader rejected are queued for review rather than failing the run.
                     Returns 404 when the job does not exist, 403 when it belongs to another operator, and 409 when \
                     the state is not launchable or the uploaded file or locationId is missing.
                     """)
-    @ApiResponse(responseCode = "200", description = "Job transitioned to PROCESSING")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Import run finished; the returned job carries its terminal status and row counts.")
     @ApiResponse(
             responseCode = "403",
             description = "Job does not belong to the authenticated operator",
@@ -163,6 +167,21 @@ public class FileUploadController {
             responseCode = "409",
             description = "Invalid state transition",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    /**
+     * This endpoint was documented as launching the batch asynchronously, which it never did: the
+     * module configures no {@code TaskExecutor} or {@code JobLauncher} bean, so Spring Boot
+     * Batch's default {@code JobOperator} uses a {@code SyncTaskExecutor} and the whole import
+     * runs on this request thread (issue #1712). The description above now says so.
+     *
+     * <p>Making it genuinely asynchronous is a separate change, not a configuration tweak: the
+     * operator's bearer token reaches the ingest writers and the business-key resolvers through
+     * {@code BulkLoadAuthorizationContext}, a {@code ThreadLocal} that is set and cleared around
+     * {@code launch()} on this thread, so a pooled batch thread would find no credential and
+     * every downstream write would fail. The launch would also have to move after the
+     * transaction that stamps PROCESSING commits, or the batch thread could read a job row that
+     * is not there yet. Both belong with a deliberate decision to hold or not hold a connection
+     * for the length of an import, so neither is done here.
+     */
     public ResponseEntity<BulkLoadJobResponse> startProcessing(@PathVariable @NonNull UUID jobId) {
         String operatorId = currentOperatorId();
         bulkLoadJobService.startProcessing(jobId, operatorId, currentAuthorizationHeader());

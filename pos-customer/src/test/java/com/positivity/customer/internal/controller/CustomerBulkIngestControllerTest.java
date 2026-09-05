@@ -1,6 +1,8 @@
 package com.positivity.customer.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,10 +24,12 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
 @WebMvcTest(CustomerBulkIngestController.class)
@@ -89,7 +93,8 @@ class CustomerBulkIngestControllerTest {
         request.setLocationId(LOCATION_ID);
         request.setRecords(List.of(ingestRecord));
 
-        when(personService.createPerson(any(), any())).thenThrow(new IllegalArgumentException("Duplicate customer"));
+        when(personService.createPerson(any(), any()))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "firstName is required"));
 
         mockMvc.perform(post("/v1/customer/bulk-ingest")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -98,7 +103,42 @@ class CustomerBulkIngestControllerTest {
                 .andExpect(jsonPath("$.totalSubmitted").value(1))
                 .andExpect(jsonPath("$.successCount").value(0))
                 .andExpect(jsonPath("$.failureCount").value(1))
-                .andExpect(jsonPath("$.results[0].errorCode").value("CUSTOMER_INGEST_FAILED"));
+                .andExpect(jsonPath("$.results[0].errorCode").value("CUSTOMER_INGEST_FAILED"))
+                // The reason alone, not ResponseStatusException's own message, which prefixes
+                // the status line.
+                .andExpect(jsonPath("$.results[0].errorMessage").value("firstName is required"));
+    }
+
+    /**
+     * Issue #1718: a row lost to a server-side fault must not echo the exception's text — an
+     * {@code IllegalArgumentException} out of Hibernate or a JPA converter names internal
+     * classes and columns. The caller gets a generic code and their own correlation id instead.
+     */
+    @Test
+    void bulkIngest_serverFault_reportsGenericFailureAndTheCorrelationId() throws Exception {
+        CustomerBulkIngestRecord ingestRecord = new CustomerBulkIngestRecord();
+        ingestRecord.setFirstName("Bad");
+        ingestRecord.setLastName("Customer");
+
+        BulkIngestRequest<CustomerBulkIngestRecord> request = new BulkIngestRequest<>();
+        request.setJobId(JOB_ID);
+        request.setLocationId(LOCATION_ID);
+        request.setRecords(List.of(ingestRecord));
+
+        when(personService.createPerson(any(), any()))
+                .thenThrow(new IllegalArgumentException(
+                        "Unable to locate persister: com.positivity.customer.internal.entity.Person"));
+
+        mockMvc.perform(post("/v1/customer/bulk-ingest")
+                        .header("X-Correlation-Id", "corr-from-caller")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INGEST_INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].errorMessage", containsString("corr-from-caller")))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("persister"))))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("com.positivity"))));
     }
 
     @Test
