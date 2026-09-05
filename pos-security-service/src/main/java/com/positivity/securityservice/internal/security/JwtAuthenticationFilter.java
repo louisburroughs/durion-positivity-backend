@@ -40,12 +40,18 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * {@link JwtService#getAuthoritiesFromToken} (issue #1715).
  *
  * <p>Instead of propagating, a failure leaves the request unauthenticated and clears any
- * authentication an earlier filter established, so a request that presents a broken bearer
- * token can never fall back to {@link GatewayHeaderAuthenticationFilter}'s header-derived
- * authorities. The downstream authorization filter then rejects it and
- * {@code JsonAuthenticationEntryPoint} renders the enveloped, correlated 401. This mirrors the
- * fail-closed contract {@link GatewayHeaderAuthenticationFilter} already documents for
- * {@code X-Perm-Bits}.
+ * authentication an earlier filter established. The downstream authorization filter then
+ * rejects it and {@code JsonAuthenticationEntryPoint} renders the enveloped, correlated 401.
+ *
+ * <p><strong>A refused token is treated the same as a failed one.</strong> When a bearer token
+ * is present but {@link JwtService#validateToken} refuses it, the context is cleared too. This
+ * matters because the gateway validates only signature, issuer, audience and expiry — it does
+ * not consult revocation — so a revoked or logged-out token still reaches this service carrying
+ * gateway-derived {@code X-Perm-Bits}. Returning without clearing let those header authorities
+ * carry the request, which meant revocation and logout did not take effect at the very service
+ * that owns them. Presenting a credential this service refuses now always denies the request
+ * rather than silently ignoring the credential and falling back to
+ * {@link GatewayHeaderAuthenticationFilter}'s headers.
  */
 @Slf4j
 @Component
@@ -64,7 +70,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
         if (token != null) {
             try {
-                authenticate(request, token);
+                if (!authenticate(request, token)) {
+                    // validateToken said no: expired, revoked, deleted by logout, or absent from
+                    // the token store. Logged at DEBUG, not WARN — an expired access token
+                    // arriving alongside a refresh call is ordinary traffic, and validateToken
+                    // already logs the specific reason at DEBUG.
+                    SecurityContextHolder.clearContext();
+                    log.debug(
+                            "Access-token authentication refused; clearing auth context uri={}",
+                            request.getRequestURI());
+                }
             } catch (SecurityValidationException
                     | JwtException
                     | IllegalArgumentException
@@ -72,10 +87,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 // SecurityValidationException: malformed perm_bits or an unsupported perm_ver.
                 // JwtException / IllegalArgumentException: a claim re-parse that validateToken
                 // accepted but a later read rejects. AuthenticationException: the subject no
-                // longer resolves to a user (UsernameNotFoundException).
+                // longer resolves to a user (UsernameNotFoundException). Anomalous, so WARN.
                 SecurityContextHolder.clearContext();
                 log.warn(
-                        "Bearer token rejected; clearing auth context uri={} error={} reason={}",
+                        "Access-token authentication rejected; clearing auth context uri={} error={} reason={}",
                         request.getRequestURI(),
                         e.getClass().getSimpleName(),
                         e.getMessage());
@@ -84,9 +99,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private void authenticate(HttpServletRequest request, String token) {
+    /**
+     * @return {@code true} when the token authenticated the request; {@code false} when
+     *         {@link JwtService#validateToken} refused it, which the caller answers by failing
+     *         closed
+     */
+    private boolean authenticate(HttpServletRequest request, String token) {
         if (!jwtService.validateToken(token)) {
-            return;
+            return false;
         }
         String username = jwtService.getUsernameFromToken(token);
         UserDetails userDetails = userDetailsService.loadUserByUsername(username);
@@ -101,5 +121,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 new UsernamePasswordAuthenticationToken(userDetails, null, granted);
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         SecurityContextHolder.getContext().setAuthentication(authentication);
+        return true;
     }
 }

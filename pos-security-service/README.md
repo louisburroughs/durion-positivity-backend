@@ -176,11 +176,21 @@ Two rules constrain what those bodies may contain and where they can come from (
 - **Nothing escapes the filter chain unenveloped.** `JwtAuthenticationFilter` and
   `GatewayHeaderAuthenticationFilter` run before the dispatcher, so no `@ControllerAdvice` — not
   this module's and not `pos-web-common`'s — can see what they throw; the container would answer
-  with its own default page instead of the envelope (ADR-0056 §1). Both therefore fail closed:
-  any token- or header-processing failure (a `perm_bits` claim that no longer decodes, a stale
-  `perm_ver`, a subject that no longer resolves to a user) clears the security context and lets
-  the chain continue, so `JsonAuthenticationEntryPoint` renders the enveloped, correlated 401.
-  Presenting a broken bearer token never falls back to gateway-header authorities.
+  with its own default page instead of the envelope (ADR-0056 §1). Both therefore fail closed,
+  by different means, and the distinction matters:
+  - `JwtAuthenticationFilter` **clears** the security context whenever a bearer token is present
+    and does not authenticate — whether it threw (a `perm_bits` claim that no longer decodes, a
+    stale `perm_ver`, a subject that no longer resolves to a user) or `validateToken` simply
+    refused it (expired, revoked, logged out, absent from the token store). Clearing rather than
+    returning is what stops a refused credential from riding on gateway-header authorities: the
+    gateway checks signature, issuer, audience and expiry but **not revocation**, so a revoked or
+    logged-out token still arrives here with valid-looking `X-Perm-Bits`.
+  - `GatewayHeaderAuthenticationFilter` **yields no authorities** when `X-Perm-Bits` is present
+    but will not decode; it never falls back to `X-Authorities` for that request. It has no
+    earlier authentication to clear, being the first of the two to run.
+
+  Either way the chain continues unauthenticated, the authorization filter rejects, and
+  `JsonAuthenticationEntryPoint` renders the enveloped, correlated 401.
 - **An error message never reveals whether an account exists.** The token-issuance endpoints
   (`POST /v1/auth/internal/token`, `POST /v1/auth/token-pair`) answer an unresolvable subject with
   a generic `400 VALIDATION_ERROR` that names neither the subject nor the reason; the subject goes

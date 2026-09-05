@@ -220,4 +220,34 @@ class JwtAuthenticationFilterTest {
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         assertThat(chain.getRequest()).isNotNull();
     }
+
+    /**
+     * Raised by Copilot on PR #1801, and a real gap rather than a consistency nit: the gateway
+     * validates only signature, issuer, audience and expiry — {@code pos-api-gateway} has no
+     * revocation check at all — so a revoked or logged-out token still arrives here carrying
+     * gateway-derived {@code X-Perm-Bits}. {@code JwtServiceImpl#validateToken} does consult
+     * revocation and the token store and correctly refuses such a token, but the filter used to
+     * return without clearing, leaving {@link GatewayHeaderAuthenticationFilter}'s header
+     * authorities in place. Logout and revocation therefore did not take effect at the service
+     * that owns them.
+     */
+    @Test
+    @DisplayName(
+            "refusedToken_clearsGatewayAuth: a revoked or logged-out token never rides on gateway-header authorities")
+    void refusedToken_clearsGatewayAuth() throws Exception {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        "gateway-user", null, List.of(new SimpleGrantedAuthority("security:token:issue_internal"))));
+        when(jwtService.validateToken(TOKEN)).thenReturn(false);
+
+        MockFilterChain chain = new MockFilterChain();
+        filter.doFilter(bearerRequest(), new MockHttpServletResponse(), chain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication())
+                .as("a credential this service refuses must deny the request, not be silently ignored")
+                .isNull();
+        assertThat(chain.getRequest())
+                .as("the chain must still run so the entry point can render the 401 envelope")
+                .isNotNull();
+    }
 }
