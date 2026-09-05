@@ -10,10 +10,12 @@ import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.UpdateEmployeeRequest;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.internal.service.EmployeeService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -67,9 +69,18 @@ public class EmployeeController {
                     and 422 when terminationDate is before hireDate.
                     """)
     @ApiResponse(responseCode = "201", description = "Employee created")
-    @ApiResponse(responseCode = "400", description = "Invalid request")
-    @ApiResponse(responseCode = "409", description = "Duplicate employee")
-    @ApiResponse(responseCode = "422", description = "Semantic validation failure")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Duplicate employee",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Semantic validation failure",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:create"})
@@ -150,10 +161,22 @@ public class EmployeeController {
                     hireDate.
                     """)
     @ApiResponse(responseCode = "200", description = "Employee updated")
-    @ApiResponse(responseCode = "400", description = "Invalid request")
-    @ApiResponse(responseCode = "404", description = "Employee not found")
-    @ApiResponse(responseCode = "409", description = "Duplicate employee")
-    @ApiResponse(responseCode = "422", description = "Semantic validation failure")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Employee not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Duplicate employee",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Semantic validation failure",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:edit"})
@@ -195,7 +218,10 @@ public class EmployeeController {
                     Returns 404 when neither an employee record nor a person replica row exists for the id.
                     """)
     @ApiResponse(responseCode = "200", description = "Employee found")
-    @ApiResponse(responseCode = "404", description = "Employee not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Employee not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:view"})
@@ -219,7 +245,10 @@ public class EmployeeController {
                     Returns 404 when no employee carries the supplied employee number.
                     """)
     @ApiResponse(responseCode = "200", description = "Employee resolved")
-    @ApiResponse(responseCode = "404", description = "No employee with that number")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No employee with that number",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:view"})
@@ -252,8 +281,14 @@ public class EmployeeController {
                     (an already DISABLED, TERMINATED, ON_LEAVE, or SUSPENDED employee cannot be disabled again).
                     """)
     @ApiResponse(responseCode = "200", description = "Employee disabled")
-    @ApiResponse(responseCode = "404", description = "Employee not found")
-    @ApiResponse(responseCode = "409", description = "Employee is not currently ACTIVE")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Employee not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Employee is not currently ACTIVE",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:employee:deactivate"})

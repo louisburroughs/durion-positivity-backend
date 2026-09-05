@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -59,11 +61,56 @@ class BulkLoadJobControllerErrorHandlingTest {
         when(bulkLoadJobService.getJob(eq(JOB_ID), any()))
                 .thenThrow(new IllegalStateException("Job cannot be processed before a locationId is assigned"));
 
+        // #1716: the ApiError envelope (code/message/status/timestamp/correlationId), not a bare
+        // ProblemDetail. ADR-0017 §3 makes ApiError the contract for every non-2xx body.
         mockMvc.perform(get("/v1/bulk-jobs/{jobId}", JOB_ID).header("X-Correlation-Id", "corr-conflict-1"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.detail").value("Job cannot be processed before a locationId is assigned"))
+                .andExpect(jsonPath("$.code").value("BULK_JOB_INVALID_STATE"))
+                .andExpect(jsonPath("$.message").value("Job cannot be processed before a locationId is assigned"))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
                 .andExpect(jsonPath("$.correlationId").value("corr-conflict-1"))
+                .andExpect(jsonPath("$.detail").doesNotExist())
                 .andExpect(header().string("X-Correlation-Id", "corr-conflict-1"));
+    }
+
+    /**
+     * ADR-0017 §4 asks for the correlation id in the {@code X-Correlation-Id} header, and clients
+     * read it as a single value rather than a list. Asserted with {@code stringValues} rather than
+     * {@code string} so that a second value would fail the comparison instead of being silently
+     * joined with a comma.
+     */
+    @Test
+    @WithMockUser(authorities = "bulkImport:status:read")
+    void theCorrelationIdHeaderCarriesExactlyOneValue() throws Exception {
+        when(bulkLoadJobService.getJob(eq(JOB_ID), any())).thenThrow(new IllegalStateException("conflict"));
+
+        mockMvc.perform(get("/v1/bulk-jobs/{jobId}", JOB_ID).header("X-Correlation-Id", "corr-single-1"))
+                .andExpect(status().isConflict())
+                .andExpect(header().stringValues("X-Correlation-Id", "corr-single-1"));
+    }
+
+    /**
+     * #1716 moved field-level failures into the envelope's {@code fieldErrors} array rather than
+     * flattening them into one string. Nothing exercised that path until now.
+     */
+    @Test
+    @WithMockUser(authorities = "bulkImport:upload:execute")
+    void aBeanValidationFailureAnswers400WithPopulatedFieldErrors() throws Exception {
+        mockMvc.perform(post("/v1/bulk-jobs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Correlation-Id", "corr-validation-1")
+                        .content("{\"fileName\":\"  \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("Request validation failed"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.correlationId").value("corr-validation-1"))
+                .andExpect(header().string("X-Correlation-Id", "corr-validation-1"))
+                .andExpect(jsonPath("$.fieldErrors").isArray())
+                .andExpect(jsonPath("$.fieldErrors[?(@.field == 'fileName')]").exists())
+                .andExpect(jsonPath("$.fieldErrors[?(@.field == 'fileName')].message")
+                        .isNotEmpty());
     }
 
     /**

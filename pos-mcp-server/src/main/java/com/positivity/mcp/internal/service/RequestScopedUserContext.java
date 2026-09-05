@@ -42,6 +42,18 @@ public class RequestScopedUserContext {
     // and by the manager's telemetry emission. Unset fail-closes to false (no WRITE_GATE layer).
     private static final ThreadLocal<Boolean> WRITE_CAPABLE_TOOLS_PRESENT = new ThreadLocal<>();
 
+    /**
+     * The user's own words for this turn (#1675).
+     *
+     * <p>Held here rather than passed as a tool argument because the model does not copy them
+     * faithfully: asked for the wording of a range it sends a normalised snippet — "in the last six
+     * months" and "over the last six months" both arrive as "last six months" — and the preposition
+     * it drops is the entire discriminator between a rolling window and a calendar one. A
+     * model-supplied copy of the user's words is still a model output, so the only reliable source
+     * is the request itself.
+     */
+    private static final ThreadLocal<String> USER_MESSAGE = new ThreadLocal<>();
+
     public void set(@NonNull CurrentUserContext context) {
         set(context, null);
     }
@@ -69,10 +81,21 @@ public class RequestScopedUserContext {
         return Boolean.TRUE.equals(WRITE_CAPABLE_TOOLS_PRESENT.get());
     }
 
+    /** Records this turn's raw user message so tools can read the wording the caller actually used. */
+    public void recordUserMessage(@NonNull String message) {
+        USER_MESSAGE.set(message);
+    }
+
+    /** This turn's raw user message, or empty when unrecorded (a non-chat entry point, or a test). */
+    public @NonNull Optional<String> currentUserMessage() {
+        return Optional.ofNullable(USER_MESSAGE.get());
+    }
+
     public void clear() {
         HOLDER.remove();
         DISCOVERED_OPENAPI_TOOLS.remove();
         WRITE_CAPABLE_TOOLS_PRESENT.remove();
+        USER_MESSAGE.remove();
     }
 
     public @NonNull Optional<CurrentUserContext> current() {

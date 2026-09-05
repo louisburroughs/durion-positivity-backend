@@ -30,7 +30,9 @@ class PeopleApiErrorContractIT extends BaseContractIntegrationTest {
     void unknownPathReturnsNotFound() throws Exception {
         mockMvc.perform(withAuth(get("/v1/people/" + PERSON_ID + "/no-such-resource")))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.detail").value("No endpoint for the requested path"));
+                .andExpect(jsonPath("$.code").value("NO_ENDPOINT"))
+                .andExpect(jsonPath("$.message").value("No endpoint for the requested path"))
+                .andExpect(jsonPath("$.correlationId").exists());
     }
 
     @Test
@@ -40,7 +42,9 @@ class PeopleApiErrorContractIT extends BaseContractIntegrationTest {
         // UUID path-variable error contract in this module.
         mockMvc.perform(withAuth(get("/v1/people/employees/not-a-uuid")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.detail").value("Invalid value for parameter 'employeeId'"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("Invalid value for parameter 'employeeId'"))
+                .andExpect(jsonPath("$.correlationId").exists());
     }
 
     @Test
@@ -48,7 +52,9 @@ class PeopleApiErrorContractIT extends BaseContractIntegrationTest {
     void staffingAssignmentsMissingPersonIdReturnsBadRequest() throws Exception {
         mockMvc.perform(withAuth(get("/v1/people/staffing/assignments")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.detail").value("Missing required parameter 'personId'"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("Missing required parameter 'personId'"))
+                .andExpect(jsonPath("$.correlationId").exists());
     }
 
     @Test

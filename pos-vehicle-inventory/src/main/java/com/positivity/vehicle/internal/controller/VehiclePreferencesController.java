@@ -1,6 +1,7 @@
 package com.positivity.vehicle.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.vehicle.internal.dto.UpsertPreferencesRequest;
 import com.positivity.vehicle.internal.dto.VehicleCarePreferenceResponse;
 import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
@@ -12,6 +13,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -70,13 +72,17 @@ public class VehiclePreferencesController {
                     vehicles start with no preferences.
                     Required inputs: vehicleId (UUID) as a path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 with an empty body when no preference document exists for the vehicle.
+                    Returns 404 with a RESOURCE_NOT_FOUND ApiError when no preference document exists for the \
+                    vehicle.
                     """)
     @ApiResponse(
             responseCode = "200",
             description = "Preferences found and returned",
             content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class)))
-    @ApiResponse(responseCode = "404", description = "No preferences found for this vehicle")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No preferences found for this vehicle",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.PREFERENCES_MANAGE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -86,10 +92,10 @@ public class VehiclePreferencesController {
             @Parameter(description = "Vehicle ID") @PathVariable UUID vehicleId) {
 
         log.info("GET /v1/vehicles/{}/preferences", vehicleId);
-        return preferencesService
+        return ResponseEntity.ok(preferencesService
                 .getPreferences(vehicleId)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() ->
+                        new EntityNotFoundException("No care preferences stored for vehicle '" + vehicleId + "'")));
     }
 
     @Operation(
@@ -121,8 +127,14 @@ public class VehiclePreferencesController {
             responseCode = "201",
             description = "Preferences created successfully",
             content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Vehicle not found")
-    @ApiResponse(responseCode = "400", description = "Invalid preference data")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Vehicle not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid preference data",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.PREFERENCES_MANAGE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -188,7 +200,10 @@ public class VehiclePreferencesController {
             responseCode = "200",
             description = "Preferences merged successfully",
             content = @Content(schema = @Schema(implementation = VehicleCarePreferenceResponse.class)))
-    @ApiResponse(responseCode = "404", description = "No existing preferences to merge into")
+    @ApiResponse(
+            responseCode = "404",
+            description = "No existing preferences to merge into",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.PREFERENCES_MANAGE + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

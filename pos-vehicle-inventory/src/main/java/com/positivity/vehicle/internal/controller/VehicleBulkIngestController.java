@@ -6,12 +6,14 @@ import com.positivity.bulkingest.BulkIngestResponse;
 import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.dto.CreateVehicleRequest;
+import com.positivity.shared.error.ApiError;
 import com.positivity.vehicle.internal.dto.VehicleBulkIngestRecord;
 import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
 import com.positivity.vehicle.internal.service.VehicleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -76,7 +78,10 @@ public class VehicleBulkIngestController extends AbstractBulkIngestController<Ve
                     ApiError when the envelope is missing jobId or locationId or the records array is empty.
                     """)
     @ApiResponse(responseCode = "200", description = "Batch processed; check per-record success and failure counts.")
-    @ApiResponse(responseCode = "400", description = "Invalid request envelope.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request envelope.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @Override
     @PostMapping("/bulk-ingest")
     @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.REGISTRY_CREATE + "')")

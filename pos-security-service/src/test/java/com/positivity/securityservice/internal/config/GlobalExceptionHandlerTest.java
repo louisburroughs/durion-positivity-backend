@@ -312,7 +312,7 @@ class GlobalExceptionHandlerTest {
     class HandleSecurityValidationException {
 
         @Test
-        @DisplayName("returns 400 INVALID_REQUEST with message when present, and echoes correlation id in header")
+        @DisplayName("returns 400 VALIDATION_ERROR with message when present, and echoes correlation id in header")
         void returns400WithMessage() {
             SecurityValidationException ex = new SecurityValidationException("bad param");
 
@@ -320,13 +320,13 @@ class GlobalExceptionHandlerTest {
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().code()).isEqualTo("INVALID_REQUEST");
+            assertThat(response.getBody().code()).isEqualTo("VALIDATION_ERROR");
             assertThat(response.getBody().message()).isEqualTo("bad param");
             assertThat(response.getHeaders().getFirst("X-Correlation-Id")).isEqualTo(CORRELATION_ID);
         }
 
         @Test
-        @DisplayName("returns 400 INVALID_REQUEST with default message when null")
+        @DisplayName("returns 400 VALIDATION_ERROR with default message when null")
         void returns400WithDefaultMessageWhenNull() {
             SecurityValidationException ex = new SecurityValidationException(null);
 
@@ -334,7 +334,7 @@ class GlobalExceptionHandlerTest {
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().code()).isEqualTo("INVALID_REQUEST");
+            assertThat(response.getBody().code()).isEqualTo("VALIDATION_ERROR");
             assertThat(response.getBody().message()).isEqualTo("Invalid request parameters");
         }
     }

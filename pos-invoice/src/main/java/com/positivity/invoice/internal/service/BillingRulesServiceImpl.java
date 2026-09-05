@@ -6,6 +6,7 @@ import com.positivity.invoice.internal.entity.BillingRules;
 import com.positivity.invoice.internal.enums.InvoiceDeliveryMethod;
 import com.positivity.invoice.internal.enums.InvoiceGroupingStrategy;
 import com.positivity.invoice.internal.enums.PaymentTerms;
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.repository.BillingRulesRepository;
 import com.positivity.security.common.SecurityContextHelper;
 import java.util.Optional;
@@ -122,11 +123,17 @@ public class BillingRulesServiceImpl implements BillingRulesService {
     /**
      * #993: {@code paymentTermsCode} is a validated vocabulary ({@link PaymentTerms}), not a
      * free-form string — the due-date rule engine depends on it. Mirrors the DB CHECK constraint.
+     *
+     * <p>#1713: throws the module's own {@link InvoiceRequestValidationException} rather than a
+     * bare {@code IllegalArgumentException}. This is a caller-supplied value, so ADR-0017 §1
+     * makes it a 400 — but {@code BillingRulesController} was covered by no advice, so the bare
+     * type reached pos-web-common's platform fallback and answered 500 for an outcome the
+     * endpoint's own {@code @Operation} prose documents.
      */
     @NonNull
     private String validatedTermsCode(@NonNull String code) {
         return PaymentTerms.fromCode(code)
-                .orElseThrow(() -> new IllegalArgumentException("Unknown paymentTermsCode '" + code
+                .orElseThrow(() -> new InvoiceRequestValidationException("Unknown paymentTermsCode '" + code
                         + "' — expected one of DUE_ON_RECEIPT, NET_10, NET_15," + " NET_30, NET_45, NET_60"))
                 .name();
     }

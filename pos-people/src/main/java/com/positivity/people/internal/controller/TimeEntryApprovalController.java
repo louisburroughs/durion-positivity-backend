@@ -9,10 +9,12 @@ import com.positivity.people.internal.dto.TimeEntrySummary;
 import com.positivity.people.internal.enums.TimeEntryStatus;
 import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.security.PeoplePermissions;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -70,7 +72,10 @@ public class TimeEntryApprovalController {
                     paging parameters are out of range.
                     """)
     @ApiResponse(responseCode = "200", description = "Time entries returned (possibly empty)")
-    @ApiResponse(responseCode = "400", description = "Invalid filter or paging parameter")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid filter or paging parameter",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_LIST", apiVersion = "1")
     @GetMapping
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -114,8 +119,14 @@ public class TimeEntryApprovalController {
                     Returns 404 when no entry has that id, and 400 when timeZone is not a known zone id.
                     """)
     @ApiResponse(responseCode = "200", description = "Time entry returned")
-    @ApiResponse(responseCode = "400", description = "Invalid timeZone")
-    @ApiResponse(responseCode = "404", description = "Time entry not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid timeZone",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Time entry not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_GET", apiVersion = "1")
     @GetMapping("/{timeEntryId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -163,7 +174,10 @@ public class TimeEntryApprovalController {
                     rather than failing the whole batch, and 400 when the decisions list is missing or empty.
                     """)
     @ApiResponse(responseCode = "200", description = "Time entries approved successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid request - decisions required")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request - decisions required",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_APPROVE", apiVersion = "1")
     @PostMapping("/approve")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -217,7 +231,10 @@ public class TimeEntryApprovalController {
                     FORBIDDEN), and 400 when any decision lacks a rejectionReason.
                     """)
     @ApiResponse(responseCode = "200", description = "Time entries rejected successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid request - rejectionReason required for all decisions")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request - rejectionReason required for all decisions",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_REJECT", apiVersion = "1")
     @PostMapping("/reject")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

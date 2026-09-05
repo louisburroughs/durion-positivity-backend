@@ -271,7 +271,8 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.detail").value("Validation failed"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("Validation failed"));
     }
 
     @Test

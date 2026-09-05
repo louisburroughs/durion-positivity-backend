@@ -8,9 +8,11 @@ import com.positivity.people.internal.dto.TimePeriodDto;
 import com.positivity.people.internal.dto.TimekeepingEntryDto;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.internal.service.TimekeepingApprovalService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -100,7 +102,10 @@ public class TimekeepingApprovalController {
                     Returns 404 when the time period does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "List of timekeeping entries")
-    @ApiResponse(responseCode = "404", description = "Time period not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Time period not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timekeeping:view"})
@@ -124,7 +129,10 @@ public class TimekeepingApprovalController {
                     Returns 404 when the time period does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Approval summary")
-    @ApiResponse(responseCode = "404", description = "Time period not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Time period not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timekeeping:view"})
@@ -150,7 +158,10 @@ public class TimekeepingApprovalController {
                     not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Entries approved")
-    @ApiResponse(responseCode = "404", description = "Time period not found")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Time period not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timekeeping:approve"})
@@ -175,8 +186,14 @@ public class TimekeepingApprovalController {
                     Returns 400 when reason is blank, and 404 when the time period does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "Entries rejected")
-    @ApiResponse(responseCode = "400", description = "Reason is required")
-    @ApiResponse(responseCode = "404", description = "Time period not found")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Reason is required",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Time period not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"people:timekeeping:reject"})

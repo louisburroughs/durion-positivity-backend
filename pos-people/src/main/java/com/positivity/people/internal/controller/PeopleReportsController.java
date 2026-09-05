@@ -6,8 +6,11 @@ import com.positivity.people.internal.dto.AttendanceDiscrepancyReportResponse;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.internal.service.PeopleReportsService;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
@@ -48,10 +51,22 @@ public class PeopleReportsController {
                     Returns 400 when endDate is before startDate or timezone is not a valid IANA zone.
                     """)
     @ApiResponse(responseCode = "200", description = "Report generated successfully.")
-    @ApiResponse(responseCode = "400", description = "Invalid parameters")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
-    @ApiResponse(responseCode = "503", description = "Dependent service unavailable")
-    @ApiResponse(responseCode = "500", description = "Unexpected server error")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid parameters",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "Dependent service unavailable",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "500",
+            description = "Unexpected server error",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "REPORT_ATTENDANCE_VS_JOBTIME_GENERATED", apiVersion = "1")
     @GetMapping("/attendanceJobtimeDiscrepancy")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -96,10 +111,22 @@ public class PeopleReportsController {
                     locationId is unknown or inactive.
                     """)
     @ApiResponse(responseCode = "200", description = "Approved time rows retrieved successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid parameters")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
-    @ApiResponse(responseCode = "503", description = "Dependent service unavailable")
-    @ApiResponse(responseCode = "500", description = "Unexpected server error")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid parameters",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "Dependent service unavailable",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "500",
+            description = "Unexpected server error",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_TIME_APPROVED_EXPORT_READ", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
