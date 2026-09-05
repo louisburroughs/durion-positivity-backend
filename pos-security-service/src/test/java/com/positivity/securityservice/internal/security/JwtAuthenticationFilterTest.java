@@ -6,15 +6,20 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.security.service.JwtService;
 import io.jsonwebtoken.MalformedJwtException;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -45,6 +50,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 @DisplayName("JwtAuthenticationFilter")
 class JwtAuthenticationFilterTest {
 
+    private static final Instant FIXED_INSTANT = Instant.parse("2026-09-05T12:00:00Z");
     private static final String TOKEN = "a-signature-valid-token";
     private static final String BEARER = "Bearer " + TOKEN;
 
@@ -56,7 +62,8 @@ class JwtAuthenticationFilterTest {
     void setUp() {
         jwtService = mock(JwtService.class);
         userDetailsService = mock(UserDetailsService.class);
-        filter = new JwtAuthenticationFilter(jwtService, userDetailsService);
+        filter = new JwtAuthenticationFilter(
+                jwtService, userDetailsService, new ObjectMapper(), Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC));
     }
 
     @AfterEach
@@ -249,5 +256,99 @@ class JwtAuthenticationFilterTest {
         assertThat(chain.getRequest())
                 .as("the chain must still run so the entry point can render the 401 envelope")
                 .isNotNull();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // A server fault is not a bad credential: enveloped 500, never a container page
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * The narrow catch list closes the #1715 instance but not the guarantee: {@code validateToken}
+     * wraps its body in {@code catch (JwtException | IllegalArgumentException)} only
+     * ({@code JwtServiceImpl:121}), so a {@code RedisConnectionFailureException} from the
+     * revocation check or a {@code DataAccessException} from the token store propagates straight
+     * out of the filter — the same bare-container-page symptom #1715 reported, from a different
+     * cause. Answering 401 for it would be wrong too: the caller's token is fine, and telling them
+     * to replace it misdirects the fix. So it must be an enveloped, correlated 500.
+     */
+    @Test
+    @DisplayName(
+            "infrastructureFailure_answersEnvelopedFiveHundred: a DataAccessException answers a correlated 500 envelope, not a container page and not a 401")
+    void infrastructureFailure_answersEnvelopedFiveHundred() throws Exception {
+        when(jwtService.validateToken(TOKEN))
+                .thenThrow(new DataAccessResourceFailureException("Redis connection refused"));
+
+        MockHttpServletRequest request = bearerRequest();
+        request.addHeader("X-Correlation-Id", "corr-1715");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(500);
+        assertThat(response.getHeader("X-Correlation-Id")).isEqualTo("corr-1715");
+        assertThat(response.getContentAsString())
+                .contains("\"code\":\"INTERNAL_ERROR\"")
+                .contains("\"correlationId\":\"corr-1715\"")
+                .as("the failure text must not reach the client")
+                .doesNotContain("Redis connection refused");
+        assertThat(chain.getRequest())
+                .as("the chain must NOT continue — the filter already wrote the response")
+                .isNull();
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
+
+    @Test
+    @DisplayName(
+            "userLookupFailure_answersEnvelopedFiveHundred: a DataAccessException from the user lookup is a server fault, not a 401")
+    void userLookupFailure_answersEnvelopedFiveHundred() throws Exception {
+        when(jwtService.validateToken(TOKEN)).thenReturn(true);
+        when(jwtService.getUsernameFromToken(TOKEN)).thenReturn("jane.doe");
+        when(userDetailsService.loadUserByUsername("jane.doe"))
+                .thenThrow(new DataAccessResourceFailureException("connection pool exhausted"));
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        filter.doFilter(bearerRequest(), response, new MockFilterChain());
+
+        assertThat(response.getStatus()).isEqualTo(500);
+        assertThat(response.getContentAsString()).contains("\"code\":\"INTERNAL_ERROR\"");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Correlation id: the reason and the rendered 401 must be joinable
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName(
+            "rejectedToken_publishesCorrelationId: the filter publishes the correlation id the entry point renders on the 401")
+    void rejectedToken_publishesCorrelationId() throws Exception {
+        when(jwtService.validateToken(TOKEN)).thenReturn(true);
+        when(jwtService.getUsernameFromToken(TOKEN)).thenReturn("jane.doe");
+        when(jwtService.getRolesFromToken(TOKEN)).thenReturn(Set.of("SHOP_MGR"));
+        when(jwtService.getAuthoritiesFromToken(TOKEN)).thenThrow(new SecurityValidationException("Malformed bitset"));
+        when(userDetailsService.loadUserByUsername("jane.doe")).thenReturn(new User("jane.doe", "", List.of()));
+
+        MockHttpServletRequest request = bearerRequest();
+        request.addHeader("X-Correlation-Id", "corr-echo");
+        filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
+
+        assertThat(request.getAttribute(JwtAuthenticationFilter.CORRELATION_ID_ATTRIBUTE))
+                .as("JsonAuthenticationEntryPoint reads this attribute so the 401 quotes the same id")
+                .isEqualTo("corr-echo");
+    }
+
+    @Test
+    @DisplayName(
+            "rejectedTokenWithoutHeader_generatesCorrelationId: with no inbound header the filter mints one and publishes it, so the 401 does not mint a different one")
+    void rejectedTokenWithoutHeader_generatesCorrelationId() throws Exception {
+        when(jwtService.validateToken(TOKEN)).thenReturn(false);
+
+        MockHttpServletRequest request = bearerRequest();
+        filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
+
+        assertThat(request.getAttribute(JwtAuthenticationFilter.CORRELATION_ID_ATTRIBUTE))
+                .isInstanceOf(String.class)
+                .asString()
+                .isNotBlank();
     }
 }

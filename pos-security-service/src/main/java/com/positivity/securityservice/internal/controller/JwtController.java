@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.LogSanitizer;
 import com.positivity.securityservice.internal.dto.InternalTokenRequest;
 import com.positivity.securityservice.internal.dto.RefreshTokenRequest;
 import com.positivity.securityservice.internal.dto.TokenPairRequest;
@@ -124,24 +125,39 @@ public class JwtController {
                     InternalTokenRequest request) {
         log.info(
                 "Internal token issuance request received: subject={}, rolesCount={}",
-                request.subject(),
+                LogSanitizer.forLog(request.subject()),
                 request.roles() != null ? request.roles().size() : 0);
 
         // The 400 body must not say *why* the subject was rejected: echoing "User not found for
         // subject: X" turned this endpoint into an account-existence oracle for any caller holding
-        // security:token:issue_internal (issue #1715). The subject rides along as the exception's
+        // security:token:issue_internal (issue #1715). Both refusal paths below therefore answer
+        // the identical generic message, and the real reason rides along as the exception's
         // logDetail, which GlobalExceptionHandler logs against the response's correlation id and
-        // never puts in the ApiError body (ADR-0056 §1: rejected values are never echoed).
-        // The status stays 400 rather than becoming 404: this module already answers 400 for an
-        // unresolvable user reference (UserServiceImpl#assignRoles, #updateUser) and both
-        // endpoints document 400 for a subject with no user, so one condition keeps one status
-        // across entry points (ADR-0017 §2).
+        // never puts in the ApiError body (ADR-0056 §1: rejected values are never echoed). The
+        // subject is sanitised on the way to the log because it is unvalidated request text and
+        // could otherwise forge log lines (CWE-117).
+        //
+        // KNOWN ADR-0017 DEVIATION (#1802): the status stays 400, but §2 reserves 400 for request
+        // shape and says it "is never a domain-condition answer" — an unresolvable subject is a
+        // domain condition, so §1/§2 point at 404 or 422. 400 is kept here only because
+        // UserServiceImpl#assignRoles/#updateUser already answer 400 for the same condition and
+        // both endpoints document it; moving one without the other would break "one condition, one
+        // status" in the other direction, and moving both changes the published contract. Tracked
+        // separately rather than settled inside a security fix.
         var user = userService
                 .getUserByUsername(request.subject())
-                .orElseThrow(() -> new SecurityValidationException(
-                        TOKEN_REQUEST_REJECTED, "no user exists for subject: " + request.subject()));
+                .orElseThrow(() -> SecurityValidationException.withLogDetail(
+                        TOKEN_REQUEST_REJECTED,
+                        "no user exists for subject: " + LogSanitizer.forLog(request.subject())));
         if (user.getId() == null) {
-            throw new IllegalStateException("Resolved user record is missing an id");
+            // A persisted user row with no primary key is a server-side data defect, so ADR-0017
+            // §1 would put it at 500; it answers the same 400 as the branch above because the
+            // alternative discloses what that branch exists to hide — a distinct status or code
+            // tells the caller the subject resolved. Unreachable by construction (id is the PK of
+            // a row just loaded); the defect is diagnosable from the logDetail. Also #1802.
+            throw SecurityValidationException.withLogDetail(
+                    TOKEN_REQUEST_REJECTED,
+                    "user record has no id for subject: " + LogSanitizer.forLog(request.subject()));
         }
 
         String token = jwtService.generateToken(
@@ -209,24 +225,39 @@ public class JwtController {
 
         log.info(
                 "Token pair request received: subject={}, rolesCount={}",
-                request.subject(),
+                LogSanitizer.forLog(request.subject()),
                 request.roles() != null ? request.roles().size() : 0);
 
         // The 400 body must not say *why* the subject was rejected: echoing "User not found for
         // subject: X" turned this endpoint into an account-existence oracle for any caller holding
-        // security:token:issue_internal (issue #1715). The subject rides along as the exception's
+        // security:token:issue_internal (issue #1715). Both refusal paths below therefore answer
+        // the identical generic message, and the real reason rides along as the exception's
         // logDetail, which GlobalExceptionHandler logs against the response's correlation id and
-        // never puts in the ApiError body (ADR-0056 §1: rejected values are never echoed).
-        // The status stays 400 rather than becoming 404: this module already answers 400 for an
-        // unresolvable user reference (UserServiceImpl#assignRoles, #updateUser) and both
-        // endpoints document 400 for a subject with no user, so one condition keeps one status
-        // across entry points (ADR-0017 §2).
+        // never puts in the ApiError body (ADR-0056 §1: rejected values are never echoed). The
+        // subject is sanitised on the way to the log because it is unvalidated request text and
+        // could otherwise forge log lines (CWE-117).
+        //
+        // KNOWN ADR-0017 DEVIATION (#1802): the status stays 400, but §2 reserves 400 for request
+        // shape and says it "is never a domain-condition answer" — an unresolvable subject is a
+        // domain condition, so §1/§2 point at 404 or 422. 400 is kept here only because
+        // UserServiceImpl#assignRoles/#updateUser already answer 400 for the same condition and
+        // both endpoints document it; moving one without the other would break "one condition, one
+        // status" in the other direction, and moving both changes the published contract. Tracked
+        // separately rather than settled inside a security fix.
         var user = userService
                 .getUserByUsername(request.subject())
-                .orElseThrow(() -> new SecurityValidationException(
-                        TOKEN_REQUEST_REJECTED, "no user exists for subject: " + request.subject()));
+                .orElseThrow(() -> SecurityValidationException.withLogDetail(
+                        TOKEN_REQUEST_REJECTED,
+                        "no user exists for subject: " + LogSanitizer.forLog(request.subject())));
         if (user.getId() == null) {
-            throw new IllegalStateException("Resolved user record is missing an id");
+            // A persisted user row with no primary key is a server-side data defect, so ADR-0017
+            // §1 would put it at 500; it answers the same 400 as the branch above because the
+            // alternative discloses what that branch exists to hide — a distinct status or code
+            // tells the caller the subject resolved. Unreachable by construction (id is the PK of
+            // a row just loaded); the defect is diagnosable from the logDetail. Also #1802.
+            throw SecurityValidationException.withLogDetail(
+                    TOKEN_REQUEST_REJECTED,
+                    "user record has no id for subject: " + LogSanitizer.forLog(request.subject()));
         }
 
         JwtService.TokenPair tokenPair = jwtService.generateTokenPair(

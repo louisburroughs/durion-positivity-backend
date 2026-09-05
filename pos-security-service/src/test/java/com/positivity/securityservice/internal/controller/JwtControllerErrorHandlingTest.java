@@ -261,11 +261,21 @@ class JwtControllerErrorHandlingTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"subject\":\"real.account\",\"roles\":[\"SHOP_MGR\"]}"))
                 .andExpect(status().isBadRequest())
+                // The code and message must be byte-identical to the missing-subject path above.
+                // Asserting only the status let the previous version through, where this branch
+                // answered INVALID_STATE "Resolved user record is missing an id" — a distinct code
+                // and a phrase that both tell the caller the subject resolved, which is exactly
+                // what the generic message exists to hide.
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("Token issuance request is invalid"))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
 
-        assertThat(body).doesNotContain("real.account");
+        assertThat(body)
+                .doesNotContain("real.account")
+                .doesNotContain("INVALID_STATE")
+                .doesNotContain("missing an id");
     }
 
     /** Clock for {@code GlobalExceptionHandler} and {@code pos-web-common}'s advice, plus method security. */

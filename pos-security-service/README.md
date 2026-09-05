@@ -176,8 +176,19 @@ Two rules constrain what those bodies may contain and where they can come from (
 - **Nothing escapes the filter chain unenveloped.** `JwtAuthenticationFilter` and
   `GatewayHeaderAuthenticationFilter` run before the dispatcher, so no `@ControllerAdvice` — not
   this module's and not `pos-web-common`'s — can see what they throw; the container would answer
-  with its own default page instead of the envelope (ADR-0056 §1). Both therefore fail closed,
-  by different means, and the distinction matters:
+  with its own default page instead of the envelope (ADR-0056 §1). `JwtAuthenticationFilter`
+  therefore separates the two cases a catch-all must not merge:
+  - **The credential is bad → 401.** A token that throws while being read, or that
+    `validateToken` refuses, fails closed (below).
+  - **The server failed → enveloped 500.** Any other `RuntimeException` — a
+    `RedisConnectionFailureException` from the revocation check, a `DataAccessException` from the
+    token store or the user lookup, an NPE on a token with no `exp` claim — is a server fault, not
+    a bad credential. `validateToken` wraps its body in `catch (JwtException |
+    IllegalArgumentException)` only, so these propagate; answering 401 would tell the caller to
+    replace a token that is fine. The filter writes the `ApiError` envelope itself and logs at
+    ERROR against the same correlation id.
+
+  Both filters fail closed on a bad credential, by different means, and the distinction matters:
   - `JwtAuthenticationFilter` **clears** the security context whenever a bearer token is present
     and does not authenticate — whether it threw (a `perm_bits` claim that no longer decodes, a
     stale `perm_ver`, a subject that no longer resolves to a user) or `validateToken` simply
@@ -190,14 +201,31 @@ Two rules constrain what those bodies may contain and where they can come from (
     earlier authentication to clear, being the first of the two to run.
 
   Either way the chain continues unauthenticated, the authorization filter rejects, and
-  `JsonAuthenticationEntryPoint` renders the enveloped, correlated 401.
+  `JsonAuthenticationEntryPoint` renders the enveloped, correlated 401. The correlation id on that
+  401 is the one `JwtAuthenticationFilter` published on the request (`CORRELATION_ID_ATTRIBUTE`),
+  not a freshly minted one — the body says only `INVALID_CREDENTIALS`, so the shared id is the only
+  thing joining the response a caller quotes to the log line carrying the actual reason
+  (ADR-0017 §4).
+
+  `SecurityConfig` puts `JwtAuthenticationFilter` on the `/v1/auth/**` chain only, and
+  `SecurityBeansConfig` disables the servlet-container registration Spring Boot would otherwise
+  add for it at `/*`. Without that, the container copy runs *after* `springSecurityFilterChain`
+  on every other chain, clearing the context after authorization has already passed.
 - **An error message never reveals whether an account exists.** The token-issuance endpoints
   (`POST /v1/auth/internal/token`, `POST /v1/auth/token-pair`) answer an unresolvable subject with
   a generic `400 VALIDATION_ERROR` that names neither the subject nor the reason; the subject goes
   to the correlated WARN log via `SecurityValidationException`'s `logDetail`, never into the body
-  (ADR-0056 §1 — rejected values are never echoed). The status stays `400` rather than `404`, so
-  that an unresolvable user reference answers the same way here as it does in `UserServiceImpl`
-  (ADR-0017 §2, one condition one status).
+  (ADR-0056 §1 — rejected values are never echoed), sanitised through `LogSanitizer` because the
+  subject is unvalidated request text (CWE-117). Both refusal paths — no such user, and a resolved
+  user record with no id — answer a byte-identical body, since a distinct code or phrase would
+  disclose what the generic message exists to hide.
+
+  The status stays `400`, which is a **known ADR-0017 deviation tracked in #1802**, not a
+  compliant choice: §2 reserves `400` for request shape and says it "is never a domain-condition
+  answer", and an unresolvable subject is a domain condition. `400` is kept here only because
+  `UserServiceImpl#assignRoles` / `#updateUser` already answer it for the same condition, so
+  moving one entry point without the others would break "one condition, one status" the other
+  way, and moving all of them is a published-contract change.
 
 The published `openapi.yaml` lists only the error statuses an operation can actually produce.
 Because the advice is module-wide, springdoc would otherwise attach its 400/401/403/404/409 to

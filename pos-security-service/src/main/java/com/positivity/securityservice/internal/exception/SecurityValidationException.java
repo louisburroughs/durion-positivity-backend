@@ -51,10 +51,20 @@ public class SecurityValidationException extends RuntimeException {
      * (issue #1715). ADR-0056 §1 states the same rule for the platform advice: rejected data
      * values are never echoed, and the correlation id is the diagnostic handle.
      *
+     * <p>Exposed as a static factory rather than a {@code (String, String)} constructor: that
+     * signature sits next to {@code (String, Throwable)} and reads identically at a call site
+     * written as {@code new SecurityValidationException(msg, e.getMessage())}, which would silently
+     * drop the cause. The name makes the intent unmistakable.
+     *
      * @param message   the generic, client-safe message placed in the {@code ApiError} body
      * @param logDetail the sensitive detail; logged with the correlation id, never returned
+     * @return the exception to throw
      */
-    public SecurityValidationException(String message, @Nullable String logDetail) {
+    public static SecurityValidationException withLogDetail(String message, @Nullable String logDetail) {
+        return new SecurityValidationException(message, logDetail, null);
+    }
+
+    private SecurityValidationException(String message, @Nullable String logDetail, @Nullable Void disambiguator) {
         super(message);
         this.logDetail = logDetail;
     }
