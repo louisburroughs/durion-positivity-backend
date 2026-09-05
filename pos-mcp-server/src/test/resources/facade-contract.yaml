@@ -396,6 +396,22 @@ OrderFacadeTool.listOrders:
   template: "/order/v1/orders/carts"
   route: order
   downstreamPath: "/v1/orders/carts"
+
+OrderFacadeTool.listPurchaseOrders:
+  verb: GET
+  baseUrlProperty: pos.order.base-url
+  templateProperty: pos.order.purchase-order-list-uri-template
+  template: "/order/v1/orders/purchase-orders"
+  route: order
+  downstreamPath: "/v1/orders/purchase-orders"
+
+OrderFacadeTool.getPurchaseOrder:
+  verb: GET
+  baseUrlProperty: pos.order.base-url
+  templateProperty: pos.order.purchase-order-uri-template
+  template: "/order/v1/orders/purchase-orders/{poId}"
+  route: order
+  downstreamPath: "/v1/orders/purchase-orders/{}"
   # optional query params appended by the tool when provided: status, clerkId, terminalId
 
 PricingFacadeTool.getPriceForSku:

@@ -64,7 +64,9 @@ class ToolSelectionEngineTest {
                 RestClient.builder(),
                 "http://api-gateway",
                 "/order/v1/orders/{orderId}",
-                "/order/v1/orders/search?q={query}");
+                "/order/v1/orders/search?q={query}",
+                "/order/v1/orders/purchase-orders",
+                "/order/v1/orders/purchase-orders/{poId}");
         sharedOrchestrationSupport = new SharedOrchestrationSupport(Clock.systemUTC());
         when(toolRegistry.resolveMasterTools()).thenReturn(List.of(exaWebSearchTool));
         glossaryFacadeTool = new GlossaryFacadeTool();

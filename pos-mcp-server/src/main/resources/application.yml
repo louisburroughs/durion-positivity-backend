@@ -468,6 +468,8 @@ pos:
     base-url: ${POS_ORDER_BASE_URL:http://pos-api-gateway}
     order-uri-template: ${POS_ORDER_URI_TEMPLATE:/order/v1/orders/carts/{orderId}}
     list-uri-template: ${POS_ORDER_LIST_URI_TEMPLATE:/order/v1/orders/carts}
+    purchase-order-list-uri-template: ${POS_ORDER_PO_LIST_URI_TEMPLATE:/order/v1/orders/purchase-orders}
+    purchase-order-uri-template: ${POS_ORDER_PO_URI_TEMPLATE:/order/v1/orders/purchase-orders/{poId}}
   pricing:
     base-url: ${POS_PRICING_BASE_URL:http://pos-api-gateway}
     # getPriceForSku composition legs (#1519 WS-3.PRICE-SKU). Cross-domain per ADR-0054:
