@@ -1,12 +1,14 @@
 -- Temporary probe (deleted before merge).
--- DB: pos_order_db
-SELECT sku_id, sum(quantity_decimal) AS ordered, sum(open_quantity_decimal) AS still_open,
-       sum(quantity_decimal - COALESCE(open_quantity_decimal,0)) AS received, count(*) AS lines
-FROM purchase_order_line GROUP BY sku_id ORDER BY ordered DESC LIMIT 8;
+-- DB: pos_workorder_db
+SELECT event_type, count(*) AS events, sum(quantity) AS qty
+FROM workorder_part_usage_event GROUP BY event_type ORDER BY events DESC;
+
+SELECT sum(quantity_issued) AS issued, sum(quantity_consumed) AS consumed,
+       sum(quantity_returned) AS returned FROM workorder_part;
 
 -- DB: pos_inventory_db
-SELECT s.stock_item_id, s.location_id, s.on_hand, s.atp, p.itemsku, p.minimum_quantity,
-       (s.atp < p.minimum_quantity) AS is_running_low
-FROM inventory_stock_summary s
-JOIN replenishment_policy p ON p.location_id = s.location_id AND p.active
-LIMIT 10;
+SELECT location_id, lot_id, on_hand, allocated, reserved, atp
+FROM inventory_stock_summary WHERE stock_item_id = 'OIL-5W30-5QT';
+
+SELECT count(*) AS rows_where_atp_differs_from_onhand
+FROM inventory_stock_summary WHERE atp IS DISTINCT FROM on_hand;
