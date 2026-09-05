@@ -24,12 +24,23 @@ import org.jspecify.annotations.NonNull;
  * {@code TOOL_USE} rule ("ask when an argument is missing") is a mechanical trigger on a missing
  * identifier; this is a semantic one, and the two are not the same test.
  *
- * <p>Every definition below was decided by the owning domain agents, not by this module — these
- * are business decisions, and the assistant's job is to read an agreed answer rather than to
- * reach one. The distinctions are deliberate where the language differs: <b>best</b> measures
- * profitability while <b>largest</b> measures revenue; "payment problems" measures currently
- * overdue exposure rather than a speculative behavioural score; "backed up" is an operational
- * lateness measure, not a capacity sentiment.
+ * <p><strong>Ratified by @louisburroughs on 2026-09-05</strong> (issue #1688, PR #1777; the
+ * ratification is recorded as a comment on #1688 so it survives any rewrite of this file),
+ * reviewing the full term set
+ * against the alternatives for each — notably <em>best customers</em> as contribution margin rather
+ * than plain revenue, the deliberate <b>best</b>/<b>largest</b> split, the trailing-30-day window on
+ * technician productivity, the six-month threshold on "haven't been back", and the rule that stock
+ * with no active ReplenishmentPolicy is never classified as low. These are business decisions and
+ * the assistant's job is to read an agreed answer rather than to reach one, so the record of who
+ * agreed belongs here: an unattributed definition is indistinguishable from an invented one, which
+ * is the failure #1688 exists to prevent.
+ *
+ * <p>The distinctions are deliberate where the language differs: <b>best</b> measures profitability
+ * while <b>largest</b> measures revenue; "payment problems" measures currently overdue exposure
+ * rather than a speculative behavioural score; "backed up" is an operational lateness measure, not
+ * a capacity sentiment.
+ *
+ * <p>Changing any definition needs the same sign-off, and a {@link #VERSION} bump with it.
  *
  * <p>{@link #VERSION} is returned with every lookup and recorded in the tool trace, so a graded
  * fixture (#1682) can assert both the outcome and <em>which</em> definition produced it. Bump it
@@ -39,7 +50,7 @@ import org.jspecify.annotations.NonNull;
 final class BusinessGlossary {
 
     /** Bump on any change to a definition, a default window, or the term set. */
-    static final String VERSION = "2026-09-04.1";
+    static final String VERSION = "2026-09-05.1";
 
     /**
      * One decided term.
