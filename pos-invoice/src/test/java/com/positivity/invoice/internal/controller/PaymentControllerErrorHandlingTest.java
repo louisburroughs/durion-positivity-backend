@@ -8,16 +8,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.invoice.ControllerSliceConfig;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
 import com.positivity.invoice.internal.service.PaymentService;
+import com.positivity.security.common.GatewaySecurityConfig;
+import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -42,9 +44,8 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * full-context pattern (see {@code OrderInvoiceContractBehaviorIT}) instead, authenticating via
  * the gateway's {@code X-User}/{@code X-Authorities} headers rather than {@code @WithMockUser}.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
+@WebMvcTest(PaymentController.class)
+@Import({GatewaySecurityConfig.class, WebCommonErrorAutoConfiguration.class, ControllerSliceConfig.class})
 @DisplayName("Payment endpoints answer the errors they document (#1694)")
 class PaymentControllerErrorHandlingTest {
 

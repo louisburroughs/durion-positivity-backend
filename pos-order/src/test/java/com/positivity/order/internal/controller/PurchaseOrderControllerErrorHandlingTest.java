@@ -7,16 +7,19 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.order.BaseContractIntegrationTest;
+import com.positivity.order.BaseControllerSliceTest;
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
+import com.positivity.order.internal.service.ProcurementAvailabilityService;
 import com.positivity.order.internal.service.PurchaseOrderService;
 import com.positivity.order.internal.service.PurchaseOrderTransmissionService;
+import com.positivity.security.common.GatewaySecurityConfig;
+import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * Issue #1694: {@link PurchaseOrderExceptionHandler} no longer has a blanket
@@ -32,18 +35,20 @@ import org.springframework.test.web.servlet.MockMvc;
  * not-found/conflict/422 coverage this file complements).
  */
 @DisplayName("Purchase-order endpoints answer the errors they document — issue #1694 additions")
-class PurchaseOrderControllerErrorHandlingTest extends BaseContractIntegrationTest {
+@WebMvcTest(PurchaseOrderController.class)
+@Import({GatewaySecurityConfig.class, WebCommonErrorAutoConfiguration.class, BaseControllerSliceTest.SliceConfig.class})
+class PurchaseOrderControllerErrorHandlingTest extends BaseControllerSliceTest {
 
     private static final UUID PO_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b05");
-
-    @Autowired
-    private MockMvc mockMvc;
 
     @MockitoBean
     private PurchaseOrderService purchaseOrderService;
 
     @MockitoBean
     private PurchaseOrderTransmissionService purchaseOrderTransmissionService;
+
+    @MockitoBean
+    private ProcurementAvailabilityService procurementAvailabilityService;
 
     @Test
     @DisplayName("a request validation failure answers 400 with its own message and code")

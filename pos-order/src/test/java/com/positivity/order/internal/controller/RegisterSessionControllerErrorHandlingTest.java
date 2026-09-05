@@ -7,15 +7,17 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.order.BaseContractIntegrationTest;
+import com.positivity.order.BaseControllerSliceTest;
 import com.positivity.order.internal.exception.RegisterSessionRequestValidationException;
 import com.positivity.order.internal.service.RegisterSessionService;
+import com.positivity.security.common.GatewaySecurityConfig;
+import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * Issue #1694: {@link RegisterSessionExceptionHandler} no longer has a blanket
@@ -33,12 +35,11 @@ import org.springframework.test.web.servlet.MockMvc;
  * ({@link BaseContractIntegrationTest}, see {@code PurchaseOrderErrorContractTest}) instead.
  */
 @DisplayName("Register-session endpoints answer the errors they document (#1694)")
-class RegisterSessionControllerErrorHandlingTest extends BaseContractIntegrationTest {
+@WebMvcTest(RegisterSessionController.class)
+@Import({GatewaySecurityConfig.class, WebCommonErrorAutoConfiguration.class, BaseControllerSliceTest.SliceConfig.class})
+class RegisterSessionControllerErrorHandlingTest extends BaseControllerSliceTest {
 
     private static final UUID SESSION_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01");
-
-    @Autowired
-    private MockMvc mockMvc;
 
     @MockitoBean
     private RegisterSessionService registerSessionService;
