@@ -9,13 +9,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.BaseControllerSliceTest;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.InvalidBillAllocationException;
 import com.positivity.accounting.internal.service.APPaymentService;
+import com.positivity.security.common.GatewaySecurityConfig;
+import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -28,12 +32,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * Both used to carry a blanket {@code @ExceptionHandler(IllegalArgumentException.class)}; both
  * are now gone, replaced with per-type mappings audited for genuine client-vs-server origin.
  *
- * <p>Runs through {@link BaseIntegrationTest} (full application context) rather than a {@code
- * @WebMvcTest} slice: {@code PosAccountingApplication} carries a non-standard extra {@code
- * @ComponentScan} that bypasses {@code @WebMvcTest}'s controllers-only filtering, pulling in
- * unrelated beans (JPA repositories, {@code EntityManagerFactory}) a slice cannot satisfy. The
- * full context exercises the exact same production {@code AccountingExceptionHandler}, {@code
- * APPaymentExceptionHandler} and {@code pos-web-common} {@code GlobalApiExceptionHandler} beans.
+ * <p>Runs as a {@code @WebMvcTest} controller slice since #1723 removed the redundant
+ * {@code @ComponentScan} from {@code PosAccountingApplication} that had been bypassing
+ * {@code @WebMvcTest}'s controllers-only filtering. It exercises the same production
+ * {@code AccountingExceptionHandler}, {@code APPaymentExceptionHandler} and {@code
+ * pos-web-common} {@code GlobalApiExceptionHandler} beans the full context did, without booting
+ * JPA or messaging.
  *
  * <ul>
  *   <li>{@link InvalidBillAllocationException} (mapped only in {@code APPaymentExceptionHandler})
@@ -50,7 +54,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * </ul>
  */
 @DisplayName("APPaymentController Error Handling Tests (issue #1694)")
-class APPaymentControllerErrorHandlingTest extends BaseIntegrationTest {
+@WebMvcTest(APPaymentController.class)
+@Import({GatewaySecurityConfig.class, WebCommonErrorAutoConfiguration.class, BaseControllerSliceTest.SliceConfig.class})
+class APPaymentControllerErrorHandlingTest extends BaseControllerSliceTest {
 
     private static final String CLIENT_CORRELATION_ID = "test-correlation-id-0001";
 
