@@ -755,11 +755,13 @@ def ask(url, token, api_version, message, timeout, conversation_id=None):
         return {"answer": "", "error": f"HTTP {exc.code}: {detail}",
                 "elapsed_s": round(time.monotonic() - started, 1)}
     # OSError covers the connection-level failures urllib raises unwrapped — RemoteDisconnected is a
+    # ConnectionResetError and TimeoutError is itself an OSError subclass, so naming either
+    # separately would be redundant.
     # ConnectionResetError, not a URLError, so it escaped both handlers and killed the whole run.
     # A tunnel hiccup on question 2 discarded question 1's completed result along with the other
     # ten, which is the opposite of what a harness should do: a transport failure is data about one
     # turn, not grounds for losing the others.
-    except (urllib.error.URLError, OSError, TimeoutError, json.JSONDecodeError) as exc:
+    except (urllib.error.URLError, OSError, json.JSONDecodeError) as exc:
         return {"answer": "", "error": f"{type(exc).__name__}: {exc}",
                 "elapsed_s": round(time.monotonic() - started, 1)}
 
