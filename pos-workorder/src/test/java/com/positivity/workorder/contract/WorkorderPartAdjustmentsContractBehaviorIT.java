@@ -355,7 +355,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
         Map<String, Object> returnRequest =
                 Map.of("workorderPartId", partId.toString(), "quantity", 3.0, "reason", "Return too much");
 
-        // Then: Should fail with 400 Bad Request
+        // Then: Should fail with 409 Conflict (stateful conflict: quantities do not allow return)
         givenWithGatewayAuth()
                 .contentType(ContentType.JSON)
                 .body(returnRequest)
@@ -364,7 +364,7 @@ class WorkorderPartAdjustmentsContractBehaviorIT extends BaseContractIntegration
                 .then()
                 .log()
                 .ifValidationFails()
-                .statusCode(400);
+                .statusCode(409);
 
         // Verify no event was created
         List<WorkorderPartAdjustmentEvent> events =

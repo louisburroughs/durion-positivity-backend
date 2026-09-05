@@ -207,18 +207,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Insufficient authority
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth: []
       summary: Search Audit Events With Filters
@@ -284,18 +272,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Insufficient authority
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth: []
       summary: Record an Immutable Audit Event
@@ -320,12 +296,6 @@ paths:
         '
       operationId: rejectAuditEventDelete
       responses:
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Bad Request
         '401':
           content:
             application/json:
@@ -338,20 +308,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
         '405':
           description: Method not allowed for immutable audit events
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth: []
       summary: Reject Audit Event Deletion
@@ -375,12 +333,6 @@ paths:
         '
       operationId: rejectAuditEventUpdate
       responses:
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Bad Request
         '401':
           content:
             application/json:
@@ -393,20 +345,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
         '405':
           description: Method not allowed for immutable audit events
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth: []
       summary: Reject Audit Event Modification
@@ -468,12 +408,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Audit event not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth: []
       summary: Get One Audit Event by Id
@@ -537,18 +471,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Insufficient authority
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth: []
       summary: Request an Asynchronous Audit Export
@@ -612,12 +534,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Export job not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth: []
       summary: Get Audit Export Job Status
@@ -688,18 +604,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth: []
       summary: Record an Immutable Pricing Snapshot
@@ -761,12 +665,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Pricing snapshot not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth: []
       summary: Get One Pricing Snapshot by Id
@@ -829,18 +727,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'Forbidden: internal admin context required'
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
         '500':
           content:
             application/json:
@@ -909,18 +795,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'USER_HAS_NO_ROLES: the credentials are valid, but the account currently has no roles assigned'
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
         '500':
           content:
             application/json:
@@ -976,19 +850,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Unauthorized
+          description: Refresh token is invalid, revoked, or references a user that no longer exists
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'USER_HAS_NO_ROLES: the refresh token is valid, but the referenced user currently has no roles assigned'
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
         '409':
           content:
             application/json:
@@ -1041,24 +909,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Unauthorized
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Conflict
+          description: Token was modified concurrently; retry with backoff
       security:
       - bearerAuth: []
       summary: Revoke a JWT Access Token
@@ -1110,24 +966,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Token invalid or expired
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth: []
       summary: Extract Roles From JWT Token
@@ -1181,24 +1019,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Invalid registration payload
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unauthorized
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
         '409':
           content:
             application/json:
@@ -1249,24 +1069,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Token invalid or expired
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth: []
       summary: Extract Subject From JWT Token
@@ -1330,18 +1132,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'Forbidden: missing security:token:issue_internal permission'
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
         '500':
           content:
             application/json:
@@ -1397,24 +1187,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Token invalid or expired
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth: []
       summary: Extract User Id From JWT Token
@@ -1457,30 +1229,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Bad Request
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unauthorized
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       summary: Validate a JWT Access Token
       tags:
       - JWT API
@@ -1557,18 +1305,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Insufficient authority
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:permission:view
@@ -1600,36 +1336,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/CatalogVersionResponse'
           description: OK
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Bad Request
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unauthorized
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       summary: Get Current Permission Catalog Version
       tags:
       - Permission Registry
@@ -1687,18 +1393,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:permission:view
@@ -1756,18 +1450,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:permission:view
@@ -1823,18 +1505,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:permission:view
@@ -1903,18 +1573,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:permission:register
@@ -1985,18 +1643,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:permission:register
@@ -2052,18 +1698,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:permission:view
@@ -2101,7 +1735,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PermissionDto'
-          description: OK
+          description: Permission returned successfully
         '400':
           content:
             application/json:
@@ -2125,13 +1759,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
+          description: Permission not found
       security:
       - bearerAuth:
         - security:permission:view
@@ -2165,12 +1793,6 @@ paths:
                   $ref: '#/components/schemas/RoleDto'
                 type: array
           description: Roles returned successfully
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Bad Request
         '401':
           content:
             application/json:
@@ -2183,18 +1805,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:role:view
@@ -2258,12 +1868,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
         '409':
           content:
             application/json:
@@ -2348,7 +1952,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Conflict
+          description: Overlapping role assignment for the same user, role, and scope
       security:
       - bearerAuth:
         - security:role:assign
@@ -2423,12 +2027,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: User not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:role:view
@@ -2497,12 +2095,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Role assignment not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:role:assign
@@ -2577,18 +2169,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:role:create
@@ -2650,12 +2230,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Role not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:role:view
@@ -2728,12 +2302,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: User not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:permission:view
@@ -2804,12 +2372,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Role or permission not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:role:edit
@@ -2883,18 +2445,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:role:edit
@@ -2960,12 +2510,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: User not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:permission:view
@@ -2999,12 +2543,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/RolePersonasResponse'
           description: Role persona snapshot returned
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Bad Request
         '401':
           content:
             application/json:
@@ -3017,18 +2555,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:role:view
@@ -3087,12 +2613,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Role not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:role:delete
@@ -3154,12 +2674,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Role not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:role:view
@@ -3239,12 +2753,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Role not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:role:edit
@@ -3319,12 +2827,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Role or permission not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:role:edit
@@ -3388,12 +2890,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Role or permission not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:role:edit
@@ -3456,12 +2952,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Role or permission not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:role:edit
@@ -3517,18 +3007,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:role:view
@@ -3597,18 +3075,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:user_account_state:view
@@ -3671,12 +3137,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Review case not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:user_account_state:view
@@ -3751,12 +3211,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Review case not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:user_account_state:manage
@@ -3790,12 +3244,6 @@ paths:
                   $ref: '#/components/schemas/UserDto'
                 type: array
           description: List of users returned successfully.
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Bad Request
         '401':
           content:
             application/json:
@@ -3808,18 +3256,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:user:view
@@ -3883,18 +3319,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Conflict
+          description: Username already exists
       security:
       - bearerAuth:
         - security:user:create
@@ -3959,18 +3389,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'Forbidden: authorization decision permission required'
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:authorization:decide
@@ -4036,18 +3454,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'Forbidden: authorization decision permission required'
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:authorization:decide
@@ -4120,18 +3526,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:user:create
@@ -4200,18 +3594,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:user:edit
@@ -4277,12 +3659,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Principal or role not found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:role:assign
@@ -4297,13 +3673,13 @@ paths:
 
         Use this tool to remove an account permanently; do not use disableUserAccount, which blocks sign-in reversibly and keeps the record.
 
-        Preconditions: the caller must hold security:user:delete; deleting an id that does not exist is a silent no-op.
+        Preconditions: the caller must hold security:user:delete and the user must exist.
 
         Required inputs: id (UUID) as a path parameter.
 
         Emits a SECURITY_USER_DELETE event and sends a UserPersonLinkRemoveRequested command to the people-contact domain in the same transaction.
 
-        Returns 204 in all cases, including when the user was already absent.
+        Returns 404 when the user does not exist.
 
         '
       operationId: deleteUser
@@ -4343,12 +3719,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: User not found.
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:user:delete
@@ -4412,12 +3782,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: User not found.
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:user:view
@@ -4437,7 +3801,7 @@ paths:
 
         Emits a SECURITY_USER_UPDATE event; a supplied password is re-hashed before storage.
 
-        Returns 400 with INVALID_REQUEST when the user or a named role cannot be found; the miss surfaces as 400 rather than 404.
+        Returns 400 with VALIDATION_ERROR when the user or a named role cannot be found; the miss surfaces as 400 rather than 404.
 
         '
       operationId: updateUser
@@ -4476,7 +3840,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: User or named role not found (INVALID_REQUEST); the miss surfaces as 400, not 404.
+          description: User or named role not found (VALIDATION_ERROR); the miss surfaces as 400, not 404.
         '401':
           content:
             application/json:
@@ -4489,18 +3853,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:user:edit
@@ -4562,13 +3914,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
+          description: User not found
       security:
       - bearerAuth:
         - security:user_account_state:view
@@ -4626,13 +3972,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
+          description: User not found
       security:
       - bearerAuth:
         - security:user_account_state:manage
@@ -4690,13 +4030,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
+          description: User not found
       security:
       - bearerAuth:
         - security:user_account_state:manage
@@ -4754,13 +4088,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
+          description: User not found
       security:
       - bearerAuth:
         - security:user_account_state:manage
@@ -4818,13 +4146,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
+          description: User not found
       security:
       - bearerAuth:
         - security:user_account_state:manage
@@ -4895,12 +4217,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: User not found.
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:user:edit
@@ -4958,13 +4274,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
+          description: User not found
       security:
       - bearerAuth:
         - security:user_account_state:manage
@@ -5005,7 +4315,7 @@ paths:
                   $ref: '#/components/schemas/PermissionDto'
                 type: array
                 uniqueItems: true
-          description: OK
+          description: User permissions returned successfully
         '400':
           content:
             application/json:
@@ -5029,13 +4339,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
+          description: User not found
       security:
       - bearerAuth:
         - security:permission:view
@@ -5074,8 +4378,8 @@ paths:
           format: uuid
           type: string
       responses:
-        '200':
-          description: OK
+        '204':
+          description: Role revoked from user
         '400':
           content:
             application/json:
@@ -5099,13 +4403,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
+          description: User, role, or active role assignment not found
       security:
       - bearerAuth:
         - security:role:assign
@@ -5143,8 +4441,8 @@ paths:
           format: uuid
           type: string
       responses:
-        '200':
-          description: OK
+        '201':
+          description: Role assigned to user
         '400':
           content:
             application/json:
@@ -5168,13 +4466,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
+          description: User or role not found
       security:
       - bearerAuth:
         - security:role:assign
@@ -5195,7 +4487,7 @@ paths:
 
         Emits a SECURITY_USER_ASSIGN_ROLES event.
 
-        Returns 400 with INVALID_REQUEST when the user or a named role cannot be found; the miss surfaces as 400 rather than 404.
+        Returns 400 with VALIDATION_ERROR when the user or a named role cannot be found; the miss surfaces as 400 rather than 404.
 
         '
       operationId: assignUserRolesByUsername
@@ -5232,7 +4524,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: User or named role not found (INVALID_REQUEST); the miss surfaces as 400, not 404.
+          description: User or named role not found (VALIDATION_ERROR); the miss surfaces as 400, not 404.
         '401':
           content:
             application/json:
@@ -5245,18 +4537,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Not Found
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Conflict
       security:
       - bearerAuth:
         - security:role:assign

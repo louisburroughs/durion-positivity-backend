@@ -83,7 +83,11 @@ class VehiclePreferencesControllerWebMvcTest {
 
         // A vehicle with no preferences is an ordinary state, not an error — but it must not
         // read as an empty preference set, which a 200 with a null body would.
-        mockMvc.perform(get(PATH).header(AUTH, BEARER)).andExpect(status().isNotFound());
+        mockMvc.perform(get(PATH).header(AUTH, BEARER))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
     @Test

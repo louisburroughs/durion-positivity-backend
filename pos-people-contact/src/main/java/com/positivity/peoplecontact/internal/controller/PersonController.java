@@ -7,6 +7,7 @@ import com.positivity.peoplecontact.internal.dto.ResolvePersonResponse;
 import com.positivity.peoplecontact.internal.security.PeopleContactPermissions;
 import com.positivity.peoplecontact.internal.service.PersonService;
 import com.positivity.peoplecontact.internal.service.UserPersonTranslationService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -20,7 +21,6 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -60,10 +60,7 @@ public class PersonController {
     @ApiResponse(
             responseCode = "404",
             description = "No person linked to the current user.",
-            content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/me")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -113,10 +110,7 @@ public class PersonController {
     @ApiResponse(
             responseCode = "404",
             description = "Person not found.",
-            content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/{personId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -316,10 +310,7 @@ public class PersonController {
     @ApiResponse(
             responseCode = "404",
             description = "Person not found.",
-            content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_CONTACT_PERSON_UPDATE", apiVersion = "1")
     @PutMapping("/{personId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -370,17 +361,11 @@ public class PersonController {
     @ApiResponse(
             responseCode = "404",
             description = "Person not found.",
-            content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Person still has linked users; unlink them first.",
-            content =
-                    @Content(
-                            mediaType = "application/problem+json",
-                            schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_CONTACT_PERSON_DELETE", apiVersion = "1")
     @DeleteMapping("/{personId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(

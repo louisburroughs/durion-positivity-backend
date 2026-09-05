@@ -1,6 +1,7 @@
 package com.positivity.vehicle.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.vehicle.internal.dto.SearchVehiclesRequest;
 import com.positivity.vehicle.internal.dto.SearchVehiclesResponse;
 import com.positivity.vehicle.internal.security.VehicleInventoryPermissions;
@@ -65,7 +66,10 @@ public class VehicleSearchController {
             responseCode = "200",
             description = "Search results returned",
             content = @Content(schema = @Schema(implementation = SearchVehiclesResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid search query")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid search query",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.SEARCH_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -112,7 +116,10 @@ public class VehicleSearchController {
             responseCode = "200",
             description = "Search results returned",
             content = @Content(schema = @Schema(implementation = SearchVehiclesResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid search query")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid search query",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + VehicleInventoryPermissions.SEARCH_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

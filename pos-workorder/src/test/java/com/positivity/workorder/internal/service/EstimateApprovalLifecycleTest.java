@@ -25,7 +25,6 @@ import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PurchaseOrderRequiredException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
-import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.repository.ApprovalConfigurationRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
@@ -263,7 +262,7 @@ class EstimateApprovalLifecycleTest {
 
             assertThatThrownBy(() -> service.approveEstimate(
                             ESTIMATE_ID, OTHER_CUSTOMER_ID, "sig", "image/png", "Someone Else", null))
-                    .isInstanceOf(WorkorderResourceConflictException.class)
+                    .isInstanceOf(WorkorderRequestValidationException.class)
                     .hasMessageContaining("Customer ID mismatch");
         }
 

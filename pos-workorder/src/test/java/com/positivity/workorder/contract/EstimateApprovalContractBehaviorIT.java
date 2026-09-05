@@ -206,7 +206,7 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                 .when()
                 .post("/v1/workorders/estimates/{id}/approval", estimateId)
                 .then()
-                .statusCode(anyOf(is(400), is(500)))
+                .statusCode(400)
                 .log()
                 .ifValidationFails();
     }

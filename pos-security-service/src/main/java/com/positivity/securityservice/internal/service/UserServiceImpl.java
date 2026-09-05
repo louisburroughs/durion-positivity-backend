@@ -89,14 +89,15 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void deleteUser(UUID id) {
+        User user = userRepository
+                .findById(id)
+                .orElseThrow(() -> new com.positivity.securityservice.internal.exception.UserNotFoundException(
+                        "User not found: " + id));
         // The user-person link is owned by pos-people-contact (amended ADR-0043, #876): queue its
         // removal in the same transaction so the link (and every consumer's projection of it)
         // follows the account out.
-        userRepository
-                .findById(id)
-                .ifPresent(user -> peopleContactCommandEmitter.requestLinkRemove(
-                        new com.positivity.domainevents.peoplecontact.UserPersonLinkRemoveRequestedV1(
-                                user.getUsername())));
+        peopleContactCommandEmitter.requestLinkRemove(
+                new com.positivity.domainevents.peoplecontact.UserPersonLinkRemoveRequestedV1(user.getUsername()));
         userRepository.deleteById(id);
     }
 

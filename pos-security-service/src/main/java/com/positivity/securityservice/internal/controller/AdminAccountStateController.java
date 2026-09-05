@@ -4,7 +4,10 @@ import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.AccountStateResponse;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.internal.service.AdminAccountStateService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
@@ -36,6 +39,10 @@ public class AdminAccountStateController {
                     Returns 404 with USER_NOT_FOUND when the user does not exist.
                     """)
     @ApiResponse(responseCode = "204", description = "User account unlocked successfully")
+    @ApiResponse(
+            responseCode = "404",
+            description = "User not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:user_account_state:manage"})
@@ -58,6 +65,10 @@ public class AdminAccountStateController {
                     Returns 404 with USER_NOT_FOUND when the user does not exist.
                     """)
     @ApiResponse(responseCode = "204", description = "User account enabled successfully")
+    @ApiResponse(
+            responseCode = "404",
+            description = "User not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:user_account_state:manage"})
@@ -80,6 +91,10 @@ public class AdminAccountStateController {
                     Returns 404 with USER_NOT_FOUND when the user does not exist.
                     """)
     @ApiResponse(responseCode = "204", description = "User account disabled successfully")
+    @ApiResponse(
+            responseCode = "404",
+            description = "User not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:user_account_state:manage"})
@@ -104,6 +119,10 @@ public class AdminAccountStateController {
                     Returns 404 with USER_NOT_FOUND when the user does not exist.
                     """)
     @ApiResponse(responseCode = "204", description = "User account expired successfully")
+    @ApiResponse(
+            responseCode = "404",
+            description = "User not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:user_account_state:manage"})
@@ -127,6 +146,10 @@ public class AdminAccountStateController {
                     Returns 404 with USER_NOT_FOUND when the user does not exist.
                     """)
     @ApiResponse(responseCode = "204", description = "User credentials expired successfully")
+    @ApiResponse(
+            responseCode = "404",
+            description = "User not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:user_account_state:manage"})
@@ -149,6 +172,10 @@ public class AdminAccountStateController {
                     Returns 404 with USER_NOT_FOUND when the user does not exist.
                     """)
     @ApiResponse(responseCode = "200", description = "User account state returned successfully")
+    @ApiResponse(
+            responseCode = "404",
+            description = "User not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
             scopes = {"security:user_account_state:view"})

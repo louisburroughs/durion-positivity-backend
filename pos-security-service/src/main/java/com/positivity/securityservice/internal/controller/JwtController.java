@@ -239,6 +239,10 @@ public class JwtController {
             description = "Invalid refresh token",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
+            responseCode = "401",
+            description = "Refresh token is invalid, revoked, or references a user that no longer exists",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "409",
             description = "Concurrency conflict during token revocation",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
@@ -323,6 +327,10 @@ public class JwtController {
                     be inferred from the status code.
                     """)
     @ApiResponse(responseCode = "204", description = "Token revoked successfully")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Token was modified concurrently; retry with backoff",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
     @EmitEvent(id = "SECURITY_AUTH_REVOKE", apiVersion = "1")
     @PreAuthorize("isAuthenticated()")

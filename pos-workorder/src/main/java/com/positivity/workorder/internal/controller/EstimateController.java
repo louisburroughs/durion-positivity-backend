@@ -446,26 +446,24 @@ public class EstimateController {
                     signatureData, signerName, notes, purchaseOrderNumber, and lineItemApprovals are optional, \
                     and signatureMimeType defaults to image/png.
                     Emits a WORKORDER_ESTIMATE_APPROVE event.
-                    Returns 404 when the estimate does not exist, 400 when the status is not PENDING_APPROVAL, \
-                    409 when the customer does not match the estimate's own customer, and 422 when a required \
-                    purchase order is missing.
+                    Returns 404 when the estimate does not exist, 400 when the status is not PENDING_APPROVAL or \
+                    the customerId in the request does not match the estimate's own customer, and 422 when a \
+                    required purchase order is missing.
                     """)
     @ApiResponse(responseCode = "200", description = "Estimate approved successfully with signature captured.")
     @ApiResponse(
             responseCode = "400",
-            description = "Estimate cannot be approved in current state.",
+            description = "Estimate cannot be approved in current state, or the customerId in the request does "
+                    + "not match the estimate's own customer.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Estimate not found (ESTIMATE_NOT_FOUND).",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
-            responseCode = "409",
-            description = "Customer ID mismatch: estimate belongs to a different customer.",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
             responseCode = "422",
-            description = "Purchase order number is required for this customer account (PURCHASE_ORDER_REQUIRED).")
+            description = "Purchase order number is required for this customer account (PURCHASE_ORDER_REQUIRED).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Approving customer's identity, signature artifacts, and optional line-item selections.",
             required = true,

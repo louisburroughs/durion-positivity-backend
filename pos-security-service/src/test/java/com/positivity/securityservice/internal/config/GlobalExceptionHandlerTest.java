@@ -4,29 +4,37 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
+import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
 import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
+import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
+import com.positivity.securityservice.internal.exception.SelfRegistrationReviewCaseNotFoundException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.shared.error.ApiError;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Arrays;
+import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -46,6 +54,7 @@ import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.context.request.WebRequest;
 
 /**
@@ -303,33 +312,29 @@ class GlobalExceptionHandlerTest {
     class HandleSecurityValidationException {
 
         @Test
-        @DisplayName("returns 400 INVALID_REQUEST with message when present, and echoes correlation id in header")
+        @DisplayName("returns 400 VALIDATION_ERROR with message when present, and echoes correlation id in header")
         void returns400WithMessage() {
             SecurityValidationException ex = new SecurityValidationException("bad param");
-            HttpServletResponse httpResponse = mock(HttpServletResponse.class);
 
-            ResponseEntity<ApiError> response =
-                    sut.handleSecurityValidationException(ex, requestWithHeader(), httpResponse);
+            ResponseEntity<ApiError> response = sut.handleSecurityValidationException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().code()).isEqualTo("INVALID_REQUEST");
+            assertThat(response.getBody().code()).isEqualTo("VALIDATION_ERROR");
             assertThat(response.getBody().message()).isEqualTo("bad param");
-            verify(httpResponse).setHeader("X-Correlation-Id", CORRELATION_ID);
+            assertThat(response.getHeaders().getFirst("X-Correlation-Id")).isEqualTo(CORRELATION_ID);
         }
 
         @Test
-        @DisplayName("returns 400 INVALID_REQUEST with default message when null")
+        @DisplayName("returns 400 VALIDATION_ERROR with default message when null")
         void returns400WithDefaultMessageWhenNull() {
             SecurityValidationException ex = new SecurityValidationException(null);
-            HttpServletResponse httpResponse = mock(HttpServletResponse.class);
 
-            ResponseEntity<ApiError> response =
-                    sut.handleSecurityValidationException(ex, requestWithHeader(), httpResponse);
+            ResponseEntity<ApiError> response = sut.handleSecurityValidationException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().code()).isEqualTo("INVALID_REQUEST");
+            assertThat(response.getBody().code()).isEqualTo("VALIDATION_ERROR");
             assertThat(response.getBody().message()).isEqualTo("Invalid request parameters");
         }
     }
@@ -346,17 +351,15 @@ class GlobalExceptionHandlerTest {
         @DisplayName("returns 403 USER_HAS_NO_ROLES with message and nextAction, and echoes correlation id in header")
         void returns403WithMessageAndNextAction() {
             NoRolesAssignedException ex = new NoRolesAssignedException("User has no roles assigned");
-            HttpServletResponse httpResponse = mock(HttpServletResponse.class);
 
-            ResponseEntity<ApiError> response =
-                    sut.handleNoRolesAssignedException(ex, requestWithHeader(), httpResponse);
+            ResponseEntity<ApiError> response = sut.handleNoRolesAssignedException(ex, requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().code()).isEqualTo("USER_HAS_NO_ROLES");
             assertThat(response.getBody().message()).isEqualTo("User has no roles assigned");
             assertThat(response.getBody().nextAction()).contains("assign at least one role");
-            verify(httpResponse).setHeader("X-Correlation-Id", CORRELATION_ID);
+            assertThat(response.getHeaders().getFirst("X-Correlation-Id")).isEqualTo(CORRELATION_ID);
         }
     }
 
@@ -767,6 +770,141 @@ class GlobalExceptionHandlerTest {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
             assertThat(response.getBody().code()).isEqualTo("CREDENTIALS_EXPIRED");
             assertThat(response.getBody().correlationId()).isNotBlank();
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // X-Correlation-Id header (ADR-0017 §4, #1729) — proves the single `respond`
+    // helper puts the correlation id in both the body and the header for EVERY
+    // @ExceptionHandler method, and guards against a future handler forgetting it.
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("X-Correlation-Id header (ADR-0017 §4, #1729)")
+    class XCorrelationIdHeader {
+
+        @FunctionalInterface
+        interface HandlerInvocation {
+            ResponseEntity<ApiError> invoke(WebRequest request);
+        }
+
+        /**
+         * One entry per {@code @ExceptionHandler} method on {@link GlobalExceptionHandler}. Uses
+         * a standalone handler instance (not the outer test's {@code sut}) so this factory method
+         * can stay static, as required by {@code @MethodSource} outside a {@code PER_CLASS} test
+         * instance lifecycle.
+         */
+        private static Stream<Named<HandlerInvocation>> handlerInvocations() {
+            Clock fixedClock = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
+            @SuppressWarnings("unchecked")
+            ObjectProvider<AuditEventService> nullAuditProvider = mock(ObjectProvider.class);
+            GlobalExceptionHandler handler = new GlobalExceptionHandler(fixedClock, nullAuditProvider);
+            HttpServletRequest httpReq = mock(HttpServletRequest.class);
+            when(httpReq.getRequestURI()).thenReturn("/v1/resource");
+
+            return Stream.of(
+                    Named.of("handleRoleNotFoundException", (HandlerInvocation)
+                            request -> handler.handleRoleNotFoundException(
+                                    new RoleNotFoundException("Role not found: ADMIN"), request)),
+                    Named.of("handleUserNotFoundException", (HandlerInvocation) request ->
+                            handler.handleUserNotFoundException(new UserNotFoundException("User not found"), request)),
+                    Named.of("handleRoleAssignmentNotFoundException", (HandlerInvocation)
+                            request -> handler.handleRoleAssignmentNotFoundException(
+                                    new RoleAssignmentNotFoundException("Assignment not found"), request)),
+                    Named.of("handlePermissionNotFoundException", (HandlerInvocation)
+                            request -> handler.handlePermissionNotFoundException(
+                                    new PermissionNotFoundException("Permission not found"), request)),
+                    Named.of("handleEntityNotFoundException", (HandlerInvocation)
+                            request -> handler.handleEntityNotFoundException(
+                                    new EntityNotFoundException("Entity not found"), request)),
+                    Named.of("handleSelfRegistrationConflictException", (HandlerInvocation)
+                            request -> handler.handleSelfRegistrationConflictException(
+                                    new SelfRegistrationConflictException("USER_ALREADY_EXISTS", "Already exists"),
+                                    request)),
+                    Named.of("handleSelfRegistrationReviewCaseNotFoundException", (HandlerInvocation)
+                            request -> handler.handleSelfRegistrationReviewCaseNotFoundException(
+                                    new SelfRegistrationReviewCaseNotFoundException(UUID.randomUUID()), request)),
+                    Named.of("handleSecurityValidationException", (HandlerInvocation)
+                            request -> handler.handleSecurityValidationException(
+                                    new SecurityValidationException("bad param"), request)),
+                    Named.of("handleNoRolesAssignedException", (HandlerInvocation)
+                            request -> handler.handleNoRolesAssignedException(
+                                    new NoRolesAssignedException("User has no roles assigned"), request)),
+                    Named.of("handleBadRequestExceptions", (HandlerInvocation) request -> {
+                        HttpMessageNotReadableException ex = mock(HttpMessageNotReadableException.class);
+                        when(ex.getMessage()).thenReturn("JSON parse error");
+                        return handler.handleBadRequestExceptions(ex, request);
+                    }),
+                    Named.of("handleAuthorizationDeniedException", (HandlerInvocation)
+                            request -> handler.handleAuthorizationDeniedException(
+                                    new AuthorizationDeniedException("denied"), request, httpReq)),
+                    Named.of("handleIllegalStateException", (HandlerInvocation)
+                            request -> handler.handleIllegalStateException(
+                                    new IllegalStateException("Some invalid state"), request)),
+                    Named.of("handleOptimisticLockingFailure", (HandlerInvocation)
+                            request -> handler.handleOptimisticLockingFailure(
+                                    new ObjectOptimisticLockingFailureException(Object.class, "id-123"), request)),
+                    Named.of("handleDuplicateRoleNameException", (HandlerInvocation)
+                            request -> handler.handleDuplicateRoleNameException(
+                                    new DuplicateRoleNameException("Role 'ADMIN' already exists"), request)),
+                    Named.of("handleDuplicateUsernameException", (HandlerInvocation)
+                            request -> handler.handleDuplicateUsernameException(
+                                    new DuplicateUsernameException("Username already exists"), request)),
+                    Named.of("handleInvalidRefreshTokenException", (HandlerInvocation)
+                            request -> handler.handleInvalidRefreshTokenException(
+                                    new InvalidRefreshTokenException("Refresh token invalid"), request)),
+                    Named.of("handleLockedException", (HandlerInvocation)
+                            request -> handler.handleLockedException(new LockedException("Account locked"), request)),
+                    Named.of("handleDisabledException", (HandlerInvocation) request ->
+                            handler.handleDisabledException(new DisabledException("Account is disabled"), request)),
+                    Named.of("handleAccountExpiredException", (HandlerInvocation)
+                            request -> handler.handleAccountExpiredException(
+                                    new AccountExpiredException("Account has expired"), request)),
+                    Named.of("handleCredentialsExpiredException", (HandlerInvocation)
+                            request -> handler.handleCredentialsExpiredException(
+                                    new CredentialsExpiredException("Credentials have expired"), request)),
+                    Named.of("handleBadCredentialsException", (HandlerInvocation)
+                            request -> handler.handleBadCredentialsException(
+                                    new BadCredentialsException("bad password"), request)));
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("echoes the inbound X-Correlation-Id in both header and body")
+        void echoesInboundCorrelationId(HandlerInvocation invocation) {
+            ResponseEntity<ApiError> response = invocation.invoke(requestWithHeader());
+
+            assertThat(response.getHeaders().getFirst("X-Correlation-Id")).isEqualTo(CORRELATION_ID);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getHeaders().getFirst("X-Correlation-Id"))
+                    .isEqualTo(response.getBody().correlationId());
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a non-blank X-Correlation-Id, consistent between header and body, when absent")
+        void generatesCorrelationIdWhenAbsent(HandlerInvocation invocation) {
+            ResponseEntity<ApiError> response = invocation.invoke(requestWithoutHeader());
+
+            String header = response.getHeaders().getFirst("X-Correlation-Id");
+            assertThat(header).isNotBlank();
+            assertThat(response.getBody()).isNotNull();
+            assertThat(header).isEqualTo(response.getBody().correlationId());
+        }
+
+        @Test
+        @DisplayName("every @ExceptionHandler method on GlobalExceptionHandler has a matching MethodSource entry")
+        void everyHandlerMethodIsCovered() {
+            long handlerMethodCount = Arrays.stream(GlobalExceptionHandler.class.getDeclaredMethods())
+                    .filter(method -> method.isAnnotationPresent(ExceptionHandler.class))
+                    .count();
+            long methodSourceEntryCount = handlerInvocations().count();
+
+            assertThat(methodSourceEntryCount)
+                    .as("A new @ExceptionHandler method was added to GlobalExceptionHandler without a matching "
+                            + "entry in XCorrelationIdHeader#handlerInvocations() in GlobalExceptionHandlerTest — "
+                            + "add one so the X-Correlation-Id header contract stays proven for every handler")
+                    .isEqualTo(handlerMethodCount);
         }
     }
 }

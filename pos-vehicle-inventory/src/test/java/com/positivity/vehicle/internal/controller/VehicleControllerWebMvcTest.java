@@ -102,7 +102,13 @@ class VehicleControllerWebMvcTest {
     void getUnknownIdIsNotFound() throws Exception {
         when(vehicleLegacyService.getVehicle(VEHICLE_ID)).thenReturn(Optional.empty());
 
-        mockMvc.perform(get(PATH + "/" + VEHICLE_ID).header(AUTH, BEARER)).andExpect(status().isNotFound());
+        mockMvc.perform(get(PATH + "/" + VEHICLE_ID).header(AUTH, BEARER))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
     @Test
@@ -110,7 +116,13 @@ class VehicleControllerWebMvcTest {
     void getUnknownVinIsNotFound() throws Exception {
         when(vehicleLegacyService.getVehicleByVin(VIN)).thenReturn(Optional.empty());
 
-        mockMvc.perform(get(PATH + "/vin/" + VIN).header(AUTH, BEARER)).andExpect(status().isNotFound());
+        mockMvc.perform(get(PATH + "/vin/" + VIN).header(AUTH, BEARER))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
     @Test
@@ -134,7 +146,12 @@ class VehicleControllerWebMvcTest {
                         .header(AUTH, BEARER)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(BODY))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
     @Test
@@ -146,7 +163,12 @@ class VehicleControllerWebMvcTest {
                         .header(AUTH, BEARER)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(BODY))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
     @Test
@@ -158,7 +180,13 @@ class VehicleControllerWebMvcTest {
 
         // The false case is the one that matters: without the explicit check this would also be
         // a 204, telling the caller a vehicle was removed when none was.
-        mockMvc.perform(delete(PATH + "/" + VEHICLE_ID).header(AUTH, BEARER)).andExpect(status().isNotFound());
+        mockMvc.perform(delete(PATH + "/" + VEHICLE_ID).header(AUTH, BEARER))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
     @Test
@@ -168,7 +196,13 @@ class VehicleControllerWebMvcTest {
 
         mockMvc.perform(delete(PATH + "/vin/" + VIN).header(AUTH, BEARER)).andExpect(status().isNoContent());
 
-        mockMvc.perform(delete(PATH + "/vin/" + VIN).header(AUTH, BEARER)).andExpect(status().isNotFound());
+        mockMvc.perform(delete(PATH + "/vin/" + VIN).header(AUTH, BEARER))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
     @Test

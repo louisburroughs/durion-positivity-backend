@@ -150,6 +150,32 @@ class UserControllerTest {
     }
 
     @Nested
+    @DisplayName("GET /v1/users/{id}")
+    class GetUserById {
+
+        private static final String USER_PATH = "/v1/users/01990000-0000-7000-8000-000000000042";
+
+        /**
+         * A missing user must flow through {@code UserNotFoundException} and the advice, so the 404
+         * carries the {@code ApiError} envelope and the {@code X-Correlation-Id} header (issue #1729)
+         * rather than the bodyless {@code ResponseEntity.notFound()} it used to answer.
+         */
+        @Test
+        void unknownUser_returns404EnvelopeWithCorrelationId() throws Exception {
+            when(userService.getUserById(any())).thenReturn(java.util.Optional.empty());
+
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(USER_PATH)
+                            .header("X-Correlation-Id", "corr-get-user-404")
+                            .with(user("viewer").authorities(() -> "security:user:view")))
+                    .andExpect(status().isNotFound())
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                            .string("X-Correlation-Id", "corr-get-user-404"))
+                    .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"))
+                    .andExpect(jsonPath("$.correlationId").value("corr-get-user-404"));
+        }
+    }
+
+    @Nested
     @DisplayName("PUT /v1/users/{id}/person-link")
     class LinkUserPerson {
 

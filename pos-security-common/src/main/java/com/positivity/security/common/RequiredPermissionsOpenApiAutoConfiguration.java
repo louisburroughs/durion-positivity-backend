@@ -8,7 +8,6 @@ import java.util.regex.Pattern;
 import org.springdoc.core.customizers.OperationCustomizer;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -26,8 +25,10 @@ import org.springframework.web.method.HandlerMethod;
  * {@code AUTHENTICATED} sentinel.
  *
  * <p>Gated behind {@link ConditionalOnClass}({@code OperationCustomizer}) so non-web consumers of this
- * library are unaffected, and {@link ConditionalOnMissingBean} so a service that still defines its own
- * customizer keeps precedence during migration.
+ * library are unaffected. This customizer is always registered — it is no longer conditional on the
+ * absence of other {@code OperationCustomizer} beans. Services may register additional customizers
+ * alongside it (for example pos-security-service's response-pruning customizer, issue #1721) without
+ * losing this extension; springdoc applies every {@code OperationCustomizer} bean present in the context.
  */
 @AutoConfiguration
 @ConditionalOnClass(OperationCustomizer.class)
@@ -43,7 +44,6 @@ public class RequiredPermissionsOpenApiAutoConfiguration {
     private static final Pattern QUOTED_ARG_PATTERN = Pattern.compile("'([^']+)'");
 
     @Bean
-    @ConditionalOnMissingBean(OperationCustomizer.class)
     public OperationCustomizer requiredPermissionsOperationCustomizer() {
         return (operation, handlerMethod) -> {
             var requiredPermissions = extractRequiredPermissions(handlerMethod);

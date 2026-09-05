@@ -28,6 +28,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -52,12 +54,19 @@ import org.springframework.test.web.servlet.MockMvc;
  * chain; {@link JwtAuthenticationFilter} is mocked and short-circuited to a pass-through because
  * {@code @WebMvcTest} auto-detects it as a servlet {@code Filter} bean. {@code /v1/auth/login} is
  * {@code permitAll}, so no {@code @WithMockUser} is needed.
+ *
+ * <p>Also proves the {@code X-Correlation-Id} header on two pre-existing handlers exercised
+ * through this same endpoint — {@link BadCredentialsException} (401 {@code INVALID_CREDENTIALS})
+ * and {@link LockedException} (401 {@code ACCOUNT_LOCKED}) — now that every handler routes
+ * through the single {@code respond} helper in {@code GlobalExceptionHandler} (ADR-0017 §4, issue
+ * #1729).
  */
 @WebMvcTest(AuthController.class)
 @Import(WebCommonErrorAutoConfiguration.class)
 class AuthControllerErrorHandlingTest {
 
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2026-09-04T12:00:00Z"), ZoneOffset.UTC);
+    private static final String CORRELATION_ID = "test-correlation-id-1729";
 
     @Autowired
     private MockMvc mockMvc;
@@ -91,13 +100,45 @@ class AuthControllerErrorHandlingTest {
         when(authenticationService.login(any())).thenThrow(new NoRolesAssignedException("User has no roles assigned"));
 
         mockMvc.perform(post("/v1/auth/login")
+                        .header("X-Correlation-Id", CORRELATION_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"alice\",\"password\":\"correct-password\"}"))
                 .andExpect(status().isForbidden())
-                .andExpect(header().exists("X-Correlation-Id"))
+                .andExpect(header().string("X-Correlation-Id", CORRELATION_ID))
                 .andExpect(jsonPath("$.code").value("USER_HAS_NO_ROLES"))
                 .andExpect(jsonPath("$.message").value("User has no roles assigned"))
-                .andExpect(jsonPath("$.nextAction").value(containsString("assign at least one role")));
+                .andExpect(jsonPath("$.nextAction").value(containsString("assign at least one role")))
+                .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID));
+    }
+
+    @Test
+    @DisplayName("login with bad credentials answers 401 INVALID_CREDENTIALS with the echoed correlation id")
+    void loginWithBadCredentialsAnswers401InvalidCredentialsWithCorrelationId() throws Exception {
+        when(authenticationService.login(any())).thenThrow(new BadCredentialsException("bad password"));
+
+        mockMvc.perform(post("/v1/auth/login")
+                        .header("X-Correlation-Id", CORRELATION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"alice\",\"password\":\"wrong-password\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("X-Correlation-Id", CORRELATION_ID))
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
+                .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID));
+    }
+
+    @Test
+    @DisplayName("login against a locked account answers 401 ACCOUNT_LOCKED with the echoed correlation id")
+    void loginWithLockedAccountAnswers401AccountLockedWithCorrelationId() throws Exception {
+        when(authenticationService.login(any())).thenThrow(new LockedException("Account locked"));
+
+        mockMvc.perform(post("/v1/auth/login")
+                        .header("X-Correlation-Id", CORRELATION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"alice\",\"password\":\"correct-password\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("X-Correlation-Id", CORRELATION_ID))
+                .andExpect(jsonPath("$.code").value("ACCOUNT_LOCKED"))
+                .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID));
     }
 
     /** Clock for {@code GlobalExceptionHandler} and {@code pos-web-common}'s advice, plus method security. */

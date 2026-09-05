@@ -8,14 +8,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.invoice.ControllerSliceConfig;
 import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.InvoiceAnalyticsService;
+import com.positivity.security.common.GatewaySecurityConfig;
+import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -30,15 +32,13 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * pos-web-common's platform-wide {@code GlobalApiExceptionHandler}, which answers a generic,
  * correlated 500 that never echoes the exception's own text.
  *
- * <p>A {@code @WebMvcTest} slice does not work for this module: {@code PosInvoiceApplication}
- * declares {@code @EnableJpaRepositories} directly, which a web slice cannot exclude and which
- * then fails to find an {@code entityManagerFactory} bean. So this follows the module's existing
- * full-context pattern (see {@code OrderInvoiceContractBehaviorIT}) instead, authenticating via
- * the gateway's {@code X-User}/{@code X-Authorities} headers rather than {@code @WithMockUser}.
+ * <p>Runs as a {@code @WebMvcTest} slice wired by {@link com.positivity.invoice.ControllerSliceConfig},
+ * whose Javadoc records why this module could not be sliced before #1723. Authentication goes
+ * through the gateway's {@code X-User}/{@code X-Authorities} headers rather than
+ * {@code @WithMockUser}.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
+@WebMvcTest(InvoiceAnalyticsController.class)
+@Import({GatewaySecurityConfig.class, WebCommonErrorAutoConfiguration.class, ControllerSliceConfig.class})
 @DisplayName("Invoice-analytics endpoints answer the errors they document (#1694)")
 class InvoiceAnalyticsControllerErrorHandlingTest {
 

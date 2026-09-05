@@ -1137,6 +1137,13 @@ components:
       example:
         message: Hello
       properties:
+        conversationId:
+          description: Optional conversation id. Turns sharing an id share one memory;
+            omit it to use the caller's default per-role conversation, and supply
+            a distinct id per request to ask independent questions that do not inherit
+            each other's history (#1735).
+          example: gate-q07
+          type: string
         message:
           description: User chat message to send to the agent
           example: Hello
