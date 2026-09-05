@@ -96,8 +96,7 @@ public class PeopleAvailabilityController {
     @ApiResponse(
             responseCode = "404",
             description = "No primary location assignment found and no top-level default location available.",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/me/primary-location")
     @EmitEvent(id = "PEOPLE_PRIMARY_LOCATION_GET", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -136,8 +135,7 @@ public class PeopleAvailabilityController {
     @ApiResponse(
             responseCode = "404",
             description = "No person linked to the current user.",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/me/locations")
     @EmitEvent(id = "PEOPLE_ME_LOCATIONS_LIST", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -193,8 +191,7 @@ public class PeopleAvailabilityController {
     @ApiResponse(
             responseCode = "404",
             description = "No primary location assignment found for the person.",
-            content =
-                    @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ApiError.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/{personId}/primary-location")
     @EmitEvent(id = "PEOPLE_PERSON_PRIMARY_LOCATION_GET", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
