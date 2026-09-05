@@ -1095,11 +1095,14 @@ jobs:
         code-quality,
         code-quality-full,
       ]
-    # !cancelled() matters: always() deliberately runs a job even when the workflow run
-    # was cancelled, so without it a run superseded by the next push to the same branch
-    # reports this check as a build failure on an intermediate commit that never failed
-    # (issue #1755).
-    if: always() && !cancelled() && github.event_name != 'schedule'
+    # !cancelled() replaces the previous always(): always() deliberately runs a job even
+    # when the workflow run was cancelled, so a run superseded by the next push to the same
+    # branch reported this check as a build failure on an intermediate commit that never
+    # failed (issue #1755). !cancelled() still runs the job when an upstream job failed,
+    # which is the part always() was here for, and is GitHub's documented idiom for this.
+    # The ${{ }} wrapper is required, not decoration: a bare `!` opens a YAML tag, so
+    # `if: !cancelled() && ...` is a parse error rather than a condition.
+    if: ${{ !cancelled() && github.event_name != 'schedule' }}
 
     steps:
       - name: Check build status

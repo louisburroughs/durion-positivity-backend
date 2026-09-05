@@ -18,7 +18,6 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,11 +56,6 @@ class WorkorderApprovalContractBehaviorIT extends BaseContractIntegrationTest {
     private UUID testCustomerId;
     private UUID testLocationId;
     private UUID testVehicleId;
-
-    @AfterEach
-    void tearDown() {
-        purgeTestData();
-    }
 
     @Test
     @DisplayName("WA-001: Approve a DRAFT workorder")

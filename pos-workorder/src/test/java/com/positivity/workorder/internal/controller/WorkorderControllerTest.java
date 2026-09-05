@@ -206,7 +206,7 @@ class WorkorderControllerTest {
         }
 
         @Test
-        void letsAnApprovalRefusalReachTheGlobalHandler() {
+        void propagatesAnApprovalRefusalInsteadOfCatchingIt() {
             ApproveWorkorderRequest request =
                     ApproveWorkorderRequest.builder().customerId(CUSTOMER_ID).build();
             doThrow(new WorkorderResourceConflictException("Workorder cannot be approved in current state: APPROVED"))
@@ -214,7 +214,9 @@ class WorkorderControllerTest {
                     .approveWorkorder(any(), any(), any(), any(), any(), any());
 
             // #1753: previously caught here and answered as a bodiless 400 with the message
-            // discarded entirely. It now reaches GlobalExceptionHandler for an enveloped 409.
+            // discarded entirely. This test asserts only that the controller no longer swallows
+            // it — the call is direct, so no advice runs. That it becomes an enveloped 409 is
+            // asserted over the wire in WorkorderApprovalContractBehaviorIT.
             assertThatThrownBy(() -> controller.approveWorkorder(WORKORDER_ID, request))
                     .isInstanceOf(WorkorderResourceConflictException.class);
         }

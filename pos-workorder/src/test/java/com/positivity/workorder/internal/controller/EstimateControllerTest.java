@@ -423,20 +423,23 @@ class EstimateControllerTest {
         }
 
         @Test
-        void letsApprovalFailuresReachTheGlobalHandler() {
+        void propagatesApprovalFailuresInsteadOfCatchingThem() {
             ApproveEstimateRequest request =
                     ApproveEstimateRequest.builder().customerId(CUSTOMER_ID).build();
-            // #1713: propagates to GlobalExceptionHandler for the enveloped 404 (ADR-0017 §3/§4)
-            // instead of being caught here and answered as a bodiless one.
+            // The call is direct, so no advice runs: these assertions cover propagation out of
+            // the controller only, and the resulting envelopes are asserted over the wire in the
+            // contract ITs.
+            //
+            // #1713: propagates instead of being caught here and answered as a bodiless 404.
             doThrow(new EstimateNotFoundException(ESTIMATE_ID))
                     .when(estimateService)
                     .approveEstimate(any(), any(), any(), any(), any(), any(), any(), any());
             assertThatThrownBy(() -> controller.approveEstimate(ESTIMATE_ID, request))
                     .isInstanceOf(EstimateNotFoundException.class);
 
-            // #1753: the invalid-state refusal propagates too, for the enveloped 409. It was
-            // previously caught here and answered as a bodiless 400 that the OpenAPI contract
-            // nonetheless documented as an ApiError.
+            // #1753: the invalid-state refusal propagates too. It was previously caught here and
+            // answered as a bodiless 400 that the OpenAPI contract nonetheless documented as an
+            // ApiError.
             doThrow(new WorkorderResourceConflictException("Estimate cannot be approved in current state: DRAFT"))
                     .when(estimateService)
                     .approveEstimate(any(), any(), any(), any(), any(), any(), any(), any());
