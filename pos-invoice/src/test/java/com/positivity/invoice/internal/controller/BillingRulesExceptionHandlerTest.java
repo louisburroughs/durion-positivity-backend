@@ -2,10 +2,7 @@ package com.positivity.invoice.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
-import com.positivity.invoice.internal.exception.PaymentDeclinedException;
-import com.positivity.invoice.internal.exception.PaymentIdempotencyConflictException;
-import com.positivity.invoice.internal.exception.PaymentIntentNotFoundException;
+import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Method;
@@ -22,24 +19,24 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
 /**
- * Unit tests for {@link PaymentExceptionHandler} (ADR-0017 §4, ADR-0056 §1, #1729).
+ * Unit tests for {@link BillingRulesExceptionHandler} (ADR-0017 §4, ADR-0056 §1, #1729).
  */
-class PaymentExceptionHandlerTest {
+class BillingRulesExceptionHandlerTest {
 
     private static final String CORRELATION_HEADER = "X-Correlation-Id";
     private static final Instant NOW = Instant.parse("2026-08-25T09:00:00Z");
 
     /**
-     * Proves every {@code @ExceptionHandler} on {@link PaymentExceptionHandler} carries the
-     * correlation id in both the {@code X-Correlation-Id} response header and the {@code ApiError}
-     * body (ADR-0017 §4, ADR-0056 §1, #1729). This class was already fully compliant when this
-     * guard was added — every handler builds its own {@code ResponseEntity} with the same {@code
-     * X-Correlation-Id} header — so no production code changed; this only pins the behavior
-     * against regression and guards a future handler forgetting the header.
+     * Proves every {@code @ExceptionHandler} on {@link BillingRulesExceptionHandler} carries the
+     * correlation id in both the {@code X-Correlation-Id} response header and the {@code
+     * ApiError} body (ADR-0017 §4, ADR-0056 §1, #1729). This class was already fully compliant
+     * when this guard was added — its single handler routes through the private {@code
+     * correlationId} resolver and sets the {@code X-Correlation-Id} header itself — so no
+     * production code changed; this only pins the behavior against regression and guards a
+     * future handler forgetting the header.
      */
     @Nested
     @DisplayName("X-Correlation-Id header (ADR-0017 §4, #1729)")
@@ -51,26 +48,15 @@ class PaymentExceptionHandlerTest {
         }
 
         /**
-         * One entry per {@code @ExceptionHandler} method on {@link PaymentExceptionHandler}. Uses
-         * a standalone handler instance so this factory method can stay static, as required by
-         * {@code @MethodSource} outside a {@code PER_CLASS} test instance lifecycle.
+         * One entry per {@code @ExceptionHandler} method on {@link BillingRulesExceptionHandler}.
+         * Uses a standalone handler instance so this factory method can stay static, as required
+         * by {@code @MethodSource} outside a {@code PER_CLASS} test instance lifecycle.
          */
         private static Stream<Named<HandlerInvocation>> handlerInvocations() {
-            PaymentExceptionHandler handler = new PaymentExceptionHandler(Clock.fixed(NOW, ZoneOffset.UTC));
+            BillingRulesExceptionHandler handler = new BillingRulesExceptionHandler(Clock.fixed(NOW, ZoneOffset.UTC));
 
-            return Stream.of(
-                    Named.of("handleInvalidPaymentState", (HandlerInvocation)
-                            request -> handler.handleInvalidPaymentState(
-                                    new InvalidPaymentStateException("payment intent already captured"), request)),
-                    Named.of("handleIdempotencyConflict", (HandlerInvocation)
-                            request -> handler.handleIdempotencyConflict(
-                                    new PaymentIdempotencyConflictException("idempotency key reused"), request)),
-                    Named.of("handleNotFound", (HandlerInvocation) request -> handler.handleNotFound(
-                            new PaymentIntentNotFoundException("payment intent not found"), request)),
-                    Named.of("handlePaymentDeclined", (HandlerInvocation) request ->
-                            handler.handlePaymentDeclined(new PaymentDeclinedException("card declined"), request)),
-                    Named.of("handleForbidden", (HandlerInvocation)
-                            request -> handler.handleForbidden(new AccessDeniedException("denied"), request)));
+            return Stream.of(Named.of("handleValidation", (HandlerInvocation) request -> handler.handleValidation(
+                    new InvoiceRequestValidationException("Unknown paymentTermsCode: X"), request)));
         }
 
         @ParameterizedTest
@@ -117,17 +103,18 @@ class PaymentExceptionHandlerTest {
         }
 
         @Test
-        @DisplayName("every @ExceptionHandler method on PaymentExceptionHandler has a matching MethodSource entry")
+        @DisplayName("every @ExceptionHandler method on BillingRulesExceptionHandler has a matching MethodSource entry")
         void everyHandlerMethodIsCovered() {
-            long handlerMethodCount = Arrays.stream(PaymentExceptionHandler.class.getDeclaredMethods())
+            long handlerMethodCount = Arrays.stream(BillingRulesExceptionHandler.class.getDeclaredMethods())
                     .filter((Method method) -> method.isAnnotationPresent(ExceptionHandler.class))
                     .count();
             long methodSourceEntryCount = handlerInvocations().count();
 
             assertThat(methodSourceEntryCount)
-                    .as("A new @ExceptionHandler method was added to PaymentExceptionHandler without a matching "
-                            + "entry in XCorrelationIdHeader#handlerInvocations() in PaymentExceptionHandlerTest — "
-                            + "add one so the X-Correlation-Id header contract stays proven for every handler")
+                    .as("A new @ExceptionHandler method was added to BillingRulesExceptionHandler without a "
+                            + "matching entry in XCorrelationIdHeader#handlerInvocations() in "
+                            + "BillingRulesExceptionHandlerTest — add one so the X-Correlation-Id header contract "
+                            + "stays proven for every handler")
                     .isEqualTo(handlerMethodCount);
         }
     }

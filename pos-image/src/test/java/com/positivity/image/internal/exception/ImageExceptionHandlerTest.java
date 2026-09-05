@@ -156,6 +156,22 @@ class ImageExceptionHandlerTest {
             assertThat(header).isEqualTo(response.getBody().correlationId());
         }
 
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+        void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
+            MockHttpServletRequest request = servletRequest();
+            request.addHeader("X-Correlation-Id", "   ");
+
+            ResponseEntity<ApiError> response = invocation.invoke(request);
+
+            String header = response.getHeaders().getFirst("X-Correlation-Id");
+            assertThat(header).isNotBlank();
+            assertThat(header).isNotEqualTo("   ");
+            assertThat(response.getBody()).isNotNull();
+            assertThat(header).isEqualTo(response.getBody().correlationId());
+        }
+
         @Test
         @DisplayName("every @ExceptionHandler method on ImageExceptionHandler has a matching MethodSource entry")
         void everyHandlerMethodIsCovered() {

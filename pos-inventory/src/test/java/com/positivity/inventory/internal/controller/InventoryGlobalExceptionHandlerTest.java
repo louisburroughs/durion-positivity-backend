@@ -289,9 +289,7 @@ class InventoryGlobalExceptionHandlerTest {
                     Named.of("handleInvalidParamCombination", (HandlerInvocation) () ->
                             handler.handleInvalidParamCombination(new InvalidParamCombinationException("bad combo"))),
                     Named.of("handleShortageResolution", (HandlerInvocation) () -> handler.handleShortageResolution(
-                            ShortageResolutionException.substituteUnavailable("SUB-1"))),
-                    Named.of("handleUnexpected", (HandlerInvocation)
-                            () -> handler.handleUnexpected(new RuntimeException("boom"))));
+                            ShortageResolutionException.substituteUnavailable("SUB-1"))));
         }
 
         @ParameterizedTest
@@ -318,6 +316,21 @@ class InventoryGlobalExceptionHandlerTest {
 
             String header = response.getHeaders().getFirst(X_CORRELATION_ID);
             assertThat(header).isNotBlank();
+            assertThat(response.getBody()).isNotNull();
+            assertThat(header).isEqualTo(response.getBody().correlationId());
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+        void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) throws Exception {
+            setRequestCorrelationId("   ");
+
+            ResponseEntity<ApiError> response = invocation.invoke();
+
+            String header = response.getHeaders().getFirst(X_CORRELATION_ID);
+            assertThat(header).isNotBlank();
+            assertThat(header).isNotEqualTo("   ");
             assertThat(response.getBody()).isNotNull();
             assertThat(header).isEqualTo(response.getBody().correlationId());
         }

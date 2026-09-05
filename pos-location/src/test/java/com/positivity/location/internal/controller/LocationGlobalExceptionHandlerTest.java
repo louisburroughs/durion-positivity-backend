@@ -58,4 +58,24 @@ class LocationGlobalExceptionHandlerTest {
         assertThat(problem.getProperties()).containsEntry("correlationId", header);
         assertThat(problem.getDetail()).isEqualTo("Location not found");
     }
+
+    @Test
+    @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+    void generatesCorrelationIdWhenInboundIsBlank() throws Exception {
+        MockHttpServletRequest servletRequest = new MockHttpServletRequest("GET", "/v1/locations/missing");
+        servletRequest.addHeader(LocationGlobalExceptionHandler.X_CORRELATION_ID, "   ");
+
+        ResponseEntity<Object> response = handler.handleException(
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found"),
+                new ServletWebRequest(servletRequest));
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        String header = response.getHeaders().getFirst(LocationGlobalExceptionHandler.X_CORRELATION_ID);
+        assertThat(header).isNotBlank();
+        assertThat(header).isNotEqualTo("   ");
+        ProblemDetail problem = (ProblemDetail) response.getBody();
+        assertThat(problem).isNotNull();
+        assertThat(problem.getProperties()).containsEntry("correlationId", header);
+    }
 }

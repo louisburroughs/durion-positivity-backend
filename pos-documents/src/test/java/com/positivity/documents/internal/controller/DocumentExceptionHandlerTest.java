@@ -118,6 +118,22 @@ class DocumentExceptionHandlerTest {
             assertThat(header).isEqualTo(response.getBody().correlationId());
         }
 
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+        void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
+            HttpServletRequest request = mock(HttpServletRequest.class);
+            when(request.getHeader(CORRELATION_HEADER)).thenReturn("   ");
+
+            ResponseEntity<ApiError> response = invocation.invoke(request);
+
+            String header = response.getHeaders().getFirst(CORRELATION_HEADER);
+            assertThat(header).isNotBlank();
+            assertThat(header).isNotEqualTo("   ");
+            assertThat(response.getBody()).isNotNull();
+            assertThat(header).isEqualTo(response.getBody().correlationId());
+        }
+
         @Test
         @DisplayName("every @ExceptionHandler method on DocumentExceptionHandler has a matching MethodSource entry")
         void everyHandlerMethodIsCovered() {

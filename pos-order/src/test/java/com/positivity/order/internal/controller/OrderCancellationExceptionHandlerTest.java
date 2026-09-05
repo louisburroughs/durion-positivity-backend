@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.positivity.order.internal.exception.OrderCancellationReviewRequiredException;
+import com.positivity.order.internal.exception.OrderCancellationStateConflictException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
@@ -82,7 +84,8 @@ class OrderCancellationExceptionHandlerTest {
     @DisplayName("maps an invalid cancellation state to 409 ORDER_CANCELLATION_INVALID")
     void invalidState() {
         assertEnvelope(
-                sut.handleInvalidCancellationState(new IllegalStateException("already cancelled"), request),
+                sut.handleInvalidCancellationState(
+                        new OrderCancellationStateConflictException("already cancelled"), request),
                 HttpStatus.CONFLICT,
                 "ORDER_CANCELLATION_INVALID");
     }
@@ -128,7 +131,10 @@ class OrderCancellationExceptionHandlerTest {
                             handler.handleSalesOrderNotFound(new SalesOrderNotFoundException(ORDER_ID), request)),
                     Named.of("handleInvalidCancellationState", (HandlerInvocation)
                             request -> handler.handleInvalidCancellationState(
-                                    new IllegalStateException("already cancelled"), request)),
+                                    new OrderCancellationStateConflictException("already cancelled"), request)),
+                    Named.of("handleCancellationReviewRequired", (HandlerInvocation)
+                            request -> handler.handleCancellationReviewRequired(
+                                    new OrderCancellationReviewRequiredException("manual review required"), request)),
                     Named.of("handleAccessDenied", (HandlerInvocation)
                             request -> handler.handleAccessDenied(new AccessDeniedException("denied"), request)));
         }
@@ -159,6 +165,22 @@ class OrderCancellationExceptionHandlerTest {
 
             String header = response.getHeaders().getFirst(CORRELATION_HEADER);
             assertThat(header).isNotBlank();
+            assertThat(response.getBody()).isNotNull();
+            assertThat(header).isEqualTo(response.getBody().correlationId());
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+        void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
+            HttpServletRequest req = mock(HttpServletRequest.class);
+            when(req.getHeader(CORRELATION_HEADER)).thenReturn("   ");
+
+            ResponseEntity<ApiError> response = invocation.invoke(req);
+
+            String header = response.getHeaders().getFirst(CORRELATION_HEADER);
+            assertThat(header).isNotBlank();
+            assertThat(header).isNotEqualTo("   ");
             assertThat(response.getBody()).isNotNull();
             assertThat(header).isEqualTo(response.getBody().correlationId());
         }

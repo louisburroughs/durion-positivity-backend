@@ -105,6 +105,22 @@ class ToolPermissionExceptionHandlerTest {
             assertThat(header).isEqualTo(response.getBody().correlationId());
         }
 
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+        void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.addHeader(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, "   ");
+
+            ResponseEntity<ApiError> response = invocation.invoke(request);
+
+            String header = response.getHeaders().getFirst(NltiCorrelationIdSupport.CORRELATION_ID_HEADER);
+            assertThat(header).isNotBlank();
+            assertThat(header).isNotEqualTo("   ");
+            assertThat(response.getBody()).isNotNull();
+            assertThat(header).isEqualTo(response.getBody().correlationId());
+        }
+
         @Test
         @DisplayName(
                 "every @ExceptionHandler method on ToolPermissionExceptionHandler has a matching MethodSource entry")

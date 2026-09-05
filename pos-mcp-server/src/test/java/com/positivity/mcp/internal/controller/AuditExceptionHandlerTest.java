@@ -89,6 +89,21 @@ class AuditExceptionHandlerTest {
             assertThat(UUID.fromString(header).version()).isEqualTo(7);
         }
 
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+        void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.addHeader(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, "   ");
+
+            ResponseEntity<Map<String, Object>> response = invocation.invoke(request);
+
+            String header = response.getHeaders().getFirst(NltiCorrelationIdSupport.CORRELATION_ID_HEADER);
+            assertThat(header).isNotBlank();
+            assertThat(header).isNotEqualTo("   ");
+            assertThat(UUID.fromString(header).version()).isEqualTo(7);
+        }
+
         @Test
         @DisplayName("every @ExceptionHandler method on AuditExceptionHandler has a matching MethodSource entry")
         void everyHandlerMethodIsCovered() {

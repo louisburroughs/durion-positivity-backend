@@ -321,6 +321,25 @@ class CrmExceptionHandlerTest {
             assertThat(result.getBody().correlationId()).isEqualTo(captor.getValue());
         }
 
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+        void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
+            HttpServletRequest req = mock(HttpServletRequest.class);
+            HttpServletResponse resp = mock(HttpServletResponse.class);
+            when(req.getRequestURI()).thenReturn("/v1/crm/accounts");
+            when(req.getHeader(CORRELATION_HEADER)).thenReturn("   ");
+
+            ResponseEntity<ApiError> result = invocation.invoke(req, resp);
+
+            ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+            verify(resp).setHeader(eq(CORRELATION_HEADER), captor.capture());
+            assertThat(captor.getValue()).isNotBlank();
+            assertThat(captor.getValue()).isNotEqualTo("   ");
+            assertThat(result.getBody()).isNotNull();
+            assertThat(result.getBody().correlationId()).isEqualTo(captor.getValue());
+        }
+
         @Test
         @DisplayName("every @ExceptionHandler method on CrmExceptionHandler has a matching MethodSource entry")
         void everyHandlerMethodIsCovered() {

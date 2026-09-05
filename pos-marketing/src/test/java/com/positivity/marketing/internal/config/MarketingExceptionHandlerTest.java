@@ -257,6 +257,24 @@ class MarketingExceptionHandlerTest {
             assertThat(captor.getValue()).isEqualTo(result.getBody().correlationId());
         }
 
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+        void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
+            HttpServletRequest request = mock(HttpServletRequest.class);
+            HttpServletResponse response = mock(HttpServletResponse.class);
+            when(request.getHeader(CORRELATION_HEADER)).thenReturn("   ");
+
+            ResponseEntity<ApiError> result = invocation.invoke(request, response);
+
+            ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+            verify(response).setHeader(eq(CORRELATION_HEADER), captor.capture());
+            assertThat(captor.getValue()).isNotBlank();
+            assertThat(captor.getValue()).isNotEqualTo("   ");
+            assertThat(result.getBody()).isNotNull();
+            assertThat(captor.getValue()).isEqualTo(result.getBody().correlationId());
+        }
+
         @Test
         @DisplayName("every @ExceptionHandler method on MarketingExceptionHandler has a matching MethodSource entry")
         void everyHandlerMethodIsCovered() {

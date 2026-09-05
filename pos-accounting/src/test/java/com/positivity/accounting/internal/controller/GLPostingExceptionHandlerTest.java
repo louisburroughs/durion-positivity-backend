@@ -108,6 +108,19 @@ class GLPostingExceptionHandlerTest {
             assertThat(header).isEqualTo(response.getBody().correlationId());
         }
 
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+        void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
+            ResponseEntity<ApiError> response = invocation.invoke(requestWithHeader("   "));
+
+            String header = response.getHeaders().getFirst(CORRELATION_ID_HEADER);
+            assertThat(header).isNotBlank();
+            assertThat(header).isNotEqualTo("   ");
+            assertThat(response.getBody()).isNotNull();
+            assertThat(header).isEqualTo(response.getBody().correlationId());
+        }
+
         @Test
         @DisplayName("every @ExceptionHandler method on GLPostingExceptionHandler has a matching MethodSource entry")
         void everyHandlerMethodIsCovered() {

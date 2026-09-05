@@ -96,6 +96,12 @@ class WarrantyExceptionHandlerTest {
             return new MockHttpServletRequest();
         }
 
+        private static HttpServletRequest requestWithBlankHeader() {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.addHeader("X-Correlation-Id", "   ");
+            return request;
+        }
+
         /**
          * One entry per {@code @ExceptionHandler} method on {@link WarrantyExceptionHandler}.
          * Uses a standalone handler instance so this factory method can stay static, as
@@ -167,6 +173,18 @@ class WarrantyExceptionHandlerTest {
 
             String header = response.getHeaders().getFirst("X-Correlation-Id");
             assertThat(header).isNotBlank();
+            assertThat(response.getBody()).isNotNull();
+            assertThat(header).isEqualTo(response.getBody().correlationId());
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+        void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
+            ResponseEntity<ApiError> response = invocation.invoke(requestWithBlankHeader());
+
+            String header = response.getHeaders().getFirst("X-Correlation-Id");
+            assertThat(header).isNotBlank().isNotEqualTo("   ");
             assertThat(response.getBody()).isNotNull();
             assertThat(header).isEqualTo(response.getBody().correlationId());
         }

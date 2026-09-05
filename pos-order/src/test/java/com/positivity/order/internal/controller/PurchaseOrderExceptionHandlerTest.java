@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderNotTransmittableException;
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
+import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
 import com.positivity.order.internal.exception.UomConversionUndefinedException;
 import com.positivity.shared.error.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
@@ -104,7 +105,7 @@ class PurchaseOrderExceptionHandlerTest {
     @DisplayName("maps a lifecycle refusal to 409 PURCHASE_ORDER_INVALID_STATE")
     void invalidState() {
         assertEnvelope(
-                sut.handleInvalidState(new IllegalStateException("already approved"), request),
+                sut.handleInvalidState(new PurchaseOrderStateConflictException("already approved"), request),
                 HttpStatus.CONFLICT,
                 "PURCHASE_ORDER_INVALID_STATE");
     }
@@ -161,8 +162,8 @@ class PurchaseOrderExceptionHandlerTest {
                     Named.of("handleUomConversionUndefined", (HandlerInvocation)
                             request -> handler.handleUomConversionUndefined(
                                     UomConversionUndefinedException.unknownProduct(PO_ID, "EA"), request)),
-                    Named.of("handleInvalidState", (HandlerInvocation) request ->
-                            handler.handleInvalidState(new IllegalStateException("already approved"), request)),
+                    Named.of("handleInvalidState", (HandlerInvocation) request -> handler.handleInvalidState(
+                            new PurchaseOrderStateConflictException("already approved"), request)),
                     Named.of("handleInvalidRequest", (HandlerInvocation) request -> handler.handleInvalidRequest(
                             new PurchaseOrderRequestValidationException("quantity is required"), request)),
                     Named.of("handleAccessDenied", (HandlerInvocation)
@@ -195,6 +196,22 @@ class PurchaseOrderExceptionHandlerTest {
 
             String header = response.getHeaders().getFirst(CORRELATION_HEADER);
             assertThat(header).isNotBlank();
+            assertThat(response.getBody()).isNotNull();
+            assertThat(header).isEqualTo(response.getBody().correlationId());
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+        void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
+            HttpServletRequest req = mock(HttpServletRequest.class);
+            when(req.getHeader(CORRELATION_HEADER)).thenReturn("   ");
+
+            ResponseEntity<ApiError> response = invocation.invoke(req);
+
+            String header = response.getHeaders().getFirst(CORRELATION_HEADER);
+            assertThat(header).isNotBlank();
+            assertThat(header).isNotEqualTo("   ");
             assertThat(response.getBody()).isNotNull();
             assertThat(header).isEqualTo(response.getBody().correlationId());
         }

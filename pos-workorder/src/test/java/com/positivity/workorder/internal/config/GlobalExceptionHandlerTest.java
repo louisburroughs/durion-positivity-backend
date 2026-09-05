@@ -97,6 +97,12 @@ class GlobalExceptionHandlerTest {
             return new MockHttpServletRequest();
         }
 
+        private static HttpServletRequest requestWithBlankHeader() {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.addHeader("X-Correlation-Id", "   ");
+            return request;
+        }
+
         private static ObjectProvider<Clock> fixedClockProvider() {
             Clock fixedClock = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
             return new ObjectProvider<>() {
@@ -241,6 +247,19 @@ class GlobalExceptionHandlerTest {
 
             String header = response.getHeaders().getFirst("X-Correlation-Id");
             assertThat(header).isNotBlank();
+            assertThat(response.getBody()).isNotNull();
+            assertThat(header).isEqualTo(response.getBody().correlationId());
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+        void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
+            ResponseEntity<ApiError> response = invocation.invoke(requestWithBlankHeader());
+
+            String header = response.getHeaders().getFirst("X-Correlation-Id");
+            assertThat(header).isNotBlank();
+            assertThat(header).isNotEqualTo("   ");
             assertThat(response.getBody()).isNotNull();
             assertThat(header).isEqualTo(response.getBody().correlationId());
         }

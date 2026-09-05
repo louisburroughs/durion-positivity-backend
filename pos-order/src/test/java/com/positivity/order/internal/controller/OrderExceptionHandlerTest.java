@@ -316,7 +316,7 @@ class OrderExceptionHandlerTest {
                                 handler.handleInvalidSku(new InvalidSkuException("BAD", "no such sku"), request)),
                         Named.of("handleUnprocessableRequest", (HandlerInvocation)
                                 request -> handler.handleUnprocessableRequest(
-                                        new IllegalStateException("already closed"), request)),
+                                        new SalesOrderUnprocessableException("Cannot quote an empty cart"), request)),
                         Named.of("handleInvalidRequest", (HandlerInvocation) request -> handler.handleInvalidRequest(
                                 new SalesOrderRequestValidationException("bad qty"), request)),
                         Named.of("handleAccessDenied", (HandlerInvocation)
@@ -347,6 +347,21 @@ class OrderExceptionHandlerTest {
 
                 String header = response.getHeaders().getFirst(CORRELATION_HEADER);
                 assertThat(header).isNotBlank();
+                assertThat(response.getBody()).isNotNull();
+                assertThat(header).isEqualTo(response.getBody().correlationId());
+            }
+
+            @ParameterizedTest
+            @MethodSource("handlerInvocations")
+            @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+            void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
+                when(request.getHeader(CORRELATION_HEADER)).thenReturn("   ");
+
+                ResponseEntity<ApiError> response = invocation.invoke(request);
+
+                String header = response.getHeaders().getFirst(CORRELATION_HEADER);
+                assertThat(header).isNotBlank();
+                assertThat(header).isNotEqualTo("   ");
                 assertThat(response.getBody()).isNotNull();
                 assertThat(header).isEqualTo(response.getBody().correlationId());
             }
@@ -487,8 +502,12 @@ class OrderExceptionHandlerTest {
                                 request)),
                         Named.of("handleWarrantyRouting", (HandlerInvocation) request ->
                                 handler.handleWarrantyRouting(new WarrantyReturnRoutingException(ID), request)),
-                        Named.of("handleConflict", (HandlerInvocation) request ->
-                                handler.handleConflict(new IllegalStateException("already returned"), request)),
+                        Named.of("handleConflict", (HandlerInvocation) request -> handler.handleConflict(
+                                new ReturnOrderStateConflictException("already returned"), request)),
+                        Named.of("handleUnprocessable", (HandlerInvocation) request -> handler.handleUnprocessable(
+                                new ReturnOrderUnprocessableException(
+                                        "No invoice on the original order to refund against"),
+                                request)),
                         Named.of("handleInvalidRequest", (HandlerInvocation) request -> handler.handleInvalidRequest(
                                 new ReturnRequestValidationException("qty must be positive"), request)),
                         Named.of("handleLineNotReturnable", (HandlerInvocation) request ->
@@ -519,6 +538,21 @@ class OrderExceptionHandlerTest {
 
                 String header = response.getHeaders().getFirst(CORRELATION_HEADER);
                 assertThat(header).isNotBlank();
+                assertThat(response.getBody()).isNotNull();
+                assertThat(header).isEqualTo(response.getBody().correlationId());
+            }
+
+            @ParameterizedTest
+            @MethodSource("handlerInvocations")
+            @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+            void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
+                when(request.getHeader(CORRELATION_HEADER)).thenReturn("   ");
+
+                ResponseEntity<ApiError> response = invocation.invoke(request);
+
+                String header = response.getHeaders().getFirst(CORRELATION_HEADER);
+                assertThat(header).isNotBlank();
+                assertThat(header).isNotEqualTo("   ");
                 assertThat(response.getBody()).isNotNull();
                 assertThat(header).isEqualTo(response.getBody().correlationId());
             }
@@ -635,6 +669,21 @@ class OrderExceptionHandlerTest {
 
                 String header = response.getHeaders().getFirst(CORRELATION_HEADER);
                 assertThat(header).isNotBlank();
+                assertThat(response.getBody()).isNotNull();
+                assertThat(header).isEqualTo(response.getBody().correlationId());
+            }
+
+            @ParameterizedTest
+            @MethodSource("handlerInvocations")
+            @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+            void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
+                when(request.getHeader(CORRELATION_HEADER)).thenReturn("   ");
+
+                ResponseEntity<ApiError> response = invocation.invoke(request);
+
+                String header = response.getHeaders().getFirst(CORRELATION_HEADER);
+                assertThat(header).isNotBlank();
+                assertThat(header).isNotEqualTo("   ");
                 assertThat(response.getBody()).isNotNull();
                 assertThat(header).isEqualTo(response.getBody().correlationId());
             }
@@ -787,6 +836,21 @@ class OrderExceptionHandlerTest {
 
                 String header = response.getHeaders().getFirst(CORRELATION_HEADER);
                 assertThat(header).isNotBlank();
+                assertThat(response.getBody()).isNotNull();
+                assertThat(header).isEqualTo(response.getBody().correlationId());
+            }
+
+            @ParameterizedTest
+            @MethodSource("handlerInvocations")
+            @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+            void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
+                when(request.getHeader(CORRELATION_HEADER)).thenReturn("   ");
+
+                ResponseEntity<ApiError> response = invocation.invoke(request);
+
+                String header = response.getHeaders().getFirst(CORRELATION_HEADER);
+                assertThat(header).isNotBlank();
+                assertThat(header).isNotEqualTo("   ");
                 assertThat(response.getBody()).isNotNull();
                 assertThat(header).isEqualTo(response.getBody().correlationId());
             }
