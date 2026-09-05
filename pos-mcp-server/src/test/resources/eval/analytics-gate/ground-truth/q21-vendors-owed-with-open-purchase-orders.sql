@@ -21,7 +21,7 @@
 --   to the vendor and not yet fully received. FULLY_RECEIVED is closed, DRAFT was never sent,
 --   CANCELLED is void.
 --
--- The answer is the intersection by supplier_id. A vendor owed money with no open PO is a
+-- The answer is the intersection by vendor_id. A vendor owed money with no open PO is a
 -- payment question; a vendor with an open PO and nothing owed is a receiving question. Only
 -- the intersection is the exposure the question asks about.
 
@@ -32,14 +32,14 @@
 \endif
 
 SELECT
-    supplier_id,
+    vendor_id,
     count(*)                AS unpaid_bills,
     sum(total_amount)       AS amount_owed,
     min(due_date)           AS earliest_due,
     max(due_date)           AS latest_due
 FROM vendor_bill
 WHERE status = 'APPROVED'
-GROUP BY supplier_id
+GROUP BY vendor_id
 ORDER BY amount_owed DESC;
 
 -- Totals, so the per-vendor rows can be cross-footed.
@@ -52,11 +52,11 @@ WHERE status = 'APPROVED';
 -- DB: pos_order_db
 
 SELECT
-    supplier_id,
+    vendor_id,
     count(*) AS open_purchase_orders
 FROM purchase_order
 WHERE status = 'APPROVED'
-GROUP BY supplier_id
+GROUP BY vendor_id
 ORDER BY open_purchase_orders DESC;
 
 SELECT
