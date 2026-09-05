@@ -13,13 +13,11 @@ import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -34,6 +32,12 @@ import org.springframework.web.server.ResponseStatusException;
 /**
  * Status mapping for the People API's error envelope. Routing and binding failures must not
  * surface as 500s (#820), and no handler may echo user-controlled request data.
+ *
+ * <p>Since #1716 every handler answers the same {@link ApiError} envelope, so
+ * {@link #assertEnvelope} checks the whole ADR-0017 §3/§4 contract in one place — status, a
+ * machine-readable code, the fixed-clock timestamp, and the correlation id present identically
+ * in the body and the {@code X-Correlation-Id} header. Before that, thirteen of these handlers
+ * answered a bare ProblemDetail with no code and no correlation id at all.
  */
 @DisplayName("PeopleExceptionHandler")
 class PeopleExceptionHandlerTest {
@@ -43,35 +47,69 @@ class PeopleExceptionHandlerTest {
 
     private final PeopleExceptionHandler handler = new PeopleExceptionHandler(Clock.fixed(NOW, ZoneOffset.UTC));
 
-    private static void assertStatusAndTimestamp(ProblemDetail problem, HttpStatus expectedStatus) {
-        assertThat(problem.getStatus()).isEqualTo(expectedStatus.value());
-        assertThat(problem.getProperties()).containsEntry("timestamp", NOW);
+    private static MockHttpServletRequest request() {
+        return new MockHttpServletRequest();
+    }
+
+    private static MockHttpServletResponse response() {
+        return new MockHttpServletResponse();
+    }
+
+    /** The whole ADR-0017 §3/§4 envelope contract, asserted once per handler. */
+    private static ApiError assertEnvelope(
+            ResponseEntity<ApiError> result, MockHttpServletResponse response, HttpStatus expectedStatus, String code) {
+        assertThat(result.getStatusCode()).isEqualTo(expectedStatus);
+        ApiError body = result.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.code()).isEqualTo(code);
+        assertThat(body.status()).isEqualTo(expectedStatus.value());
+        assertThat(body.timestamp()).isEqualTo(NOW.toString());
+        assertThat(body.correlationId()).isNotBlank();
+        assertThat(response.getHeader("X-Correlation-Id")).isEqualTo(body.correlationId());
+        return body;
     }
 
     @Test
     void mapsAMissingPersonToNotFound() {
-        ProblemDetail problem = handler.handlePersonNotFound(new PersonNotFoundException(PERSON_ID));
+        MockHttpServletResponse response = response();
 
-        assertStatusAndTimestamp(problem, HttpStatus.NOT_FOUND);
-        assertThat(problem.getDetail()).contains(PERSON_ID.toString());
+        ApiError body = assertEnvelope(
+                handler.handlePersonNotFound(new PersonNotFoundException(PERSON_ID), request(), response),
+                response,
+                HttpStatus.NOT_FOUND,
+                "PERSON_NOT_FOUND");
+
+        assertThat(body.message()).contains(PERSON_ID.toString());
     }
 
     @Test
     void mapsADomainNotFoundToNotFound() {
-        assertStatusAndTimestamp(handler.handleNotFound(new NotFoundException("no such thing")), HttpStatus.NOT_FOUND);
+        MockHttpServletResponse response = response();
+        assertEnvelope(
+                handler.handleNotFound(new NotFoundException("no such thing"), request(), response),
+                response,
+                HttpStatus.NOT_FOUND,
+                "NOT_FOUND");
     }
 
     @Test
     void mapsAMissingWorkSessionToNotFound() {
-        assertStatusAndTimestamp(
-                handler.handleWorkSessionNotFound(new WorkSessionNotFoundException("no session")),
-                HttpStatus.NOT_FOUND);
+        MockHttpServletResponse response = response();
+        assertEnvelope(
+                handler.handleWorkSessionNotFound(new WorkSessionNotFoundException("no session"), request(), response),
+                response,
+                HttpStatus.NOT_FOUND,
+                "WORK_SESSION_NOT_FOUND");
     }
 
     @Test
     void mapsAMissingEntityToNotFound() {
-        assertStatusAndTimestamp(
-                handler.handleEntityNotFound(new EntityNotFoundException("gone")), HttpStatus.NOT_FOUND);
+        MockHttpServletResponse response = response();
+        assertEnvelope(
+                handler.handleEntityNotFound(new EntityNotFoundException("gone"), request(), response),
+                response,
+                HttpStatus.NOT_FOUND,
+                "NOT_FOUND");
     }
 
     @Test
@@ -131,27 +169,42 @@ class PeopleExceptionHandlerTest {
 
     @Test
     void mapsAnIllegalStateToConflict() {
-        assertStatusAndTimestamp(handler.handleIllegalState(new IllegalStateException("dup")), HttpStatus.CONFLICT);
+        MockHttpServletResponse response = response();
+        assertEnvelope(
+                handler.handleIllegalState(new IllegalStateException("dup"), request(), response),
+                response,
+                HttpStatus.CONFLICT,
+                "INVALID_STATE");
     }
 
     @Test
     void mapsASemanticValidationFailureToUnprocessableContent() {
-        assertStatusAndTimestamp(
-                handler.handleSemanticValidation(new SemanticValidationException("bad dates")),
-                HttpStatus.UNPROCESSABLE_CONTENT);
+        MockHttpServletResponse response = response();
+        assertEnvelope(
+                handler.handleSemanticValidation(new SemanticValidationException("bad dates"), request(), response),
+                response,
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "SEMANTIC_VALIDATION_ERROR");
     }
 
     @Test
     void mapsAnAccessDenialToForbidden() {
-        assertStatusAndTimestamp(handler.handleAccessDenied(new AccessDeniedException("nope")), HttpStatus.FORBIDDEN);
+        MockHttpServletResponse response = response();
+        assertEnvelope(
+                handler.handleAccessDenied(new AccessDeniedException("nope"), request(), response),
+                response,
+                HttpStatus.FORBIDDEN,
+                "FORBIDDEN");
     }
 
     @Test
     void mapsAnUnroutablePathToNotFoundWithoutEchoingIt() {
-        ProblemDetail problem = handler.handleNoEndpoint();
+        MockHttpServletResponse response = response();
 
-        assertStatusAndTimestamp(problem, HttpStatus.NOT_FOUND);
-        assertThat(problem.getDetail()).isEqualTo("No endpoint for the requested path");
+        ApiError body = assertEnvelope(
+                handler.handleNoEndpoint(request(), response), response, HttpStatus.NOT_FOUND, "NO_ENDPOINT");
+
+        assertThat(body.message()).isEqualTo("No endpoint for the requested path");
     }
 
     @Test
@@ -159,21 +212,31 @@ class PeopleExceptionHandlerTest {
         MethodArgumentTypeMismatchException mismatch = new MethodArgumentTypeMismatchException(
                 "not-a-uuid", UUID.class, "employeeId", methodParameter(), new IllegalArgumentException("nope"));
 
-        ProblemDetail problem = handler.handleTypeMismatch(mismatch);
+        MockHttpServletResponse response = response();
 
-        assertStatusAndTimestamp(problem, HttpStatus.BAD_REQUEST);
-        assertThat(problem.getDetail()).isEqualTo("Invalid value for parameter 'employeeId'");
+        ApiError body = assertEnvelope(
+                handler.handleTypeMismatch(mismatch, request(), response),
+                response,
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR");
+
+        assertThat(body.message()).isEqualTo("Invalid value for parameter 'employeeId'");
         // The offending value is user input and must not be reflected back (S5131).
-        assertThat(problem.getDetail()).doesNotContain("not-a-uuid");
+        assertThat(body.message()).doesNotContain("not-a-uuid");
     }
 
     @Test
     void mapsAMissingParameterToBadRequest() {
-        ProblemDetail problem =
-                handler.handleMissingParameter(new MissingServletRequestParameterException("locationId", "UUID"));
+        MockHttpServletResponse response = response();
 
-        assertStatusAndTimestamp(problem, HttpStatus.BAD_REQUEST);
-        assertThat(problem.getDetail()).isEqualTo("Missing required parameter 'locationId'");
+        ApiError body = assertEnvelope(
+                handler.handleMissingParameter(
+                        new MissingServletRequestParameterException("locationId", "UUID"), request(), response),
+                response,
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR");
+
+        assertThat(body.message()).isEqualTo("Missing required parameter 'locationId'");
     }
 
     @Test
@@ -181,44 +244,70 @@ class PeopleExceptionHandlerTest {
         MethodArgumentNotValidException invalid = new MethodArgumentNotValidException(
                 methodParameter(), new BeanPropertyBindingResult(new Object(), "request"));
 
-        ProblemDetail problem = handler.handleValidation(invalid);
+        MockHttpServletResponse response = response();
 
-        assertStatusAndTimestamp(problem, HttpStatus.BAD_REQUEST);
-        assertThat(problem.getDetail()).isEqualTo("Validation failed");
+        ApiError body = assertEnvelope(
+                handler.handleValidation(invalid, request(), response),
+                response,
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR");
+
+        // The binding result is deliberately not exposed: it names this module's internal
+        // property names and any caller can provoke this response. #1716 moved the envelope,
+        // not that trade, so fieldErrors stays absent.
+        assertThat(body.message()).isEqualTo("Validation failed");
+        assertThat(body.fieldErrors()).isNull();
     }
 
     @Test
-    void mapsMalformedJsonToABadRequestBodyCarryingTheRequestPath() {
+    void mapsMalformedJsonToABadRequestEnvelopeWithoutEchoingTheRequestPath() {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/people/employees");
+        MockHttpServletResponse response = response();
 
-        ResponseEntity<Map<String, Object>> response = handler.handleHttpMessageNotReadable(
-                new HttpMessageNotReadableException("boom", (org.springframework.http.HttpInputMessage) null), request);
+        // Before #1716 this was the one handler answering an ad-hoc Map with error/path keys — a
+        // third error shape inside one advice. It is now the same envelope as everything else,
+        // and the request path is no longer echoed (S5131, the rule the sibling handlers had).
+        ApiError body = assertEnvelope(
+                handler.handleHttpMessageNotReadable(
+                        new HttpMessageNotReadableException("boom", (org.springframework.http.HttpInputMessage) null),
+                        request,
+                        response),
+                response,
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR");
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody())
-                .containsEntry("timestamp", NOW)
-                .containsEntry("status", HttpStatus.BAD_REQUEST.value())
-                .containsEntry("error", "Bad Request")
-                .containsEntry("path", "/v1/people/employees")
-                .containsEntry("message", "Malformed JSON request");
+        assertThat(body.message()).isEqualTo("Malformed JSON request");
+        assertThat(body.toString()).doesNotContain("/v1/people/employees");
     }
 
     @Test
     void keepsTheStatusAndReasonOfAResponseStatusException() {
-        ProblemDetail problem =
-                handler.handleResponseStatusException(new ResponseStatusException(HttpStatus.CONFLICT, "already open"));
+        MockHttpServletResponse response = response();
 
-        assertStatusAndTimestamp(problem, HttpStatus.CONFLICT);
-        assertThat(problem.getDetail()).isEqualTo("already open");
+        // The code is derived from the status Spring chose, so a caller still gets something
+        // machine-readable for a status this advice never mapped by hand.
+        ApiError body = assertEnvelope(
+                handler.handleResponseStatusException(
+                        new ResponseStatusException(HttpStatus.CONFLICT, "already open"), request(), response),
+                response,
+                HttpStatus.CONFLICT,
+                "CONFLICT");
+
+        assertThat(body.message()).isEqualTo("already open");
     }
 
     @Test
     void fallsBackToTheExceptionMessageWhenAResponseStatusExceptionCarriesNoReason() {
-        ProblemDetail problem =
-                handler.handleResponseStatusException(new ResponseStatusException(HttpStatus.BAD_GATEWAY));
+        MockHttpServletResponse response = response();
 
-        assertStatusAndTimestamp(problem, HttpStatus.BAD_GATEWAY);
-        assertThat(problem.getDetail()).isNotBlank();
+        ApiError body = assertEnvelope(
+                handler.handleResponseStatusException(
+                        new ResponseStatusException(HttpStatus.BAD_GATEWAY), request(), response),
+                response,
+                HttpStatus.BAD_GATEWAY,
+                "BAD_GATEWAY");
+
+        assertThat(body.message()).isNotBlank();
     }
 
     /** Any real method parameter works: the handlers only read the exception's own fields. */

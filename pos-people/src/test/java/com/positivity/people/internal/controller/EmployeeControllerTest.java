@@ -11,18 +11,22 @@ import com.positivity.people.internal.dto.EmployeeSummaryDto;
 import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.service.EmployeeService;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(EmployeeController.class)
-@Import(TestSecurityConfig.class)
+@Import({TestSecurityConfig.class, EmployeeControllerTest.FixedClockConfig.class})
 @ActiveProfiles("test")
 @SuppressWarnings({"java:S6813", "java:S100", "java:S1192"})
 class EmployeeControllerTest {
@@ -32,9 +36,6 @@ class EmployeeControllerTest {
 
     @Autowired
     MockMvc mockMvc;
-
-    @MockitoBean
-    Clock clock;
 
     @MockitoBean
     EmployeeService employeeService;
@@ -96,5 +97,20 @@ class EmployeeControllerTest {
     void searchEmployees_rejectsANegativePage() throws Exception {
         mockMvc.perform(get("/v1/people/employees").param("page", "-1").header("X-Authorities", "people:employee:view"))
                 .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * A real fixed {@code Clock}, not a mock. {@code PeopleExceptionHandler} reads it on every
+     * error response ({@code Instant.now(clock)}), and an unstubbed mock returns {@code null} —
+     * which made the advice itself throw, so the original exception surfaced as unhandled
+     * (issue #1716). Fixed rather than {@code systemUTC} so timestamps stay deterministic.
+     */
+    @TestConfiguration
+    static class FixedClockConfig {
+
+        @Bean
+        Clock clock() {
+            return Clock.fixed(Instant.parse("2026-03-01T00:00:00Z"), ZoneOffset.UTC);
+        }
     }
 }
