@@ -1460,7 +1460,7 @@ def server_build(chat_url, token):
     try:
         with urllib.request.urlopen(request, timeout=15) as response:
             info = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, OSError, TimeoutError, json.JSONDecodeError) as exc:
+    except (urllib.error.URLError, OSError, json.JSONDecodeError) as exc:
         return {"error": f"{type(exc).__name__}: {exc}"}
     build = info.get("build") if isinstance(info, dict) else None
     if isinstance(build, dict):
