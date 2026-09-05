@@ -197,6 +197,12 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
     @Override
     public @NonNull String chat(@NonNull CurrentUserContext currentUserContext, @NonNull String message) {
+        return chat(currentUserContext, message, null);
+    }
+
+    @Override
+    public @NonNull String chat(
+            @NonNull CurrentUserContext currentUserContext, @NonNull String message, @Nullable String conversationId) {
         String username = currentUserContext.username();
         String role = currentUserContext.primaryRole();
         AtomicInteger requestCount = requestCountCache.get(username, key -> new AtomicInteger(0));
@@ -297,7 +303,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 requestScopedUserContext.set(currentUserContext, currentAuthorizationHeader());
             }
             long agentStartNanos = System.nanoTime();
-            String response = agent.chat(memoryKey(username, role), message, formatUserContext(currentUserContext));
+            String response = agent.chat(
+                    memoryKey(username, role, conversationId), message, formatUserContext(currentUserContext));
             int elapsedMs = (int) (System.currentTimeMillis() - startMs);
             LOGGER.info(
                     "MCP agent chat completed role={} selectedTools={} modelElapsedMs={} totalElapsedMs={}",
@@ -707,8 +714,17 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
                 .size();
     }
 
-    private static @NonNull String memoryKey(@NonNull String userId, @NonNull String role) {
-        return userId + MEMORY_KEY_SEPARATOR + role;
+    /**
+     * The conversation this turn belongs to.
+     *
+     * <p>A null or blank {@code conversationId} keeps the pre-#1735 key, so an existing caller's
+     * memory is unchanged and a running conversation still accumulates. A supplied id partitions
+     * the memory beneath the actor, which is what lets a caller ask independent questions without
+     * each one inheriting the last eleven.
+     */
+    static @NonNull String memoryKey(@NonNull String userId, @NonNull String role, @Nullable String conversationId) {
+        String base = userId + MEMORY_KEY_SEPARATOR + role;
+        return conversationId == null || conversationId.isBlank() ? base : base + MEMORY_KEY_SEPARATOR + conversationId;
     }
 
     private static long elapsedMs(long startNanos) {

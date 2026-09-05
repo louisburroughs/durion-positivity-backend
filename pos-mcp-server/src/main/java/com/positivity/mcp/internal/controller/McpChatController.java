@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -87,7 +88,8 @@ public class McpChatController {
                 currentUserContext.roles().size(),
                 currentUserContext.authorities().size(),
                 "ROLE_USER".equals(currentUserContext.primaryRole()));
-        String response = agentOrchestrationService.chat(currentUserContext, request.message());
+        String response =
+                agentOrchestrationService.chat(currentUserContext, request.message(), request.conversationId());
         return ResponseEntity.ok(new ChatResponse(response));
     }
 
@@ -99,7 +101,17 @@ public class McpChatController {
                     requiredMode = Schema.RequiredMode.REQUIRED)
             @NotBlank
             @NonNull
-            String message) {}
+            String message,
+
+            @Schema(
+                    description = "Optional conversation id. Turns sharing an id share one memory; "
+                            + "omit it to use the caller's default per-role conversation, and supply a "
+                            + "distinct id per request to ask independent questions that do not inherit "
+                            + "each other's history (#1735).",
+                    example = "gate-q07",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            String conversationId) {}
 
     @Schema(name = "ChatResponse", description = "Chat response payload", example = "{\"response\":\"Hi!\"}")
     public record ChatResponse(
