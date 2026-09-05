@@ -7,9 +7,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
+import com.positivity.inventory.internal.entity.LocationRefEntity;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import com.positivity.inventory.internal.repository.LocationRefRepository;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -43,12 +45,32 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
     private InventoryStockSummaryRepository inventoryStockSummaryRepository;
 
     @Autowired
+    private LocationRefRepository locationRefRepository;
+
+    @Autowired
     private LedgerPostingService ledgerPostingService;
 
     @BeforeEach
     void setUp() {
         inventoryLedgerEntryRepository.deleteAll();
         inventoryStockSummaryRepository.deleteAll();
+        locationRefRepository.deleteAll();
+    }
+
+    /**
+     * Availability rows carry a resolved {@code locationName}, read from the {@code location_ref}
+     * replica rather than echoed from the raw location UUID. A location the replica does not carry
+     * is deliberately left with a null name, so an assertion on {@code locationName} only means
+     * something once the replica has a row for that location — seeding on-hand stock alone is not
+     * enough.
+     */
+    private void seedLocationRef(UUID locationId, String name) {
+        locationRefRepository.save(LocationRefEntity.builder()
+                .locationId(locationId)
+                .name(name)
+                .status("ACTIVE")
+                .active(true)
+                .build());
     }
 
     @Test
@@ -56,6 +78,8 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
     void getAvailability_returnsPerLocationList_whenProductHasStock() throws Exception {
         UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
+        seedLocationRef(LOC_1, "Main Warehouse");
+        seedLocationRef(LOC_2, "Overflow Depot");
         seedOnHand(productId, LOC_1, new BigDecimal("40"));
         seedOnHand(productId, LOC_2, new BigDecimal("60"));
 
@@ -63,12 +87,12 @@ class InventoryAvailabilityContractBehaviorIT extends BaseContractIntegrationTes
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].locationId").exists())
-                .andExpect(jsonPath("$[0].locationName").exists())
+                .andExpect(jsonPath("$[0].locationId").value(LOC_1.toString()))
+                .andExpect(jsonPath("$[0].locationName").value("Main Warehouse"))
                 .andExpect(jsonPath("$[0].onHandQuantity").exists())
                 .andExpect(jsonPath("$[0].availableToPromiseQuantity").exists())
-                .andExpect(jsonPath("$[1].locationId").exists())
-                .andExpect(jsonPath("$[1].locationName").exists())
+                .andExpect(jsonPath("$[1].locationId").value(LOC_2.toString()))
+                .andExpect(jsonPath("$[1].locationName").value("Overflow Depot"))
                 .andExpect(jsonPath("$[1].onHandQuantity").exists())
                 .andExpect(jsonPath("$[1].availableToPromiseQuantity").exists());
     }
