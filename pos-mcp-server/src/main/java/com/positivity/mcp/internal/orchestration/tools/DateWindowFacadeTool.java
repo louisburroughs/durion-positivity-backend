@@ -156,7 +156,16 @@ public class DateWindowFacadeTool {
             parsedShape = c.shape();
             parsedUnit = c.unit();
             resolvedCount = c.count();
-            if (parsedComparison == DateWindowResolver.Comparison.NONE) {
+            // #1774: a comparison the wording names outright wins over the model's argument, the
+            // same way the shape does. #1675 only filled in a comparison the model left NONE and
+            // never corrected one it supplied — deliberate caution then, for lack of evidence about
+            // comparison wording. q15 is the evidence: "compared with the same six months last
+            // year" names a specific period, the model sent PRIOR_PERIOD, and the year-on-year
+            // figure was computed against 2025-09..2026-02 instead of 2025-03..2025-08.
+            // The classifier still abstains on wording it does not recognise, so an unnamed
+            // comparison leaves the model's choice untouched.
+            if (c.comparison() != DateWindowResolver.Comparison.NONE
+                    || parsedComparison == DateWindowResolver.Comparison.NONE) {
                 parsedComparison = c.comparison();
             }
         }
