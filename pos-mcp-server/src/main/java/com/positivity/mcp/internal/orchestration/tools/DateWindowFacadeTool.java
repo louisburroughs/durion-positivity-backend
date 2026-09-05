@@ -63,7 +63,7 @@ public class DateWindowFacadeTool {
                     + "\"the next three months\"); use this for anything upcoming — bills due, appointments "
                     + "scheduled, warranties expiring — and never ask the caller for explicit dates for a "
                     + "forward range. Units: DAY, "
-                    + "WEEK (ISO Monday-Sunday), MONTH, QUARTER, YEAR — DAY is only valid with ROLLING. "
+                    + "WEEK (ISO Monday-Sunday), MONTH, QUARTER, YEAR — DAY is only valid with ROLLING or FORWARD. "
                     + "Optional comparison, for a question that pairs the window with another one: "
                     + "PRIOR_PERIOD (the same shape and length immediately before the primary window) or "
                     + "YEAR_EARLIER (the primary window's exact span, one year earlier). Returns JSON: "
@@ -213,7 +213,7 @@ public class DateWindowFacadeTool {
         } catch (IllegalArgumentException invalid) {
             throw new InvalidToolArgumentException(
                     "Unsupported shape '" + raw
-                            + "': pass one of ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, CALENDAR_SPAN",
+                            + "': pass one of ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, CALENDAR_SPAN, FORWARD",
                     invalid);
         }
     }

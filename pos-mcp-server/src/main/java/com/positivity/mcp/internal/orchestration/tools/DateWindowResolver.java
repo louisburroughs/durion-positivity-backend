@@ -388,7 +388,7 @@ final class DateWindowResolver {
         return LocalDate.of(date.getYear(), quarterStartMonth, 1);
     }
 
-    /** {@code date} shifted back {@code count} whole units of {@code unit}. */
+    /** {@code date} shifted forward {@code count} whole units of {@code unit}. */
     private static LocalDate shiftForward(@NonNull LocalDate date, @NonNull Unit unit, int count) {
         return switch (unit) {
             case DAY -> date.plusDays(count);
@@ -399,6 +399,7 @@ final class DateWindowResolver {
         };
     }
 
+    /** {@code date} shifted back {@code count} whole units of {@code unit}. */
     private static LocalDate shiftBack(@NonNull LocalDate date, @NonNull Unit unit, int count) {
         return switch (unit) {
             case DAY -> date.minusDays(count);

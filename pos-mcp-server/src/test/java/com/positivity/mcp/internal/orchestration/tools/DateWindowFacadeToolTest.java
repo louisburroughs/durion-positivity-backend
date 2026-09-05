@@ -104,7 +104,9 @@ class DateWindowFacadeToolTest {
     void resolveDateWindow_rejectsUnrecognizedShape() {
         assertThatExceptionOfType(InvalidToolArgumentException.class)
                 .isThrownBy(() -> tool.resolveDateWindow("SOMETIME_SOON", "MONTH", 1, null, null))
-                .withMessageContaining("ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, CALENDAR_SPAN");
+                // FORWARD must appear too: the message is what a model self-corrects from, and
+                // omitting a supported shape tells it that shape does not exist.
+                .withMessageContaining("ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, CALENDAR_SPAN, FORWARD");
     }
 
     @Test
