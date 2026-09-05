@@ -354,7 +354,11 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                // A blank subject is not a bean-validation failure: InternalTokenRequest declares no
+                // constraints, so @Valid passes and JwtController throws SecurityValidationException.
+                // #1730 aligned that type on VALIDATION_ERROR; INVALID_REQUEST stays for framework
+                // binding failures only.
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.message").isNotEmpty())
                 .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
@@ -396,7 +400,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+                // Same path as T6: RefreshTokenRequest carries no constraints, so this reaches
+                // JwtServiceImpl#refreshAccessToken, which throws SecurityValidationException.
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     /**
