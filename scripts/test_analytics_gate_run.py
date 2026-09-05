@@ -1272,6 +1272,56 @@ class TransportResilienceTest(unittest.TestCase):
         outcome = self._ask_raising(ConnectionRefusedError("refused"))
 
         self.assertIn("ConnectionRefusedError", outcome["error"])
+class RunProvenanceTest(unittest.TestCase):
+    """#1735 follow-on: a run must say what it measured against.
+
+    On 2026-09-05 a deploy landed mid-run. The service restarted underneath the gate, the trace
+    endpoint answered 503, eleven of twelve questions came back UNGRADED, and the output was
+    indistinguishable from a genuine collapse in capability — the file recorded the questions blob
+    and the actor, and nothing about the server. Attributing it needed container logs.
+    """
+
+    def test_server_build_extracts_the_build_section(self):
+        class FakeResponse:
+            def read(self):
+                return json.dumps({"build": {"name": "pos-mcp-server", "version": "0.1.81ff1e0"}}).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        with mock.patch.object(runner.urllib.request, "urlopen", lambda r, timeout=None: FakeResponse()):
+            build = runner.server_build("http://x/mcp-server/v1/mcp/chat", "tok")
+
+        self.assertEqual(build["version"], "0.1.81ff1e0")
+
+    def test_server_build_reports_a_reason_rather_than_raising(self):
+        # Not knowing the build must never stop a run.
+        def boom(request, timeout=None):
+            raise ConnectionRefusedError("refused")
+
+        with mock.patch.object(runner.urllib.request, "urlopen", boom):
+            build = runner.server_build("http://x/mcp-server/v1/mcp/chat", "tok")
+
+        self.assertIn("ConnectionRefusedError", build["error"])
+
+    def test_server_build_handles_info_without_a_build_section(self):
+        class FakeResponse:
+            def read(self):
+                return json.dumps({"git": {"branch": "main"}}).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        with mock.patch.object(runner.urllib.request, "urlopen", lambda r, timeout=None: FakeResponse()):
+            build = runner.server_build("http://x/mcp-server/v1/mcp/chat", "tok")
+
+        self.assertIn("no build section", build["error"])
 
 
 class TurnIsolationTest(unittest.TestCase):
