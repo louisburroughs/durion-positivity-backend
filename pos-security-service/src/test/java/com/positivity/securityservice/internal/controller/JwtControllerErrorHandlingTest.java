@@ -7,9 +7,11 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
 import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
@@ -60,12 +62,19 @@ import org.springframework.test.web.servlet.MockMvc;
  * because {@code @WebMvcTest} auto-detects it as a servlet {@code Filter} bean (this module's
  * existing controller-slice pattern, see e.g. {@code AuditControllerTest}); this is a security
  * service, and this endpoint deliberately does not use {@code @WithMockUser}.
+ *
+ * <p>This class also proves, at the HTTP boundary, that an inbound {@code X-Correlation-Id} is
+ * echoed in both the response header and the {@code ApiError} body for the pre-existing handlers
+ * exercised here — {@link InvalidRefreshTokenException}, {@link SecurityValidationException}, and
+ * {@link NoRolesAssignedException} — now that every handler routes through the single {@code
+ * respond} helper in {@code GlobalExceptionHandler} (ADR-0017 §4, issue #1729).
  */
 @WebMvcTest(JwtController.class)
 @Import(WebCommonErrorAutoConfiguration.class)
 class JwtControllerErrorHandlingTest {
 
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2026-09-04T12:00:00Z"), ZoneOffset.UTC);
+    private static final String CORRELATION_ID = "test-correlation-id-1729";
 
     @Autowired
     private MockMvc mockMvc;
@@ -99,11 +108,14 @@ class JwtControllerErrorHandlingTest {
                 .thenThrow(new SecurityValidationException("Invalid refresh token"));
 
         mockMvc.perform(post("/v1/auth/refresh")
+                        .header("X-Correlation-Id", CORRELATION_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"not-a-real-token\"}"))
                 .andExpect(status().isBadRequest())
+                .andExpect(header().string("X-Correlation-Id", CORRELATION_ID))
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
-                .andExpect(jsonPath("$.message").value("Invalid refresh token"));
+                .andExpect(jsonPath("$.message").value("Invalid refresh token"))
+                .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID));
     }
 
     @Test
@@ -113,12 +125,32 @@ class JwtControllerErrorHandlingTest {
                 .thenThrow(new NoRolesAssignedException("User has no roles assigned"));
 
         mockMvc.perform(post("/v1/auth/refresh")
+                        .header("X-Correlation-Id", CORRELATION_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"a-valid-looking-token\"}"))
                 .andExpect(status().isForbidden())
+                .andExpect(header().string("X-Correlation-Id", CORRELATION_ID))
                 .andExpect(jsonPath("$.code").value("USER_HAS_NO_ROLES"))
                 .andExpect(jsonPath("$.message").value("User has no roles assigned"))
-                .andExpect(jsonPath("$.nextAction").value(containsString("assign at least one role")));
+                .andExpect(jsonPath("$.nextAction").value(containsString("assign at least one role")))
+                .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID));
+    }
+
+    @Test
+    @DisplayName("an InvalidRefreshTokenException answers 401 INVALID_REFRESH_TOKEN with the echoed correlation id")
+    void anInvalidRefreshTokenFailureAnswers401WithEchoedCorrelationId() throws Exception {
+        when(jwtService.refreshAccessToken(anyString()))
+                .thenThrow(new InvalidRefreshTokenException("Refresh token references a user that no longer exists"));
+
+        mockMvc.perform(post("/v1/auth/refresh")
+                        .header("X-Correlation-Id", CORRELATION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"a-valid-looking-token\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("X-Correlation-Id", CORRELATION_ID))
+                .andExpect(jsonPath("$.code").value("INVALID_REFRESH_TOKEN"))
+                .andExpect(jsonPath("$.message").value("Refresh token references a user that no longer exists"))
+                .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID));
     }
 
     /**

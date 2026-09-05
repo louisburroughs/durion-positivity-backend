@@ -162,6 +162,32 @@ of `GET /v1/roles/check-permission`, rather than assumed from the token.
 - `POST /v1/users/{id}/enable` / `disable` — admin: enable/disable account
 - `GET /v1/auth/authorization/decision` — check if caller has a permission
 
+## Error Responses
+
+Every non-2xx response this service maps itself (`GlobalExceptionHandler`) carries the platform
+`ApiError` envelope (see `docs/ERROR_ENVELOPE.md`) and the same correlation id in both the body's
+`correlationId` and the `X-Correlation-Id` response header (ADR-0017 §4). An inbound
+`X-Correlation-Id` is echoed; otherwise a UUIDv7 is generated. All handlers build their response
+through one helper, and `GlobalExceptionHandlerTest` fails if a new handler is added without
+joining its header assertion (#1729).
+
+The published `openapi.yaml` lists only the error statuses an operation can actually produce.
+Because the advice is module-wide, springdoc would otherwise attach its 400/401/403/404/409 to
+every operation (#1721); `ProducibleResponsesOperationCustomizer` prunes them by rule:
+
+| Status | Kept when |
+| --- | --- |
+| any 2xx / `default` | always |
+| declared via `@ApiResponse` / `@Operation(responses)` on the method or class | always |
+| `400` | the operation has a parameter or a request body |
+| `401` | the `@PreAuthorize` guard is anything but `permitAll()` |
+| `403` | the guard uses `hasAuthority` / `hasAnyAuthority` / `hasRole` / a SpEL bean check |
+| `404`, `409`, anything else | only when declared |
+
+So an endpoint that can answer 404 or 409 (or a `permitAll()` endpoint that can answer 401/403)
+must declare it on the controller method. `OpenApiErrorResponseContractTest` cross-checks the
+committed spec against the controllers' declarations and fails on drift in either direction.
+
 ## Configuration
 
 | Property                            | Default      | Description                           |

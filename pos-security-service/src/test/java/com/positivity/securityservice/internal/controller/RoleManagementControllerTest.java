@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -14,6 +15,7 @@ import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleCreateRequest;
 import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
+import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import com.positivity.securityservice.internal.service.CustomUserDetailsService;
 import com.positivity.securityservice.internal.service.RoleAuthorityService;
@@ -234,7 +236,8 @@ class RoleManagementControllerTest {
         mockMvc.perform(post("/v1/roles")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"ShopManager\"}"))
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(header().exists("X-Correlation-Id"));
     }
 
     // ── SC3: GET /v1/roles → 200 ─────────────────────────────────────────────
@@ -280,7 +283,9 @@ class RoleManagementControllerTest {
     // ── SC5: GET /v1/roles/{id} → 404 ────────────────────────────────────────
 
     /**
-     * SC5: GET /v1/roles/{id} for a non-existent UUID returns 404 Not Found.
+     * SC5: GET /v1/roles/{id} for a non-existent UUID returns 404 Not Found, flowing through
+     * {@link RoleNotFoundException} and the {@code GlobalExceptionHandler} advice so the response
+     * carries the {@code ApiError} envelope and the {@code X-Correlation-Id} header (issue #1729).
      */
     @Test
     @WithMockUser(authorities = "security:role:view")
@@ -289,7 +294,9 @@ class RoleManagementControllerTest {
         when(roleManagementService.getRoleById(any(UUID.class))).thenReturn(Optional.empty());
 
         mockMvc.perform(get("/v1/roles/{id}", UUID.fromString("00000000-0000-0000-0000-000000000099")))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(header().exists("X-Correlation-Id"))
+                .andExpect(jsonPath("$.code").value("ROLE_NOT_FOUND"));
     }
 
     // ── SC6: DELETE /v1/roles/{id} → 204 ─────────────────────────────────────

@@ -213,6 +213,29 @@ public class SecurityConfig {
 }
 ```
 
+### Error Responses From Unscoped `@ControllerAdvice`
+
+springdoc merges a "generic" response onto **every** operation for each `@ExceptionHandler` that
+carries `@ResponseStatus` on any advice applicable to the controller. A module-wide
+`@ControllerAdvice` (no `assignableTypes` / `basePackages`) therefore stamps its whole status set —
+typically 400/401/403/404/409 — onto all operations, including ones that can only answer 200
+(durion-positivity-backend #1721). Modules whose advices are scoped per controller (`pos-invoice`,
+`pos-order`) do not have the problem.
+
+Two fixes are accepted:
+
+1. Scope the advice (`@RestControllerAdvice(assignableTypes = ...)`) when the mapped exceptions
+   are controller-specific.
+2. Keep the module-wide advice and register an `OperationCustomizer` that prunes what an operation
+   cannot produce. `pos-security-service`'s `ProducibleResponsesOperationCustomizer` is the
+   reference: it keeps declared codes, 2xx, and 400/401/403 by structural rule (inputs present,
+   guard not `permitAll()`, guard checks an authority), and drops everything else. Pair it with a
+   spec-level test (`OpenApiErrorResponseContractTest`) so the committed `openapi.yaml` cannot drift
+   from the controllers' declarations.
+
+`pos-security-common`'s `x-required-permissions` customizer is always registered, so a module may
+add its own `OperationCustomizer` beans without losing the extension.
+
 ### Generating OpenAPI Specs
 
 **Method 1: Maven Profile (Recommended)**

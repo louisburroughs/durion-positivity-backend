@@ -16,7 +16,6 @@ import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
@@ -100,6 +99,11 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * exception now falls through to that platform advice, which answers a generic, correlated
  * {@code 500 INTERNAL_ERROR} and logs the stack trace at ERROR.
  *
+ * <p>Every response built by this advice carries the correlation id in both the {@link ApiError}
+ * body and the {@code X-Correlation-Id} response header (ADR-0017 §4, issue #1729). The private
+ * {@code respond} helper is the sole path that builds an {@link ApiError}, so a handler added
+ * later cannot forget the header.
+ *
  * @since 1.0
  */
 @Slf4j
@@ -127,8 +131,7 @@ public class GlobalExceptionHandler {
         String correlationId = extractCorrelationId(request);
         log.warn("Role not found (correlationId={}): {}", correlationId, ex.getMessage());
 
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(errorResponse("ROLE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND, correlationId));
+        return respond(HttpStatus.NOT_FOUND, "ROLE_NOT_FOUND", ex.getMessage(), correlationId);
     }
 
     /**
@@ -147,8 +150,7 @@ public class GlobalExceptionHandler {
         String correlationId = extractCorrelationId(request);
         log.warn("User not found (correlationId={}): {}", correlationId, ex.getMessage());
 
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(errorResponse("USER_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND, correlationId));
+        return respond(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", ex.getMessage(), correlationId);
     }
 
     /**
@@ -168,8 +170,7 @@ public class GlobalExceptionHandler {
         String correlationId = extractCorrelationId(request);
         log.warn("Role assignment not found (correlationId={}): {}", correlationId, ex.getMessage());
 
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(errorResponse("ROLE_ASSIGNMENT_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND, correlationId));
+        return respond(HttpStatus.NOT_FOUND, "ROLE_ASSIGNMENT_NOT_FOUND", ex.getMessage(), correlationId);
     }
 
     /**
@@ -189,8 +190,7 @@ public class GlobalExceptionHandler {
         String correlationId = extractCorrelationId(request);
         log.warn("Permission not found (correlationId={}): {}", correlationId, ex.getMessage());
 
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(errorResponse("PERMISSION_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND, correlationId));
+        return respond(HttpStatus.NOT_FOUND, "PERMISSION_NOT_FOUND", ex.getMessage(), correlationId);
     }
 
     @ExceptionHandler(EntityNotFoundException.class)
@@ -198,8 +198,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleEntityNotFoundException(EntityNotFoundException ex, WebRequest request) {
         String correlationId = extractCorrelationId(request);
         log.warn("Entity not found (correlationId={}): {}", correlationId, ex.getMessage());
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(errorResponse("NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND, correlationId));
+        return respond(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), correlationId);
     }
 
     @ExceptionHandler(SelfRegistrationConflictException.class)
@@ -211,15 +210,14 @@ public class GlobalExceptionHandler {
         log.warn("Self-registration conflict (correlationId={}): {}", correlationId, ex.getMessage());
         SelfRegistrationGuidance guidance = selfRegistrationGuidance(ex.getErrorCode());
 
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(errorResponse(
-                        ex.getErrorCode(),
-                        ex.getMessage(),
-                        HttpStatus.CONFLICT,
-                        correlationId,
-                        ex.getReferenceId() == null ? null : ex.getReferenceId().toString(),
-                        guidance.nextAction(),
-                        guidance.supportAction()));
+        return respond(
+                HttpStatus.CONFLICT,
+                ex.getErrorCode(),
+                ex.getMessage(),
+                correlationId,
+                ex.getReferenceId() == null ? null : ex.getReferenceId().toString(),
+                guidance.nextAction(),
+                guidance.supportAction());
     }
 
     @ExceptionHandler(SelfRegistrationReviewCaseNotFoundException.class)
@@ -230,12 +228,7 @@ public class GlobalExceptionHandler {
         String correlationId = extractCorrelationId(request);
         log.warn("Self-registration review case not found (correlationId={}): {}", correlationId, ex.getMessage());
 
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(errorResponse(
-                        "SELF_REGISTRATION_REVIEW_CASE_NOT_FOUND",
-                        ex.getMessage(),
-                        HttpStatus.NOT_FOUND,
-                        correlationId));
+        return respond(HttpStatus.NOT_FOUND, "SELF_REGISTRATION_REVIEW_CASE_NOT_FOUND", ex.getMessage(), correlationId);
     }
 
     /**
@@ -246,26 +239,23 @@ public class GlobalExceptionHandler {
      *
      * **HTTP Status:** 400 Bad Request (ADR-0017 §1)
      *
-     * @param ex       the exception
-     * @param request  the web request
-     * @param response the servlet response, used to echo the correlation id header (ADR-0017 §4)
+     * @param ex      the exception
+     * @param request the web request
      * @return error response with 400 status and correlation ID
      */
     @ExceptionHandler(SecurityValidationException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<ApiError> handleSecurityValidationException(
-            SecurityValidationException ex, WebRequest request, HttpServletResponse response) {
+            SecurityValidationException ex, WebRequest request) {
 
         String correlationId = extractCorrelationId(request);
-        response.setHeader(CORRELATION_ID_HEADER, correlationId);
         log.warn("Validation error (correlationId={}): {}", correlationId, ex.getMessage());
 
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(errorResponse(
-                        "INVALID_REQUEST",
-                        ex.getMessage() != null ? ex.getMessage() : "Invalid request parameters",
-                        HttpStatus.BAD_REQUEST,
-                        correlationId));
+        return respond(
+                HttpStatus.BAD_REQUEST,
+                "INVALID_REQUEST",
+                ex.getMessage() != null ? ex.getMessage() : "Invalid request parameters",
+                correlationId);
     }
 
     /**
@@ -278,29 +268,25 @@ public class GlobalExceptionHandler {
      * authorization, not a malformed request; decided in #1725). The body carries a
      * {@code nextAction} hint telling the caller how to get the account back into service.
      *
-     * @param ex       the exception
-     * @param request  the web request
-     * @param response the servlet response, used to echo the correlation id header (ADR-0017 §4)
+     * @param ex      the exception
+     * @param request the web request
      * @return error response with 403 status, a {@code nextAction} hint, and correlation ID
      */
     @ExceptionHandler(NoRolesAssignedException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
-    public ResponseEntity<ApiError> handleNoRolesAssignedException(
-            NoRolesAssignedException ex, WebRequest request, HttpServletResponse response) {
+    public ResponseEntity<ApiError> handleNoRolesAssignedException(NoRolesAssignedException ex, WebRequest request) {
 
         String correlationId = extractCorrelationId(request);
-        response.setHeader(CORRELATION_ID_HEADER, correlationId);
         log.warn("No roles assigned (correlationId={}): {}", correlationId, ex.getMessage());
 
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(errorResponse(
-                        "USER_HAS_NO_ROLES",
-                        ex.getMessage(),
-                        HttpStatus.FORBIDDEN,
-                        correlationId,
-                        null,
-                        "Ask an administrator to assign at least one role to this account, then sign in again",
-                        null));
+        return respond(
+                HttpStatus.FORBIDDEN,
+                "USER_HAS_NO_ROLES",
+                ex.getMessage(),
+                correlationId,
+                null,
+                "Ask an administrator to assign at least one role to this account, then sign in again",
+                null);
     }
 
     @ExceptionHandler({
@@ -323,9 +309,7 @@ public class GlobalExceptionHandler {
                             fe.getDefaultMessage()));
         }
 
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(errorResponse(
-                        "INVALID_REQUEST", "Invalid request parameters", HttpStatus.BAD_REQUEST, correlationId));
+        return respond(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "Invalid request parameters", correlationId);
     }
 
     @ExceptionHandler(AuthorizationDeniedException.class)
@@ -364,8 +348,7 @@ public class GlobalExceptionHandler {
                     auditException.getMessage());
         }
 
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(errorResponse("FORBIDDEN", "Access denied", HttpStatus.FORBIDDEN, correlationId));
+        return respond(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied", correlationId);
     }
 
     @ExceptionHandler(IllegalStateException.class)
@@ -375,13 +358,11 @@ public class GlobalExceptionHandler {
 
         if (message.contains("Overlapping role assignment")) {
             log.warn("Role assignment overlap conflict (correlationId={}): {}", correlationId, message);
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(errorResponse("ROLE_ASSIGNMENT_CONFLICT", message, HttpStatus.CONFLICT, correlationId));
+            return respond(HttpStatus.CONFLICT, "ROLE_ASSIGNMENT_CONFLICT", message, correlationId);
         }
 
         log.warn("Illegal state (correlationId={}): {}", correlationId, message);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(errorResponse("INVALID_STATE", message, HttpStatus.BAD_REQUEST, correlationId));
+        return respond(HttpStatus.BAD_REQUEST, "INVALID_STATE", message, correlationId);
     }
 
     /**
@@ -411,12 +392,11 @@ public class GlobalExceptionHandler {
                 "Concurrency conflict (correlationId={}): Entity was modified concurrently. Retry with backoff.",
                 correlationId);
 
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(errorResponse(
-                        "CONCURRENCY_CONFLICT",
-                        "Token was modified concurrently. Please retry with exponential backoff.",
-                        HttpStatus.CONFLICT,
-                        correlationId));
+        return respond(
+                HttpStatus.CONFLICT,
+                "CONCURRENCY_CONFLICT",
+                "Token was modified concurrently. Please retry with exponential backoff.",
+                correlationId);
     }
 
     /**
@@ -436,8 +416,7 @@ public class GlobalExceptionHandler {
         String correlationId = extractCorrelationId(request);
         log.warn("Duplicate role name (correlationId={}): {}", correlationId, ex.getMessage());
 
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(errorResponse("DUPLICATE_ROLE_NAME", ex.getMessage(), HttpStatus.CONFLICT, correlationId));
+        return respond(HttpStatus.CONFLICT, "DUPLICATE_ROLE_NAME", ex.getMessage(), correlationId);
     }
 
     /**
@@ -446,14 +425,14 @@ public class GlobalExceptionHandler {
      * semantics for an already-taken account.
      */
     @ExceptionHandler(DuplicateUsernameException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
     public ResponseEntity<ApiError> handleDuplicateUsernameException(
             DuplicateUsernameException ex, WebRequest request) {
 
         String correlationId = extractCorrelationId(request);
         log.warn("Duplicate username (correlationId={}): {}", correlationId, ex.getMessage());
 
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(errorResponse("USER_ALREADY_EXISTS", ex.getMessage(), HttpStatus.CONFLICT, correlationId));
+        return respond(HttpStatus.CONFLICT, "USER_ALREADY_EXISTS", ex.getMessage(), correlationId);
     }
 
     /**
@@ -473,8 +452,7 @@ public class GlobalExceptionHandler {
             InvalidRefreshTokenException ex, WebRequest request) {
         String correlationId = extractCorrelationId(request);
         log.warn("Invalid refresh token (correlationId={}): {}", correlationId, ex.getMessage());
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(errorResponse("INVALID_REFRESH_TOKEN", ex.getMessage(), HttpStatus.UNAUTHORIZED, correlationId));
+        return respond(HttpStatus.UNAUTHORIZED, "INVALID_REFRESH_TOKEN", ex.getMessage(), correlationId);
     }
 
     @ExceptionHandler(LockedException.class)
@@ -482,12 +460,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleLockedException(LockedException ex, WebRequest request) {
         String correlationId = extractCorrelationId(request);
         log.warn("Authentication denied (correlationId={}): account is locked", correlationId);
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(errorResponse(
-                        "ACCOUNT_LOCKED",
-                        "Account is temporarily locked due to repeated failed login attempts",
-                        HttpStatus.UNAUTHORIZED,
-                        correlationId));
+        return respond(
+                HttpStatus.UNAUTHORIZED,
+                "ACCOUNT_LOCKED",
+                "Account is temporarily locked due to repeated failed login attempts",
+                correlationId);
     }
 
     @ExceptionHandler(DisabledException.class)
@@ -495,8 +472,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleDisabledException(DisabledException ex, WebRequest request) {
         String correlationId = extractCorrelationId(request);
         log.warn("Authentication denied (correlationId={}): account is disabled", correlationId);
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(errorResponse("ACCOUNT_DISABLED", "Account is disabled", HttpStatus.UNAUTHORIZED, correlationId));
+        return respond(HttpStatus.UNAUTHORIZED, "ACCOUNT_DISABLED", "Account is disabled", correlationId);
     }
 
     @ExceptionHandler(AccountExpiredException.class)
@@ -504,8 +480,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleAccountExpiredException(AccountExpiredException ex, WebRequest request) {
         String correlationId = extractCorrelationId(request);
         log.warn("Authentication denied (correlationId={}): account has expired", correlationId);
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(errorResponse("ACCOUNT_EXPIRED", "Account has expired", HttpStatus.UNAUTHORIZED, correlationId));
+        return respond(HttpStatus.UNAUTHORIZED, "ACCOUNT_EXPIRED", "Account has expired", correlationId);
     }
 
     @ExceptionHandler(CredentialsExpiredException.class)
@@ -514,9 +489,7 @@ public class GlobalExceptionHandler {
             CredentialsExpiredException ex, WebRequest request) {
         String correlationId = extractCorrelationId(request);
         log.warn("Authentication denied (correlationId={}): credentials have expired", correlationId);
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(errorResponse(
-                        "CREDENTIALS_EXPIRED", "Credentials have expired", HttpStatus.UNAUTHORIZED, correlationId));
+        return respond(HttpStatus.UNAUTHORIZED, "CREDENTIALS_EXPIRED", "Credentials have expired", correlationId);
     }
 
     @ExceptionHandler(BadCredentialsException.class)
@@ -524,42 +497,45 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleBadCredentialsException(BadCredentialsException ex, WebRequest request) {
         String correlationId = extractCorrelationId(request);
         log.warn("Authentication failed (correlationId={}): invalid credentials", correlationId);
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(errorResponse(
-                        "INVALID_CREDENTIALS", "Invalid username or password", HttpStatus.UNAUTHORIZED, correlationId));
+        return respond(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Invalid username or password", correlationId);
     }
 
     /**
-     * Builds standardized error response object.
+     * Builds the standardized error response, carrying the correlation id in both the
+     * {@link ApiError} body and the {@code X-Correlation-Id} response header (ADR-0017 §4). This
+     * is the only path in this advice that builds an {@link ApiError}, so a handler added later
+     * cannot forget the header.
      *
+     * @param status        HTTP status for the response
      * @param code          error code for client processing
      * @param message       human-readable error message
-     * @param status        HTTP status for the response
      * @param correlationId request correlation ID for tracking
-     * @return error response record
+     * @return the response, with the correlation id header set and the body populated
      */
-    private ApiError errorResponse(String code, String message, HttpStatus status, String correlationId) {
-        return errorResponse(code, message, status, correlationId, null, null, null);
+    private ResponseEntity<ApiError> respond(HttpStatus status, String code, String message, String correlationId) {
+        return respond(status, code, message, correlationId, null, null, null);
     }
 
-    private ApiError errorResponse(
+    private ResponseEntity<ApiError> respond(
+            HttpStatus status,
             String code,
             String message,
-            HttpStatus status,
             String correlationId,
             String referenceId,
             String nextAction,
             String supportAction) {
-        return new ApiError(
-                code,
-                message,
-                status.value(),
-                Instant.now(clock).toString(),
-                correlationId,
-                null,
-                referenceId,
-                nextAction,
-                supportAction);
+        return ResponseEntity.status(status)
+                .header(CORRELATION_ID_HEADER, correlationId)
+                .body(new ApiError(
+                        code,
+                        message,
+                        status.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        null,
+                        referenceId,
+                        nextAction,
+                        supportAction));
     }
 
     private SelfRegistrationGuidance selfRegistrationGuidance(String errorCode) {
@@ -602,7 +578,7 @@ public class GlobalExceptionHandler {
      *
      * **Priority:**
      * 1. X-Correlation-Id header (if present)
-     * 2. Generate new UUID v4
+     * 2. Generate new UUID v7 (see {@link UUIDv7Generator})
      *
      * @param request the web request
      * @return correlation ID (never null)
