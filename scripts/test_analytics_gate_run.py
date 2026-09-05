@@ -705,7 +705,8 @@ class WindowGradingTest(unittest.TestCase):
             self._q({"shape": None, "note": "mixed window"}), "rolling: 2026-01-01 to 2026-02-01 — x", date(2026, 9, 1)
         )
         self.assertEqual(verdict, "UNGRADED")
-        self.assertEqual(detail, "mixed window")
+        # Now source-tagged, so a reader can tell a corpus decision from a grading outcome.
+        self.assertEqual(detail, "[corpus] mixed window")
 
     def test_observed_shapes_deduplicates_and_preserves_order(self):
         # All on one line: a greedy clause used to swallow everything after the first statement.
@@ -865,6 +866,56 @@ class TraceWindowGradingTest(unittest.TestCase):
 
         self.assertEqual(traces, [])
         self.assertIsNotNone(failure)
+
+    def test_a_trace_with_no_resolver_call_is_ungraded_not_answer_parsed(self):
+        # The distinction that matters: an EMPTY resolved list means the trace exists and proves no
+        # window was resolved. Treating it as "no trace" would fall back to prose and could PASS on
+        # a claim the trace disproves.
+        verdict, detail = runner.grade_window(
+            self._q({"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6}),
+            "calendar span: 2026-03-01 to 2026-08-31 — 6 whole months",
+            date(2026, 9, 4),
+            [],
+        )
+
+        self.assertEqual(verdict, "UNGRADED")
+        self.assertIn("[trace]", detail)
+        self.assertIn("no window was resolved", detail)
+
+    def test_every_verdict_names_its_source(self):
+        expectation = {"shape": "CALENDAR_SPAN", "unit": "MONTH", "count": 6}
+        cases = [
+            (self._q(expectation), "no statement here", None),                      # answer, ungraded
+            (self._q(expectation), "irrelevant", []),                               # trace, ungraded
+            (self._q({"shape": None, "note": "left unset"}), "x", None),            # corpus, ungraded
+            (self._q({"shape": None, "as_of_offset_days": 0}), None, None),         # answer, no reply
+        ]
+        for question, answer, resolved in cases:
+            _, detail = runner.grade_window(question, answer, date(2026, 9, 4), resolved)
+            self.assertRegex(detail, r"^\[(trace|answer|corpus)\]", detail)
+
+    def test_the_trace_query_is_url_encoded_and_uses_a_z_timestamp(self):
+        # An unencoded "+00:00" offset decodes to a space, so Spring cannot parse @RequestParam
+        # Instant and answers 400 — the runner would then fall back to answer parsing on every run.
+        captured = {}
+
+        class _Resp:
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return False
+            def read(self):
+                return b"[]"
+
+        def fake_urlopen(request, timeout=None):
+            captured["url"] = request.full_url
+            return _Resp()
+
+        with mock.patch.object(runner.urllib.request, "urlopen", fake_urlopen):
+            runner.fetch_traces("http://h/v1/eval/turn-traces", "tok", datetime(2026, 9, 5, 1, 0, tzinfo=timezone.utc))
+
+        self.assertIn("since=2026-09-05T01%3A00%3A00Z", captured["url"])
+        self.assertNotIn("+", captured["url"])
 
     def test_traces_url_is_derived_from_the_chat_url(self):
         self.assertEqual(

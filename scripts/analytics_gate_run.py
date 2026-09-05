@@ -53,6 +53,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -315,7 +316,13 @@ def fetch_traces(traces_url, token, since, timeout=60):
     dying. The reason is returned so the record can say WHY it fell back, instead of a reader having
     to guess whether the endpoint is missing, forbidden, or simply empty.
     """
-    request = urllib.request.Request(f"{traces_url}?since={since.isoformat()}&limit=200")
+    # urlencode, and Z rather than +00:00: an unencoded "+" decodes to a space, so Spring would
+    # fail to parse @RequestParam Instant and answer 400 — and the runner would silently fall back
+    # to answer parsing on every run, exactly the behaviour this change exists to replace.
+    query = urllib.parse.urlencode(
+        {"since": since.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "limit": 200}
+    )
+    request = urllib.request.Request(f"{traces_url}?{query}")
     request.add_header("Authorization", f"Bearer {token}")
     request.add_header("X-API-Version", os.environ.get("MCP_API_VERSION", "1"))
     try:
@@ -380,14 +387,14 @@ def grade_window(question, answer, as_of, resolved=None):
             if not answer:
                 # A transport failure is not a window failure. Keeping them separable is the whole
                 # point of grading per stage.
-                return "UNGRADED", "no answer to read an as-of date from"
+                return "UNGRADED", "[answer] no answer to read an as-of date from"
             target = as_of + timedelta(days=int(expected["as_of_offset_days"]))
             if target.isoformat() in normalise_typography(answer):
                 return "PASS", f"answer states the as-of date {target.isoformat()}"
             return "FAIL", f"expected the as-of date {target.isoformat()} to appear in the answer"
-        return "UNGRADED", expected.get("note") or "no window expectation recorded"
+        return "UNGRADED", "[corpus] " + (expected.get("note") or "no window expectation recorded")
 
-    if resolved:
+    if resolved is not None:
         statements = resolved
         observed = []
         for statement in resolved:
@@ -400,10 +407,10 @@ def grade_window(question, answer, as_of, resolved=None):
         source = "answer"
     if not observed:
         return "UNGRADED", (
-            "no window was resolved in the tool trace for this turn"
+            "[trace] no window was resolved in the tool trace for this turn"
             if source == "trace"
-            else "the answer quotes no resolver statement and no tool trace was available, so the "
-            "shape cannot be read (the DATE_WINDOW contract requires quoting it)"
+            else "[answer] the answer quotes no resolver statement and no tool trace was available, "
+            "so the shape cannot be read (the DATE_WINDOW contract requires quoting it)"
         )
 
     acceptable = {wanted, *expected.get("also_accept", [])}
@@ -1292,9 +1299,10 @@ def main(argv=None):
         else:
             for trace in traces:
                 message = trace.get("userMessage")
-                windows = window_from_trace(trace)
-                if message and windows:
-                    resolved_by_utterance.setdefault(message, windows)
+                if message:
+                    # setdefault with the possibly-EMPTY list: a trace that resolved no window is
+                    # evidence that none was resolved, which must not be mistaken for "no trace".
+                    resolved_by_utterance.setdefault(message, window_from_trace(trace))
             trace_note = f"{len(traces)} trace(s) fetched, {len(resolved_by_utterance)} with a resolved window"
     record["trace_source"] = trace_note
 
