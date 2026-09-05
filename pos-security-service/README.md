@@ -173,7 +173,9 @@ joining its header assertion (#1729).
 
 The published `openapi.yaml` lists only the error statuses an operation can actually produce.
 Because the advice is module-wide, springdoc would otherwise attach its 400/401/403/404/409 to
-every operation (#1721); `ProducibleResponsesOperationCustomizer` prunes them by rule:
+every operation (#1721); `pos-security-common`'s `ProducibleResponsesOperationCustomizer` prunes
+them by rule. It is auto-configured platform-wide — this service gets it automatically from
+depending on `pos-security-common`, with no customizer code of its own:
 
 | Status | Kept when |
 | --- | --- |

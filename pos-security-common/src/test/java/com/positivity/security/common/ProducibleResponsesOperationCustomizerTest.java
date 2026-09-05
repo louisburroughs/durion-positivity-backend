@@ -1,4 +1,4 @@
-package com.positivity.securityservice.internal.config;
+package com.positivity.security.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -17,6 +17,8 @@ import org.springframework.web.method.HandlerMethod;
 class ProducibleResponsesOperationCustomizerTest {
 
     private static final List<String> GENERIC_CODES = List.of("200", "400", "401", "403", "404", "409");
+    private static final List<String> GENERIC_CODES_WITH_5XX =
+            List.of("200", "400", "401", "403", "404", "409", "500", "503");
 
     private final ProducibleResponsesOperationCustomizer customizer = new ProducibleResponsesOperationCustomizer();
 
@@ -85,9 +87,13 @@ class ProducibleResponsesOperationCustomizerTest {
     }
 
     private static Operation genericOperation(boolean withParameter, boolean withRequestBody) {
+        return genericOperation(GENERIC_CODES, withParameter, withRequestBody);
+    }
+
+    private static Operation genericOperation(List<String> codes, boolean withParameter, boolean withRequestBody) {
         Operation operation = new Operation();
         ApiResponses responses = new ApiResponses();
-        for (String code : GENERIC_CODES) {
+        for (String code : codes) {
             responses.addApiResponse(code, new io.swagger.v3.oas.models.responses.ApiResponse());
         }
         responses.setDefault(new io.swagger.v3.oas.models.responses.ApiResponse());
@@ -194,5 +200,16 @@ class ProducibleResponsesOperationCustomizerTest {
 
         assertThat(result).isSameAs(operation);
         assertThat(result.getResponses()).isNull();
+    }
+
+    @Test
+    @DisplayName("ADR-0056 §1: a generic 500 and 503 survive on a permitAll() no-input operation")
+    void serverErrorCodesAlwaysSurviveOnPermitAllNoInputOperation() throws Exception {
+        Method method = Fixture.class.getMethod("permitAllNoInputs");
+        HandlerMethod handlerMethod = new HandlerMethod(new Fixture(), method);
+
+        Operation result = customizer.customize(genericOperation(GENERIC_CODES_WITH_5XX, false, false), handlerMethod);
+
+        assertThat(result.getResponses().keySet()).containsExactlyInAnyOrder("200", "500", "503", "default");
     }
 }

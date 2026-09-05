@@ -2,6 +2,8 @@ package com.positivity.customer.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,11 +19,17 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Arrays;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Named;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -34,6 +42,7 @@ import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 
 /**
  * Unit tests for {@link CrmExceptionHandler} (ADR-0017 error envelope).
@@ -211,5 +220,139 @@ class CrmExceptionHandlerTest {
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(result.getBody()).isNotNull();
         assertThat(result.getBody().correlationId()).isNotBlank();
+    }
+
+    /** Target for {@link MethodParameter} reflection in {@link XCorrelationIdHeader} — never invoked. */
+    private void bindingTargetMethod() {}
+
+    // ---------------------------------------------------------------
+    // X-Correlation-Id header (ADR-0017 §4, #1729) — proves every @ExceptionHandler
+    // method routes through the single response.setHeader(...) path in CrmExceptionHandler
+    // and guards against a future handler forgetting it.
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("X-Correlation-Id header (ADR-0017 §4, #1729)")
+    class XCorrelationIdHeader {
+
+        @FunctionalInterface
+        interface HandlerInvocation {
+            ResponseEntity<ApiError> invoke(HttpServletRequest request, HttpServletResponse response);
+        }
+
+        /**
+         * One entry per {@code @ExceptionHandler} method on {@link CrmExceptionHandler}. Uses a
+         * standalone handler instance (not the outer test's {@code handler}) so this factory
+         * method can stay static, as required by {@code @MethodSource} outside a
+         * {@code PER_CLASS} test instance lifecycle.
+         */
+        private static Stream<Named<HandlerInvocation>> handlerInvocations() {
+            Clock fixedClock = Clock.fixed(NOW, ZoneOffset.UTC);
+            CrmExceptionHandler h = new CrmExceptionHandler(fixedClock);
+
+            return Stream.of(
+                    Named.of("handleAccessDenied", (HandlerInvocation) (request, response) -> h.handleAccessDenied(
+                            new AccessDeniedException("missing crm:party:view"), request, response)),
+                    Named.of("handleDuplicateRedemption", (HandlerInvocation) (request, response) ->
+                            h.handleDuplicateRedemption(new DuplicateRedemptionException(ID, ID), request, response)),
+                    Named.of("handleNotFound", (HandlerInvocation) (request, response) ->
+                            h.handleNotFound(new CrmResourceNotFoundException("Party", ID), request, response)),
+                    Named.of("handleDuplicateResource", (HandlerInvocation)
+                            (request, response) -> h.handleDuplicateResource(
+                                    new CrmDuplicateResourceException("Segment", "VIP"), request, response)),
+                    Named.of("handleUnprocessable", (HandlerInvocation) (request, response) -> h.handleUnprocessable(
+                            new CrmUnprocessableEntityException("predicate references an unknown attribute"),
+                            request,
+                            response)),
+                    Named.of(
+                            "handleTooManyRequests", (HandlerInvocation) (request, response) -> h.handleTooManyRequests(
+                                    new CrmTooManyRequestsException("Too many requests"), request, response)),
+                    Named.of("handleMethodArgumentNotValid", (HandlerInvocation) (request, response) -> {
+                        BindingResult binding = new BeanPropertyBindingResult(new Object(), "request");
+                        binding.addError(new FieldError("request", "displayName", "must not be blank"));
+                        MethodArgumentNotValidException ex;
+                        try {
+                            ex = new MethodArgumentNotValidException(
+                                    new org.springframework.core.MethodParameter(
+                                            CrmExceptionHandlerTest.class.getDeclaredMethod("bindingTargetMethod"), -1),
+                                    binding);
+                        } catch (NoSuchMethodException e) {
+                            throw new IllegalStateException(e);
+                        }
+                        return h.handleMethodArgumentNotValid(ex, request, response);
+                    }),
+                    Named.of("handleValidation", (HandlerInvocation) (request, response) ->
+                            h.handleValidation(new CrmValidationException("page must be >= 0"), request, response)));
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("echoes the inbound X-Correlation-Id in both header and body")
+        void echoesInboundCorrelationId(HandlerInvocation invocation) {
+            HttpServletRequest req = mock(HttpServletRequest.class);
+            HttpServletResponse resp = mock(HttpServletResponse.class);
+            when(req.getRequestURI()).thenReturn("/v1/crm/accounts");
+            when(req.getHeader(CORRELATION_HEADER)).thenReturn("trace-1");
+
+            ResponseEntity<ApiError> result = invocation.invoke(req, resp);
+
+            ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+            verify(resp).setHeader(eq(CORRELATION_HEADER), captor.capture());
+            assertThat(captor.getValue()).isEqualTo("trace-1");
+            assertThat(result.getBody()).isNotNull();
+            assertThat(result.getBody().correlationId()).isEqualTo("trace-1");
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a non-blank X-Correlation-Id, consistent between header and body, when absent")
+        void generatesCorrelationIdWhenAbsent(HandlerInvocation invocation) {
+            HttpServletRequest req = mock(HttpServletRequest.class);
+            HttpServletResponse resp = mock(HttpServletResponse.class);
+            when(req.getRequestURI()).thenReturn("/v1/crm/accounts");
+            when(req.getHeader(CORRELATION_HEADER)).thenReturn(null);
+
+            ResponseEntity<ApiError> result = invocation.invoke(req, resp);
+
+            ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+            verify(resp).setHeader(eq(CORRELATION_HEADER), captor.capture());
+            assertThat(captor.getValue()).isNotBlank();
+            assertThat(result.getBody()).isNotNull();
+            assertThat(result.getBody().correlationId()).isEqualTo(captor.getValue());
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+        void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
+            HttpServletRequest req = mock(HttpServletRequest.class);
+            HttpServletResponse resp = mock(HttpServletResponse.class);
+            when(req.getRequestURI()).thenReturn("/v1/crm/accounts");
+            when(req.getHeader(CORRELATION_HEADER)).thenReturn("   ");
+
+            ResponseEntity<ApiError> result = invocation.invoke(req, resp);
+
+            ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+            verify(resp).setHeader(eq(CORRELATION_HEADER), captor.capture());
+            assertThat(captor.getValue()).isNotBlank();
+            assertThat(captor.getValue()).isNotEqualTo("   ");
+            assertThat(result.getBody()).isNotNull();
+            assertThat(result.getBody().correlationId()).isEqualTo(captor.getValue());
+        }
+
+        @Test
+        @DisplayName("every @ExceptionHandler method on CrmExceptionHandler has a matching MethodSource entry")
+        void everyHandlerMethodIsCovered() {
+            long handlerMethodCount = Arrays.stream(CrmExceptionHandler.class.getDeclaredMethods())
+                    .filter(method -> method.isAnnotationPresent(ExceptionHandler.class))
+                    .count();
+            long methodSourceEntryCount = handlerInvocations().count();
+
+            assertThat(methodSourceEntryCount)
+                    .as("A new @ExceptionHandler method was added to CrmExceptionHandler without a matching entry "
+                            + "in XCorrelationIdHeader#handlerInvocations() in CrmExceptionHandlerTest — add one so "
+                            + "the X-Correlation-Id header contract stays proven for every handler")
+                    .isEqualTo(handlerMethodCount);
+        }
     }
 }

@@ -309,19 +309,14 @@ public class InventoryGlobalExceptionHandler {
      */
     @ExceptionHandler(SourceDocumentLinesUnavailableException.class)
     public ResponseEntity<ApiError> handleSourceDocumentLinesUnavailable(SourceDocumentLinesUnavailableException ex) {
-        String correlationId = resolveCorrelationId(null);
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .header(X_CORRELATION_ID, correlationId)
-                .body(ApiError.guided(
-                        SourceDocumentLinesUnavailableException.ERROR_CODE,
-                        ex.getMessage(),
-                        HttpStatus.CONFLICT.value(),
-                        Instant.now(clock).toString(),
-                        correlationId,
-                        null,
-                        "The purchase-order line projection has not caught up. Retry in a few seconds; "
-                                + "if this persists, the purchase order id is unknown.",
-                        null));
+        return build(
+                HttpStatus.CONFLICT,
+                SourceDocumentLinesUnavailableException.ERROR_CODE,
+                ex.getMessage(),
+                null,
+                "The purchase-order line projection has not caught up. Retry in a few seconds; "
+                        + "if this persists, the purchase order id is unknown.",
+                null);
     }
 
     /**
@@ -459,15 +454,34 @@ public class InventoryGlobalExceptionHandler {
     // if one comes back.
 
     private ResponseEntity<ApiError> build(HttpStatus status, String code, String message) {
+        return build(status, code, message, null, null, null);
+    }
+
+    /**
+     * Single response-building helper for every handler in this advice (issue #1729): sets the
+     * correlation id in both the {@code ApiError} body and the {@code X-Correlation-Id} header, and
+     * threads the optional guided fields for handlers that need {@code referenceId}/{@code
+     * nextAction}/{@code supportAction} (e.g. {@link #handleSourceDocumentLinesUnavailable}).
+     */
+    private ResponseEntity<ApiError> build(
+            HttpStatus status,
+            String code,
+            String message,
+            String referenceId,
+            String nextAction,
+            String supportAction) {
         String correlationId = resolveCorrelationId(null);
         return ResponseEntity.status(status)
                 .header(X_CORRELATION_ID, correlationId)
-                .body(ApiError.of(
+                .body(ApiError.guided(
                         code,
                         message != null ? message : "",
                         status.value(),
                         Instant.now(clock).toString(),
-                        correlationId));
+                        correlationId,
+                        referenceId,
+                        nextAction,
+                        supportAction));
     }
 
     private String resolveCorrelationId(HttpServletRequest request) {

@@ -7,14 +7,20 @@ import com.positivity.shared.error.ApiError;
 import com.positivity.supplier.internal.audit.SupplierCorrelationContext;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
+import java.lang.reflect.Method;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Arrays;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -25,6 +31,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
@@ -415,6 +422,164 @@ class SupplierExceptionHandlerTest {
 
             assertThat(response.getBody().correlationId()).isNotBlank();
             assertThat(response.getBody().correlationId()).isNotEqualTo("   ");
+        }
+    }
+
+    /**
+     * Proves every {@code @ExceptionHandler} on {@link SupplierExceptionHandler} carries the
+     * correlation id in both the {@code X-Correlation-Id} response header and the {@code ApiError}
+     * body (ADR-0017 §4, ADR-0056 §1, #1729). This class was already fully compliant when this
+     * guard was added — every handler routes through {@link SupplierExceptionHandler#build} (or,
+     * for the two field-error-bearing responses, builds its own {@code ResponseEntity} with the
+     * same {@code X-Correlation-Id} header) — so no production code changed; this only pins the
+     * behavior against regression and guards a future handler forgetting the header.
+     */
+    @Nested
+    @DisplayName("X-Correlation-Id header (ADR-0017 §4, #1729)")
+    class XCorrelationIdHeader {
+
+        @FunctionalInterface
+        interface HandlerInvocation {
+            ResponseEntity<ApiError> invoke(HttpServletRequest request);
+        }
+
+        private static MethodArgumentNotValidException bodyValidationException() {
+            BindingResult binding = new BeanPropertyBindingResult(new Object(), "request");
+            binding.addError(new FieldError("request", "supplierRef", "must not be blank"));
+            try {
+                return new MethodArgumentNotValidException(
+                        new org.springframework.core.MethodParameter(
+                                SupplierExceptionHandlerTest.class.getDeclaredMethod("bodyValidationListsFieldErrors"),
+                                -1),
+                        binding);
+            } catch (NoSuchMethodException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+
+        /**
+         * One entry per {@code @ExceptionHandler} method on {@link SupplierExceptionHandler}. Uses a
+         * standalone handler instance (not the outer test's {@code handler}) so this factory method
+         * can stay static, as required by {@code @MethodSource} outside a {@code PER_CLASS} test
+         * instance lifecycle.
+         */
+        private static Stream<Named<HandlerInvocation>> handlerInvocations() {
+            SupplierExceptionHandler handler = new SupplierExceptionHandler(Clock.fixed(NOW, ZoneOffset.UTC));
+
+            return Stream.of(
+                    Named.of("handleNotFound", (HandlerInvocation) request -> handler.handleNotFound(
+                            new SupplierNotFoundException(SupplierNotFoundException.PROFILE_NOT_FOUND, "not found"),
+                            request)),
+                    Named.of("handleValidation", (HandlerInvocation) request -> handler.handleValidation(
+                            new SupplierValidationException(
+                                    SupplierValidationException.UNKNOWN_CAPABILITY, "bad capability"),
+                            request)),
+                    Named.of("handleMktCatImportFailure", (HandlerInvocation)
+                            request -> handler.handleMktCatImportFailure(
+                                    new MktCatImportException("catalogue unreadable"), request)),
+                    Named.of("handleFleetLookupFailure", (HandlerInvocation) request ->
+                            handler.handleFleetLookupFailure(new FleetLookupException("vendor unreachable"), request)),
+                    Named.of("handleInvoiceFetch", (HandlerInvocation) request ->
+                            handler.handleInvoiceFetch(new InvoiceFetchException("window fetch failed"), request)),
+                    Named.of("handleConflict", (HandlerInvocation) request -> handler.handleConflict(
+                            new SupplierConflictException(SupplierConflictException.SUPPLIER_REF_CONFLICT, "ref taken"),
+                            request)),
+                    Named.of("handleConfiguration", (HandlerInvocation) request -> handler.handleConfiguration(
+                            new SupplierConfigurationException(
+                                    SupplierConfigurationException.PROFILE_DISABLED, "profile disabled"),
+                            request)),
+                    Named.of("handlePayloadUnreadable", (HandlerInvocation) request -> handler.handlePayloadUnreadable(
+                            new PayloadUnreadableException(
+                                    PayloadUnreadableException.UNKNOWN_KEY_ID, "no key for id 7"),
+                            request)),
+                    Named.of("handleBodyValidation", (HandlerInvocation)
+                            request -> handler.handleBodyValidation(bodyValidationException(), request)),
+                    Named.of("handleConstraintViolation", (HandlerInvocation)
+                            request -> handler.handleConstraintViolation(
+                                    new jakarta.validation.ConstraintViolationException(
+                                            "must be positive", java.util.Set.of()),
+                                    request)),
+                    Named.of("handleMissingParameter", (HandlerInvocation) request -> handler.handleMissingParameter(
+                            new MissingServletRequestParameterException("supplierRef", "String"), request)),
+                    Named.of("handleTypeMismatch", (HandlerInvocation) request -> handler.handleTypeMismatch(
+                            new MethodArgumentTypeMismatchException(
+                                    "bad-value",
+                                    UUID.class,
+                                    "supplierProfileId",
+                                    null,
+                                    new IllegalArgumentException("bad uuid")),
+                            request)),
+                    Named.of("handleUnreadableBody", (HandlerInvocation) request -> handler.handleUnreadableBody(
+                            new org.springframework.http.converter.HttpMessageNotReadableException(
+                                    "JSON parse error",
+                                    new IllegalArgumentException("supplierRef must not be blank"),
+                                    null),
+                            request)),
+                    Named.of("handleAccessDenied", (HandlerInvocation)
+                            request -> handler.handleAccessDenied(new AccessDeniedException("denied"), request)),
+                    Named.of("handleOptimisticLockConflict", (HandlerInvocation)
+                            request -> handler.handleOptimisticLockConflict(
+                                    new ObjectOptimisticLockingFailureException(
+                                            SupplierExceptionHandlerTest.class, "id"),
+                                    request)));
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("echoes the inbound X-Correlation-Id in both header and body")
+        void echoesInboundCorrelationId(HandlerInvocation invocation) {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.addHeader(CORRELATION_HEADER, "inbound-trace-id");
+
+            ResponseEntity<ApiError> response = invocation.invoke(request);
+
+            assertThat(response.getHeaders().getFirst(CORRELATION_HEADER)).isEqualTo("inbound-trace-id");
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getHeaders().getFirst(CORRELATION_HEADER))
+                    .isEqualTo(response.getBody().correlationId());
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a non-blank X-Correlation-Id, consistent between header and body, when absent")
+        void generatesCorrelationIdWhenAbsent(HandlerInvocation invocation) {
+            ResponseEntity<ApiError> response = invocation.invoke(new MockHttpServletRequest());
+
+            String header = response.getHeaders().getFirst(CORRELATION_HEADER);
+            assertThat(header).isNotBlank();
+            assertThat(response.getBody()).isNotNull();
+            assertThat(header).isEqualTo(response.getBody().correlationId());
+        }
+
+        @ParameterizedTest
+        @MethodSource("handlerInvocations")
+        @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
+        void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.addHeader(CORRELATION_HEADER, "   ");
+
+            ResponseEntity<ApiError> response = invocation.invoke(request);
+
+            String header = response.getHeaders().getFirst(CORRELATION_HEADER);
+            assertThat(header).isNotBlank();
+            assertThat(header).isNotEqualTo("   ");
+            assertThat(response.getBody()).isNotNull();
+            assertThat(header).isEqualTo(response.getBody().correlationId());
+        }
+
+        @Test
+        @DisplayName("every @ExceptionHandler method on SupplierExceptionHandler has a matching MethodSource entry")
+        void everyHandlerMethodIsCovered() {
+            long handlerMethodCount = Arrays.stream(SupplierExceptionHandler.class.getDeclaredMethods())
+                    .filter((Method method) -> method.isAnnotationPresent(ExceptionHandler.class))
+                    .count();
+            long methodSourceEntryCount = handlerInvocations().count();
+
+            assertThat(methodSourceEntryCount)
+                    .as("A new @ExceptionHandler method was added to SupplierExceptionHandler without a matching "
+                            + "entry in XCorrelationIdHeader#handlerInvocations() in SupplierExceptionHandlerTest — "
+                            + "add one so the X-Correlation-Id header contract stays proven for every handler")
+                    .isEqualTo(handlerMethodCount);
         }
     }
 }

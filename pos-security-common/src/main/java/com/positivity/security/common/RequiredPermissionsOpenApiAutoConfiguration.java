@@ -14,21 +14,30 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.method.HandlerMethod;
 
 /**
- * Single source of the springdoc {@link OperationCustomizer} that publishes each operation's required
- * permissions as the {@code x-required-permissions} OpenAPI extension (#781).
+ * Single source of two springdoc {@link OperationCustomizer} beans, auto-configured for every service on the
+ * {@code pos-security-common} classpath:
  *
- * <p>Previously copy-pasted into every service's {@code OpenApiConfig}; auto-configured here so every
- * service on the classpath emits the extension identically. It reads
- * {@link org.springframework.security.access.prepost.PreAuthorize} from the controller class and the
- * handler method, extracts every {@code hasAuthority} / {@code hasAnyAuthority} argument, and — for
- * operations guarded only by {@code isAuthenticated()} or with no {@code @PreAuthorize} — emits the
- * {@code AUTHENTICATED} sentinel.
+ * <ul>
+ *   <li>{@link #requiredPermissionsOperationCustomizer()} publishes each operation's required permissions as the
+ *       {@code x-required-permissions} OpenAPI extension (#781). It reads
+ *       {@link org.springframework.security.access.prepost.PreAuthorize} from the controller class and the
+ *       handler method, extracts every {@code hasAuthority} / {@code hasAnyAuthority} argument, and — for
+ *       operations guarded only by {@code isAuthenticated()} or with no {@code @PreAuthorize} — emits the
+ *       {@code AUTHENTICATED} sentinel.
+ *   <li>{@link #producibleResponsesOperationCustomizer()} prunes the generic {@code 400}/{@code 401}/{@code 403}/
+ *       {@code 404}/{@code 409} responses that springdoc merges onto every operation from an unscoped
+ *       {@code @ControllerAdvice}, keeping only the codes an operation can actually produce. Originating case:
+ *       {@code pos-security-service} (issue #1721); see {@link ProducibleResponsesOperationCustomizer} for the
+ *       full rule set.
+ * </ul>
  *
- * <p>Gated behind {@link ConditionalOnClass}({@code OperationCustomizer}) so non-web consumers of this
- * library are unaffected. This customizer is always registered — it is no longer conditional on the
- * absence of other {@code OperationCustomizer} beans. Services may register additional customizers
- * alongside it (for example pos-security-service's response-pruning customizer, issue #1721) without
- * losing this extension; springdoc applies every {@code OperationCustomizer} bean present in the context.
+ * <p>Previously the required-permissions customizer was copy-pasted into every service's {@code OpenApiConfig};
+ * both are auto-configured here so every service on the classpath gets them identically, with no per-module code.
+ *
+ * <p>Both beans are gated behind {@link ConditionalOnClass}({@code OperationCustomizer}) so non-web consumers of
+ * this library are unaffected. Neither is conditional on the absence of other {@code OperationCustomizer} beans —
+ * services may register additional customizers alongside them without losing either one; springdoc applies every
+ * {@code OperationCustomizer} bean present in the context.
  */
 @AutoConfiguration
 @ConditionalOnClass(OperationCustomizer.class)
@@ -52,6 +61,11 @@ public class RequiredPermissionsOpenApiAutoConfiguration {
             }
             return operation;
         };
+    }
+
+    @Bean
+    public OperationCustomizer producibleResponsesOperationCustomizer() {
+        return new ProducibleResponsesOperationCustomizer();
     }
 
     private static List<String> extractRequiredPermissions(HandlerMethod handlerMethod) {
