@@ -595,6 +595,10 @@ public class StreamingSessionAgentManager
         // caller to a later request; if provideTools ran after the clear it would just fail-closed.
         if (requestScopedUserContext != null) {
             requestScopedUserContext.set(currentUserContext, authorizationHeader);
+            // #1675: same window as the caller above — resolveDateWindow reads the user's own
+            // wording from here rather than the model's normalised copy, and the streaming path
+            // needs it for the same reason the blocking one does.
+            requestScopedUserContext.recordUserMessage(message);
         }
         try {
             // agent.chat resolves this request's tools synchronously at Flux-assembly time, so the

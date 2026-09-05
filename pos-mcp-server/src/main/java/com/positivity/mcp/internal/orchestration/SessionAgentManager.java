@@ -301,6 +301,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
             // in finally.
             if (requestScopedUserContext != null) {
                 requestScopedUserContext.set(currentUserContext, currentAuthorizationHeader());
+                // #1675: tools that need the caller's own wording read it from here rather than
+                // from a model-supplied copy, which arrives normalised with the preposition gone.
+                requestScopedUserContext.recordUserMessage(message);
             }
             long agentStartNanos = System.nanoTime();
             String response = agent.chat(
