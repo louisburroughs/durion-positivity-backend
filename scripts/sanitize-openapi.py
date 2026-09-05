@@ -136,7 +136,10 @@ _OpenApiLoader.yaml_implicit_resolvers = {
 
 
 def sanitize_file(path: Path) -> bool:
-    text = path.read_text()
+    # UTF-8 explicitly, not the locale default: specs carry non-ASCII (safe_dump runs with
+    # allow_unicode=True), and every other repo script pins it. A runner with a different
+    # default encoding would otherwise read or write these files differently.
+    text = path.read_text(encoding="utf-8")
     data = yaml.load(text, Loader=_OpenApiLoader)
     cleaned = _ordered(_clean(data), top_level=True)
     new_text = yaml.safe_dump(
@@ -148,7 +151,7 @@ def sanitize_file(path: Path) -> bool:
     )
     if new_text == text:
         return False
-    path.write_text(new_text)
+    path.write_text(new_text, encoding="utf-8")
     return True
 
 
