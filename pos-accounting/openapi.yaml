@@ -9548,7 +9548,7 @@ components:
           format: uuid
           type: string
         creditMemoReference:
-          description: Short human-readable reference for the credit memo, shown in place of the raw creditMemoId UUID (CM-{YYYYMM}-{n}). Null for memos issued before the reference was introduced and never backfilled; render nothing rather than falling back to the UUID.
+          description: Short human-readable reference for the credit memo, shown in place of the raw creditMemoId UUID (CM-{YYYYMM}-{n}). Assigned at creation, and backfilled for memos that predate the field, so it is normally present. Nullable because assignment is a service-layer concern rather than a database invariant; when absent, render nothing rather than falling back to the UUID.
           example: CM-202609-7
           type:
           - string
