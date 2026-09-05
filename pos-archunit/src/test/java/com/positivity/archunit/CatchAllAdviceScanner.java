@@ -34,6 +34,20 @@ final class CatchAllAdviceScanner {
     /** Java line and block comments, stripped before matching so tombstone prose is not a hit. */
     private static final Pattern COMMENTS = Pattern.compile("//[^\\n]*|/\\*.*?\\*/", Pattern.DOTALL);
 
+    /**
+     * {@code ApiError} as a whole type name, optionally package-qualified. A plain substring test
+     * would also accept {@code ApiErrorResponse} — a different type with a different shape — and
+     * wave through exactly the envelope drift this rule exists to catch.
+     */
+    private static final Pattern API_ERROR_TYPE = Pattern.compile("(?<![A-Za-z0-9_$])ApiError(?![A-Za-z0-9_$])");
+
+    /**
+     * {@code @RestController} as a whole annotation name. {@code @RestControllerAdvice} starts with
+     * the same characters but declares no endpoint, so a substring test would pull advice-only
+     * modules into a rule that is about the modules serving requests.
+     */
+    private static final Pattern REST_CONTROLLER = Pattern.compile("@RestController(?![A-Za-z0-9_$])");
+
     private CatchAllAdviceScanner() {}
 
     /** A module-local catch-all and the type its handler method answers with. */
@@ -45,7 +59,7 @@ final class CatchAllAdviceScanner {
          * rule is meant to reject.
          */
         boolean returnsApiError() {
-            return returnType.contains("ApiError");
+            return API_ERROR_TYPE.matcher(returnType).find();
         }
     }
 
@@ -56,7 +70,7 @@ final class CatchAllAdviceScanner {
                     .filter(module -> Files.isDirectory(module.resolve("src/main/java")))
                     .filter(module ->
                             !exemptModules.contains(module.getFileName().toString()))
-                    .filter(module -> anyMainSourceContains(module, "@RestController"))
+                    .filter(module -> anyMainSourceMatches(module, REST_CONTROLLER))
                     .sorted()
                     .toList();
         }
@@ -89,10 +103,10 @@ final class CatchAllAdviceScanner {
         return providers.stream().anyMatch(provider -> content.contains("<artifactId>" + provider + "</artifactId>"));
     }
 
-    private static boolean anyMainSourceContains(Path module, String needle) {
+    private static boolean anyMainSourceMatches(Path module, Pattern pattern) {
         boolean[] hit = {false};
         forEachMainSource(module, path -> {
-            if (!hit[0] && read(path).contains(needle)) {
+            if (!hit[0] && pattern.matcher(read(path)).find()) {
                 hit[0] = true;
             }
         });

@@ -72,6 +72,40 @@ class CatchAllAdviceScannerTest {
     }
 
     @Test
+    @DisplayName("a type merely prefixed ApiError does not satisfy the envelope rule")
+    void aTypeNamedLikeApiErrorIsNotApiError(@TempDir Path root) throws IOException {
+        Path module = moduleWithAdvice(root, "pos-fake-lookalike", """
+                @ExceptionHandler(Exception.class)
+                public ResponseEntity<ApiErrorResponse> handleAny(Exception ex) {
+                    return ResponseEntity.internalServerError().body(new ApiErrorResponse("boom"));
+                }
+                """);
+
+        assertThat(CatchAllAdviceScanner.catchAllsIn(module))
+                .singleElement()
+                .extracting(CatchAllAdviceScanner.CatchAll::returnsApiError)
+                .describedAs("ApiErrorResponse is a different type — a substring match would wave it through")
+                .isEqualTo(false);
+    }
+
+    @Test
+    @DisplayName("a fully qualified ApiError still satisfies the envelope rule")
+    void aFullyQualifiedApiErrorIsAccepted(@TempDir Path root) throws IOException {
+        Path module = moduleWithAdvice(root, "pos-fake-qualified", """
+                @ExceptionHandler(Exception.class)
+                public org.springframework.http.ResponseEntity<com.positivity.shared.error.ApiError> handleAny(
+                        Exception ex) {
+                    return null;
+                }
+                """);
+
+        assertThat(CatchAllAdviceScanner.catchAllsIn(module))
+                .singleElement()
+                .extracting(CatchAllAdviceScanner.CatchAll::returnsApiError)
+                .isEqualTo(true);
+    }
+
+    @Test
     @DisplayName("prose mentioning the annotation in a comment is not mistaken for a declaration")
     void tombstoneCommentsAreNotCatchAlls(@TempDir Path root) throws IOException {
         Path module = moduleWithAdvice(root, "pos-fake-people-contact", """
@@ -102,6 +136,9 @@ class CatchAllAdviceScannerTest {
     void onlyControllerModulesAreScanned(@TempDir Path root) throws IOException {
         Path withController = moduleWithAdvice(root, "pos-fake-api", "@RestController\nclass C {}\n");
         moduleWithAdvice(root, "pos-fake-library", "class NotAController {}\n");
+        // A module that only declares an advice serves no endpoints, so ADR-0056 coverage does not
+        // apply to it — @RestControllerAdvice must not be read as a @RestController declaration.
+        moduleWithAdvice(root, "pos-fake-advice-only", "@RestControllerAdvice\nclass A {}\n");
 
         assertThat(CatchAllAdviceScanner.controllerModules(root, Set.of())).containsExactly(withController);
     }

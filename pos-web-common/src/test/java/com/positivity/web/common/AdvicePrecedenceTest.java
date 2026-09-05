@@ -61,10 +61,12 @@ class AdvicePrecedenceTest {
     @Test
     @DisplayName("a module advice's specific mapping beats the platform catch-all")
     void moduleAdviceWinsTheTieForATypeItMaps() throws Exception {
-        mockMvc(ModuleAdviceWithoutIntegrityMapping.class)
-                .perform(get("/test/domain-conflict"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("MODULE_CONFLICT"));
+        try (AnnotationConfigWebApplicationContext context = context(ModuleAdviceWithoutIntegrityMapping.class)) {
+            mockMvc(context)
+                    .perform(get("/test/domain-conflict"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("MODULE_CONFLICT"));
+        }
     }
 
     /**
@@ -75,12 +77,14 @@ class AdvicePrecedenceTest {
     @Test
     @DisplayName("DataIntegrityViolationException still reaches the platform mapping")
     void integrityViolationReachesThePlatformMapping() throws Exception {
-        mockMvc(ModuleAdviceWithoutIntegrityMapping.class)
-                .perform(get("/test/duplicate"))
-                .andExpect(status().isConflict())
-                .andExpect(header().exists("X-Correlation-Id"))
-                .andExpect(jsonPath("$.code").value("DUPLICATE_RESOURCE"))
-                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+        try (AnnotationConfigWebApplicationContext context = context(ModuleAdviceWithoutIntegrityMapping.class)) {
+            mockMvc(context)
+                    .perform(get("/test/duplicate"))
+                    .andExpect(status().isConflict())
+                    .andExpect(header().exists("X-Correlation-Id"))
+                    .andExpect(jsonPath("$.code").value("DUPLICATE_RESOURCE"))
+                    .andExpect(jsonPath("$.correlationId").isNotEmpty());
+        }
     }
 
     /**
@@ -94,10 +98,12 @@ class AdvicePrecedenceTest {
     @Test
     @DisplayName("a module-local catch-all shadows ADR-0056 §2's integrity mapping — the rule's reason to exist")
     void aModuleLocalCatchAllShadowsThePlatformIntegrityMapping() throws Exception {
-        mockMvc(ModuleAdviceWithCatchAll.class)
-                .perform(get("/test/duplicate"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.detail").value("swallowed by the module catch-all"));
+        try (AnnotationConfigWebApplicationContext context = context(ModuleAdviceWithCatchAll.class)) {
+            mockMvc(context)
+                    .perform(get("/test/duplicate"))
+                    .andExpect(status().isInternalServerError())
+                    .andExpect(jsonPath("$.detail").value("swallowed by the module catch-all"));
+        }
     }
 
     /**
@@ -112,7 +118,7 @@ class AdvicePrecedenceTest {
      * and component-scanned classes, which is exactly how the platform advice arrives (an
      * auto-configuration {@code @Bean}) versus a module advice (a component-scanned
      * {@code @RestControllerAdvice}). Verified rather than assumed: reversing the two
-     * {@code context.register} calls in {@link #mockMvc} does not change the resolved order.
+     * {@code context.register} calls in {@link #context} does not change the resolved order.
      *
      * <p>So the guarantee is real but incidental — a property of Spring's registration phases,
      * not a declared precedence. Giving module advices an explicit {@code @Order} above
@@ -122,8 +128,7 @@ class AdvicePrecedenceTest {
     @Test
     @DisplayName("the platform advice resolves strictly last in the advice chain")
     void thePlatformAdviceResolvesLast() {
-        AnnotationConfigWebApplicationContext context = context(ModuleAdviceWithoutIntegrityMapping.class);
-        try {
+        try (AnnotationConfigWebApplicationContext context = context(ModuleAdviceWithoutIntegrityMapping.class)) {
             List<Class<?>> adviceTypes = ControllerAdviceBean.findAnnotatedBeans(context).stream()
                     .map(ControllerAdviceBean::getBeanType)
                     .collect(Collectors.toList());
@@ -132,8 +137,6 @@ class AdvicePrecedenceTest {
                     .describedAs("ADR-0056 §1: service advices keep precedence over the shared one")
                     .containsSubsequence(ModuleAdviceWithoutIntegrityMapping.class, GlobalApiExceptionHandler.class);
             assertThat(adviceTypes.getLast()).isEqualTo(GlobalApiExceptionHandler.class);
-        } finally {
-            context.close();
         }
     }
 
@@ -157,8 +160,8 @@ class AdvicePrecedenceTest {
                 .isNull();
     }
 
-    private static MockMvc mockMvc(Class<?> moduleAdvice) {
-        return MockMvcBuilders.webAppContextSetup(context(moduleAdvice)).build();
+    private static MockMvc mockMvc(AnnotationConfigWebApplicationContext context) {
+        return MockMvcBuilders.webAppContextSetup(context).build();
     }
 
     private static AnnotationConfigWebApplicationContext context(Class<?> moduleAdvice) {
