@@ -448,3 +448,43 @@ i.e. runtime-created co-tenant data rather than seed. Per the co-tenancy policy 
 accepted, not cleaned — but it means **this question's empty intersection is an environment
 fact, not a designed seed invariant**. If a future seed gives an owed vendor an open PO, or the
 co-tenant PO block is cleared, re-run and refresh. Treat drift here as environment churn first.
+
+## Q22 — share of revenue from the top five customers
+
+Measured 2026-09-05 via `run_ground_truth.sh q22-revenue-share-of-top-five-customers.sql`
+(exit 0, both sections, zero SQL errors). #1689 band 5 — percentage-of-total.
+
+Window 2025-09-01 .. 2026-08-31 (trailing 12 complete calendar months from EVAL_AS_OF
+2026-09-01), `ext_invoice` status FINALIZED/POSTED, document date per q13's coalesce.
+
+| rank | customer_id | invoices | revenue | % of total |
+|---|---|---|---|---|
+| 1 | `e79a3e7a-e63b-5633-ae72-2c84233f0dfc` | 14 | 16,500.0000 | 28.36 |
+| 2 | `b4b79106-4dde-5458-8e66-c017ffc2f111` | 14 | 10,800.0000 | 18.56 |
+| 3 | `61ef5d96-2e4b-5138-8295-22c74b3d004f` | 9 | 8,100.0000 | 13.92 |
+| 4 | `1dc41416-eec7-5788-9416-042d5af62667` | 13 | 6,000.0000 | 10.31 |
+| 5 | `ece9efad-e5d4-5bcd-98e0-078cd83ef629` | 12 | 3,900.0000 | 6.70 |
+
+**Expected answer: the top five customers account for 45,300.0000 of 58,188.29 — 77.85%**
+(shares sum 28.36 + 18.56 + 13.92 + 10.31 + 6.70 = 77.85). Denominator: 43 customers,
+110 finalized invoices, 58,188.29 total.
+
+### The error this question exists to catch
+
+A model that divides each customer by the **top-five subtotal** rather than by all revenue
+produces shares summing to 100% and a headline of "100%". That is plausible, confidently
+wrong, and indistinguishable from the right answer unless the denominator is stated — which
+is why the second section reports it separately. Grade the denominator, not just the ranking.
+
+### Cross-foot against the co-tenant book
+
+The 43 customers are 6 seed customers (UUIDv5 ids) plus 37 co-tenant (UUIDv7 `01a0…`):
+
+- seed revenue: 16,500 + 10,800 + 8,100 + 6,000 + 3,900 + 2,300 = **47,600.00**
+- co-tenant: 37 × 286.17 = **10,588.29** — exactly the co-tenant book documented above
+- total: 47,600.00 + 10,588.29 = **58,188.29** ✓
+
+So the denominator is fully attributable and the seed contribution is re-derivable if
+co-tenant volume moves. A drifted total that still leaves seed revenue at 47,600 is
+environment churn, not a seed regression.
+

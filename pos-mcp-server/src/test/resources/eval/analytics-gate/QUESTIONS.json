@@ -528,6 +528,33 @@
         ]
       },
       "expected_outcome": "answered"
+    },
+    {
+      "fixture_id": "q22",
+      "expected_section": "Q22",
+      "ground_truth_sql": "ground-truth/q22-revenue-share-of-top-five-customers.sql",
+      "utterance": "What share of our revenue came from our top five customers?",
+      "window": {
+        "shape": "calendar",
+        "resolved_range": "2025-09-01..2026-08-31",
+        "stated_in_question": false,
+        "notes": "No range is stated. The glossary's default window for ranking customers is the trailing 12 complete calendar months, so the assistant should resolve it rather than ask (#1688: answer when only the range is unstated).",
+        "expected": {
+          "shape": "CALENDAR_SPAN",
+          "unit": "MONTH",
+          "count": 12
+        }
+      },
+      "expected_plan": {
+        "note": "#1689 band 5. The denominator is the graded part: dividing by the top-five subtotal gives shares summing to 100%, which is plausible and wrong. A correct answer states the total revenue as well as the ranking.",
+        "tool_calls": [
+          {
+            "name": "getCustomerRevenueRanking",
+            "why": "per-customer revenue over the resolved window, and the all-customer total that is the denominator"
+          }
+        ]
+      },
+      "expected_outcome": "answered"
     }
   ]
 }
