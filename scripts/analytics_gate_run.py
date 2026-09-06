@@ -1222,7 +1222,9 @@ def format_tool_calls(tool_calls):
 
 
 
-DEFLECTION_SOURCES = {"LADDER", "BLANK", "THINKING"}
+# Replies the user could not use as an answer: a ladder deflection, blank content, recovered
+# reasoning shown as text, or a bare tool payload that no ladder intercepted (#1816).
+DEFLECTION_SOURCES = {"LADDER", "BLANK", "THINKING", "TOOL_PAYLOAD"}
 
 
 def summarize_results(results, replaying, graded_from_traces=True):
@@ -1256,9 +1258,12 @@ def summarize_results(results, replaying, graded_from_traces=True):
     summary = {
         "window_counts": dict(sorted(window_counts.items())),
         "errors": errors,
-        "answer_sources": dict(sorted(answer_sources.items())),
-        "deflected": deflected,
     }
+    if not replaying:
+        # Replay fixtures carry no answer source; recording "0 deflections" there would claim a
+        # measurement replay never takes.
+        summary["answer_sources"] = dict(sorted(answer_sources.items()))
+        summary["deflected"] = deflected
     if replaying:
         outcome_counts = Counter(result["outcome"] for result in results)
         failed = sum(result["verdict"] == "FAIL" for result in results)

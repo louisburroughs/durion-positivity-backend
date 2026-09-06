@@ -95,6 +95,23 @@ class AlphaEvalTurnTraceRecorderTest {
     }
 
     @Test
+    void answerSourceIsPerTurnAndNotCarriedIntoTheNext() {
+        // #1816: the builder is created at begin(), so a source recorded on one turn cannot leak
+        // into the next — asserted rather than assumed, because the gate fails a run on it.
+        recorder.begin(USER, "first");
+        recorder.recordAnswerSource("CONTENT");
+        recorder.complete("answer");
+        recorder.begin(USER, "second");
+        recorder.fail(new IllegalStateException("model down"));
+
+        ArgumentCaptor<EvalTurnTrace> captor = ArgumentCaptor.forClass(EvalTurnTrace.class);
+        verify(repository, org.mockito.Mockito.times(2)).save(captor.capture());
+        assertThat(captor.getAllValues().get(0).answerSource()).isEqualTo("CONTENT");
+        assertThat(captor.getAllValues().get(1).answerSource()).isNull();
+        assertThat(captor.getAllValues().get(1).error()).contains("model down");
+    }
+
+    @Test
     void failedTurnPersistsErrorAndAlwaysClearsActiveState() {
         recorder.begin(USER, "broken turn");
 

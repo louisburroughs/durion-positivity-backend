@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.orchestration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -26,6 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -121,8 +123,7 @@ class SpringAiPosAssistantTest {
         QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
         AnswerResolutionLadder ladder = mock(AnswerResolutionLadder.class);
-        com.positivity.mcp.internal.service.ToolInvocationRecorder recorder =
-                mock(com.positivity.mcp.internal.service.ToolInvocationRecorder.class);
+        ToolInvocationRecorder recorder = mock(ToolInvocationRecorder.class);
         when(chatModel.getOptions())
                 .thenReturn(OllamaChatOptions.builder().model("gpt-oss:120b").build());
         when(ragRetriever.retrieve(any())).thenReturn(List.of());
@@ -152,7 +153,7 @@ class SpringAiPosAssistantTest {
         assistant.chat("user-1::ROLE_ADMIN", "q2", "ctx");
         assistant.chat("user-1::ROLE_ADMIN", "q3", "ctx");
 
-        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(recorder);
+        InOrder inOrder = inOrder(recorder);
         inOrder.verify(recorder).recordAnswerSource("CONTENT");
         inOrder.verify(recorder).recordAnswerSource("RE_RENDERED");
         inOrder.verify(recorder).recordAnswerSource("LADDER");
