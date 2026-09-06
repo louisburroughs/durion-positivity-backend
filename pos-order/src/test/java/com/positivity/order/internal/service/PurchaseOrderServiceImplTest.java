@@ -17,6 +17,7 @@ import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
+import com.positivity.order.internal.repository.PurchaseOrderLineRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
 import com.positivity.order.internal.repository.PurchaseOrderTransmissionEventRepository;
 import java.math.BigDecimal;
@@ -62,6 +63,9 @@ class PurchaseOrderServiceImplTest {
     private PurchaseOrderRepository purchaseOrderRepository;
 
     @Mock
+    private PurchaseOrderLineRepository purchaseOrderLineRepository;
+
+    @Mock
     private PurchaseOrderTransmissionEventRepository transmissionEventRepository;
 
     @Mock
@@ -79,6 +83,7 @@ class PurchaseOrderServiceImplTest {
     void setUp() {
         service = new PurchaseOrderServiceImpl(
                 purchaseOrderRepository,
+                purchaseOrderLineRepository,
                 transmissionEventRepository,
                 entityManager,
                 purchaseOrderFactPublisher,

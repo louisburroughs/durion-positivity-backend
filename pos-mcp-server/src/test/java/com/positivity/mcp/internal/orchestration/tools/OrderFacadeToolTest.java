@@ -39,7 +39,8 @@ class OrderFacadeToolTest {
                 contract("getOrder").template(),
                 contract("listOrders").template(),
                 "/order/v1/orders/purchase-orders",
-                "/order/v1/orders/purchase-orders/{poId}");
+                "/order/v1/orders/purchase-orders/{poId}",
+                "/order/v1/orders/purchase-orders/summary");
     }
 
     @Test

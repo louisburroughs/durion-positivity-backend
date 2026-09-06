@@ -139,6 +139,9 @@ public final class EventTypes {
             EventTypeRegistration.search("ORDER_PURCHASE_ORDER_LIST", "List purchase orders")
                     .apiVersion("1")
                     .build(),
+            EventTypeRegistration.search("ORDER_PURCHASE_ORDER_SUMMARY", "Summarize purchase orders")
+                    .apiVersion("1")
+                    .build(),
             EventTypeRegistration.approval("ORDER_PURCHASE_ORDER_APPROVE", "Approve a purchase order")
                     .apiVersion("1")
                     .build(),

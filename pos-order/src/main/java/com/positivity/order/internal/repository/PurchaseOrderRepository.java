@@ -1,5 +1,6 @@
 package com.positivity.order.internal.repository;
 
+import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderStatusRollup;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import java.util.List;
@@ -9,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrderEntity, UUID> {
 
@@ -31,4 +33,17 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrderEnti
     Page<PurchaseOrderEntity> findByStatus(PurchaseOrderStatus status, Pageable pageable);
 
     Page<PurchaseOrderEntity> findAll(Pageable pageable);
+
+    /**
+     * Header totals per status over every order: the population a page cannot see (#1798).
+     */
+    @Query("select new com.positivity.order.internal.dto.purchaseorder.PurchaseOrderStatusRollup("
+            + "po.status, count(po), sum(po.grandTotalMinor), sum(po.openBalanceMinor)) "
+            + "from PurchaseOrderEntity po group by po.status")
+    List<PurchaseOrderStatusRollup> rollupByStatus();
+
+    @Query("select new com.positivity.order.internal.dto.purchaseorder.PurchaseOrderStatusRollup("
+            + "po.status, count(po), sum(po.grandTotalMinor), sum(po.openBalanceMinor)) "
+            + "from PurchaseOrderEntity po where po.vendorId = :vendorId group by po.status")
+    List<PurchaseOrderStatusRollup> rollupByStatusForVendor(@Param("vendorId") UUID vendorId);
 }

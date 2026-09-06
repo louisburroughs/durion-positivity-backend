@@ -589,7 +589,7 @@
       "tool_selection_fixture_id": "q24-units-on-order-not-received",
       "utterance": "How many units are still on order but not yet received?",
       "in_chat_path_gate": false,
-      "excluded_reason": "Newly authored (#1689). Executable since #1785; awaiting a replay fixture before promotion, same as q23.",
+      "excluded_reason": "Newly authored (#1689). Answerable since #1798 added getPurchaseOrderSummary; awaiting a live run and a replay fixture before promotion, same as q23.",
       "plan_wave": "2",
       "budget": 2,
       "window": {
@@ -605,9 +605,9 @@
       },
       "expected_plan": {
         "min_tool_calls": {
-          "listPurchaseOrders": 1
+          "getPurchaseOrderSummary": 1
         },
-        "per": "the open quantity, not the ordered quantity: 2,351 against 7,849, both plausible and only one correct",
+        "per": "one getPurchaseOrderSummary call; with no status it covers the open set (APPROVED, PARTIALLY_RECEIVED) and the answer is unitsOpen, not unitsOrdered. A status-blind sum would add the 3,450 open units still sitting on CANCELLED lines (#1798 review). listPurchaseOrders pages and must not be summed.",
         "declined_reason": "answering with ordered quantity, which is over three times the outstanding figure"
       }
     },
