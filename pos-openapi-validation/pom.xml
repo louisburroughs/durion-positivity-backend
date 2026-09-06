@@ -16,7 +16,7 @@
     <description>OpenAPI validation policy support module</description>
 
     <properties>
-        <!-- Coverage ratchet: measured 94.1% line / 82.9% branch by the gate's own
+        <!-- Coverage ratchet: measured 93.3% line / 81.9% branch by the gate's own
              command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
              Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
              IT-inclusive measurement describes coverage the gate cannot see. -->
