@@ -201,6 +201,16 @@ public final class CatalogPermissions {
     public static final String TREAD_DESIGN_VIEW = "catalog:tread_design:view";
 
     /**
+     * Rule on a tread design awaiting review — attach it to products by hand, reject the matcher's
+     * suggestions, or defer the decision (#1645).
+     *
+     * <p>Separate from {@link #TREAD_DESIGN_VIEW} because reading a worklist and deciding what the
+     * catalogue says are different jobs: the first is something any catalogue user may need, the
+     * second changes what every shop sees on a product.
+     */
+    public static final String TREAD_DESIGN_RESOLVE = "catalog:tread_design:resolve";
+
+    /**
      * Read a service's labor standards — vehicle-keyed book times with provenance (#1569).
      */
     public static final String LABOR_STANDARD_VIEW = "catalog:labor_standard:view";

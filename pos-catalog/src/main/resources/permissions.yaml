@@ -77,6 +77,8 @@ permissions:
   - name: "catalog:supplier_cost:write"
     description: "Create, update, and delete supplier item cost structures"
     deprecated: true
+  - name: "catalog:tread_design:resolve"
+    description: "Attach, reject or defer a vendor tread design awaiting review"
   - name: "catalog:tread_design:view"
     description: "View vendor tread-design enrichment matched to products"
   - name: "catalog:uom_conversion:edit"

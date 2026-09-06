@@ -1,5 +1,6 @@
 package com.positivity.catalog.internal.dto;
 
+import com.positivity.catalog.internal.enums.TreadDesignMatchState;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -54,6 +55,28 @@ public record TreadDesignDto(
 
         @Schema(description = "Artwork references.") @NonNull
         List<TreadDesignImageDto> images,
+
+        @Schema(description = "Where this design stands in the enrichment review cycle.", example = "REVIEW") @NonNull
+        TreadDesignMatchState matchState,
+
+        @Schema(description = "When the review state last changed.") @NonNull
+        Instant matchStateAt,
+
+        @Schema(description = "Reviewer who last resolved this design, when one has.") @Nullable
+        String resolvedBy,
+
+        @Schema(description = "Note the reviewer left with that resolution.") @Nullable
+        String resolutionNote,
+
+        @Schema(description = "When a deferred design should return to the worklist, when set.") @Nullable
+        Instant deferUntil,
+
+        @Schema(
+                description = "Products the matcher scored against this design, best first."
+                        + " Empty on the product-scoped read, which is about one resolved match rather"
+                        + " than about a pending decision.")
+        @NonNull
+        List<TreadDesignCandidateDto> candidates,
 
         @Schema(description = "When this enrichment was last applied.") @NonNull
         Instant updatedAt) {}
