@@ -1,10 +1,12 @@
 package com.positivity.mcp.internal.discovery;
 
+import com.positivity.mcp.internal.config.ToolEmbeddingInitializer;
 import com.positivity.mcp.internal.discovery.service.ToolRegistrationService;
 import java.time.Duration;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -32,9 +34,14 @@ public class DiscoveryRefreshScheduler {
     private static final Duration REFRESH_TIMEOUT = Duration.ofMinutes(10);
 
     private final ToolRegistrationService toolRegistrationService;
+    /** Optional: the initializer is {@code @Profile("!test")}. */
+    private final ObjectProvider<ToolEmbeddingInitializer> toolEmbeddingInitializer;
 
-    public DiscoveryRefreshScheduler(@NonNull ToolRegistrationService toolRegistrationService) {
+    public DiscoveryRefreshScheduler(
+            @NonNull ToolRegistrationService toolRegistrationService,
+            @NonNull ObjectProvider<ToolEmbeddingInitializer> toolEmbeddingInitializer) {
         this.toolRegistrationService = toolRegistrationService;
+        this.toolEmbeddingInitializer = toolEmbeddingInitializer;
     }
 
     // Separate initial delay (#1643 review): the first self-heal matters most right after a restart —
@@ -51,6 +58,9 @@ public class DiscoveryRefreshScheduler {
             // tool (#1102 review). registerDiscoveredTools is itself fail-soft; the timeout bounds a
             // hung fetch.
             toolRegistrationService.registerDiscoveredTools().block(REFRESH_TIMEOUT);
+            // #1824: rows this cycle inserted have no embedding yet and are invisible to selection
+            // until they do. The backfill is cheap when nothing is missing and guards against overlap.
+            toolEmbeddingInitializer.ifAvailable(ToolEmbeddingInitializer::backfillAsync);
         } catch (RuntimeException ex) {
             log.warn("Periodic MCP tool discovery refresh failed: {}", ex.getMessage());
         }

@@ -49,8 +49,8 @@ public class ToolEmbeddingInitializer {
     private final JdbcTemplate jdbcTemplate;
     private final EmbeddingModel embeddingModel;
     private final int batchSize;
-    /** Counts down when a backfill finishes; tests wait on it instead of sleeping. */
-    private final CountDownLatch completed = new CountDownLatch(1);
+    /** Counts down when the current backfill finishes; tests wait on it instead of sleeping. */
+    private volatile CountDownLatch completed = new CountDownLatch(1);
     /** One backfill at a time: a second trigger while one runs would double-embed the same rows. */
     private final AtomicBoolean running = new AtomicBoolean(false);
     /** Set on context shutdown so a backfill in flight stops at the next batch boundary. */
@@ -68,7 +68,20 @@ public class ToolEmbeddingInitializer {
     /** Readiness is already reported when this fires; the backfill must not hold it up. */
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
-        Thread.ofVirtual().name("tool-embedding-backfill").start(this::backfill);
+        backfillAsync();
+    }
+
+    /**
+     * Starts a backfill on its own thread and returns at once. Also called after each scheduled
+     * re-discovery (#1824): rows a later discovery cycle inserts would otherwise stay without an
+     * embedding — invisible to selection — until the next restart. A backfill already running is
+     * left alone: rows inserted after its initial query wait for the next cycle's trigger.
+     */
+    public void backfillAsync() {
+        CountDownLatch latch = tryStart();
+        if (latch != null) {
+            Thread.ofVirtual().name("tool-embedding-backfill").start(() -> run(latch));
+        }
     }
 
     /**
@@ -82,10 +95,30 @@ public class ToolEmbeddingInitializer {
 
     /** Runs the backfill on the calling thread. Package-private so tests can drive it directly. */
     void backfill() {
-        if (!running.compareAndSet(false, true)) {
-            LOGGER.info("Tool embedding backfill already running; not starting another");
-            return;
+        CountDownLatch latch = tryStart();
+        if (latch != null) {
+            run(latch);
         }
+    }
+
+    /**
+     * Claims the single running slot and publishes this run's latch, on the CALLER's thread, so a
+     * second trigger is refused before it spawns anything and an {@code awaitCompletion} issued right
+     * after a trigger waits on the new run, not on a finished one. Returns null when a run is active.
+     */
+    private CountDownLatch tryStart() {
+        if (!running.compareAndSet(false, true)) {
+            LOGGER.info(
+                    "Tool embedding backfill already running; not starting another — rows inserted since its initial "
+                            + "query wait for the next discovery cycle");
+            return null;
+        }
+        CountDownLatch latch = new CountDownLatch(1);
+        completed = latch;
+        return latch;
+    }
+
+    private void run(CountDownLatch latch) {
         long totalStartNanos = System.nanoTime();
         try {
             // The vector column is the single validated value from RagEmbeddingSettings (V33, #1207),
@@ -116,8 +149,10 @@ public class ToolEmbeddingInitializer {
             // be visible in the log rather than vanish with the thread.
             LOGGER.error("Tool embedding backfill aborted after {} ms", elapsedMs(totalStartNanos), exception);
         } finally {
+            // This run's own latch, captured at start: a successor may already have replaced the
+            // field by the time we get here, and it must count down its own latch, not ours.
+            latch.countDown();
             running.set(false);
-            completed.countDown();
         }
     }
 
