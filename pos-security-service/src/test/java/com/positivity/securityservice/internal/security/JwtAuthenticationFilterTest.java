@@ -213,7 +213,7 @@ class JwtAuthenticationFilterTest {
     @DisplayName(
             "disabledAccount_isRefused: a valid token for a disabled account leaves the request unauthenticated without throwing")
     void disabledAccount_isRefused() {
-        stubValidTokenFor(accountWith(true, false, true));
+        stubValidTokenFor(disabledAccount());
 
         MockFilterChain chain = new MockFilterChain();
 
@@ -230,7 +230,7 @@ class JwtAuthenticationFilterTest {
     @Test
     @DisplayName("lockedAccount_isRefused: a valid token for a locked account leaves the request unauthenticated")
     void lockedAccount_isRefused() {
-        stubValidTokenFor(accountWith(false, true, true));
+        stubValidTokenFor(lockedAccount());
 
         MockFilterChain chain = new MockFilterChain();
 
@@ -243,7 +243,7 @@ class JwtAuthenticationFilterTest {
     @Test
     @DisplayName("expiredAccount_isRefused: a valid token for an expired account leaves the request unauthenticated")
     void expiredAccount_isRefused() {
-        stubValidTokenFor(accountWith(true, true, false));
+        stubValidTokenFor(expiredAccount());
 
         MockFilterChain chain = new MockFilterChain();
 
@@ -253,6 +253,33 @@ class JwtAuthenticationFilterTest {
         assertThat(chain.getRequest()).isNotNull();
     }
 
+    /**
+     * The fourth flag. Nothing on this path checks a password, but {@code JwtController#issueInternalToken}
+     * mints tokens with no password check at all, so a token minted after the credentials expired
+     * would otherwise keep working. {@code AccountStatusUserDetailsChecker} throws
+     * {@code CredentialsExpiredException} for it, and the filter must answer exactly as it does
+     * for the other three: unauthenticated, chain continues, nothing written.
+     */
+    @Test
+    @DisplayName(
+            "credentialsExpired_isRefused: a valid token for an account whose credentials have expired leaves the request unauthenticated")
+    void credentialsExpired_isRefused() throws Exception {
+        stubValidTokenFor(credentialsExpiredAccount());
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        assertThatCode(() -> filter.doFilter(bearerRequest(), response, chain)).doesNotThrowAnyException();
+        assertThat(SecurityContextHolder.getContext().getAuthentication())
+                .as("expired credentials must stop a live token authenticating, like the other three flags")
+                .isNull();
+        assertThat(chain.getRequest())
+                .as("the chain must still run so the entry point renders the 401 envelope")
+                .isNotNull();
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getContentAsString()).isEmpty();
+    }
+
     @Test
     @DisplayName(
             "disabledAccount_clearsGatewayAuth: a disabled account's token never rides on gateway-header authorities")
@@ -260,7 +287,7 @@ class JwtAuthenticationFilterTest {
         SecurityContextHolder.getContext()
                 .setAuthentication(new UsernamePasswordAuthenticationToken(
                         "gateway-user", null, List.of(new SimpleGrantedAuthority("security:token:issue_internal"))));
-        stubValidTokenFor(accountWith(true, false, true));
+        stubValidTokenFor(disabledAccount());
 
         filter.doFilter(bearerRequest(), new MockHttpServletResponse(), new MockFilterChain());
 
@@ -276,7 +303,7 @@ class JwtAuthenticationFilterTest {
     @Test
     @DisplayName("disabledAccount_isNotAServerFault: the refusal writes nothing and is not answered as a 500")
     void disabledAccount_isNotAServerFault() throws Exception {
-        stubValidTokenFor(accountWith(true, false, true));
+        stubValidTokenFor(disabledAccount());
 
         MockHttpServletResponse response = new MockHttpServletResponse();
         filter.doFilter(bearerRequest(), response, new MockFilterChain());
@@ -288,7 +315,7 @@ class JwtAuthenticationFilterTest {
     @Test
     @DisplayName("healthyAccount_stillAuthenticates: all account-state flags true is the happy path unchanged")
     void healthyAccount_stillAuthenticates() throws Exception {
-        stubValidTokenFor(accountWith(true, true, true));
+        stubValidTokenFor(healthyAccount());
 
         filter.doFilter(bearerRequest(), new MockHttpServletResponse(), new MockFilterChain());
 
@@ -303,14 +330,38 @@ class JwtAuthenticationFilterTest {
         when(userDetailsService.loadUserByUsername(account.getUsername())).thenReturn(account);
     }
 
-    /** Mirrors the constructor order {@code CustomUserDetailsService} uses. */
-    private static User accountWith(boolean accountNonLocked, boolean enabled, boolean accountNonExpired) {
+    // Named factories over Spring's User(username, password, enabled, accountNonExpired,
+    // credentialsNonExpired, accountNonLocked, authorities) constructor: each flips exactly one
+    // flag, so a test reads as the account state it exercises rather than as a positional triple.
+
+    private static User healthyAccount() {
+        return account(true, true, true, true);
+    }
+
+    private static User disabledAccount() {
+        return account(false, true, true, true);
+    }
+
+    private static User expiredAccount() {
+        return account(true, false, true, true);
+    }
+
+    private static User credentialsExpiredAccount() {
+        return account(true, true, false, true);
+    }
+
+    private static User lockedAccount() {
+        return account(true, true, true, false);
+    }
+
+    private static User account(
+            boolean enabled, boolean accountNonExpired, boolean credentialsNonExpired, boolean accountNonLocked) {
         return new User(
                 "jane.doe",
                 "",
                 enabled,
                 accountNonExpired,
-                /* credentialsNonExpired */ true,
+                credentialsNonExpired,
                 accountNonLocked,
                 List.of(new SimpleGrantedAuthority("ignored")));
     }

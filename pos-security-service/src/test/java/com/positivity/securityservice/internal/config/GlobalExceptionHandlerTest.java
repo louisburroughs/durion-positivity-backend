@@ -6,6 +6,10 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
@@ -41,6 +45,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -279,6 +284,72 @@ class GlobalExceptionHandlerTest {
             assertThat(response.getBody().code()).isEqualTo("USER_NOT_FOUND");
             assertThat(response.getBody().message()).isEqualTo("Token issuance request is invalid");
             assertThat(response.getBody().toString()).doesNotContain("ghost.account");
+        }
+
+        /**
+         * The other half of the non-disclosure contract (#1715, #1808 review): the detail the body
+         * withholds must actually reach the WARN log, keyed by the correlation id the body quotes,
+         * or the operator has no way to find out which subject failed to resolve.
+         */
+        @Test
+        @DisplayName("logs the logDetail at WARN against the correlation id, and never in the body")
+        void logsTheLogDetailAtWarnAgainstTheCorrelationIdAndNeverInTheBody() {
+            UserNotFoundException ex = UserNotFoundException.withLogDetail(
+                    "Token issuance request is invalid", "no user exists for subject: ghost.account");
+
+            ListAppender<ILoggingEvent> appender = attachAppender();
+            ResponseEntity<ApiError> response;
+            try {
+                response = sut.handleUserNotFoundException(ex, requestWithHeader());
+            } finally {
+                detachAppender(appender);
+            }
+
+            assertThat(appender.list)
+                    .filteredOn(event -> event.getLevel() == Level.WARN)
+                    .singleElement()
+                    .extracting(ILoggingEvent::getFormattedMessage)
+                    .asString()
+                    .contains("ghost.account")
+                    .contains(CORRELATION_ID);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().message()).doesNotContain("ghost.account");
+        }
+
+        @Test
+        @DisplayName("logs no detail suffix when the exception carries no logDetail")
+        void logsNoDetailSuffixWhenThereIsNoLogDetail() {
+            UserNotFoundException ex = new UserNotFoundException("User not found");
+
+            ListAppender<ILoggingEvent> appender = attachAppender();
+            try {
+                sut.handleUserNotFoundException(ex, requestWithHeader());
+            } finally {
+                detachAppender(appender);
+            }
+
+            assertThat(appender.list)
+                    .filteredOn(event -> event.getLevel() == Level.WARN)
+                    .singleElement()
+                    .extracting(ILoggingEvent::getFormattedMessage)
+                    .asString()
+                    .contains(CORRELATION_ID)
+                    .contains("User not found")
+                    .doesNotContain(" — ");
+        }
+
+        private ListAppender<ILoggingEvent> attachAppender() {
+            Logger logger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
+            ListAppender<ILoggingEvent> appender = new ListAppender<>();
+            appender.start();
+            logger.addAppender(appender);
+            return appender;
+        }
+
+        private void detachAppender(ListAppender<ILoggingEvent> appender) {
+            Logger logger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
+            logger.detachAppender(appender);
+            appender.stop();
         }
     }
 

@@ -43,6 +43,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.AccountExpiredException;
+import org.springframework.security.authentication.CredentialsExpiredException;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -803,6 +807,130 @@ class JwtServiceImplTest {
         assertThatThrownBy(() -> sut.refreshAccessToken(refreshToken))
                 .isInstanceOf(NoRolesAssignedException.class)
                 .hasMessageContaining("no roles assigned");
+    }
+
+    // =========================================================
+    // #1803 / #1808 review: account state is enforced on the refresh path
+    // =========================================================
+
+    /**
+     * {@code /v1/auth/refresh} is permitAll and carries the refresh token in the body, so
+     * {@code JwtAuthenticationFilter} — and the account-state check it runs on bearer tokens —
+     * never sees it. {@code LockoutServiceImpl} locks an account without revoking its tokens, so
+     * without a check here a locked-out account could rotate a refresh token into a fresh access
+     * token. The checker must run before any rotation starts: nothing revoked, nothing deleted.
+     */
+    @Test
+    @DisplayName("refreshAccessToken refuses a locked account with LockedException before rotation starts")
+    void refreshAccessToken_lockedAccount_throwsLockedExceptionBeforeRotation() {
+        UUID userId = UUID.randomUUID();
+        String refreshToken = storedRefreshTokenFor(userId, Set.of("ADMIN"));
+        when(userDetailsService.loadUserByUsername(userId.toString()))
+                .thenReturn(accountFor(userId).accountLocked(true).build());
+
+        assertThatThrownBy(() -> sut.refreshAccessToken(refreshToken)).isInstanceOf(LockedException.class);
+
+        verify(tokenRevocationManager, never()).revokeToken(anyString(), anyLong());
+        verify(jwtTokenRepository, never()).delete(any(JwtToken.class));
+    }
+
+    @Test
+    @DisplayName("refreshAccessToken refuses a disabled account with DisabledException before rotation starts")
+    void refreshAccessToken_disabledAccount_throwsDisabledExceptionBeforeRotation() {
+        UUID userId = UUID.randomUUID();
+        String refreshToken = storedRefreshTokenFor(userId, Set.of("ADMIN"));
+        when(userDetailsService.loadUserByUsername(userId.toString()))
+                .thenReturn(accountFor(userId).disabled(true).build());
+
+        assertThatThrownBy(() -> sut.refreshAccessToken(refreshToken)).isInstanceOf(DisabledException.class);
+
+        verify(tokenRevocationManager, never()).revokeToken(anyString(), anyLong());
+        verify(jwtTokenRepository, never()).delete(any(JwtToken.class));
+    }
+
+    @Test
+    @DisplayName("refreshAccessToken refuses an expired account with AccountExpiredException before rotation starts")
+    void refreshAccessToken_expiredAccount_throwsAccountExpiredExceptionBeforeRotation() {
+        UUID userId = UUID.randomUUID();
+        String refreshToken = storedRefreshTokenFor(userId, Set.of("ADMIN"));
+        when(userDetailsService.loadUserByUsername(userId.toString()))
+                .thenReturn(accountFor(userId).accountExpired(true).build());
+
+        assertThatThrownBy(() -> sut.refreshAccessToken(refreshToken)).isInstanceOf(AccountExpiredException.class);
+
+        verify(tokenRevocationManager, never()).revokeToken(anyString(), anyLong());
+        verify(jwtTokenRepository, never()).delete(any(JwtToken.class));
+    }
+
+    @Test
+    @DisplayName(
+            "refreshAccessToken refuses expired credentials with CredentialsExpiredException before rotation starts")
+    void refreshAccessToken_credentialsExpired_throwsCredentialsExpiredExceptionBeforeRotation() {
+        UUID userId = UUID.randomUUID();
+        String refreshToken = storedRefreshTokenFor(userId, Set.of("ADMIN"));
+        when(userDetailsService.loadUserByUsername(userId.toString()))
+                .thenReturn(accountFor(userId).credentialsExpired(true).build());
+
+        assertThatThrownBy(() -> sut.refreshAccessToken(refreshToken)).isInstanceOf(CredentialsExpiredException.class);
+
+        verify(tokenRevocationManager, never()).revokeToken(anyString(), anyLong());
+        verify(jwtTokenRepository, never()).delete(any(JwtToken.class));
+    }
+
+    /**
+     * Ordering: the account-state check runs before the roles check, so a locked account with no
+     * roles is told it is locked (401 ACCOUNT_LOCKED), not that it has no roles (403
+     * USER_HAS_NO_ROLES). Answering the roles question first would tell a locked-out caller
+     * something about the account's authorization while it is not fit to hold a token at all.
+     */
+    @Test
+    @DisplayName("refreshAccessToken checks account state before roles: a locked, role-less account is LockedException")
+    void refreshAccessToken_lockedAccountWithNoRoles_throwsLockedExceptionNotNoRolesAssigned() {
+        UUID userId = UUID.randomUUID();
+        String refreshToken = storedRefreshTokenFor(userId, Set.of());
+        when(userDetailsService.loadUserByUsername(userId.toString()))
+                .thenReturn(accountFor(userId).accountLocked(true).build());
+
+        assertThatThrownBy(() -> sut.refreshAccessToken(refreshToken))
+                .isInstanceOf(LockedException.class)
+                .isNotInstanceOf(NoRolesAssignedException.class);
+
+        verify(tokenRevocationManager, never()).revokeToken(anyString(), anyLong());
+    }
+
+    /**
+     * Mints a token pair for {@code userId}, stores its refresh token, and stubs the user lookup
+     * with the given roles, so that {@code refreshAccessToken} reaches the account-state check.
+     */
+    private String storedRefreshTokenFor(UUID userId, Set<String> roles) {
+        JwtService.TokenPair tokenPair = sut.generateTokenPair(userId.toString(), userId, null, Set.of("ADMIN"));
+        String refreshToken = tokenPair.refreshToken();
+
+        JwtToken stored = new JwtToken();
+        stored.setToken(tokenPair.accessToken());
+        stored.setRefreshToken(refreshToken);
+        stored.setIssuedAt(Instant.now(TEST_CLOCK));
+        stored.setExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(600));
+        stored.setRefreshExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(1200));
+        stored.setSubject(userId.toString());
+
+        when(tokenRevocationManager.isRevoked(anyString())).thenReturn(false);
+        doReturn(Optional.of(stored))
+                .doReturn(Optional.of(stored))
+                .when(jwtTokenRepository)
+                .findByRefreshToken(refreshToken);
+        when(userService.getUserById(userId))
+                .thenReturn(Optional.of(UserDto.builder()
+                        .id(userId)
+                        .username(userId.toString())
+                        .roles(roles)
+                        .build()));
+        return refreshToken;
+    }
+
+    /** A Spring {@code User} builder for {@code userId}'s account with every state flag healthy. */
+    private static User.UserBuilder accountFor(UUID userId) {
+        return User.withUsername(userId.toString()).password("{noop}unused").roles("ADMIN");
     }
 
     /**

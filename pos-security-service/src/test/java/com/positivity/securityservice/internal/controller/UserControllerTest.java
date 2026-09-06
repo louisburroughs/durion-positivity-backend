@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.controller;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
@@ -131,6 +132,31 @@ class UserControllerTest {
                     .andExpect(jsonPath("$.code").value("USER_ALREADY_EXISTS"));
         }
 
+        /**
+         * #1808 review: a named role that does not resolve is a domain condition on the same
+         * footing as an unresolvable user, so it answers 404 {@code ROLE_NOT_FOUND} through the
+         * advice rather than a 400 or a bare 500 from the service's lookup.
+         */
+        @Test
+        void createUser_unknownRole_returns404RoleNotFound() throws Exception {
+            when(userService.createUser(any(), any(), anySet()))
+                    .thenThrow(new com.positivity.securityservice.internal.exception.RoleNotFoundException(
+                            "Role not found: GHOST"));
+
+            mockMvc.perform(post("/v1/users")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"username":"jane.doe","password":"Sup3rS3cret!","roles":["GHOST"]}""")
+                            .header("X-Correlation-Id", "corr-create-role-404")
+                            .with(user("admin-user").authorities(() -> "security:user:create")))
+                    .andExpect(status().isNotFound())
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                            .string("X-Correlation-Id", "corr-create-role-404"))
+                    .andExpect(jsonPath("$.code").value("ROLE_NOT_FOUND"))
+                    .andExpect(jsonPath("$.message").value(containsString("GHOST")))
+                    .andExpect(jsonPath("$.correlationId").value("corr-create-role-404"));
+        }
+
         @Test
         void withoutAuthority_returns403() throws Exception {
             mockMvc.perform(post("/v1/users")
@@ -219,7 +245,28 @@ class UserControllerTest {
                             .content("{\"roles\":[\"GHOST\"]}")
                             .with(user("admin-user").authorities(() -> "security:user:edit")))
                     .andExpect(status().isNotFound())
-                    .andExpect(jsonPath("$.code").value("ROLE_NOT_FOUND"));
+                    .andExpect(jsonPath("$.code").value("ROLE_NOT_FOUND"))
+                    .andExpect(jsonPath("$.message").value(containsString("GHOST")));
+        }
+
+        @Test
+        void assignRoles_unknownRole_returns404RoleNotFound() throws Exception {
+            when(userService.assignRoles(eq("jane.doe"), anySet()))
+                    .thenThrow(new com.positivity.securityservice.internal.exception.RoleNotFoundException(
+                            "Role not found: GHOST"));
+
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                                    "/v1/users/jane.doe/roles")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"roles\":[\"GHOST\"]}")
+                            .header("X-Correlation-Id", "corr-assign-role-404")
+                            .with(user("admin-user").authorities(() -> "security:role:assign")))
+                    .andExpect(status().isNotFound())
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                            .string("X-Correlation-Id", "corr-assign-role-404"))
+                    .andExpect(jsonPath("$.code").value("ROLE_NOT_FOUND"))
+                    .andExpect(jsonPath("$.message").value(containsString("GHOST")))
+                    .andExpect(jsonPath("$.correlationId").value("corr-assign-role-404"));
         }
 
         @Test

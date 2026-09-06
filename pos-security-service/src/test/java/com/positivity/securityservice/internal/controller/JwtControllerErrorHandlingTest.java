@@ -32,6 +32,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -225,7 +227,11 @@ class JwtControllerErrorHandlingTest {
                 .getResponse()
                 .getContentAsString();
 
-        assertThat(body).doesNotContain("ghost.account").doesNotContain("subject:");
+        assertThat(body)
+                .doesNotContain("ghost.account")
+                .doesNotContain("not found")
+                .doesNotContain("User")
+                .doesNotContain("subject:");
     }
 
     @Test
@@ -246,7 +252,11 @@ class JwtControllerErrorHandlingTest {
                 .getResponse()
                 .getContentAsString();
 
-        assertThat(body).doesNotContain("ghost.account").doesNotContain("subject:");
+        assertThat(body)
+                .doesNotContain("ghost.account")
+                .doesNotContain("not found")
+                .doesNotContain("User")
+                .doesNotContain("subject:");
     }
 
     /**
@@ -342,6 +352,34 @@ class JwtControllerErrorHandlingTest {
                 .andExpect(jsonPath("$.code").value("TOKEN_USER_ID_MISSING"))
                 .andExpect(jsonPath("$.message").value("Token does not carry a uid or userId claim"))
                 .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID));
+    }
+
+    /**
+     * #1808 review: the three token-utility endpoints used to answer a bare
+     * {@code ResponseEntity.status(UNAUTHORIZED).build()} when {@code validateToken} refused the
+     * query-parameter token — no {@code ApiError} body and no {@code X-Correlation-Id} header,
+     * while {@code openapi.yaml} documented an enveloped 401. They now throw
+     * {@code InvalidTokenException}, which the advice renders as 401 {@code INVALID_TOKEN} through
+     * the same {@code respond} helper as every other handler (ADR-0017 §3/§4).
+     */
+    @ParameterizedTest(name = "GET {0}")
+    @ValueSource(strings = {"/v1/auth/user-id", "/v1/auth/subject", "/v1/auth/roles"})
+    @WithMockUser
+    @DisplayName("a refused token query parameter answers an enveloped, correlated 401 INVALID_TOKEN")
+    void aRefusedTokenAnswersAnEnvelopedCorrelated401(String path) throws Exception {
+        when(jwtService.validateToken("refused-token")).thenReturn(false);
+
+        mockMvc.perform(get(path).param("token", "refused-token").header("X-Correlation-Id", CORRELATION_ID))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("X-Correlation-Id", CORRELATION_ID))
+                .andExpect(jsonPath("$.code").value("INVALID_TOKEN"))
+                .andExpect(jsonPath("$.message").value("Token invalid or expired"))
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID));
+
+        org.mockito.Mockito.verify(jwtService, org.mockito.Mockito.never()).getRolesFromToken(anyString());
+        org.mockito.Mockito.verify(jwtService, org.mockito.Mockito.never()).getUsernameFromToken(anyString());
+        org.mockito.Mockito.verify(jwtService, org.mockito.Mockito.never()).getUserIdFromToken(anyString());
     }
 
     @Test
