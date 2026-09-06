@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.supplier.internal.config.SecurityConfig;
 import com.positivity.supplier.internal.domain.model.SupplierRef;
+import com.positivity.supplier.internal.exception.SupplierConfigurationException;
 import com.positivity.supplier.internal.mktcat.service.MktCatImporter;
 import com.positivity.supplier.internal.mktcat.service.MktCatStagedReader;
 import com.positivity.supplier.internal.mktcat.service.model.MarketingEnrichmentView;
@@ -136,5 +137,32 @@ class SupplierMarketingCatalogControllerWebMvcTest {
     @Test
     void isDeniedWithoutTheImportAuthority() throws Exception {
         mockMvc.perform(authed(get(BASE), SupplierPermissions.PROFILE_READ)).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void anUnknownVendorProfileIsNotFoundInTheStandardEnvelope() throws Exception {
+        when(stagedReader.findStaged(eq(new SupplierRef(SUPPLIER_REF)), eq(100), isNull()))
+                .thenThrow(new SupplierConfigurationException(
+                        SupplierConfigurationException.UNKNOWN_SUPPLIER,
+                        "No vendor profile configured for supplier '" + SUPPLIER_REF + "'"));
+
+        mockMvc.perform(authed(get(BASE), SupplierPermissions.MARKETING_CATALOG_IMPORT))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(SupplierConfigurationException.UNKNOWN_SUPPLIER))
+                .andExpect(
+                        jsonPath("$.message").value("No vendor profile configured for supplier '" + SUPPLIER_REF + "'"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").exists());
+    }
+
+    @Test
+    void aMalformedHasUnresolvedImagesValueIsRejectedAsBadRequest() throws Exception {
+        mockMvc.perform(authed(
+                        get(BASE + "?hasUnresolvedImages=notaboolean"), SupplierPermissions.MARKETING_CATALOG_IMPORT))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_PARAMETER"))
+                .andExpect(jsonPath("$.message").value("Parameter 'hasUnresolvedImages' has an invalid value"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.correlationId").exists());
     }
 }
