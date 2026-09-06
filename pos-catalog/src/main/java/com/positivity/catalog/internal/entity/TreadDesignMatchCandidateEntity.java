@@ -18,6 +18,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -38,11 +39,20 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * {@code contentHash} changes and matching re-runs, the previous observations describe words the
  * vendor no longer publishes. The unique constraint on {@code (tread_design_id, product_id)} is
  * what keeps a re-run from accumulating duplicate opinions about the same pair.
+ *
+ * <h2>No {@code updatedAt} (ADR-0024 §5 {@code @Immutable} exemption)</h2>
+ *
+ * A row is never updated in place: {@code SupplierCatalogEnrichmentListener#recordCandidates}
+ * deletes a design's whole candidate set and re-inserts it wholesale on every rematch. Lifecycle
+ * update semantics — and the audit column that would track them — do not apply to a row that is
+ * only ever created or deleted, never modified, so {@code updatedAt} is intentionally absent and
+ * {@link Immutable} declares that to Hibernate rather than leaving it implicit.
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Immutable
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(

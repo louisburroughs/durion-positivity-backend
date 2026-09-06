@@ -72,7 +72,9 @@ Routing rule for new stories: computing **what a customer pays** → pos-price; 
 - `POST /v1/catalog/labor-guide-imports?sourceCode=`, `GET /.../incomplete`, `GET /.../unmapped` — chunked labor-guide feed import from STORE-licensed sources, with counted completeness and the unmapped-operation curation queue (auth: `catalog:labor_standard:import` / `:view`)
 - `POST /v1/catalog/labor-times/resolve` — the ADR-0058 §5 service-to-service edge: resolve the applicable labor time for (service operation, vehicle) with provenance and typed degradation; sole approved caller is pos-workorder's `CatalogLaborTimeClientImpl` (auth: `catalog:labor_time:resolve`)
 - `GET /v1/catalog/tread-designs/for-product/{productId}` — vendor-supplied MKCAT enrichment matched to a product (auth: `catalog:tread_design:view`)
-- `GET /v1/catalog/tread-designs/unmatched` — tread designs that matched no product, for manual review (auth: `catalog:tread_design:view`)
+- `GET /v1/catalog/tread-designs/unmatched` — enrichment review worklist (`matchState` defaults to `UNMATCHED,REVIEW`; auth: `catalog:tread_design:view`)
+- `GET /v1/catalog/tread-designs/{treadDesignId}/candidates` — every scored candidate for one design (auth: `catalog:tread_design:view`)
+- `POST /v1/catalog/tread-designs/{treadDesignId}/resolve` — reviewer decision: `ATTACH` / `REJECT` / `DEFER` (auth: `catalog:tread_design:resolve`)
 
 ## Estimated service time (labor standards, #1569)
 

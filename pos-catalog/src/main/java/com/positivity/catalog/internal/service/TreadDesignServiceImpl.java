@@ -40,6 +40,17 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class TreadDesignServiceImpl implements TreadDesignService {
 
+    /**
+     * How many of a design's best-scoring candidates ride along on the review worklist row
+     * ({@link #findForReview}). The candidate table itself is unbounded for {@code AUTO} tier
+     * (#1645) so the ambiguity check and traceability stay correct, but a worklist row is a summary
+     * a reviewer scans, not the full candidate detail — that lives at {@link #findCandidates}, which
+     * returns every scored candidate for one design. Bounding here, at read time, keeps the
+     * worklist payload the size ADR-0060 §7 describes ("top scored candidates") without truncating
+     * what got persisted.
+     */
+    private static final int MAX_WORKLIST_CANDIDATES = 20;
+
     private final Clock clock;
     private final ProductRepository productRepository;
     private final TreadDesignRepository treadDesignRepository;
@@ -91,7 +102,11 @@ public class TreadDesignServiceImpl implements TreadDesignService {
                 design,
                 textsByDesign.getOrDefault(design.getId(), List.of()),
                 imagesByDesign.getOrDefault(design.getId(), List.of()),
-                candidatesByDesign.getOrDefault(design.getId(), List.of())));
+                // Best-first already (query order); bounded here for the worklist summary only —
+                // the full set is unbounded in storage and unbounded on findCandidates().
+                candidatesByDesign.getOrDefault(design.getId(), List.of()).stream()
+                        .limit(MAX_WORKLIST_CANDIDATES)
+                        .toList()));
     }
 
     @Override

@@ -88,11 +88,19 @@ public class SupplierCatalogEnrichmentListener {
     static final String OWNER = "supplier";
 
     /**
-     * How many scored candidates are kept per design. A reviewer compares a handful of plausible
-     * products; a vendor with ten thousand priced SKUs would otherwise write a candidate table
-     * nobody can page through to answer the one question it exists for.
+     * How many {@code REVIEW}-tier candidates are kept per design, best score first.
+     *
+     * <p>{@code AUTO}-tier candidates are never capped, unlike {@code REVIEW}-tier ones: they are
+     * exactly the rows {@link #matchProducts}'s attach loop and {@link #parkAmbiguousClaim}'s rival
+     * lookup depend on for correctness, not just for a reviewer's convenience. Capping them would
+     * mean an attachment beyond the cap has no candidate row to explain it, and a design with more
+     * AUTO-tier candidates than the cap could let a later rival attach uncontested because the
+     * ambiguity check can only see what got persisted. {@code REVIEW}-tier rows carry no such
+     * obligation — nothing acts on them automatically, a person only ever looks at them — so they
+     * stay capped for the reason #1352 never intended a reviewer to page through a vendor's entire
+     * priced catalogue to find the handful worth a decision.
      */
-    static final int MAX_STORED_CANDIDATES = 20;
+    static final int MAX_STORED_REVIEW_CANDIDATES = 20;
 
     /** Matches {@code numeric(5,4)} in V20 — the stored score must equal the compared score. */
     private static final int SCORE_SCALE = 4;
@@ -303,17 +311,35 @@ public class SupplierCatalogEnrichmentListener {
         }
     }
 
-    /** Replaces this design's candidate rows with the current scoring, best first and bounded. */
+    /**
+     * Replaces this design's candidate rows with the current scoring: every {@code AUTO}-tier
+     * candidate, plus the best-scoring {@link #MAX_STORED_REVIEW_CANDIDATES} {@code REVIEW}-tier
+     * ones. {@code scored} arrives best-score-first (see {@link TreadDesignMatcher#evaluateCandidates})
+     * and {@code AUTO} always outscores {@code REVIEW} under the configured thresholds, so a single
+     * pass in that order caps only the {@code REVIEW} tail without needing to partition first.
+     *
+     * <p>This is deliberately the exact set {@link #matchProducts}'s attach loop iterates over for
+     * {@code AUTO} candidates — persisting fewer would silently break both traceability (an
+     * attachment with no candidate row) and {@link #parkAmbiguousClaim}'s rival lookup, which only
+     * ever sees rows that made it to this table.
+     */
     private void recordCandidates(TreadDesignEntity design, List<TreadDesignMatcher.ScoredCandidate> scored) {
         treadDesignMatchCandidateRepository.deleteByTreadDesignId(design.getId());
-        scored.stream()
-                .limit(MAX_STORED_CANDIDATES)
-                .forEach(candidate -> treadDesignMatchCandidateRepository.save(TreadDesignMatchCandidateEntity.builder()
-                        .treadDesignId(design.getId())
-                        .productId(candidate.product().getId())
-                        .score(BigDecimal.valueOf(candidate.score()).setScale(SCORE_SCALE, RoundingMode.HALF_UP))
-                        .tier(candidate.tier())
-                        .build()));
+        int reviewKept = 0;
+        for (TreadDesignMatcher.ScoredCandidate candidate : scored) {
+            if (candidate.tier() == MatchTier.REVIEW) {
+                if (reviewKept >= MAX_STORED_REVIEW_CANDIDATES) {
+                    continue;
+                }
+                reviewKept++;
+            }
+            treadDesignMatchCandidateRepository.save(TreadDesignMatchCandidateEntity.builder()
+                    .treadDesignId(design.getId())
+                    .productId(candidate.product().getId())
+                    .score(BigDecimal.valueOf(candidate.score()).setScale(SCORE_SCALE, RoundingMode.HALF_UP))
+                    .tier(candidate.tier())
+                    .build());
+        }
     }
 
     /**

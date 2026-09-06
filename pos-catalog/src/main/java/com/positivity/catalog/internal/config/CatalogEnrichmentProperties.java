@@ -37,6 +37,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *         contigroup: Continental
  * }</pre>
  *
+ * <p>Both thresholds (defaulted or explicit) are validated fail-fast in the compact constructor:
+ * each must fall within {@code [0, 1]}, and {@code autoThreshold} must be {@code >= reviewThreshold}
+ * — a mistuned deployment fails at startup rather than silently inverting the tiers at matching
+ * time.
+ *
  * @param autoThreshold score at or above which an unambiguous candidate is attached without asking;
  *     null = 0.80
  * @param reviewThreshold score at or above which a candidate is shown to a reviewer; null = 0.50
@@ -55,6 +60,31 @@ public record CatalogEnrichmentProperties(
 
     /** ADR-0060 default: #1352's single threshold, demoted to "worth a person's attention". */
     public static final double DEFAULT_REVIEW_THRESHOLD = 0.50;
+
+    // (d) defensive/internal: these guard `pos.catalog.enrichment.*` property binding at Spring
+    // context startup (@ConfigurationProperties), never a value supplied on an HTTP request, so
+    // there is no controller path to reach them. Left as IllegalArgumentException — Spring's own
+    // property-binding failure reporting expects it, and GlobalExceptionHandler never sees it.
+    // Validated against the *effective* (default-filled) thresholds, not the raw nullable fields,
+    // because an override of only one of the two — e.g. raising review-threshold above the
+    // untouched 0.80 auto default — is exactly the misconfiguration this exists to catch fast at
+    // startup rather than let it silently invert the tiers (ADR-0060 §2) at matching time.
+    public CatalogEnrichmentProperties {
+        double effectiveAuto = autoThreshold != null ? autoThreshold : DEFAULT_AUTO_THRESHOLD;
+        double effectiveReview = reviewThreshold != null ? reviewThreshold : DEFAULT_REVIEW_THRESHOLD;
+        if (effectiveAuto < 0.0 || effectiveAuto > 1.0) {
+            throw new IllegalArgumentException(
+                    "pos.catalog.enrichment.auto-threshold must be within [0,1], got " + effectiveAuto);
+        }
+        if (effectiveReview < 0.0 || effectiveReview > 1.0) {
+            throw new IllegalArgumentException(
+                    "pos.catalog.enrichment.review-threshold must be within [0,1], got " + effectiveReview);
+        }
+        if (effectiveAuto < effectiveReview) {
+            throw new IllegalArgumentException("pos.catalog.enrichment.auto-threshold (" + effectiveAuto
+                    + ") must be >= review-threshold (" + effectiveReview + ")");
+        }
+    }
 
     public double autoThresholdOrDefault() {
         return autoThreshold != null ? autoThreshold : DEFAULT_AUTO_THRESHOLD;

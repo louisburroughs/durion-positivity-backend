@@ -70,3 +70,8 @@ ALTER TABLE product ADD COLUMN tread_design_source character varying(10);
 -- Every attachment that exists today was made by the #1352 matcher, by construction: there was no
 -- way for a person to make one.
 UPDATE product SET tread_design_source = 'AUTO' WHERE tread_design_id IS NOT NULL;
+
+-- Backfill above guarantees the invariant before this constraint is added: tread_design_source is
+-- set exactly where tread_design_id is not null, and null everywhere else.
+ALTER TABLE product ADD CONSTRAINT ck_product_tread_design_source_paired
+    CHECK ((tread_design_id IS NULL) = (tread_design_source IS NULL));
