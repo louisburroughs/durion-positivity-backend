@@ -25,21 +25,22 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * Unit tests for the accounting-event payload display projection (issue #1778).
+ * Unit tests for the accounting-event payload display projection (issues #1778, #1797).
  *
- * <p>The projection's job is to let a screen label the UUID-backed values in an event payload
- * without exposing the UUIDs and without reaching across a domain boundary. These tests pin the
- * two halves of that: which values the walk recognizes in a free-form producer payload, and the
- * rule that an unresolvable reference yields nulls rather than the UUID as text.
+ * <p>The projection's job is to let a screen label the reference values in an event payload
+ * without exposing raw identifiers and without reaching across a domain boundary. These tests pin
+ * the two halves of that: which values the walk recognizes in a free-form producer payload, and
+ * the rule that an unresolvable reference yields nulls rather than the identifier as text.
  */
 @ExtendWith(MockitoExtension.class)
-@DisplayName("EventPayloadReferenceProjector Tests (issue #1778)")
+@DisplayName("EventPayloadReferenceProjector Tests (issues #1778, #1797)")
 class EventPayloadReferenceProjectorTest {
 
     private static final UUID INVOICE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f0001");
     private static final UUID CUSTOMER_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f0002");
     private static final UUID VENDOR_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f0003");
     private static final UUID ORGANIZATION_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f0004");
+    private static final UUID LOCATION_UUID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f0005");
 
     @Mock
     private DisplayReferenceResolver displayReferenceResolver;
@@ -53,6 +54,7 @@ class EventPayloadReferenceProjectorTest {
         assertThat(projector.project(null)).isEmpty();
         assertThat(projector.project(Map.of())).isEmpty();
         verify(displayReferenceResolver, never()).resolve(any(), anyCollection());
+        verify(displayReferenceResolver, never()).resolveCodes(any(), anyCollection());
     }
 
     @Test
@@ -73,6 +75,8 @@ class EventPayloadReferenceProjectorTest {
         EventPayloadReference customer = byPath(projection, "customerId");
         assertThat(customer.getReferenceType()).isEqualTo(DisplayReferenceType.CUSTOMER);
         assertThat(customer.getId()).isEqualTo(CUSTOMER_ID);
+        // The raw value is the payload string; the id is that same value parsed.
+        assertThat(customer.getRawValue()).isEqualTo(CUSTOMER_ID.toString());
         assertThat(customer.getDisplayName()).isEqualTo("Northside Fleet Services");
         assertThat(customer.getDisplayReference()).isEqualTo("C-10427");
 
@@ -141,6 +145,133 @@ class EventPayloadReferenceProjectorTest {
 
         assertThat(projector.project(payload)).isEmpty();
         verify(displayReferenceResolver, never()).resolve(any(), anyCollection());
+        verify(displayReferenceResolver, never()).resolveCodes(any(), anyCollection());
+    }
+
+    @Test
+    @DisplayName("A code-valued locationId is projected and resolved by code, with no UUID (issue #1797)")
+    void projectsCodeValuedLocationReference() {
+        // Accounting's location dimension is a code, not a UUID — the canonical envelope carries
+        // "location_id": "LOC_USA". Before #1797 the value never parsed as a UUID, so the key was
+        // silently skipped and LOCATION was dead in the contract.
+        when(displayReferenceResolver.resolveCodes(eq(DisplayReferenceType.LOCATION), anyCollection()))
+                .thenReturn(Map.of("loc-107", new ResolvedDisplayReference("Planta Monterrey", "LOC-107")));
+
+        Map<String, Object> payload = Map.of("dimensions", Map.of("location_id", "loc-107"));
+
+        List<EventPayloadReference> projection = projector.project(payload);
+
+        assertThat(projection).hasSize(1);
+        EventPayloadReference location = byPath(projection, "dimensions.location_id");
+        assertThat(location.getReferenceType()).isEqualTo(DisplayReferenceType.LOCATION);
+        assertThat(location.getRawValue()).isEqualTo("loc-107");
+        assertThat(location.getId()).isNull();
+        assertThat(location.getDisplayName()).isEqualTo("Planta Monterrey");
+        // The display reference is the canonical stored code, not the producer's spelling.
+        assertThat(location.getDisplayReference()).isEqualTo("LOC-107");
+        // Code-keyed types never go through the UUID entry point.
+        verify(displayReferenceResolver, never()).resolve(any(), anyCollection());
+    }
+
+    @Test
+    @DisplayName("An unknown location code is still projected, with null display values — never the code as a label")
+    void unknownLocationCodeProjectsNullDisplayValues() {
+        when(displayReferenceResolver.resolveCodes(eq(DisplayReferenceType.LOCATION), anyCollection()))
+                .thenReturn(Map.of());
+
+        List<EventPayloadReference> projection = projector.project(Map.of("locationId", "LOC_USA"));
+
+        assertThat(projection).hasSize(1);
+        EventPayloadReference location = projection.getFirst();
+        assertThat(location.getRawValue()).isEqualTo("LOC_USA");
+        assertThat(location.getId()).isNull();
+        assertThat(location.getDisplayName()).isNull();
+        assertThat(location.getDisplayReference()).isNull();
+    }
+
+    @Test
+    @DisplayName("A UUID-shaped location value is still resolved by code, and keeps its parsed id")
+    void uuidShapedLocationValueResolvesByCode() {
+        when(displayReferenceResolver.resolveCodes(eq(DisplayReferenceType.LOCATION), anyCollection()))
+                .thenReturn(Map.of());
+
+        List<EventPayloadReference> projection = projector.project(Map.of("locationId", LOCATION_UUID.toString()));
+
+        assertThat(projection).hasSize(1);
+        assertThat(projection.getFirst().getRawValue()).isEqualTo(LOCATION_UUID.toString());
+        assertThat(projection.getFirst().getId()).isEqualTo(LOCATION_UUID);
+        // A profile could be coded with that exact string; the lookup is by code either way.
+        verify(displayReferenceResolver).resolveCodes(eq(DisplayReferenceType.LOCATION), anyCollection());
+        verify(displayReferenceResolver, never()).resolve(any(), anyCollection());
+    }
+
+    @Test
+    @DisplayName("A hyphenated hex-like code never fabricates an id: only canonical UUID text parses")
+    void doesNotFabricateIdFromLenientUuidParse() {
+        // UUID.fromString accepts any five hyphen-separated hex groups, so "AB-CD-EF-01-23" would
+        // parse to 000000ab-00cd-00ef-0001-000000000023 — an id that appears nowhere in the
+        // payload. Under a code-keyed key the value is still a usable code; under a UUID-keyed
+        // key it is not a reference at all.
+        when(displayReferenceResolver.resolveCodes(eq(DisplayReferenceType.LOCATION), anyCollection()))
+                .thenReturn(Map.of());
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("locationId", "AB-CD-EF-01-23");
+        payload.put("invoiceId", "AB-CD-EF-01-23");
+
+        List<EventPayloadReference> projection = projector.project(payload);
+
+        assertThat(projection).hasSize(1);
+        assertThat(projection.getFirst().getPath()).isEqualTo("locationId");
+        assertThat(projection.getFirst().getRawValue()).isEqualTo("AB-CD-EF-01-23");
+        assertThat(projection.getFirst().getId()).isNull();
+        verify(displayReferenceResolver, never()).resolve(any(), anyCollection());
+    }
+
+    @Test
+    @DisplayName("Location values that cannot be a code are skipped: blank, non-string, or over-long")
+    void ignoresUnusableLocationValues() {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("locationId", "   ");
+        payload.put("lines", List.of(Map.of("locationId", 107), Map.of("location_id", "x".repeat(101))));
+
+        assertThat(projector.project(payload)).isEmpty();
+        verify(displayReferenceResolver, never()).resolveCodes(any(), anyCollection());
+    }
+
+    @Test
+    @DisplayName("A code exactly at the column width is still projected")
+    void acceptsLocationCodeAtMaximumLength() {
+        when(displayReferenceResolver.resolveCodes(eq(DisplayReferenceType.LOCATION), anyCollection()))
+                .thenReturn(Map.of());
+
+        List<EventPayloadReference> projection = projector.project(Map.of("locationId", "x".repeat(100)));
+
+        assertThat(projection).hasSize(1);
+        assertThat(projection.getFirst().getRawValue()).hasSize(100);
+    }
+
+    @Test
+    @DisplayName("Repeated location codes cost a single code-resolver call, alongside the UUID batches")
+    void batchesCodeResolutionPerType() {
+        when(displayReferenceResolver.resolveCodes(eq(DisplayReferenceType.LOCATION), anyCollection()))
+                .thenReturn(Map.of("LOC-107", ResolvedDisplayReference.ofReference("LOC-107")));
+        when(displayReferenceResolver.resolve(eq(DisplayReferenceType.INVOICE), anyCollection()))
+                .thenReturn(Map.of());
+
+        Map<String, Object> payload = Map.of(
+                "invoiceId", INVOICE_ID.toString(),
+                "lines", List.of(Map.of("locationId", "LOC-107"), Map.of("locationId", "LOC-107")));
+
+        List<EventPayloadReference> projection = projector.project(payload);
+
+        assertThat(projection).hasSize(3);
+        assertThat(byPath(projection, "lines[0].locationId").getDisplayReference())
+                .isEqualTo("LOC-107");
+        assertThat(byPath(projection, "lines[1].locationId").getDisplayReference())
+                .isEqualTo("LOC-107");
+        verify(displayReferenceResolver, times(1)).resolveCodes(eq(DisplayReferenceType.LOCATION), anyCollection());
+        verify(displayReferenceResolver, times(1)).resolve(eq(DisplayReferenceType.INVOICE), anyCollection());
     }
 
     @Test

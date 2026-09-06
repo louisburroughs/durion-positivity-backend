@@ -104,11 +104,12 @@ public class AccountingEventResponse {
     private String eventReference;
 
     @Schema(
-            description = "Display projection for the UUID-backed values recognized inside the raw payload "
-                    + "(issue #1778). The payload above is unchanged and remains the audit record; this list "
-                    + "carries the human-readable identity of each recognized reference, with null display "
-                    + "values where accounting cannot resolve one. Populated on the event detail endpoint "
-                    + "only — list responses omit it.",
+            description = "Display projection for the reference values recognized inside the raw payload "
+                    + "(issues #1778, #1797): UUID-backed ids, plus the code-keyed accounting location. The "
+                    + "payload above is unchanged and remains the audit record; this list carries the "
+                    + "human-readable identity of each recognized reference, with null display values where "
+                    + "accounting cannot resolve one. Populated on the event detail endpoint only — list "
+                    + "responses omit it.",
             requiredMode = NOT_REQUIRED,
             nullable = true)
     private List<EventPayloadReference> payloadReferences;

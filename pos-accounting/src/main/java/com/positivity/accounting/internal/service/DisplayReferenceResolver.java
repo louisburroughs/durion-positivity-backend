@@ -18,6 +18,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -29,17 +30,21 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Resolves UUID-backed references to the human-readable identities accounting responses show in
- * their place (issues #1778, #1779).
+ * Resolves references to the human-readable identities accounting responses show in their place
+ * (issues #1778, #1779, #1797).
  *
  * <p>Every source is data this module already holds — its own records, or a replica fed by the
  * owner's domain events — so resolution crosses no domain wall and issues no synchronous call to
  * another service (ADR-0044). What accounting cannot name stays unnamed: a missing source yields
- * {@link ResolvedDisplayReference#EMPTY}, never the UUID rendered as text. Callers keep the raw
- * identifier alongside the display values for commands, links and audit.
+ * {@link ResolvedDisplayReference#EMPTY}, never the identifier rendered as text. Callers keep the
+ * raw identifier alongside the display values for commands, links and audit.
  *
  * <p>Resolution is batched per type: one {@code IN} query per reference type per response, so a
  * page of rows costs the same number of queries as a single row.
+ *
+ * <p>Types are keyed one of two ways, and each has its own entry point so a caller cannot look a
+ * value up by the wrong shape: UUID-keyed types go through {@link #resolve}; code-keyed types
+ * ({@link DisplayReferenceType#isCodeKeyed()}) go through {@link #resolveCodes}.
  */
 @Component
 @RequiredArgsConstructor
@@ -53,12 +58,13 @@ public class DisplayReferenceResolver {
     private final VendorBillRepository vendorBillRepository;
 
     /**
-     * Batch-resolve display values for one reference type.
+     * Batch-resolve display values for one UUID-keyed reference type.
      *
-     * @param type reference type to resolve
+     * @param type reference type to resolve; must not be code-keyed
      * @param ids  identifiers to resolve; nulls and duplicates are ignored
      * @return display values by identifier — identifiers with nothing to show are absent from the
      *         map, so callers should read it with {@code getOrDefault(id, EMPTY)}
+     * @throws IllegalArgumentException if {@code type} is code-keyed; use {@link #resolveCodes}
      */
     @NonNull
     @Transactional(readOnly = true)
@@ -101,40 +107,102 @@ public class DisplayReferenceResolver {
                         vendorBillRepository.findAllById(distinct),
                         VendorBill::getVendorBillId,
                         bill -> ResolvedDisplayReference.ofReference(bill.getBillNumber()));
-            case LOCATION -> resolveLocations(distinct);
             // ADR-0023 retired multi-tenancy: there is no organization directory to name an
             // organizationId from, so the type is recognized by the contract and always resolves
             // to nothing. Recognizing it costs one branch and means a future directory is a
             // resolver change, not a wire-contract change.
             case ORGANIZATION -> Map.of();
+            case LOCATION -> throw codeKeyedMisuse(type);
+        };
+    }
+
+    /**
+     * Batch-resolve display values for one code-keyed reference type.
+     *
+     * <p>Codes are matched case-insensitively, since event producers do not all spell a code the
+     * way accounting's master data stores it. The returned map is keyed by the codes exactly as
+     * given, so a caller correlates results without re-normalizing; the resolved
+     * {@code displayReference} is the canonical stored code.
+     *
+     * @param type  reference type to resolve; must be code-keyed
+     * @param codes business codes to resolve; nulls, blanks and duplicates are ignored
+     * @return display values by the given code — codes with nothing to show are absent from the
+     *         map, so callers should read it with {@code getOrDefault(code, EMPTY)}
+     * @throws IllegalArgumentException if {@code type} is UUID-keyed; use {@link #resolve}
+     */
+    @NonNull
+    @Transactional(readOnly = true)
+    public Map<String, ResolvedDisplayReference> resolveCodes(
+            @NonNull DisplayReferenceType type, @NonNull Collection<String> codes) {
+
+        Set<String> distinct = new LinkedHashSet<>();
+        for (String code : codes) {
+            if (code != null && !code.isBlank()) {
+                distinct.add(code);
+            }
+        }
+        if (distinct.isEmpty()) {
+            return Map.of();
+        }
+
+        return switch (type) {
+            case LOCATION -> resolveLocations(distinct);
+            case INVOICE, CUSTOMER, ORGANIZATION, JOURNAL_ENTRY, VENDOR, VENDOR_BILL ->
+                throw new IllegalArgumentException(
+                        type + " is UUID-keyed; resolve it through resolve(type, ids) rather than by code");
         };
     }
 
     /**
      * Locations are keyed in {@code accounting_location_profile} by the accounting location
-     * <em>code</em> ({@code LOC-107}), which is the value the journal-entry-line {@code locationId}
-     * dimension carries. A payload holding a raw location UUID therefore resolves only where a
-     * profile happens to be coded with that same string; otherwise it stays unnamed, which is the
-     * honest answer rather than echoing the UUID.
+     * <em>code</em> ({@code LOC-107}), which is the value the journal-entry-line and event
+     * {@code locationId} dimension carries. One upper-cased {@code IN} query finds every profile;
+     * each given code is then matched back to its profile by the same normalization, so
+     * {@code loc-107} in a payload names the profile stored as {@code LOC-107}.
+     *
+     * <p>The table's unique key is case-sensitive, so profiles differing only in case can coexist.
+     * A code that matches one of them exactly (after trimming) takes that profile; otherwise the
+     * first profile the query returned for that normalized code is used, so the choice is at least
+     * stable within a response rather than whichever row happened to be read last.
      */
-    private Map<UUID, ResolvedDisplayReference> resolveLocations(Set<UUID> ids) {
-        Map<String, UUID> byCode = new HashMap<>();
-        for (UUID id : ids) {
-            byCode.put(id.toString(), id);
+    private Map<String, ResolvedDisplayReference> resolveLocations(Set<String> codes) {
+        Map<String, String> normalizedByCode = new HashMap<>();
+        for (String code : codes) {
+            normalizedByCode.put(code, normalizeCode(code));
         }
-        Map<UUID, ResolvedDisplayReference> resolved = new HashMap<>();
-        for (LocationProfile profile : locationProfileRepository.findByLocationCodeIn(byCode.keySet())) {
-            UUID id = byCode.get(profile.getLocationCode());
-            if (id == null) {
-                continue;
+
+        Map<String, LocationProfile> profilesByExactCode = new HashMap<>();
+        Map<String, LocationProfile> profilesByNormalizedCode = new HashMap<>();
+        for (LocationProfile profile : locationProfileRepository.findByLocationCodeInIgnoreCase(
+                new LinkedHashSet<>(normalizedByCode.values()))) {
+            profilesByExactCode.putIfAbsent(profile.getLocationCode(), profile);
+            profilesByNormalizedCode.putIfAbsent(normalizeCode(profile.getLocationCode()), profile);
+        }
+
+        Map<String, ResolvedDisplayReference> resolved = new HashMap<>();
+        normalizedByCode.forEach((code, normalized) -> {
+            LocationProfile profile =
+                    profilesByExactCode.getOrDefault(code.trim(), profilesByNormalizedCode.get(normalized));
+            if (profile == null) {
+                return;
             }
             ResolvedDisplayReference display =
                     normalize(new ResolvedDisplayReference(profile.getLocationLabel(), profile.getLocationCode()));
             if (!display.isEmpty()) {
-                resolved.put(id, display);
+                resolved.put(code, display);
             }
-        }
+        });
         return resolved;
+    }
+
+    /** The comparison key for a location code: trimmed and upper-cased, matching the JPQL. */
+    private static String normalizeCode(String code) {
+        return code.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private static IllegalArgumentException codeKeyedMisuse(DisplayReferenceType type) {
+        return new IllegalArgumentException(
+                type + " is code-keyed; resolve it through resolveCodes(type, codes) rather than by UUID");
     }
 
     /**

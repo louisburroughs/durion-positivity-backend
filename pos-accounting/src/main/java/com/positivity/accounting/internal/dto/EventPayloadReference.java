@@ -10,21 +10,25 @@ import lombok.Builder;
 import lombok.Data;
 
 /**
- * One recognized UUID-backed value inside an accounting event's raw payload, projected with the
- * human-readable identity accounting can offer for it (issue #1778).
+ * One recognized reference inside an accounting event's raw payload, projected with the
+ * human-readable identity accounting can offer for it (issues #1778, #1797).
  *
  * <p>The raw payload itself is unchanged and still returned in full — this projection sits
  * alongside it so screens can label a reference without parsing the payload or issuing a
  * cross-domain lookup. Both display values are independently nullable and are null when
- * accounting cannot resolve the reference; a UUID is never copied into a display field as
- * fallback text. {@code path} and {@code id} let a caller correlate an entry back to the exact
- * payload value it describes, and remain available for routing and diagnostics.
+ * accounting cannot resolve the reference; an identifier is never copied into a display field as
+ * fallback text.
+ *
+ * <p>{@code path} and {@code rawValue} let a caller correlate an entry back to the exact payload
+ * value it describes. {@code id} is the same value parsed as a UUID, for the UUID-backed types
+ * that route on one; it is null for a code-valued reference such as an accounting location code,
+ * which has no UUID (issue #1797).
  */
 @Data
 @Builder
 @Schema(
-        description = "Display projection for one UUID-backed value found in the event's raw payload. "
-                + "Display values are null when unavailable and are never replaced by the UUID.")
+        description = "Display projection for one reference found in the event's raw payload. "
+                + "Display values are null when unavailable and are never replaced by the identifier.")
 public class EventPayloadReference {
 
     @Schema(
@@ -41,10 +45,21 @@ public class EventPayloadReference {
     private DisplayReferenceType referenceType;
 
     @Schema(
-            description = "The identifier as it appears in the raw payload. Always present — this is the "
-                    + "value the display fields describe, and it stays available for routing and audit.",
+            description = "The identifier as it appears in the raw payload, trimmed. Always present — this "
+                    + "is the value the display fields describe, and it correlates the entry back to the "
+                    + "payload. A UUID string for UUID-backed types; an accounting location code such as "
+                    + "\"LOC-107\" for LOCATION.",
             example = "01960003-0000-7000-8000-000000000003",
             requiredMode = REQUIRED)
+    private String rawValue;
+
+    @Schema(
+            description = "rawValue parsed as a UUID, for routing and audit. Null when the raw value is "
+                    + "not in canonical UUID form — the normal case for LOCATION, whose accounting dimension "
+                    + "is a code rather than a UUID.",
+            example = "01960003-0000-7000-8000-000000000003",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private UUID id;
 
     @Schema(
@@ -57,7 +72,8 @@ public class EventPayloadReference {
 
     @Schema(
             description = "Stable business reference or number for the reference, e.g. an invoice number, "
-                    + "customer number or journal-entry number. Null when accounting holds none.",
+                    + "customer number, journal-entry number or the canonical location code. Null when "
+                    + "accounting holds none.",
             example = "C-10427",
             requiredMode = NOT_REQUIRED,
             nullable = true)

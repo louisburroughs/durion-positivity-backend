@@ -2333,7 +2333,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        The payload is returned unchanged for audit; payloadReferences adds a display projection of the UUID-backed values recognized inside it, whose displayName and displayReference are null when accounting cannot resolve them and are never the UUID rendered as text. listAccountingEvents omits payloadReferences.
+        The payload is returned unchanged for audit; payloadReferences adds a display projection of the reference values recognized inside it: UUID-backed invoice, customer, organization, journal-entry, vendor and vendor-bill ids, plus the code-keyed accounting location (locationId / location_id, matched case-insensitively against the location profile code). Each entry carries rawValue as written and id only when that value is a UUID; displayName and displayReference are null when accounting cannot resolve the reference and are never the identifier rendered as text. listAccountingEvents omits payloadReferences.
 
         Returns 404 EVENT_NOT_FOUND when no accounting event exists for the supplied id.
 
@@ -8362,7 +8362,7 @@ components:
           description: Event-specific payload content
           type: object
         payloadReferences:
-          description: 'Display projection for the UUID-backed values recognized inside the raw payload (issue #1778). The payload above is unchanged and remains the audit record; this list carries the human-readable identity of each recognized reference, with null display values where accounting cannot resolve one. Populated on the event detail endpoint only — list responses omit it.'
+          description: 'Display projection for the reference values recognized inside the raw payload (issues #1778, #1797): UUID-backed ids, plus the code-keyed accounting location. The payload above is unchanged and remains the audit record; this list carries the human-readable identity of each recognized reference, with null display values where accounting cannot resolve one. Populated on the event detail endpoint only — list responses omit it.'
           items:
             $ref: '#/components/schemas/EventPayloadReference'
           type:
@@ -10010,7 +10010,7 @@ components:
       - version
       type: object
     EventPayloadReference:
-      description: Display projection for one UUID-backed value found in the event's raw payload. Display values are null when unavailable and are never replaced by the UUID.
+      description: Display projection for one reference found in the event's raw payload. Display values are null when unavailable and are never replaced by the identifier.
       properties:
         displayName:
           description: Human-readable name for the reference, e.g. a customer display name or a location label. Null when accounting holds no name for it.
@@ -10019,19 +10019,25 @@ components:
           - string
           - 'null'
         displayReference:
-          description: Stable business reference or number for the reference, e.g. an invoice number, customer number or journal-entry number. Null when accounting holds none.
+          description: Stable business reference or number for the reference, e.g. an invoice number, customer number, journal-entry number or the canonical location code. Null when accounting holds none.
           example: C-10427
           type:
           - string
           - 'null'
         id:
-          description: The identifier as it appears in the raw payload. Always present — this is the value the display fields describe, and it stays available for routing and audit.
+          description: rawValue parsed as a UUID, for routing and audit. Null when the raw value is not in canonical UUID form — the normal case for LOCATION, whose accounting dimension is a code rather than a UUID.
           example: 01960003-0000-7000-8000-000000000003
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         path:
           description: Dot-separated path of the value inside the raw payload, e.g. "billDetails.vendorId". Array elements are indexed, e.g. "lines[0].locationId".
           example: billDetails.vendorId
+          type: string
+        rawValue:
+          description: The identifier as it appears in the raw payload, trimmed. Always present — this is the value the display fields describe, and it correlates the entry back to the payload. A UUID string for UUID-backed types; an accounting location code such as "LOC-107" for LOCATION.
+          example: 01960003-0000-7000-8000-000000000003
           type: string
         referenceType:
           description: Kind of entity the identifier refers to, as recognized from the payload key.
@@ -10046,8 +10052,8 @@ components:
           example: VENDOR
           type: string
       required:
-      - id
       - path
+      - rawValue
       - referenceType
       type: object
     EventProcessingLogEntry:

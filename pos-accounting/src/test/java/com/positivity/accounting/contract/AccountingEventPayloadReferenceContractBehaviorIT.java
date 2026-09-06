@@ -10,11 +10,13 @@ import com.positivity.accounting.BaseContractIntegrationTest;
 import com.positivity.accounting.internal.dto.AccountingEventSubmitRequest;
 import com.positivity.accounting.internal.entity.ExtCustomerParty;
 import com.positivity.accounting.internal.entity.ExtInvoice;
+import com.positivity.accounting.internal.entity.LocationProfile;
 import com.positivity.accounting.internal.entity.Vendor;
 import com.positivity.accounting.internal.enums.VendorStatus;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ExtCustomerPartyRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
+import com.positivity.accounting.internal.repository.LocationProfileRepository;
 import com.positivity.accounting.internal.repository.VendorRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -33,16 +35,17 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
 /**
- * Contract behavior for the accounting-event payload display projection (issue #1778).
+ * Contract behavior for the accounting-event payload display projection (issues #1778, #1797).
  *
  * <p>The event detail response keeps its raw payload byte-for-byte — it is an audit artifact —
- * and adds {@code payloadReferences}, a typed projection naming the UUID-backed values inside it.
+ * and adds {@code payloadReferences}, a typed projection naming the reference values inside it.
  * These tests pin both halves of the contract: the projection resolves what accounting knows, and
- * leaves what it does not know as null rather than echoing the UUID. They also pin the
+ * leaves what it does not know as null rather than echoing the identifier. They also pin the
  * non-regression the issue insists on: the payload itself, and the ids callers route and audit
- * with, are unchanged.
+ * with, are unchanged. Issue #1797 adds the code-keyed {@code LOCATION} type, resolved against
+ * accounting's own location profile by code rather than by UUID.
  */
-@DisplayName("Accounting Event Payload Reference Contract Tests (issue #1778)")
+@DisplayName("Accounting Event Payload Reference Contract Tests (issues #1778, #1797)")
 class AccountingEventPayloadReferenceContractBehaviorIT extends BaseContractIntegrationTest {
 
     private static final String API_V1_EVENTS = "/v1/accounting/events";
@@ -57,6 +60,8 @@ class AccountingEventPayloadReferenceContractBehaviorIT extends BaseContractInte
     private static final String CUSTOMER_NAME = "Northside Fleet Services";
     private static final String CUSTOMER_NUMBER = "C-10427";
     private static final String VENDOR_NAME = "Acme Parts Supply";
+    private static final String LOCATION_CODE = "LOC-1797-IT";
+    private static final String LOCATION_LABEL = "Planta Monterrey (IT)";
 
     @Autowired
     private AccountingEventRepository accountingEventRepository;
@@ -70,12 +75,22 @@ class AccountingEventPayloadReferenceContractBehaviorIT extends BaseContractInte
     @Autowired
     private VendorRepository vendorRepository;
 
+    @Autowired
+    private LocationProfileRepository locationProfileRepository;
+
     @BeforeEach
     void setUp() {
         accountingEventRepository.deleteAll();
         extInvoiceRepository.deleteAll();
         extCustomerPartyRepository.deleteAll();
         vendorRepository.deleteAll();
+        deleteLocationProfile();
+
+        locationProfileRepository.save(LocationProfile.builder()
+                .locationCode(LOCATION_CODE)
+                .locationLabel(LOCATION_LABEL)
+                .currencyCode("MXN")
+                .build());
 
         extInvoiceRepository.save(ExtInvoice.builder()
                 .invoiceId(KNOWN_INVOICE_ID)
@@ -114,6 +129,12 @@ class AccountingEventPayloadReferenceContractBehaviorIT extends BaseContractInte
         extInvoiceRepository.deleteAll();
         extCustomerPartyRepository.deleteAll();
         vendorRepository.deleteAll();
+        deleteLocationProfile();
+    }
+
+    /** Only this class's own profile: other suites seed location master data of their own. */
+    private void deleteLocationProfile() {
+        locationProfileRepository.findByLocationCode(LOCATION_CODE).ifPresent(locationProfileRepository::delete);
     }
 
     @Test
@@ -183,6 +204,57 @@ class AccountingEventPayloadReferenceContractBehaviorIT extends BaseContractInte
         assertThat(body).doesNotContain("\"displayReference\":\"" + UNKNOWN_INVOICE_ID + "\"");
         assertThat(body).doesNotContain("\"displayName\":\"" + ORGANIZATION_ID + "\"");
         assertThat(body).doesNotContain("\"displayReference\":\"" + ORGANIZATION_ID + "\"");
+    }
+
+    @Test
+    @DisplayName("A code-valued location is resolved by code, case-insensitively, with no UUID (issue #1797)")
+    void detailProjectsCodeValuedLocationReference() throws Exception {
+        // The canonical envelope carries the accounting location *code* ("location_id":
+        // "LOC_USA"), never a UUID. Before #1797 that value could not be projected at all.
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("dimensions", Map.of("location_id", LOCATION_CODE.toLowerCase()));
+        payload.put("lines", List.of(Map.of("locationId", "LOC_USA")));
+
+        UUID eventId = submitEvent(payload);
+
+        mockMvc.perform(withAuth(get(API_V1_EVENTS + "/" + eventId)))
+                .andExpect(status().isOk())
+                // organizationId, payload.dimensions.location_id, payload.lines[0].locationId
+                .andExpect(jsonPath("$.payloadReferences.length()").value(3))
+                .andExpect(jsonPath("$.payloadReferences[1].path").value("payload.dimensions.location_id"))
+                .andExpect(jsonPath("$.payloadReferences[1].referenceType").value("LOCATION"))
+                // The raw value correlates back to the payload, as the producer spelled it ...
+                .andExpect(jsonPath("$.payloadReferences[1].rawValue").value(LOCATION_CODE.toLowerCase()))
+                // ... there is no UUID for a code-keyed reference ...
+                .andExpect(jsonPath("$.payloadReferences[1].id").doesNotExist())
+                // ... and the profile is matched regardless of case, with the canonical code shown.
+                .andExpect(jsonPath("$.payloadReferences[1].displayName").value(LOCATION_LABEL))
+                .andExpect(jsonPath("$.payloadReferences[1].displayReference").value(LOCATION_CODE))
+                // A location accounting holds no profile for is still projected, unnamed.
+                .andExpect(jsonPath("$.payloadReferences[2].path").value("payload.lines[0].locationId"))
+                .andExpect(jsonPath("$.payloadReferences[2].referenceType").value("LOCATION"))
+                .andExpect(jsonPath("$.payloadReferences[2].rawValue").value("LOC_USA"))
+                .andExpect(jsonPath("$.payloadReferences[2].id").doesNotExist())
+                .andExpect(jsonPath("$.payloadReferences[2].displayName").doesNotExist())
+                .andExpect(jsonPath("$.payloadReferences[2].displayReference").doesNotExist())
+                // The raw payload still carries the producer's value verbatim.
+                .andExpect(jsonPath("$.payload.payload.dimensions.location_id").value(LOCATION_CODE.toLowerCase()));
+    }
+
+    @Test
+    @DisplayName("UUID-backed references carry rawValue and id together")
+    void detailProjectsRawValueAlongsideId() throws Exception {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("invoiceId", KNOWN_INVOICE_ID.toString());
+
+        UUID eventId = submitEvent(payload);
+
+        mockMvc.perform(withAuth(get(API_V1_EVENTS + "/" + eventId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.payloadReferences[?(@.path=='payload.invoiceId')].rawValue")
+                        .value(KNOWN_INVOICE_ID.toString()))
+                .andExpect(jsonPath("$.payloadReferences[?(@.path=='payload.invoiceId')].id")
+                        .value(KNOWN_INVOICE_ID.toString()));
     }
 
     @Test
