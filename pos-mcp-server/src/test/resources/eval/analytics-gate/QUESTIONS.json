@@ -618,7 +618,7 @@
       "tool_selection_fixture_id": "q25-replenishment-policy-coverage",
       "utterance": "How many of our stocked product-locations have an active replenishment policy, and which SKU is it?",
       "in_chat_path_gate": false,
-      "excluded_reason": "No tool exposes replenishment policies. InventoryFacadeTool covers stock availability (checkStock, searchInventory, getLocationStock) and nothing reads replenishment_policy, so the assistant cannot answer the coverage half. Ground truth is measured; the question waits on a tool, like q21 waited on purchase orders before #1785.",
+      "excluded_reason": "Awaiting a live run, not a missing tool. The exclusion originally read 'no tool exposes replenishment policies'; #1794 added InventoryFacadeTool.listReplenishmentPolicies, which returns each policy's SKU, location, active flag and minimum — both halves of this question in one call. The chat-path gate set must be matched exactly by the offline-replay corpus (#1682), so promotion waits on a recorded turn, as for q21 through q24.",
       "plan_wave": "3",
       "budget": 2,
       "window": {
@@ -631,6 +631,13 @@
           "as_of_offset_days": 0,
           "note": "Point-in-time. Graded on the as-of date, not a resolver shape."
         }
+      },
+      "expected_plan": {
+        "min_tool_calls": {
+          "listReplenishmentPolicies": 1
+        },
+        "per": "one call returning every replenishment policy with its SKU, location and active flag; the count of active policies and their SKUs are read from that response",
+        "declined_reason": "counting every policy rather than only the active ones, or treating a product-location with no policy as covered"
       }
     },
     {
