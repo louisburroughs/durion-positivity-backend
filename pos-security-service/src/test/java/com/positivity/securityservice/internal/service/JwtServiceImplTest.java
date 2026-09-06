@@ -834,6 +834,28 @@ class JwtServiceImplTest {
         verify(jwtTokenRepository, never()).delete(any(JwtToken.class));
     }
 
+    /**
+     * PRCR-002 from the #1808 review: the user resolved by id a moment ago but the username load
+     * misses (deleted or renamed in between). Same condition as the isEmpty() branch, so it must
+     * answer the same code rather than escaping as UsernameNotFoundException and being rendered
+     * as the entry point's generic INVALID_CREDENTIALS.
+     */
+    @Test
+    @DisplayName("refreshAccessToken answers InvalidRefreshTokenException when the username load races a deletion")
+    void refreshAccessToken_userVanishesBetweenReads_throwsInvalidRefreshTokenException() {
+        UUID userId = UUID.randomUUID();
+        String refreshToken = storedRefreshTokenFor(userId, Set.of("ADMIN"));
+        when(userDetailsService.loadUserByUsername(userId.toString()))
+                .thenThrow(new org.springframework.security.core.userdetails.UsernameNotFoundException("gone"));
+
+        assertThatThrownBy(() -> sut.refreshAccessToken(refreshToken))
+                .isInstanceOf(InvalidRefreshTokenException.class)
+                .hasMessage("Refresh token references a user that no longer exists");
+
+        verify(tokenRevocationManager, never()).revokeToken(anyString(), anyLong());
+        verify(jwtTokenRepository, never()).delete(any(JwtToken.class));
+    }
+
     @Test
     @DisplayName("refreshAccessToken refuses a disabled account with DisabledException before rotation starts")
     void refreshAccessToken_disabledAccount_throwsDisabledExceptionBeforeRotation() {

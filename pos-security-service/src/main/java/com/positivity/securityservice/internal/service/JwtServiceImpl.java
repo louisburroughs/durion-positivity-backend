@@ -39,6 +39,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AccountStatusUserDetailsChecker;
 import org.springframework.security.core.userdetails.UserDetailsChecker;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -460,7 +461,17 @@ public class JwtServiceImpl implements JwtService {
         // the same explicit answers the credential login path gives. That is deliberate and differs
         // from the bearer path, where the filter stays generic (INVALID_CREDENTIALS): a
         // refresh-token holder is a credential-equivalent caller, not an anonymous bearer.
-        ACCOUNT_STATUS_CHECKER.check(userDetailsService.loadUserByUsername(user.getUsername()));
+        final org.springframework.security.core.userdetails.UserDetails account;
+        try {
+            account = userDetailsService.loadUserByUsername(user.getUsername());
+        } catch (UsernameNotFoundException raced) {
+            // The row resolved by id a moment ago and is gone (or renamed) now. It is the same
+            // condition the isEmpty() branch above answers, so it answers the same code
+            // (ADR-0017 §2: one condition, one code) instead of falling through to the entry
+            // point's generic INVALID_CREDENTIALS.
+            throw new InvalidRefreshTokenException("Refresh token references a user that no longer exists", raced);
+        }
+        ACCOUNT_STATUS_CHECKER.check(account);
         Set<String> roles = user.getRoles() == null ? Collections.<String>emptySet() : user.getRoles();
         if (roles.isEmpty()) {
             // ADR-0017 §2 (question 1): the refresh token is well-formed, unexpired, unrevoked,

@@ -294,6 +294,32 @@ class JwtControllerErrorHandlingTest {
                 .doesNotContain("missing an id");
     }
 
+    /** PRCR-003 from the #1808 review: the token-pair endpoint has the same no-id branch and must pin the same byte-identity. */
+    @Test
+    @WithMockUser(authorities = "security:token:issue_internal")
+    @DisplayName("generateTokenPair does not name the subject when the resolved user record has no id")
+    void generateTokenPairDoesNotNameTheSubjectWhenTheUserRecordHasNoId() throws Exception {
+        UserAuthContext idlessUser =
+                UserAuthContext.builder().username("real.account").build();
+        when(userService.getUserByUsername("real.account")).thenReturn(Optional.of(idlessUser));
+
+        String body = mockMvc.perform(post("/v1/auth/token-pair")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"subject\":\"real.account\",\"roles\":[\"SHOP_MGR\"]}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Token issuance request is invalid"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(body)
+                .doesNotContain("real.account")
+                .doesNotContain("INVALID_STATE")
+                .doesNotContain("missing an id");
+    }
+
     /**
      * A blank subject is request shape, so it stays 400 (ADR-0017 §1) and must be decided before
      * the user lookup: without the guard an empty subject would fall out of the lookup as the
