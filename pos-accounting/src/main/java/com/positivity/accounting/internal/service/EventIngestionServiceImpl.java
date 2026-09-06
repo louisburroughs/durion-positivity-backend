@@ -231,10 +231,11 @@ public class EventIngestionServiceImpl implements EventIngestionService {
                 .findById(eventId)
                 .orElseThrow(() -> new EventNotFoundException(EVENT_NOT_FOUND_PREFIX + eventId));
         AccountingEventResponse response = AccountingEventMapper.toEventResponse(event);
-        // Detail-only display projection (issue #1778): the raw payload above is returned
+        // Detail-only display projection (issues #1778, #1797): the raw payload above is returned
         // unchanged for audit and diagnostics; this adds the human-readable identity of the
-        // UUID-backed values inside it, so screens need not show raw UUIDs or reach across a
-        // domain boundary to label them. List responses stay lean and omit it.
+        // reference values inside it — UUID-backed ids and code-keyed location codes — so screens
+        // need not show raw identifiers or reach across a domain boundary to label them. List
+        // responses stay lean and omit it.
         response.setPayloadReferences(eventPayloadReferenceProjector.project(event.getPayload()));
         return response;
     }

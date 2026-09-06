@@ -105,11 +105,13 @@ class DisplayReferenceResolverTest {
                 .thenReturn(
                         List.of(profile("LOC-107", "Upper-case profile"), profile("loc-107", "Lower-case profile")));
 
-        Map<String, ResolvedDisplayReference> resolved =
-                resolver.resolveCodes(DisplayReferenceType.LOCATION, List.of("LOC-107", "loc-107", "Loc-107"));
+        Map<String, ResolvedDisplayReference> resolved = resolver.resolveCodes(
+                DisplayReferenceType.LOCATION, List.of("LOC-107", "loc-107", " loc-107 ", "Loc-107"));
 
         assertThat(resolved.get("LOC-107").displayName()).isEqualTo("Upper-case profile");
         assertThat(resolved.get("loc-107").displayName()).isEqualTo("Lower-case profile");
+        // Exact-case matching is applied after trimming, like every other comparison here.
+        assertThat(resolved.get(" loc-107 ").displayName()).isEqualTo("Lower-case profile");
         // No exact match: the first profile the query returned for that code, not the last.
         assertThat(resolved.get("Loc-107").displayName()).isEqualTo("Upper-case profile");
         assertThat(resolved.get("Loc-107").displayReference()).isEqualTo("LOC-107");

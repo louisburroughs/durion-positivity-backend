@@ -55,8 +55,8 @@ public class EventPayloadReference {
 
     @Schema(
             description = "rawValue parsed as a UUID, for routing and audit. Null when the raw value is "
-                    + "not a UUID — the normal case for LOCATION, whose accounting dimension is a code "
-                    + "rather than a UUID.",
+                    + "not in canonical UUID form — the normal case for LOCATION, whose accounting dimension "
+                    + "is a code rather than a UUID.",
             example = "01960003-0000-7000-8000-000000000003",
             requiredMode = NOT_REQUIRED,
             nullable = true)

@@ -151,9 +151,12 @@ public class EventIngestionController {
                     Required inputs: eventId (UUID) as a path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
                     The payload is returned unchanged for audit; payloadReferences adds a display projection of \
-                    the UUID-backed values recognized inside it, whose displayName and displayReference are null \
-                    when accounting cannot resolve them and are never the UUID rendered as text. \
-                    listAccountingEvents omits payloadReferences.
+                    the reference values recognized inside it: UUID-backed invoice, customer, organization, \
+                    journal-entry, vendor and vendor-bill ids, plus the code-keyed accounting location \
+                    (locationId / location_id, matched case-insensitively against the location profile code). \
+                    Each entry carries rawValue as written and id only when that value is a UUID; displayName \
+                    and displayReference are null when accounting cannot resolve the reference and are never \
+                    the identifier rendered as text. listAccountingEvents omits payloadReferences.
                     Returns 404 EVENT_NOT_FOUND when no accounting event exists for the supplied id.
                     """,
             tags = {"Accounting Events"})

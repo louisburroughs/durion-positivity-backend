@@ -240,6 +240,18 @@ class EventPayloadReferenceProjectorTest {
     }
 
     @Test
+    @DisplayName("A code exactly at the column width is still projected")
+    void acceptsLocationCodeAtMaximumLength() {
+        when(displayReferenceResolver.resolveCodes(eq(DisplayReferenceType.LOCATION), anyCollection()))
+                .thenReturn(Map.of());
+
+        List<EventPayloadReference> projection = projector.project(Map.of("locationId", "x".repeat(100)));
+
+        assertThat(projection).hasSize(1);
+        assertThat(projection.getFirst().getRawValue()).hasSize(100);
+    }
+
+    @Test
     @DisplayName("Repeated location codes cost a single code-resolver call, alongside the UUID batches")
     void batchesCodeResolutionPerType() {
         when(displayReferenceResolver.resolveCodes(eq(DisplayReferenceType.LOCATION), anyCollection()))
