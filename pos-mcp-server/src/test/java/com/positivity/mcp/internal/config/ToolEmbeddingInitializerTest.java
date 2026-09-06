@@ -179,4 +179,48 @@ class ToolEmbeddingInitializerTest {
         assertThat(initializer.awaitCompletion(5, TimeUnit.SECONDS)).isTrue();
         verify(jdbcTemplate).update(eq(UPDATE_SQL), any(Object[].class));
     }
+
+    @Test
+    @DisplayName("two consecutive runs each get their own latch — a waiter on the second never sees the first's")
+    void consecutiveRunsHaveIndependentLatches() throws Exception {
+        rowsMissingEmbeddings(1);
+        CountDownLatch releaseSecond = new CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+        when(embeddingModel.embed(anyList())).thenAnswer(invocation -> {
+            if (calls.incrementAndGet() == 2) {
+                releaseSecond.await(5, TimeUnit.SECONDS);
+            }
+            return List.of(new float[] {1f});
+        });
+        ToolEmbeddingInitializer initializer = new ToolEmbeddingInitializer(jdbcTemplate, embeddingModel, 32);
+
+        initializer.backfill(); // first run, synchronous, completes
+        initializer.backfillAsync(); // second run, parked on the latch
+
+        // The second run's latch is in place before backfillAsync returned, so this waits on it —
+        // not on the first run's already-released one.
+        assertThat(initializer.awaitCompletion(100, TimeUnit.MILLISECONDS)).isFalse();
+        releaseSecond.countDown();
+        assertThat(initializer.awaitCompletion(5, TimeUnit.SECONDS)).isTrue();
+        verify(jdbcTemplate, times(2)).update(eq(UPDATE_SQL), any(Object[].class));
+    }
+
+    @Test
+    @DisplayName("a trigger while a run is in flight is refused, not queued")
+    void secondTriggerWhileRunningIsRefused() throws Exception {
+        rowsMissingEmbeddings(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(embeddingModel.embed(anyList())).thenAnswer(invocation -> {
+            release.await(5, TimeUnit.SECONDS);
+            return List.of(new float[] {1f});
+        });
+        ToolEmbeddingInitializer initializer = new ToolEmbeddingInitializer(jdbcTemplate, embeddingModel, 32);
+
+        initializer.backfillAsync();
+        initializer.backfillAsync();
+        release.countDown();
+
+        assertThat(initializer.awaitCompletion(5, TimeUnit.SECONDS)).isTrue();
+        verify(embeddingModel, times(1)).embed(anyList());
+    }
 }

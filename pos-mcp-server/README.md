@@ -396,7 +396,8 @@ alpha deploy. A row is invisible to tool selection until its embedding exists (b
 filter on `embedding IS NOT NULL`), so a large backlog still means a short window of missing tools —
 now measured in batches, not in readiness. Progress is logged per batch; shutdown stops the backfill
 at the next batch boundary. Each scheduled re-discovery cycle re-triggers the backfill (#1824), so
-rows a later cycle inserts are embedded within that cycle rather than on the next restart.
+rows a later cycle inserts are embedded by that cycle's backfill — or by the next cycle's if a backfill
+is already running — rather than on the next restart.
 
 ## Data Model
 
