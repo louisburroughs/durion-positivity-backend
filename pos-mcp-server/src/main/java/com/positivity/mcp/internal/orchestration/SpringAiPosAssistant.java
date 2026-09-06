@@ -132,10 +132,55 @@ final class SpringAiPosAssistant implements PosAssistant {
      */
     private @NonNull String resolveResponse(
             @NonNull String userMessage, ChatResponseText.@NonNull Extracted extracted) {
+        if (extracted.source() == ChatResponseText.Source.TOOL_PAYLOAD) {
+            // The tools ran and the data is right; only the composition stage was skipped. One
+            // re-render turn recovers the answer where the ladder would deflect (#1708).
+            String rendered = renderToolPayload(userMessage, extracted.text());
+            if (rendered != null) {
+                return rendered;
+            }
+        }
         if (answerResolutionLadder != null && extracted.source() != ChatResponseText.Source.CONTENT) {
             return answerResolutionLadder.resolveFallback(userMessage).text();
         }
         return extracted.text();
+    }
+
+    private static final String RENDER_INSTRUCTION =
+            "The previous assistant turn is the raw JSON result of a tool the assistant called for the "
+                    + "user's question. Write the answer to the user's question from that data as a short, "
+                    + "direct reply: state the figures with their units and the period or as-of date they "
+                    + "cover, use a table when there are several rows, and do not mention JSON, tools or "
+                    + "fields. Do not call any tool. Reply with prose only, never with a JSON object or array.";
+
+    /**
+     * Asks the model, once and without tools, to compose the answer from a bare tool payload it
+     * emitted as its reply. Returns the prose, or {@code null} when the second turn produced no
+     * direct answer either — the caller then falls back to the ladder as before.
+     *
+     * <p>Seen live on 2026-09-05 (q05): the guard from PR #1726 classified the payload correctly and
+     * the ladder answered "I can't compute that directly, but you can view it here" — a deflection
+     * for a turn whose tools had all run. The data was already in hand; only the last stage was
+     * missing.
+     */
+    private @Nullable String renderToolPayload(@NonNull String userMessage, @NonNull String payload) {
+        List<Message> messages = List.of(
+                new SystemMessage(RENDER_INSTRUCTION),
+                new UserMessage(userMessage),
+                new AssistantMessage(payload),
+                new UserMessage("Answer my question from the result above, as prose."));
+        ChatResponse rendered = callModel(new Prompt(messages, chatModel.getOptions()));
+        AssistantMessage output = rendered != null && rendered.getResult() != null
+                ? rendered.getResult().getOutput()
+                : null;
+        ChatResponseText.Extracted extracted = ChatResponseText.extractDetailed(output);
+        if (extracted.source() == ChatResponseText.Source.CONTENT) {
+            LOGGER.info("Bare tool payload re-rendered as prose (#1708)");
+            return extracted.text();
+        }
+        LOGGER.warn(
+                "Bare tool payload re-render produced no direct answer either: source={} (#1708)", extracted.source());
+        return null;
     }
 
     /**

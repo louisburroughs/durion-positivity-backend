@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -44,15 +46,96 @@ class SpringAiPosAssistantTest {
     }
 
     @Test
-    @DisplayName("a bare tool payload is handed to the ladder, not returned to the user (#1708)")
-    void chat_handsOffToLadderWhenContentIsABareToolPayload() {
-        // resolveResponse routes on `source != CONTENT`. Without this test a future narrowing to
-        // `== THINKING || == BLANK` would restore #1708 with every ChatResponseTextTest still green:
-        // the classification would be right and nothing would act on it.
+    @DisplayName("a bare tool payload is re-rendered as prose by one tool-less turn, not deflected (#1708)")
+    void chat_reRendersABareToolPayloadInsteadOfDeflecting() {
+        // Live on 2026-09-05 (q05): the guard classified the payload and the ladder answered "I can't
+        // compute that directly" for a turn whose tools had all run. The second turn gets the
+        // payload back as an assistant message and no tools, and its prose is the reply.
+        ChatModel chatModel = mock(ChatModel.class);
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        AnswerResolutionLadder ladder = mock(AnswerResolutionLadder.class);
+        when(chatModel.getOptions())
+                .thenReturn(OllamaChatOptions.builder().model("gpt-oss:120b").build());
+        when(ragRetriever.retrieve(any())).thenReturn(List.of());
+        when(chatMemory.get(any())).thenReturn(List.of());
+        String payload = "{\"customerId\":\"e79a3e7a\",\"buckets\":{\"61-90\":1500.00},\"asOf\":\"2026-09-05\"}";
+        when(chatModel.call(any(Prompt.class)))
+                .thenReturn(chatResponse(payload))
+                .thenReturn(chatResponse("Harbor Tool & Die owes $1,500.00, 61-90 days past due as of 2026-09-05."));
+        SpringAiPosAssistant assistant = new SpringAiPosAssistant(
+                chatModel,
+                () -> "base prompt",
+                List.of(),
+                ragRetriever,
+                ignored -> chatMemory,
+                null,
+                ladder,
+                null,
+                null,
+                null);
+
+        String response = assistant.chat("user-1::ROLE_ADMIN", "who is more than 60 days past due", "ctx");
+
+        assertThat(response).isEqualTo("Harbor Tool & Die owes $1,500.00, 61-90 days past due as of 2026-09-05.");
+        verify(ladder, never()).resolveFallback(any());
+        ArgumentCaptor<Prompt> prompts = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel, times(2)).call(prompts.capture());
+        Prompt render = prompts.getAllValues().get(1);
+        assertThat(render.getInstructions().stream().map(Message::getText)).anyMatch(text -> text.contains(payload));
+        assertThat(render.getInstructions().get(0).getText()).contains("never with a JSON object");
+        // The render turn offers no tools: OllamaChatOptions always implements ToolCallingChatOptions,
+        // so the check is on the callbacks it carries, not on the type.
+        assertThat(((org.springframework.ai.model.tool.ToolCallingChatOptions) render.getOptions()).getToolCallbacks())
+                .isNullOrEmpty();
+        ArgumentCaptor<List<Message>> persisted = messageListCaptor();
+        verify(chatMemory).add(eq("user-1::ROLE_ADMIN"), persisted.capture());
+        assertThat(persisted.getValue().get(1).getText()).startsWith("Harbor Tool & Die owes");
+    }
+
+    @Test
+    @DisplayName("when the re-render also comes back as a payload, the ladder answers as before (#1708)")
+    void chat_handsOffToLadderWhenTheReRenderIsAlsoAPayload() {
+        ChatModel chatModel = mock(ChatModel.class);
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        AnswerResolutionLadder ladder = mock(AnswerResolutionLadder.class);
+        when(chatModel.getOptions())
+                .thenReturn(OllamaChatOptions.builder().model("gpt-oss:120b").build());
+        when(ragRetriever.retrieve(any())).thenReturn(List.of());
+        when(chatMemory.get(any())).thenReturn(List.of());
+        when(chatModel.call(any(Prompt.class)))
+                .thenReturn(chatResponse("{\"startDate\":\"2026-03-01\",\"rows\":[]}"))
+                .thenReturn(chatResponse("{\"startDate\":\"2026-03-01\",\"rows\":[]}"));
+        when(ladder.resolveFallback("invoicing lag by month"))
+                .thenReturn(new LadderResult("View it here — Work Orders: /workorders", Rung.DEEP_LINK, "/workorders"));
+        SpringAiPosAssistant assistant = new SpringAiPosAssistant(
+                chatModel,
+                () -> "base prompt",
+                List.of(),
+                ragRetriever,
+                ignored -> chatMemory,
+                null,
+                ladder,
+                null,
+                null,
+                null);
+
+        String response = assistant.chat("user-1::ROLE_ADMIN", "invoicing lag by month", "ctx");
+
+        assertThat(response).isEqualTo("View it here — Work Orders: /workorders");
+        verify(chatModel, times(2)).call(any(Prompt.class));
+    }
+
+    @Test
+    @DisplayName("the payload classification still routes away from CONTENT (#1708 guard)")
+    void chat_bareToolPayloadIsNotContent() {
+        // resolveResponse acts on TOOL_PAYLOAD. Without this pin a future narrowing of the
+        // classification would restore the raw-JSON reply with every ChatResponseTextTest still green.
         assertThat(ChatResponseText.extractDetailed(new org.springframework.ai.chat.messages.AssistantMessage(
                                 "{\"startDate\":\"2026-03-01\",\"rows\":[]}"))
                         .source())
-                .isNotEqualTo(ChatResponseText.Source.CONTENT);
+                .isEqualTo(ChatResponseText.Source.TOOL_PAYLOAD);
     }
 
     @Test
