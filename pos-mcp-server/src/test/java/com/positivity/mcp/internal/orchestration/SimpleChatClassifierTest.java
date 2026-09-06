@@ -57,4 +57,33 @@ class SimpleChatClassifierTest {
         assertThat(classifier.isSimpleChat("explain the inventory valuation procedure"))
                 .isFalse();
     }
+
+    @Test
+    @DisplayName("a follow-up that leans on the previous turn never takes the history-less T0 path (#1836)")
+    void isSimpleChat_withContinuationCue_returnsFalse() {
+        // The MULTI_TURN corpus follow-ups. s03 turn 2 reached T0 on 2026-09-06 and was answered
+        // "which ten?" because the fast path has no conversation history.
+        assertThat(classifier.isSimpleChat("Now rank those same ten by outstanding balance instead."))
+                .isFalse();
+        assertThat(classifier.isSimpleChat("Which of those has the most outstanding AR?"))
+                .isFalse();
+        assertThat(classifier.isSimpleChat("Which three of them have the oldest past-due invoices?"))
+                .isFalse();
+        assertThat(classifier.isSimpleChat("And the month before that?")).isFalse();
+        assertThat(classifier.isSimpleChat("What is their outstanding balance?"))
+                .isFalse();
+        // Cues alone, without a question mark or business word: still a continuation.
+        assertThat(classifier.isSimpleChat("Show me those again")).isFalse();
+        assertThat(classifier.isSimpleChat("Rank them by balance instead")).isFalse();
+        assertThat(classifier.isSimpleChat("montre-moi ceux-la aussi")).isFalse();
+        assertThat(classifier.isSimpleChat("muestrame esos tambien")).isFalse();
+    }
+
+    @Test
+    @DisplayName("analytics vocabulary is a task signal on its own")
+    void isSimpleChat_withAnalyticsVocabulary_returnsFalse() {
+        assertThat(classifier.isSimpleChat("rank customers by revenue")).isFalse();
+        assertThat(classifier.isSimpleChat("outstanding balance for Harbor Tool"))
+                .isFalse();
+    }
 }

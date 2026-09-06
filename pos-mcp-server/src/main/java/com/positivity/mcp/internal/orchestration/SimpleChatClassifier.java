@@ -15,6 +15,45 @@ final class SimpleChatClassifier {
     private static final int MAX_SIMPLE_CHAT_CHAR_LENGTH = 160;
     private static final int MAX_SIMPLE_CHAT_TOKEN_COUNT = 12;
 
+    /**
+     * Words that lean on the previous turn (#1836). The T0 path answers with the master prompt and
+     * the bare message — no conversation history — so a message that continues an earlier one can
+     * never be answered there, whatever else it says: "Now rank those same ten by outstanding balance
+     * instead" reached T0 on the 2026-09-06 sequences run and was answered with "which ten?". Tokens
+     * are compared after {@link SimpleChatRuleCatalog#normalize}, hence the de-accented forms.
+     */
+    private static final Set<String> CONTINUATION_CUES = Set.of(
+            // en
+            "those",
+            "them",
+            "same",
+            "instead",
+            "also",
+            "ones",
+            "previous",
+            "earlier",
+            "above",
+            "again",
+            // fr
+            "ceux",
+            "celles",
+            "memes",
+            "aussi",
+            "plutot",
+            "precedent",
+            "precedente",
+            "encore",
+            // es
+            "esos",
+            "esas",
+            "mismos",
+            "mismas",
+            "tambien",
+            "anterior",
+            "anteriores",
+            "otra",
+            "vez");
+
     private final Supplier<SimpleChatRuleCatalog> catalogSupplier;
 
     @Autowired
@@ -53,6 +92,9 @@ final class SimpleChatClassifier {
     private static boolean hasStrongTaskSignal(
             @NonNull String text, @NonNull MessageFeatures features, @NonNull SimpleChatRuleCatalog catalog) {
         if (features.hasQuestionMark() && !catalog.isSocialQuestion(text) && !catalog.isCapability(text)) {
+            return true;
+        }
+        if (features.tokenSet().stream().anyMatch(CONTINUATION_CUES::contains)) {
             return true;
         }
         if (catalog.matchesQuantityQuestion(text)) {
