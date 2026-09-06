@@ -80,6 +80,42 @@ class DisplayReferenceResolverTest {
     }
 
     @Test
+    @DisplayName("One profile fans out to every caller spelling of its code")
+    void keysEverySpellingOfOneCode() {
+        when(locationProfileRepository.findByLocationCodeInIgnoreCase(anyCollection()))
+                .thenReturn(List.of(profile("LOC-107", "Planta Monterrey")));
+
+        Map<String, ResolvedDisplayReference> resolved =
+                resolver.resolveCodes(DisplayReferenceType.LOCATION, List.of("loc-107", "LOC-107", " Loc-107 "));
+
+        // The projector reads results back by each reference's own raw value, so a payload that
+        // spells one code three ways must find all three keys — from a single row.
+        assertThat(resolved).containsOnlyKeys("loc-107", "LOC-107", " Loc-107 ");
+        assertThat(resolved.values()).allSatisfy(display -> {
+            assertThat(display.displayName()).isEqualTo("Planta Monterrey");
+            assertThat(display.displayReference()).isEqualTo("LOC-107");
+        });
+    }
+
+    @Test
+    @DisplayName("Profiles that differ only in case: an exact match wins, otherwise the first row, deterministically")
+    void prefersExactCaseMatchWhenProfilesCollide() {
+        // The unique key on location_code is case-sensitive, so both rows can exist.
+        when(locationProfileRepository.findByLocationCodeInIgnoreCase(anyCollection()))
+                .thenReturn(
+                        List.of(profile("LOC-107", "Upper-case profile"), profile("loc-107", "Lower-case profile")));
+
+        Map<String, ResolvedDisplayReference> resolved =
+                resolver.resolveCodes(DisplayReferenceType.LOCATION, List.of("LOC-107", "loc-107", "Loc-107"));
+
+        assertThat(resolved.get("LOC-107").displayName()).isEqualTo("Upper-case profile");
+        assertThat(resolved.get("loc-107").displayName()).isEqualTo("Lower-case profile");
+        // No exact match: the first profile the query returned for that code, not the last.
+        assertThat(resolved.get("Loc-107").displayName()).isEqualTo("Upper-case profile");
+        assertThat(resolved.get("Loc-107").displayReference()).isEqualTo("LOC-107");
+    }
+
+    @Test
     @DisplayName("The lookup is one upper-cased IN query, with blanks, nulls and duplicates dropped")
     void batchesOneNormalizedQuery() {
         when(locationProfileRepository.findByLocationCodeInIgnoreCase(anyCollection()))

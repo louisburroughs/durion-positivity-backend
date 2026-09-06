@@ -159,6 +159,11 @@ public class DisplayReferenceResolver {
      * {@code locationId} dimension carries. One upper-cased {@code IN} query finds every profile;
      * each given code is then matched back to its profile by the same normalization, so
      * {@code loc-107} in a payload names the profile stored as {@code LOC-107}.
+     *
+     * <p>The table's unique key is case-sensitive, so profiles differing only in case can coexist.
+     * A code that matches one of them exactly (after trimming) takes that profile; otherwise the
+     * first profile the query returned for that normalized code is used, so the choice is at least
+     * stable within a response rather than whichever row happened to be read last.
      */
     private Map<String, ResolvedDisplayReference> resolveLocations(Set<String> codes) {
         Map<String, String> normalizedByCode = new HashMap<>();
@@ -166,15 +171,18 @@ public class DisplayReferenceResolver {
             normalizedByCode.put(code, normalizeCode(code));
         }
 
+        Map<String, LocationProfile> profilesByExactCode = new HashMap<>();
         Map<String, LocationProfile> profilesByNormalizedCode = new HashMap<>();
         for (LocationProfile profile : locationProfileRepository.findByLocationCodeInIgnoreCase(
                 new LinkedHashSet<>(normalizedByCode.values()))) {
-            profilesByNormalizedCode.put(normalizeCode(profile.getLocationCode()), profile);
+            profilesByExactCode.putIfAbsent(profile.getLocationCode(), profile);
+            profilesByNormalizedCode.putIfAbsent(normalizeCode(profile.getLocationCode()), profile);
         }
 
         Map<String, ResolvedDisplayReference> resolved = new HashMap<>();
         normalizedByCode.forEach((code, normalized) -> {
-            LocationProfile profile = profilesByNormalizedCode.get(normalized);
+            LocationProfile profile =
+                    profilesByExactCode.getOrDefault(code.trim(), profilesByNormalizedCode.get(normalized));
             if (profile == null) {
                 return;
             }

@@ -34,11 +34,11 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Key recognition is by name, case-insensitively and in both camelCase and snake_case, because
  * event payloads are free-form maps submitted by many producers. What counts as a usable value
  * depends on how the reference type is keyed ({@link DisplayReferenceType#isCodeKeyed()}): a
- * UUID-keyed type needs a value that parses as a UUID, while a code-keyed type such as
- * {@link DisplayReferenceType#LOCATION} takes any non-blank string, because accounting's location
- * dimension is a code ({@code LOC_USA}), not a UUID. A recognized key whose value fits neither is
- * skipped — this is a display concern, and guessing at a malformed identifier would be worse than
- * omitting it.
+ * UUID-keyed type needs a value in canonical UUID form, while a code-keyed type such as
+ * {@link DisplayReferenceType#LOCATION} takes any non-blank string up to the width of the code
+ * column ({@value #MAX_CODE_LENGTH} characters), because accounting's location dimension is a code
+ * ({@code LOC_USA}), not a UUID. A recognized key whose value fits neither is skipped — this is a
+ * display concern, and guessing at a malformed identifier would be worse than omitting it.
  */
 @Slf4j
 @Component
@@ -204,9 +204,9 @@ public class EventPayloadReferenceProjector {
     /**
      * Decide whether the value under a recognized key is a usable reference of the key's type.
      *
-     * <p>A UUID-keyed type requires a value that parses as a UUID. A code-keyed type takes any
+     * <p>A UUID-keyed type requires a value in canonical UUID form. A code-keyed type takes any
      * non-blank string of plausible length, and still records the parsed UUID when the code happens
-     * to be one, so {@code id} is populated whenever it can be.
+     * to be one, so {@code id} is populated whenever it genuinely can be.
      */
     @Nullable
     private static FoundReference recognize(String path, DisplayReferenceType type, @Nullable Object value) {
@@ -242,8 +242,21 @@ public class EventPayloadReferenceProjector {
         return text.trim();
     }
 
+    /** Length of a UUID in its canonical {@code 8-4-4-4-12} text form. */
+    private static final int CANONICAL_UUID_LENGTH = 36;
+
+    /**
+     * Parse a value as a UUID only when it is written in canonical form. {@link UUID#fromString}
+     * is lenient — it accepts any five hyphen-separated hex groups, so {@code AB-CD-EF-01-23}
+     * would parse to {@code 000000ab-00cd-00ef-0001-000000000023}. That leniency would let a
+     * hyphenated location code, or a malformed identifier under a UUID-keyed key, fabricate an
+     * {@code id} that appears nowhere in the payload; the length check rules it out.
+     */
     @Nullable
     private static UUID asUuid(String text) {
+        if (text.length() != CANONICAL_UUID_LENGTH) {
+            return null;
+        }
         try {
             return UUID.fromString(text);
         } catch (IllegalArgumentException notAUuid) {

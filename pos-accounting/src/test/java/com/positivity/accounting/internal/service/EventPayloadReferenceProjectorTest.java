@@ -206,6 +206,29 @@ class EventPayloadReferenceProjectorTest {
     }
 
     @Test
+    @DisplayName("A hyphenated hex-like code never fabricates an id: only canonical UUID text parses")
+    void doesNotFabricateIdFromLenientUuidParse() {
+        // UUID.fromString accepts any five hyphen-separated hex groups, so "AB-CD-EF-01-23" would
+        // parse to 000000ab-00cd-00ef-0001-000000000023 — an id that appears nowhere in the
+        // payload. Under a code-keyed key the value is still a usable code; under a UUID-keyed
+        // key it is not a reference at all.
+        when(displayReferenceResolver.resolveCodes(eq(DisplayReferenceType.LOCATION), anyCollection()))
+                .thenReturn(Map.of());
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("locationId", "AB-CD-EF-01-23");
+        payload.put("invoiceId", "AB-CD-EF-01-23");
+
+        List<EventPayloadReference> projection = projector.project(payload);
+
+        assertThat(projection).hasSize(1);
+        assertThat(projection.getFirst().getPath()).isEqualTo("locationId");
+        assertThat(projection.getFirst().getRawValue()).isEqualTo("AB-CD-EF-01-23");
+        assertThat(projection.getFirst().getId()).isNull();
+        verify(displayReferenceResolver, never()).resolve(any(), anyCollection());
+    }
+
+    @Test
     @DisplayName("Location values that cannot be a code are skipped: blank, non-string, or over-long")
     void ignoresUnusableLocationValues() {
         Map<String, Object> payload = new LinkedHashMap<>();
