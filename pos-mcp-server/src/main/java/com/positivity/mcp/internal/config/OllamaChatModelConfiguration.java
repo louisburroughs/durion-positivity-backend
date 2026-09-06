@@ -9,13 +9,17 @@ import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.ai.ollama.api.OllamaApi;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
+import org.springframework.ai.retry.TransientAiException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.retry.RetryPolicy;
+import org.springframework.core.retry.RetryTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -37,8 +41,9 @@ public class OllamaChatModelConfiguration {
             @Value("${spring.ai.ollama.chat.timeout:${OLLAMA_CHAT_TIMEOUT:180s}}") @NonNull Duration timeout,
             @Value("${OLLAMA_CHAT_THINK:}") @NonNull String think,
             @Value("${spring.ai.ollama.chat.options.temperature:${OLLAMA_CHAT_TEMPERATURE:0.0}}") double temperature,
-            @Value("${spring.ai.ollama.chat.options.num-ctx:${OLLAMA_NUM_CTX:32768}}") int numCtx) {
-        return buildChatModel(baseUrl, modelName, apiKey, timeout, think, temperature, numCtx);
+            @Value("${spring.ai.ollama.chat.options.num-ctx:${OLLAMA_NUM_CTX:32768}}") int numCtx,
+            @NonNull RetryTemplate ollamaChatRetryTemplate) {
+        return buildChatModel(baseUrl, modelName, apiKey, timeout, think, temperature, numCtx, ollamaChatRetryTemplate);
     }
 
     @Bean
@@ -56,8 +61,53 @@ public class OllamaChatModelConfiguration {
                     Duration timeout,
             @Value("${OLLAMA_CHAT_THINK:}") @NonNull String think,
             @Value("${spring.ai.ollama.chat.options.temperature:${OLLAMA_CHAT_TEMPERATURE:0.0}}") double temperature,
-            @Value("${spring.ai.ollama.chat.options.num-ctx:${OLLAMA_NUM_CTX:32768}}") int numCtx) {
-        return buildChatModel(baseUrl, modelName, apiKey, timeout, think, temperature, numCtx);
+            @Value("${spring.ai.ollama.chat.options.num-ctx:${OLLAMA_NUM_CTX:32768}}") int numCtx,
+            @NonNull RetryTemplate ollamaChatRetryTemplate) {
+        return buildChatModel(baseUrl, modelName, apiKey, timeout, think, temperature, numCtx, ollamaChatRetryTemplate);
+    }
+
+    /**
+     * Bounded retry for the Ollama chat calls (#1749).
+     *
+     * <p>Spring AI's default template retries a transient failure ten times with exponential
+     * back-off from 2 s, multiplier 5, capped at three minutes. On 2026-09-05 ollama.com answered
+     * HTTP 500 to one gate question and that default kept the turn alive through back-offs of 8 s,
+     * 11 s, 50 s and 181 s — the client had given up at 180 s long before, and the question read as
+     * a hang. Three requests over about seven seconds is the whole budget an interactive turn can
+     * spend on an upstream that is failing; after that the caller gets the error and can retry
+     * itself.
+     */
+    @Bean
+    public @NonNull RetryTemplate ollamaChatRetryTemplate(
+            @Value("${mcp.model.retry.max-retries:2}") int maxRetries,
+            @Value("${mcp.model.retry.initial-delay:1s}") @NonNull Duration initialDelay,
+            @Value("${mcp.model.retry.multiplier:2}") int multiplier,
+            @Value("${mcp.model.retry.max-delay:5s}") @NonNull Duration maxDelay) {
+        LOGGER.info(
+                "MCP Ollama chat retry configured: maxRetries={} initialDelay={} multiplier={} maxDelay={}",
+                maxRetries,
+                initialDelay,
+                multiplier,
+                maxDelay);
+        return boundedRetryTemplate(maxRetries, initialDelay, multiplier, maxDelay);
+    }
+
+    /**
+     * A retry template that retries the same failures Spring AI's default does (transient AI
+     * errors and I/O failures) but within the given bounds: {@code maxRetries} further attempts
+     * after the first, with exponential back-off from {@code initialDelay} capped at {@code maxDelay}.
+     */
+    static @NonNull RetryTemplate boundedRetryTemplate(
+            int maxRetries, @NonNull Duration initialDelay, int multiplier, @NonNull Duration maxDelay) {
+        RetryPolicy policy = RetryPolicy.builder()
+                .maxRetries(maxRetries)
+                .includes(TransientAiException.class)
+                .includes(ResourceAccessException.class)
+                .delay(initialDelay)
+                .multiplier(multiplier)
+                .maxDelay(maxDelay)
+                .build();
+        return new RetryTemplate(policy);
     }
 
     /**
@@ -95,7 +145,8 @@ public class OllamaChatModelConfiguration {
             @NonNull Duration timeout,
             @NonNull String think,
             double temperature,
-            int numCtx) {
+            int numCtx,
+            @NonNull RetryTemplate retryTemplate) {
         int timeoutMillis = Math.toIntExact(timeout.toMillis());
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(timeoutMillis);
@@ -136,6 +187,7 @@ public class OllamaChatModelConfiguration {
         return OllamaChatModel.builder()
                 .ollamaApi(ollamaApi)
                 .options(optionsBuilder.build())
+                .retryTemplate(retryTemplate)
                 .build();
     }
 

@@ -1,6 +1,8 @@
 package com.positivity.mcp.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,6 +19,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.retry.TransientAiException;
+import org.springframework.core.retry.RetryTemplate;
 
 /**
  * The chat backend can require authentication (e.g. ollama.com). {@code OllamaApi} talks to it over
@@ -41,6 +45,10 @@ class OllamaChatModelConfigurationTest {
     private final OllamaChatModelConfiguration configuration = new OllamaChatModelConfiguration();
     private final ConcurrentLinkedQueue<String> authorizationHeaders = new ConcurrentLinkedQueue<>();
     private final ConcurrentLinkedQueue<String> requestBodies = new ConcurrentLinkedQueue<>();
+    private static final RetryTemplate RETRY =
+            OllamaChatModelConfiguration.boundedRetryTemplate(2, Duration.ofMillis(20), 2, Duration.ofMillis(100));
+
+    private volatile int failWithStatus = 0;
     private HttpServer server;
     private String baseUrl;
 
@@ -53,6 +61,15 @@ class OllamaChatModelConfigurationTest {
             String request = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             requestBodies.add(request);
             boolean streaming = request.contains("\"stream\":true");
+            if (failWithStatus != 0) {
+                byte[] error = "{\"error\":\"Internal Server Error (ref: test)\"}".getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(failWithStatus, error.length);
+                try (OutputStream out = exchange.getResponseBody()) {
+                    out.write(error);
+                }
+                return;
+            }
             byte[] body = CHAT_RESPONSE.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", streaming ? "application/x-ndjson" : "application/json");
             exchange.sendResponseHeaders(200, body.length);
@@ -72,7 +89,7 @@ class OllamaChatModelConfigurationTest {
     @Test
     void streamingChatModel_relaysApiKeyAsBearerHeader() {
         StreamingChatModel model = configuration.streamingChatModel(
-                baseUrl, "test-model", "secret-key", Duration.ofSeconds(10), "", 0.0d, 32768);
+                baseUrl, "test-model", "secret-key", Duration.ofSeconds(10), "", 0.0d, 32768, RETRY);
 
         model.stream(new Prompt("hi")).blockLast(Duration.ofSeconds(10));
 
@@ -81,8 +98,8 @@ class OllamaChatModelConfigurationTest {
 
     @Test
     void chatModel_relaysApiKeyAsBearerHeader() {
-        ChatModel model =
-                configuration.chatModel(baseUrl, "test-model", "secret-key", Duration.ofSeconds(10), "", 0.0d, 32768);
+        ChatModel model = configuration.chatModel(
+                baseUrl, "test-model", "secret-key", Duration.ofSeconds(10), "", 0.0d, 32768, RETRY);
 
         model.call(new Prompt("hi"));
 
@@ -91,8 +108,8 @@ class OllamaChatModelConfigurationTest {
 
     @Test
     void blankApiKey_sendsNoAuthorizationHeader() {
-        StreamingChatModel model =
-                configuration.streamingChatModel(baseUrl, "test-model", "", Duration.ofSeconds(10), "", 0.0d, 32768);
+        StreamingChatModel model = configuration.streamingChatModel(
+                baseUrl, "test-model", "", Duration.ofSeconds(10), "", 0.0d, 32768, RETRY);
 
         model.stream(new Prompt("hi")).blockLast(Duration.ofSeconds(10));
 
@@ -101,7 +118,8 @@ class OllamaChatModelConfigurationTest {
 
     @Test
     void chatModel_sendsConfiguredNumCtxAndTemperature() {
-        ChatModel model = configuration.chatModel(baseUrl, "test-model", "", Duration.ofSeconds(10), "", 0.0d, 32768);
+        ChatModel model =
+                configuration.chatModel(baseUrl, "test-model", "", Duration.ofSeconds(10), "", 0.0d, 32768, RETRY);
 
         model.call(new Prompt("hi"));
 
@@ -110,8 +128,8 @@ class OllamaChatModelConfigurationTest {
 
     @Test
     void streamingChatModel_sendsConfiguredNumCtxAndTemperature() {
-        StreamingChatModel model =
-                configuration.streamingChatModel(baseUrl, "test-model", "", Duration.ofSeconds(10), "", 0.0d, 32768);
+        StreamingChatModel model = configuration.streamingChatModel(
+                baseUrl, "test-model", "", Duration.ofSeconds(10), "", 0.0d, 32768, RETRY);
 
         model.stream(new Prompt("hi")).blockLast(Duration.ofSeconds(10));
 
@@ -124,7 +142,8 @@ class OllamaChatModelConfigurationTest {
      */
     @Test
     void nonDefaultNumCtxAndTemperature_areSentAsConfigured() {
-        ChatModel model = configuration.chatModel(baseUrl, "test-model", "", Duration.ofSeconds(10), "", 0.7d, 8192);
+        ChatModel model =
+                configuration.chatModel(baseUrl, "test-model", "", Duration.ofSeconds(10), "", 0.7d, 8192, RETRY);
 
         model.call(new Prompt("hi"));
 
@@ -146,5 +165,38 @@ class OllamaChatModelConfigurationTest {
             assertThat(options.path("num_ctx").intValue()).isEqualTo(expectedNumCtx);
             assertThat(options.path("temperature").doubleValue()).isEqualTo(expectedTemperature);
         });
+    }
+
+    @Test
+    void upstream500_isRetriedWithinTheBoundedBudgetThenSurfaced() {
+        // #1749: ollama.com answered 500 on a gate question and Spring AI's default template kept
+        // the turn alive through back-offs of 8 s, 11 s, 50 s and 181 s while the client timed out
+        // at 180 s. With the bounded template the turn makes its three requests and fails fast.
+        failWithStatus = 500;
+        ChatModel model = configuration.chatModel(
+                baseUrl, "test-model", "secret-key", Duration.ofSeconds(10), "", 0.0d, 32768, RETRY);
+
+        assertTimeoutPreemptively(
+                Duration.ofSeconds(15),
+                () -> assertThatThrownBy(() -> model.call(new Prompt("hi")))
+                        .isInstanceOf(TransientAiException.class)
+                        .hasMessageContaining("500"));
+
+        assertThat(requestBodies).hasSize(3);
+    }
+
+    @Test
+    void boundedRetryTemplate_isWhatTheBeanBuilds() {
+        // The bean and the test helper must be the same construction, or the test above proves
+        // nothing about production.
+        RetryTemplate fromBean =
+                configuration.ollamaChatRetryTemplate(2, Duration.ofSeconds(1), 2, Duration.ofSeconds(5));
+
+        assertThat(fromBean).isNotNull();
+        assertThat(fromBean.getRetryPolicy())
+                .usingRecursiveComparison()
+                .isEqualTo(OllamaChatModelConfiguration.boundedRetryTemplate(
+                                2, Duration.ofSeconds(1), 2, Duration.ofSeconds(5))
+                        .getRetryPolicy());
     }
 }

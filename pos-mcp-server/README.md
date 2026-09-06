@@ -396,3 +396,14 @@ Tracked separately as GitHub issues. Open items not yet implemented in code:
   and emit the sentinel from all services so unguarded operations gate correctly.
 - **Retrieval-quality regression tests** — hit@5 / MRR harness for tool-selection and RAG recall.
 - **Hybrid embedding + BM25 retrieval** and an **admin UI for `mcp_tool_permission`** maintenance.
+
+## Upstream model errors and retry (#1749)
+
+Chat calls to the Ollama backend retry transient failures (HTTP 5xx, I/O errors) within a bounded
+budget: `mcp.model.retry.max-retries` further attempts after the first (default 2), exponential
+back-off from `initial-delay` (1s) with `multiplier` (2) capped at `max-delay` (5s) — about seven
+seconds worst case, after which the turn fails and the caller sees the error. Spring AI's default
+would have retried ten times with back-off up to three minutes; on 2026-09-05 that turned one
+`ollama.com` 500 into a turn that outlived the client's 180s timeout and read as a hang.
+Environment: `MCP_MODEL_RETRY_MAX_RETRIES`, `MCP_MODEL_RETRY_INITIAL_DELAY`, `MCP_MODEL_RETRY_MULTIPLIER`,
+`MCP_MODEL_RETRY_MAX_DELAY`.

@@ -308,6 +308,14 @@ mcp:
     eval-freshness-hours: ${MCP_TUNING_EVAL_FRESHNESS_HOURS:48}
     cron: "0 0 2 * * ?"
   model:
+    # Retry budget for the Ollama chat calls (#1749). Spring AI's default (10 attempts, back-off
+    # 2s x5 capped at 3 min) turned one upstream HTTP 500 into a turn that outlived the client's
+    # 180s timeout and read as a hang. max-retries counts attempts AFTER the first request.
+    retry:
+      max-retries: ${MCP_MODEL_RETRY_MAX_RETRIES:2}
+      initial-delay: ${MCP_MODEL_RETRY_INITIAL_DELAY:1s}
+      multiplier: ${MCP_MODEL_RETRY_MULTIPLIER:2}
+      max-delay: ${MCP_MODEL_RETRY_MAX_DELAY:5s}
     # Gate 4 (#1192) tiered model router. DORMANT by default since #1683 — see the `simple` /
     # `complex` comments below: with both tier models blank, T2-simple and T2-complex resolve to
     # the SAME model, so every non-simple-chat turn was paying a qwen3:4b classification call to
