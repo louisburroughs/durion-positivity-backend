@@ -375,4 +375,26 @@ class DateWindowFacadeToolTest {
             assertThat(node.get("shape").asText()).isEqualTo("PRIOR_COMPLETE");
         }
     }
+
+    @Test
+    @DisplayName("a missing count is an argument error the model can correct, not a NullPointerException (#1829)")
+    void missingCountIsAnArgumentError() {
+        // Alpha 2026-09-06, gpt-oss:20b on q04: the model called this tool with no arguments and got
+        // "Cannot invoke Number.intValue() because ... is null" back — and gave up.
+        assertThatExceptionOfType(InvalidToolArgumentException.class)
+                .isThrownBy(() -> tool.resolveDateWindow("CALENDAR_SPAN", "MONTH", null, null, null))
+                .withMessageContaining("Missing argument 'count'")
+                .withMessageContaining("count=6");
+    }
+
+    @Test
+    @DisplayName("a missing shape or unit is named the same way (#1829)")
+    void missingShapeOrUnitIsNamed() {
+        assertThatExceptionOfType(InvalidToolArgumentException.class)
+                .isThrownBy(() -> tool.resolveDateWindow(null, "MONTH", 6, null, null))
+                .withMessageContaining("Missing argument 'shape'");
+        assertThatExceptionOfType(InvalidToolArgumentException.class)
+                .isThrownBy(() -> tool.resolveDateWindow("CALENDAR_SPAN", " ", 6, null, null))
+                .withMessageContaining("Missing argument 'unit'");
+    }
 }

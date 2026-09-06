@@ -98,7 +98,8 @@ public class DateWindowFacadeTool {
             @ToolParam(
                             description = "Number of units/periods, e.g. 6 for \"the last six months\". Must be 1 "
                                     + "for CURRENT_TO_DATE and PRIOR_COMPLETE")
-                    int count,
+                    @Nullable
+                    Integer count,
             @ToolParam(
                             description = "Comparison window to also resolve: NONE (default), PRIOR_PERIOD, or "
                                     + "YEAR_EARLIER",
@@ -113,10 +114,14 @@ public class DateWindowFacadeTool {
                             required = false)
                     @Nullable
                     String phrase) {
-        DateWindowResolver.Shape parsedShape = parseShape(shape);
-        DateWindowResolver.Unit parsedUnit = parseUnit(unit);
+        // #1829: a small model sends this tool with no arguments now and then. Primitive parameters
+        // made Spring AI's binding throw a NullPointerException before the tool ran — a JVM stack
+        // trace the model cannot act on — where every other bad argument gets a message it can
+        // correct. Every required argument is now checked here, in that same voice.
+        DateWindowResolver.Shape parsedShape = parseShape(required("shape", shape));
+        DateWindowResolver.Unit parsedUnit = parseUnit(required("unit", unit));
         DateWindowResolver.Comparison parsedComparison = parseComparison(comparison);
-        int resolvedCount = count;
+        int resolvedCount = required("count", count);
 
         // #1675: the wording decides the shape, and it decides it here rather than in the model.
         // Three rounds of prompt text did not make the classification stick, so where the phrase
@@ -242,6 +247,19 @@ public class DateWindowFacadeTool {
                 resolved.endDate(),
                 comparisonWindow.startDate(),
                 comparisonWindow.endDate());
+    }
+
+    /**
+     * The argument, or an {@link InvalidToolArgumentException} that names it. Tool arguments arrive
+     * from the model, so a missing one is a correctable model mistake, not a programming error.
+     */
+    private static <T> @NonNull T required(@NonNull String name, @Nullable T value) {
+        if (value == null || (value instanceof String text && text.isBlank())) {
+            throw new InvalidToolArgumentException(
+                    "Missing argument '" + name + "': resolveDateWindow needs shape, unit and count — e.g. "
+                            + "shape=CALENDAR_SPAN, unit=MONTH, count=6 for \"the last six months\"");
+        }
+        return value;
     }
 
     private static DateWindowResolver.Shape parseShape(@NonNull String raw) {
