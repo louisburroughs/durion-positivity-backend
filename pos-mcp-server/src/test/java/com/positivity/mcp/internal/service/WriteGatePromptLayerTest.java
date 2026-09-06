@@ -40,6 +40,33 @@ class WriteGatePromptLayerTest {
     }
 
     @Test
+    @DisplayName(
+            "the write gate exempts reads, keeps a write a write however phrased, and says so above its precedence "
+                    + "line (#1821)")
+    void writeGate_exemptsReads_aboveThePrecedenceLine() {
+        // q04 was answered twice with "Would you like me to proceed?" and no tool call — this layer's
+        // confirmation habit leaking onto a fully specified read. Pinned on the constant, not on the
+        // assembled text, so it survives the bullet moving within the layer.
+        String layer = SystemPromptDefaults.WRITE_GATE_LAYER_TEXT;
+        int exemption = layer.indexOf("Reads — lookups and reports that change nothing — are NOT gated");
+        int precedence = layer.indexOf("These rules take precedence");
+
+        assertThat(exemption).isNotNegative();
+        assertThat(layer).contains("never ask whether to proceed").contains("is a write however it is phrased");
+        assertThat(exemption).isLessThan(precedence);
+    }
+
+    @Test
+    @DisplayName("the always-present tool-use layer carries the by-period composition rule (#1821)")
+    void toolUse_carriesTheByPeriodRule() {
+        // The write gate is only appended when a write-capable tool is a candidate, so the
+        // composition guidance a by-month read needs must not depend on it.
+        assertThat(SystemPromptDefaults.TOOL_USE_LAYER_TEXT)
+                .contains("one call per period against the same tool")
+                .contains("never ask whether to proceed");
+    }
+
+    @Test
     @DisplayName("assemble without write-capable candidates omits the WRITE_GATE layer")
     void assemble_withoutWriteCapableTools_omitsWriteGateLayer() {
         AssembledPrompt prompt = resolver.assemble("ROLE_SERVICE_ADVISOR", "master", false);
