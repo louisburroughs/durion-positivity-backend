@@ -31,6 +31,7 @@ import org.mockito.InOrder;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -605,6 +606,50 @@ class SpringAiPosAssistantTest {
         String response = assistant.chat("user-1::ROLE_ADMIN", "show open invoices", "ctx");
 
         assertThat(response).isEqualTo("View them here — Invoices: /invoices");
+    }
+
+    /**
+     * #1831: a single slip on the tool name is answered inside the loop, so a model that then calls
+     * an offered tool (or answers) still finishes the turn with content rather than the ladder.
+     */
+    @Test
+    void chat_continuesAfterTheModelNamesAnUnknownToolOnce() {
+        ChatModel chatModel = mock(ChatModel.class);
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        AnswerResolutionLadder ladder = mock(AnswerResolutionLadder.class);
+        when(chatModel.getOptions())
+                .thenReturn(OllamaChatOptions.builder().model("gpt-oss:120b").build());
+        when(ragRetriever.retrieve(any())).thenReturn(List.of());
+        when(chatMemory.get(any())).thenReturn(List.of());
+        when(chatModel.call(any(Prompt.class)))
+                .thenReturn(toolCallResponse("accounting_listinvoices"), chatResponse("Two invoices are open."));
+
+        SpringAiPosAssistant assistant = new SpringAiPosAssistant(
+                chatModel,
+                () -> "base prompt",
+                List.of(new PingTool()),
+                ragRetriever,
+                ignored -> chatMemory,
+                null,
+                ladder,
+                null,
+                null,
+                null);
+
+        String response = assistant.chat("user-1::ROLE_ADMIN", "show open invoices", "ctx");
+
+        assertThat(response).isEqualTo("Two invoices are open.");
+        verify(ladder, never()).resolveFallback(any());
+        ArgumentCaptor<Prompt> prompts = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel, times(2)).call(prompts.capture());
+        Message correction = prompts.getAllValues().get(1).getInstructions().getLast();
+        assertThat(correction).isInstanceOf(ToolResponseMessage.class);
+        assertThat(((ToolResponseMessage) correction).getResponses())
+                .singleElement()
+                .extracting(ToolResponseMessage.ToolResponse::responseData)
+                .asString()
+                .contains("Unknown tool 'accounting_listinvoices'");
     }
 
     // ─── ChatClient observability (#1655) ───────────────────────────────────
