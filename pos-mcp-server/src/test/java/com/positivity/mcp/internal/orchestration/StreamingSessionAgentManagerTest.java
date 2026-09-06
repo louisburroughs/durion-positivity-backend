@@ -17,6 +17,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -24,6 +25,7 @@ import static org.mockito.Mockito.when;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.positivity.mcp.internal.classification.SimpleChatRuleDefaults;
 import com.positivity.mcp.internal.config.CurrentUserContext;
+import com.positivity.mcp.internal.domain.EvalTurnTrace;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.domain.WorkflowState;
@@ -36,6 +38,8 @@ import com.positivity.mcp.internal.orchestration.tools.ExaWebSearchTool;
 import com.positivity.mcp.internal.orchestration.tools.GlossaryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.InventoryFacadeTool;
 import com.positivity.mcp.internal.orchestration.tools.OrderFacadeTool;
+import com.positivity.mcp.internal.repository.EvalTurnTraceRepository;
+import com.positivity.mcp.internal.service.AlphaEvalTurnTraceRecorder;
 import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.RequestScopedUserContext;
@@ -731,7 +735,7 @@ class StreamingSessionAgentManagerTest {
         assertThat(tokens).containsExactly("Hi ", "there");
         verify(recorder).beginTurn(any(), eq("hello"));
         verify(recorder).recordSimpleChat(true);
-        verify(recorder).completeTurn("Hi there");
+        verify(recorder, timeout(5_000)).completeTurn("Hi there");
         verify(recorder, never()).failTurn(any());
         // The request thread must not keep the turn bound for the next request on that thread.
         verify(recorder).clearTurn();
@@ -758,8 +762,112 @@ class StreamingSessionAgentManagerTest {
                 .isInstanceOf(IllegalStateException.class);
 
         verify(recorder).beginTurn(any(), eq("hello"));
-        verify(recorder).failTurn(any(IllegalStateException.class));
+        verify(recorder, timeout(5_000)).failTurn(any(IllegalStateException.class));
         verify(recorder, never()).completeTurn(any());
+    }
+
+    @Test
+    @DisplayName("a real recorder writes a streamed turn's trace across a thread hop (#1850)")
+    void streamChat_writesARealTraceAcrossAThreadHop() {
+        // The mock-based tests above prove the calls happen; this one proves a trace is actually
+        // persisted, with the turn bound on the Reactor thread that terminates the stream.
+        EvalTurnTraceRepository traceRepository = mock(EvalTurnTraceRepository.class);
+        AlphaEvalTurnTraceRecorder traceRecorder = new AlphaEvalTurnTraceRecorder(
+                traceRepository, FIXED_CLOCK, java.time.Duration.ofHours(24), "sha-test");
+        ToolInvocationRecorder recorder = new ToolInvocationRecorder(
+                mock(com.positivity.mcp.internal.service.ToolAuditService.class),
+                mock(com.positivity.mcp.internal.repository.ToolMetadataRepository.class),
+                mock(com.positivity.mcp.internal.service.RequestScopedUserContext.class),
+                traceRecorder);
+        when(streamingChatModel.stream(any(org.springframework.ai.chat.prompt.Prompt.class)))
+                .thenReturn(Flux.just(streamedChunk("Hi "), streamedChunk("there"))
+                        .publishOn(reactor.core.scheduler.Schedulers.boundedElastic()));
+
+        List<String> tokens = managerWithRecorder(recorder)
+                .streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "hello")
+                .collectList()
+                .block(java.time.Duration.ofSeconds(5));
+
+        assertThat(tokens).containsExactly("Hi ", "there");
+        // The turn is written on the Reactor thread that terminates the stream, which can be after
+        // block() returns — so the assertion waits for it rather than racing it.
+        ArgumentCaptor<EvalTurnTrace> saved = ArgumentCaptor.forClass(EvalTurnTrace.class);
+        verify(traceRepository, timeout(5_000)).save(saved.capture());
+        assertThat(saved.getValue().finalResponse()).isEqualTo("Hi there");
+        assertThat(saved.getValue().userMessage()).isEqualTo("hello");
+        assertThat(saved.getValue().error()).isNull();
+    }
+
+    @Test
+    @DisplayName("a cancelled stream still records what was streamed rather than dropping the turn (#1850)")
+    void streamChat_cancelledStreamStillRecordsTheTurn() {
+        ToolInvocationRecorder recorder = recorderRunningBoundActions();
+        when(streamingChatModel.stream(any(org.springframework.ai.chat.prompt.Prompt.class)))
+                .thenReturn(Flux.just(streamedChunk("one"), streamedChunk("two"), streamedChunk("three")));
+
+        // reactor-test is not on this module's classpath, so cancel is driven directly: take(1)
+        // consumes one element and cancels upstream, which is what a client disconnect does.
+        List<String> received = managerWithRecorder(recorder)
+                .streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "hello")
+                .take(1)
+                .collectList()
+                .block(java.time.Duration.ofSeconds(5));
+
+        assertThat(received).containsExactly("one");
+
+        // A client disconnect or async timeout cancels the SSE stream; the turn happened and the
+        // gate grades from traces, so it must not vanish.
+        verify(recorder, timeout(5_000)).completeTurn(any());
+    }
+
+    @Test
+    @DisplayName("a failure before the stream is assembled fails the turn and unbinds the thread (#1850)")
+    void streamChat_failureBeforeAssemblyStillTerminatesTheTurn() {
+        ToolInvocationRecorder recorder = recorderRunningBoundActions();
+        when(toolSelectionEngine.selectRoleTools(any(), any(), any()))
+                .thenThrow(new IllegalStateException("selection exploded"));
+
+        assertThatThrownBy(() -> managerWithRecorder(recorder)
+                        .streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "how many open work orders"))
+                .isInstanceOf(IllegalStateException.class);
+
+        verify(recorder).beginTurn(any(), eq("how many open work orders"));
+        verify(recorder).failTurn(any(IllegalStateException.class));
+        verify(recorder).clearTurn();
+    }
+
+    @Test
+    @DisplayName("a streamed tool-path turn records the same stages the blocking path does (#1850)")
+    void streamChat_toolPathRecordsRoutingWorkflowAndTools() {
+        ToolInvocationRecorder recorder = recorderRunningBoundActions();
+        when(((org.springframework.ai.chat.model.ChatModel) streamingChatModel).getOptions())
+                .thenReturn(org.springframework.ai.ollama.api.OllamaChatOptions.builder()
+                        .model("deepseek-v4-flash:0731")
+                        .build());
+        when(streamingChatModel.stream(any(org.springframework.ai.chat.prompt.Prompt.class)))
+                .thenReturn(Flux.just(streamedChunk("42 open")));
+
+        managerWithRecorder(recorder)
+                .streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "how many open work orders")
+                .collectList()
+                .block(java.time.Duration.ofSeconds(5));
+
+        verify(recorder, timeout(5_000)).recordSimpleChat(false);
+        verify(recorder, timeout(5_000)).recordWorkflowState(any());
+        verify(recorder, timeout(5_000)).recordSelectedTools(any());
+    }
+
+    /** A recorder mock whose {@code runWithTurn} runs the bound action, as the real one does. */
+    private static ToolInvocationRecorder recorderRunningBoundActions() {
+        ToolInvocationRecorder recorder = mock(ToolInvocationRecorder.class);
+        lenient()
+                .doAnswer(invocation -> {
+                    ((Runnable) invocation.getArgument(1)).run();
+                    return null;
+                })
+                .when(recorder)
+                .runWithTurn(any(), any());
+        return recorder;
     }
 
     /** The same manager the suite builds, with an eval-trace recorder wired in (#1850). */

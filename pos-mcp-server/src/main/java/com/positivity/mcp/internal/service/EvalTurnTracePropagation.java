@@ -22,10 +22,23 @@ import reactor.core.publisher.Hooks;
  * and enabling Reactor's automatic context propagation restores it on the threads that handle each
  * signal.
  *
- * <p>Deliberately scoped to the alpha profile with tracing enabled, the same condition the recorder
- * carries: {@link Hooks#enableAutomaticContextPropagation()} is a JVM-wide switch, so it is
- * installed only where the traces it exists for are actually collected, never in a normal
- * deployment.
+ * <p><b>The hook is JVM-wide and not selective</b>, which is why this is scoped to the alpha profile
+ * with tracing enabled — the same condition the recorder carries — and never runs in a normal
+ * deployment. Two consequences worth stating rather than discovering:
+ *
+ * <ul>
+ *   <li>Once on, Reactor propagates <em>every</em> registered {@code ThreadLocalAccessor}, not just
+ *       this one — Micrometer's observation scope and Spring Security's context are both registered
+ *       by ServiceLoader. So on alpha, reactive code runs under a context regime production does not
+ *       have. Alpha is where the eval gate measures behaviour, so that is a real caveat, accepted
+ *       because a trace of the wrong thread's work is worth less than the difference.
+ *   <li>{@link #disable()} removes the accessor and asks Reactor to turn the hook back off, but a
+ *       context restart within one JVM cannot un-ring anything another component enabled.
+ * </ul>
+ *
+ * <p>Lives beside the recorder rather than in {@code internal.config}, where registration components
+ * usually sit: it needs the recorder, and {@code config} already depends on {@code service}, so the
+ * other direction closes a package cycle ArchUnit rejects.
  */
 @Component
 @Profile("alpha")
@@ -45,7 +58,9 @@ public class EvalTurnTracePropagation {
 
     @PostConstruct
     void enable() {
-        ContextRegistry.getInstance().registerThreadLocalAccessor(TURN_KEY, recorder.activeTurn);
+        ContextRegistry.getInstance()
+                .registerThreadLocalAccessor(
+                        TURN_KEY, recorder::currentTurnHandle, recorder::bindTurn, recorder::unbindTurn);
         Hooks.enableAutomaticContextPropagation();
         LOGGER.info("Eval turn traces now follow Reactor thread hops (#1850); key={}", TURN_KEY);
     }
@@ -53,5 +68,8 @@ public class EvalTurnTracePropagation {
     @PreDestroy
     void disable() {
         ContextRegistry.getInstance().removeThreadLocalAccessor(TURN_KEY);
+        // Undo the JVM-wide switch too, so a context restart does not leave it on for whatever
+        // starts next. Reactor no-ops if something else has since enabled it.
+        Hooks.disableAutomaticContextPropagation();
     }
 }

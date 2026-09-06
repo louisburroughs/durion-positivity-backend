@@ -44,6 +44,12 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
         <!-- Prometheus scrape endpoint: /actuator/prometheus (ADR observability) -->
+        <!-- #1850: imported directly by EvalTurnTracePropagation. It arrives transitively today,
+             but an upstream change would break compilation with no signal, so it is declared. -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>context-propagation</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
