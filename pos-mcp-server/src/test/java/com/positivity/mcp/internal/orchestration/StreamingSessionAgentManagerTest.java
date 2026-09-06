@@ -240,6 +240,26 @@ class StreamingSessionAgentManagerTest {
     }
 
     @Test
+    @DisplayName("simple-chat stream replaces harmony markup with the fallback (#1838)")
+    void streamChat_simpleChat_replacesMarkupWithFallback() {
+        when(streamingChatModel.stream(any(org.springframework.ai.chat.prompt.Prompt.class)))
+                .thenReturn(Flux.just(
+                        streamedChunk("<|channel|>"), streamedChunk("analysis<|message|>"), streamedChunk("Hi there")));
+
+        List<String> tokens = manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "hello")
+                .collectList()
+                .block(java.time.Duration.ofSeconds(5));
+
+        assertThat(tokens).containsExactly(ChatResponseText.BLANK_RESPONSE_FALLBACK);
+    }
+
+    private static org.springframework.ai.chat.model.ChatResponse streamedChunk(String text) {
+        return new org.springframework.ai.chat.model.ChatResponse(
+                List.of(new org.springframework.ai.chat.model.Generation(
+                        new org.springframework.ai.chat.messages.AssistantMessage(text))));
+    }
+
+    @Test
     @DisplayName("streamChat reuses cached agent for same userId+role")
     void streamChat_cachesAgentForSameUser() {
         manager.streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "show inventory stock");

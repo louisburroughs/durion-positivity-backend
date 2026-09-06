@@ -98,4 +98,32 @@ class StreamingAnswerGuardTest {
         assertThat(out).containsExactly(ChatResponseText.BLANK_RESPONSE_FALLBACK);
         assertThat(classified).containsExactly(ChatResponseText.Source.TOOL_PAYLOAD);
     }
+
+    @Test
+    @DisplayName(
+            "markup after a non-marker first token is still held: the template may eat only the first special token")
+    void markupAfterLeadingWord_isHeldAndClassified() {
+        List<String> out = run("analysis<|message|>", "The user asked: who are our ten largest customers?");
+
+        assertThat(out).containsExactly(ChatResponseText.BLANK_RESPONSE_FALLBACK);
+        assertThat(classified).containsExactly(ChatResponseText.Source.PROTOCOL_MARKUP);
+    }
+
+    @Test
+    @DisplayName("markup after a prose lead-in stops the stream there; a recovered final channel follows")
+    void markupMidReply_holdsTheTailAndRecoversTheFinalChannel() {
+        List<String> out = run("Sure ", "<|channel|>final<|message|>", "Two invoices are open.", "<|return|>");
+
+        assertThat(out).containsExactly("Sure ", "Two invoices are open.");
+        assertThat(classified).containsExactly(ChatResponseText.Source.CONTENT);
+    }
+
+    @Test
+    @DisplayName("markup after a prose lead-in with no final channel: the lead-in stands, the source is honest")
+    void markupMidReply_withoutFinal_isReportedAsMarkup() {
+        List<String> out = run("Sure ", "<|channel|>analysis<|message|>thinking out loud");
+
+        assertThat(out).containsExactly("Sure ", ChatResponseText.BLANK_RESPONSE_FALLBACK);
+        assertThat(classified).containsExactly(ChatResponseText.Source.PROTOCOL_MARKUP);
+    }
 }

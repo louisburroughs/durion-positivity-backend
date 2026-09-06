@@ -25,7 +25,10 @@ import reactor.core.publisher.Flux;
  *
  * <p>The decision is made on the first non-blank characters; a prefix that could still become either
  * ({@code <}, a lone backtick) waits for a few more characters or the end of the stream, so a prose
- * reply that opens with an HTML tag is not held back for long.
+ * reply that opens with an HTML tag is not held back for long. Markup that appears after a prose
+ * lead-in stops the stream at that point: what already went out cannot be retracted, but nothing more
+ * is emitted until the whole reply is classified. Every reply, passthrough included, is classified in
+ * full at the end so the reported source matches what the blocking path would say.
  */
 final class StreamingAnswerGuard {
 
@@ -56,21 +59,24 @@ final class StreamingAnswerGuard {
 
     private static final class State {
         private final StringBuilder buffered = new StringBuilder();
+        private final StringBuilder emitted = new StringBuilder();
         private Mode mode = Mode.UNDECIDED;
-        private boolean emittedAnything;
 
         @NonNull
         List<String> accept(@NonNull String token) {
-            if (mode == Mode.PASSTHROUGH) {
-                buffered.append(token);
-                if (!token.isEmpty()) {
-                    emittedAnything = true;
-                }
-                return token.isEmpty() ? List.of() : List.of(token);
-            }
             buffered.append(token);
             if (mode == Mode.HOLD) {
                 return List.of();
+            }
+            if (mode == Mode.PASSTHROUGH) {
+                if (token.contains("<|")) {
+                    // Markup after a prose lead-in ("Sure <|channel|>…"): what is out is out, but
+                    // nothing more goes until the whole reply has been classified.
+                    mode = Mode.HOLD;
+                    return List.of();
+                }
+                emitted.append(token);
+                return token.isEmpty() ? List.of() : List.of(token);
             }
             String prefix = buffered.toString().stripLeading();
             if (prefix.isEmpty()) {
@@ -90,27 +96,38 @@ final class StreamingAnswerGuard {
                     return List.of();
                 }
             }
+            if (prefix.contains("<|")) {
+                mode = Mode.HOLD;
+                return List.of();
+            }
             mode = Mode.PASSTHROUGH;
-            emittedAnything = true;
+            emitted.append(buffered);
             return List.of(buffered.toString());
         }
 
         @NonNull
         List<String> finish(@NonNull Consumer<ChatResponseText.Source> onClassified) {
-            if (mode == Mode.PASSTHROUGH) {
-                onClassified.accept(ChatResponseText.Source.CONTENT);
-                return List.of();
-            }
             if (mode == Mode.UNDECIDED && buffered.toString().isBlank()) {
                 LOGGER.warn("Streamed reply carried no text; using blank-response fallback (#1838)");
                 onClassified.accept(ChatResponseText.Source.BLANK);
                 return List.of(ChatResponseText.BLANK_RESPONSE_FALLBACK);
             }
+            // Every reply is classified in full at the end, passthrough included, so the recorded
+            // source is the same the blocking path would report even when text already went out.
             ChatResponseText.Extracted extracted =
                     ChatResponseText.extractDetailed(new AssistantMessage(buffered.toString()));
             onClassified.accept(extracted.source());
             if (extracted.source() == ChatResponseText.Source.CONTENT) {
-                return List.of(extracted.text());
+                String text = extracted.text();
+                String alreadyOut = emitted.toString();
+                if (alreadyOut.isEmpty()) {
+                    return List.of(text);
+                }
+                // Passthrough: what remains of the classified text after what already went out.
+                String remainder = text.startsWith(alreadyOut.strip())
+                        ? text.substring(alreadyOut.strip().length())
+                        : text;
+                return remainder.isEmpty() ? List.of() : List.of(remainder);
             }
             // The content is not logged: a payload carries data, markup carries tool arguments.
             LOGGER.warn(
