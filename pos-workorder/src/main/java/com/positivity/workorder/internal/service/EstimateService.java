@@ -138,11 +138,13 @@ public interface EstimateService {
      * @param estimateId estimate to submit
      * @param username   username submitting the estimate
      * @return updated estimate in PENDING_APPROVAL state
-     * @throws IllegalArgumentException if estimate not found
-     * @throws IllegalStateException    if estimate is not in DRAFT state or
-     *                                  incomplete
+     * @throws com.positivity.workorder.internal.exception.EstimateNotFoundException          if estimate not found
+     * @throws com.positivity.workorder.internal.exception.WorkorderResourceConflictException if estimate is not in
+     *                                                                                        DRAFT state
+     * @throws com.positivity.workorder.internal.exception.EstimateIncompleteException        if estimate is incomplete
      */
-    EstimateResponse submitForApproval(UUID estimateId, String username);
+    @NonNull
+    EstimateResponse submitForApproval(@NonNull UUID estimateId, @NonNull String username);
 
     /**
      * Get the most specific approval configuration for a location and customer.

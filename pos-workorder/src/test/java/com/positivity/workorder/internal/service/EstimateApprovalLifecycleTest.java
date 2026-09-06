@@ -22,6 +22,7 @@ import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.EstimateSnapshot;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
 import com.positivity.workorder.internal.enums.EstimateStatus;
+import com.positivity.workorder.internal.exception.EstimateIncompleteException;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PurchaseOrderRequiredException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
@@ -52,6 +53,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -125,27 +127,7 @@ class EstimateApprovalLifecycleTest {
 
     @BeforeEach
     void setUp() {
-        service = new EstimateServiceImpl(
-                Clock.fixed(NOW, ZoneOffset.UTC),
-                estimateRepository,
-                estimateItemRepository,
-                estimateSnapshotRepository,
-                approvalConfigurationRepository,
-                workOrderRepository,
-                eventPublisher,
-                billingRulesClientService,
-                taxClient,
-                locationReferenceService,
-                peopleAvailabilityLocalService,
-                documentClient,
-                new ObjectMapper(),
-                customerReferenceService,
-                vehicleReferenceService,
-                estimateFactPublisher,
-                org.mockito.Mockito.mock(PartQuantityDivisibilityService.class),
-                // Un-stubbed mock: lookupGuideTime answers Optional.empty(), i.e. "no guide",
-                // which keeps every pre-#1569 scenario behaviorally identical.
-                org.mockito.Mockito.mock(LaborTimeDefaultingService.class));
+        service = newService(new ObjectMapper());
 
         when(estimateRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(estimateItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -160,6 +142,31 @@ class EstimateApprovalLifecycleTest {
             return snapshot;
         });
         when(billingRulesClientService.isPurchaseOrderRequired(any())).thenReturn(false);
+    }
+
+    /** The service under test with the given snapshot serializer; everything else is the shared mocks. */
+    private EstimateServiceImpl newService(ObjectMapper objectMapper) {
+        return new EstimateServiceImpl(
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                estimateRepository,
+                estimateItemRepository,
+                estimateSnapshotRepository,
+                approvalConfigurationRepository,
+                workOrderRepository,
+                eventPublisher,
+                billingRulesClientService,
+                taxClient,
+                locationReferenceService,
+                peopleAvailabilityLocalService,
+                documentClient,
+                objectMapper,
+                customerReferenceService,
+                vehicleReferenceService,
+                estimateFactPublisher,
+                org.mockito.Mockito.mock(PartQuantityDivisibilityService.class),
+                // Un-stubbed mock: lookupGuideTime answers Optional.empty(), i.e. "no guide",
+                // which keeps every pre-#1569 scenario behaviorally identical.
+                org.mockito.Mockito.mock(LaborTimeDefaultingService.class));
     }
 
     private Estimate estimate(EstimateStatus status) {
@@ -553,8 +560,9 @@ class EstimateApprovalLifecycleTest {
         void rejectsNonDraft() {
             givenEstimate(estimate(EstimateStatus.PENDING_APPROVAL));
 
+            // #1791: a lifecycle guard on the target's own status, 409 via the module advice.
             assertThatThrownBy(() -> service.submitForApproval(ESTIMATE_ID, "jane.smith"))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(WorkorderResourceConflictException.class)
                     .hasMessageContaining("must be in DRAFT state, current state: PENDING_APPROVAL");
         }
 
@@ -568,6 +576,8 @@ class EstimateApprovalLifecycleTest {
                     .isInstanceOf(EstimateNotFoundException.class);
         }
 
+        // #1791: the four completeness refusals below are one condition — a DRAFT estimate that is
+        // not ready — and answer 422 via the module advice, not the 409 of the status guard above.
         @Test
         @DisplayName("refuses an estimate with no customer")
         void rejectsMissingCustomer() {
@@ -576,7 +586,7 @@ class EstimateApprovalLifecycleTest {
             givenEstimate(estimate);
 
             assertThatThrownBy(() -> service.submitForApproval(ESTIMATE_ID, "jane.smith"))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(EstimateIncompleteException.class)
                     .hasMessage("Cannot submit estimate - no customer assigned");
         }
 
@@ -588,7 +598,7 @@ class EstimateApprovalLifecycleTest {
             givenEstimate(estimate);
 
             assertThatThrownBy(() -> service.submitForApproval(ESTIMATE_ID, "jane.smith"))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(EstimateIncompleteException.class)
                     .hasMessage("Cannot submit estimate - no vehicle assigned");
         }
 
@@ -600,7 +610,7 @@ class EstimateApprovalLifecycleTest {
                     .thenReturn(List.of());
 
             assertThatThrownBy(() -> service.submitForApproval(ESTIMATE_ID, "jane.smith"))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(EstimateIncompleteException.class)
                     .hasMessage("Cannot submit estimate - no line items added");
         }
 
@@ -612,13 +622,32 @@ class EstimateApprovalLifecycleTest {
             givenEstimate(estimate);
 
             assertThatThrownBy(() -> service.submitForApproval(ESTIMATE_ID, "jane.smith"))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(EstimateIncompleteException.class)
                     .hasMessageContaining("totals not calculated");
 
             estimate.setSubtotal(BigDecimal.ZERO);
             assertThatThrownBy(() -> service.submitForApproval(ESTIMATE_ID, "jane.smith"))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(EstimateIncompleteException.class)
                     .hasMessageContaining("totals not calculated");
+        }
+
+        @Test
+        @DisplayName("propagates a snapshot serialization fault unwrapped, not re-typed to IllegalStateException")
+        void snapshotSerializationFaultIsNotReTyped() {
+            givenEstimate(estimate(EstimateStatus.DRAFT));
+            ObjectMapper brokenMapper = org.mockito.Mockito.mock(ObjectMapper.class);
+            JacksonException fault = new JacksonException("cannot serialize estimate") {};
+            when(brokenMapper.writeValueAsString(any())).thenThrow(fault);
+
+            // #1791: the module advice maps IllegalStateException to 409 CONFLICT, so wrapping a
+            // serialization fault in it reported our defect as a retryable client state; the raw
+            // JacksonException is unmapped and must reach the platform's correlated 500 instead.
+            assertThatThrownBy(() -> newService(brokenMapper).submitForApproval(ESTIMATE_ID, "jane.smith"))
+                    .isInstanceOf(JacksonException.class)
+                    .isNotInstanceOf(IllegalStateException.class)
+                    .isSameAs(fault);
+            verify(estimateSnapshotRepository, never()).save(any());
+            verify(estimateRepository, never()).save(any());
         }
     }
 

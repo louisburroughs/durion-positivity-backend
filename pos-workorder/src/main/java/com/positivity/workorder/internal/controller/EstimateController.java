@@ -705,14 +705,22 @@ public class EstimateController {
                     Required inputs: estimateId (UUID) as a path parameter; there is no request body, and the \
                     submitting user comes from the security context.
                     Emits a WORKORDER_ESTIMATE_SUBMIT event and persists a submission snapshot.
-                    Returns 404 when the estimate does not exist, and 400 when it is not DRAFT or fails a \
-                    completeness check.
+                    Returns 404 when the estimate does not exist, 409 when it is not DRAFT, and 422 when it is \
+                    DRAFT but fails a completeness check.
                     """)
     @ApiResponse(responseCode = "200", description = "Estimate submitted for approval successfully")
-    @ApiResponse(responseCode = "400", description = "Estimate is incomplete or not in DRAFT state")
     @ApiResponse(
             responseCode = "404",
             description = "Estimate not found (ESTIMATE_NOT_FOUND)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Estimate is not in DRAFT, so it cannot be submitted in its current state (CONFLICT)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "Estimate is DRAFT but incomplete: no customer, no vehicle, no line items, or totals not "
+                    + "yet calculated (ESTIMATE_INCOMPLETE)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{estimateId}/submit-for-approval")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SUBMIT", apiVersion = "1")
@@ -724,15 +732,10 @@ public class EstimateController {
             @Parameter(description = "ID of the estimate to submit", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
                     UUID estimateId) {
-        try {
-            // Get authenticated username from security context
-            String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
-            EstimateResponse submitted = estimateService.submitForApproval(estimateId, username);
-            return ResponseEntity.ok(submitted);
-        } catch (IllegalStateException e) {
-            log.warn("Failed to submit estimate {} for approval: {}", estimateId, e.getMessage());
-            return ResponseEntity.badRequest().build();
-        }
+        // Get authenticated username from security context
+        String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
+        EstimateResponse submitted = estimateService.submitForApproval(estimateId, username);
+        return ResponseEntity.ok(submitted);
     }
 
     @Operation(operationId = "deleteEstimate", summary = "Delete an Estimate", description = """
@@ -1100,14 +1103,20 @@ public class EstimateController {
                     Required inputs: estimateId (UUID) as a path parameter; notes is an optional query \
                     parameter explaining why the snapshot was taken.
                     Emits an ESTIMATE_SNAPSHOT_CREATE event.
-                    Returns 404 when the estimate does not exist, and 409 when the snapshot cannot be \
-                    serialized.
+                    Returns 404 when the estimate does not exist, and 500 when the snapshot cannot be \
+                    serialized, which is a server fault rather than anything about the request.
                     """)
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "200", description = "Snapshot created successfully"),
-                @ApiResponse(responseCode = "404", description = "Estimate not found"),
-                @ApiResponse(responseCode = "409", description = "Snapshot creation failed")
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Estimate not found (ESTIMATE_NOT_FOUND)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "500",
+                        description = "Snapshot could not be serialized (INTERNAL_ERROR)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @PostMapping("/{estimateId}/snapshots")
     @EmitEvent(id = "ESTIMATE_SNAPSHOT_CREATE", apiVersion = "1")
@@ -1125,14 +1134,9 @@ public class EstimateController {
                     @RequestParam(required = false)
                     @Nullable
                     String notes) {
-        try {
-            String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
-            EstimateSnapshotResponse snapshot = estimateService.createEstimateSnapshot(estimateId, username, notes);
-            return ResponseEntity.ok(snapshot);
-        } catch (IllegalStateException e) {
-            log.error("Failed to create snapshot for estimate {}: {}", estimateId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
-        }
+        String username = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
+        EstimateSnapshotResponse snapshot = estimateService.createEstimateSnapshot(estimateId, username, notes);
+        return ResponseEntity.ok(snapshot);
     }
 
     private String maskForLog(Object value) {

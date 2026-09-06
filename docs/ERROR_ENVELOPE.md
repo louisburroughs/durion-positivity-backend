@@ -265,6 +265,7 @@ Any service may therefore return these in addition to its module codes below.
 | `CUSTOMER_APPROVAL_INVALID` | 409 | Workorder claims an approval its own state does not back |
 | `INSUFFICIENT_PART_AVAILABILITY` | 409 | Requested part quantity exceeds current owned stock (guided, with `nextAction`) |
 | `PURCHASE_ORDER_REQUIRED` | 422 | Commercial customer's billing rules require a purchase order that was not supplied |
+| `ESTIMATE_INCOMPLETE` | 422 | A DRAFT estimate was submitted for approval with no customer, no vehicle, no line items, or uncalculated totals (`EstimateIncompleteException`) |
 | `FRACTIONAL_QUANTITY_NOT_ALLOWED` | 422 | Quantity is not a whole number for a product the catalog declares indivisible |
 | `UOM_CONVERSION_UNDEFINED` | 422 | `uomCode` names no conversion row for the referenced product |
 | `PROMOTION_IDEMPOTENCY_INCONSISTENT` | 500 | A recorded promotion idempotency key resolves to no workorder (server defect, correlated) |

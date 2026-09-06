@@ -19,6 +19,7 @@ import com.positivity.workorder.internal.dto.EstimateSnapshotResponse;
 import com.positivity.workorder.internal.dto.EstimateSummaryResponse;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.exception.CustomerRequirementsNotMetException;
+import com.positivity.workorder.internal.exception.EstimateIncompleteException;
 import com.positivity.workorder.internal.exception.EstimateItemNotFoundException;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsistencyException;
@@ -48,6 +49,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.core.JacksonException;
 
 /**
  * Estimate endpoints: the controller owns status mapping and the Idempotency-Key replay contract,
@@ -381,21 +383,33 @@ class EstimateControllerTest {
         }
 
         @Test
-        void mapsSubmissionFailuresOntoNotFoundOrBadRequest() {
-            // #1713: the controller no longer catches a not-found to build a bodiless 404. The
-            // module's own type propagates to GlobalExceptionHandler, which answers the enveloped,
-            // correlated 404 required by ADR-0017 §3/§4.
+        void noLongerSwallowsSubmissionFailures() {
+            // No advice runs here: this calls the controller method directly, so the only thing
+            // this test can pin is that the controller does not catch these itself. The status
+            // and envelope each one produces over the wire are asserted in
+            // EstimateApprovalContractBehaviorIT (AP-002 to AP-006).
+            //
+            // #1713: the controller no longer catches a not-found to build a bodiless 404.
             doThrow(new EstimateNotFoundException(ESTIMATE_ID))
                     .when(estimateService)
                     .submitForApproval(any(), anyString());
             assertThatThrownBy(() -> controller.submitForApproval(ESTIMATE_ID))
                     .isInstanceOf(EstimateNotFoundException.class);
 
-            doThrow(new IllegalStateException("not a draft"))
+            // #1791: the not-DRAFT refusal (409) and the completeness refusals (422) propagate
+            // too. Both were previously caught here as IllegalStateException and answered as a
+            // bodiless 400 the OpenAPI contract documented as an EstimateResponse.
+            doThrow(new WorkorderResourceConflictException("not a draft"))
                     .when(estimateService)
                     .submitForApproval(any(), anyString());
-            assertThat(controller.submitForApproval(ESTIMATE_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThatThrownBy(() -> controller.submitForApproval(ESTIMATE_ID))
+                    .isInstanceOf(WorkorderResourceConflictException.class);
+
+            doThrow(new EstimateIncompleteException("no line items"))
+                    .when(estimateService)
+                    .submitForApproval(any(), anyString());
+            assertThatThrownBy(() -> controller.submitForApproval(ESTIMATE_ID))
+                    .isInstanceOf(EstimateIncompleteException.class);
         }
 
         @Test
@@ -818,18 +832,21 @@ class EstimateControllerTest {
         }
 
         @Test
-        void mapsSnapshotFailuresOntoNotFoundAndConflict() {
+        void noLongerSwallowsSnapshotFailures() {
+            // No advice runs here; the wire statuses are pinned in EstimateControllerErrorHandlingTest.
             doThrow(new EstimateNotFoundException(ESTIMATE_ID))
                     .when(estimateService)
                     .createEstimateSnapshot(any(), anyString(), any());
             assertThatThrownBy(() -> controller.createEstimateSnapshot(ESTIMATE_ID, null))
                     .isInstanceOf(EstimateNotFoundException.class);
 
-            doThrow(new IllegalStateException("snapshot exists"))
-                    .when(estimateService)
-                    .createEstimateSnapshot(any(), anyString(), any());
-            assertThat(controller.createEstimateSnapshot(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT);
+            // #1791: the service no longer wraps a serialization fault in IllegalStateException, so
+            // the local catch that answered it as a bodiless 409 was dead and is gone; the raw
+            // JacksonException propagates to the platform's correlated 500.
+            JacksonException fault = new JacksonException("cannot serialize") {};
+            doThrow(fault).when(estimateService).createEstimateSnapshot(any(), anyString(), any());
+            assertThatThrownBy(() -> controller.createEstimateSnapshot(ESTIMATE_ID, null))
+                    .isSameAs(fault);
         }
     }
 }

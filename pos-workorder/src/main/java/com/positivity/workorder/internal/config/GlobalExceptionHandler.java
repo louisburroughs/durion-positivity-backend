@@ -8,6 +8,7 @@ import com.positivity.workorder.internal.exception.ChangeRequestNotFoundExceptio
 import com.positivity.workorder.internal.exception.CustomerApprovalInvalidException;
 import com.positivity.workorder.internal.exception.CustomerRequirementsNotMetException;
 import com.positivity.workorder.internal.exception.DuplicateSubstituteLinkException;
+import com.positivity.workorder.internal.exception.EstimateIncompleteException;
 import com.positivity.workorder.internal.exception.EstimateItemNotFoundException;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.FractionalQuantityNotAllowedException;
@@ -331,6 +332,20 @@ public class GlobalExceptionHandler {
             PurchaseOrderRequiredException ex, HttpServletRequest request) {
         return buildErrorResponse(
                 HttpStatus.UNPROCESSABLE_ENTITY, PurchaseOrderRequiredException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    /**
+     * A DRAFT estimate was submitted for approval before it was complete: no customer, no
+     * vehicle, no line items, or totals not yet calculated (issue #1791). 422, not 400 and not
+     * 409: the submit request carries no body to correct, and the estimate is in the one status
+     * that permits submission — what refuses it is an attribute of the target other than its
+     * lifecycle status, which ADR-0017 §2 places at 422.
+     */
+    @ExceptionHandler(EstimateIncompleteException.class)
+    public ResponseEntity<ApiError> handleEstimateIncomplete(
+            EstimateIncompleteException ex, HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY, EstimateIncompleteException.ERROR_CODE, ex.getMessage(), request);
     }
 
     @ExceptionHandler(ChangeRequestNotFoundException.class)

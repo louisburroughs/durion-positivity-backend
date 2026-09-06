@@ -11,6 +11,7 @@ import com.positivity.workorder.internal.exception.ChangeRequestNotFoundExceptio
 import com.positivity.workorder.internal.exception.CustomerApprovalInvalidException;
 import com.positivity.workorder.internal.exception.CustomerRequirementsNotMetException;
 import com.positivity.workorder.internal.exception.DuplicateSubstituteLinkException;
+import com.positivity.workorder.internal.exception.EstimateIncompleteException;
 import com.positivity.workorder.internal.exception.EstimateItemNotFoundException;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.FractionalQuantityNotAllowedException;
@@ -197,6 +198,9 @@ class GlobalExceptionHandlerTest {
                     Named.of("handlePurchaseOrderRequired", (HandlerInvocation)
                             request -> handler.handlePurchaseOrderRequired(
                                     new PurchaseOrderRequiredException("PO required"), request)),
+                    Named.of(
+                            "handleEstimateIncomplete", (HandlerInvocation) request -> handler.handleEstimateIncomplete(
+                                    new EstimateIncompleteException("no line items"), request)),
                     Named.of("handleChangeRequestNotFound", (HandlerInvocation) request ->
                             handler.handleChangeRequestNotFound(new ChangeRequestNotFoundException(SOME_ID), request)),
                     Named.of("handleServiceLineNotFound", (HandlerInvocation) request ->
