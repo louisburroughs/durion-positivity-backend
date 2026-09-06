@@ -18,7 +18,6 @@ import jakarta.validation.Valid;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,7 +32,6 @@ import org.springframework.web.bind.annotation.RestController;
         scopes = {"vehicle-fitment:hint:create"})
 @RequestMapping("/v1/fitments")
 @RequiredArgsConstructor
-@Slf4j
 @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_CREATE + "')")
 @Tag(name = "Vehicle Fitment Bulk Ingest API", description = "Bulk import vehicle fitment records")
 public class VehicleFitmentBulkIngestController extends AbstractBulkIngestController<FitmentBulkIngestRecord> {
@@ -75,7 +73,9 @@ public class VehicleFitmentBulkIngestController extends AbstractBulkIngestContro
                     Emits a VEHICLE_FITMENT_BULK_INGEST event covering the whole batch; rows are processed \
                     independently, so one failed row does not roll back the others.
                     Returns 200 even when every row fails, so callers must inspect each result's success flag and \
-                    FITMENT_INGEST_FAILED errorCode rather than trusting the status alone.
+                    errorCode rather than trusting the status alone. Fitment creation resolves or creates every name \
+                    it is given and refuses nothing about a row, so a failure here is a server-side fault: the row \
+                    carries INGEST_INTERNAL_ERROR and an errorMessage holding only a correlationId to quote.
                     """)
     @PostMapping("/bulk-ingest")
     @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_CREATE + "')")
@@ -126,13 +126,7 @@ public class VehicleFitmentBulkIngestController extends AbstractBulkIngestContro
                         .build());
                 successCount++;
             } catch (Exception exception) {
-                log.warn("Failed to ingest fitment record at row {}: {}", i, exception.getMessage(), exception);
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode("FITMENT_INGEST_FAILED")
-                        .errorMessage(errorMessage(exception))
-                        .build());
+                results.add(rowFailure(i, exception));
                 failureCount++;
             }
         }
@@ -145,8 +139,22 @@ public class VehicleFitmentBulkIngestController extends AbstractBulkIngestContro
                 .build();
     }
 
-    private String errorMessage(@NonNull Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? "Fitment ingest failed" : message;
+    /**
+     * No rejection types: {@link VehicleFitmentService#createFitment} refuses nothing about the
+     * record. Every name it is given is resolved or created, so a failure on this path is a
+     * persistence or upstream fault, not the caller's row — and
+     * {@code VehicleFitmentException}, the module's only exception type, wraps exactly those
+     * (it is raised on unparseable upstream responses and on an insert race, and no advice in
+     * this module maps it to a 4xx). So every failure here reports generically against a
+     * correlation id (issue #1718), which is what those failures are.
+     */
+    @Override
+    protected String rowRejectionCode() {
+        return "FITMENT_INGEST_FAILED";
+    }
+
+    @Override
+    protected String rowRejectionFallbackMessage() {
+        return "Fitment ingest failed";
     }
 }

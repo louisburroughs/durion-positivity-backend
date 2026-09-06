@@ -57,7 +57,9 @@ public class CustomerBulkIngestController extends AbstractBulkIngestController<C
                     Use this tool for migrations and file imports of individuals; do not use createCrmPerson \
                     row by row for large loads, and note this path cannot create commercial accounts.
                     Preconditions: none beyond authorization; rows that fail validation are reported with \
-                    errorCode CUSTOMER_INGEST_FAILED while the rest of the batch proceeds.
+                    errorCode CUSTOMER_INGEST_FAILED and the reason, and rows lost to a server-side fault with \
+                    INGEST_INTERNAL_ERROR and an errorMessage holding only a correlationId to quote, while the \
+                    rest of the batch proceeds.
                     Required inputs: jobId (UUID), locationId (UUID), and a non-empty records list where \
                     each record has firstName and lastName (each max 100) and optionally email, \
                     phoneNumber, primaryAddress, and customerNumber; preferredContactMethod is derived as \

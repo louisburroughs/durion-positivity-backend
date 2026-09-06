@@ -1,5 +1,7 @@
 package com.positivity.securityservice.internal.controller;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -15,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import com.positivity.securityservice.internal.service.CustomUserDetailsService;
 import com.positivity.securityservice.internal.service.UserService;
@@ -155,8 +158,10 @@ class SecurityBulkIngestControllerTest {
 
     @Test
     void users_anUnknownRoleFailsItsRow() throws Exception {
+        // The type UserServiceImpl actually raises for an unknown role, not a stand-in: a
+        // rejection has to be recognisable as one for its message to reach the caller (#1718).
         when(userService.createUserWithGeneratedPassword(anyString(), anySet()))
-                .thenThrow(new IllegalArgumentException("Role not found: NOPE"));
+                .thenThrow(new SecurityValidationException("Role not found: NOPE"));
 
         mockMvc.perform(post("/v1/users/bulk-ingest")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -164,7 +169,29 @@ class SecurityBulkIngestControllerTest {
                         .with(user("admin-user").authorities(() -> "security:user:create")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.failureCount").value(1))
-                .andExpect(jsonPath("$.results[0].errorCode").value("USER_INGEST_FAILED"));
+                .andExpect(jsonPath("$.results[0].errorCode").value("USER_INGEST_FAILED"))
+                .andExpect(jsonPath("$.results[0].errorMessage").value("Role not found: NOPE"));
+    }
+
+    /**
+     * Issue #1718: a row lost to a server-side fault must not carry the exception's text into the
+     * 200 body that reports it. The caller gets a generic code and their own correlation id.
+     */
+    @Test
+    void users_serverFault_reportsGenericFailureAndTheCorrelationId() throws Exception {
+        when(userService.createUserWithGeneratedPassword(anyString(), anySet()))
+                .thenThrow(new IllegalStateException("could not execute statement [insert into sec_user ...]"));
+
+        mockMvc.perform(post("/v1/users/bulk-ingest")
+                        .header("X-Correlation-Id", "corr-from-caller")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(USERS_BODY)
+                        .with(user("admin-user").authorities(() -> "security:user:create")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INGEST_INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].errorMessage", containsString("corr-from-caller")))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("sec_user"))));
     }
 
     @Test

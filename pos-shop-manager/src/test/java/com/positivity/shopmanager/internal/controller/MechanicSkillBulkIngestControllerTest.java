@@ -1,6 +1,8 @@
 package com.positivity.shopmanager.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -17,10 +19,12 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * The mechanic-skill ingest, whose whole job is the folding: the underlying operation replaces a
@@ -73,7 +77,10 @@ class MechanicSkillBulkIngestControllerTest {
     void bulkIngest_everyRowOfAFailedMechanicFails() throws Exception {
         // The rows were applied together, so they share the outcome; reporting one as successful
         // would say a skill landed when the whole set was refused.
-        doThrow(new IllegalStateException("mechanic projection not there yet"))
+        // The type replaceSkills actually raises when the mechanic projection has not arrived,
+        // not a stand-in: a rejection has to be recognisable as one for its message to reach the
+        // caller (issue #1718).
+        doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Mechanic not found for person " + ALICE))
                 .when(mechanicSyncService)
                 .replaceSkills(eq(ALICE), any());
 
@@ -83,7 +90,33 @@ class MechanicSkillBulkIngestControllerTest {
                 .andExpect(jsonPath("$.failureCount").value(2))
                 .andExpect(jsonPath("$.results[0].errorCode").value("MECHANIC_SKILL_INGEST_FAILED"))
                 .andExpect(jsonPath("$.results[1].success").value(true))
-                .andExpect(jsonPath("$.results[2].errorCode").value("MECHANIC_SKILL_INGEST_FAILED"));
+                .andExpect(jsonPath("$.results[2].errorCode").value("MECHANIC_SKILL_INGEST_FAILED"))
+                // Classified once for the mechanic, reported against each of that mechanic's rows.
+                .andExpect(jsonPath("$.results[0].errorMessage").value("Mechanic not found for person " + ALICE))
+                .andExpect(jsonPath("$.results[2].errorMessage").value("Mechanic not found for person " + ALICE));
+    }
+
+    /**
+     * Issue #1718: a row lost to a server-side fault must not carry the exception's text into the
+     * 200 body that reports it. The caller gets a generic code and their own correlation id.
+     */
+    @Test
+    @WithMockUser(authorities = "shop:schedule:edit")
+    void bulkIngest_serverFault_reportsGenericFailureAndTheCorrelationId() throws Exception {
+        doThrow(new IllegalStateException("could not execute statement [insert into shop_mechanic_skill ...]"))
+                .when(mechanicSyncService)
+                .replaceSkills(eq(ALICE), any());
+
+        mockMvc.perform(post(PATH)
+                        .header("X-Correlation-Id", "corr-from-caller")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(TWO_MECHANICS))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureCount").value(2))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INGEST_INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].errorMessage", containsString("corr-from-caller")))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("shop_mechanic_skill"))))
+                .andExpect(jsonPath("$.results[2].errorCode").value("INGEST_INTERNAL_ERROR"));
     }
 
     @Test

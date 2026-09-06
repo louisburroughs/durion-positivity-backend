@@ -1,5 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -170,12 +172,18 @@ class OpeningStockBulkIngestControllerTest {
                 .approveAdjustmentRequest(any(), anyString());
 
         mockMvc.perform(post("/v1/inventory/opening-stock/bulk-ingest")
+                        .header("X-Correlation-Id", "corr-from-caller")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request(new BigDecimal("24")))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.successCount").value(0))
                 .andExpect(jsonPath("$.failureCount").value(1))
-                .andExpect(jsonPath("$.results[0].errorCode").value("OPENING_STOCK_INGEST_FAILED"));
+                // The approve guard is an invariant on the request this endpoint just created, so
+                // tripping it is a server defect, not the caller's row: generic code, correlation
+                // id, and none of the exception's own text (issue #1718).
+                .andExpect(jsonPath("$.results[0].errorCode").value("INGEST_INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].errorMessage", containsString("corr-from-caller")))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("not pending"))));
     }
 
     @Test

@@ -68,7 +68,9 @@ public class CommercialBulkIngestController extends AbstractBulkIngestController
                         Use this tool for migrations and file imports of commercial fleets; individual customers go \
                         through bulkIngestCustomers instead.
                         Preconditions: none beyond authorization; rows that fail are reported with errorCode \
-                        COMMERCIAL_INGEST_FAILED while the rest of the batch proceeds.
+                        COMMERCIAL_INGEST_FAILED and the reason, and rows lost to a server-side fault with \
+                        INGEST_INTERNAL_ERROR and an errorMessage holding only a correlationId to quote, while the \
+                        rest of the batch proceeds.
                         Required inputs: jobId (UUID), locationId (UUID), and a non-empty records list where each \
                         record has legalName (max 255); displayName defaults to the legal name, and taxId and \
                         billingTermsId are optional; when contactFirstName and contactLastName are both present, a \

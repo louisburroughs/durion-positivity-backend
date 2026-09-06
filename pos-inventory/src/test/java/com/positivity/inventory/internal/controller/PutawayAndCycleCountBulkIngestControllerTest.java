@@ -1,5 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -23,6 +25,7 @@ import com.positivity.inventory.internal.dto.putaway.PutawayRuleResponse;
 import com.positivity.inventory.internal.enums.PutawayDestinationStrategy;
 import com.positivity.inventory.internal.enums.PutawayRuleMatchType;
 import com.positivity.inventory.internal.exception.DuplicateEnabledAnyPutawayRuleException;
+import com.positivity.inventory.internal.exception.InventoryValidationException;
 import com.positivity.inventory.internal.putaway.service.PutawayRuleService;
 import java.time.Clock;
 import java.time.Instant;
@@ -136,7 +139,33 @@ class PutawayAndCycleCountBulkIngestControllerTest {
     @Test
     void putawayRules_otherErrorsFailTheirRow() throws Exception {
         when(putawayRuleService.createRule(any()))
-                .thenThrow(new IllegalArgumentException("LOCATION_NOT_VALID_FOR_SKU"));
+                .thenThrow(new IllegalArgumentException("could not extract ResultSet; SQL [select ...]"));
+
+        mockMvc.perform(post("/v1/inventory/putaway/bulk-ingest")
+                        .header("X-Correlation-Id", "corr-from-caller")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                request(List.of(rule(PutawayRuleMatchType.CATEGORY, UUID.randomUUID()))))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureCount").value(1))
+                // A bare IllegalArgumentException is equally what Hibernate raises, so it is not
+                // classifiable as a rejection and its text never reaches the caller (issue #1718).
+                .andExpect(jsonPath("$.results[0].errorCode").value("INGEST_INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].errorMessage", containsString("corr-from-caller")))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("ResultSet"))));
+    }
+
+    /**
+     * The counterpart: a validation failure the service names is still reported in full, because
+     * the row is the caller's to fix. This is what {@code InventoryValidationException} exists
+     * for — the module's advice answers it exactly as it answered the bare
+     * {@code IllegalArgumentException} it replaces, and bulk ingest can now tell the two apart.
+     */
+    @Test
+    void putawayRules_rejectedRow_keepsTheValidationMessage() throws Exception {
+        when(putawayRuleService.createRule(any()))
+                .thenThrow(new InventoryValidationException(
+                        "Destination storage location does not exist in the storage-location replica"));
 
         mockMvc.perform(post("/v1/inventory/putaway/bulk-ingest")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -144,7 +173,9 @@ class PutawayAndCycleCountBulkIngestControllerTest {
                                 request(List.of(rule(PutawayRuleMatchType.CATEGORY, UUID.randomUUID()))))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.failureCount").value(1))
-                .andExpect(jsonPath("$.results[0].errorCode").value("PUTAWAY_RULE_INGEST_FAILED"));
+                .andExpect(jsonPath("$.results[0].errorCode").value("PUTAWAY_RULE_INGEST_FAILED"))
+                .andExpect(jsonPath("$.results[0].errorMessage")
+                        .value("Destination storage location does not exist in the storage-location replica"));
     }
 
     // ─── cycle count plans ───────────────────────────────────────────────────

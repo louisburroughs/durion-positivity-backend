@@ -7,6 +7,8 @@ import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.dto.UserPersonLinkBulkIngestRecord;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
+import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.internal.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,12 +19,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -48,7 +50,6 @@ import org.springframework.web.bind.annotation.RestController;
         scopes = {"security:user:edit"})
 @RequestMapping("/v1/users/person-link")
 @RequiredArgsConstructor
-@Slf4j
 @Tag(name = "User Person Link Bulk Ingest API", description = "Bulk link user accounts to persons")
 public class UserPersonLinkBulkIngestController extends AbstractBulkIngestController<UserPersonLinkBulkIngestRecord> {
 
@@ -145,14 +146,7 @@ public class UserPersonLinkBulkIngestController extends AbstractBulkIngestContro
                         .build());
                 successCount++;
             } catch (Exception exception) {
-                log.warn("Failed to queue person link at row {}: {}", i, exception.getMessage());
-                String message = exception.getMessage();
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode(INGEST_FAILED)
-                        .errorMessage(message == null || message.isBlank() ? "Person link ingest failed" : message)
-                        .build());
+                results.add(rowFailure(i, exception));
                 failureCount++;
             }
         }
@@ -163,5 +157,27 @@ public class UserPersonLinkBulkIngestController extends AbstractBulkIngestContro
                 .failureCount(failureCount)
                 .results(results)
                 .build();
+    }
+
+    /**
+     * What linking refuses about the record itself: a user the row names that does not exist, and
+     * plain field validation. Both are what
+     * {@link com.positivity.securityservice.internal.config.GlobalExceptionHandler} answers as a
+     * 4xx. Everything else is a server-side fault, reported generically against a correlation id
+     * (issue #1718).
+     */
+    @Override
+    protected Collection<Class<? extends Throwable>> rowRejectionTypes() {
+        return List.of(UserNotFoundException.class, SecurityValidationException.class);
+    }
+
+    @Override
+    protected String rowRejectionCode() {
+        return INGEST_FAILED;
+    }
+
+    @Override
+    protected String rowRejectionFallbackMessage() {
+        return "Person link ingest failed";
     }
 }

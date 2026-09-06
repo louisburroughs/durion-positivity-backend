@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.entity.CycleCountPlan;
 import com.positivity.inventory.internal.entity.LocationRefEntity;
 import com.positivity.inventory.internal.enums.CycleCountPlanStatus;
 import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundException;
+import com.positivity.inventory.internal.exception.InventoryValidationException;
 import com.positivity.inventory.internal.repository.CycleCountPlanRepository;
 import com.positivity.inventory.internal.repository.CycleCountScheduleRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;
@@ -165,13 +166,13 @@ public class CycleCountPlanServiceImpl implements CycleCountPlanService {
 
     private void validate(CreateCycleCountPlanRequest request) {
         if (request.getLocationId() == null) {
-            throw new IllegalArgumentException("locationId is required");
+            throw new InventoryValidationException("locationId is required");
         }
         if (request.getZoneIds() == null || request.getZoneIds().isEmpty()) {
-            throw new IllegalArgumentException("zoneIds cannot be empty");
+            throw new InventoryValidationException("zoneIds cannot be empty");
         }
         if (request.getScheduledDate() == null || !request.getScheduledDate().isAfter(LocalDate.now(clock))) {
-            throw new IllegalArgumentException("scheduledDate cannot be in the past and must be in the future");
+            throw new InventoryValidationException("scheduledDate cannot be in the past and must be in the future");
         }
     }
 

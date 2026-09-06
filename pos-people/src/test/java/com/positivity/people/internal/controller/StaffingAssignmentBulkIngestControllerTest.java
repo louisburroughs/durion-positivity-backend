@@ -29,10 +29,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -178,14 +180,20 @@ class StaffingAssignmentBulkIngestControllerTest {
         when(employeeService.resolveByEmployeeNumber("EMP-0001"))
                 .thenReturn(Optional.of(
                         EmployeeIdentityDto.builder().personId(PERSON_ID).build()));
+        // The type the service actually raises, not a stand-in: a rejection has to be
+        // recognisable as one for its message to reach the caller (issue #1718).
         when(staffingAssignmentService.create(any(), anyString()))
-                .thenThrow(new IllegalStateException("Overlapping assignment exists"));
+                .thenThrow(new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "An overlapping assignment already exists for this person, location, and role"));
 
         mockMvc.perform(post(PATH)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request(List.of(record("EMP-0001"))))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.failureCount").value(1))
-                .andExpect(jsonPath("$.results[0].errorCode").value("STAFFING_ASSIGNMENT_INGEST_FAILED"));
+                .andExpect(jsonPath("$.results[0].errorCode").value("STAFFING_ASSIGNMENT_INGEST_FAILED"))
+                .andExpect(jsonPath("$.results[0].errorMessage")
+                        .value("An overlapping assignment already exists for this person, location, and role"));
     }
 }

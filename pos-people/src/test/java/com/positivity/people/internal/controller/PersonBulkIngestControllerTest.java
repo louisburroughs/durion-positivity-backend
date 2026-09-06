@@ -1,5 +1,7 @@
 package com.positivity.people.internal.controller;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -100,7 +102,40 @@ class PersonBulkIngestControllerTest {
                 .andExpect(jsonPath("$.totalSubmitted").value(1))
                 .andExpect(jsonPath("$.successCount").value(0))
                 .andExpect(jsonPath("$.failureCount").value(1))
-                .andExpect(jsonPath("$.results[0].errorCode").value("PEOPLE_INGEST_FAILED"));
+                .andExpect(jsonPath("$.results[0].errorCode").value("PEOPLE_INGEST_FAILED"))
+                .andExpect(jsonPath("$.results[0].errorMessage").value("Invalid hireDate format; expected YYYY-MM-DD"));
+    }
+
+    /**
+     * Issue #1718: a row lost to a server-side fault must not carry the exception's text into the
+     * 200 body that reports it. The caller gets a generic code and their own correlation id.
+     */
+    @Test
+    void bulkIngest_serverFault_reportsGenericFailureAndTheCorrelationId() throws Exception {
+        PersonBulkIngestRecord ingestRecord = new PersonBulkIngestRecord();
+        ingestRecord.setFirstName("Bob");
+        ingestRecord.setLastName("Jones");
+        ingestRecord.setEmployeeNumber("EMP-003");
+        ingestRecord.setHireDate("2026-01-15");
+
+        BulkIngestRequest<PersonBulkIngestRecord> request = new BulkIngestRequest<>();
+        request.setJobId(JOB_ID);
+        request.setLocationId(LOCATION_ID);
+        request.setRecords(List.of(ingestRecord));
+
+        when(employeeService.createEmployee(any()))
+                .thenThrow(
+                        new IllegalArgumentException("could not execute statement [insert into people_employee ...]"));
+
+        mockMvc.perform(post("/v1/people/bulk-ingest")
+                        .header("X-Correlation-Id", "corr-from-caller")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INGEST_INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].errorMessage", containsString("corr-from-caller")))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("people_employee"))));
     }
 
     /**

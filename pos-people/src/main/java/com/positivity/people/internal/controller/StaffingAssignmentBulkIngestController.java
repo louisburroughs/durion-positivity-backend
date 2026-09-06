@@ -28,7 +28,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -50,7 +49,6 @@ import org.springframework.web.bind.annotation.RestController;
         scopes = {"people:employee:edit"})
 @RequestMapping("/v1/people/staffing")
 @RequiredArgsConstructor
-@Slf4j
 @Tag(name = "Staffing Assignment Bulk Ingest API", description = "Bulk import person-to-location assignments")
 public class StaffingAssignmentBulkIngestController
         extends AbstractBulkIngestController<StaffingAssignmentBulkIngestRecord> {
@@ -161,14 +159,7 @@ public class StaffingAssignmentBulkIngestController
                         .build());
                 successCount++;
             } catch (Exception exception) {
-                log.warn("Failed to ingest staffing assignment at row {}: {}", i, exception.getMessage());
-                String message = exception.getMessage();
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode(INGEST_FAILED)
-                        .errorMessage(message == null || message.isBlank() ? "Assignment ingest failed" : message)
-                        .build());
+                results.add(rowFailure(i, exception));
                 failureCount++;
             }
         }
@@ -207,5 +198,22 @@ public class StaffingAssignmentBulkIngestController
         return request.getOperatorId() == null || request.getOperatorId().isBlank()
                 ? "system"
                 : request.getOperatorId();
+    }
+
+    /**
+     * No module-owned types to name: {@link StaffingAssignmentService#create} refuses a row by
+     * raising {@code ResponseStatusException} with the status it wants, which
+     * {@link com.positivity.bulkingest.BulkIngestFailures} recognises as a rejection
+     * platform-wide. Anything else on this path is a server-side fault and is reported
+     * generically against a correlation id (issue #1718).
+     */
+    @Override
+    protected String rowRejectionCode() {
+        return INGEST_FAILED;
+    }
+
+    @Override
+    protected String rowRejectionFallbackMessage() {
+        return "Assignment ingest failed";
     }
 }

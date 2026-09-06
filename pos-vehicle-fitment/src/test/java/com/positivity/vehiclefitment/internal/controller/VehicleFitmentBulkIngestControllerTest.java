@@ -1,5 +1,7 @@
 package com.positivity.vehiclefitment.internal.controller;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -84,15 +86,21 @@ class VehicleFitmentBulkIngestControllerTest {
         request.setRecords(List.of(ingestRecord));
 
         when(vehicleFitmentService.createFitment(any()))
-                .thenThrow(new IllegalArgumentException("Part number not found"));
+                .thenThrow(new IllegalArgumentException("could not execute statement [insert into part_fitment ...]"));
 
         mockMvc.perform(post("/v1/fitments/bulk-ingest")
                         .header("Authorization", "Bearer test")
+                        .header("X-Correlation-Id", "corr-from-caller")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.failureCount").value(1))
-                .andExpect(jsonPath("$.results[0].errorCode").value("FITMENT_INGEST_FAILED"));
+                // createFitment refuses nothing about the record — it resolves or creates every
+                // name it is given — so a failure here is ours, and reports as one: a generic code
+                // and the caller's correlation id, never the exception's text (issue #1718).
+                .andExpect(jsonPath("$.results[0].errorCode").value("INGEST_INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].errorMessage", containsString("corr-from-caller")))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("part_fitment"))));
     }
 
     @Test

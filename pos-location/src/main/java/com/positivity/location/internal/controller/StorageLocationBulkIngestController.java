@@ -27,7 +27,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -50,7 +49,6 @@ import org.springframework.web.bind.annotation.RestController;
         scopes = {"location:write"})
 @RequestMapping("/v1/locations/storage-locations")
 @RequiredArgsConstructor
-@Slf4j
 @Tag(name = "Storage Location Bulk Ingest API", description = "Bulk import a site's storage topology")
 public class StorageLocationBulkIngestController extends AbstractBulkIngestController<StorageLocationBulkIngestRecord> {
 
@@ -146,13 +144,7 @@ public class StorageLocationBulkIngestController extends AbstractBulkIngestContr
                         .build());
                 failureCount++;
             } catch (Exception exception) {
-                log.warn("Failed to ingest storage location at row {}: {}", i, exception.getMessage());
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode(INGEST_FAILED)
-                        .errorMessage(errorMessage(exception))
-                        .build());
+                results.add(rowFailure(i, exception));
                 failureCount++;
             }
         }
@@ -248,9 +240,24 @@ public class StorageLocationBulkIngestController extends AbstractBulkIngestContr
         return name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
     }
 
-    private String errorMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? "Storage location ingest failed" : message;
+    /**
+     * No module-owned types to name: this module\'s two domain exceptions,
+     * {@code ResourceNotFoundException} and {@code DuplicateResourceException}, carry
+     * {@code @ResponseStatus} 404 and 409 of their own, and its services otherwise refuse a row
+     * with a {@code ResponseStatusException}. {@link com.positivity.bulkingest.BulkIngestFailures}
+     * recognises both platform-wide, so a rejected row keeps its message with no list here.
+     * Everything else — including the bare {@code IllegalArgumentException} these services still
+     * raise in places, which is equally what Hibernate raises — is a server-side fault and is
+     * reported generically against a correlation id (issue #1718).
+     */
+    @Override
+    protected String rowRejectionCode() {
+        return INGEST_FAILED;
+    }
+
+    @Override
+    protected String rowRejectionFallbackMessage() {
+        return "Storage location ingest failed";
     }
 
     /** Signals a parent name that matched nothing, so the row reports that rather than a generic failure. */

@@ -937,7 +937,7 @@ paths:
 
         Emits an INVENTORY_BULK_INGEST event; each accepted row persists a PENDING adjustment request attributed to the resolved actor.
 
-        Returns 200 with per-row results — failed rows carry errorCode INVENTORY_INGEST_FAILED and the failure message — and 400 when the envelope itself is invalid because jobId, locationId or records are missing.
+        Returns 200 with per-row results — a row the service refused carries errorCode INVENTORY_INGEST_FAILED and the reason, while a row lost to a server-side fault carries INGEST_INTERNAL_ERROR and an errorMessage holding only a correlationId to quote — and 400 when the envelope itself is invalid because jobId, locationId or records are missing.
 
         '
       operationId: bulkIngestInventoryAdjustments

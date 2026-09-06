@@ -142,13 +142,7 @@ public class OpeningStockBulkIngestController extends AbstractBulkIngestControll
                 results.add(establish(i, record, locationId, actorUserId));
                 successCount++;
             } catch (Exception exception) {
-                log.warn("Failed to establish opening stock at row {}: {}", i, exception.getMessage());
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode(INGEST_FAILED)
-                        .errorMessage(errorMessage(exception))
-                        .build());
+                results.add(rowFailure(i, exception));
                 failureCount++;
             }
         }
@@ -216,8 +210,20 @@ public class OpeningStockBulkIngestController extends AbstractBulkIngestControll
         return value == null || value.isBlank() ? fallback : value;
     }
 
-    private String errorMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? "Opening stock ingest failed" : message;
+    /**
+     * No rejection types: this row creates an adjustment request and immediately approves it, and
+     * neither call refuses anything about the record — the create only saves, and the approve\'s
+     * own guard is an invariant on the request this method just made, so tripping it is a server
+     * defect. A ledger posting failure is likewise ours. All of it reports generically against a
+     * correlation id (issue #1718).
+     */
+    @Override
+    protected String rowRejectionCode() {
+        return INGEST_FAILED;
+    }
+
+    @Override
+    protected String rowRejectionFallbackMessage() {
+        return "Opening stock ingest failed";
     }
 }

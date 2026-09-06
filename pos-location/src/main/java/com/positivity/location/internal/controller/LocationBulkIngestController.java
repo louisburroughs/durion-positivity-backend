@@ -20,7 +20,6 @@ import jakarta.validation.Valid;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -34,7 +33,6 @@ import org.springframework.web.bind.annotation.RestController;
         scopes = {"location:write"})
 @RequestMapping("/v1/locations")
 @RequiredArgsConstructor
-@Slf4j
 @Tag(name = "Location Bulk Ingest API", description = "Bulk import locations")
 public class LocationBulkIngestController extends AbstractBulkIngestController<LocationBulkIngestRecord> {
 
@@ -71,8 +69,10 @@ public class LocationBulkIngestController extends AbstractBulkIngestController<L
                     code; active defaults to true and locationTypeName defaults to STORE when omitted.
                     Emits a LOCATION_BULK_INGEST event, and every successfully created location also publishes a \
                     location fact for replica consumers.
-                    Returns 200 with per-record results even when some records fail (failed rows carry errorCode \
-                    LOCATION_INGEST_FAILED), and 400 when the batch envelope itself is invalid.
+                    Returns 200 with per-record results even when some records fail: a row the service refused \
+                    carries errorCode LOCATION_INGEST_FAILED and the reason, while a row lost to a server-side fault \
+                    carries INGEST_INTERNAL_ERROR and an errorMessage holding only a correlationId to quote. Returns \
+                    400 when the batch envelope itself is invalid.
                     """)
     @ApiResponse(responseCode = "200", description = "Batch processed (check per-record success/failure in response)")
     @ApiResponse(responseCode = "400", description = "Invalid request payload")
@@ -114,13 +114,7 @@ public class LocationBulkIngestController extends AbstractBulkIngestController<L
                         .build());
                 successCount++;
             } catch (Exception exception) {
-                log.warn("Failed to ingest location record at row {}: {}", i, exception.getMessage(), exception);
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode("LOCATION_INGEST_FAILED")
-                        .errorMessage(errorMessage(exception))
-                        .build());
+                results.add(rowFailure(i, exception));
                 failureCount++;
             }
         }
@@ -159,8 +153,23 @@ public class LocationBulkIngestController extends AbstractBulkIngestController<L
         return fallback;
     }
 
-    private String errorMessage(@NonNull Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? "Location ingest failed" : message;
+    /**
+     * No module-owned types to name: this module\'s two domain exceptions,
+     * {@code ResourceNotFoundException} and {@code DuplicateResourceException}, carry
+     * {@code @ResponseStatus} 404 and 409 of their own, and its services otherwise refuse a row
+     * with a {@code ResponseStatusException}. {@link com.positivity.bulkingest.BulkIngestFailures}
+     * recognises both platform-wide, so a rejected row keeps its message with no list here.
+     * Everything else — including the bare {@code IllegalArgumentException} these services still
+     * raise in places, which is equally what Hibernate raises — is a server-side fault and is
+     * reported generically against a correlation id (issue #1718).
+     */
+    @Override
+    protected String rowRejectionCode() {
+        return "LOCATION_INGEST_FAILED";
+    }
+
+    @Override
+    protected String rowRejectionFallbackMessage() {
+        return "Location ingest failed";
     }
 }

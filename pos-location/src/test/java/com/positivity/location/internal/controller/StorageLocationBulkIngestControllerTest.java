@@ -1,5 +1,7 @@
 package com.positivity.location.internal.controller;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -26,10 +28,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -216,8 +220,10 @@ class StorageLocationBulkIngestControllerTest {
 
     @Test
     void bulkIngest_oneFailingRowDoesNotStopTheRest() throws Exception {
+        // The type the service actually raises for this case, not a stand-in: a rejection has to
+        // be recognisable as one for its message to reach the caller (issue #1718).
         when(storageLocationService.createStorageLocation(eq(SITE_ID), any()))
-                .thenThrow(new IllegalStateException("DUPLICATE_BARCODE"))
+                .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "DUPLICATE_BARCODE"))
                 .thenReturn(response(BIN_ID, "Bin A-02"));
 
         mockMvc.perform(post(PATH)
@@ -229,6 +235,27 @@ class StorageLocationBulkIngestControllerTest {
                 .andExpect(jsonPath("$.successCount").value(1))
                 .andExpect(jsonPath("$.failureCount").value(1))
                 .andExpect(jsonPath("$.results[0].errorCode").value("STORAGE_LOCATION_INGEST_FAILED"))
+                .andExpect(jsonPath("$.results[0].errorMessage").value("DUPLICATE_BARCODE"))
                 .andExpect(jsonPath("$.results[1].success").value(true));
+    }
+
+    /**
+     * Issue #1718: a row lost to a server-side fault must not carry the exception's text into the
+     * 200 body that reports it. The caller gets a generic code and their own correlation id.
+     */
+    @Test
+    void bulkIngest_serverFault_reportsGenericFailureAndTheCorrelationId() throws Exception {
+        when(storageLocationService.createStorageLocation(eq(SITE_ID), any()))
+                .thenThrow(new IllegalStateException("could not execute statement [insert into storage_location ...]"));
+
+        mockMvc.perform(post(PATH)
+                        .header("X-Correlation-Id", "corr-from-caller")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(request(List.of(record("Bin A-01", StorageLocationType.BIN, null))))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INGEST_INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].errorMessage", containsString("corr-from-caller")))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("storage_location"))));
     }
 }

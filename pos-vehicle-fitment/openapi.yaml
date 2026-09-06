@@ -29,7 +29,7 @@ paths:
 
         Emits a VEHICLE_FITMENT_BULK_INGEST event covering the whole batch; rows are processed independently, so one failed row does not roll back the others.
 
-        Returns 200 even when every row fails, so callers must inspect each result''s success flag and FITMENT_INGEST_FAILED errorCode rather than trusting the status alone.
+        Returns 200 even when every row fails, so callers must inspect each result''s success flag and errorCode rather than trusting the status alone. Fitment creation resolves or creates every name it is given and refuses nothing about a row, so a failure here is a server-side fault: the row carries INGEST_INTERNAL_ERROR and an errorMessage holding only a correlationId to quote.
 
         '
       operationId: bulkIngestVehicleFitments

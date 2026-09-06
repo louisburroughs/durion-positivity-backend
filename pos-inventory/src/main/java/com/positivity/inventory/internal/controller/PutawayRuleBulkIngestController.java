@@ -9,6 +9,7 @@ import com.positivity.inventory.internal.dto.putaway.PutawayRuleBulkIngestRecord
 import com.positivity.inventory.internal.dto.putaway.PutawayRuleRequest;
 import com.positivity.inventory.internal.dto.putaway.PutawayRuleResponse;
 import com.positivity.inventory.internal.exception.DuplicateEnabledAnyPutawayRuleException;
+import com.positivity.inventory.internal.exception.InventoryValidationException;
 import com.positivity.inventory.internal.putaway.service.PutawayRuleService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,6 +20,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -140,14 +142,7 @@ public class PutawayRuleBulkIngestController extends AbstractBulkIngestControlle
                         .build());
                 successCount++;
             } catch (Exception exception) {
-                log.warn("Failed to ingest putaway rule at row {}: {}", i, exception.getMessage());
-                String message = exception.getMessage();
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode(INGEST_FAILED)
-                        .errorMessage(message == null || message.isBlank() ? "Putaway rule ingest failed" : message)
-                        .build());
+                results.add(rowFailure(i, exception));
                 failureCount++;
             }
         }
@@ -178,5 +173,26 @@ public class PutawayRuleBulkIngestController extends AbstractBulkIngestControlle
         } catch (IllegalArgumentException _) {
             return null;
         }
+    }
+
+    /**
+     * The one thing {@link PutawayRuleService#createRule} refuses about the record: a destination
+     * storage location this module\'s replica has never heard of. The duplicate enabled-ANY rule
+     * is caught above and is not a failure at all. Everything else is a server-side fault,
+     * reported generically against a correlation id (issue #1718).
+     */
+    @Override
+    protected Collection<Class<? extends Throwable>> rowRejectionTypes() {
+        return List.of(InventoryValidationException.class);
+    }
+
+    @Override
+    protected String rowRejectionCode() {
+        return INGEST_FAILED;
+    }
+
+    @Override
+    protected String rowRejectionFallbackMessage() {
+        return "Putaway rule ingest failed";
     }
 }

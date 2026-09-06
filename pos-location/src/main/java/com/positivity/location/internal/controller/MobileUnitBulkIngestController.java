@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -44,7 +43,6 @@ import org.springframework.web.server.ResponseStatusException;
         scopes = {"location:mobile-unit:manage"})
 @RequestMapping("/v1/mobile-units")
 @RequiredArgsConstructor
-@Slf4j
 @Tag(name = "Mobile Unit Bulk Ingest API", description = "Bulk import mobile units")
 public class MobileUnitBulkIngestController extends AbstractBulkIngestController<MobileUnitBulkIngestRecord> {
 
@@ -127,11 +125,10 @@ public class MobileUnitBulkIngestController extends AbstractBulkIngestController
                     successCount++;
                     continue;
                 }
-                results.add(failure(i, exception));
+                results.add(rowFailure(i, exception));
                 failureCount++;
             } catch (Exception exception) {
-                log.warn("Failed to ingest mobile unit at row {}: {}", i, exception.getMessage());
-                results.add(failure(i, exception));
+                results.add(rowFailure(i, exception));
                 failureCount++;
             }
         }
@@ -155,13 +152,23 @@ public class MobileUnitBulkIngestController extends AbstractBulkIngestController
         return unitRequest;
     }
 
-    private BulkIngestResult failure(int rowIndex, Exception exception) {
-        String message = exception.getMessage();
-        return BulkIngestResult.builder()
-                .rowIndex(rowIndex)
-                .success(false)
-                .errorCode(INGEST_FAILED)
-                .errorMessage(message == null || message.isBlank() ? "Mobile unit ingest failed" : message)
-                .build();
+    /**
+     * No module-owned types to name: this module\'s two domain exceptions,
+     * {@code ResourceNotFoundException} and {@code DuplicateResourceException}, carry
+     * {@code @ResponseStatus} 404 and 409 of their own, and its services otherwise refuse a row
+     * with a {@code ResponseStatusException}. {@link com.positivity.bulkingest.BulkIngestFailures}
+     * recognises both platform-wide, so a rejected row keeps its message with no list here.
+     * Everything else — including the bare {@code IllegalArgumentException} these services still
+     * raise in places, which is equally what Hibernate raises — is a server-side fault and is
+     * reported generically against a correlation id (issue #1718).
+     */
+    @Override
+    protected String rowRejectionCode() {
+        return INGEST_FAILED;
+    }
+
+    @Override
+    protected String rowRejectionFallbackMessage() {
+        return "Mobile unit ingest failed";
     }
 }
