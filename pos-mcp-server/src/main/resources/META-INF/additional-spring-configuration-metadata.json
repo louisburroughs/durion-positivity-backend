@@ -157,7 +157,7 @@
       "name": "mcp.model.fallback.secondary-model-name",
       "type": "java.lang.String",
       "description": "Secondary model name used for fallback inference.",
-      "defaultValue": "mistral:7b"
+      "defaultValue": "deepseek-v4-pro:0813"
     },
     {
       "name": "mcp.model.fallback.timeout",

@@ -143,6 +143,36 @@ class McpServerPropertiesDefaultsTest {
     }
 
     @Test
+    @DisplayName("every profile ships deepseek-v4-pro:0813 as the fallback model (#1691)")
+    void allProfiles_shipTheChosenFallbackModel() {
+        // The name is defined once, in application.yml. The loader ranks the FIRST resource highest,
+        // so the profile goes first: an override there would surface, as it would under Spring Boot.
+        for (String profile : List.of("application.yml", "application-dev.yml", "application-alpha.yml")) {
+            new ApplicationContextRunner()
+                    .withInitializer(loadYamlWithoutAmbientEnvironment(profile, "application.yml"))
+                    .run(ctx -> assertThat(ctx.getEnvironment().getProperty("mcp.model.fallback.secondary-model-name"))
+                            .as("fallback model in %s", profile)
+                            .isEqualTo("deepseek-v4-pro:0813"));
+        }
+    }
+
+    @Test
+    @DisplayName("failover is on in the alpha profile and off in the shipped default (#1691)")
+    void fallbackEnabled_alphaOnDefaultOff() {
+        new ApplicationContextRunner()
+                .withInitializer(loadYamlWithoutAmbientEnvironment("application.yml"))
+                .run(ctx -> assertThat(ctx.getEnvironment().getProperty("mcp.model.fallback.enabled"))
+                        .isEqualTo("false"));
+        // The alpha profile defines the key with its own default, so it is asserted from that file
+        // alone: the test loader ranks the first resource highest, unlike Spring Boot's profile
+        // precedence, and would otherwise report application.yml's value.
+        new ApplicationContextRunner()
+                .withInitializer(loadYamlWithoutAmbientEnvironment("application-alpha.yml"))
+                .run(ctx -> assertThat(ctx.getEnvironment().getProperty("mcp.model.fallback.enabled"))
+                        .isEqualTo("true"));
+    }
+
+    @Test
     @DisplayName("every profile runs the executor at temperature 0 so gate runs are reproducible")
     void allProfiles_runTheExecutorDeterministically() {
         for (String profile : List.of("application.yml", "application-dev.yml", "application-alpha.yml")) {

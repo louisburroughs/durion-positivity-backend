@@ -365,7 +365,7 @@ mcp:
     # Failover (primary -> secondary within a tier) — orthogonal to tier routing above.
     fallback:
       enabled: ${MCP_MODEL_FALLBACK_ENABLED:false}
-      secondary-model-name: ${OLLAMA_FALLBACK_MODEL:gpt-oss:20b}
+      secondary-model-name: ${OLLAMA_FALLBACK_MODEL:deepseek-v4-pro:0813}
       timeout: ${OLLAMA_FALLBACK_TIMEOUT:${OLLAMA_CHAT_TIMEOUT:180s}}
 
 exa:

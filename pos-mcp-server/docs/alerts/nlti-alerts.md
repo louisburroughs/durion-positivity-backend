@@ -99,11 +99,15 @@ populated yet, the rule states the substitute signal it fires on today.
    - Trigger: **Today** — Loki log rule on the tier resolver:
      `sum(count_over_time({job="docker", service="pos-mcp-server", level="WARN"}
       |= "MCP tiered model resolver" [10m])) > 0`, which means a tier silently served the default
-     model. **Once fallback is instrumented** — Loki:
+     model. **Since #1691 (failover wired)** — Loki:
      `sum(count_over_time(TELEMETRY | model_fallbackUsed = "true" [10m])) /
       clamp_min(sum(count_over_time(TELEMETRY [10m])), 1) > 0.05`.
-     The telemetry form cannot fire yet: `NltiRequestTelemetryFactory` hardcodes
-     `Model.fallbackUsed=false` and the `fallbackChatModel` bean is never injected into a call path.
+     `FailoverChatModel` wraps the primary `chatModel`/`streamingChatModel` beans when
+     `mcp.model.fallback.enabled=true`; a failover logs
+     `Primary model call failed (...); failing over to <model> (#1691)` at WARN and sets
+     `Model.fallbackUsed=true` on the blocking path's telemetry event — emitted whether or not tier
+     routing ran. Streamed failovers log the WARN line only (the flag is request-thread-local and a
+     stream's error arrives on another thread), so count the WARN line for the streaming surface.
    - Severity: P2
    - Runbook: pos-mcp-server/docs/runbooks/downstream-timeout.md
 

@@ -53,6 +53,11 @@ server:
   port: 8086
 
 mcp:
+  # #1691: primary -> secondary failover on. deepseek-v4-pro:0813 is the secondary (owner decision,
+  # 2026-09-06); the model name comes from OLLAMA_FALLBACK_MODEL / application.yml's default.
+  model:
+    fallback:
+      enabled: ${MCP_MODEL_FALLBACK_ENABLED:true}
   eval:
     turn-trace:
       enabled: ${MCP_EVAL_TURN_TRACE_ENABLED:true}

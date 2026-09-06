@@ -54,6 +54,47 @@ class NltiRequestTelemetryFactoryTest {
     }
 
     @Test
+    void forChatRequest_fallbackUsed_isReportedEvenWithoutTierRouting_andConsumed() {
+        // #1691: a failover on a turn with no tier routing (tiering off, or simple chat) still
+        // surfaces, and the per-request flag never outlives the event that reports it.
+        FallbackUsage.mark();
+
+        NltiRequestTelemetry withFailover = NltiRequestTelemetryFactory.forChatRequest(
+                "corr-fb",
+                "2026-09-06T00:00:00Z",
+                "ROLE_USER",
+                3,
+                List.of(),
+                List.of(),
+                List.of(),
+                false,
+                null,
+                null,
+                42L,
+                "SUCCESS",
+                null);
+        NltiRequestTelemetry next = NltiRequestTelemetryFactory.forChatRequest(
+                "corr-fb-2",
+                "2026-09-06T00:00:01Z",
+                "ROLE_USER",
+                3,
+                List.of(),
+                List.of(),
+                List.of(),
+                false,
+                null,
+                null,
+                42L,
+                "SUCCESS",
+                null);
+
+        assertThat(withFailover.model()).isNotNull();
+        assertThat(withFailover.model().fallbackUsed()).isTrue();
+        assertThat(withFailover.model().tierModel()).isNull();
+        assertThat(next.model()).as("flag consumed by the previous event").isNull();
+    }
+
+    @Test
     void forChatRequest_simpleChat_setsTier0AndRuleNoTools() {
         NltiRequestTelemetry event = NltiRequestTelemetryFactory.forChatRequest(
                 "corr-2",

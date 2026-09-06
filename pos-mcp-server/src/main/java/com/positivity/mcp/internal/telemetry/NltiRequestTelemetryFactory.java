@@ -49,8 +49,9 @@ public final class NltiRequestTelemetryFactory {
 
     /**
      * The Gate 4 router decision for one request: the T1 classification signals, the selected tier,
-     * and the actual model names (tier executor + router). {@code fallbackUsed} is not carried here
-     * — failover ({@code mcp.model.fallback}) stays orthogonal to tier routing.
+     * and the actual model names (tier executor + router). {@code fallbackUsed} is not carried here:
+     * failover ({@code mcp.model.fallback}) is orthogonal to tier routing and is read from
+     * {@link FallbackUsage} when the event is built (#1691).
      */
     public record TierRouting(
             @Nullable String intentType,
@@ -143,8 +144,16 @@ public final class NltiRequestTelemetryFactory {
             routing = null;
         }
 
-        Model model = (tierRouting != null && (tierRouting.tierModel() != null || tierRouting.routerModel() != null))
-                ? new Model(tierRouting.tierModel(), tierRouting.routerModel(), false)
+        // #1691: consumed on every event so a failover flag can never outlive its request on the
+        // thread; a failover is reported even when no tier routing ran (tiering off, simple chat).
+        boolean fallbackUsed = FallbackUsage.consume();
+        boolean tierModelsKnown =
+                tierRouting != null && (tierRouting.tierModel() != null || tierRouting.routerModel() != null);
+        Model model = tierModelsKnown || fallbackUsed
+                ? new Model(
+                        tierRouting != null ? tierRouting.tierModel() : null,
+                        tierRouting != null ? tierRouting.routerModel() : null,
+                        fallbackUsed)
                 : null;
         Write write = writeCapableToolsPresent ? new Write(true, null, null) : null;
 
