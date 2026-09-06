@@ -75,7 +75,7 @@ public class VehicleFitmentBulkIngestController extends AbstractBulkIngestContro
                     Returns 200 even when every row fails, so callers must inspect each result's success flag and \
                     errorCode rather than trusting the status alone. Fitment creation resolves or creates every name \
                     it is given and refuses nothing about a row, so a failure here is a server-side fault: the row \
-                    carries INGEST_INTERNAL_ERROR and an errorMessage holding only a correlationId to quote.
+                    carries INTERNAL_ERROR and a correlationId to quote, with no detail of its own.
                     """)
     @PostMapping("/bulk-ingest")
     @PreAuthorize("hasAuthority('" + VehicleFitmentPermissions.HINT_CREATE + "')")

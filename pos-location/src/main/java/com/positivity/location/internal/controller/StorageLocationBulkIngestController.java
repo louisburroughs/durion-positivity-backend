@@ -89,7 +89,8 @@ public class StorageLocationBulkIngestController extends AbstractBulkIngestContr
                     Re-running the same file is safe: a name already present at its site is skipped, not failed, \
                     and an existing location is never modified — applying a changed status or capacity to a live \
                     location is an operator's update, not a reseed.
-                    Returns 200 with a per-record result; check each result rather than the status alone.
+                    Returns 200 with a per-record result; check each result rather than the status alone. A row the service refused carries errorCode STORAGE_LOCATION_INGEST_FAILED and the reason; a row lost to a \
+                    server-side fault carries INTERNAL_ERROR and a correlationId to quote, with no detail of its own.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -136,12 +137,11 @@ public class StorageLocationBulkIngestController extends AbstractBulkIngestContr
                 results.add(create(i, record, siteId, idsByName));
                 successCount++;
             } catch (UnresolvedParentException exception) {
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode(UNRESOLVED_PARENT)
-                        .errorMessage(exception.getMessage())
-                        .build());
+                // This row's second kind of refusal, so it carries its own code rather than the
+                // controller's default one. Routed through rowRejection rather than built here:
+                // a hand-built failure result is the shape issue #1718's defect took, and the
+                // exception's message is this controller's own, built from the caller's parentName.
+                results.add(rowRejection(i, UNRESOLVED_PARENT, exception));
                 failureCount++;
             } catch (Exception exception) {
                 results.add(rowFailure(i, exception));

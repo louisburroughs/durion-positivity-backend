@@ -69,7 +69,7 @@ public class PersonBulkIngestController extends AbstractBulkIngestController<Per
                     identity upsert command and people.employee.updated fact.
                     Returns 200 even when individual records fail: inspect each record's success flag and errorCode, \
                     which is PEOPLE_INGEST_FAILED with the reason for a record the service refused, or \
-                    INGEST_INTERNAL_ERROR with an errorMessage holding only a correlationId to quote for a record lost \
+                    INTERNAL_ERROR with a correlationId to quote and no detail of its own for a record lost \
                     to a server-side fault. Returns 400 when the envelope itself is invalid or the records list is \
                     empty.
                     """)

@@ -42,13 +42,41 @@ import org.springframework.web.server.ResponseStatusException;
 public final class BulkIngestFailures {
 
     /**
-     * Reason code for a row that failed for a server-side reason. Shared across every domain on
-     * purpose: the code, not the message, is what tells a caller whether the row is theirs to fix
-     * or ours, and that distinction does not vary by domain.
+     * Reason code for a row that failed for a server-side reason.
+     *
+     * <p>Deliberately the same {@code INTERNAL_ERROR} that ADR-0056 fixes for a 500 body, not a
+     * bulk-specific spelling of it: the code means one thing — the server failed, quote the
+     * correlation id — and an operator or SDK matching on it should not have to know whether the
+     * failure arrived as an {@code ApiError} envelope or as a row inside a 200. The two shapes are
+     * already distinguishable without a second code.
+     *
+     * <p>Not documented in {@code docs/ERROR_ENVELOPE.md}: issue #1724 was closed not-planned with
+     * the decision that the file covers the envelope shape and the {@code pos-web-common} fallback
+     * codes only, and that each endpoint's own advice and OpenAPI spec are the source of truth for
+     * the rest. A row result is not an {@code ApiError} and this is not a fallback code, so the
+     * place it is documented is each bulk-ingest endpoint's {@code @Operation} description, which
+     * names both codes it can return.
+     *
+     * <p>Shared across every domain for the same reason: the code, not the message, is what tells
+     * a caller whether the row is theirs to fix or ours, and that distinction does not vary by
+     * domain.
      */
-    public static final String INTERNAL_ERROR_CODE = "INGEST_INTERNAL_ERROR";
+    public static final String INTERNAL_ERROR_CODE = "INTERNAL_ERROR";
+
+    /** Fixed text: everything a caller may act on is the code and the correlation id beside it. */
+    private static final String INTERNAL_ERROR_MESSAGE = "Record could not be ingested because of a server-side error";
 
     private static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
+
+    /**
+     * Request attribute under which the id resolved for this request is cached.
+     *
+     * <p>Without it a batch that arrives with no inbound {@code X-Correlation-Id} would mint a
+     * fresh id per failing row, so a file with five hundred bad rows would answer with five hundred
+     * unrelated ids and no way to group them — the opposite of the handle ADR-0056 relies on. One
+     * id per request is what this promises and now what it does.
+     */
+    private static final String CORRELATION_ID_ATTRIBUTE = BulkIngestFailures.class.getName() + ".correlationId";
 
     private BulkIngestFailures() {
         // Utility class
@@ -117,16 +145,19 @@ public final class BulkIngestFailures {
 
     /**
      * A row that failed for a server-side reason. Carries the correlation id and nothing more —
-     * the caller quotes it, and the ERROR log entry the caller's counterpart wrote against the
-     * same id holds the detail.
+     * the caller quotes it, and the ERROR log entry written against the same id holds the detail.
+     *
+     * <p>The id is a field of its own rather than a sentence inside {@code errorMessage}: it is the
+     * one machine-readable thing about this outcome, and a caller should not have to pattern-match
+     * English to recover it.
      */
     public static BulkIngestResult internalError(int rowIndex, @NonNull String correlationId) {
         return BulkIngestResult.builder()
                 .rowIndex(rowIndex)
                 .success(false)
                 .errorCode(INTERNAL_ERROR_CODE)
-                .errorMessage("Record could not be ingested because of a server-side error; quote correlationId "
-                        + correlationId)
+                .errorMessage(INTERNAL_ERROR_MESSAGE)
+                .correlationId(correlationId)
                 .build();
     }
 
@@ -134,17 +165,25 @@ public final class BulkIngestFailures {
      * The {@code X-Correlation-Id} of the request in flight, or a fresh UUID v7 when the caller
      * sent none — the same rule {@code GlobalApiExceptionHandler} applies, so an id quoted from a
      * row result and one quoted from an error envelope mean the same thing.
+     *
+     * <p>Resolved once per request and cached on it, so every failing row of one batch reports the
+     * same id whether or not the caller supplied one. Off a request thread there is nothing to
+     * cache on and each call mints its own.
      */
     public static String correlationId() {
         HttpServletRequest request = currentRequest();
         if (request == null) {
             return UUIDv7Generator.generate().toString();
         }
-        String correlationId = request.getHeader(CORRELATION_ID_HEADER);
-        if (correlationId == null || correlationId.isBlank()) {
-            return UUIDv7Generator.generate().toString();
+        if (request.getAttribute(CORRELATION_ID_ATTRIBUTE) instanceof String cached) {
+            return cached;
         }
-        return correlationId.trim();
+        String inbound = request.getHeader(CORRELATION_ID_HEADER);
+        String resolved = inbound == null || inbound.isBlank()
+                ? UUIDv7Generator.generate().toString()
+                : inbound.trim();
+        request.setAttribute(CORRELATION_ID_ATTRIBUTE, resolved);
+        return resolved;
     }
 
     @Nullable

@@ -84,7 +84,8 @@ public class PutawayRuleBulkIngestController extends AbstractBulkIngestControlle
                     At most one enabled ANY rule may exist; a second is reported as already configured, carrying the \
                     existing rule's id so it can be checked — an ANY rule pointing somewhere unintended refuses every \
                     unclassified line rather than catching it.
-                    Returns 200 with a per-record result; check each result rather than the status alone.
+                    Returns 200 with a per-record result; check each result rather than the status alone. A row the service refused carries errorCode PUTAWAY_RULE_INGEST_FAILED and the reason; a row lost to a \
+                    server-side fault carries INTERNAL_ERROR and a correlationId to quote, with no detail of its own.
                     """)
     @ApiResponse(
             responseCode = "200",

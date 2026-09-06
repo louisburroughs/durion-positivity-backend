@@ -143,7 +143,8 @@ class BulkLoadJobServiceImplTest {
         doAnswer(invocation -> {
                     BulkLoadJob launched = invocation.getArgument(0);
                     assertThat(launched.getStatus())
-                            .as("the job must already read as PROCESSING while the run is in flight")
+                            .as("the entity handed to the launcher must already carry PROCESSING, so the"
+                                    + " listener's terminal status is written after it and not over it")
                             .isEqualTo(JobStatus.PROCESSING);
                     launched.setStatus(JobStatus.COMPLETED);
                     launched.setSuccessCount(12L);

@@ -80,7 +80,9 @@ public class UserBulkIngestController extends AbstractBulkIngestController<UserB
                     through the password reset path.
                     Re-running the same file is safe: an existing username is reported as already provisioned \
                     rather than as a failure.
-                    Returns 200 with a per-record result; check each result rather than the status alone.
+                    Returns 200 with a per-record result; check each result's errorCode rather than the status \
+                    alone, which is USER_INGEST_FAILED with the reason for a row the service refused, or \
+                    INTERNAL_ERROR with a correlationId to quote for a row lost to a server-side fault.
                     """)
     @ApiResponse(
             responseCode = "200",

@@ -150,8 +150,8 @@ class PutawayAndCycleCountBulkIngestControllerTest {
                 .andExpect(jsonPath("$.failureCount").value(1))
                 // A bare IllegalArgumentException is equally what Hibernate raises, so it is not
                 // classifiable as a rejection and its text never reaches the caller (issue #1718).
-                .andExpect(jsonPath("$.results[0].errorCode").value("INGEST_INTERNAL_ERROR"))
-                .andExpect(jsonPath("$.results[0].errorMessage", containsString("corr-from-caller")))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
                 .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("ResultSet"))));
     }
 
@@ -163,9 +163,11 @@ class PutawayAndCycleCountBulkIngestControllerTest {
      */
     @Test
     void putawayRules_rejectedRow_keepsTheValidationMessage() throws Exception {
+        // The message production actually formats, id included — asserting a paraphrase would
+        // prove only that the test and the assertion agree with each other.
         when(putawayRuleService.createRule(any()))
                 .thenThrow(new InventoryValidationException(
-                        "Destination storage location does not exist in the storage-location replica"));
+                        "Destination storage location " + BIN_ID + " does not exist in the storage-location replica"));
 
         mockMvc.perform(post("/v1/inventory/putaway/bulk-ingest")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -175,7 +177,8 @@ class PutawayAndCycleCountBulkIngestControllerTest {
                 .andExpect(jsonPath("$.failureCount").value(1))
                 .andExpect(jsonPath("$.results[0].errorCode").value("PUTAWAY_RULE_INGEST_FAILED"))
                 .andExpect(jsonPath("$.results[0].errorMessage")
-                        .value("Destination storage location does not exist in the storage-location replica"));
+                        .value("Destination storage location " + BIN_ID
+                                + " does not exist in the storage-location replica"));
     }
 
     // ─── cycle count plans ───────────────────────────────────────────────────
@@ -186,6 +189,50 @@ class PutawayAndCycleCountBulkIngestControllerTest {
         record.setZoneIds(List.of(BIN_ID));
         record.setScheduledDaysOut(daysOut);
         return record;
+    }
+
+    /**
+     * The rejection branch for this endpoint: the validation CycleCountPlanServiceImpl performs on
+     * a plan, which issue #1718's sweep retyped from a bare IllegalArgumentException to
+     * InventoryValidationException precisely so the row could keep telling the operator which
+     * field is wrong.
+     */
+    @Test
+    void cycleCountPlans_rejectedRow_keepsTheValidationMessage() throws Exception {
+        clockIsFixed();
+        when(cycleCountPlanService.listPlans(any(), any(), anyInt(), anyInt())).thenReturn(List.of());
+        when(cycleCountPlanService.createPlan(any(), anyString()))
+                .thenThrow(new InventoryValidationException("zoneIds cannot be empty"));
+
+        mockMvc.perform(post("/v1/inventory/cycleCountPlans/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request(List.of(plan("Q1 Fast Movers", 30))))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("CYCLE_COUNT_PLAN_INGEST_FAILED"))
+                .andExpect(jsonPath("$.results[0].errorMessage").value("zoneIds cannot be empty"));
+    }
+
+    /**
+     * Issue #1718: a row lost to a server-side fault must not carry the exception's text into the
+     * 200 body that reports it. The caller gets a generic code and the request's correlation id.
+     */
+    @Test
+    void cycleCountPlans_serverFault_reportsGenericFailureAndTheCorrelationId() throws Exception {
+        clockIsFixed();
+        when(cycleCountPlanService.listPlans(any(), any(), anyInt(), anyInt())).thenReturn(List.of());
+        when(cycleCountPlanService.createPlan(any(), anyString()))
+                .thenThrow(new IllegalStateException("could not execute statement [insert into cycle_count_plan ...]"));
+
+        mockMvc.perform(post("/v1/inventory/cycleCountPlans/bulk-ingest")
+                        .header("X-Correlation-Id", "corr-from-caller")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request(List.of(plan("Q1 Fast Movers", 30))))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("cycle_count_plan"))));
     }
 
     @Test

@@ -76,8 +76,8 @@ public class VehicleBulkIngestController extends AbstractBulkIngestController<Ve
                     vehicle.vehicle.updated fact on the vehicle.events.v1 outbox for downstream replicas.
                     Returns 200 with per-row results even when some rows fail, since row failures carry an error \
                     code instead of an error status: VEHICLE_INGEST_FAILED for a row the registry rejected, whose \
-                    errorMessage names what is wrong with that row, or INGEST_INTERNAL_ERROR for a row lost to a \
-                    server-side fault, whose errorMessage carries only a correlationId to quote. Returns 400 with a \
+                    errorMessage names what is wrong with that row, or INTERNAL_ERROR for a row lost to a \
+                    server-side fault, which carries a correlationId to quote and no detail of its own. Returns 400 with a \
                     VALIDATION_FAILED ApiError when the envelope is missing jobId or locationId or the records array \
                     is empty.
                     """)

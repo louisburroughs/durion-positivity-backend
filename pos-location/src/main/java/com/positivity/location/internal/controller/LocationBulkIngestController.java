@@ -71,7 +71,7 @@ public class LocationBulkIngestController extends AbstractBulkIngestController<L
                     location fact for replica consumers.
                     Returns 200 with per-record results even when some records fail: a row the service refused \
                     carries errorCode LOCATION_INGEST_FAILED and the reason, while a row lost to a server-side fault \
-                    carries INGEST_INTERNAL_ERROR and an errorMessage holding only a correlationId to quote. Returns \
+                    carries INTERNAL_ERROR and a correlationId to quote, with no detail of its own. Returns \
                     400 when the batch envelope itself is invalid.
                     """)
     @ApiResponse(responseCode = "200", description = "Batch processed (check per-record success/failure in response)")

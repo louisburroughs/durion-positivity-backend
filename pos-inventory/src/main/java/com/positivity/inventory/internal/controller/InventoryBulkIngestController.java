@@ -60,7 +60,7 @@ public class InventoryBulkIngestController extends AbstractBulkIngestController<
                     attributed to the resolved actor.
                     Returns 200 with per-row results — a row the service refused carries errorCode \
                     INVENTORY_INGEST_FAILED and the reason, while a row lost to a server-side fault carries \
-                    INGEST_INTERNAL_ERROR and an errorMessage holding only a correlationId to quote — and 400 when \
+                    INTERNAL_ERROR and a correlationId to quote, with no detail of its own — and 400 when \
                     the envelope itself is invalid because jobId, locationId or records are missing.
                     """,
             tags = {"Inventory Bulk Ingest API"})

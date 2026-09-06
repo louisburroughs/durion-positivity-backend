@@ -94,7 +94,8 @@ public class OpeningStockBulkIngestController extends AbstractBulkIngestControll
                     which is what hydrates the availability and replica views.
                     Re-running the same file is safe: a line whose product already has on-hand at its destination is \
                     skipped, because adjustments are deltas and posting again would double the stock.
-                    Returns 200 with a per-record result; check each result rather than the status alone.
+                    Returns 200 with a per-record result; check each result rather than the status alone. A row the service refused carries errorCode OPENING_STOCK_INGEST_FAILED and the reason; a row lost to a \
+                    server-side fault carries INTERNAL_ERROR and a correlationId to quote, with no detail of its own.
                     """)
     @ApiResponse(
             responseCode = "200",

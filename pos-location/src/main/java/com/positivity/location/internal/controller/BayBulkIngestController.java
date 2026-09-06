@@ -76,7 +76,8 @@ public class BayBulkIngestController extends AbstractBulkIngestController<BayBul
                     Emits a LOCATION_BAY_BULK_INGEST event and a bay-created event per row.
                     Re-running the same file is safe: a bay name already present at its location is reported as \
                     already existing rather than as a failure.
-                    Returns 200 with a per-record result; check each result rather than the status alone.
+                    Returns 200 with a per-record result; check each result rather than the status alone. A row the service refused carries errorCode BAY_INGEST_FAILED and the reason; a row lost to a \
+                    server-side fault carries INTERNAL_ERROR and a correlationId to quote, with no detail of its own.
                     """)
     @ApiResponse(
             responseCode = "200",

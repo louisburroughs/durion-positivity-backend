@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -50,6 +51,7 @@ import org.springframework.web.bind.annotation.RestController;
         scopes = {"shop:schedule:edit"})
 @RequestMapping("/v1/shop-manager/mechanics")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "Mechanic Skill Bulk Ingest API", description = "Bulk set mechanics' skill sets")
 public class MechanicSkillBulkIngestController extends AbstractBulkIngestController<MechanicSkillBulkIngestRecord> {
 
@@ -88,8 +90,10 @@ public class MechanicSkillBulkIngestController extends AbstractBulkIngestControl
                     Emits a SHOP_MECHANIC_SKILLS_BULK_INGEST event, and routes each mechanic's set through the \
                     same HR-feed path the Kafka projection uses, so dedupe, stale-guard and audit apply as usual; \
                     re-running the same file is safe, since each mechanic's set is replaced rather than added to.
-                    Returns 200 with a per-record result; every row of one mechanic shares that mechanic's \
-                    outcome, since they were applied together.
+                    Returns 200 with a per-record result, where every row of one mechanic shares that mechanic's \
+                    outcome since they were applied together: MECHANIC_SKILL_INGEST_FAILED with the reason for rows \
+                    the service refused, or INTERNAL_ERROR with a correlationId to quote for rows lost to a \
+                    server-side fault.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -153,8 +157,11 @@ public class MechanicSkillBulkIngestController extends AbstractBulkIngestControl
                 successCount += rowIndexes.size();
             } catch (Exception exception) {
                 // One call covers every row for this mechanic, so the failure is classified and
-                // logged once, against the first of those rows, and the outcome it produced is
-                // then reported against each of them.
+                // logged once and the outcome it produced is reported against each of those rows.
+                // The rows are named here as well, because rowFailure's own entry can only carry
+                // the one it was given: without this an operator quoting a correlation id from
+                // row 7 would find a log line naming row 3.
+                log.warn("Skills for mechanic {} failed for rows {}", personId, rowIndexes);
                 BulkIngestResult classified = rowFailure(rowIndexes.getFirst(), exception);
                 for (int rowIndex : rowIndexes) {
                     results[rowIndex] = BulkIngestResult.builder()
@@ -162,6 +169,10 @@ public class MechanicSkillBulkIngestController extends AbstractBulkIngestControl
                             .success(false)
                             .errorCode(classified.getErrorCode())
                             .errorMessage(classified.getErrorMessage())
+                            // Copied too: on a server fault this id is the whole of what the
+                            // caller can act on, and dropping it from every row but the first
+                            // would leave most of them with nothing to quote.
+                            .correlationId(classified.getCorrelationId())
                             .build();
                 }
                 failureCount += rowIndexes.size();

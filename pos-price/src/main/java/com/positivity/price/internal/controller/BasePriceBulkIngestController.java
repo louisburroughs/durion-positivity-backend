@@ -72,8 +72,8 @@ public class BasePriceBulkIngestController extends AbstractBulkIngestController<
                     and rows are processed independently, so one bad row does not abort the batch.
                     Returns 200 with per-row results even when rows fail, marking a refused row with errorCode \
                     PRICE_INGEST_FAILED and the reason (overlapping-window conflicts and unparseable productId, msrp \
-                    or effectiveFrom values), and a row lost to a server-side fault with INGEST_INTERNAL_ERROR and an \
-                    errorMessage holding only a correlationId to quote. Returns 400 when the batch envelope itself is \
+                    or effectiveFrom values), and a row lost to a server-side fault with INTERNAL_ERROR and a \
+                    correlationId to quote, with no detail of its own. Returns 400 when the batch envelope itself is \
                     invalid.
                     """)
     @ApiResponse(responseCode = "200", description = "Batch processed; check per-record success and failure results.")

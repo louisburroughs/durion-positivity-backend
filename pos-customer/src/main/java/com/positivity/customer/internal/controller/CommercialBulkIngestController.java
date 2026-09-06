@@ -69,7 +69,7 @@ public class CommercialBulkIngestController extends AbstractBulkIngestController
                         through bulkIngestCustomers instead.
                         Preconditions: none beyond authorization; rows that fail are reported with errorCode \
                         COMMERCIAL_INGEST_FAILED and the reason, and rows lost to a server-side fault with \
-                        INGEST_INTERNAL_ERROR and an errorMessage holding only a correlationId to quote, while the \
+                        INTERNAL_ERROR and a correlationId to quote, with no detail of its own, while the \
                         rest of the batch proceeds.
                         Required inputs: jobId (UUID), locationId (UUID), and a non-empty records list where each \
                         record has legalName (max 255); displayName defaults to the legal name, and taxId and \

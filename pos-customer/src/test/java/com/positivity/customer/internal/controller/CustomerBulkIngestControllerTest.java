@@ -135,8 +135,8 @@ class CustomerBulkIngestControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.failureCount").value(1))
-                .andExpect(jsonPath("$.results[0].errorCode").value("INGEST_INTERNAL_ERROR"))
-                .andExpect(jsonPath("$.results[0].errorMessage", containsString("corr-from-caller")))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
                 .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("persister"))))
                 .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("com.positivity"))));
     }

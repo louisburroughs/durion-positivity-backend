@@ -438,8 +438,8 @@ class CatalogBulkIngestControllerTest {
                 .andExpect(jsonPath("$.failureCount").value(1))
                 // Issue #1718: a bare IllegalArgumentException is equally what Hibernate raises,
                 // so it is not classifiable as a rejection and its text never reaches the caller.
-                .andExpect(jsonPath("$.results[0].errorCode").value("INGEST_INTERNAL_ERROR"))
-                .andExpect(jsonPath("$.results[0].errorMessage", containsString("corr-from-caller")))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
                 .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("catalog_product"))));
     }
 

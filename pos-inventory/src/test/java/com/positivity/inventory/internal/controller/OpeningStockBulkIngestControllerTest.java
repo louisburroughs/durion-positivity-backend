@@ -181,8 +181,8 @@ class OpeningStockBulkIngestControllerTest {
                 // The approve guard is an invariant on the request this endpoint just created, so
                 // tripping it is a server defect, not the caller's row: generic code, correlation
                 // id, and none of the exception's own text (issue #1718).
-                .andExpect(jsonPath("$.results[0].errorCode").value("INGEST_INTERNAL_ERROR"))
-                .andExpect(jsonPath("$.results[0].errorMessage", containsString("corr-from-caller")))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
                 .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("not pending"))));
     }
 

@@ -71,7 +71,7 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
             Returns 200 even when rows fail, so callers must inspect successCount, failureCount and the \
             per-row results rather than the HTTP status. A row the catalog refused carries errorCode \
             CATALOG_INGEST_FAILED and the reason; a row lost to a server-side fault carries \
-            INGEST_INTERNAL_ERROR and an errorMessage holding only a correlationId to quote.
+            INTERNAL_ERROR and a correlationId to quote, with no detail of its own.
             """)
     @EmitEvent(id = "CATALOG_BULK_INGEST", apiVersion = "1")
     public ResponseEntity<BulkIngestResponse> bulkIngest(

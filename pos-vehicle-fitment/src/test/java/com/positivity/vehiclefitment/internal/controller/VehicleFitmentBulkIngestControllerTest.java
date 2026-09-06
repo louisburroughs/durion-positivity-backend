@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.bulkingest.BulkIngestRequest;
 import com.positivity.vehiclefitment.config.WebMvcTestSecurityConfig;
 import com.positivity.vehiclefitment.internal.dto.FitmentBulkIngestRecord;
+import com.positivity.vehiclefitment.internal.exception.VehicleFitmentException;
 import com.positivity.vehiclefitment.internal.service.VehicleFitmentService;
 import com.positivity.vehiclefitment.internal.service.dto.PartFitmentResponse;
 import java.util.List;
@@ -86,7 +87,10 @@ class VehicleFitmentBulkIngestControllerTest {
         request.setRecords(List.of(ingestRecord));
 
         when(vehicleFitmentService.createFitment(any()))
-                .thenThrow(new IllegalArgumentException("could not execute statement [insert into part_fitment ...]"));
+                // The module's own exception type, which is what createFitment's collaborators
+                // actually raise — and which no advice in pos-vehicle-fitment maps to a 4xx, so it
+                // is correctly a server fault. A JDK type here would have proved it by accident.
+                .thenThrow(new VehicleFitmentException("could not execute statement [insert into part_fitment ...]"));
 
         mockMvc.perform(post("/v1/fitments/bulk-ingest")
                         .header("Authorization", "Bearer test")
@@ -98,8 +102,8 @@ class VehicleFitmentBulkIngestControllerTest {
                 // createFitment refuses nothing about the record — it resolves or creates every
                 // name it is given — so a failure here is ours, and reports as one: a generic code
                 // and the caller's correlation id, never the exception's text (issue #1718).
-                .andExpect(jsonPath("$.results[0].errorCode").value("INGEST_INTERNAL_ERROR"))
-                .andExpect(jsonPath("$.results[0].errorMessage", containsString("corr-from-caller")))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
                 .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("part_fitment"))));
     }
 

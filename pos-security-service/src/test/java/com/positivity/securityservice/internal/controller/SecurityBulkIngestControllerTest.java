@@ -20,6 +20,7 @@ import com.positivity.securityservice.internal.exception.DuplicateUsernameExcept
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import com.positivity.securityservice.internal.service.CustomUserDetailsService;
+import com.positivity.securityservice.internal.service.RoleManagementService;
 import com.positivity.securityservice.internal.service.UserService;
 import jakarta.servlet.FilterChain;
 import java.time.Clock;
@@ -50,7 +51,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * The two security-service ingest endpoints. The load-bearing claim in the first is negative: no
  * password reaches the service, and none is created by a path that could log or return one.
  */
-@WebMvcTest({UserBulkIngestController.class, UserPersonLinkBulkIngestController.class})
+@WebMvcTest({UserBulkIngestController.class, UserPersonLinkBulkIngestController.class, RoleBulkIngestController.class})
 @Import(SecurityBulkIngestControllerTest.SliceTestConfig.class)
 @NestedTestConfiguration(NestedTestConfiguration.EnclosingConfiguration.INHERIT)
 @DisplayName("SecurityBulkIngestControllerTest")
@@ -67,6 +68,12 @@ class SecurityBulkIngestControllerTest {
              "operatorId":"seed-operator",
              "records":[{"username":"jane.doe","roles":["TECHNICIAN"]}]}""";
 
+    private static final String ROLES_BODY = """
+            {"jobId":"01990000-0000-7000-8000-0000000000a0",
+             "locationId":"01990000-0000-7000-8000-0000000000a1",
+             "operatorId":"seed-operator",
+             "records":[{"name":"TECHNICIAN","description":"Shop technician"}]}""";
+
     private static final String LINKS_BODY = """
             {"jobId":"01990000-0000-7000-8000-0000000000a0",
              "locationId":"01990000-0000-7000-8000-0000000000a1",
@@ -78,6 +85,9 @@ class SecurityBulkIngestControllerTest {
 
     @MockitoBean
     private UserService userService;
+
+    @MockitoBean
+    private RoleManagementService roleManagementService;
 
     @MockitoBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -189,9 +199,52 @@ class SecurityBulkIngestControllerTest {
                         .with(user("admin-user").authorities(() -> "security:user:create")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.failureCount").value(1))
-                .andExpect(jsonPath("$.results[0].errorCode").value("INGEST_INTERNAL_ERROR"))
-                .andExpect(jsonPath("$.results[0].errorMessage", containsString("corr-from-caller")))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
                 .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("sec_user"))));
+    }
+
+    /**
+     * Issue #1718: a row lost to a server-side fault must not carry the exception's text into the
+     * 200 body that reports it. The caller gets a generic code and the request's correlation id.
+     */
+    @Test
+    void roles_serverFault_reportsGenericFailureAndTheCorrelationId() throws Exception {
+        when(roleManagementService.createRole(any()))
+                .thenThrow(new IllegalStateException("could not execute statement [insert into sec_role ...]"));
+
+        mockMvc.perform(post("/v1/roles/bulk-ingest")
+                        .header("X-Correlation-Id", "corr-from-caller")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ROLES_BODY)
+                        .with(user("admin-user").authorities(() -> "security:role:create")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("sec_role"))));
+    }
+
+    /**
+     * Issue #1718: a row lost to a server-side fault must not carry the exception's text into the
+     * 200 body that reports it. The caller gets a generic code and the request's correlation id.
+     */
+    @Test
+    void links_serverFault_reportsGenericFailureAndTheCorrelationId() throws Exception {
+        when(userService.getAllUsers()).thenReturn(List.of(account(USER_ID, "jane.doe")));
+        org.mockito.Mockito.doThrow(
+                        new IllegalStateException("could not execute statement [insert into sec_person_link ...]"))
+                .when(userService)
+                .requestPersonLink(any(), any());
+
+        mockMvc.perform(post("/v1/users/person-link/bulk-ingest")
+                        .header("X-Correlation-Id", "corr-from-caller")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(LINKS_BODY)
+                        .with(user("admin-user").authorities(() -> "security:user:edit")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("sec_person_link"))));
     }
 
     @Test

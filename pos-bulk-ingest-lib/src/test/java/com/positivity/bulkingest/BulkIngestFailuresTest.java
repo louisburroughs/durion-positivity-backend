@@ -3,6 +3,7 @@ package com.positivity.bulkingest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -44,6 +45,28 @@ class BulkIngestFailuresTest {
         }
     }
 
+    /** The positional form, where the status is {@code value} rather than {@code code}. */
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    private static class AnnotatedWithValueAliasException extends RuntimeException {
+        AnnotatedWithValueAliasException(String message) {
+            super(message);
+        }
+    }
+
+    /** Annotation on a supertype: the shape a module gets by subclassing its own base type. */
+    private static class SubclassOfAnnotatedException extends AnnotatedConflictException {
+        SubclassOfAnnotatedException(String message) {
+            super(message);
+        }
+    }
+
+    /** The shape {@code InventoryValidationException} takes: a named subclass of a JDK type. */
+    private static class SubclassOfDomainValidationException extends DomainValidationException {
+        SubclassOfDomainValidationException(String message) {
+            super(message);
+        }
+    }
+
     @AfterEach
     void clearRequest() {
         RequestContextHolder.resetRequestAttributes();
@@ -71,6 +94,48 @@ class BulkIngestFailuresTest {
         @Test
         void treatsAnAnnotatedFourXxTypeAsARejection() {
             assertThat(BulkIngestFailures.isRowRejection(new AnnotatedConflictException("already exists"), List.of()))
+                    .isTrue();
+        }
+
+        /**
+         * Load-bearing: {@code InventoryValidationException} is listed by four pos-inventory
+         * controllers and reaches them as itself, but a module may equally list a base type and
+         * throw a subclass. {@code isInstance} is what makes that work.
+         */
+        @Test
+        void matchesASubclassOfAListedType() {
+            assertThat(BulkIngestFailures.isRowRejection(
+                            new SubclassOfDomainValidationException("vin must be 17 characters"),
+                            List.of(DomainValidationException.class)))
+                    .isTrue();
+        }
+
+        /**
+         * {@code @ResponseStatus} is not {@code @Inherited}, so {@code getAnnotation} would miss
+         * this; {@code findMergedAnnotation} is what makes an annotated base type work.
+         */
+        @Test
+        void treatsATypeAnnotatedOnItsSupertypeAsARejection() {
+            assertThat(BulkIngestFailures.isRowRejection(new SubclassOfAnnotatedException("already exists"), List.of()))
+                    .isTrue();
+        }
+
+        /**
+         * {@code code} is an alias for {@code value}, so the positional form must resolve too — a
+         * naive {@code annotation.code()} off an unmerged annotation would read 500 here.
+         */
+        @Test
+        void treatsTheValueAliasAnnotationFormAsARejection() {
+            assertThat(BulkIngestFailures.isRowRejection(
+                            new AnnotatedWithValueAliasException("no such role"), List.of()))
+                    .isTrue();
+        }
+
+        /** The module's own list wins outright; the annotation is only consulted after it. */
+        @Test
+        void aListedTypeIsARejectionEvenWhenItAnnotatesItselfAsAServerFault() {
+            assertThat(BulkIngestFailures.isRowRejection(
+                            new AnnotatedServerException("refused"), List.of(AnnotatedServerException.class)))
                     .isTrue();
         }
 
@@ -139,6 +204,15 @@ class BulkIngestFailuresTest {
             assertThat(result.getErrorMessage()).isEqualTo("firstName is required");
         }
 
+        /** A {@code ResponseStatusException} may carry no reason at all; the fallback covers it. */
+        @Test
+        void fallsBackWhenAResponseStatusExceptionCarriesNoReason() {
+            BulkIngestResult result = BulkIngestFailures.rejected(
+                    0, REJECTION_CODE, new ResponseStatusException(HttpStatus.BAD_REQUEST), FALLBACK);
+
+            assertThat(result.getErrorMessage()).isEqualTo(FALLBACK);
+        }
+
         @Test
         void fallsBackWhenTheExceptionCarriesNoMessage() {
             BulkIngestResult result =
@@ -153,13 +227,18 @@ class BulkIngestFailuresTest {
     class InternalError {
 
         @Test
-        void carriesOnlyTheCorrelationId() {
+        void carriesTheCorrelationIdAsAFieldAndAFixedMessage() {
             BulkIngestResult result = BulkIngestFailures.internalError(7, "corr-42");
 
             assertThat(result.getRowIndex()).isEqualTo(7);
             assertThat(result.isSuccess()).isFalse();
-            assertThat(result.getErrorCode()).isEqualTo(BulkIngestFailures.INTERNAL_ERROR_CODE);
-            assertThat(result.getErrorMessage()).contains("corr-42").doesNotContain("Exception");
+            assertThat(result.getErrorCode()).isEqualTo("INTERNAL_ERROR");
+            assertThat(result.getCorrelationId()).isEqualTo("corr-42");
+            // Fixed text, so there is no path by which anything about the failure reaches it. The
+            // guarantee is structural — internalError cannot be handed a Throwable — and this
+            // pins the text so a future edit cannot start interpolating one.
+            assertThat(result.getErrorMessage())
+                    .isEqualTo("Record could not be ingested because of a server-side error");
         }
     }
 
@@ -177,15 +256,31 @@ class BulkIngestFailuresTest {
         }
 
         @Test
-        void generatesOneWhenTheCallerSentNone() {
+        void generatesAUuidV7WhenTheCallerSentNone() {
             RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
 
-            assertThat(BulkIngestFailures.correlationId()).isNotBlank();
+            // ADR-0013/ADR-0027: the generated id is a UUID v7, the same as every other identifier
+            // the platform mints. isNotBlank() would survive replacing the generator with a literal.
+            assertThat(UUID.fromString(BulkIngestFailures.correlationId()).version())
+                    .isEqualTo(7);
+        }
+
+        /**
+         * One id per request, not per call. Without this a batch arriving with no inbound header
+         * would answer a five-hundred-failure file with five hundred unrelated ids, which is the
+         * opposite of a diagnostic handle.
+         */
+        @Test
+        void generatesOneIdForTheWholeRequest() {
+            RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+
+            assertThat(BulkIngestFailures.correlationId()).isEqualTo(BulkIngestFailures.correlationId());
         }
 
         @Test
-        void generatesOneOffARequestThread() {
-            assertThat(BulkIngestFailures.correlationId()).isNotBlank();
+        void generatesAUuidV7OffARequestThread() {
+            assertThat(UUID.fromString(BulkIngestFailures.correlationId()).version())
+                    .isEqualTo(7);
         }
     }
 }

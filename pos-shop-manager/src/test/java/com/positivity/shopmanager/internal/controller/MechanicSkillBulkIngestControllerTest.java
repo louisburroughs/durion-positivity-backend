@@ -113,10 +113,10 @@ class MechanicSkillBulkIngestControllerTest {
                         .content(TWO_MECHANICS))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.failureCount").value(2))
-                .andExpect(jsonPath("$.results[0].errorCode").value("INGEST_INTERNAL_ERROR"))
-                .andExpect(jsonPath("$.results[0].errorMessage", containsString("corr-from-caller")))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
                 .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("shop_mechanic_skill"))))
-                .andExpect(jsonPath("$.results[2].errorCode").value("INGEST_INTERNAL_ERROR"));
+                .andExpect(jsonPath("$.results[2].errorCode").value("INTERNAL_ERROR"));
     }
 
     @Test

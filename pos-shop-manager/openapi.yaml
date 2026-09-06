@@ -777,7 +777,7 @@ paths:
 
         Emits a SHOP_MECHANIC_SKILLS_BULK_INGEST event, and routes each mechanic''s set through the same HR-feed path the Kafka projection uses, so dedupe, stale-guard and audit apply as usual; re-running the same file is safe, since each mechanic''s set is replaced rather than added to.
 
-        Returns 200 with a per-record result; every row of one mechanic shares that mechanic''s outcome, since they were applied together.
+        Returns 200 with a per-record result, where every row of one mechanic shares that mechanic''s outcome since they were applied together: MECHANIC_SKILL_INGEST_FAILED with the reason for rows the service refused, or INTERNAL_ERROR with a correlationId to quote for rows lost to a server-side fault.
 
         '
       operationId: bulkIngestMechanicSkills
@@ -1530,6 +1530,10 @@ components:
     BulkIngestResult:
       description: Per-record outcome of a bulk ingest submission
       properties:
+        correlationId:
+          description: 'Correlation id to quote when reporting a row that failed for a server-side reason. Present only alongside errorCode INTERNAL_ERROR, where it is the whole of what the caller can act on: the exception itself is logged at ERROR against this id and never returned (ADR-0056). Every failed row of one request carries the same id.'
+          example: 01960003-0000-7000-8000-0000000000ff
+          type: string
         entityId:
           description: Identifier of the entity created/updated for this record, when successful
           example: 01960003-0000-7000-8000-000000000001

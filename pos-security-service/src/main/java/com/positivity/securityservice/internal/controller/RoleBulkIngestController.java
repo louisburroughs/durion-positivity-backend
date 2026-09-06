@@ -82,7 +82,9 @@ public class RoleBulkIngestController extends AbstractBulkIngestController<RoleB
                     Persona slots must describe the role rather than instruct the assistant: single line, within the \
                     length cap, and free of imperative control verbs.
                     Emits a SECURITY_ROLE_BULK_INGEST event.
-                    Returns 200 in all cases; inspect per-record success and failure in the response.
+                    Returns 200 in all cases; inspect each record's errorCode, which is ROLE_INGEST_FAILED with \
+                    the reason for a row the service refused, or INTERNAL_ERROR with a correlationId to quote for a \
+                    row lost to a server-side fault.
                     """)
     @ApiResponse(
             responseCode = "200",

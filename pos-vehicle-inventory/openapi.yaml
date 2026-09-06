@@ -754,7 +754,7 @@ paths:
 
         Emits a VEHICLE_BULK_INGEST event, and every successfully created row also queues a vehicle.vehicle.updated fact on the vehicle.events.v1 outbox for downstream replicas.
 
-        Returns 200 with per-row results even when some rows fail, since row failures carry an error code instead of an error status: VEHICLE_INGEST_FAILED for a row the registry rejected, whose errorMessage names what is wrong with that row, or INGEST_INTERNAL_ERROR for a row lost to a server-side fault, whose errorMessage carries only a correlationId to quote. Returns 400 with a VALIDATION_FAILED ApiError when the envelope is missing jobId or locationId or the records array is empty.
+        Returns 200 with per-row results even when some rows fail, since row failures carry an error code instead of an error status: VEHICLE_INGEST_FAILED for a row the registry rejected, whose errorMessage names what is wrong with that row, or INTERNAL_ERROR for a row lost to a server-side fault, which carries a correlationId to quote and no detail of its own. Returns 400 with a VALIDATION_FAILED ApiError when the envelope is missing jobId or locationId or the records array is empty.
 
         '
       operationId: bulkIngestVehicles
@@ -1229,6 +1229,10 @@ components:
     BulkIngestResult:
       description: Per-record outcome of a bulk ingest submission
       properties:
+        correlationId:
+          description: 'Correlation id to quote when reporting a row that failed for a server-side reason. Present only alongside errorCode INTERNAL_ERROR, where it is the whole of what the caller can act on: the exception itself is logged at ERROR against this id and never returned (ADR-0056). Every failed row of one request carries the same id.'
+          example: 01960003-0000-7000-8000-0000000000ff
+          type: string
         entityId:
           description: Identifier of the entity created/updated for this record, when successful
           example: 01960003-0000-7000-8000-000000000001

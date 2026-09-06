@@ -1,5 +1,7 @@
 package com.positivity.location.internal.controller;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -125,7 +127,48 @@ class BayAndMobileUnitBulkIngestControllerTest {
                         .content(objectMapper.writeValueAsString(request(List.of(bay("Bay 1"))))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.failureCount").value(1))
-                .andExpect(jsonPath("$.results[0].errorCode").value("BAY_INGEST_FAILED"));
+                .andExpect(jsonPath("$.results[0].errorCode").value("BAY_INGEST_FAILED"))
+                .andExpect(jsonPath("$.results[0].errorMessage").value("LOCATION_NOT_FOUND"));
+    }
+
+    /**
+     * Issue #1718: a row lost to a server-side fault must not carry the exception's text into the
+     * 200 body that reports it. The caller gets a generic code and the request's correlation id.
+     */
+    @Test
+    void bays_serverFault_reportsGenericFailureAndTheCorrelationId() throws Exception {
+        when(bayService.createBay(any(), any()))
+                .thenThrow(new IllegalStateException("could not execute statement [insert into bay ...]"));
+
+        mockMvc.perform(post("/v1/locations/bays/bulk-ingest")
+                        .header("X-Correlation-Id", "corr-from-caller")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request(List.of(bay("Bay 9"))))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("insert into bay"))));
+    }
+
+    /**
+     * Issue #1718: a row lost to a server-side fault must not carry the exception's text into the
+     * 200 body that reports it. The caller gets a generic code and the request's correlation id.
+     */
+    @Test
+    void mobileUnits_serverFault_reportsGenericFailureAndTheCorrelationId() throws Exception {
+        when(mobileUnitService.createMobileUnit(any(MobileUnitRequest.class)))
+                .thenThrow(new IllegalStateException("could not execute statement [insert into mobile_unit ...]"));
+
+        mockMvc.perform(post("/v1/mobile-units/bulk-ingest")
+                        .header("X-Correlation-Id", "corr-from-caller")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request(List.of(unit("Van 9"))))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("insert into mobile_unit"))));
     }
 
     @Test

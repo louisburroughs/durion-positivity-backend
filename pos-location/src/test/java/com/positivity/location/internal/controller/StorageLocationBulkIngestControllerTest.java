@@ -254,8 +254,8 @@ class StorageLocationBulkIngestControllerTest {
                         .content(json(request(List.of(record("Bin A-01", StorageLocationType.BIN, null))))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.failureCount").value(1))
-                .andExpect(jsonPath("$.results[0].errorCode").value("INGEST_INTERNAL_ERROR"))
-                .andExpect(jsonPath("$.results[0].errorMessage", containsString("corr-from-caller")))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
                 .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("storage_location"))));
     }
 }

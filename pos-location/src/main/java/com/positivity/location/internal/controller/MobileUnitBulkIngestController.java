@@ -76,7 +76,9 @@ public class MobileUnitBulkIngestController extends AbstractBulkIngestController
                     Emits a LOCATION_MOBILE_UNIT_MANAGE event and a unit-created event per row.
                     Re-running the same file is safe: a name already present at its base location is reported as \
                     already existing rather than as a failure.
-                    Returns 200 with a per-record result; check each result rather than the status alone.
+                    Returns 200 with a per-record result; check each result's errorCode rather than the status \
+                    alone, which is MOBILE_UNIT_INGEST_FAILED with the reason for a row the service refused, or \
+                    INTERNAL_ERROR with a correlationId to quote for a row lost to a server-side fault.
                     """)
     @ApiResponse(
             responseCode = "200",

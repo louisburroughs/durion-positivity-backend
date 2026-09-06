@@ -87,7 +87,9 @@ public class UserPersonLinkBulkIngestController extends AbstractBulkIngestContro
                     linking is asynchronous, so a successful row means the link was accepted rather than applied \
                     and the accounts should be read back to confirm the projection landed.
                     Re-running the same file is safe: the consumer upserts by username.
-                    Returns 200 with a per-record result; check each result rather than the status alone.
+                    Returns 200 with a per-record result; check each result's errorCode rather than the status \
+                    alone, which is USER_PERSON_LINK_INGEST_FAILED with the reason for a row the service refused, or \
+                    INTERNAL_ERROR with a correlationId to quote for a row lost to a server-side fault.
                     """)
     @ApiResponse(
             responseCode = "200",

@@ -1,5 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -86,16 +88,25 @@ class InventoryBulkIngestControllerTest {
         request.setLocationId(LOCATION_ID);
         request.setRecords(List.of(invRecord));
 
+        // createAdjustmentRequest validates nothing — it builds the request and saves it — so a
+        // failure on this path is a persistence fault, and the row says so rather than echoing it.
+        // The old mock (IllegalArgumentException("Unknown SKU")) described a rejection the service
+        // does not make, and the assertions were too weak to notice (issue #1718 review).
         when(stockMovementService.createAdjustmentRequest(any(), any()))
-                .thenThrow(new IllegalArgumentException("Unknown SKU"));
+                .thenThrow(new IllegalStateException(
+                        "could not execute statement [insert into inventory_adjustment_request ...]"));
 
         mockMvc.perform(post("/v1/inventory/bulk-ingest")
+                        .header("X-Correlation-Id", "corr-from-caller")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalSubmitted").value(1))
                 .andExpect(jsonPath("$.successCount").value(0))
-                .andExpect(jsonPath("$.failureCount").value(1));
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("inventory_adjustment_request"))));
     }
 
     @Test

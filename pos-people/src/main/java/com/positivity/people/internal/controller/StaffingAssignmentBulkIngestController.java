@@ -90,7 +90,8 @@ public class StaffingAssignmentBulkIngestController
                     Note two side effects that make this not simply additive: a new primary demotes and end-dates \
                     an overlapping existing primary, and a person's first active assignment is forced primary \
                     whatever the flag says.
-                    Returns 200 with a per-record result; check each result rather than the status alone.
+                    Returns 200 with a per-record result; check each result rather than the status alone. A row the service refused carries errorCode STAFFING_ASSIGNMENT_INGEST_FAILED and the reason; a row lost to a \
+                    server-side fault carries INTERNAL_ERROR and a correlationId to quote, with no detail of its own.
                     """)
     @ApiResponse(
             responseCode = "200",

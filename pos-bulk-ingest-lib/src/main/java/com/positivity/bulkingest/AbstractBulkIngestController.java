@@ -66,6 +66,24 @@ public abstract class AbstractBulkIngestController<T> {
     }
 
     /**
+     * Reports a row this controller has itself already classified as a rejection, under a reason
+     * code of its own.
+     *
+     * <p>{@link #rowRejectionCode()} gives a controller one code, which is all most of them need.
+     * A controller that distinguishes a second kind of refusal — a parent named by an earlier row
+     * that never resolved, say — would otherwise have to build the result by hand, and building
+     * failure results by hand is the shape the disclosure defect took. This is the supported way to
+     * do it, so no subclass has a reason to reach for the builder.
+     *
+     * <p>Only for an exception the controller raised itself, or one it has matched by type: the
+     * message is passed straight through, so the caller vouches for it.
+     */
+    protected final BulkIngestResult rowRejection(int rowIndex, @NonNull String errorCode, @NonNull Exception failure) {
+        log.warn("Rejected record at row {}: {}", rowIndex, failure.getMessage());
+        return BulkIngestFailures.rejected(rowIndex, errorCode, failure, rowRejectionFallbackMessage());
+    }
+
+    /**
      * The exception types that mean "the owning service refused this record", whose messages are
      * therefore safe and useful to return. In practice these are exactly the module's own domain
      * exceptions that its {@code @RestControllerAdvice} maps to a 4xx.
@@ -73,6 +91,13 @@ public abstract class AbstractBulkIngestController<T> {
      * <p>Defaults to none, so a module that has not classified its failures reports every one of
      * them generically. That is deliberate: an incomplete list costs a caller some detail, while
      * an over-broad one leaks server internals.
+     *
+     * <p>It is not free, though, and the cost is the reason to keep these lists honest: an
+     * unclassified failure is logged at ERROR with its stack trace, so a large file failing on one
+     * common value writes one such entry per row. That is the correct level for a fault nobody can
+     * classify — it means either the server really is broken or the module is raising an
+     * unclassifiable exception on a bulk path, and both want looking at — but the way to quiet it
+     * is to give the module's validation failures a name it can list here, never to demote the log.
      */
     protected Collection<Class<? extends Throwable>> rowRejectionTypes() {
         return List.of();
