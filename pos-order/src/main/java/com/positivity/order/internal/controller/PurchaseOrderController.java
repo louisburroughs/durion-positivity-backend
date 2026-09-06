@@ -6,8 +6,10 @@ import com.positivity.order.internal.dto.purchaseorder.CreatePurchaseOrderReques
 import com.positivity.order.internal.dto.purchaseorder.ListPurchaseOrdersRequest;
 import com.positivity.order.internal.dto.purchaseorder.ProcurementAvailabilityResponse;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderResponse;
+import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderSummaryResponse;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderTransmissionEventResponse;
 import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
+import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.security.PurchaseOrderPermissions;
 import com.positivity.order.internal.service.ProcurementAvailabilityService;
 import com.positivity.order.internal.service.PurchaseOrderService;
@@ -191,6 +193,46 @@ public class PurchaseOrderController {
     public ResponseEntity<Page<PurchaseOrderResponse>> listPurchaseOrders(
             @ParameterObject @ModelAttribute ListPurchaseOrdersRequest filter, @ParameterObject Pageable pageable) {
         return ResponseEntity.ok(purchaseOrderService.listPurchaseOrders(filter, pageable));
+    }
+
+    @GetMapping("/summary")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"order:purchase_order:view"})
+    @PreAuthorize("hasAuthority('" + PurchaseOrderPermissions.PURCHASE_ORDER_VIEW + "')")
+    @EmitEvent(id = "ORDER_PURCHASE_ORDER_SUMMARY", apiVersion = "1")
+    @Operation(
+            operationId = "summarizePurchaseOrders",
+            summary = "Summarize Purchase Orders",
+            description = """
+                    Returns totals across every purchase order matching the optional filters: order and line \
+                    counts, units ordered, units still open (ordered but not yet received), units received, and \
+                    grand-total and open-balance money, with the same figures broken down by lifecycle status.
+                    Use this tool for any aggregate question — how many units are on order, how much is \
+                    outstanding with a vendor, how many orders are open. Do not use listPurchaseOrders for a \
+                    total: it returns one page and any sum over it is partial; call this endpoint instead, and \
+                    use listPurchaseOrders only to see individual orders.
+                    Preconditions: none; vendorId and status are optional and independent.
+                    Required inputs: none; vendorId (UUID) restricts to one vendor and status to one lifecycle \
+                    status, and without a status filter every status is included and itemised in byStatus.
+                    Emits an ORDER_PURCHASE_ORDER_SUMMARY audit event; read-only.
+                    Returns 200 with zero totals and an empty byStatus when nothing matches.
+                    """,
+            tags = {"Purchase Orders"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Purchase order totals returned",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = PurchaseOrderSummaryResponse.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required purchase order view authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<PurchaseOrderSummaryResponse> summarizePurchaseOrders(
+            @RequestParam(required = false) UUID vendorId, @RequestParam(required = false) PurchaseOrderStatus status) {
+        return ResponseEntity.ok(purchaseOrderService.summarizePurchaseOrders(vendorId, status));
     }
 
     @PostMapping("/{poId}/approve")

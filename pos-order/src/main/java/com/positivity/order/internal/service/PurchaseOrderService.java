@@ -4,10 +4,13 @@ import com.positivity.order.internal.dto.purchaseorder.ApprovePurchaseOrderReque
 import com.positivity.order.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
 import com.positivity.order.internal.dto.purchaseorder.ListPurchaseOrdersRequest;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderResponse;
+import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderSummaryResponse;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderTransmissionEventResponse;
 import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
+import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -34,6 +37,13 @@ public interface PurchaseOrderService {
     @NonNull
     Page<PurchaseOrderResponse> listPurchaseOrders(
             @NonNull ListPurchaseOrdersRequest filter, @NonNull Pageable pageable);
+
+    /**
+     * Totals over every purchase order matching the filter — the whole population, where
+     * {@link #listPurchaseOrders} returns a page of it (#1798). Either filter may be null.
+     */
+    @NonNull
+    PurchaseOrderSummaryResponse summarizePurchaseOrders(@Nullable UUID vendorId, @Nullable PurchaseOrderStatus status);
 
     /**
      * The order's append-only vendor transmission timeline, ordered by the vendor's clock

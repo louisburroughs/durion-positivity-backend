@@ -22,6 +22,7 @@ class PurchaseOrderToolTest {
 
     private static final String BASE = "http://pos-api-gateway";
     private static final String LIST = "/order/v1/orders/purchase-orders";
+    private static final String SUMMARY = "/order/v1/orders/purchase-orders/summary";
 
     private RestClient.Builder builder;
     private MockRestServiceServer server;
@@ -37,7 +38,8 @@ class PurchaseOrderToolTest {
                 "/order/v1/orders/carts/{orderId}",
                 "/order/v1/orders/carts",
                 LIST,
-                "/order/v1/orders/purchase-orders/{poId}");
+                "/order/v1/orders/purchase-orders/{poId}",
+                "/order/v1/orders/purchase-orders/summary");
     }
 
     @Test
@@ -79,5 +81,41 @@ class PurchaseOrderToolTest {
 
         assertThat(tool.getPurchaseOrder("po-1")).contains("po-1");
         server.verify();
+    }
+
+    @Test
+    @DisplayName("the summary tool reads the whole population, not a page (#1798)")
+    void summaryReadsThePopulation() {
+        // 144 approved orders on alpha; the list tool showed 20 and the model summed those. The
+        // summary endpoint answers with the aggregate the question actually asked for.
+        server.expect(requestTo(BASE + SUMMARY + "?status=APPROVED"))
+                .andRespond(withSuccess(
+                        "{\"orderCount\":144,\"unitsOrdered\":7849,\"unitsOpen\":2351}", MediaType.APPLICATION_JSON));
+
+        assertThat(tool.getPurchaseOrderSummary("APPROVED", null)).contains("\"unitsOpen\":2351");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("the summary tool passes both filters and sends none when absent")
+    void summaryFilters() {
+        server.expect(requestTo(BASE + SUMMARY + "?status=APPROVED&vendorId=d1c3e5a5-dc2c-5f6b-8139-8925c147e3c5"))
+                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE + SUMMARY)).andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+
+        tool.getPurchaseOrderSummary("APPROVED", "d1c3e5a5-dc2c-5f6b-8139-8925c147e3c5");
+        tool.getPurchaseOrderSummary(null, null);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("the list tool tells the model not to aggregate its page, and where to go instead")
+    void listDescriptionRoutesAggregatesToTheSummary() throws Exception {
+        String description = OrderFacadeTool.class
+                .getMethod("listPurchaseOrders", String.class, String.class)
+                .getAnnotation(org.springframework.ai.tool.annotation.Tool.class)
+                .description();
+
+        assertThat(description).contains("getPurchaseOrderSummary").containsIgnoringCase("first page only");
     }
 }

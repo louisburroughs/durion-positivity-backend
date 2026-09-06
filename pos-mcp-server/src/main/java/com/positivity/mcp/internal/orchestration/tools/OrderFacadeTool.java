@@ -18,6 +18,7 @@ public class OrderFacadeTool {
     private final String orderListUriTemplate;
     private final String purchaseOrderListUriTemplate;
     private final String purchaseOrderUriTemplate;
+    private final String purchaseOrderSummaryUriTemplate;
 
     public OrderFacadeTool(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
@@ -25,12 +26,15 @@ public class OrderFacadeTool {
             @Value("${pos.order.order-uri-template}") @NonNull String orderUriTemplate,
             @Value("${pos.order.list-uri-template}") @NonNull String orderListUriTemplate,
             @Value("${pos.order.purchase-order-list-uri-template}") @NonNull String purchaseOrderListUriTemplate,
-            @Value("${pos.order.purchase-order-uri-template}") @NonNull String purchaseOrderUriTemplate) {
+            @Value("${pos.order.purchase-order-uri-template}") @NonNull String purchaseOrderUriTemplate,
+            @Value("${pos.order.purchase-order-summary-uri-template}") @NonNull
+                    String purchaseOrderSummaryUriTemplate) {
         this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
         this.orderUriTemplate = orderUriTemplate;
         this.orderListUriTemplate = orderListUriTemplate;
         this.purchaseOrderListUriTemplate = purchaseOrderListUriTemplate;
         this.purchaseOrderUriTemplate = purchaseOrderUriTemplate;
+        this.purchaseOrderSummaryUriTemplate = purchaseOrderSummaryUriTemplate;
     }
 
     @Tool(
@@ -64,19 +68,45 @@ public class OrderFacadeTool {
     @Tool(
             description = "List PURCHASE orders — what we have on order from vendors — optionally filtered by "
                     + "status and vendorId. These are orders we placed with suppliers, NOT sales orders; use "
-                    + "listOrders for customer carts. Status is one of DRAFT, APPROVED, FULLY_RECEIVED, "
-                    + "CANCELLED: only APPROVED is still open with the vendor, DRAFT was never sent, "
-                    + "FULLY_RECEIVED is closed and CANCELLED is void — so filter by status=APPROVED when the "
-                    + "question is about what is outstanding. Each line carries the quantity ordered and the "
-                    + "quantity still open, which are different numbers. Returns the first page only.")
+                    + "listOrders for customer carts. Status is one of DRAFT, APPROVED, PARTIALLY_RECEIVED, "
+                    + "FULLY_RECEIVED, CLOSED, CANCELLED: APPROVED and PARTIALLY_RECEIVED are still open with "
+                    + "the vendor, DRAFT was never sent, FULLY_RECEIVED and CLOSED are done and CANCELLED is "
+                    + "void — so filter by status=APPROVED when the question is about what is outstanding. Each "
+                    + "line carries the quantity ordered and the quantity still open, which are different "
+                    + "numbers. Returns the FIRST PAGE ONLY (20 orders), so never total, count or sum across "
+                    + "its rows — for any aggregate (how many units are on order, how many orders are open, "
+                    + "how much is outstanding) call getPurchaseOrderSummary instead.")
     public String listPurchaseOrders(
             @ToolParam(
-                            description = "Optional status: DRAFT, APPROVED, FULLY_RECEIVED or CANCELLED. Pass "
-                                    + "APPROVED for orders still open with the vendor.",
+                            description = "Optional status: DRAFT, APPROVED, PARTIALLY_RECEIVED, FULLY_RECEIVED, "
+                                    + "CLOSED or CANCELLED. Pass APPROVED for orders still open with the vendor.",
                             required = false)
                     String status,
             @ToolParam(description = "Optional vendor id (UUID)", required = false) String vendorId) {
         StringBuilder template = new StringBuilder(purchaseOrderListUriTemplate);
+        Map<String, String> uriParams = new HashMap<>();
+        appendQueryParam(template, uriParams, "status", status);
+        appendQueryParam(template, uriParams, "vendorId", vendorId);
+        return restClient.get().uri(template.toString(), uriParams).retrieve().body(String.class);
+    }
+
+    @Tool(
+            description = "Totals across ALL purchase orders matching the filter — the whole population, not a "
+                    + "page. Returns orderCount, lineCount, unitsOrdered, unitsOpen (ordered but NOT yet "
+                    + "received), unitsReceived, grandTotalMinor and openBalanceMinor, plus the same figures per "
+                    + "status in byStatus. Use this for every aggregate question about purchase orders: how "
+                    + "many units are still on order, how much is outstanding with a vendor, how many orders "
+                    + "are open. 'Still on order' / 'not yet received' is unitsOpen, NOT unitsOrdered — both are "
+                    + "plausible and only one answers the question. Pass status=APPROVED for what is currently "
+                    + "open with vendors; leave status empty to see every status itemised.")
+    public String getPurchaseOrderSummary(
+            @ToolParam(
+                            description = "Optional status: DRAFT, APPROVED, PARTIALLY_RECEIVED, FULLY_RECEIVED, "
+                                    + "CLOSED or CANCELLED. Empty means all statuses, itemised in byStatus.",
+                            required = false)
+                    String status,
+            @ToolParam(description = "Optional vendor id (UUID)", required = false) String vendorId) {
+        StringBuilder template = new StringBuilder(purchaseOrderSummaryUriTemplate);
         Map<String, String> uriParams = new HashMap<>();
         appendQueryParam(template, uriParams, "status", status);
         appendQueryParam(template, uriParams, "vendorId", vendorId);

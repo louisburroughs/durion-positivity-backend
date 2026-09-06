@@ -413,6 +413,15 @@ OrderFacadeTool.listPurchaseOrders:
   route: order
   downstreamPath: "/v1/orders/purchase-orders"
 
+OrderFacadeTool.getPurchaseOrderSummary:
+  verb: GET
+  baseUrlProperty: pos.order.base-url
+  templateProperty: pos.order.purchase-order-summary-uri-template
+  template: "/order/v1/orders/purchase-orders/summary"
+  route: order
+  downstreamPath: "/v1/orders/purchase-orders/summary"
+  # optional query params appended by the tool when provided: status, vendorId
+
 OrderFacadeTool.getPurchaseOrder:
   verb: GET
   baseUrlProperty: pos.order.base-url

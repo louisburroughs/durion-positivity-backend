@@ -185,7 +185,8 @@ class SessionAgentManagerTest {
                 "/order/v1/orders/{orderId}",
                 "/order/v1/orders/search?q={query}",
                 "/order/v1/orders/purchase-orders",
-                "/order/v1/orders/purchase-orders/{poId}");
+                "/order/v1/orders/purchase-orders/{poId}",
+                "/order/v1/orders/purchase-orders/summary");
         simpleChatClassifier = new SimpleChatClassifier(SimpleChatRuleDefaults.defaultCatalog());
         sharedOrchestrationSupport = new SharedOrchestrationSupport(Clock.systemUTC());
         simpleChatFastPath =

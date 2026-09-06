@@ -5,7 +5,11 @@ import com.positivity.order.internal.dto.purchaseorder.CreatePurchaseOrderReques
 import com.positivity.order.internal.dto.purchaseorder.ListPurchaseOrdersRequest;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderLineRequest;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderLineResponse;
+import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderLineRollup;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderResponse;
+import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderStatusRollup;
+import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderStatusSummary;
+import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderSummaryResponse;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderTransmissionEventResponse;
 import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
@@ -15,6 +19,7 @@ import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
 import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
+import com.positivity.order.internal.repository.PurchaseOrderLineRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
 import com.positivity.order.internal.repository.PurchaseOrderTransmissionEventRepository;
 import java.math.BigDecimal;
@@ -25,9 +30,13 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -59,6 +68,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private static final long MAX_PO_NUMBER_SEQUENCE = 2_821_109_907_455L;
 
     private final PurchaseOrderRepository purchaseOrderRepository;
+    private final PurchaseOrderLineRepository purchaseOrderLineRepository;
     private final PurchaseOrderTransmissionEventRepository transmissionEventRepository;
 
     /**
@@ -193,6 +203,73 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .toList();
 
         return new PageImpl<>(content, pageable, page.getTotalElements());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull PurchaseOrderSummaryResponse summarizePurchaseOrders(
+            @Nullable UUID vendorId, @Nullable PurchaseOrderStatus status) {
+        List<PurchaseOrderStatusRollup> headers = vendorId == null
+                ? purchaseOrderRepository.rollupByStatus()
+                : purchaseOrderRepository.rollupByStatusForVendor(vendorId);
+        List<PurchaseOrderLineRollup> lines = vendorId == null
+                ? purchaseOrderLineRepository.rollupByStatus()
+                : purchaseOrderLineRepository.rollupByStatusForVendor(vendorId);
+        Map<PurchaseOrderStatus, PurchaseOrderLineRollup> linesByStatus =
+                lines.stream().collect(Collectors.toMap(PurchaseOrderLineRollup::status, Function.identity()));
+
+        List<PurchaseOrderStatusSummary> byStatus = headers.stream()
+                .filter(header -> status == null || header.status() == status)
+                .sorted(Comparator.comparing(PurchaseOrderStatusRollup::status))
+                .map(header -> {
+                    PurchaseOrderLineRollup line = linesByStatus.get(header.status());
+                    BigDecimal ordered = line == null ? BigDecimal.ZERO : zeroIfNull(line.unitsOrdered());
+                    BigDecimal open = line == null ? BigDecimal.ZERO : zeroIfNull(line.unitsOpen());
+                    return new PurchaseOrderStatusSummary(
+                            header.status(),
+                            zeroIfNull(header.orderCount()),
+                            line == null ? 0L : zeroIfNull(line.lineCount()),
+                            ordered,
+                            open,
+                            ordered.subtract(open),
+                            zeroIfNull(header.grandTotalMinor()),
+                            zeroIfNull(header.openBalanceMinor()));
+                })
+                .toList();
+
+        BigDecimal unitsOrdered = byStatus.stream()
+                .map(PurchaseOrderStatusSummary::unitsOrdered)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal unitsOpen =
+                byStatus.stream().map(PurchaseOrderStatusSummary::unitsOpen).reduce(BigDecimal.ZERO, BigDecimal::add);
+        return PurchaseOrderSummaryResponse.builder()
+                .vendorId(vendorId)
+                .status(status)
+                .orderCount(byStatus.stream()
+                        .mapToLong(PurchaseOrderStatusSummary::orderCount)
+                        .sum())
+                .lineCount(byStatus.stream()
+                        .mapToLong(PurchaseOrderStatusSummary::lineCount)
+                        .sum())
+                .unitsOrdered(unitsOrdered)
+                .unitsOpen(unitsOpen)
+                .unitsReceived(unitsOrdered.subtract(unitsOpen))
+                .grandTotalMinor(byStatus.stream()
+                        .mapToLong(PurchaseOrderStatusSummary::grandTotalMinor)
+                        .sum())
+                .openBalanceMinor(byStatus.stream()
+                        .mapToLong(PurchaseOrderStatusSummary::openBalanceMinor)
+                        .sum())
+                .byStatus(byStatus)
+                .build();
+    }
+
+    private static long zeroIfNull(@Nullable Long value) {
+        return value == null ? 0L : value;
+    }
+
+    private static @NonNull BigDecimal zeroIfNull(@Nullable BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     @Override
