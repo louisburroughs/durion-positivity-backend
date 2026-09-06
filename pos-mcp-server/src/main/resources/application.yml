@@ -40,6 +40,12 @@ spring:
           model: ${OLLAMA_EMBEDDING_MODEL:bge-m3}
         timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
 mcp:
+  embedding:
+    # #1818: the startup backfill of tool embeddings runs after readiness, in batches of this many
+    # descriptions per model call. 884 tools at one call each took twenty minutes on alpha's CPU
+    # embedding model and failed a deploy's health wait. Must fit OLLAMA_EMBEDDING_TIMEOUT (30s):
+    # ~1.2s per description on alpha's CPU model, so 8 is ~10s per call with margin.
+    backfill-batch-size: ${MCP_EMBEDDING_BACKFILL_BATCH_SIZE:8}
   discovery:
     # #1819: a registered domain that contributes no operation in a discovery cycle is kept, not
     # pruned (absent from a mid-deploy aggregate is "unseen", not "removed"). List domains here that

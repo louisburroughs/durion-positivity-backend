@@ -9,7 +9,8 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-// Gate 3 (G3.1): must run before ToolEmbeddingInitializer so newly persisted openapi rows
+// Gate 3 (G3.1): runs as an ApplicationRunner, i.e. before ApplicationReadyEvent, so the openapi rows it
+// persists exist when ToolEmbeddingInitializer's backfill starts on that event (#1818) and
 // (embedding NULL) are picked up by the embedding backfill in the same startup.
 @Component
 @Order(10)
