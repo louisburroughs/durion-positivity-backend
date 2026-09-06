@@ -5,6 +5,7 @@ import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
 import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
 import com.positivity.customer.internal.entity.ContactRole;
 import com.positivity.customer.internal.entity.ContactRoleAssignment;
+import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ContactRoleAssignmentRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
@@ -65,7 +66,7 @@ public class ContactRoleServiceImpl implements ContactRoleService {
      *
      * @param partyId the party ID
      * @return response containing contacts with their roles
-     * @throws IllegalArgumentException if party not found or invalid ID
+     * @throws ResponseStatusException {@code 404} if the party does not exist
      */
     @Override
     @NonNull
@@ -174,7 +175,10 @@ public class ContactRoleServiceImpl implements ContactRoleService {
      * @param contactId the contact (person) ID
      * @param request   the role assignment request
      * @return response with update status
-     * @throws IllegalArgumentException if party/contact not found or invalid data
+     * @throws ResponseStatusException {@code 404} if the party or the contact does not exist
+     * @throws CrmValidationException  if a submitted {@code roleCode} is missing, blank, or not
+     *                                 a recognised {@link ContactRole} (answers {@code 400},
+     *                                 issue #1714)
      */
     @Override
     @NonNull
@@ -193,31 +197,28 @@ public class ContactRoleServiceImpl implements ContactRoleService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Person not found for personId: " + contactId));
 
+        // Parse every submitted role code before touching the existing assignments, so a bad
+        // code is rejected as a 400 without depending on transaction rollback to undo the delete.
+        List<ContactRoleAssignment> newAssignments = new ArrayList<>();
+        if (request.getRoles() != null) {
+            for (var roleReq : request.getRoles()) {
+                newAssignments.add(ContactRoleAssignment.builder()
+                        .contactId(contactId)
+                        .customerAccountId(partyId)
+                        .roleName(parseRoleCode(roleReq.getRoleCode()))
+                        .primary(Boolean.TRUE.equals(roleReq.getIsPrimary()))
+                        .build());
+            }
+        }
+
         // Delete existing role assignments for this contact/party
         roleAssignmentRepository.deleteByContactIdAndCustomerAccountId(contactId, partyId);
         roleAssignmentRepository.flush();
 
-        // Create new assignments
-        List<ContactRoleAssignment> newAssignments = new ArrayList<>();
-
-        if (request.getRoles() != null) {
-            for (var roleReq : request.getRoles()) {
-                ContactRole role = ContactRole.valueOf(roleReq.getRoleCode());
-                boolean isPrimary = Boolean.TRUE.equals(roleReq.getIsPrimary());
-
-                // If marking as primary, demote existing primary for this role
-                if (isPrimary) {
-                    demoteExistingPrimary(partyId, role);
-                }
-
-                ContactRoleAssignment assignment = ContactRoleAssignment.builder()
-                        .contactId(contactId)
-                        .customerAccountId(partyId)
-                        .roleName(role)
-                        .primary(isPrimary)
-                        .build();
-
-                newAssignments.add(assignment);
+        // If marking as primary, demote the existing primary for that role
+        for (ContactRoleAssignment assignment : newAssignments) {
+            if (assignment.isPrimary()) {
+                demoteExistingPrimary(partyId, assignment.getRoleName());
             }
         }
 
@@ -234,6 +235,36 @@ public class ContactRoleServiceImpl implements ContactRoleService {
                 .contactId(contactId.toString())
                 .status("SUCCESS")
                 .build();
+    }
+
+    /**
+     * Resolves a client-submitted role code to a {@link ContactRole}.
+     *
+     * <p>{@link Enum#valueOf} throws the JDK's own {@link IllegalArgumentException} for an
+     * unknown value, which is a server-defect type this module never maps to a client status
+     * (issue #1694). Converting it here is what lets an unrecognised code answer the
+     * documented {@code 400} with the {@code ApiError} envelope instead of a bodyless
+     * {@code 404} (issue #1714).
+     *
+     * <p>The controller enforces the DTO's {@code @NotBlank} at the boundary, but this method
+     * is the last line before {@code valueOf}, so a null or blank code is rejected here as well
+     * rather than surfacing as a {@link NullPointerException} (500) from a caller that did not.
+     *
+     * @param roleCode the submitted role code, possibly absent
+     * @return the matching role
+     * @throws CrmValidationException if the code is missing, blank, or not a recognised
+     *                                {@link ContactRole}
+     */
+    @NonNull
+    private static ContactRole parseRoleCode(@Nullable String roleCode) {
+        if (roleCode == null || roleCode.isBlank()) {
+            throw new CrmValidationException("roleCode is required");
+        }
+        try {
+            return ContactRole.valueOf(roleCode);
+        } catch (IllegalArgumentException e) {
+            throw new CrmValidationException("Unrecognised roleCode: " + roleCode, e);
+        }
     }
 
     /**

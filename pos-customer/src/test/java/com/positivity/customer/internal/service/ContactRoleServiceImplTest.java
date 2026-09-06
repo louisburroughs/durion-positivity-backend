@@ -2,16 +2,22 @@ package com.positivity.customer.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.customer.internal.dto.GetContactsWithRolesResponse;
+import com.positivity.customer.internal.dto.UpdateContactRolesRequest;
+import com.positivity.customer.internal.dto.UpdateContactRolesRequest.RoleAssignment;
+import com.positivity.customer.internal.dto.UpdateContactRolesResponse;
 import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.customer.internal.entity.ContactRole;
 import com.positivity.customer.internal.entity.ContactRoleAssignment;
 import com.positivity.customer.internal.entity.PersonParty;
+import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ContactRoleAssignmentRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
@@ -25,25 +31,30 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Unit tests for {@link ContactRoleServiceImpl#getContactsWithRoles}.
+ * Unit tests for {@link ContactRoleServiceImpl}.
  *
- * <p>
- * The endpoint's display fields are all optional projections of the pos-people-backed
- * {@link PersonDirectoryService.PersonIdentity} (ADR-0015 I2, issue #684): contact name, primary
- * email, and primary phone each fall back to {@code null}/{@code false} independently, so the
- * three ternaries are pinned separately rather than only in combination. The person lookup that
- * gates whether a contact is even added to the response is a presence guard only — its result is
- * discarded — which makes it easy to invert or drop while refactoring; a contact whose person
- * record has disappeared from pos-customer must never surface with an empty name instead of being
- * omitted.
+ * <p>{@link ContactRoleServiceImpl#updateContactRoles} must reject an unrecognised role code as
+ * this module's own {@link CrmValidationException} (the documented {@code 400}), never as the
+ * JDK's bare {@code IllegalArgumentException} from {@code Enum.valueOf}, and must do so before it
+ * has deleted the contact's existing assignments (issue #1714).
+ *
+ * <p>For {@link ContactRoleServiceImpl#getContactsWithRoles}: the endpoint's display fields are
+ * all optional projections of the pos-people-backed {@link PersonDirectoryService.PersonIdentity}
+ * (ADR-0015 I2, issue #684): contact name, primary email, and primary phone each fall back to
+ * {@code null}/{@code false} independently, so the three ternaries are pinned separately rather
+ * than only in combination. The person lookup that gates whether a contact is even added to the
+ * response is a presence guard only — its result is discarded — which makes it easy to invert or
+ * drop while refactoring; a contact whose person record has disappeared from pos-customer must
+ * never surface with an empty name instead of being omitted.
  */
 @ExtendWith(MockitoExtension.class)
-@DisplayName("ContactRoleServiceImpl — getContactsWithRoles")
+@DisplayName("ContactRoleServiceImpl")
 class ContactRoleServiceImplTest {
 
     private static final UUID PARTY_ID = UUID.randomUUID();
@@ -335,6 +346,117 @@ class ContactRoleServiceImplTest {
             assertThat(response.getContacts())
                     .extracting(GetContactsWithRolesResponse.ContactWithRoles::getContactId)
                     .containsExactlyInAnyOrder(CONTACT_ID.toString(), secondContactId.toString());
+        }
+    }
+
+    @Nested
+    @DisplayName("updateContactRoles — role code parsing (issue #1714)")
+    class UpdateContactRolesRoleCodeParsing {
+
+        private static RoleAssignment roleRequest(String roleCode, boolean primary) {
+            return RoleAssignment.builder()
+                    .roleCode(roleCode)
+                    .isPrimary(primary)
+                    .build();
+        }
+
+        private static UpdateContactRolesRequest request(RoleAssignment... roles) {
+            return UpdateContactRolesRequest.builder().roles(List.of(roles)).build();
+        }
+
+        private void givenPartyAndContactExist() {
+            givenPartyExists();
+            givenContactResolvesToPerson(CONTACT_ID);
+        }
+
+        @Test
+        @DisplayName(
+                "rejects an unrecognised roleCode as CrmValidationException naming the code, not as IllegalArgumentException")
+        void rejectsAnUnrecognisedRoleCodeAsCrmValidationException() {
+            givenPartyAndContactExist();
+
+            assertThatThrownBy(() ->
+                            sut.updateContactRoles(PARTY_ID, CONTACT_ID, request(roleRequest("NOT_A_ROLE", false))))
+                    .isInstanceOf(CrmValidationException.class)
+                    .isNotInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("NOT_A_ROLE")
+                    .hasCauseInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("rejects a null roleCode as CrmValidationException, never as NullPointerException")
+        void rejectsANullRoleCodeAsCrmValidationException() {
+            givenPartyAndContactExist();
+
+            assertThatThrownBy(() -> sut.updateContactRoles(PARTY_ID, CONTACT_ID, request(roleRequest(null, false))))
+                    .isInstanceOf(CrmValidationException.class)
+                    .hasMessage("roleCode is required");
+            verify(roleAssignmentRepository, never()).deleteByContactIdAndCustomerAccountId(any(), any());
+        }
+
+        @Test
+        @DisplayName("rejects a blank roleCode as CrmValidationException")
+        void rejectsABlankRoleCodeAsCrmValidationException() {
+            givenPartyAndContactExist();
+
+            assertThatThrownBy(() -> sut.updateContactRoles(PARTY_ID, CONTACT_ID, request(roleRequest("  ", false))))
+                    .isInstanceOf(CrmValidationException.class)
+                    .hasMessage("roleCode is required");
+            verify(roleAssignmentRepository, never()).deleteByContactIdAndCustomerAccountId(any(), any());
+        }
+
+        @Test
+        @DisplayName(
+                "parses every roleCode before deleting the existing assignments, so a bad code leaves them untouched")
+        void parsesEveryRoleCodeBeforeDeletingExistingAssignments() {
+            givenPartyAndContactExist();
+
+            // A valid code first, then a bad one: the bad one must still win before any write.
+            assertThatThrownBy(() -> sut.updateContactRoles(
+                            PARTY_ID,
+                            CONTACT_ID,
+                            request(roleRequest("BILLING", true), roleRequest("NOT_A_ROLE", false))))
+                    .isInstanceOf(CrmValidationException.class);
+
+            verify(roleAssignmentRepository, never()).deleteByContactIdAndCustomerAccountId(any(), any());
+            verify(roleAssignmentRepository, never()).findByCustomerAccountIdAndRoleNameAndPrimaryTrue(any(), any());
+            verify(roleAssignmentRepository, never()).saveAll(anyList());
+        }
+
+        @Test
+        @DisplayName("still verifies party and contact existence before parsing role codes")
+        void stillVerifiesPartyAndContactBeforeParsingRoleCodes() {
+            when(partyRepository.findById(PARTY_ID)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() ->
+                            sut.updateContactRoles(PARTY_ID, CONTACT_ID, request(roleRequest("NOT_A_ROLE", false))))
+                    .isInstanceOf(ResponseStatusException.class)
+                    .hasMessageContaining("Party not found");
+        }
+
+        @Test
+        @DisplayName("writes recognised role codes with their primary flags and demotes the existing primary")
+        @SuppressWarnings("unchecked")
+        void writesRecognisedRoleCodesAndDemotesExistingPrimary() {
+            givenPartyAndContactExist();
+            UUID otherContactId = UUID.randomUUID();
+            ContactRoleAssignment existingPrimary = assignment(otherContactId, ContactRole.BILLING, true);
+            when(roleAssignmentRepository.findByCustomerAccountIdAndRoleNameAndPrimaryTrue(
+                            PARTY_ID, ContactRole.BILLING))
+                    .thenReturn(Optional.of(existingPrimary));
+
+            UpdateContactRolesResponse response = sut.updateContactRoles(
+                    PARTY_ID, CONTACT_ID, request(roleRequest("BILLING", true), roleRequest("OPERATIONS", false)));
+
+            assertThat(response.getStatus()).isEqualTo("SUCCESS");
+            assertThat(existingPrimary.isPrimary()).isFalse();
+            verify(roleAssignmentRepository).deleteByContactIdAndCustomerAccountId(CONTACT_ID, PARTY_ID);
+
+            ArgumentCaptor<List<ContactRoleAssignment>> saved = ArgumentCaptor.forClass(List.class);
+            verify(roleAssignmentRepository).saveAll(saved.capture());
+            assertThat(saved.getValue())
+                    .extracting(ContactRoleAssignment::getRoleName, ContactRoleAssignment::isPrimary)
+                    .containsExactly(tuple(ContactRole.BILLING, true), tuple(ContactRole.OPERATIONS, false));
         }
     }
 }
