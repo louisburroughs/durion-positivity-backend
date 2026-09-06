@@ -13,7 +13,8 @@ import org.jspecify.annotations.Nullable;
  * @param displayName      human-readable name, e.g. a customer's display name or a location
  *                         label; null when the source holds no name
  * @param displayReference stable business reference or number, e.g. an invoice number, customer
- *                         number or journal-entry number; null when the source holds none
+ *                         number, journal-entry number or canonical location code; null when the
+ *                         source holds none
  */
 public record ResolvedDisplayReference(
         @Nullable String displayName, @Nullable String displayReference) {
