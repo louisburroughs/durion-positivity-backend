@@ -399,11 +399,15 @@ Tracked separately as GitHub issues. Open items not yet implemented in code:
 
 ## Upstream model errors and retry (#1749)
 
-Chat calls to the Ollama backend retry transient failures (HTTP 5xx, I/O errors) within a bounded
-budget: `mcp.model.retry.max-retries` further attempts after the first (default 2), exponential
-back-off from `initial-delay` (1s) with `multiplier` (2) capped at `max-delay` (5s) — about seven
-seconds worst case, after which the turn fails and the caller sees the error. Spring AI's default
-would have retried ten times with back-off up to three minutes; on 2026-09-05 that turned one
-`ollama.com` 500 into a turn that outlived the client's 180s timeout and read as a hang.
+Blocking chat calls to the Ollama backend retry fast transient failures (HTTP 5xx, refused
+connections, resets) within a bounded budget: `mcp.model.retry.max-retries` further attempts after
+the first (default 2), exponential back-off from `initial-delay` (1s) with `multiplier` (2) capped at
+`max-delay` (5s) — three requests and 3s of waiting, after which the turn fails and the caller sees
+the error. The budget bounds attempts, not wall time; a read timeout is not retried, because each
+attempt could cost the full `OLLAMA_CHAT_TIMEOUT`. Streaming does not retry at all (Spring AI 2.0
+consults the template only on the blocking path). Spring AI's default would have retried ten times
+(eleven requests) with back-off up to three minutes; on 2026-09-05 that turned one `ollama.com` 500
+into a turn that outlived the client's 180s timeout and read as a hang. Declaring this template
+supersedes `spring.ai.retry.*` for the module. The fallback model (`mcp.model.fallback.*`) shares it.
 Environment: `MCP_MODEL_RETRY_MAX_RETRIES`, `MCP_MODEL_RETRY_INITIAL_DELAY`, `MCP_MODEL_RETRY_MULTIPLIER`,
 `MCP_MODEL_RETRY_MAX_DELAY`.

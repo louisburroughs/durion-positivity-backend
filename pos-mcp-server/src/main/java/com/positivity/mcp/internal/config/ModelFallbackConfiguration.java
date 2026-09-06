@@ -6,10 +6,12 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.ai.ollama.api.OllamaApi;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.retry.RetryTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
@@ -31,7 +33,8 @@ public class ModelFallbackConfiguration {
             @Value("${OLLAMA_API_KEY:}") @NonNull String apiKey,
             @Value("${mcp.model.fallback.timeout:180s}") @NonNull Duration timeout,
             @Value("${spring.ai.ollama.chat.options.temperature:${OLLAMA_CHAT_TEMPERATURE:0.0}}") double temperature,
-            @Value("${spring.ai.ollama.chat.options.num-ctx:${OLLAMA_NUM_CTX:32768}}") int numCtx) {
+            @Value("${spring.ai.ollama.chat.options.num-ctx:${OLLAMA_NUM_CTX:32768}}") int numCtx,
+            @Qualifier("ollamaChatRetryTemplate") @NonNull RetryTemplate retryTemplate) {
         int timeoutMillis = Math.toIntExact(timeout.toMillis());
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(timeoutMillis);
@@ -54,6 +57,9 @@ public class ModelFallbackConfiguration {
                         .temperature(temperature)
                         .numCtx(numCtx)
                         .build())
+                // The same bounded budget as the primary model (#1749): a failover that hangs on the
+                // default template is no failover.
+                .retryTemplate(retryTemplate)
                 .build();
     }
 }

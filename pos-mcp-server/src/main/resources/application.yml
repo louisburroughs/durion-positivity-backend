@@ -308,9 +308,11 @@ mcp:
     eval-freshness-hours: ${MCP_TUNING_EVAL_FRESHNESS_HOURS:48}
     cron: "0 0 2 * * ?"
   model:
-    # Retry budget for the Ollama chat calls (#1749). Spring AI's default (10 attempts, back-off
-    # 2s x5 capped at 3 min) turned one upstream HTTP 500 into a turn that outlived the client's
-    # 180s timeout and read as a hang. max-retries counts attempts AFTER the first request.
+    # Retry budget for the blocking Ollama chat calls (#1749). Spring AI's default (10 retries = 11
+    # requests, back-off 2s x5 capped at 3 min) turned one upstream HTTP 500 into a turn that
+    # outlived the client's 180s timeout and read as a hang. max-retries counts attempts AFTER the
+    # first request; it bounds attempts, not wall time. Read timeouts are not retried; streaming
+    # never retries. Declaring this template supersedes spring.ai.retry.* for this module.
     retry:
       max-retries: ${MCP_MODEL_RETRY_MAX_RETRIES:2}
       initial-delay: ${MCP_MODEL_RETRY_INITIAL_DELAY:1s}

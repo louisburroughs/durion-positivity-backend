@@ -1,5 +1,7 @@
 package com.positivity.mcp.internal.config;
 
+import java.net.SocketTimeoutException;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -10,6 +12,7 @@ import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.ai.ollama.api.OllamaApi;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.ai.retry.TransientAiException;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -42,7 +45,7 @@ public class OllamaChatModelConfiguration {
             @Value("${OLLAMA_CHAT_THINK:}") @NonNull String think,
             @Value("${spring.ai.ollama.chat.options.temperature:${OLLAMA_CHAT_TEMPERATURE:0.0}}") double temperature,
             @Value("${spring.ai.ollama.chat.options.num-ctx:${OLLAMA_NUM_CTX:32768}}") int numCtx,
-            @NonNull RetryTemplate ollamaChatRetryTemplate) {
+            @Qualifier("ollamaChatRetryTemplate") @NonNull RetryTemplate ollamaChatRetryTemplate) {
         return buildChatModel(baseUrl, modelName, apiKey, timeout, think, temperature, numCtx, ollamaChatRetryTemplate);
     }
 
@@ -62,26 +65,32 @@ public class OllamaChatModelConfiguration {
             @Value("${OLLAMA_CHAT_THINK:}") @NonNull String think,
             @Value("${spring.ai.ollama.chat.options.temperature:${OLLAMA_CHAT_TEMPERATURE:0.0}}") double temperature,
             @Value("${spring.ai.ollama.chat.options.num-ctx:${OLLAMA_NUM_CTX:32768}}") int numCtx,
-            @NonNull RetryTemplate ollamaChatRetryTemplate) {
+            @Qualifier("ollamaChatRetryTemplate") @NonNull RetryTemplate ollamaChatRetryTemplate) {
         return buildChatModel(baseUrl, modelName, apiKey, timeout, think, temperature, numCtx, ollamaChatRetryTemplate);
     }
 
     /**
-     * Bounded retry for the Ollama chat calls (#1749).
+     * Bounded retry for the blocking Ollama chat calls (#1749).
      *
-     * <p>Spring AI's default template retries a transient failure ten times with exponential
-     * back-off from 2 s, multiplier 5, capped at three minutes. On 2026-09-05 ollama.com answered
-     * HTTP 500 to one gate question and that default kept the turn alive through back-offs of 8 s,
-     * 11 s, 50 s and 181 s — the client had given up at 180 s long before, and the question read as
-     * a hang. Three requests over about seven seconds is the whole budget an interactive turn can
-     * spend on an upstream that is failing; after that the caller gets the error and can retry
-     * itself.
+     * <p>Spring AI's default template retries a transient failure ten times (eleven requests) with
+     * exponential back-off from 2 s, multiplier 5, capped at three minutes. On 2026-09-05 ollama.com
+     * answered HTTP 500 to one gate question and that default kept the turn alive through back-offs
+     * of 8 s, 11 s, 50 s and 181 s — the client had given up at 180 s long before, and the question
+     * read as a hang. This template bounds ATTEMPTS, not wall time: two retries after the first
+     * request, back-off 1 s then 2 s (3 s of waiting in all). A read timeout is deliberately not
+     * retried — each attempt could cost the full {@code OLLAMA_CHAT_TIMEOUT}, and an interactive turn
+     * cannot spend three of those — so only fast failures (5xx, refused connections, resets) are.
+     *
+     * <p>Streaming does not retry at all: Spring AI 2.0's {@code OllamaChatModel} consults the retry
+     * template only on the blocking path, so a streamed 500 surfaces after one request. Declaring
+     * this bean makes Spring AI's own {@code spring.ai.retry.*} template back off; {@code mcp.model.retry.*}
+     * supersedes it module-wide, which is the intent.
      */
-    @Bean
+    @Bean("ollamaChatRetryTemplate")
     public @NonNull RetryTemplate ollamaChatRetryTemplate(
             @Value("${mcp.model.retry.max-retries:2}") int maxRetries,
             @Value("${mcp.model.retry.initial-delay:1s}") @NonNull Duration initialDelay,
-            @Value("${mcp.model.retry.multiplier:2}") int multiplier,
+            @Value("${mcp.model.retry.multiplier:2}") double multiplier,
             @Value("${mcp.model.retry.max-delay:5s}") @NonNull Duration maxDelay) {
         LOGGER.info(
                 "MCP Ollama chat retry configured: maxRetries={} initialDelay={} multiplier={} maxDelay={}",
@@ -98,16 +107,33 @@ public class OllamaChatModelConfiguration {
      * after the first, with exponential back-off from {@code initialDelay} capped at {@code maxDelay}.
      */
     static @NonNull RetryTemplate boundedRetryTemplate(
-            int maxRetries, @NonNull Duration initialDelay, int multiplier, @NonNull Duration maxDelay) {
+            int maxRetries, @NonNull Duration initialDelay, double multiplier, @NonNull Duration maxDelay) {
         RetryPolicy policy = RetryPolicy.builder()
                 .maxRetries(maxRetries)
                 .includes(TransientAiException.class)
                 .includes(ResourceAccessException.class)
+                .predicate(OllamaChatModelConfiguration::isNotAReadTimeout)
                 .delay(initialDelay)
                 .multiplier(multiplier)
                 .maxDelay(maxDelay)
                 .build();
         return new RetryTemplate(policy);
+    }
+
+    /**
+     * A read timeout already cost a full {@code OLLAMA_CHAT_TIMEOUT}; retrying it would cost that
+     * again, twice. Refused connections and resets are fast and stay retryable.
+     */
+    static boolean isNotAReadTimeout(@NonNull Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof SocketTimeoutException || cause instanceof HttpTimeoutException) {
+                return false;
+            }
+            if (cause.getCause() == cause) {
+                break;
+            }
+        }
+        return true;
     }
 
     /**
