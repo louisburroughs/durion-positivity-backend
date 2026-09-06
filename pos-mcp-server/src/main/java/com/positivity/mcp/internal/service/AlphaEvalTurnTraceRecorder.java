@@ -34,6 +34,11 @@ public class AlphaEvalTurnTraceRecorder {
     // The deployed build (image tag, MCP_BUILD_ID) stamped on every trace, so a gate run can say
     // which build answered each turn — including a deploy that lands mid-run (#1806).
     private final String buildId;
+    /**
+     * The turn the current thread is recording. Stays private: {@code EvalTurnTracePropagation}
+     * carries it across Reactor threads through {@link #currentTurnHandle()}, {@link #bindTurn} and
+     * {@link #unbindTurn()} rather than by reaching into the field (#1850).
+     */
     private final ThreadLocal<TraceBuilder> activeTurn = new ThreadLocal<>();
 
     public AlphaEvalTurnTraceRecorder(
@@ -122,6 +127,12 @@ public class AlphaEvalTurnTraceRecorder {
         if (builder == null) {
             return;
         }
+        synchronized (builder) {
+            finishLocked(builder, response, error);
+        }
+    }
+
+    private void finishLocked(@NonNull TraceBuilder builder, @Nullable String response, @Nullable String error) {
         try {
             repository.save(builder.build(clock.instant(), retention, response, error));
         } catch (RuntimeException exception) {
@@ -131,10 +142,68 @@ public class AlphaEvalTurnTraceRecorder {
         }
     }
 
+    /**
+     * The turn bound to this thread, as an opaque handle (#1850).
+     *
+     * <p>Captured on the request thread and handed back to {@link #runWithTurn} inside a Reactor
+     * callback, this makes a streamed turn's completion deterministic rather than dependent on
+     * context propagation having captured the right thread at subscribe time.
+     */
+    public @Nullable Object currentTurnHandle() {
+        return activeTurn.get();
+    }
+
+    /**
+     * Binds {@code handle} as this thread's active turn. For context propagation, which has to set
+     * and clear the binding around a signal rather than around a call; ordinary callers want
+     * {@link #runWithTurn}, which restores the previous binding for them.
+     */
+    public void bindTurn(@Nullable Object handle) {
+        if (handle instanceof TraceBuilder builder) {
+            activeTurn.set(builder);
+        } else {
+            activeTurn.remove();
+        }
+    }
+
+    /** Clears this thread's binding, leaving the turn itself untouched. */
+    public void unbindTurn() {
+        activeTurn.remove();
+    }
+
+    /** Runs {@code action} with {@code handle} bound as the active turn, restoring what was there. */
+    public void runWithTurn(@Nullable Object handle, @NonNull Runnable action) {
+        if (!(handle instanceof TraceBuilder builder)) {
+            action.run();
+            return;
+        }
+        TraceBuilder previous = activeTurn.get();
+        activeTurn.set(builder);
+        try {
+            action.run();
+        } finally {
+            if (previous == null) {
+                activeTurn.remove();
+            } else {
+                activeTurn.set(previous);
+            }
+        }
+    }
+
+    /**
+     * Applies {@code operation} to this thread's turn, synchronized on the builder.
+     *
+     * <p>Before #1850 a turn was one thread's by construction and plain fields were safe. Now a
+     * streamed turn's tool calls and completion run on different threads against the same builder,
+     * so every mutation — and the read in {@link #finish} — takes the builder's monitor. Contention
+     * is nil: these are short field writes on one turn.
+     */
     private void current(java.util.function.Consumer<TraceBuilder> operation) {
         TraceBuilder builder = activeTurn.get();
         if (builder != null) {
-            operation.accept(builder);
+            synchronized (builder) {
+                operation.accept(builder);
+            }
         }
     }
 

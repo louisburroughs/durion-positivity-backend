@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.positivity.mcp.internal.config.CurrentUserContext;
 import com.positivity.mcp.internal.domain.EvalTurnTrace;
@@ -15,6 +16,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -139,5 +141,67 @@ class AlphaEvalTurnTraceRecorderTest {
         ArgumentCaptor<EvalTurnTrace> captor = ArgumentCaptor.forClass(EvalTurnTrace.class);
         verify(repository).save(captor.capture());
         return captor.getValue();
+    }
+
+    // ── #1850: a turn must be reachable from another thread ─────────────────
+
+    @Test
+    @DisplayName("a turn opened on one thread records nothing from another until it is bound")
+    void turnIsThreadBoundUntilRebound() throws Exception {
+        recorder.begin(USER, "stream me");
+        Object handle = recorder.currentTurnHandle();
+        assertThat(handle).as("the open turn is handed out as a handle").isNotNull();
+
+        // The failure this fixes: a Reactor thread records onto nothing.
+        runOnAnotherThread(() -> recorder.recordToolCall("getAgedReceivables", "{}", "{}", null, 5));
+        // Bound, the same call from the same kind of thread lands.
+        runOnAnotherThread(() -> recorder.runWithTurn(
+                handle, () -> recorder.recordToolCall("getRevenueByCustomer", "{}", "{}", null, 7)));
+        runOnAnotherThread(() -> recorder.runWithTurn(handle, () -> recorder.complete("done")));
+
+        EvalTurnTrace trace = savedTrace();
+        assertThat(trace.toolCalls())
+                .extracting(EvalTurnTrace.ToolCallTrace::name)
+                .as("only the bound call was recorded")
+                .containsExactly("getRevenueByCustomer");
+        assertThat(trace.finalResponse()).isEqualTo("done");
+    }
+
+    @Test
+    @DisplayName("runWithTurn restores whatever the thread had bound before, including nothing")
+    void runWithTurnRestoresPreviousBinding() {
+        recorder.begin(USER, "outer turn");
+        Object outer = recorder.currentTurnHandle();
+
+        recorder.runWithTurn(null, () -> {});
+        assertThat(recorder.currentTurnHandle())
+                .as("a null handle leaves the binding alone")
+                .isEqualTo(outer);
+
+        AlphaEvalTurnTraceRecorder other =
+                new AlphaEvalTurnTraceRecorder(repository, Clock.fixed(NOW, ZoneOffset.UTC), RETENTION, "sha-test");
+        other.begin(USER, "another turn");
+        Object otherHandle = other.currentTurnHandle();
+        recorder.runWithTurn(
+                otherHandle, () -> assertThat(recorder.currentTurnHandle()).isEqualTo(otherHandle));
+        assertThat(recorder.currentTurnHandle())
+                .as("the outer turn is back afterwards")
+                .isEqualTo(outer);
+    }
+
+    @Test
+    @DisplayName("a thread with no turn bound records nothing and does not throw")
+    void recordingWithoutATurnIsSafe() {
+        recorder.recordToolCall("getAgedReceivables", "{}", "{}", null, 1);
+        recorder.recordAnswerSource("CONTENT");
+        recorder.complete("no turn was open");
+
+        verifyNoInteractions(repository);
+    }
+
+    private static void runOnAnotherThread(Runnable action) throws Exception {
+        Thread thread = new Thread(action);
+        thread.start();
+        thread.join();
     }
 }
