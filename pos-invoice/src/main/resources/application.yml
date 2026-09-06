@@ -109,6 +109,10 @@ pos:
       workorder-manifest-topic: ${POS_INVOICE_WORKORDER_MANIFEST_TOPIC:workorder.manifest.v1}
       workorder-manifest-consumer-group: ${POS_INVOICE_WORKORDER_MANIFEST_CONSUMER_GROUP:pos-invoice-workorder-manifests}
       workorder-commands-topic: ${POS_INVOICE_WORKORDER_COMMANDS_TOPIC:workorder.commands.v1}
+      # GL-posting facts from pos-accounting: accounting.invoice.gl-posted moves a FINALIZED
+      # invoice to POSTED (ADR-0044 §6, #1843)
+      accounting-events-topic: ${POS_INVOICE_ACCOUNTING_EVENTS_TOPIC:accounting.events.v1}
+      accounting-events-consumer-group: ${POS_INVOICE_ACCOUNTING_EVENTS_CONSUMER_GROUP:pos-invoice-accounting-events}
       # Own command intake + reconciliation manifests (ADR-0044 §4, #900)
       commands-topic: ${POS_INVOICE_COMMANDS_TOPIC:invoice.commands.v1}
       commands-consumer-group: ${POS_INVOICE_COMMANDS_CONSUMER_GROUP:pos-invoice-commands}

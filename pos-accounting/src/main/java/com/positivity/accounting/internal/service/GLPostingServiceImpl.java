@@ -496,6 +496,93 @@ public class GLPostingServiceImpl implements GLPostingService {
                 "Register Over/Short - Session#" + sessionId);
     }
 
+    @Override
+    public UUID postInvoiceRevenue(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID invoiceId,
+            @NonNull UUID arAccountId,
+            @NonNull UUID revenueAccountId,
+            @NonNull UUID taxPayableAccountId,
+            @NonNull BigDecimal revenueAmount,
+            @NonNull BigDecimal taxAmount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description) {
+
+        BigDecimal totalAmount = revenueAmount.add(taxAmount);
+
+        log.info(
+                "Posting invoice revenue GL entry {}: debit AR {}, credit revenue {}, credit tax {}",
+                sourceEventId,
+                totalAmount,
+                revenueAmount,
+                taxAmount);
+
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
+
+        // Debit: AR (the receivable the finalized invoice creates).
+        addDebit(lines, arAccountId, totalAmount, "Accounts Receivable - INV#" + invoiceId);
+        // Credit: Service Revenue (recognized on finalization, ASC 606 point-in-time).
+        addCredit(lines, revenueAccountId, revenueAmount, "Revenue Recognition - INV#" + invoiceId);
+        // Credit: Sales Tax Payable (collected on behalf of the jurisdiction; zero leg omitted).
+        addCredit(lines, taxPayableAccountId, taxAmount, "Sales Tax Payable - INV#" + invoiceId);
+
+        return createAndPost(sourceEventId, transactionDate, description, lines, "invoice revenue");
+    }
+
+    @Override
+    public UUID postInvoiceRevenueReversal(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID invoiceId,
+            @NonNull UUID arAccountId,
+            @NonNull UUID revenueAccountId,
+            @NonNull UUID taxPayableAccountId,
+            @NonNull BigDecimal revenueAmount,
+            @NonNull BigDecimal taxAmount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description) {
+
+        BigDecimal totalAmount = revenueAmount.add(taxAmount);
+
+        log.info(
+                "Posting invoice revenue REVERSAL GL entry {}: debit revenue {}, debit tax {}, credit AR {}",
+                sourceEventId,
+                revenueAmount,
+                taxAmount,
+                totalAmount);
+
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
+
+        // Debit: Service Revenue (un-recognize the reverted invoice's revenue).
+        addDebit(lines, revenueAccountId, revenueAmount, "Revenue Reversal - INV#" + invoiceId);
+        // Debit: Sales Tax Payable (release the tax liability; zero leg omitted).
+        addDebit(lines, taxPayableAccountId, taxAmount, "Sales Tax Reversal - INV#" + invoiceId);
+        // Credit: AR (the receivable no longer exists).
+        addCredit(lines, arAccountId, totalAmount, "AR Reversal - INV#" + invoiceId);
+
+        return createAndPost(sourceEventId, transactionDate, description, lines, "invoice revenue reversal");
+    }
+
+    /** Create and post an entry from prepared lines (period gate applies inside post, B2). */
+    private UUID createAndPost(
+            @NonNull UUID sourceEventId,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @NonNull List<JournalEntryCreateRequest.JournalEntryLineRequest> lines,
+            @NonNull String label) {
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .transactionDate(transactionDate)
+                .description(description)
+                .sourceEventId(sourceEventId)
+                .lines(lines)
+                .build();
+
+        JournalEntryResponse created = journalEntryService.createJournalEntry(request);
+        JournalEntryResponse posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), null);
+
+        log.info("Posted {} GL entry: journal entry ID {}", label, posted.getJournalEntryId());
+        return posted.getJournalEntryId();
+    }
+
     /**
      * Post a balanced two-line entry {@code Dr debitAccount / Cr creditAccount}
      * of {@code amount}. Used by settlement write-off (Dr Suspense / Cr

@@ -6,7 +6,6 @@ import com.positivity.invoice.internal.dto.FinalizationEligibilityResult;
 import com.positivity.invoice.internal.dto.FinalizationRequest;
 import com.positivity.invoice.internal.dto.InvoiceAdjustmentResponse;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
-import com.positivity.invoice.internal.dto.InvoiceFinalizedEvent;
 import com.positivity.invoice.internal.dto.InvoiceItemResponse;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
@@ -29,7 +28,6 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,8 +46,17 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>
  * Lifecycle:
  * <ul>
- * <li>DRAFT → FINALIZED (on successful finalization)</li>
- * <li>FINALIZED → DRAFT (on revert, within 24h, before GL posting)</li>
+ * <li>DRAFT → FINALIZED (on successful finalization). Finalization emits
+ * {@code invoice.invoice.updated} (status FINALIZED) through the transactional outbox;
+ * pos-accounting consumes that fact and posts the revenue journal entry (ADR-0044 §6,
+ * #1843).</li>
+ * <li>FINALIZED → POSTED when pos-accounting's {@code accounting.invoice.gl-posted} fact
+ * arrives on {@code accounting.events.v1} — see {@link AccountingEventsListener} and
+ * {@link #markPosted(UUID, UUID, Instant)}. The journal entry id is recorded as
+ * {@code glEntryId}. pos-invoice never fabricates a GL entry itself.</li>
+ * <li>FINALIZED → DRAFT (on revert, within 24h, before the GL-posted fact arrives). A revert
+ * that races the posting is reconciled by pos-accounting reversing the entry when it sees
+ * the DRAFT fact; the late {@code gl-posted} fact is then skipped here.</li>
  * <li>POSTED: immutable — cannot be reverted</li>
  * </ul>
  */
@@ -67,7 +74,6 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     private static final String OVERRIDE_AUTHORITY = "invoice:finalize:override";
 
     private final InvoiceRepository invoiceRepository;
-    private final ApplicationEventPublisher eventPublisher;
     private final ElevationTokenService elevationTokenService;
     private final InvoiceEventPublisher invoiceEventPublisher;
     private final TaxLifecycleClient taxLifecycleClient;
@@ -77,7 +83,6 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
 
     public InvoiceFinalizationServiceImpl(
             InvoiceRepository invoiceRepository,
-            ApplicationEventPublisher eventPublisher,
             Clock clock,
             ElevationTokenService elevationTokenService,
             InvoiceEventPublisher invoiceEventPublisher,
@@ -87,7 +92,6 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             InvoiceTaxBreakdownWriter taxBreakdownWriter) {
         this.clock = clock;
         this.invoiceRepository = invoiceRepository;
-        this.eventPublisher = eventPublisher;
         this.elevationTokenService = elevationTokenService;
         this.invoiceEventPublisher = invoiceEventPublisher;
         this.taxLifecycleClient = taxLifecycleClient;
@@ -222,10 +226,10 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             invoice.setPaymentTermsCode(dueTerms.paymentTerms().name());
             invoice.setDueDate(dueTerms.dueDate());
             Invoice saved = invoiceRepository.save(invoice);
+            // AC5 / #1843: this FINALIZED fact is what drives GL posting — pos-accounting
+            // consumes it, posts the revenue entry, and answers with accounting.invoice.gl-posted
+            // (see markPosted). No in-process accounting event is emitted any more.
             invoiceEventPublisher.publishInvoiceUpdated(saved);
-
-            // AC5: Emit async accounting event
-            publishFinalizedEvent(saved.getId(), saved.getWorkorderId(), finalizedBy, now, saved.getTotal());
 
             // Story T6 / D-T3: commit the provider tax document for the finalized invoice.
             // Synchronous utility call; never blocks the sale (the client swallows failures and
@@ -323,6 +327,89 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         taxLifecycleClient.voidTransaction(saved.getId());
 
         return toDetailsResponse(saved);
+    }
+
+    /**
+     * #1843: applies pos-accounting's {@code accounting.invoice.gl-posted} (POSTED) fact.
+     *
+     * <p>
+     * The fact carries the {@code finalizedAt} of the finalization instance the journal entry
+     * was posted for, so a fact belonging to an earlier finalize/revert cycle never promotes a
+     * re-finalized invoice. Outcomes:
+     * <ul>
+     * <li>FINALIZED with a matching {@code finalizedAt}: transition to POSTED, record the
+     * journal entry id as {@code glEntryId}, and emit {@code invoice.invoice.updated} so
+     * downstream replicas see POSTED.</li>
+     * <li>Already POSTED with the same {@code glEntryId}: duplicate delivery, no-op.</li>
+     * <li>Any other state — POSTED under a different entry, DRAFT/CANCELLED (reverted or
+     * cancelled in the race window; accounting reverses the entry when it sees that fact), a
+     * different {@code finalizedAt}, or an unknown invoice — is logged at WARN and skipped.
+     * Facts are never rejected: skipping is the reconciliation, not an error.</li>
+     * </ul>
+     */
+    @Override
+    @Transactional
+    public void markPosted(@NonNull UUID invoiceId, @NonNull UUID glEntryId, @NonNull Instant finalizedAt) {
+        Optional<Invoice> invoiceOpt = invoiceRepository.findById(invoiceId);
+        if (invoiceOpt.isEmpty()) {
+            log.warn(
+                    "GL-posted fact skipped — invoice not found: invoiceId={}, glEntryId(mask)={}",
+                    invoiceId,
+                    maskForLog(glEntryId));
+            return;
+        }
+        Invoice invoice = invoiceOpt.get();
+
+        if (invoice.getStatus() == InvoiceStatus.POSTED) {
+            if (glEntryId.equals(invoice.getGlEntryId())) {
+                log.debug("GL-posted fact skipped — already POSTED under the same entry: invoiceId={}", invoiceId);
+            } else {
+                log.warn(
+                        "GL-posted fact skipped — invoice already POSTED under a different entry: invoiceId={}, "
+                                + "glEntryId(mask)={}, factGlEntryId(mask)={}",
+                        invoiceId,
+                        maskForLog(invoice.getGlEntryId()),
+                        maskForLog(glEntryId));
+            }
+            return;
+        }
+
+        if (invoice.getStatus() != InvoiceStatus.FINALIZED) {
+            log.warn(
+                    "GL-posted fact skipped — invoice is {} (reverted or cancelled before posting; accounting "
+                            + "reverses on that fact): invoiceId={}, glEntryId(mask)={}",
+                    invoice.getStatus(),
+                    invoiceId,
+                    maskForLog(glEntryId));
+            return;
+        }
+
+        if (invoice.getFinalizedAt() == null) {
+            log.warn(
+                    "GL-posted fact applied to a FINALIZED invoice with no finalizedAt — cannot verify the "
+                            + "finalization instance: invoiceId={}, factFinalizedAt={}",
+                    invoiceId,
+                    finalizedAt);
+        } else if (!sameInstant(invoice.getFinalizedAt(), finalizedAt)) {
+            log.warn(
+                    "GL-posted fact skipped — finalization instance mismatch: invoiceId={}, finalizedAt={}, "
+                            + "factFinalizedAt={}",
+                    invoiceId,
+                    invoice.getFinalizedAt(),
+                    finalizedAt);
+            return;
+        }
+
+        invoice.setStatus(InvoiceStatus.POSTED);
+        invoice.setGlEntryId(glEntryId);
+        Invoice saved = invoiceRepository.save(invoice);
+        invoiceEventPublisher.publishInvoiceUpdated(saved);
+        if (log.isInfoEnabled()) {
+            log.info(
+                    "Invoice POSTED from GL-posted fact: invoiceId={}, glEntryId(mask)={}",
+                    invoiceId,
+                    maskForLog(glEntryId));
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -427,6 +514,20 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
         }
     }
 
+    /**
+     * Tolerance for matching the fact's {@code finalizedAt} against the stored one. The stored
+     * value round-trips through the database at microsecond precision (rounded, so it can land on
+     * the far side of a millisecond boundary) while the fact echoes the value the outbox
+     * serialized from the in-memory entity; comparing by distance rather than by truncation keeps
+     * boundary rounding from rejecting a legitimate fact. Two finalization instances of one
+     * invoice can never be a millisecond apart (revert needs manager approval in between).
+     */
+    static final Duration FINALIZED_AT_TOLERANCE = Duration.ofMillis(1);
+
+    private static boolean sameInstant(@NonNull Instant stored, @NonNull Instant fromFact) {
+        return Duration.between(stored, fromFact).abs().compareTo(FINALIZED_AT_TOLERANCE) <= 0;
+    }
+
     private String maskForLog(Object value) {
         if (value == null) {
             return "null";
@@ -438,13 +539,6 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
             return "****";
         }
         return sanitized.substring(0, 2) + "***" + sanitized.substring(length - 2);
-    }
-
-    private void publishFinalizedEvent(
-            UUID invoiceId, UUID workorderId, String finalizedBy, Instant finalizedAt, BigDecimal grandTotal) {
-        // m10: eventPublisher is Spring-injected — always non-null; null guard removed
-        eventPublisher.publishEvent(new InvoiceFinalizedEvent(
-                invoiceId, workorderId, finalizedBy, finalizedAt, grandTotal != null ? grandTotal : BigDecimal.ZERO));
     }
 
     private InvoiceDetailsResponse toDetailsResponse(@NonNull Invoice invoice) {

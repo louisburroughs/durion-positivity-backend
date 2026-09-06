@@ -267,9 +267,11 @@ public class InvoiceController {
                     managerApprovalCode when the stored total exceeds 500.00.
                     Required inputs: invoiceId (UUID) as a path parameter; managerApprovalCode and overrideReason in \
                     the body are optional below the cap and for override holders.
-                    Emits an INVOICE_FINALIZED event and publishes the async accounting event that drives GL \
-                    posting; the tax commit tolerates a provider outage by recording PENDING_COMMIT in pos-tax for \
-                    the re-commit job, and is skipped entirely when nothing is taxable.
+                    Emits an INVOICE_FINALIZED event and publishes the invoice.invoice.updated fact (status \
+                    FINALIZED); pos-accounting consumes it and posts the revenue journal entry, and the invoice \
+                    becomes POSTED asynchronously when the accounting.invoice.gl-posted fact from pos-accounting arrives. The \
+                    tax commit tolerates a provider outage by recording PENDING_COMMIT in pos-tax for the re-commit \
+                    job, and is skipped entirely when nothing is taxable.
                     Returns 200 with the finalized invoice, 404 when the invoice does not exist, 409 when the \
                     invoice is not DRAFT or tax has not been calculated, and 403 with MANAGER_APPROVAL_REQUIRED or \
                     MANAGER_APPROVAL_INVALID when a required managerApprovalCode is missing, invalid, or expired \

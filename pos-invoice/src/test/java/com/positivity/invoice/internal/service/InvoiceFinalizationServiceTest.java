@@ -34,7 +34,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -51,10 +50,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
  * workorder not complete</li>
  * <li>AC3 — permission and amount limits enforced; manager approval required
  * for overrides</li>
- * <li>AC4 — {@code finalizeInvoice} transitions DRAFT → FINALIZED and emits
- * {@code InvoiceFinalized} event</li>
- * <li>AC5 — GL entries posted asynchronously; invoice marked POSTED or
- * ERROR</li>
+ * <li>AC4 — {@code finalizeInvoice} transitions DRAFT → FINALIZED and emits the
+ * {@code invoice.invoice.updated} fact that drives GL posting in pos-accounting</li>
+ * <li>AC5 — the invoice becomes POSTED when accounting's {@code gl-posted} fact
+ * arrives ({@code markPosted}, #1843)</li>
  * <li>AC6 — finalized invoice is read-only; revert requires manager approval
  * within 24h</li>
  * </ul>
@@ -70,9 +69,6 @@ class InvoiceFinalizationServiceTest {
 
     @Mock
     private InvoiceRepository invoiceRepository;
-
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
 
     @Mock
     private ElevationTokenService elevationTokenService;
@@ -230,8 +226,8 @@ class InvoiceFinalizationServiceTest {
 
     /**
      * AC4: Successful finalization must transition the invoice to FINALIZED,
-     * set {@code finalizedAt} and {@code finalizedBy}, and emit an
-     * {@code InvoiceFinalized} event.
+     * set {@code finalizedAt} and {@code finalizedBy}, and emit the
+     * {@code invoice.invoice.updated} fact pos-accounting posts the GL entry from.
      */
     @Test
     void finalize_transitionsInvoiceFromDraftToFinalized_andEmitsEvent() {
@@ -252,6 +248,145 @@ class InvoiceFinalizationServiceTest {
         // #993: the due-date facts are frozen on the entity at finalization.
         assertThat(draft.getDueDate()).isEqualTo(java.time.LocalDate.ofInstant(TEST_CLOCK.instant(), ZoneOffset.UTC));
         assertThat(draft.getPaymentTermsCode()).isEqualTo("DUE_ON_RECEIPT");
+        // #1843: the FINALIZED fact is the only thing that drives GL posting; pos-invoice does
+        // not fabricate a GL entry, so the invoice stays FINALIZED with no glEntryId.
+        verify(invoiceEventPublisher).publishInvoiceUpdated(draft);
+        assertThat(draft.getGlEntryId()).isNull();
+    }
+
+    // -------------------------------------------------------------------------
+    // AC5 — FINALIZED → POSTED from accounting's gl-posted fact (#1843)
+    // -------------------------------------------------------------------------
+
+    private static final UUID GL_ENTRY_ID = UUID.fromString("00000000-0000-0000-0000-00000000a0a0");
+
+    private Invoice finalizedAt(Instant finalizedAt) {
+        Invoice invoice = finalizedInvoice(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        invoice.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        invoice.setFinalizedAt(finalizedAt);
+        return invoice;
+    }
+
+    @Test
+    void markPosted_transitionsFinalizedToPosted_recordsGlEntry_andPublishes() {
+        Instant finalizedAt = TEST_CLOCK.instant();
+        Invoice invoice = finalizedAt(finalizedAt);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.markPosted(invoice.getId(), GL_ENTRY_ID, finalizedAt);
+
+        assertThat(invoice.getStatus()).isEqualTo(InvoiceStatus.POSTED);
+        assertThat(invoice.getGlEntryId()).isEqualTo(GL_ENTRY_ID);
+        verify(invoiceRepository).save(invoice);
+        verify(invoiceEventPublisher).publishInvoiceUpdated(invoice);
+    }
+
+    @Test
+    void markPosted_toleratesSubMillisecondFinalizedAtDrift() {
+        // The stored value round-trips the DB at microsecond precision; the fact echoes the
+        // serialized in-memory value. Anything below a millisecond is the same instance.
+        Instant stored = TEST_CLOCK.instant().plusNanos(123_000);
+        Invoice invoice = finalizedAt(stored);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.markPosted(invoice.getId(), GL_ENTRY_ID, TEST_CLOCK.instant());
+
+        assertThat(invoice.getStatus()).isEqualTo(InvoiceStatus.POSTED);
+    }
+
+    @Test
+    void markPosted_toleratesMicrosecondRoundingAcrossMillisecondBoundary() {
+        // Postgres rounds timestamp(6): an in-memory 00:00:00.000999600 is stored as
+        // 00:00:00.001000, on the far side of the millisecond boundary the fact sits on.
+        Instant fact = TEST_CLOCK.instant().plusNanos(999_600);
+        Instant stored = TEST_CLOCK.instant().plusNanos(1_000_000);
+        Invoice invoice = finalizedAt(stored);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.markPosted(invoice.getId(), GL_ENTRY_ID, fact);
+
+        assertThat(invoice.getStatus()).isEqualTo(InvoiceStatus.POSTED);
+        assertThat(invoice.getGlEntryId()).isEqualTo(GL_ENTRY_ID);
+    }
+
+    @Test
+    void markPosted_appliesWhenLocalFinalizedAtMissing() {
+        Invoice invoice = finalizedAt(null);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.markPosted(invoice.getId(), GL_ENTRY_ID, TEST_CLOCK.instant());
+
+        assertThat(invoice.getStatus()).isEqualTo(InvoiceStatus.POSTED);
+        assertThat(invoice.getGlEntryId()).isEqualTo(GL_ENTRY_ID);
+    }
+
+    @Test
+    void markPosted_skipsWhenFinalizationInstanceDiffers() {
+        // A fact for an earlier finalize/revert cycle must not promote the re-finalized invoice.
+        Invoice invoice = finalizedAt(TEST_CLOCK.instant().plusSeconds(3600));
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+
+        service.markPosted(invoice.getId(), GL_ENTRY_ID, TEST_CLOCK.instant());
+
+        assertThat(invoice.getStatus()).isEqualTo(InvoiceStatus.FINALIZED);
+        assertThat(invoice.getGlEntryId()).isNull();
+        verify(invoiceRepository, org.mockito.Mockito.never()).save(any());
+        verify(invoiceEventPublisher, org.mockito.Mockito.never()).publishInvoiceUpdated(any());
+    }
+
+    @Test
+    void markPosted_isNoOpWhenAlreadyPostedUnderSameEntry() {
+        Invoice invoice = finalizedAt(TEST_CLOCK.instant());
+        invoice.setStatus(InvoiceStatus.POSTED);
+        invoice.setGlEntryId(GL_ENTRY_ID);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+
+        service.markPosted(invoice.getId(), GL_ENTRY_ID, TEST_CLOCK.instant());
+
+        verify(invoiceRepository, org.mockito.Mockito.never()).save(any());
+        verify(invoiceEventPublisher, org.mockito.Mockito.never()).publishInvoiceUpdated(any());
+    }
+
+    @Test
+    void markPosted_skipsWhenAlreadyPostedUnderDifferentEntry() {
+        Invoice invoice = finalizedAt(TEST_CLOCK.instant());
+        invoice.setStatus(InvoiceStatus.POSTED);
+        invoice.setGlEntryId(UUID.fromString("00000000-0000-0000-0000-00000000b0b0"));
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+
+        service.markPosted(invoice.getId(), GL_ENTRY_ID, TEST_CLOCK.instant());
+
+        assertThat(invoice.getGlEntryId()).isEqualTo(UUID.fromString("00000000-0000-0000-0000-00000000b0b0"));
+        verify(invoiceRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void markPosted_skipsDraftInvoice_revertedInRaceWindow() {
+        Invoice invoice = finalizedAt(TEST_CLOCK.instant());
+        invoice.setStatus(InvoiceStatus.DRAFT);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+
+        service.markPosted(invoice.getId(), GL_ENTRY_ID, TEST_CLOCK.instant());
+
+        assertThat(invoice.getStatus()).isEqualTo(InvoiceStatus.DRAFT);
+        assertThat(invoice.getGlEntryId()).isNull();
+        verify(invoiceRepository, org.mockito.Mockito.never()).save(any());
+        verify(invoiceEventPublisher, org.mockito.Mockito.never()).publishInvoiceUpdated(any());
+    }
+
+    @Test
+    void markPosted_skipsUnknownInvoice() {
+        UUID missing = UUID.fromString("00000000-0000-0000-0000-0000000000ff");
+        when(invoiceRepository.findById(missing)).thenReturn(Optional.empty());
+
+        service.markPosted(missing, GL_ENTRY_ID, TEST_CLOCK.instant());
+
+        verify(invoiceRepository, org.mockito.Mockito.never()).save(any());
+        verify(invoiceEventPublisher, org.mockito.Mockito.never()).publishInvoiceUpdated(any());
     }
 
     /**

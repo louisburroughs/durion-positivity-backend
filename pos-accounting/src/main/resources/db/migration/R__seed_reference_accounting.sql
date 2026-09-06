@@ -550,3 +550,50 @@ ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system
 INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
 VALUES ('5eed0acc-0000-4000-8000-00000000d313'::uuid, 'ACCOUNTING', 'REGISTER_OVER_SHORT_CASH_CLEARING', '5eed0acc-0000-4000-8000-00000000d301'::uuid, '5eed0acc-0000-4000-8000-00000000d304'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '1095'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
 ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
+
+-- ============================================================================
+-- Issue #1843: invoice revenue recognition (ADR-0044 R6).
+-- A FINALIZED invoice fact on invoice.events.v1 posts
+--   Dr 1200 Accounts Receivable (total) / Cr 4000 Service Revenue (total - tax)
+--                                        / Cr 2200 Sales Tax Payable (tax)
+-- dated at the invoice's finalizedAt; a DRAFT/CANCELLED fact for a recognized
+-- invoice posts the mirror. Accounts resolve through the INVOICE_REVENUE
+-- category's mapping keys (ACCOUNTS_RECEIVABLE / SERVICE_REVENUE /
+-- SALES_TAX_PAYABLE) — never hardcoded. Fixed ids in the 5eed0acc-...-d4xx block;
+-- fixed effective_start_date (not NOW()) exactly like the #954 PAYMENT_APPLICATION
+-- block so re-runs stay idempotent and the mapping covers every posting date.
+-- gl_mapping.gl_account_id is resolved by account_code SELECT (mirrors the G3
+-- pattern above) so the FK binds to whichever id won the ON CONFLICT (account_code)
+-- upsert: 1200 = 0f12890f-383d-b449-b555-bd4b37bf1f44, 4000 =
+-- b8798348-d3be-9582-7a6d-883ae3e64e66, 2200 = 5eed0acc-0000-4000-8000-000000002200
+-- on a fresh schema.
+-- ============================================================================
+
+-- Posting category: INVOICE_REVENUE.
+INSERT INTO posting_category (posting_category_id, category_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d401'::uuid, 'INVOICE_REVENUE', 'Invoice revenue recognition on finalization (Dr AR / Cr Service Revenue / Cr Sales Tax Payable, #1843)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (posting_category_id) DO UPDATE SET
+    category_name = EXCLUDED.category_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active,
+    modified_at = NOW(), modified_by = 'seed-generator';
+
+-- Mapping keys (resolved by name at posting time).
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d402'::uuid, '5eed0acc-0000-4000-8000-00000000d401'::uuid, 'ACCOUNTS_RECEIVABLE', 'Debit side of invoice revenue recognition (the receivable)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.posting_category_id, key_name = EXCLUDED.key_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active, modified_at = NOW(), modified_by = 'seed-generator';
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d403'::uuid, '5eed0acc-0000-4000-8000-00000000d401'::uuid, 'SERVICE_REVENUE', 'Credit side of invoice revenue recognition (total - tax)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.posting_category_id, key_name = EXCLUDED.key_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active, modified_at = NOW(), modified_by = 'seed-generator';
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d404'::uuid, '5eed0acc-0000-4000-8000-00000000d401'::uuid, 'SALES_TAX_PAYABLE', 'Credit side of invoice revenue recognition (tax collected)', TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator')
+ON CONFLICT (mapping_key_id) DO UPDATE SET posting_category_id = EXCLUDED.posting_category_id, key_name = EXCLUDED.key_name, description = EXCLUDED.description, is_active = EXCLUDED.is_active, modified_at = NOW(), modified_by = 'seed-generator';
+
+-- GL mappings (fixed effective_start_date for idempotent re-runs).
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d411'::uuid, 'ACCOUNTING', 'INVOICE_REVENUE_ACCOUNTS_RECEIVABLE', '5eed0acc-0000-4000-8000-00000000d401'::uuid, '5eed0acc-0000-4000-8000-00000000d402'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '1200'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d412'::uuid, 'ACCOUNTING', 'INVOICE_REVENUE_SERVICE_REVENUE', '5eed0acc-0000-4000-8000-00000000d401'::uuid, '5eed0acc-0000-4000-8000-00000000d403'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '4000'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+VALUES ('5eed0acc-0000-4000-8000-00000000d413'::uuid, 'ACCOUNTING', 'INVOICE_REVENUE_SALES_TAX_PAYABLE', '5eed0acc-0000-4000-8000-00000000d401'::uuid, '5eed0acc-0000-4000-8000-00000000d404'::uuid, (SELECT gl_account_id FROM gl_account WHERE account_code = '2200'), TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator')
+ON CONFLICT (gl_mapping_id) DO UPDATE SET source_system = EXCLUDED.source_system, external_code = EXCLUDED.external_code, posting_category_id = EXCLUDED.posting_category_id, mapping_key_id = EXCLUDED.mapping_key_id, gl_account_id = EXCLUDED.gl_account_id, effective_start_date = EXCLUDED.effective_start_date, created_by = 'seed-generator';
