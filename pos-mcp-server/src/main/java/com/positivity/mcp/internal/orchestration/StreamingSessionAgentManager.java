@@ -209,6 +209,13 @@ public class StreamingSessionAgentManager
                 tokenCount(message),
                 messagePreview);
 
+        // #1850: open the eval turn on the request thread, before either branch. The turn is bound
+        // to this thread; EvalTurnTracePropagation carries it onto the Reactor threads that run the
+        // tool calls, and the completion callbacks below re-bind it explicitly so a trace is written
+        // whether or not propagation captured this thread at subscribe time.
+        if (toolInvocationRecorder != null) {
+            toolInvocationRecorder.beginTurn(currentUserContext, message);
+        }
         // Gate 4 / Gate 2A closure: shared T0 rule fast-path (previously blocking-only) — pure
         // social chat streams straight from the default model with no tool selection or RAG.
         if (simpleChatFastPath.isSimpleChat(message)) {
@@ -217,7 +224,16 @@ public class StreamingSessionAgentManager
                     username,
                     role,
                     messagePreview);
-            return simpleStreamChat(currentUserContext, message, startMs);
+            if (toolInvocationRecorder != null) {
+                toolInvocationRecorder.recordSimpleChat(true);
+            }
+            Flux<String> simple = simpleStreamChat(currentUserContext, message, startMs);
+            // The handle now travels with the Flux; unbind the request thread so a pooled servlet
+            // thread cannot carry this turn into the next request (#1850).
+            if (toolInvocationRecorder != null) {
+                toolInvocationRecorder.clearTurn();
+            }
+            return simple;
         }
 
         // Gate 4 (#1192): classify with the T1 router (temperature 0) and select the executor tier.
@@ -262,7 +278,12 @@ public class StreamingSessionAgentManager
         // Capture the caller's Authorization on the request thread; the Flux is subscribed later on a
         // Reactor thread where RequestContextHolder is no longer populated.
         String authorizationHeader = currentAuthorizationHeader();
-        return Flux.<String>create(emitter -> streamTokens(
+        // #1850: the turn was opened on the request thread but this Flux is subscribed on a Reactor
+        // thread, so the handle travels explicitly — bound inside streamTokens for the work, and
+        // re-bound in the completion callbacks for the write.
+        Object turnHandle = toolInvocationRecorder == null ? null : toolInvocationRecorder.currentTurnHandle();
+        StringBuilder streamedText = new StringBuilder();
+        Flux<String> streamed = Flux.<String>create(emitter -> streamTokens(
                         agent,
                         memoryId,
                         message,
@@ -270,8 +291,16 @@ public class StreamingSessionAgentManager
                         currentUserContext,
                         authorizationHeader,
                         writeCapableToolsPresent,
+                        turnHandle,
                         emitter))
+                .doOnNext(streamedText::append)
                 .doOnComplete(() -> {
+                    // #1850: re-bind the turn opened on the request thread — this callback runs on a
+                    // Reactor thread — so the streamed reply lands on its trace like a blocking one.
+                    if (toolInvocationRecorder != null) {
+                        toolInvocationRecorder.runWithTurn(
+                                turnHandle, () -> toolInvocationRecorder.completeTurn(streamedText.toString()));
+                    }
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
                     LOGGER.debug(
                             "MCP streaming chat completed username={} role={} totalElapsedMs={} preview=\"{}\"",
@@ -297,6 +326,10 @@ public class StreamingSessionAgentManager
                             writeCapable);
                 })
                 .doOnError(exception -> {
+                    if (toolInvocationRecorder != null) {
+                        toolInvocationRecorder.runWithTurn(
+                                turnHandle, () -> toolInvocationRecorder.failTurn(exception));
+                    }
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
                     LOGGER.warn(
                             "MCP streaming chat failed username={} role={} preview=\"{}\" error={}",
@@ -326,6 +359,12 @@ public class StreamingSessionAgentManager
                             tierRouting,
                             writeCapableToolsPresent.get());
                 });
+        // The handle now travels with the Flux; unbind the request thread so a pooled servlet thread
+        // cannot carry this turn into the next request (#1850).
+        if (toolInvocationRecorder != null) {
+            toolInvocationRecorder.clearTurn();
+        }
+        return streamed;
     }
 
     /**
@@ -338,6 +377,10 @@ public class StreamingSessionAgentManager
         String role = currentUserContext.primaryRole();
         String correlationId = resolveCorrelationId();
         Prompt prompt = simpleChatFastPath.prompt(currentUserContext, message);
+        // #1850: the turn was opened on the request thread; bind it here, inside the deferred
+        // subscription, so the model call and the answer-source record below land on it.
+        Object turnHandle = toolInvocationRecorder == null ? null : toolInvocationRecorder.currentTurnHandle();
+        StringBuilder streamedText = new StringBuilder();
         Flux<String> tokens = Flux.defer(() -> streamingChatModel.stream(prompt))
                 .map(response -> {
                     if (response.getResult() == null || response.getResult().getOutput() == null) {
@@ -350,10 +393,16 @@ public class StreamingSessionAgentManager
         // #1838: classified like the blocking simple-chat reply; the raw source is recorded (#1816).
         return StreamingAnswerGuard.guard(tokens, source -> {
                     if (toolInvocationRecorder != null) {
-                        toolInvocationRecorder.recordAnswerSource(source.name());
+                        toolInvocationRecorder.runWithTurn(
+                                turnHandle, () -> toolInvocationRecorder.recordAnswerSource(source.name()));
                     }
                 })
+                .doOnNext(streamedText::append)
                 .doOnComplete(() -> {
+                    if (toolInvocationRecorder != null) {
+                        toolInvocationRecorder.runWithTurn(
+                                turnHandle, () -> toolInvocationRecorder.completeTurn(streamedText.toString()));
+                    }
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
                     LOGGER.debug(
                             "MCP streaming simple chat completed username={} role={} totalElapsedMs={}",
@@ -377,6 +426,10 @@ public class StreamingSessionAgentManager
                             false);
                 })
                 .doOnError(exception -> {
+                    if (toolInvocationRecorder != null) {
+                        toolInvocationRecorder.runWithTurn(
+                                turnHandle, () -> toolInvocationRecorder.failTurn(exception));
+                    }
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
                     LOGGER.warn(
                             "MCP streaming simple chat failed username={} role={} error={}",
@@ -587,6 +640,45 @@ public class StreamingSessionAgentManager
     }
 
     private void streamTokens(
+            @NonNull StreamingPosAssistant agent,
+            @NonNull String memoryId,
+            @NonNull String message,
+            @NonNull String userContext,
+            @NonNull CurrentUserContext currentUserContext,
+            @Nullable String authorizationHeader,
+            @NonNull AtomicBoolean writeCapableToolsPresent,
+            @Nullable Object turnHandle,
+            @NonNull FluxSink<String> emitter) {
+        if (toolInvocationRecorder != null) {
+            // #1850: bind the eval turn for the same window as the caller below. agent.chat resolves
+            // tools and builds the prompt synchronously here, and the inner subscribe happens here
+            // too, so this is where the turn has to be live for those records to land — and where
+            // Reactor's context propagation captures it for the tool calls on other threads.
+            toolInvocationRecorder.runWithTurn(
+                    turnHandle,
+                    () -> streamTokensWithTurnBound(
+                            agent,
+                            memoryId,
+                            message,
+                            userContext,
+                            currentUserContext,
+                            authorizationHeader,
+                            writeCapableToolsPresent,
+                            emitter));
+            return;
+        }
+        streamTokensWithTurnBound(
+                agent,
+                memoryId,
+                message,
+                userContext,
+                currentUserContext,
+                authorizationHeader,
+                writeCapableToolsPresent,
+                emitter);
+    }
+
+    private void streamTokensWithTurnBound(
             @NonNull StreamingPosAssistant agent,
             @NonNull String memoryId,
             @NonNull String message,

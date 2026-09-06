@@ -34,7 +34,13 @@ public class AlphaEvalTurnTraceRecorder {
     // The deployed build (image tag, MCP_BUILD_ID) stamped on every trace, so a gate run can say
     // which build answered each turn — including a deploy that lands mid-run (#1806).
     private final String buildId;
-    private final ThreadLocal<TraceBuilder> activeTurn = new ThreadLocal<>();
+    /**
+     * The turn the current thread is recording. Package-private so {@link EvalTurnTracePropagation}
+     * can register it with Micrometer's {@code ContextRegistry}: a streamed turn runs its tool calls
+     * and its completion on Reactor threads, and without propagation every record from those threads
+     * lands on nothing (#1850).
+     */
+    final ThreadLocal<TraceBuilder> activeTurn = new ThreadLocal<>();
 
     public AlphaEvalTurnTraceRecorder(
             @NonNull EvalTurnTraceRepository repository,
@@ -128,6 +134,36 @@ public class AlphaEvalTurnTraceRecorder {
             LOGGER.warn("Failed to persist alpha evaluation turn trace", exception);
         } finally {
             activeTurn.remove();
+        }
+    }
+
+    /**
+     * The turn bound to this thread, as an opaque handle (#1850).
+     *
+     * <p>Captured on the request thread and handed back to {@link #runWithTurn} inside a Reactor
+     * callback, this makes a streamed turn's completion deterministic rather than dependent on
+     * context propagation having captured the right thread at subscribe time.
+     */
+    public @Nullable Object currentTurnHandle() {
+        return activeTurn.get();
+    }
+
+    /** Runs {@code action} with {@code handle} bound as the active turn, restoring what was there. */
+    public void runWithTurn(@Nullable Object handle, @NonNull Runnable action) {
+        if (!(handle instanceof TraceBuilder builder)) {
+            action.run();
+            return;
+        }
+        TraceBuilder previous = activeTurn.get();
+        activeTurn.set(builder);
+        try {
+            action.run();
+        } finally {
+            if (previous == null) {
+                activeTurn.remove();
+            } else {
+                activeTurn.set(previous);
+            }
         }
     }
 

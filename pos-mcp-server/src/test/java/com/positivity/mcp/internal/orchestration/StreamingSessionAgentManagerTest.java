@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.orchestration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -11,6 +12,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -38,6 +40,7 @@ import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.RolePromptResolver;
+import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
 import java.lang.reflect.Member;
@@ -699,5 +702,93 @@ class StreamingSessionAgentManagerTest {
                 Set.of(primaryRole),
                 Set.of(primaryRole, "mcp:chat:stream"),
                 PERMISSION_CODES);
+    }
+
+    // ── #1850: a streamed turn writes an eval trace ─────────────────────────
+
+    @Test
+    @DisplayName("a streamed simple-chat turn opens, records and completes its eval turn (#1850)")
+    void streamChat_recordsTheEvalTurnAcrossThreadHops() {
+        ToolInvocationRecorder recorder = mock(ToolInvocationRecorder.class);
+        // The manager binds the turn through runWithTurn; run the action so the recording lands.
+        doAnswer(invocation -> {
+                    ((Runnable) invocation.getArgument(1)).run();
+                    return null;
+                })
+                .when(recorder)
+                .runWithTurn(any(), any());
+        when(streamingChatModel.stream(any(org.springframework.ai.chat.prompt.Prompt.class)))
+                .thenReturn(Flux.just(streamedChunk("Hi "), streamedChunk("there"))
+                        // A thread hop, which is what broke recording before this fix.
+                        .publishOn(reactor.core.scheduler.Schedulers.boundedElastic()));
+        StreamingSessionAgentManager tracingManager = managerWithRecorder(recorder);
+
+        List<String> tokens = tracingManager
+                .streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "hello")
+                .collectList()
+                .block(java.time.Duration.ofSeconds(5));
+
+        assertThat(tokens).containsExactly("Hi ", "there");
+        verify(recorder).beginTurn(any(), eq("hello"));
+        verify(recorder).recordSimpleChat(true);
+        verify(recorder).completeTurn("Hi there");
+        verify(recorder, never()).failTurn(any());
+        // The request thread must not keep the turn bound for the next request on that thread.
+        verify(recorder).clearTurn();
+    }
+
+    @Test
+    @DisplayName("a streamed turn that fails records the failure on its trace rather than dropping it")
+    void streamChat_recordsFailureOnTheTrace() {
+        ToolInvocationRecorder recorder = mock(ToolInvocationRecorder.class);
+        doAnswer(invocation -> {
+                    ((Runnable) invocation.getArgument(1)).run();
+                    return null;
+                })
+                .when(recorder)
+                .runWithTurn(any(), any());
+        when(streamingChatModel.stream(any(org.springframework.ai.chat.prompt.Prompt.class)))
+                .thenReturn(Flux.error(new IllegalStateException("upstream gone")));
+        StreamingSessionAgentManager tracingManager = managerWithRecorder(recorder);
+
+        assertThatThrownBy(() -> tracingManager
+                        .streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "hello")
+                        .collectList()
+                        .block(java.time.Duration.ofSeconds(5)))
+                .isInstanceOf(IllegalStateException.class);
+
+        verify(recorder).beginTurn(any(), eq("hello"));
+        verify(recorder).failTurn(any(IllegalStateException.class));
+        verify(recorder, never()).completeTurn(any());
+    }
+
+    /** The same manager the suite builds, with an eval-trace recorder wired in (#1850). */
+    private StreamingSessionAgentManager managerWithRecorder(ToolInvocationRecorder recorder) {
+        return new StreamingSessionAgentManager(
+                streamingChatModel,
+                toolRegistry,
+                sharedOrchestrationSupport,
+                toolSelectionEngine,
+                scopedContentRetrieverFactory,
+                rolePromptResolver,
+                simpleChatFastPath,
+                null, // toolAuditService
+                telemetryEmitter,
+                null, // openApiToolProvider
+                null, // requestScopedUserContext
+                null, // observationRegistry
+                null, // roleDefaultPermissionsClient
+                recorder,
+                workflowStateService,
+                null, // nltiRouter
+                null, // tieredChatModelResolver
+                true,
+                FIXED_CLOCK,
+                30,
+                500,
+                50,
+                100,
+                0.6,
+                0.55);
     }
 }

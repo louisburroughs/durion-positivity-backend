@@ -148,6 +148,24 @@ public class ToolInvocationRecorder {
         }
     }
 
+    /** The active eval turn as an opaque handle, or null when no trace is being recorded (#1850). */
+    public @Nullable Object currentTurnHandle() {
+        return traceRecorder == null ? null : traceRecorder.currentTurnHandle();
+    }
+
+    /**
+     * Runs {@code action} with {@code handle} bound as the active eval turn (#1850). Used by the
+     * streaming path, whose completion callbacks run on a Reactor thread rather than the request
+     * thread that opened the turn.
+     */
+    public void runWithTurn(@Nullable Object handle, @NonNull Runnable action) {
+        if (traceRecorder == null) {
+            action.run();
+            return;
+        }
+        traceRecorder.runWithTurn(handle, action);
+    }
+
     private @Nullable UUID resolveToolId(String toolLookupName) {
         Optional<UUID> resolved = toolIdCache.computeIfAbsent(toolLookupName, name -> {
             Optional<UUID> id;
