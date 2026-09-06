@@ -1142,9 +1142,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 75")
+    @DisplayName("CATALOG_VERSION is 76")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(75);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(76);
     }
 
     @Test
@@ -1405,8 +1405,10 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(507)).isEqualTo("PERM_mcp:eval_trace:view");
         // catalog v75 (#1645): tread-design enrichment review resolve in pos-catalog (bit 508)
         assertThat(GatewayPermissionCatalog.authorityForBit(508)).isEqualTo("PERM_catalog:tread_design:resolve");
+        // catalog v76 (#1851): invoice revenue reconciliation in pos-accounting (bit 509)
+        assertThat(GatewayPermissionCatalog.authorityForBit(509)).isEqualTo("PERM_accounting:gl:reconcile");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(509)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(510)).isNull();
     }
 
     @Test

@@ -52,6 +52,8 @@ permissions:
     description: "Create gl mapping"
   - name: "accounting:gl-mapping:resolve"
     description: "Resolve gl mapping"
+  - name: "accounting:gl:reconcile"
+    description: "Reconcile gl"
   - name: "accounting:je:create"
     description: "Create journal entries"
   - name: "accounting:je:post"

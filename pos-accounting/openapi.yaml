@@ -3204,6 +3204,60 @@ paths:
       - GL Accounts
       x-required-permissions:
       - accounting:coa:deactivate
+  /v1/accounting/invoice-revenue/reconcile:
+    post:
+      description: "Posts revenue to the general ledger for every finalized invoice in the accounting replica that has no open revenue posting yet, using the same entries the live invoice event path creates (Dr Accounts Receivable / Cr Service Revenue / Cr Sales Tax Payable, dated at the invoice's finalization).
+
+        Use this tool to backfill invoices finalized before revenue posting existed, after a consumer outage, or when the income statement disagrees with invoice totals; do not use retryAccountingEvent, which re-runs a single failed ingestion event, or an outbox replay, which cannot reach invoices that never produced an event.
+
+        Preconditions: caller holds accounting:gl:reconcile. Idempotent: an invoice already on the ledger is reported as ALREADY_POSTED and left alone; a second run posts nothing new.
+
+        Required inputs: none. Optional body: finalizedFrom / finalizedTo (half-open instant window), invoiceIds (overrides the window), dryRun (report without posting), limit (oldest first).
+
+        Emits an ACCOUNTING_INVOICE_REVENUE_RECONCILE event and returns 200 with per-invoice outcomes (POSTED, WOULD_POST, ALREADY_POSTED, SKIPPED with reason, FAILED with error) and totals.
+
+        "
+      operationId: reconcileInvoiceRevenue
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Dry run for July-August 2026:
+                description: Dry run for July-August 2026
+                value: |
+                  {"finalizedFrom":"2026-07-01T00:00:00Z",
+                   "finalizedTo":"2026-09-01T00:00:00Z",
+                   "dryRun":true}
+            schema:
+              $ref: '#/components/schemas/InvoiceRevenueReconcileRequest'
+        description: Optional bounds; an empty or absent body reconciles everything, live.
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceRevenueReconcileResponse'
+          description: Reconciliation run completed; see per-invoice outcomes
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceRevenueReconcileResponse'
+          description: Invalid bounds (limit outside 1-5000)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceRevenueReconcileResponse'
+          description: Caller lacks accounting:gl:reconcile
+      security:
+      - bearerAuth:
+        - accounting:gl:reconcile
+      summary: Reconcile Invoice Revenue Postings
+      tags:
+      - Accounting GL
+      x-required-permissions:
+      - accounting:gl:reconcile
   /v1/accounting/invoice/invoices:
     post:
       description: 'Requests regeneration of an invoice from a completed workorder, either synchronously or via the asynchronous command path.
@@ -11046,6 +11100,95 @@ components:
       - productId
       - quantity
       - unitPrice
+      type: object
+    InvoiceRevenueReconcileOutcome:
+      description: Outcome for one invoice
+      properties:
+        detail:
+          description: Reason for a skip or the failure message; the journal entry id when posted
+          type: string
+        finalizedAt:
+          format: date-time
+          type: string
+        invoiceId:
+          format: uuid
+          type: string
+        invoiceNumber:
+          type: string
+        kind:
+          description: POSTED, WOULD_POST, ALREADY_POSTED, SKIPPED or FAILED
+          enum:
+          - POSTED
+          - WOULD_POST
+          - ALREADY_POSTED
+          - SKIPPED
+          - FAILED
+          type: string
+        total:
+          type: number
+      type: object
+    InvoiceRevenueReconcileRequest:
+      description: Bounds for an invoice revenue reconciliation run; all fields optional
+      properties:
+        dryRun:
+          default: false
+          description: Report what would be posted without posting
+          type: boolean
+        finalizedFrom:
+          description: Only invoices finalized at or after this instant
+          example: 2026-07-01T00:00:00Z
+          format: date-time
+          type: string
+        finalizedTo:
+          description: Only invoices finalized before this instant
+          example: 2026-09-01T00:00:00Z
+          format: date-time
+          type: string
+        invoiceIds:
+          description: Only these invoices (overrides the window when given)
+          items:
+            format: uuid
+            type: string
+          type: array
+        limit:
+          description: Stop after this many candidates, oldest first (1-5000)
+          example: 500
+          format: int32
+          maximum: 5000
+          minimum: 1
+          type: integer
+      type: object
+    InvoiceRevenueReconcileResponse:
+      description: Result of an invoice revenue reconciliation run
+      properties:
+        alreadyPosted:
+          description: Invoices whose revenue was already on the ledger
+          format: int32
+          type: integer
+        dryRun:
+          description: True when nothing was posted (dry run)
+          type: boolean
+        failed:
+          description: Invoices whose posting raised an error
+          format: int32
+          type: integer
+        outcomes:
+          description: One entry per candidate, in the order examined
+          items:
+            $ref: '#/components/schemas/InvoiceRevenueReconcileOutcome'
+          type: array
+        posted:
+          description: Postings created (or, on a dry run, that would be created)
+          format: int32
+          type: integer
+        scanned:
+          description: Candidates examined
+          format: int32
+          type: integer
+        skipped:
+          description: Invoices skipped by rule (deposit-take, zero total, no finalizedAt, reversed cycle)
+          format: int32
+          type: integer
       type: object
     InvoiceStatusResponse:
       description: Invoice payment status response

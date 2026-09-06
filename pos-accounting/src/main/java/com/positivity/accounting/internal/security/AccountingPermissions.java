@@ -92,6 +92,9 @@ public final class AccountingPermissions {
     /** Resolve gl mapping. */
     public static final String GL_MAPPING_RESOLVE = "accounting:gl-mapping:resolve";
 
+    /** Reconcile invoice revenue GL postings from the invoice replica (#1851). */
+    public static final String GL_RECONCILE = "accounting:gl:reconcile";
+
     /** Create journal entries. */
     public static final String JE_CREATE = "accounting:je:create";
 

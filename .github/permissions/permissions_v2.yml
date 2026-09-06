@@ -51,6 +51,9 @@ permissions_by_domain:
   - name: accounting:events:view
     description: View accounting events
     source: pos-accounting/src/main/resources/permissions.yaml
+  - name: accounting:gl:reconcile
+    description: Reconcile gl
+    source: pos-accounting/src/main/resources/permissions.yaml
   - name: accounting:je:create
     description: Create journal entries
     source: pos-accounting/src/main/resources/permissions.yaml

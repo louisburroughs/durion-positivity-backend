@@ -942,13 +942,15 @@ public enum PermissionCode {
     // ── Mcp (new) ──────────────────────────────────────────────────────────────
     MCP__EVAL_TRACE__VIEW(507, "mcp:eval_trace:view"),
     // ── Catalog (new) ──────────────────────────────────────────────────────────
-    CATALOG__TREAD_DESIGN__RESOLVE(508, "catalog:tread_design:resolve");
+    CATALOG__TREAD_DESIGN__RESOLVE(508, "catalog:tread_design:resolve"),
+    // ── Accounting (new) ───────────────────────────────────────────────────────
+    ACCOUNTING__GL__RECONCILE(509, "accounting:gl:reconcile");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 75;
+    public static final int CATALOG_VERSION = 76;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
