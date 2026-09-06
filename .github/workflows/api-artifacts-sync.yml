@@ -4,6 +4,9 @@
 #   Walk the full API contract chain from this backend to the frontend and
 #   report what the current controllers break downstream:
 #
+#     0. preflight            probes CROSS_REPO_TOKEN against each target repo
+#                             and reports, per repo, whether it can actually
+#                             push. Runs first, in seconds, and writes nothing.
 #     1. backend-openapi      scripts/generate-openapi.sh regenerates every
 #                             module's openapi.yaml (plus the aggregate index
 #                             and permissions manifests) from the booted
@@ -39,12 +42,21 @@
 #   - Stage 1 boots every spec-producing module in turn, so a full run takes a
 #     while. Pass a space-separated `modules` list to regenerate a subset; the
 #     aggregate index still covers every module.
-#   - The SDK and frontend repos are checked out with CROSS_REPO_TOKEN when the
-#     secret exists, falling back to the workflow token (enough to read public
-#     repos). Committing to those repos needs the secret: a fine-grained PAT
-#     with Contents and Pull requests write access on all four repositories.
-#     It is also worth using for this repo's own PR, since a PR opened with the
-#     workflow token does not trigger the other workflows on it.
+#   - Committing to the SDK and frontend repos needs CROSS_REPO_TOKEN: a
+#     fine-grained PAT with Contents and Pull requests write access on all four
+#     repositories. A job's `permissions:` block only scopes GITHUB_TOKEN to the
+#     repository running the workflow, so it can never reach the other three.
+#     The PAT is also worth using for this repo's own PR, since a PR opened with
+#     the workflow token does not trigger the other workflows on it.
+#   - The token is used only where stage 0 proved it can push; everywhere else
+#     the checkout falls back to the workflow token, which is enough to read
+#     these repos while they are public. That matters because an invalid PAT
+#     fails a public-repo checkout with a 401 just as it fails a push, so
+#     handing a dead token to `actions/checkout` would break the read path too.
+#   - A stage that cannot deliver skips delivery with a warning rather than
+#     failing at the push. If delivery was requested and no repository could
+#     take it, the report job fails the run — the artifacts are still uploaded,
+#     but a delivery run that delivered nothing is not a success.
 #   - Generation and test steps use continue-on-error so a failure early in the
 #     chain still produces the downstream evidence; the report job turns those
 #     outcomes into the run's final status.
@@ -128,12 +140,149 @@ env:
 
 jobs:
   # ───────────────────────────────────────────────────────────────────────────
+  # Stage 0: prove the delivery credential before anything expensive runs.
+  #
+  # Checking that the secret is merely *set* is not enough — an expired or
+  # revoked PAT is still a non-empty secret, and the push would fail hours
+  # later at the last step of every downstream job. This probes the token
+  # against each target repository and reports, per repo, whether it can
+  # actually push. It writes nothing.
+  #
+  # It runs even for commit_mode=none, so a zero-risk run still tells you
+  # whether the credential is good; only the gating is conditional.
+  # ───────────────────────────────────────────────────────────────────────────
+  preflight:
+    name: Preflight — delivery credential
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # No GITHUB_TOKEN scopes needed: the probe authenticates as the PAT.
+    permissions: {}
+    outputs:
+      pat_state: ${{ steps.check.outputs.pat_state }}
+      backend: ${{ steps.check.outputs.backend }}
+      sdk: ${{ steps.check.outputs.sdk }}
+      sdk_angular: ${{ steps.check.outputs.sdk_angular }}
+      frontend: ${{ steps.check.outputs.frontend }}
+      deliverable: ${{ steps.check.outputs.deliverable }}
+
+    steps:
+      - name: Probe the sync credential
+        id: check
+        shell: bash
+        env:
+          SYNC_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
+          COMMIT_MODE: ${{ inputs.commit_mode }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+
+          # key:repo — key is the job output each stage reads. Kept as an
+          # ordered list rather than an associative array so the summary and
+          # the outputs are deterministic.
+          TARGETS="backend:durion-positivity-backend sdk:durion-positivity-sdk sdk_angular:durion-positivity-sdk-angular frontend:durion-positivity-frontend"
+
+          emit() { echo "$1=$2" >> "$GITHUB_OUTPUT"; }
+
+          if [[ -z "${SYNC_TOKEN}" ]]; then
+            echo "CROSS_REPO_TOKEN is not set."
+            emit pat_state absent
+            for t in ${TARGETS}; do emit "${t%%:*}" false; done
+            emit deliverable 0
+            {
+              echo "## Stage 0 — Delivery credential"
+              echo ""
+              echo "\`CROSS_REPO_TOKEN\` is **not set**."
+              echo ""
+              echo "The backend stage can still deliver to its own repository with the"
+              echo "workflow token. The other three cannot: a job's \`permissions:\` block"
+              echo "only scopes \`GITHUB_TOKEN\` to the repository running the workflow."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Probe one repo. Prints a status word; never prints the token.
+          probe() {
+            local repo="$1" body code
+            body="$(mktemp)"
+            if ! code="$(curl -sS -o "${body}" -w '%{http_code}' \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                -H "Authorization: Bearer ${SYNC_TOKEN}" \
+                "https://api.github.com/repos/${OWNER}/${repo}" 2>/dev/null)"; then
+              code="000"
+            fi
+            case "${code}" in
+              200)
+                if [[ "$(jq -r '.permissions.push // false' "${body}")" == "true" ]]; then
+                  echo ok
+                else
+                  echo no-write
+                fi
+                ;;
+              401) echo unauthorized ;;
+              403) echo forbidden ;;
+              404) echo not-visible ;;
+              *)   echo "http-${code}" ;;
+            esac
+            rm -f "${body}"
+          }
+
+          declare -A EXPLAIN=(
+            [ok]="can push"
+            [no-write]="visible, but the token has no Contents write access"
+            [unauthorized]="token is invalid, expired or revoked"
+            [forbidden]="token is blocked for this repository"
+            [not-visible]="not in the token's selected repositories"
+          )
+
+          rows=""
+          deliverable=0
+          pat_state=ok
+          for target in ${TARGETS}; do
+            key="${target%%:*}"
+            repo="${target#*:}"
+            status="$(probe "${repo}")"
+            detail="${EXPLAIN[$status]:-unexpected response (${status})}"
+            echo "${repo}: ${status} — ${detail}"
+            if [[ "${status}" == "ok" ]]; then
+              emit "${key}" true
+              deliverable=$((deliverable + 1))
+              rows="${rows}| \`${repo}\` | ✅ | ${detail} |"$'\n'
+            else
+              emit "${key}" false
+              rows="${rows}| \`${repo}\` | ❌ | ${detail} |"$'\n'
+              [[ "${status}" == "unauthorized" ]] && pat_state=invalid
+            fi
+          done
+
+          [[ "${deliverable}" -eq 0 && "${pat_state}" == "ok" ]] && pat_state=no-access
+          emit pat_state "${pat_state}"
+          emit deliverable "${deliverable}"
+
+          {
+            echo "## Stage 0 — Delivery credential"
+            echo ""
+            echo "\`CROSS_REPO_TOKEN\` is set; probed against each target repository."
+            echo ""
+            echo "| Repository | Can push | Detail |"
+            echo "|---|---|---|"
+            printf '%s' "${rows}"
+            echo ""
+            echo "Repositories the credential can deliver to: **${deliverable} of 4**."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "${deliverable}" -lt 4 ]]; then
+            echo "::warning::The sync credential cannot push to every target repository (${deliverable}/4). Stages it cannot reach will skip delivery."
+          fi
+
+  # ───────────────────────────────────────────────────────────────────────────
   # Stage 1: regenerate the backend OpenAPI artifacts.
   # ───────────────────────────────────────────────────────────────────────────
   backend-openapi:
     name: Backend OpenAPI artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 240
+    needs: preflight
     permissions:
       # write scopes let the commit step deliver to this repo with the
       # workflow token when CROSS_REPO_TOKEN is not configured.
@@ -293,7 +442,9 @@ jobs:
         with:
           repository: ${{ github.repository }}
           working-directory: ${{ env.BACKEND_DIR }}
-          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
+          # Use the PAT only where preflight proved it can push. An invalid
+          # PAT would otherwise fail even a public-repo checkout with a 401.
+          token: ${{ needs.preflight.outputs.backend == 'true' && secrets.CROSS_REPO_TOKEN || github.token }}
           mode: ${{ steps.delivery.outputs.mode }}
           base-branch: ${{ github.ref_name }}
           head-branch: ${{ env.SYNC_BRANCH }}
@@ -342,7 +493,7 @@ jobs:
     name: Generate durion-positivity-sdk
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    needs: backend-openapi
+    needs: [preflight, backend-openapi]
     permissions:
       contents: read
     outputs:
@@ -372,7 +523,9 @@ jobs:
           repository: louisburroughs/durion-positivity-sdk
           ref: ${{ inputs.sdk_ref }}
           path: ${{ env.SDK_DIR }}
-          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
+          # Use the PAT only where preflight proved it can push. An invalid
+          # PAT would otherwise fail even a public-repo checkout with a 401.
+          token: ${{ needs.preflight.outputs.sdk == 'true' && secrets.CROSS_REPO_TOKEN || github.token }}
           persist-credentials: false
           fetch-depth: 1
 
@@ -461,11 +614,13 @@ jobs:
           COMMIT_MODE: ${{ inputs.commit_mode }}
           GENERATE: ${{ steps.generate.outcome }}
           BUILD: ${{ steps.build.outcome }}
-          # Cross-repo delivery needs the PAT. A job's `permissions:` block only
-          # scopes the workflow token to the repository running the workflow, so
-          # GITHUB_TOKEN cannot write to durion-positivity-sdk however it is scoped;
-          # without the secret the push would fail at the very end of the job.
-          HAS_SYNC_TOKEN: ${{ secrets.CROSS_REPO_TOKEN != '' }}
+          # Preflight probed the credential against this repository and reports
+          # false for an absent, expired, revoked or under-scoped token — the
+          # cases a bare "is the secret set" test cannot tell apart. A job's
+          # `permissions:` block cannot help here: it only scopes GITHUB_TOKEN
+          # to the repository running the workflow, never to durion-positivity-sdk.
+          CAN_DELIVER: ${{ needs.preflight.outputs.sdk }}
+          PAT_STATE: ${{ needs.preflight.outputs.pat_state }}
           # The specs artifact uploads even when stage 1 fails, so these outputs
           # may have come from the committed specs rather than regenerated ones.
           # Never deliver that as a regeneration.
@@ -473,8 +628,8 @@ jobs:
         run: |
           set -euo pipefail
           mode="${COMMIT_MODE}"
-          if [[ "${mode}" != "none" && "${HAS_SYNC_TOKEN}" != "true" ]]; then
-            echo "::warning::CROSS_REPO_TOKEN is not set; the workflow token cannot write to durion-positivity-sdk. Set the secret, or run with commit_mode=none."
+          if [[ "${mode}" != "none" && "${CAN_DELIVER}" != "true" ]]; then
+            echo "::warning::The sync credential cannot push to durion-positivity-sdk (${PAT_STATE}); see the preflight summary. Delivering nothing."
             mode=none
           elif [[ "${BACKEND_GENERATE}" != "success" ]]; then
             echo "::warning::Backend OpenAPI generation did not succeed, so this stage ran against the committed specs rather than regenerated ones; not committing durion-positivity-sdk."
@@ -495,7 +650,9 @@ jobs:
         with:
           repository: louisburroughs/durion-positivity-sdk
           working-directory: ${{ env.SDK_DIR }}
-          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
+          # Use the PAT only where preflight proved it can push. An invalid
+          # PAT would otherwise fail even a public-repo checkout with a 401.
+          token: ${{ needs.preflight.outputs.sdk == 'true' && secrets.CROSS_REPO_TOKEN || github.token }}
           mode: ${{ steps.delivery.outputs.mode }}
           base-branch: ${{ inputs.sdk_ref }}
           head-branch: ${{ env.SYNC_BRANCH }}
@@ -526,7 +683,7 @@ jobs:
     name: Generate durion-positivity-sdk-angular
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    needs: backend-openapi
+    needs: [preflight, backend-openapi]
     permissions:
       contents: read
     outputs:
@@ -555,7 +712,9 @@ jobs:
           repository: louisburroughs/durion-positivity-sdk-angular
           ref: ${{ inputs.sdk_angular_ref }}
           path: ${{ env.SDK_ANGULAR_DIR }}
-          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
+          # Use the PAT only where preflight proved it can push. An invalid
+          # PAT would otherwise fail even a public-repo checkout with a 401.
+          token: ${{ needs.preflight.outputs.sdk_angular == 'true' && secrets.CROSS_REPO_TOKEN || github.token }}
           persist-credentials: false
           fetch-depth: 1
 
@@ -716,11 +875,13 @@ jobs:
           COMMIT_MODE: ${{ inputs.commit_mode }}
           GENERATE: ${{ steps.generate.outcome }}
           PACK: ${{ steps.pack.outcome }}
-          # Cross-repo delivery needs the PAT. A job's `permissions:` block only
-          # scopes the workflow token to the repository running the workflow, so
-          # GITHUB_TOKEN cannot write to durion-positivity-sdk-angular however it is scoped;
-          # without the secret the push would fail at the very end of the job.
-          HAS_SYNC_TOKEN: ${{ secrets.CROSS_REPO_TOKEN != '' }}
+          # Preflight probed the credential against this repository and reports
+          # false for an absent, expired, revoked or under-scoped token — the
+          # cases a bare "is the secret set" test cannot tell apart. A job's
+          # `permissions:` block cannot help here: it only scopes GITHUB_TOKEN
+          # to the repository running the workflow, never to durion-positivity-sdk-angular.
+          CAN_DELIVER: ${{ needs.preflight.outputs.sdk_angular }}
+          PAT_STATE: ${{ needs.preflight.outputs.pat_state }}
           # The specs artifact uploads even when stage 1 fails, so these outputs
           # may have come from the committed specs rather than regenerated ones.
           # Never deliver that as a regeneration.
@@ -728,8 +889,8 @@ jobs:
         run: |
           set -euo pipefail
           mode="${COMMIT_MODE}"
-          if [[ "${mode}" != "none" && "${HAS_SYNC_TOKEN}" != "true" ]]; then
-            echo "::warning::CROSS_REPO_TOKEN is not set; the workflow token cannot write to durion-positivity-sdk-angular. Set the secret, or run with commit_mode=none."
+          if [[ "${mode}" != "none" && "${CAN_DELIVER}" != "true" ]]; then
+            echo "::warning::The sync credential cannot push to durion-positivity-sdk-angular (${PAT_STATE}); see the preflight summary. Delivering nothing."
             mode=none
           elif [[ "${BACKEND_GENERATE}" != "success" ]]; then
             echo "::warning::Backend OpenAPI generation did not succeed, so this stage ran against the committed specs rather than regenerated ones; not committing durion-positivity-sdk-angular."
@@ -750,7 +911,9 @@ jobs:
         with:
           repository: louisburroughs/durion-positivity-sdk-angular
           working-directory: ${{ env.SDK_ANGULAR_DIR }}
-          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
+          # Use the PAT only where preflight proved it can push. An invalid
+          # PAT would otherwise fail even a public-repo checkout with a 401.
+          token: ${{ needs.preflight.outputs.sdk_angular == 'true' && secrets.CROSS_REPO_TOKEN || github.token }}
           mode: ${{ steps.delivery.outputs.mode }}
           base-branch: ${{ inputs.sdk_angular_ref }}
           head-branch: ${{ env.SYNC_BRANCH }}
@@ -794,6 +957,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     needs:
+      - preflight
       # generate-sdk-angular supplies the tarballs and the SDK version.
       # backend-openapi is already a transitive dependency through it, but the
       # `needs` context only carries jobs named here, so it must be declared
@@ -829,7 +993,9 @@ jobs:
           repository: louisburroughs/durion-positivity-frontend
           ref: ${{ inputs.frontend_ref }}
           path: ${{ env.FRONTEND_DIR }}
-          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
+          # Use the PAT only where preflight proved it can push. An invalid
+          # PAT would otherwise fail even a public-repo checkout with a 401.
+          token: ${{ needs.preflight.outputs.frontend == 'true' && secrets.CROSS_REPO_TOKEN || github.token }}
           persist-credentials: false
           fetch-depth: 1
 
@@ -1033,11 +1199,13 @@ jobs:
           BUILD: ${{ steps.build.outcome }}
           CONTRACT_TESTS: ${{ steps.contract_tests.outcome }}
           UNIT_TESTS: ${{ steps.unit_tests.outcome }}
-          # Cross-repo delivery needs the PAT. A job's `permissions:` block only
-          # scopes the workflow token to the repository running the workflow, so
-          # GITHUB_TOKEN cannot write to durion-positivity-frontend however it is scoped;
-          # without the secret the push would fail at the very end of the job.
-          HAS_SYNC_TOKEN: ${{ secrets.CROSS_REPO_TOKEN != '' }}
+          # Preflight probed the credential against this repository and reports
+          # false for an absent, expired, revoked or under-scoped token — the
+          # cases a bare "is the secret set" test cannot tell apart. A job's
+          # `permissions:` block cannot help here: it only scopes GITHUB_TOKEN
+          # to the repository running the workflow, never to durion-positivity-frontend.
+          CAN_DELIVER: ${{ needs.preflight.outputs.frontend }}
+          PAT_STATE: ${{ needs.preflight.outputs.pat_state }}
           # The specs artifact uploads even when stage 1 fails, so these outputs
           # may have come from the committed specs rather than regenerated ones.
           # Never deliver that as a regeneration.
@@ -1045,8 +1213,8 @@ jobs:
         run: |
           set -euo pipefail
           mode="${COMMIT_MODE}"
-          if [[ "${mode}" != "none" && "${HAS_SYNC_TOKEN}" != "true" ]]; then
-            echo "::warning::CROSS_REPO_TOKEN is not set; the workflow token cannot write to durion-positivity-frontend. Set the secret, or run with commit_mode=none."
+          if [[ "${mode}" != "none" && "${CAN_DELIVER}" != "true" ]]; then
+            echo "::warning::The sync credential cannot push to durion-positivity-frontend (${PAT_STATE}); see the preflight summary. Delivering nothing."
             mode=none
           elif [[ "${BACKEND_GENERATE}" != "success" ]]; then
             echo "::warning::Backend OpenAPI generation did not succeed, so this stage ran against the committed specs rather than regenerated ones; not committing durion-positivity-frontend."
@@ -1067,7 +1235,9 @@ jobs:
         with:
           repository: louisburroughs/durion-positivity-frontend
           working-directory: ${{ env.FRONTEND_DIR }}
-          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
+          # Use the PAT only where preflight proved it can push. An invalid
+          # PAT would otherwise fail even a public-repo checkout with a 401.
+          token: ${{ needs.preflight.outputs.frontend == 'true' && secrets.CROSS_REPO_TOKEN || github.token }}
           mode: ${{ steps.delivery.outputs.mode }}
           base-branch: ${{ inputs.frontend_ref }}
           head-branch: ${{ env.SYNC_BRANCH }}
@@ -1112,6 +1282,7 @@ jobs:
     timeout-minutes: 5
     if: always()
     needs:
+      - preflight
       - backend-openapi
       - generate-sdk
       - generate-sdk-angular
@@ -1122,6 +1293,9 @@ jobs:
       - name: Summarize the chain
         shell: bash
         env:
+          PREFLIGHT_JOB: ${{ needs.preflight.result }}
+          PAT_STATE: ${{ needs.preflight.outputs.pat_state }}
+          DELIVERABLE: ${{ needs.preflight.outputs.deliverable }}
           BACKEND_JOB: ${{ needs.backend-openapi.result }}
           BACKEND_GENERATE: ${{ needs.backend-openapi.outputs.generate }}
           BACKEND_CHANGED: ${{ needs.backend-openapi.outputs.changed_files }}
@@ -1204,14 +1378,24 @@ jobs:
             delivery "durion-positivity-sdk-angular" "${SDK_ANGULAR_COMMIT}" "${SDK_ANGULAR_PR}"
             delivery "durion-positivity-frontend" "${FRONTEND_COMMIT}" "${FRONTEND_PR}"
             echo ""
-            echo "\`unchanged\` = nothing to commit; \`skipped\` = held back (generation failed, or direct mode with a failing stage)."
+            echo "\`unchanged\` = nothing to commit; \`skipped\` = held back (credential, generation failure, or direct mode with a failing stage)."
+            echo ""
+            echo "Delivery credential: \`${PAT_STATE:-unknown}\` — usable for ${DELIVERABLE:-0} of 4 repositories (preflight job: \`${PREFLIGHT_JOB}\`)."
             echo ""
             echo "Artifacts: \`openapi-specs\`, \`backend-openapi-changes\`, \`sdk-changes\`, \`sdk-angular-changes\`, \`sdk-angular-tarballs\`, \`frontend-results\`."
           } >> "$GITHUB_STEP_SUMMARY"
 
-          for job in "${BACKEND_JOB}" "${SDK_JOB}" "${SDK_ANGULAR_JOB}" "${FRONTEND_JOB}"; do
+          for job in "${PREFLIGHT_JOB}" "${BACKEND_JOB}" "${SDK_JOB}" "${SDK_ANGULAR_JOB}" "${FRONTEND_JOB}"; do
             [[ "$job" == "success" ]] || failed=1
           done
+
+          # A delivery run that could reach no repository is a failed run, not a
+          # quiet no-op: the artifacts are still uploaded above, but the thing
+          # that was asked for did not happen.
+          if [[ "${COMMIT_MODE}" != "none" && "${DELIVERABLE:-0}" -eq 0 ]]; then
+            echo "::error::commit_mode=${COMMIT_MODE} was requested but the sync credential (${PAT_STATE:-unknown}) can push to no target repository. Nothing was delivered."
+            failed=1
+          fi
 
           if [[ "$failed" -ne 0 ]]; then
             echo "::error::At least one stage of the API artifact chain failed; see the job summary."
