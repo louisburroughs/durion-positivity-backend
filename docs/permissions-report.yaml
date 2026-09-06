@@ -1,9 +1,9 @@
-generatedAt: "2026-09-06T15:40:05.138347+00:00"
+generatedAt: "2026-09-06T19:24:09.869516+00:00"
 root: "."
 summary:
   manifestCount: 23
-  permissionCount: 473
-  uniquePermissionCount: 473
+  permissionCount: 474
+  uniquePermissionCount: 474
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -12,7 +12,7 @@ manifests:
     domain: "accounting"
     serviceName: "pos-accounting"
     version: "1.0"
-    permissionCount: 53
+    permissionCount: 54
     permissions:
       - name: "accounting:analytics:view"
         description: "View Wave 2 read-only accounting analytics (invoiced-vs-collected, payment-lag cohorts)"
@@ -64,6 +64,8 @@ manifests:
         description: "Create gl mapping"
       - name: "accounting:gl-mapping:resolve"
         description: "Resolve gl mapping"
+      - name: "accounting:gl:reconcile"
+        description: "Reconcile gl"
       - name: "accounting:je:create"
         description: "Create journal entries"
       - name: "accounting:je:post"
@@ -1261,6 +1263,12 @@ permissions:
     source: "pos-accounting/src/main/resources/permissions.yaml"
   - name: "accounting:gl-mapping:resolve"
     description: "Resolve gl mapping"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:gl:reconcile"
+    description: "Reconcile gl"
     domain: "accounting"
     serviceName: "pos-accounting"
     module: "pos-accounting"

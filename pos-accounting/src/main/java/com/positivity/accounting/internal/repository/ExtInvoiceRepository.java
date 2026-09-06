@@ -67,4 +67,11 @@ public interface ExtInvoiceRepository extends JpaRepository<ExtInvoice, UUID> {
      * @return matching invoices (unordered; callers pick the most recent by {@code updatedAt})
      */
     List<ExtInvoice> findByWorkorderId(UUID workorderId);
+
+    /**
+     * Replica rows in the given statuses finalized in {@code [from, to)}, oldest first — the
+     * candidate set for invoice revenue reconciliation (#1851).
+     */
+    List<ExtInvoice> findByStatusInAndFinalizedAtGreaterThanEqualAndFinalizedAtLessThanOrderByFinalizedAtAsc(
+            Collection<String> statuses, Instant from, Instant to);
 }

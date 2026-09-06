@@ -117,6 +117,10 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.write("ACCOUNTING_EVENT_RETRY", "Retry processing for a failed accounting event")
                         .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_INVOICE_REVENUE_RECONCILE",
+                                "Reconcile invoice revenue GL postings from the invoice replica")
+                        .build(),
                 EventTypeRegistration.approval(
                                 "ACCOUNTING_EVENT_REPROCESS",
                                 "Reprocess a suspended accounting event after mapping/rule correction")
