@@ -44,7 +44,8 @@ class EvalTurnTraceQueryServiceTest {
                 List.of(),
                 List.of(),
                 "the answer",
-                null);
+                null,
+                "sha-test0000");
     }
 
     private static EvalTurnTraceQueryService serviceReturning(EvalTurnTrace... traces) {

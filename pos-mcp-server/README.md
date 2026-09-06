@@ -243,7 +243,8 @@ Tuning is enabled by default with a runtime kill switch (`mcp.tuning.enabled`). 
 
 Alpha-only, property-gated (`mcp.eval.turn-trace.enabled`, default on for alpha) capture of one immutable
 JSON trace per completed/failed chat turn — assembled system prompt, offered tool definitions, ordered
-tool calls with arguments/results, and the final response or error — persisted with a configurable
+tool calls with arguments/results, the final response or error, and the build that answered
+(`serverBuild`, from `MCP_BUILD_ID`, the image tag on alpha; #1806) — persisted with a configurable
 retention window and cleaned up on a schedule. Twelve committed fixtures replay the live analytics gate's
 `in_chat_path_gate` questions against a real model with canned tool responses, so a candidate fix is
 verifiable without an alpha deploy-and-run cycle. See `src/test/resources/eval/README.md` (§"Offline

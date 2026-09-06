@@ -25,7 +25,8 @@ public record EvalTurnTrace(
         @NonNull List<ToolDefinitionTrace> offeredTools,
         @NonNull List<ToolCallTrace> toolCalls,
         @Nullable String finalResponse,
-        @Nullable String error) {
+        @Nullable String error,
+        @Nullable String serverBuild) {
 
     public EvalTurnTrace {
         selectedTools = List.copyOf(selectedTools);
