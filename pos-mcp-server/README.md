@@ -386,6 +386,13 @@ The session system prompt is resolved by `RolePromptResolver`: (1) look up a pro
 Spring Security role (e.g. `ROLE_SERVICE_ADVISOR`); (2) if missing, WARN and fall back to the `default` prompt;
 (3) if still missing, WARN and use the built-in hardcoded fallback. Prompts are managed via `/v1/prompts`.
 
+**Tool-embedding backfill (#1818).** Rows in `mcp_tool` with no embedding are embedded after
+`ApplicationReadyEvent` on a dedicated thread, in batches of `mcp.embedding.backfill-batch-size`
+(default 32, `MCP_EMBEDDING_BACKFILL_BATCH_SIZE`) descriptions per model call, with a per-tool fallback
+when a batch fails. Readiness never waits for it: on 2026-09-06 a serial, pre-readiness backfill of 884
+tools held `/actuator/health` at 503 for twenty minutes and failed the alpha deploy. Until the backfill
+reaches a row, tool selection falls back to lexical matching for it. Progress is logged per batch.
+
 ## Data Model
 
 Key tables (Flyway migrations under `src/main/resources/db/migration`, H2 variants under `db/h2-migration`):
