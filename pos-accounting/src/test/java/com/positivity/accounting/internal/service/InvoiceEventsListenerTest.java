@@ -13,6 +13,7 @@ import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
+import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
@@ -36,10 +37,12 @@ class InvoiceEventsListenerTest {
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2026-07-08T12:00:00Z"), ZoneOffset.UTC);
     private static final UUID INVOICE_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID WORKORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final Instant OCCURRED_AT = Instant.parse("2026-07-08T11:59:30Z");
 
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final ExtInvoiceRepository replica = mock(ExtInvoiceRepository.class);
     private final ExtInvoiceTaxRepository taxReplica = mock(ExtInvoiceTaxRepository.class);
+    private final InvoiceRevenuePostingService revenuePosting = mock(InvoiceRevenuePostingService.class);
 
     private InvoiceEventsListener listener;
 
@@ -51,6 +54,7 @@ class InvoiceEventsListenerTest {
                 processedEvents,
                 replica,
                 taxReplica,
+                revenuePosting,
                 org.mockito.Mockito.mock(ObjectProvider.class));
     }
 
@@ -77,6 +81,16 @@ class InvoiceEventsListenerTest {
                  "payload":{"invoiceId":"%s","workorderId":"%s","status":"FINALIZED",
                             "invoiceNumber":"INV-2026-000123","total":216.00,"subtotal":200.00,"tax":16.00}}
                 """.formatted(eventId, INVOICE_ID, version, INVOICE_ID, WORKORDER_ID);
+    }
+
+    private String eventWithStatus(String eventId, long version, String status) {
+        return """
+                {"eventId":"%s","eventType":"invoice.invoice.updated","schemaVersion":1,
+                 "aggregateId":"%s","aggregateVersion":%d,"occurredAtUtc":"%s",
+                 "payload":{"invoiceId":"%s","workorderId":"%s","status":"%s",
+                            "invoiceNumber":"INV-2026-000123","total":216.00,"subtotal":200.00,"tax":16.00,
+                            "finalizedAt":"2026-07-08T10:00:00Z"}}
+                """.formatted(eventId, INVOICE_ID, version, OCCURRED_AT, INVOICE_ID, WORKORDER_ID, status);
     }
 
     @Test
@@ -360,7 +374,7 @@ class InvoiceEventsListenerTest {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         when(provider.getIfAvailable()).thenReturn(meterRegistry);
         InvoiceEventsListener listenerWithMetrics = new InvoiceEventsListener(
-                TEST_CLOCK, new ObjectMapper(), processedEvents, replica, taxReplica, provider);
+                TEST_CLOCK, new ObjectMapper(), processedEvents, replica, taxReplica, revenuePosting, provider);
 
         when(processedEvents.existsById("e-persist-fail")).thenReturn(false);
         when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
@@ -387,7 +401,7 @@ class InvoiceEventsListenerTest {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         when(provider.getIfAvailable()).thenReturn(meterRegistry);
         InvoiceEventsListener listenerWithMetrics = new InvoiceEventsListener(
-                TEST_CLOCK, new ObjectMapper(), processedEvents, replica, taxReplica, provider);
+                TEST_CLOCK, new ObjectMapper(), processedEvents, replica, taxReplica, revenuePosting, provider);
 
         when(processedEvents.existsById("e-programming-error")).thenReturn(false);
         when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
@@ -411,7 +425,7 @@ class InvoiceEventsListenerTest {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         when(provider.getIfAvailable()).thenReturn(meterRegistry);
         InvoiceEventsListener listenerWithMetrics = new InvoiceEventsListener(
-                TEST_CLOCK, new ObjectMapper(), processedEvents, replica, taxReplica, provider);
+                TEST_CLOCK, new ObjectMapper(), processedEvents, replica, taxReplica, revenuePosting, provider);
 
         when(processedEvents.existsById("e-tax-persist-fail")).thenReturn(false);
         when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
@@ -426,5 +440,133 @@ class InvoiceEventsListenerTest {
         assertThat(counter.count()).isEqualTo(1d);
         // Not marked processed — same retry/DLQ path as ext_invoice constraint rejections above.
         verify(processedEvents, never()).save(any());
+    }
+
+    // ----- #1843: invoice revenue recognition dispatch -----
+
+    @Test
+    @DisplayName("Dispatches an applied FINALIZED fact to revenue posting after the replica upsert (#1843)")
+    void dispatchesFinalizedToRevenuePosting() {
+        when(processedEvents.existsById("e-fin")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+
+        listener.onInvoiceEvent(event("e-fin", 5));
+
+        ArgumentCaptor<InvoiceUpdatedV1> posted = ArgumentCaptor.forClass(InvoiceUpdatedV1.class);
+        verify(revenuePosting).postRevenue(posted.capture());
+        assertThat(posted.getValue().invoiceId()).isEqualTo(INVOICE_ID);
+        assertThat(posted.getValue().status()).isEqualTo("FINALIZED");
+        verify(revenuePosting, never()).reverseRevenue(any(), any());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("Dispatches a POSTED fact to revenue posting too (backfill of old simulated postings, #1843)")
+    void dispatchesPostedToRevenuePosting() {
+        when(processedEvents.existsById("e-posted")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+
+        listener.onInvoiceEvent(eventWithStatus("e-posted", 6, "POSTED"));
+
+        verify(revenuePosting).postRevenue(any());
+        verify(revenuePosting, never()).reverseRevenue(any(), any());
+    }
+
+    @Test
+    @DisplayName("Dispatches DRAFT and CANCELLED facts to revenue reversal with the envelope's occurredAtUtc")
+    void dispatchesRevertsToRevenueReversal() {
+        when(processedEvents.existsById(any())).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+
+        listener.onInvoiceEvent(eventWithStatus("e-draft", 7, "DRAFT"));
+        listener.onInvoiceEvent(eventWithStatus("e-cancel", 8, "CANCELLED"));
+
+        ArgumentCaptor<InvoiceUpdatedV1> reversed = ArgumentCaptor.forClass(InvoiceUpdatedV1.class);
+        verify(revenuePosting, org.mockito.Mockito.times(2))
+                .reverseRevenue(reversed.capture(), org.mockito.ArgumentMatchers.eq(OCCURRED_AT));
+        assertThat(reversed.getAllValues()).extracting(InvoiceUpdatedV1::status).containsExactly("DRAFT", "CANCELLED");
+        verify(revenuePosting, never()).postRevenue(any());
+    }
+
+    @Test
+    @DisplayName("Leaves ERROR facts alone: replica updated, no posting, no reversal")
+    void ignoresErrorStatusForPosting() {
+        when(processedEvents.existsById("e-err")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+
+        listener.onInvoiceEvent(eventWithStatus("e-err", 9, "ERROR"));
+
+        verify(replica).saveAndFlush(any());
+        verify(revenuePosting, never()).postRevenue(any());
+        verify(revenuePosting, never()).reverseRevenue(any(), any());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("Does not post revenue for a stale event (the replica guard gates posting too)")
+    void skipsRevenuePostingForStaleEvent() {
+        when(processedEvents.existsById("e-stale-post")).thenReturn(false);
+        when(replica.findById(INVOICE_ID))
+                .thenReturn(Optional.of(ExtInvoice.builder()
+                        .invoiceId(INVOICE_ID)
+                        .workorderId(WORKORDER_ID)
+                        .status("POSTED")
+                        .aggregateVersion(9L)
+                        .updatedAt(Instant.now(TEST_CLOCK))
+                        .build()));
+
+        listener.onInvoiceEvent(event("e-stale-post", 5));
+
+        verify(revenuePosting, never()).postRevenue(any());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("A GL posting failure propagates unwrapped and is NOT marked processed (ADR-0044 §4)")
+    void postingFailurePropagatesAndIsNotMarkedProcessed() {
+        when(processedEvents.existsById("e-post-fail")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        org.mockito.Mockito.doThrow(new IllegalArgumentException("No GL mapping for INVOICE_REVENUE/SERVICE_REVENUE"))
+                .when(revenuePosting)
+                .postRevenue(any());
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> listener.onInvoiceEvent(event("e-post-fail", 1)))
+                .withMessageContaining("No GL mapping");
+
+        // Load-bearing: before #1843 the generic catch (Exception) would have logged "Skipping
+        // malformed invoice event" and marked the event processed, silently losing the ledger
+        // entry forever. The container error handler must see the failure to retry / DLQ it.
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("A transient DB error from GL posting propagates for container retry")
+    void postingTransientErrorPropagates() {
+        when(processedEvents.existsById("e-post-transient")).thenReturn(false);
+        when(replica.findById(INVOICE_ID)).thenReturn(Optional.empty());
+        org.mockito.Mockito.doThrow(new QueryTimeoutException("db timeout"))
+                .when(revenuePosting)
+                .reverseRevenue(any(), any());
+
+        assertThatExceptionOfType(QueryTimeoutException.class)
+                .isThrownBy(() -> listener.onInvoiceEvent(eventWithStatus("e-post-transient", 2, "DRAFT")));
+
+        verify(processedEvents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("A malformed payload is still skipped and marked processed without reaching GL posting")
+    void malformedPayloadNeverReachesPosting() {
+        when(processedEvents.existsById("e-malformed")).thenReturn(false);
+        // invoiceId is @NonNull on the record; a payload without it fails databind.
+        listener.onInvoiceEvent("""
+                {"eventId":"e-malformed","eventType":"invoice.invoice.updated","schemaVersion":1,
+                 "aggregateVersion":1,"payload":{"status":"FINALIZED","total":"not-a-number"}}
+                """);
+
+        verify(revenuePosting, never()).postRevenue(any());
+        verify(revenuePosting, never()).reverseRevenue(any(), any());
+        verify(processedEvents).save(any());
     }
 }

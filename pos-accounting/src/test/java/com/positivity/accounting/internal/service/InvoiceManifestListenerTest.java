@@ -226,6 +226,7 @@ class InvoiceManifestListenerTest {
                 processedEvents,
                 replica,
                 taxReplica,
+                org.mockito.Mockito.mock(InvoiceRevenuePostingService.class),
                 org.mockito.Mockito.mock(ObjectProvider.class));
 
         UUID invoiceId = UUID.randomUUID();

@@ -74,6 +74,8 @@ pos:
       # Invoice replica reconciliation manifest + its replay-request command topic (#1537 D2)
       invoice-manifest-topic: ${POS_ACCOUNTING_KAFKA_INVOICE_MANIFEST_TOPIC:invoice.manifest.v1}
       invoice-commands-topic: ${POS_ACCOUNTING_KAFKA_INVOICE_COMMANDS_TOPIC:invoice.commands.v1}
+      # Accounting's own fact feed (accounting.invoice.gl-posted), drained from kafka_event_outbox (#1843)
+      accounting-events-topic: ${POS_ACCOUNTING_KAFKA_ACCOUNTING_EVENTS_TOPIC:accounting.events.v1}
 
 # Payment Gateway Configuration
 payment:

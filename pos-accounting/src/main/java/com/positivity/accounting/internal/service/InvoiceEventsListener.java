@@ -31,7 +31,11 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Consumes {@code invoice.events.v1} into accounting's {@code ext_invoice} replica (ADR-0044,
- * #842).
+ * #842) and, for applied (non-stale) {@code invoice.invoice.updated} facts, into invoice revenue
+ * recognition on the GL (#1843, {@link InvoiceRevenuePostingService}): {@code FINALIZED}/{@code
+ * POSTED} post {@code Dr AR / Cr Service Revenue / Cr Sales Tax Payable}, {@code DRAFT}/{@code
+ * CANCELLED} reverse an open recognition. Posting failures propagate unwrapped for container
+ * retry / DLQ and are never marked processed.
  *
  * <p>Same contract as {@link CustomerEventsListener}: idempotent via {@code processed_events} in
  * the upsert transaction, stale envelopes (aggregateVersion strictly below the replica's) skipped,
@@ -66,6 +70,7 @@ public class InvoiceEventsListener {
     private final ProcessedEventRepository processedEventRepository;
     private final ExtInvoiceRepository extInvoiceRepository;
     private final ExtInvoiceTaxRepository extInvoiceTaxRepository;
+    private final InvoiceRevenuePostingService invoiceRevenuePostingService;
     private final Counter payloadRejectedCounter;
     private final Counter replicaPersistFailedCounter;
 
@@ -75,12 +80,14 @@ public class InvoiceEventsListener {
             ProcessedEventRepository processedEventRepository,
             ExtInvoiceRepository extInvoiceRepository,
             ExtInvoiceTaxRepository extInvoiceTaxRepository,
+            InvoiceRevenuePostingService invoiceRevenuePostingService,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.extInvoiceRepository = extInvoiceRepository;
         this.extInvoiceTaxRepository = extInvoiceTaxRepository;
+        this.invoiceRevenuePostingService = invoiceRevenuePostingService;
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -123,9 +130,18 @@ public class InvoiceEventsListener {
             return;
         }
 
+        // The replica upsert and the GL posting are deliberately separated (#1843): the try/catch
+        // below classifies replica failures (malformed payload -> mark processed; integrity /
+        // transient -> rethrow), and the generic catch (Exception) at its foot marks the event
+        // processed. A GL posting failure (missing mapping, CLOSED period, transient DB error)
+        // must never fall into that generic path and be marked processed over a ledger entry that
+        // never happened, so posting runs after the try/catch, outside it, and propagates unwrapped
+        // for container retry / DLQ (ADR-0044 §4) — the same contract OrderEventsListener
+        // documents. The whole @Transactional rolls back together, replica row included.
+        InvoiceUpdatedV1 applied = null;
         try {
             if (InvoiceUpdatedV1.EVENT_TYPE.equals(eventType)) {
-                applyInvoiceUpdate(envelope);
+                applied = applyInvoiceUpdate(envelope);
             } else {
                 // Ignored types still fall through to the processed_events insert below: the
                 // owner's manifest counts every fact in the window (#1537 F1) — pos-invoice's
@@ -168,6 +184,9 @@ public class InvoiceEventsListener {
         } catch (Exception e) {
             log.warn("Skipping malformed invoice event eventId={}", eventId, e);
         }
+        if (applied != null) {
+            postRevenue(applied, envelope);
+        }
         processedEventRepository.save(ProcessedEvent.builder()
                 .eventId(eventId)
                 .owner(OWNER)
@@ -175,7 +194,30 @@ public class InvoiceEventsListener {
                 .build());
     }
 
-    private void applyInvoiceUpdate(JsonNode envelope) {
+    /**
+     * Dispatch the applied (non-stale) fact to invoice revenue recognition (#1843) by status:
+     * {@code FINALIZED}/{@code POSTED} recognize, {@code DRAFT}/{@code CANCELLED} reverse an open
+     * recognition, anything else ({@code ERROR}, unknown) is left alone. Failures propagate — see
+     * {@link #onInvoiceEvent}.
+     */
+    private void postRevenue(@NonNull InvoiceUpdatedV1 payload, @NonNull JsonNode envelope) {
+        String status = payload.status();
+        if (InvoiceRevenuePostingService.POSTING_STATUSES.contains(status)) {
+            invoiceRevenuePostingService.postRevenue(payload);
+        } else if (InvoiceRevenuePostingService.REVERSING_STATUSES.contains(status)) {
+            String occurredAt = envelope.path("occurredAtUtc").stringValue(null);
+            invoiceRevenuePostingService.reverseRevenue(
+                    payload, occurredAt == null ? Instant.now(clock) : Instant.parse(occurredAt));
+        }
+    }
+
+    /**
+     * Upsert the replica from the envelope's payload.
+     *
+     * @return the parsed payload when it was applied, or {@code null} when the event was stale
+     *     and skipped — the caller only dispatches applied facts to GL posting
+     */
+    private @Nullable InvoiceUpdatedV1 applyInvoiceUpdate(JsonNode envelope) {
         InvoiceUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), InvoiceUpdatedV1.class);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         UUID invoiceId = payload.invoiceId();
@@ -193,7 +235,7 @@ public class InvoiceEventsListener {
                     invoiceId,
                     aggregateVersion,
                     existing.getAggregateVersion());
-            return;
+            return null;
         }
 
         // saveAndFlush, not save (#1651): ExtInvoice's id is assigned (never generated), so a
@@ -227,6 +269,7 @@ public class InvoiceEventsListener {
                 invoiceId,
                 payload.status(),
                 aggregateVersion);
+        return payload;
     }
 
     /**

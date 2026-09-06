@@ -346,4 +346,66 @@ public interface GLPostingService {
             @NonNull LocalDateTime transactionDate,
             @NonNull String description,
             @Nullable String overrideJustification);
+
+    /**
+     * Post invoice revenue recognition for a finalized invoice (issue #1843, ADR-0044 R6):
+     * {@code Dr Accounts Receivable (revenueAmount + taxAmount) / Cr Service Revenue
+     * (revenueAmount) / Cr Sales Tax Payable (taxAmount)}. A zero tax leg is omitted, so the
+     * entry balances by construction. Consumed from the {@code invoice.invoice.updated} fact on
+     * {@code invoice.events.v1}; all three accounts are resolved by the caller through the
+     * {@code INVOICE_REVENUE} posting category's mapping keys, never hardcoded.
+     *
+     * @param sourceEventId deterministic JE source id derived from the invoice id and its
+     *     finalization instant (namespaced so it never collides with the reversal entry)
+     * @param invoiceId the invoice being recognized (audit label on the entry lines)
+     * @param arAccountId GL account for Accounts Receivable (debit)
+     * @param revenueAccountId GL account for Service Revenue (credit)
+     * @param taxPayableAccountId GL account for Sales Tax Payable (credit)
+     * @param revenueAmount the revenue portion ({@code total - tax})
+     * @param taxAmount the tax portion (zero omits the leg)
+     * @param transactionDate business transaction date (the invoice's {@code finalizedAt}) used
+     *     as the journal entry date; must not be derived from processing/clock time so Kafka
+     *     redeliveries post into the correct period
+     * @param description entry description
+     * @return posted journal entry's id
+     */
+    UUID postInvoiceRevenue(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID invoiceId,
+            @NonNull UUID arAccountId,
+            @NonNull UUID revenueAccountId,
+            @NonNull UUID taxPayableAccountId,
+            @NonNull BigDecimal revenueAmount,
+            @NonNull BigDecimal taxAmount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description);
+
+    /**
+     * Post the mirror of {@link #postInvoiceRevenue} when a recognized invoice reverts to
+     * {@code DRAFT} or is cancelled (issue #1843): {@code Dr Service Revenue (revenueAmount) /
+     * Dr Sales Tax Payable (taxAmount) / Cr Accounts Receivable (revenueAmount + taxAmount)},
+     * dated at the revert's business time in the current open period (period gate applies) —
+     * the same shape as the credit-memo void mirror, never a restatement of the original period.
+     *
+     * @param sourceEventId deterministic JE source id (distinct namespace from the revenue entry)
+     * @param invoiceId the invoice whose recognition is reversed (audit label on the lines)
+     * @param arAccountId GL account for Accounts Receivable (credit)
+     * @param revenueAccountId GL account for Service Revenue (debit)
+     * @param taxPayableAccountId GL account for Sales Tax Payable (debit)
+     * @param revenueAmount the revenue portion originally credited
+     * @param taxAmount the tax portion originally credited (zero omits the leg)
+     * @param transactionDate business transaction date (the revert's {@code occurredAt})
+     * @param description entry description
+     * @return posted journal entry's id
+     */
+    UUID postInvoiceRevenueReversal(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID invoiceId,
+            @NonNull UUID arAccountId,
+            @NonNull UUID revenueAccountId,
+            @NonNull UUID taxPayableAccountId,
+            @NonNull BigDecimal revenueAmount,
+            @NonNull BigDecimal taxAmount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description);
 }

@@ -190,6 +190,40 @@ Full schema reference: `durion/domains/accounting/.business-rules/POSTING_RULES_
   eval-time recheck fails loudly rather than silently rebalancing. Pre-E2 unparseable conditions on
   already-published versions stay WARN + non-match at evaluation.
 
+## Invoice Revenue Recognition (issue #1843)
+
+Accounting is event-only inbound and outbound (ADR-0044 §6). Invoice revenue reaches the ledger through
+`InvoiceEventsListener` → `InvoiceRevenuePostingService`, not through any REST call from pos-invoice.
+
+- **Trigger** — an applied (non-stale) `invoice.invoice.updated` fact on `invoice.events.v1` with status
+  `FINALIZED` (or `POSTED`, so manifest replays of invoices the old simulated posting path had already marked
+  posted are backfilled). Deposit-take invoices (`depositSourceType` set — they fund a contract liability, #1623),
+  zero/null totals, and facts without `finalizedAt` are skipped.
+- **Entry** — `Dr 1200 Accounts Receivable (total) / Cr 4000 Service Revenue (total − tax) / Cr 2200 Sales Tax
+  Payable (tax)`, dated at the invoice's `finalizedAt` (business time, so it lands in the invoice's month). The
+  tax leg is omitted when zero; the entry balances by construction because pos-invoice computes
+  `total = subtotal + adjustments + tax`. Accounts resolve through the `INVOICE_REVENUE` posting category and its
+  `ACCOUNTS_RECEIVABLE` / `SERVICE_REVENUE` / `SALES_TAX_PAYABLE` mapping keys (seeded in
+  `R__seed_reference_accounting.sql`) — never hardcoded. The period gate applies; a CLOSED period, missing
+  mapping, or transient DB error propagates unwrapped so the Kafka container retries / DLQs the record
+  (ADR-0044 §4) instead of marking it processed.
+- **Idempotency** — one `invoice_gl_posting` row per `(invoice_id, finalized_at)` cycle, written in the same
+  transaction as the journal entry; at most one open (un-reversed) posting per invoice. Redeliveries, the
+  follow-up `POSTED` fact, and replays of an already-reversed cycle post nothing. The journal entry's
+  `sourceEventId` is `nameUUIDFromBytes("INVOICE_REVENUE:" + invoiceId + ":" + finalizedAt)`.
+- **Reversal** — a `DRAFT` or `CANCELLED` fact for an invoice with an open posting posts the mirror
+  (`Dr Service Revenue / Dr Sales Tax Payable / Cr Accounts Receivable`) for the amounts actually posted, dated
+  at the fact's `occurredAtUtc` (current open period, like the credit-memo void mirror), and closes the row
+  (`reversal_journal_entry_id`, `reversed_at`). Re-finalizing afterwards carries a new `finalizedAt` and posts a
+  fresh cycle. Without an open posting the fact is a no-op.
+- **Outbound fact** — each posting and reversal enqueues `accounting.invoice.gl-posted` v1
+  (`InvoiceGlPostedV1`: `invoiceId`, `journalEntryId`, `postingKind` `POSTED|REVERSED`, `finalizedAt`, `postedAt`,
+  `reversedJournalEntryId`) on `accounting.events.v1` through the transactional outbox
+  (`kafka_event_outbox`, `OutboxEventWriter` / `OutboxPublisher`, at-least-once, keyed by invoice id).
+  pos-invoice consumes it to move the invoice `FINALIZED → POSTED` with the real journal entry id. The outbox
+  writer is conditional on `pos.accounting.kafka.enabled`; with Kafka off the posting still happens and the
+  publish is a no-op. (`event_outbox` / `OutboxProcessor` is the unrelated in-process Spring-event outbox.)
+
 ## Payment Application Concurrency
 
 `ReceivablePayment` uses JPA optimistic locking (`@Version`, V10). `RetryingPaymentApplicationService`
@@ -206,6 +240,9 @@ preserved); a second conflict returns `409 Conflict` and the client should retry
 | `pos.accounting.credit-memo.ar-account-id`          | required             | GL account for AR reductions             |
 | `pos.accounting.kafka.enabled`                      | `false`              | Enable all of accounting's Kafka consumers (payment, workorder, invoice, invoice-manifest, customer, inventory, order, warranty, settlement-config) |
 | `pos.accounting.kafka.inventory-events-topic`       | `inventory.events.v1` | Inventory scrap facts for shrinkage GL posting (#1043) |
+| `pos.accounting.kafka.accounting-events-topic`      | `accounting.events.v1` | Accounting's own fact feed (`accounting.invoice.gl-posted`), drained from `kafka_event_outbox` (#1843) |
+| `pos.accounting.outbox.poll-interval-ms`            | `1000`               | Kafka outbox drain interval (#1843) |
+| `pos.accounting.outbox.send-timeout-ms`             | `10000`              | Broker ack timeout per outbox row (#1843) |
 | `stripe.api-key`                                    | required             | Stripe API key for payment processing    |
 
 ## Dependencies
@@ -233,7 +270,8 @@ Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`:
 - `V32__ext_invoice_workorder_id_nullable.sql` — drops `ext_invoice.workorder_id NOT NULL`: order-fronted/counter-sale/standalone-billing invoices carry no originating workorder and must still replicate into A/R aging and collections (issue #1651)
 - `V34__create_ext_customer_party.sql` — read-only replica of pos-customer party identity (display name + customer number), fed by `customer.events.v1`; the source of the customer display values on accounting responses (issue #1779)
 - `V35__credit_memo_reference.sql` — `credit_memo.credit_memo_reference` display number (`CM-{YYYYMM}-{n}`), assigned from the `accounting_sequence` counter and backfilled for existing memos (issue #1779)
-- `R__seed_reference_accounting.sql` — repeatable seed for reference data, including the 9-account COA
+- `V36__invoice_gl_posting.sql` — `invoice_gl_posting` (one row per invoice revenue-recognition cycle, at most one open per invoice) and `kafka_event_outbox` (transactional outbox for `accounting.events.v1`) (issue #1843)
+- `R__seed_reference_accounting.sql` — repeatable seed for reference data, including the 9-account COA; also the `INVOICE_REVENUE` posting category / mapping keys (#1843)
 
 ## Development
 
