@@ -72,11 +72,16 @@ class SimpleChatClassifierTest {
         assertThat(classifier.isSimpleChat("And the month before that?")).isFalse();
         assertThat(classifier.isSimpleChat("What is their outstanding balance?"))
                 .isFalse();
+        assertThat(classifier.isSimpleChat("How does that compare with the same quarter last year?"))
+                .isFalse();
         // Cues alone, without a question mark or business word: still a continuation.
         assertThat(classifier.isSimpleChat("Show me those again")).isFalse();
         assertThat(classifier.isSimpleChat("Rank them by balance instead")).isFalse();
         assertThat(classifier.isSimpleChat("montre-moi ceux-la aussi")).isFalse();
         assertThat(classifier.isSimpleChat("muestrame esos tambien")).isFalse();
+        // Accented forms reach the cue set through normalize(): mêmes → memes, también → tambien.
+        assertThat(classifier.isSimpleChat("montre-moi les mêmes plutôt")).isFalse();
+        assertThat(classifier.isSimpleChat("muéstrame los mismos también")).isFalse();
     }
 
     @Test
