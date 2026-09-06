@@ -1222,7 +1222,7 @@ def format_tool_calls(tool_calls):
 
 
 
-def summarize_results(results, replaying):
+def summarize_results(results, replaying, graded_from_traces=True):
     """One verdict for the run, in both modes.
 
     Live runs never had one: the summary block sat under the replay-only branch, so the 2026-09-05
@@ -1231,9 +1231,13 @@ def summarize_results(results, replaying):
 
     A window FAIL fails the run in either mode — answering the right question on the wrong six
     months is a wrong answer, and a verdict that ignored it would report PASS for exactly the
-    q09/q12/q15 failures this work exists to catch. A transport error (timeout, dropped connection)
-    fails a live run too: its window grades UNGRADED, which does not fail anything on its own, but
-    the question was never answered.
+    q09/q12/q15 failures this work exists to catch. An unanswered question — `ask()` recorded an
+    error: a timeout, a dropped connection, or an HTTP 4xx/5xx — fails a live run too: its window
+    grades UNGRADED, which does not fail anything on its own, but the question was never answered.
+
+    A live run that could not fetch its traces is UNGRADED, not PASS: every window then grades
+    UNGRADED and the verdict would otherwise read PASS for exactly the 2026-09-05 mid-deploy run
+    (trace endpoint 503, eleven of twelve UNGRADED) that looked like a collapse in capability.
     """
     window_counts = Counter(
         (result.get("window_check") or {}).get("verdict", "UNGRADED") for result in results
@@ -1253,8 +1257,10 @@ def summarize_results(results, replaying):
             "failed": failed,
             "outcomes": dict(sorted(outcome_counts.items())),
         })
+    elif window_failed or errors:
+        summary["verdict"] = "FAIL"
     else:
-        summary["verdict"] = "PASS" if window_failed == 0 and errors == 0 else "FAIL"
+        summary["verdict"] = "PASS" if graded_from_traces else "UNGRADED"
     return summary
 
 
@@ -1320,7 +1326,7 @@ def write_markdown(out_dir, record):
             f"Endpoint: `{record['endpoint']}` \u00b7 questions asked:"
             f" {len(record['results'])}",
             (
-                f"Window grading: {summary.get('window_counts')} \u00b7 transport errors:"
+                f"Window grading: {summary.get('window_counts')} \u00b7 unanswered (error):"
                 f" {summary.get('errors')} (source: {record.get('trace_source')})"
             ),
             (
@@ -1788,7 +1794,11 @@ def main(argv=None):
         )
         result["window_check"] = {"verdict": verdict, "detail": detail}
 
-    record["summary"] = summarize_results(record["results"], replaying=replay_by_fixture is not None)
+    record["summary"] = summarize_results(
+        record["results"],
+        replaying=replay_by_fixture is not None,
+        graded_from_traces=record.get("graded_from_traces", True),
+    )
 
     (out_dir / "run.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     write_markdown(out_dir, record)

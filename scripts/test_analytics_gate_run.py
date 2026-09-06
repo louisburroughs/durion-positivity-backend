@@ -370,6 +370,15 @@ class CliModeTest(unittest.TestCase):
         # being ambiguous with "checked and valid" — the ambiguity #1706 was filed about.
         self.assertIs(record["void"], False)
         self.assertIn("n/a (not exposed by the endpoint)", markdown)
+        # #1806: the summary was only assigned under the replay branch, so a live run wrote
+        # summary: null. Asserted on main()'s own output, not on summarize_results — a revert of
+        # the wiring alone left every direct test of the function green. No trace endpoint answers
+        # here, so the run is UNGRADED, and the report must say so rather than PASS.
+        self.assertIs(record["graded_from_traces"], False)
+        self.assertIsNotNone(record["summary"])
+        self.assertEqual(record["summary"]["verdict"], "UNGRADED")
+        self.assertEqual(record["summary"]["window_counts"], {"UNGRADED": 1})
+        self.assertIn("Overall verdict: **UNGRADED**", markdown)
 
 
 class ExistingHelperBehaviorTest(unittest.TestCase):
@@ -1454,10 +1463,6 @@ class TurnIsolationTest(unittest.TestCase):
         self.assertEqual(captured["body"]["conversationId"], "gate-X-q01")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class RunSummaryTest(unittest.TestCase):
     """#1806: a live run must carry a verdict, and a window FAIL must fail it.
 
@@ -1535,7 +1540,7 @@ class RunSummaryTest(unittest.TestCase):
                 "elapsed_s": 1.0, "window": {"shape": "calendar", "resolved_range": "r"},
             })
         record = {
-            "started_at": "t", "endpoint": "http://x/v1/mcp/chat", "eval_as_of": "2026-09-01",
+            "started_at": "t", "mode": "live", "endpoint": "http://x/v1/mcp/chat", "eval_as_of": "2026-09-01",
             "graded_as_of": "2026-09-05", "actor": {}, "results": results,
             "questions_file": {"path": "q.json", "blob_sha": "abc", "commit": "c", "uncommitted": False}, "trace_source": "2 trace(s)",
             "summary": runner.summarize_results(results, replaying=False),
@@ -1545,4 +1550,27 @@ class RunSummaryTest(unittest.TestCase):
             report = (Path(tmp) / "run.md").read_text(encoding="utf-8")
 
         self.assertIn("Overall verdict: **FAIL**", report)
-        self.assertIn("'FAIL': 1", report)
+        self.assertIn("Window grading:", report)
+        self.assertEqual(record["summary"]["window_counts"]["FAIL"], 1)
+
+    def test_a_live_run_that_could_not_fetch_traces_is_ungraded_not_pass(self):
+        # The 2026-09-05 mid-deploy run: trace endpoint 503, eleven of twelve UNGRADED, no error on
+        # any single question. Every window UNGRADED and errors == 0 would read PASS.
+        results = [self._live("q01", "UNGRADED"), self._live("q03", "UNGRADED")]
+
+        summary = runner.summarize_results(results, replaying=False, graded_from_traces=False)
+
+        self.assertEqual(summary["verdict"], "UNGRADED")
+
+    def test_a_window_fail_still_fails_a_run_that_could_not_fetch_traces(self):
+        # Answer parsing can still catch a FAIL without traces; not being able to read the traces
+        # must not soften one that was read off the answer.
+        results = [self._live("q09", "FAIL"), self._live("q03", "UNGRADED")]
+
+        summary = runner.summarize_results(results, replaying=False, graded_from_traces=False)
+
+        self.assertEqual(summary["verdict"], "FAIL")
+
+
+if __name__ == "__main__":
+    unittest.main()
