@@ -81,7 +81,7 @@ final class SpringAiPosAssistant implements PosAssistant {
             @Nullable RequestScopedUserContext requestScopedUserContext,
             @Nullable ObservationRegistry observationRegistry) {
         this.chatModel = chatModel;
-        this.chatClient = buildToolCallingChatClient(chatModel, observationRegistry);
+        this.chatClient = buildToolCallingChatClient(chatModel, observationRegistry, invocationRecorder);
         this.systemPromptSupplier = systemPromptSupplier;
         this.staticToolCallbacks = SpringAiToolCallbackResolver.fromObjects(staticTools, invocationRecorder);
         this.ragRetriever = ragRetriever;
@@ -266,6 +266,17 @@ final class SpringAiPosAssistant implements PosAssistant {
      */
     static @NonNull ChatClient buildToolCallingChatClient(
             @NonNull ChatModel chatModel, @Nullable ObservationRegistry observationRegistry) {
+        return buildToolCallingChatClient(chatModel, observationRegistry, null);
+    }
+
+    /**
+     * As above, with the recorder that lets the manager append an unknown-tool call to the eval turn
+     * trace (#1831).
+     */
+    static @NonNull ChatClient buildToolCallingChatClient(
+            @NonNull ChatModel chatModel,
+            @Nullable ObservationRegistry observationRegistry,
+            @Nullable ToolInvocationRecorder invocationRecorder) {
         // #1655: the single-argument ChatClient.builder(chatModel) hardcodes ObservationRegistry.NOOP,
         // which silently drops the spring.ai.chat.client observation and every per-advisor one. The
         // model-level gen_ai.client.operation metrics survive it (the Ollama bean carries its own
@@ -279,7 +290,7 @@ final class SpringAiPosAssistant implements PosAssistant {
                         null)
                 .defaultAdvisors(ToolCallingAdvisor.builder()
                         .toolCallingManager(new BoundedToolCallingManager(
-                                ToolCallingManager.builder().build()))
+                                ToolCallingManager.builder().build(), invocationRecorder))
                         .build())
                 .build();
     }
@@ -287,11 +298,11 @@ final class SpringAiPosAssistant implements PosAssistant {
     /**
      * Runs the turn, degrading to the blank-response path rather than propagating.
      *
-     * <p>A model that names a tool which is not in the callback list makes
-     * {@code DefaultToolCallingManager} throw a raw {@code IllegalStateException} ("No ToolCallback
-     * found for tool name"), which the session manager would turn into a 500. With sixteen facades in
-     * context that is a realistic model slip, and the whole point of the answer-resolution ladder is
-     * that this path degrades instead of erroring.
+     * <p>A model that names a tool which is not in the callback list is answered inside the loop by
+     * {@link BoundedToolCallingManager} (#1831); before that it made {@code DefaultToolCallingManager}
+     * throw a raw {@code IllegalStateException} ("No ToolCallback found for tool name") and the turn
+     * fell to the ladder. The catch below remains the backstop for anything else the loop throws, so
+     * this path degrades instead of turning into a 500.
      */
     private @Nullable ChatResponse callModel(@NonNull Prompt prompt) {
         try {
@@ -305,6 +316,10 @@ final class SpringAiPosAssistant implements PosAssistant {
                     "Tool execution failed and was not converted into a model-readable result; "
                             + "the model cannot retry this turn",
                     exception);
+            return null;
+        } catch (BoundedToolCallingManager.UnknownToolLoopException exception) {
+            // #1831: every round named a tool that was not offered; the corrections never landed.
+            LOGGER.warn("{}; falling back", exception.getMessage());
             return null;
         } catch (RuntimeException exception) {
             LOGGER.warn("Chat turn failed during the model call; falling back", exception);

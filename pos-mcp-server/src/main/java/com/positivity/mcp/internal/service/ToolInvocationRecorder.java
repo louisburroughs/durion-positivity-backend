@@ -132,6 +132,22 @@ public class ToolInvocationRecorder {
         }
     }
 
+    /**
+     * Appends a call the model made to a tool that was never offered (#1831) to the active eval turn
+     * trace, so the trace shows the slip and the correction the model received. There is no audit row:
+     * nothing executed and no {@code mcp_tool} row exists for the name.
+     */
+    public void recordUnknownToolCall(@NonNull String toolName, @Nullable String toolInput, @NonNull String error) {
+        if (traceRecorder == null) {
+            return;
+        }
+        try {
+            traceRecorder.recordToolCall(toolName, toolInput == null ? "" : toolInput, null, error, 0);
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Failed to append unknown tool '{}' to the active eval turn trace", toolName, exception);
+        }
+    }
+
     private @Nullable UUID resolveToolId(String toolLookupName) {
         Optional<UUID> resolved = toolIdCache.computeIfAbsent(toolLookupName, name -> {
             Optional<UUID> id;

@@ -70,7 +70,8 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
                     "Streaming chat model %s must also implement ChatModel: tool execution runs through ChatClient and would otherwise be silently unavailable"
                             .formatted(streamingChatModel.getClass().getName()));
         }
-        this.chatClient = SpringAiPosAssistant.buildToolCallingChatClient(chatModel, observationRegistry);
+        this.chatClient =
+                SpringAiPosAssistant.buildToolCallingChatClient(chatModel, observationRegistry, invocationRecorder);
         this.systemPromptSupplier = systemPromptSupplier;
         this.staticToolCallbacks = SpringAiToolCallbackResolver.fromObjects(staticTools, invocationRecorder);
         this.ragRetriever = ragRetriever;
