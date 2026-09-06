@@ -21,7 +21,6 @@ import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -516,13 +515,17 @@ public class InvoiceFinalizationServiceImpl implements InvoiceFinalizationServic
     }
 
     /**
-     * The stored {@code finalizedAt} round-trips through the database at microsecond precision
-     * while the fact echoes the value the outbox serialized from the in-memory entity, so
-     * compare at millisecond precision. Two finalization instances of one invoice can never be
-     * a millisecond apart (revert needs manager approval in between).
+     * Tolerance for matching the fact's {@code finalizedAt} against the stored one. The stored
+     * value round-trips through the database at microsecond precision (rounded, so it can land on
+     * the far side of a millisecond boundary) while the fact echoes the value the outbox
+     * serialized from the in-memory entity; comparing by distance rather than by truncation keeps
+     * boundary rounding from rejecting a legitimate fact. Two finalization instances of one
+     * invoice can never be a millisecond apart (revert needs manager approval in between).
      */
+    static final Duration FINALIZED_AT_TOLERANCE = Duration.ofMillis(1);
+
     private static boolean sameInstant(@NonNull Instant stored, @NonNull Instant fromFact) {
-        return stored.truncatedTo(ChronoUnit.MILLIS).equals(fromFact.truncatedTo(ChronoUnit.MILLIS));
+        return Duration.between(stored, fromFact).abs().compareTo(FINALIZED_AT_TOLERANCE) <= 0;
     }
 
     private String maskForLog(Object value) {

@@ -297,6 +297,22 @@ class InvoiceFinalizationServiceTest {
     }
 
     @Test
+    void markPosted_toleratesMicrosecondRoundingAcrossMillisecondBoundary() {
+        // Postgres rounds timestamp(6): an in-memory 00:00:00.000999600 is stored as
+        // 00:00:00.001000, on the far side of the millisecond boundary the fact sits on.
+        Instant fact = TEST_CLOCK.instant().plusNanos(999_600);
+        Instant stored = TEST_CLOCK.instant().plusNanos(1_000_000);
+        Invoice invoice = finalizedAt(stored);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.markPosted(invoice.getId(), GL_ENTRY_ID, fact);
+
+        assertThat(invoice.getStatus()).isEqualTo(InvoiceStatus.POSTED);
+        assertThat(invoice.getGlEntryId()).isEqualTo(GL_ENTRY_ID);
+    }
+
+    @Test
     void markPosted_appliesWhenLocalFinalizedAtMissing() {
         Invoice invoice = finalizedAt(null);
         when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
