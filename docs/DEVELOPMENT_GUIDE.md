@@ -293,6 +293,11 @@ curl http://localhost:8093/v3/api-docs.yaml > openapi.yaml
 `.github/workflows/api-artifacts-sync.yml` (manual `workflow_dispatch`) walks the whole
 contract chain and reports what the current controllers break downstream:
 
+0. A `preflight` job probes `CROSS_REPO_TOKEN` against each of the four repositories
+   and reports, per repo, whether it can actually push. It runs first, takes seconds
+   and writes nothing — so a `commit_mode=none` run is enough to verify a newly
+   created token. Checking only that the secret is *set* would not catch an expired
+   or under-scoped PAT, which is a non-empty secret that fails at the push.
 1. `scripts/generate-openapi.sh` regenerates every module's `openapi.yaml` (or the
    `modules` input's subset), the aggregate index and the permissions manifests.
 2. `durion-positivity-sdk` regenerates its typescript-fetch clients from those specs and
@@ -328,12 +333,21 @@ gh workflow run api-artifacts-sync.yml --repo louisburroughs/durion-positivity-b
   --ref main -f modules="pos-order pos-workorder"      # omit modules to regenerate everything
 ```
 
-The `sdk_ref`, `sdk_angular_ref` and `frontend_ref` inputs pick the downstream branches. The
-other repos are checked out with the `CROSS_REPO_TOKEN` secret when it exists, otherwise with
-the workflow token. Committing to the SDK and frontend repos needs the secret: a fine-grained
-PAT with Contents and Pull requests write access on all four repositories. It is also worth
+The `sdk_ref`, `sdk_angular_ref` and `frontend_ref` inputs pick the downstream branches.
+
+Committing to the SDK and frontend repos needs `CROSS_REPO_TOKEN`: a fine-grained PAT with
+Contents and Pull requests write access on all four repositories. A job's `permissions:` block
+only scopes `GITHUB_TOKEN` to the repository running the workflow, so it can never reach the
+other three — regardless of whether they are public. Public visibility only covers the *read*
+path: checkout works without the secret while these repos stay public. The PAT is also worth
 using for this repo's own PR, since a PR opened with the workflow token does not trigger the
 other workflows on it.
+
+The PAT is used only where the preflight job proved it can push; elsewhere the checkout falls
+back to the workflow token. That matters because an invalid PAT fails a public-repo checkout
+with a 401 exactly as it fails a push. A stage that cannot deliver skips delivery with a
+warning instead of failing at the last step, and if delivery was requested but no repository
+could take it, the report job fails the run.
 
 ### Access Points (When Running)
 
