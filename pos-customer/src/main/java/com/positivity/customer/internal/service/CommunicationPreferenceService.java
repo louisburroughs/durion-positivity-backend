@@ -16,7 +16,8 @@ public interface CommunicationPreferenceService {
      *
      * @param partyId the party ID
      * @return response containing preferences
-     * @throws IllegalArgumentException if party not found or invalid ID
+     * @throws org.springframework.web.server.ResponseStatusException {@code 404} if the party
+     *                                                                does not exist
      */
     GetCommunicationPreferencesResponse getCommunicationPreferences(UUID partyId);
 
@@ -30,7 +31,8 @@ public interface CommunicationPreferenceService {
      * @param partyId the party ID
      * @param request the preferences to set
      * @return response with update status
-     * @throws IllegalArgumentException if party not found or invalid data
+     * @throws org.springframework.web.server.ResponseStatusException {@code 404} if the party
+     *                                                                does not exist
      */
     UpsertCommunicationPreferencesResponse upsertCommunicationPreferences(
             UUID partyId, UpsertCommunicationPreferencesRequest request);

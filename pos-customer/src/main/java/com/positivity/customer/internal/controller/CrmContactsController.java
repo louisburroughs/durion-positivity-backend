@@ -16,8 +16,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -39,8 +37,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/v1/crm/parties")
 public class CrmContactsController {
-
-    private static final Logger log = LoggerFactory.getLogger(CrmContactsController.class);
 
     private final ContactRoleService contactRoleService;
 
@@ -88,13 +84,12 @@ public class CrmContactsController {
     public ResponseEntity<GetContactsWithRolesResponse> getContactsWithRoles(
             @Parameter(description = "Party ID", required = true) @PathVariable @NonNull UUID partyId) {
 
-        try {
-            GetContactsWithRolesResponse response = contactRoleService.getContactsWithRoles(partyId);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            log.warn("Failed to get contacts with roles: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
-        }
+        // No local catch: a missing party raises ResponseStatusException (404), which
+        // pos-web-common's GlobalApiExceptionHandler maps to a full ApiError body with a
+        // correlation id. A local catch (IllegalArgumentException) here would only re-arm the
+        // bodyless-404 defect of issue #1714 if a throw on this path were ever re-typed.
+        GetContactsWithRolesResponse response = contactRoleService.getContactsWithRoles(partyId);
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -157,15 +152,10 @@ public class CrmContactsController {
                     @NonNull
                     UpdateContactRolesRequest request) {
 
-        try {
-            UpdateContactRolesResponse response = contactRoleService.updateContactRoles(partyId, contactId, request);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            log.warn("Failed to update contact roles: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
-        } catch (IllegalStateException e) {
-            log.warn("Business rule violation: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
-        }
+        // No local catch: a missing party or contact raises ResponseStatusException (404) and an
+        // unrecognised roleCode raises CrmValidationException (400); the exception handlers map
+        // both to a full ApiError body with a correlation id (issue #1714).
+        UpdateContactRolesResponse response = contactRoleService.updateContactRoles(partyId, contactId, request);
+        return ResponseEntity.ok(response);
     }
 }

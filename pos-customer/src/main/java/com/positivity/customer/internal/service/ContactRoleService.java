@@ -12,7 +12,8 @@ public interface ContactRoleService {
      *
      * @param partyId the party ID
      * @return response containing contacts with their roles
-     * @throws IllegalArgumentException if party not found or invalid ID
+     * @throws org.springframework.web.server.ResponseStatusException {@code 404} if the party
+     *                                                                does not exist
      */
     GetContactsWithRolesResponse getContactsWithRoles(UUID partyId);
 
@@ -28,7 +29,11 @@ public interface ContactRoleService {
      * @param contactId the contact (person) ID
      * @param request   the role assignment request
      * @return response with update status
-     * @throws IllegalArgumentException if party/contact not found or invalid data
+     * @throws org.springframework.web.server.ResponseStatusException {@code 404} if the party
+     *                                                                or the contact does not exist
+     * @throws com.positivity.customer.internal.exception.CrmValidationException if a submitted
+     *                                                                {@code roleCode} is not a
+     *                                                                recognised role ({@code 400})
      */
     UpdateContactRolesResponse updateContactRoles(UUID partyId, UUID contactId, UpdateContactRolesRequest request);
 }

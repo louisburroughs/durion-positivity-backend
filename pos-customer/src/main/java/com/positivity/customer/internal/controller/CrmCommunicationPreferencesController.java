@@ -16,8 +16,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,8 +39,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/crm/parties")
 public class CrmCommunicationPreferencesController {
-
-    private static final Logger log = LoggerFactory.getLogger(CrmCommunicationPreferencesController.class);
 
     private final CommunicationPreferenceService preferenceService;
 
@@ -94,13 +90,11 @@ public class CrmCommunicationPreferencesController {
     public ResponseEntity<GetCommunicationPreferencesResponse> getCommunicationPreferences(
             @Parameter(description = "Party ID", required = true) @PathVariable @NonNull UUID partyId) {
 
-        try {
-            GetCommunicationPreferencesResponse response = preferenceService.getCommunicationPreferences(partyId);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            log.warn("Failed to get communication preferences: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
-        }
+        // No local catch: a missing party raises ResponseStatusException (404), which
+        // pos-web-common's GlobalApiExceptionHandler maps to a full ApiError body with a
+        // correlation id (issue #1714).
+        GetCommunicationPreferencesResponse response = preferenceService.getCommunicationPreferences(partyId);
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -175,13 +169,9 @@ public class CrmCommunicationPreferencesController {
                     @NonNull
                     UpsertCommunicationPreferencesRequest request) {
 
-        try {
-            UpsertCommunicationPreferencesResponse response =
-                    preferenceService.upsertCommunicationPreferences(partyId, request);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            log.warn("Failed to upsert communication preferences: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
-        }
+        // No local catch: see getCommunicationPreferences (issue #1714).
+        UpsertCommunicationPreferencesResponse response =
+                preferenceService.upsertCommunicationPreferences(partyId, request);
+        return ResponseEntity.ok(response);
     }
 }

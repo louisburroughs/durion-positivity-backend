@@ -71,7 +71,7 @@ public class CommunicationPreferenceServiceImpl implements CommunicationPreferen
      *
      * @param partyId the party ID
      * @return response containing preferences
-     * @throws IllegalArgumentException if party not found or invalid ID
+     * @throws ResponseStatusException {@code 404} if the party does not exist
      */
     @Override
     @NonNull
@@ -96,7 +96,7 @@ public class CommunicationPreferenceServiceImpl implements CommunicationPreferen
      * @param partyId the party ID
      * @param request the preferences to set
      * @return response with update status
-     * @throws IllegalArgumentException if party not found or invalid data
+     * @throws ResponseStatusException {@code 404} if the party does not exist
      */
     @Override
     @NonNull

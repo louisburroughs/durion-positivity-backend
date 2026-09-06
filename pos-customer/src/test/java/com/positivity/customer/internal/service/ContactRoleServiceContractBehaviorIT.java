@@ -14,6 +14,7 @@ import com.positivity.customer.internal.entity.ContactRoleAssignment;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.PartyType;
+import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ContactRoleAssignmentRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
@@ -254,7 +255,13 @@ class ContactRoleServiceContractBehaviorIT extends BaseContractIntegrationTest {
 
         UUID partyId = testParty.getPartyId();
 
+        // Issue #1714: the JDK's own IllegalArgumentException from Enum.valueOf must not escape —
+        // it is what a local controller catch turned into a bodyless 404. The module's own
+        // validation type is what CrmExceptionHandler maps to the documented 400.
         assertThatThrownBy(() -> contactRoleService.updateContactRoles(partyId, testContactUuid, request))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(CrmValidationException.class)
+                .hasMessageContaining("INVALID_ROLE");
+
+        assertThat(roleAssignmentRepository.findByCustomerAccountId(partyId)).isEmpty();
     }
 }
