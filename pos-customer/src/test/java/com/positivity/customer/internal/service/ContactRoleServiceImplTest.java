@@ -384,6 +384,28 @@ class ContactRoleServiceImplTest {
         }
 
         @Test
+        @DisplayName("rejects a null roleCode as CrmValidationException, never as NullPointerException")
+        void rejectsANullRoleCodeAsCrmValidationException() {
+            givenPartyAndContactExist();
+
+            assertThatThrownBy(() -> sut.updateContactRoles(PARTY_ID, CONTACT_ID, request(roleRequest(null, false))))
+                    .isInstanceOf(CrmValidationException.class)
+                    .hasMessage("roleCode is required");
+            verify(roleAssignmentRepository, never()).deleteByContactIdAndCustomerAccountId(any(), any());
+        }
+
+        @Test
+        @DisplayName("rejects a blank roleCode as CrmValidationException")
+        void rejectsABlankRoleCodeAsCrmValidationException() {
+            givenPartyAndContactExist();
+
+            assertThatThrownBy(() -> sut.updateContactRoles(PARTY_ID, CONTACT_ID, request(roleRequest("  ", false))))
+                    .isInstanceOf(CrmValidationException.class)
+                    .hasMessage("roleCode is required");
+            verify(roleAssignmentRepository, never()).deleteByContactIdAndCustomerAccountId(any(), any());
+        }
+
+        @Test
         @DisplayName(
                 "parses every roleCode before deleting the existing assignments, so a bad code leaves them untouched")
         void parsesEveryRoleCodeBeforeDeletingExistingAssignments() {

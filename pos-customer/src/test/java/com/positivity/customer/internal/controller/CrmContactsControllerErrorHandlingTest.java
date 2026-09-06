@@ -3,6 +3,8 @@ package com.positivity.customer.internal.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -90,6 +92,29 @@ class CrmContactsControllerErrorHandlingTest {
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.timestamp").value(NOW.toString()))
                 .andExpect(jsonPath("$.correlationId").value("corr-1714"));
+    }
+
+    /**
+     * The request body is bean-validated at the boundary ({@code @Valid}), so a role entry with
+     * no {@code roleCode} never reaches the service: it answers 400 {@code VALIDATION_FAILED}
+     * with a field error naming the offending element, not a 500 from {@code valueOf(null)}.
+     */
+    @Test
+    @DisplayName("a role entry without a roleCode answers 400 VALIDATION_FAILED with a field error, before the service")
+    void aRoleEntryWithoutARoleCodeAnswers400BeforeTheService() throws Exception {
+        mockMvc.perform(put(ROLES_PATH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"roles":[{"isPrimary":true}]}
+                                """)
+                        .header("X-Authorities", "crm:contact_role:assign"))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().exists("X-Correlation-Id"))
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("roles[0].roleCode"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+
+        verify(contactRoleService, never()).updateContactRoles(any(), any(), any());
     }
 
     @Test

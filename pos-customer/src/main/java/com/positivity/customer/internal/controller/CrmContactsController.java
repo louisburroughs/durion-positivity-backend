@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
@@ -148,13 +149,16 @@ public class CrmContactsController {
                                                                     {"roles":[{"roleCode":"BILLING","isPrimary":true},
                                                                               {"roleCode":"OPERATIONS","isPrimary":false}]}
                                                                     """)))
+                    @Valid
                     @RequestBody
                     @NonNull
                     UpdateContactRolesRequest request) {
 
-        // No local catch: a missing party or contact raises ResponseStatusException (404) and an
-        // unrecognised roleCode raises CrmValidationException (400); the exception handlers map
-        // both to a full ApiError body with a correlation id (issue #1714).
+        // No local catch: a missing party or contact raises ResponseStatusException (404), a
+        // missing/blank roleCode fails bean validation (400 VALIDATION_FAILED with fieldErrors),
+        // and an unrecognised roleCode raises CrmValidationException (400 VALIDATION_ERROR); the
+        // exception handlers map all of them to a full ApiError body with a correlation id
+        // (issue #1714).
         UpdateContactRolesResponse response = contactRoleService.updateContactRoles(partyId, contactId, request);
         return ResponseEntity.ok(response);
     }

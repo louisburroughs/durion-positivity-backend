@@ -176,8 +176,9 @@ public class ContactRoleServiceImpl implements ContactRoleService {
      * @param request   the role assignment request
      * @return response with update status
      * @throws ResponseStatusException {@code 404} if the party or the contact does not exist
-     * @throws CrmValidationException  if a submitted {@code roleCode} is not a recognised
-     *                                 {@link ContactRole} (answers {@code 400}, issue #1714)
+     * @throws CrmValidationException  if a submitted {@code roleCode} is missing, blank, or not
+     *                                 a recognised {@link ContactRole} (answers {@code 400},
+     *                                 issue #1714)
      */
     @Override
     @NonNull
@@ -245,12 +246,20 @@ public class ContactRoleServiceImpl implements ContactRoleService {
      * documented {@code 400} with the {@code ApiError} envelope instead of a bodyless
      * {@code 404} (issue #1714).
      *
-     * @param roleCode the submitted role code
+     * <p>The controller enforces the DTO's {@code @NotBlank} at the boundary, but this method
+     * is the last line before {@code valueOf}, so a null or blank code is rejected here as well
+     * rather than surfacing as a {@link NullPointerException} (500) from a caller that did not.
+     *
+     * @param roleCode the submitted role code, possibly absent
      * @return the matching role
-     * @throws CrmValidationException if the code is not a recognised {@link ContactRole}
+     * @throws CrmValidationException if the code is missing, blank, or not a recognised
+     *                                {@link ContactRole}
      */
     @NonNull
-    private static ContactRole parseRoleCode(@NonNull String roleCode) {
+    private static ContactRole parseRoleCode(@Nullable String roleCode) {
+        if (roleCode == null || roleCode.isBlank()) {
+            throw new CrmValidationException("roleCode is required");
+        }
         try {
             return ContactRole.valueOf(roleCode);
         } catch (IllegalArgumentException e) {
