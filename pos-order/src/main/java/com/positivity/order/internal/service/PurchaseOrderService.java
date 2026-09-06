@@ -35,6 +35,11 @@ public interface PurchaseOrderService {
     @NonNull
     PurchaseOrderResponse getPurchaseOrder(@NonNull UUID poId);
 
+    /**
+     * One page of the purchase orders matching every supplied filter. All four filters are applied
+     * in the query, so the page holds the first {@code size} matching rows and {@code totalElements}
+     * counts matching rows only (#1804). Currency matches case-insensitively.
+     */
     @NonNull
     Page<PurchaseOrderResponse> listPurchaseOrders(
             @NonNull ListPurchaseOrdersRequest filter, @NonNull Pageable pageable);
