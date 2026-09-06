@@ -32,7 +32,7 @@ class AlphaEvalTurnTraceRecorderTest {
 
     private final EvalTurnTraceRepository repository = mock(EvalTurnTraceRepository.class);
     private final AlphaEvalTurnTraceRecorder recorder =
-            new AlphaEvalTurnTraceRecorder(repository, Clock.fixed(NOW, ZoneOffset.UTC), RETENTION);
+            new AlphaEvalTurnTraceRecorder(repository, Clock.fixed(NOW, ZoneOffset.UTC), RETENTION, "sha-81ff1e0");
 
     @Test
     void completedTurnPersistsAllStagesAndOrderedToolIo() {
@@ -86,6 +86,8 @@ class AlphaEvalTurnTraceRecorderTest {
                 .containsExactly("resolveDateWindow", "getRevenueByCustomer");
         assertThat(trace.finalResponse()).isEqualTo("Revenue was $1,500.00.");
         assertThat(trace.error()).isNull();
+        // #1806: the build that answered, so a run measured across a mid-run deploy can say so.
+        assertThat(trace.serverBuild()).isEqualTo("sha-81ff1e0");
         assertThat(recorder.hasActiveTurn()).isFalse();
     }
 

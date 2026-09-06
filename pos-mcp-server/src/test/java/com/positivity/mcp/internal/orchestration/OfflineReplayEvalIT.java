@@ -218,7 +218,8 @@ class OfflineReplayEvalIT {
                 setup.offeredTools(),
                 toolCallTraces,
                 result.finalResponse(),
-                result.error());
+                result.error(),
+                null);
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("fixture_id", fixtureId);
         entry.put("trace", trace);

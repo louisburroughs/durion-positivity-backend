@@ -171,6 +171,9 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-mcp-server:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
+    environment:
+      # Stamped on every eval turn trace so a gate run records the build it measured (#1806).
+      MCP_BUILD_ID: ${BACKEND_TAG:-unknown}
 
   pos-order:
     image: ${ECR_REGISTRY}/durion/pos-order:${BACKEND_TAG}

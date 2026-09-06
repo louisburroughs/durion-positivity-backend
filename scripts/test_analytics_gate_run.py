@@ -322,11 +322,63 @@ class CliModeTest(unittest.TestCase):
             markdown = (out_dir / "run.md").read_text(encoding="utf-8")
 
         ask.assert_not_called()
+        # Replay has no server to attribute a build to, and must never go looking for one.
+        self.assertIn("replay mode", record["server_build"]["error"])
         self.assertEqual("PASS", record["results"][0]["verdict"])
         self.assertIn("argument_accuracy", record["results"][0]["axes"])
         self.assertIn("Overall verdict: **PASS**", markdown)
         self.assertIn("getRevenue", markdown)
         self.assertNotIn("always reads n/a", markdown)
+
+    def _live_run_with_traces(self, ask, provenance, fetch_traces, traces):
+        provenance.return_value = {"path": "questions.json", "blob_sha": "abc", "commit": "def", "uncommitted": False}
+        ask.return_value = {"answer": "live answer", "error": None, "elapsed_s": 1.0}
+        fetch_traces.return_value = (traces, None)
+        with tempfile.TemporaryDirectory() as directory, mock.patch.dict(os.environ, {}, clear=True):
+            directory = Path(directory)
+            questions_path = directory / "questions.json"
+            questions_path.write_text(json.dumps(self.document()), encoding="utf-8")
+            out_dir = directory / "out"
+            runner.main([
+                "--out", str(out_dir), "--questions", str(questions_path),
+                "--token", _token({"sub": "admin.alpha", "roles": ["ROLE_ADMIN"], "perm_bits": "t"}),
+            ])
+            record = json.loads((out_dir / "run.json").read_text(encoding="utf-8"))
+            markdown = (out_dir / "run.md").read_text(encoding="utf-8")
+        return record, markdown
+
+    @mock.patch.object(runner, "fetch_traces")
+    @mock.patch.object(runner, "questions_provenance")
+    @mock.patch.object(runner, "ask")
+    def test_live_mode_records_the_build_its_traces_carry(self, ask, provenance, fetch_traces):
+        # #1806: asserted on main()'s own output. The #1807 review found every direct test of the
+        # helper green with the wiring reverted; this one fails if record["server_build"] is not
+        # set from the fetched traces.
+        record, markdown = self._live_run_with_traces(
+            ask, provenance, fetch_traces,
+            [{"userMessage": "Question?", "serverBuild": "sha-81ff1e0", "toolCalls": []}],
+        )
+
+        self.assertEqual(record["server_build"], {"builds": ["sha-81ff1e0"], "mixed": False})
+        self.assertEqual(record["results"][0]["server_build"], "sha-81ff1e0")
+        self.assertIn("Server build: sha-81ff1e0", markdown)
+        self.assertNotIn("MIXED", markdown)
+
+    @mock.patch.object(runner, "fetch_traces")
+    @mock.patch.object(runner, "questions_provenance")
+    @mock.patch.object(runner, "ask")
+    def test_a_deploy_landing_mid_run_shows_up_as_a_mixed_build(self, ask, provenance, fetch_traces):
+        record, markdown = self._live_run_with_traces(
+            ask, provenance, fetch_traces,
+            [
+                {"userMessage": "Question?", "serverBuild": "sha-81ff1e0", "toolCalls": []},
+                {"userMessage": "another turn", "serverBuild": "sha-fef3150", "toolCalls": []},
+            ],
+        )
+
+        self.assertTrue(record["server_build"]["mixed"])
+        self.assertEqual(record["server_build"]["builds"], ["sha-81ff1e0", "sha-fef3150"])
+        self.assertIn("MIXED", markdown)
 
     @mock.patch.object(runner, "questions_provenance")
     @mock.patch.object(runner, "ask")
@@ -379,6 +431,10 @@ class CliModeTest(unittest.TestCase):
         self.assertEqual(record["summary"]["verdict"], "UNGRADED")
         self.assertEqual(record["summary"]["window_counts"], {"UNGRADED": 1})
         self.assertIn("Overall verdict: **UNGRADED**", markdown)
+        # And the build is read from the traces, never from actuator/info (denied by design, #1806):
+        # with no traces the file says why the build is unknown instead of recording a 401.
+        self.assertTrue(record["server_build"]["error"].startswith("no traces"))
+        self.assertIn("Server build: unknown \u2014 no traces", markdown)
 
 
 class ExistingHelperBehaviorTest(unittest.TestCase):
@@ -1290,91 +1346,37 @@ class RunProvenanceTest(unittest.TestCase):
     and the actor, and nothing about the server. Attributing it needed container logs.
     """
 
-    def test_replay_mode_makes_no_server_call_and_claims_no_trace_provenance(self):
-        # Replay is offline by contract. A first draft inverted this condition and probed the
-        # server exactly when replaying — the opposite of the requirement, and invisible without a
-        # test because the field would still be populated.
-        calls = []
+    def test_one_build_across_the_traces_is_recorded_as_that_build(self):
+        traces = [{"serverBuild": "sha-81ff1e0"}, {"serverBuild": "sha-81ff1e0"}]
 
-        def record_call(request, timeout=None):
-            calls.append(request)
-            raise ConnectionRefusedError("should not be reached in replay mode")
+        build = runner.server_build_from_traces(traces)
 
-        with mock.patch.object(runner.urllib.request, "urlopen", record_call):
-            replaying = True
-            build = {"error": "replay mode: no server"} if replaying else runner.server_build("http://x/v1/y", "t")
-            graded_from_traces = not replaying
+        self.assertEqual(build, {"builds": ["sha-81ff1e0"], "mixed": False})
 
-        self.assertEqual(calls, [])
-        self.assertIn("replay mode", build["error"])
-        self.assertFalse(graded_from_traces)
+    def test_two_builds_are_flagged_as_a_mid_run_deploy(self):
+        # The 2026-09-05 case: the container restarted between q03 and q04, and nothing in the run
+        # file could say so.
+        traces = [{"serverBuild": "sha-fef3150"}, {"serverBuild": "sha-81ff1e0"}, {"serverBuild": "sha-81ff1e0"}]
 
-    def test_the_base_url_keeps_an_earlier_version_segment(self):
-        # split() takes the FIRST "/v1/" and would truncate a base URL carrying one earlier in its
-        # path; rsplit takes the last, matching traces_url_for. Asserts the URL the function
-        # actually requests, not a string operation restated in the test.
-        requested = []
+        build = runner.server_build_from_traces(traces)
 
-        class FakeResponse:
-            def read(self):
-                return json.dumps({"build": {"version": "x"}}).encode()
+        self.assertTrue(build["mixed"])
+        self.assertEqual(build["builds"], ["sha-81ff1e0", "sha-fef3150"])
+        self.assertIn("mid-run", build["note"])
 
-            def __enter__(self):
-                return self
+    def test_traces_from_a_server_that_predates_the_field_say_so(self):
+        build = runner.server_build_from_traces([{"userMessage": "x"}, {"userMessage": "y", "serverBuild": None}])
 
-            def __exit__(self, *a):
-                return False
+        self.assertIn("predates #1806", build["error"])
 
-        def capture(request, timeout=None):
-            requested.append(request.full_url)
-            return FakeResponse()
+    def test_no_traces_is_a_reason_not_a_crash(self):
+        self.assertIn("no traces", runner.server_build_from_traces([])["error"])
 
-        with mock.patch.object(runner.urllib.request, "urlopen", capture):
-            runner.server_build("http://host/api/v1/mcp-server/v1/mcp/chat", "tok")
-
-        self.assertEqual(requested, ["http://host/api/v1/mcp-server/actuator/info"])
-
-    def test_server_build_extracts_the_build_section(self):
-        class FakeResponse:
-            def read(self):
-                return json.dumps({"build": {"name": "pos-mcp-server", "version": "0.1.81ff1e0"}}).encode()
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                return False
-
-        with mock.patch.object(runner.urllib.request, "urlopen", lambda r, timeout=None: FakeResponse()):
-            build = runner.server_build("http://x/mcp-server/v1/mcp/chat", "tok")
-
-        self.assertEqual(build["version"], "0.1.81ff1e0")
-
-    def test_server_build_reports_a_reason_rather_than_raising(self):
-        # Not knowing the build must never stop a run.
-        def boom(request, timeout=None):
-            raise ConnectionRefusedError("refused")
-
-        with mock.patch.object(runner.urllib.request, "urlopen", boom):
-            build = runner.server_build("http://x/mcp-server/v1/mcp/chat", "tok")
-
-        self.assertIn("ConnectionRefusedError", build["error"])
-
-    def test_server_build_handles_info_without_a_build_section(self):
-        class FakeResponse:
-            def read(self):
-                return json.dumps({"git": {"branch": "main"}}).encode()
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                return False
-
-        with mock.patch.object(runner.urllib.request, "urlopen", lambda r, timeout=None: FakeResponse()):
-            build = runner.server_build("http://x/mcp-server/v1/mcp/chat", "tok")
-
-        self.assertIn("no build section", build["error"])
+    def test_the_report_names_the_build_and_shouts_about_a_mixed_run(self):
+        self.assertEqual(runner._build_line({"builds": ["sha-81ff1e0"], "mixed": False}), "sha-81ff1e0")
+        self.assertIn("MIXED", runner._build_line({"builds": ["a", "b"], "mixed": True, "note": "n"}))
+        self.assertIn("unknown", runner._build_line({"error": "no traces"}))
+        self.assertIn("predates", runner._build_line(None))
 
 
 class TurnIsolationTest(unittest.TestCase):

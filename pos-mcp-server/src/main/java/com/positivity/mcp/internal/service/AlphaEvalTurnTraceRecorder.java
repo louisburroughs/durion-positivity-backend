@@ -31,19 +31,24 @@ public class AlphaEvalTurnTraceRecorder {
     private final EvalTurnTraceRepository repository;
     private final Clock clock;
     private final Duration retention;
+    // The deployed build (image tag, MCP_BUILD_ID) stamped on every trace, so a gate run can say
+    // which build answered each turn — including a deploy that lands mid-run (#1806).
+    private final String buildId;
     private final ThreadLocal<TraceBuilder> activeTurn = new ThreadLocal<>();
 
     public AlphaEvalTurnTraceRecorder(
             @NonNull EvalTurnTraceRepository repository,
             @NonNull Clock clock,
-            @Value("${mcp.eval.turn-trace.retention:24h}") @NonNull Duration retention) {
+            @Value("${mcp.eval.turn-trace.retention:24h}") @NonNull Duration retention,
+            @Value("${mcp.build.id:unknown}") @NonNull String buildId) {
         this.repository = repository;
         this.clock = clock;
         this.retention = retention;
+        this.buildId = buildId;
     }
 
     public void begin(@NonNull CurrentUserContext user, @NonNull String userMessage) {
-        activeTurn.set(new TraceBuilder(user, userMessage, clock.instant()));
+        activeTurn.set(new TraceBuilder(user, userMessage, clock.instant(), buildId));
     }
 
     public void recordSimpleChat(boolean simpleChat) {
@@ -138,10 +143,13 @@ public class AlphaEvalTurnTraceRecorder {
         private List<EvalTurnTrace.ToolDefinitionTrace> offeredTools = List.of();
         private final List<EvalTurnTrace.ToolCallTrace> toolCalls = new ArrayList<>();
 
-        private TraceBuilder(CurrentUserContext user, String userMessage, Instant startedAt) {
+        private final String buildId;
+
+        private TraceBuilder(CurrentUserContext user, String userMessage, Instant startedAt, String buildId) {
             this.user = user;
             this.userMessage = userMessage;
             this.startedAt = startedAt;
+            this.buildId = buildId;
         }
 
         private EvalTurnTrace build(
@@ -164,7 +172,8 @@ public class AlphaEvalTurnTraceRecorder {
                     offeredTools,
                     toolCalls,
                     response,
-                    error);
+                    error,
+                    buildId);
         }
     }
 }

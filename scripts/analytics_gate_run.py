@@ -1264,6 +1264,15 @@ def summarize_results(results, replaying, graded_from_traces=True):
     return summary
 
 
+def _build_line(build):
+    if not build:
+        return "not recorded (run predates #1806)"
+    if build.get("error"):
+        return f"unknown — {build['error']}"
+    line = ", ".join(build["builds"])
+    return f"{line} — **MIXED: {build['note']}**" if build.get("mixed") else line
+
+
 def _actor_line(actor):
     """One line naming who asked. A score is not comparable without it (#1706)."""
     if actor.get("not_applicable"):
@@ -1303,6 +1312,7 @@ def write_markdown(out_dir, record):
         "Ground truth: `pos-mcp-server/src/test/resources/eval/analytics-gate/"
         "ground-truth/EXPECTED.md`",
         _actor_line(record.get("actor") or {}),
+        f"Server build: {_build_line(record.get('server_build'))}",
     ]
     replay = record.get("mode") == "replay"
     if replay:
@@ -1494,29 +1504,28 @@ def run_alternate_mode(args, token):
     return None
 
 
-def server_build(chat_url, token):
-    """The build the server is running, so a run says what it measured.
+def server_build_from_traces(traces):
+    """The build(s) that answered this run, read off the turn traces.
 
     A gate number is only comparable against another if both name the build they ran against. On
-    2026-09-05 a deploy landed mid-run and the results were unattributable after the fact — the file
-    recorded the questions blob and the actor, and nothing about the service. Returns a reason
-    string rather than raising: not knowing the build must not stop a run.
+    2026-09-05 a deploy landed mid-run and the results were unattributable after the fact. The first
+    attempt probed actuator/info and answered 401 on its first live run, and no permitAll would have
+    fixed it: GatewayAuthoritiesFilter skips every /actuator path so the caller arrives anonymous at a
+    denyAll rule (hence 401, not 403), and pos-mcp-server serves its actuator on a separate random
+    management port, so the app port the gateway routes to would 404 the path regardless. Since
+    #1806 the server stamps `serverBuild` (its image tag) on every trace, so the run reads the build
+    from the same traces it grades — and a deploy that lands mid-run shows up as two builds rather
+    than as a mystery.
     """
-    # rsplit, matching traces_url_for: split() takes the FIRST "/v1/" and would truncate a base
-    # URL that happens to contain one earlier in its path.
-    base = chat_url.rsplit("/v1/", 1)[0]
-    request = urllib.request.Request(f"{base}/actuator/info")
-    request.add_header("Authorization", f"Bearer {token}")
-    request.add_header("Accept", "application/json")
-    try:
-        with urllib.request.urlopen(request, timeout=15) as response:
-            info = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, OSError, json.JSONDecodeError) as exc:
-        return {"error": f"{type(exc).__name__}: {exc}"}
-    build = info.get("build") if isinstance(info, dict) else None
-    if isinstance(build, dict):
-        return {k: build.get(k) for k in ("name", "version", "time") if build.get(k)}
-    return {"error": "no build section in actuator/info"}
+    if not traces:
+        return {"error": "no traces fetched, so the build cannot be read"}
+    builds = sorted({trace.get("serverBuild") for trace in traces if trace.get("serverBuild")})
+    if not builds:
+        return {"error": "traces carry no serverBuild (server predates #1806)"}
+    result = {"builds": builds, "mixed": len(builds) > 1}
+    if result["mixed"]:
+        result["note"] = "more than one build answered this run: a deploy landed mid-run"
+    return result
 
 
 def build_parser():
@@ -1688,9 +1697,8 @@ def main(argv=None):
         "questions_file": provenance,
         "actor": actor,
         # Replay mode is offline by contract: it reads recorded fixtures and makes no HTTP call, so
-        # it must not probe the server for a build, and it has no live traces to claim provenance
-        # over. Both fields say "not applicable" rather than guessing.
-        "server_build": {"error": "replay mode: no server"} if replaying else server_build(args.url, token),
+        # it has no live traces to claim provenance over (server_build, read from those traces, is
+        # set after the trace fetch below and says "replay mode" here).
         "graded_from_traces": not replaying,
         "void": bool(role_mismatch),
         "results": [],
@@ -1760,6 +1768,8 @@ def main(argv=None):
     # Grade windows AFTER the loop: traces are written as each turn completes, so one fetch at the
     # end covers the whole run instead of a request per question (#1743).
     resolved_by_utterance = {}
+    build_by_utterance = {}
+    traces = []
     trace_note = "replay mode: no live traces"
     if replay_by_fixture is None and token:
         traces, failure = fetch_traces(args.traces_url or traces_url_for(args.url), token, run_started_at)
@@ -1778,11 +1788,18 @@ def main(argv=None):
             for trace in traces:
                 message = trace.get("userMessage")
                 if message:
+                    build_by_utterance.setdefault(message, trace.get("serverBuild"))
                     # setdefault with the possibly-EMPTY list: a trace that resolved no window is
                     # evidence that none was resolved, which must not be mistaken for "no trace".
                     resolved_by_utterance.setdefault(message, window_from_trace(trace))
             trace_note = f"{len(traces)} trace(s) fetched, {len(resolved_by_utterance)} with a resolved window"
     record["trace_source"] = trace_note
+    if replay_by_fixture is not None:
+        record["server_build"] = {"error": "replay mode: no server"}
+    elif not resolved_by_utterance and record.get("graded_from_traces") is False:
+        record["server_build"] = {"error": f"no traces: {trace_note}"}
+    else:
+        record["server_build"] = server_build_from_traces(traces)
 
     for result in record["results"]:
         resolved = resolved_by_utterance.get(result["utterance"])
@@ -1793,6 +1810,8 @@ def main(argv=None):
             resolved,
         )
         result["window_check"] = {"verdict": verdict, "detail": detail}
+        # Per question, so a MIXED run can say which questions ran on which build.
+        result["server_build"] = build_by_utterance.get(result["utterance"])
 
     record["summary"] = summarize_results(
         record["results"],
