@@ -181,6 +181,34 @@ class ToolSelectionEngineTest {
      * question that carries no window must not pull it in. This is the bound on how broad the
      * keyword set may grow.
      */
+    /**
+     * #1840. The DATE_WINDOW layer gives a windowless report question the contract's default window
+     * and sends the model to the resolver for it, so a metric question is dated even when it names
+     * no unit. "Who are our ten largest customers by revenue?" lost the resolver to the candidate
+     * cut on the 2026-09-06 sequences run and the model called the tool it could not see.
+     */
+    @Test
+    @DisplayName("selectRoleTools offers resolveDateWindow for a metric question that names no window (#1840)")
+    void selectRoleTools_offersTheDateWindowToolForAWindowlessMetricQuestion() {
+        when(toolRegistry.resolveDomainTools("ROLE_ADMIN"))
+                .thenReturn(new ArrayList<>(List.of(orderFacadeTool, inventoryFacadeTool)));
+        when(toolRegistryService.resolveCandidateTools(any(ToolSelectionContext.class), eq(3)))
+                .thenReturn(List.of());
+
+        for (String question : List.of(
+                "Who are our ten largest customers by revenue?",
+                "How much did we spend with Cascade Auto Warehouse",
+                "what is our average time from work order creation to invoice",
+                "rank our vendors by total billed",
+                "which technician has the most completed work orders")) {
+            assertThat(toolSelectionEngine
+                            .selectRoleTools("ROLE_ADMIN", PERMISSION_CODES, question)
+                            .fallbackTools())
+                    .as("date-window tool offered for \"%s\"", question)
+                    .contains(dateWindowFacadeTool);
+        }
+    }
+
     @Test
     @DisplayName("selectRoleTools withholds resolveDateWindow from a question with no window")
     void selectRoleTools_withholdsTheDateWindowToolWhenNoWindowIsAsked() {
@@ -252,7 +280,9 @@ class ToolSelectionEngineTest {
         // longer substituted. Keyword fallbacks are a separate list and still populate, so the
         // assistant keeps web search rather than going mute.
         assertThat(result.roleTools()).isEmpty();
-        assertThat(result.fallbackTools()).containsExactly(exaWebSearchTool, glossaryFacadeTool, orderFacadeTool);
+        // #1840: "sales report" is a metric question, so the date-window resolver is pinned too.
+        assertThat(result.fallbackTools())
+                .containsExactlyInAnyOrder(exaWebSearchTool, glossaryFacadeTool, dateWindowFacadeTool, orderFacadeTool);
     }
 
     @Test

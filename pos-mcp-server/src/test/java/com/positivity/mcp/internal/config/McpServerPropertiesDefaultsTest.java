@@ -74,8 +74,10 @@ class McpServerPropertiesDefaultsTest {
                 .withInitializer(loadYaml("application.yml", "application-alpha.yml"))
                 .run(ctx -> assertThat(ctx.getEnvironment().getProperty("mcp.agent.candidate-tool-limit"))
                         // W1.4 (analytics-capability-plan.md §3): widened from 8 so analytical
-                        // intents stop starving multi-domain questions of candidate tools.
-                        .isEqualTo("16"));
+                        // intents stop starving multi-domain questions of candidate tools. #1840:
+                        // widened again past the facade count (17); at 16 the ranking cut dropped
+                        // one facade per turn, once the date-window resolver.
+                        .isEqualTo("24"));
     }
 
     @Test

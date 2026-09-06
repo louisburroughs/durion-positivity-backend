@@ -262,7 +262,9 @@ mcp:
     cache-ttl-minutes: 30
     max-cached-agents: 500
     memory-max-messages: 50
-    candidate-tool-limit: 16
+    # #1840: must stay above the facade count (17 on 2026-09-06) — the cut is by ranking, so at
+    # 16 one facade per turn was dropped at random, once the date-window resolver itself.
+    candidate-tool-limit: 24
 
 pos:
   accounting:

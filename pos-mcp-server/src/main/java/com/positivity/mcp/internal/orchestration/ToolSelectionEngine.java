@@ -71,6 +71,44 @@ public class ToolSelectionEngine {
             "ytd"));
 
     /**
+     * Vocabulary of a metric question that names no window at all (#1840). The DATE_WINDOW layer
+     * tells the model that a windowless report question still has a window — the contract's default
+     * — and to resolve it, so "who are our ten largest customers by revenue?" is a dated question
+     * even though it contains none of the words above. On the 2026-09-06 sequences run that exact
+     * question lost {@code resolveDateWindow} to the candidate cut and the model called the tool it
+     * could not see. A metric word earns its place here when the prompt would send the model to the
+     * resolver for it; the near misses guarded by the test suite ("phone number for NAPA", "recent
+     * notes on this vehicle") name no metric and stay out.
+     */
+    private static final List<Pattern> IMPLIED_WINDOW_WORD_PATTERNS = compileWordPatterns(Set.of(
+            "average",
+            "avg",
+            "billed",
+            "biggest",
+            "collected",
+            "count",
+            "growth",
+            "invoiced",
+            "largest",
+            "least",
+            "margin",
+            "most",
+            "payables",
+            "profit",
+            "rank",
+            "ranking",
+            "receivables",
+            "revenue",
+            "sales",
+            "spend",
+            "spending",
+            "spent",
+            "top",
+            "total",
+            "totals",
+            "trend"));
+
+    /**
      * Vocabulary that names an ABSOLUTE period rather than a relative one — a four-digit year, a
      * calendar quarter, or a month name (#1684).
      *
@@ -433,6 +471,11 @@ public class ToolSelectionEngine {
             }
         }
         for (Pattern pattern : DATE_WINDOW_WORD_PATTERNS) {
+            if (pattern.matcher(text).find()) {
+                return true;
+            }
+        }
+        for (Pattern pattern : IMPLIED_WINDOW_WORD_PATTERNS) {
             if (pattern.matcher(text).find()) {
                 return true;
             }
