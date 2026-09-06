@@ -88,12 +88,12 @@ public class DateWindowFacadeTool {
                             description =
                                     "ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, CALENDAR_SPAN, or FORWARD — see the tool "
                                             + "description for what each means and which wording maps to it")
-                    @NonNull
+                    @Nullable
                     String shape,
             @ToolParam(
                             description = "DAY, WEEK, MONTH, QUARTER, or YEAR. DAY is only valid with shape=ROLLING "
                                     + "or shape=FORWARD")
-                    @NonNull
+                    @Nullable
                     String unit,
             @ToolParam(
                             description = "Number of units/periods, e.g. 6 for \"the last six months\". Must be 1 "
