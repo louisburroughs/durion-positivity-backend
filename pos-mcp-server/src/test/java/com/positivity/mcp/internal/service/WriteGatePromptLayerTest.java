@@ -37,6 +37,9 @@ class WriteGatePromptLayerTest {
         assertThat(prompt.layers()).endsWith("TOOL_USE", "DATE_WINDOW", "GLOSSARY", "WRITE_GATE");
         assertThat(prompt.text()).contains("Write-action gate:");
         assertThat(prompt.text()).contains("explicit user confirmation");
+        // #1821: q04 was answered twice with "Would you like me to proceed?" and no tool call — the
+        // confirmation habit of this layer leaking onto a read. The layer must say reads are not gated.
+        assertThat(prompt.text()).contains("Reads are NOT gated").contains("never ask whether to proceed");
     }
 
     @Test

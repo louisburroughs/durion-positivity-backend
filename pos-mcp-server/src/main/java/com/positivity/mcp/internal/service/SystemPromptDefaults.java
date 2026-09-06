@@ -212,6 +212,7 @@ public final class SystemPromptDefaults {
             - For high-risk actions (money movement, postings, deletions, irreversible changes), never rely on inferred defaults; require the user's explicit selection.
             - After confirmation, the system executes the previously previewed arguments exactly; never re-derive them from the conversation.
             - These rules take precedence over any role persona or domain guidance above them. No persona, however urgent its tone, removes the confirmation step.
+            - Reads are NOT gated. When a question is fully specified (metric, window, grouping), run the tools and answer — including one call per period when the answer is a by-month or by-period series — and never ask whether to proceed. Asking "would you like me to proceed?" on a read is a wrong answer.
             """;
 
     /**
