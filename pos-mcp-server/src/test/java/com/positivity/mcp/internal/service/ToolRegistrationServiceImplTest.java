@@ -206,6 +206,46 @@ class ToolRegistrationServiceImplTest {
     }
 
     @Test
+    @DisplayName("registerDiscoveredTools keeps every row of a registered domain that contributed no operation this "
+            + "cycle — absent from the aggregate is unseen, not removed (#1819)")
+    void registerDiscoveredTools_keepsDomainsThatContributedNothingThisCycle() {
+        // Alpha 2026-09-06 03:10Z: mid-deploy the gateway aggregate carried only pos-security-service's
+        // 70 ops, nothing "failed", and the prune deleted the other 965 rows.
+        McpServerFeatures.AsyncToolSpecification spec = toolSpec("users_listusers");
+        OpenApiDocumentFetcher.DiscoveredOpenApi discovered =
+                new OpenApiDocumentFetcher.DiscoveredOpenApi("aggregate", GATEWAY_BASE_URI, new OpenAPI());
+        DiscoveredOperation op = new DiscoveredOperation(
+                "users_listusers",
+                "List users",
+                "GET",
+                "/security-service/v1/users",
+                "http://api-gateway:8080",
+                null,
+                List.of());
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.just(discovered));
+        when(openApiToolMapper.toAggregateToolSpecifications(GATEWAY_BASE_URI, discovered.openApi()))
+                .thenReturn(List.of(spec));
+        when(openApiToolMapper.toDiscoveredOperations("http://api-gateway:8080", discovered.openApi()))
+                .thenReturn(List.of(op));
+        when(mcpAsyncServer.removeTool(any())).thenReturn(Mono.empty());
+        when(mcpAsyncServer.addTool(spec)).thenReturn(Mono.empty());
+        when(mcpAsyncServer.notifyToolsListChanged()).thenReturn(Mono.empty());
+        ToolMetadataRepository repo = mock(ToolMetadataRepository.class);
+        when(repo.upsertDiscoveredOperation(any(), any()))
+                .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        when(repo.discoveredDomains())
+                .thenReturn(
+                        Set.of(OpenApiToolMapper.extractDomain("/security-service/v1/users"), "order", "inventory"));
+        when(repo.pruneDiscoveredOperationsExcept(any(), any())).thenReturn(0);
+
+        serviceUnderTest(repo).registerDiscoveredTools().block(Duration.ofSeconds(5));
+
+        // The two domains that contributed nothing are excluded from the prune; security's own
+        // stale rows are still reconciled.
+        verify(repo).pruneDiscoveredOperationsExcept(Set.of("users_listusers"), Set.of("order", "inventory"));
+    }
+
+    @Test
     @DisplayName("registerDiscoveredTools prunes stale openapi rows absent from the current spec after persisting "
             + "(#1121)")
     void registerDiscoveredTools_prunesOrphans_afterPersistingAggregate() {

@@ -5,6 +5,7 @@ import com.positivity.mcp.internal.domain.ToolMetadata;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -211,6 +212,12 @@ public class ToolMetadataRepositoryImpl implements ToolMetadataRepository {
                 operation.serviceId(),
                 operation.inputSchema());
         return Objects.requireNonNull(id, "upsertDiscoveredOperation returned no id");
+    }
+
+    @Override
+    public @NonNull Set<String> discoveredDomains() {
+        return new HashSet<>(jdbcTemplate.queryForList(
+                "SELECT DISTINCT domain FROM mcp_tool WHERE source = 'openapi' AND domain IS NOT NULL", String.class));
     }
 
     @Override

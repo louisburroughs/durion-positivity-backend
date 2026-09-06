@@ -11,6 +11,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.modelcontextprotocol.server.McpAsyncServer;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.swagger.v3.oas.models.OpenAPI;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -272,6 +273,7 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                     List<DiscoveredOperation> operations =
                             openApiToolMapper.toDiscoveredOperations(gatewayBaseUrl, openApi);
                     Set<String> discoveredNames = discoveredNames(operations);
+                    Set<String> discoveredDomains = discoveredDomains(operations);
                     int persisted = persistAll(operations);
                     log.info(
                             "Persisted {} discovered openapi ops (source='openapi', {} workflow); "
@@ -279,7 +281,7 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
                                     + "x-required-permissions (fail-closed when absent)",
                             persisted,
                             DISCOVERED_WORKFLOW_STATE);
-                    pruneStaleOperations(persisted, discoveredNames, failedPrefixes);
+                    pruneStaleOperations(persisted, discoveredNames, discoveredDomains, failedPrefixes);
                 })
                 .subscribeOn(Schedulers.boundedElastic())
                 .then();
@@ -290,6 +292,15 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
      * name} is {@code @NonNull} by contract; the filter is a defensive guard so a stray null can never
      * enter the keep-set and turn the prune's {@code NOT IN (...)} into a silent no-op.
      */
+    /** The domains the current run's operations belong to, derived exactly as persistOne stores them. */
+    private static @NonNull Set<String> discoveredDomains(@NonNull List<DiscoveredOperation> operations) {
+        return operations.stream()
+                .map(DiscoveredOperation::httpPath)
+                .filter(java.util.Objects::nonNull)
+                .map(OpenApiToolMapper::extractDomain)
+                .collect(Collectors.toSet());
+    }
+
     private static @NonNull Set<String> discoveredNames(@NonNull List<DiscoveredOperation> operations) {
         return operations.stream()
                 .map(DiscoveredOperation::name)
@@ -348,13 +359,31 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
      * spec again.
      */
     private void pruneStaleOperations(
-            int persisted, @NonNull Set<String> discoveredNames, @NonNull List<String> failedPrefixes) {
+            int persisted,
+            @NonNull Set<String> discoveredNames,
+            @NonNull Set<String> discoveredDomains,
+            @NonNull List<String> failedPrefixes) {
         if (persisted <= 0 || discoveredNames.isEmpty()) {
             return;
         }
         Set<String> excludedDomains = failedPrefixes.stream()
                 .map(ToolRegistrationServiceImpl::prefixToServiceId)
-                .collect(Collectors.toSet());
+                .collect(Collectors.toCollection(HashSet::new));
+        // #1819: a registered domain that contributed zero operations this cycle is unseen, not
+        // removed. On the gateway-aggregate path nothing "fails" when a service is down — it is
+        // simply absent from the aggregate — and on alpha (2026-09-06, mid-deploy) an aggregate
+        // carrying one service's 70 ops pruned the other 965 rows as stale. A domain that really
+        // removes every endpoint keeps its rows until it publishes a spec with at least one op.
+        Set<String> unseenDomains = new HashSet<>(toolMetadataRepository.discoveredDomains());
+        unseenDomains.removeAll(discoveredDomains);
+        if (!unseenDomains.isEmpty()) {
+            log.error(
+                    "Running the #1121 stale-op prune with {} registered domain(s) that contributed no operation "
+                            + "this cycle, so their rows are kept, not reconciled (#1819): {}",
+                    unseenDomains.size(),
+                    unseenDomains);
+            excludedDomains.addAll(unseenDomains);
+        }
         if (excludedDomains.isEmpty()) {
             log.info("Running the #1121 stale-op prune against a complete aggregate (no excluded domains)");
         } else {
