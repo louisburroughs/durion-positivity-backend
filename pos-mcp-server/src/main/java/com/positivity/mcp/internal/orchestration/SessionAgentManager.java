@@ -28,6 +28,7 @@ import com.positivity.mcp.internal.service.RolePromptResolver;
 import com.positivity.mcp.internal.service.RolePromptResolver.AssembledPrompt;
 import com.positivity.mcp.internal.service.SystemPromptDefaults;
 import com.positivity.mcp.internal.service.ToolInvocationRecorder;
+import com.positivity.mcp.internal.telemetry.FallbackUsage;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.TierRouting;
@@ -214,6 +215,9 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
 
         long startMs = System.currentTimeMillis();
         NltiRouter.RoutingDecision routingDecision = null;
+        // #1691: a failover flag left by a request that emitted no telemetry must not be charged
+        // to this one.
+        FallbackUsage.consume();
         try {
             if (toolInvocationRecorder != null) {
                 toolInvocationRecorder.beginTurn(currentUserContext, message);

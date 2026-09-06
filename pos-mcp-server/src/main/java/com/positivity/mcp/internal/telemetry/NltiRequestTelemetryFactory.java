@@ -144,8 +144,16 @@ public final class NltiRequestTelemetryFactory {
             routing = null;
         }
 
-        Model model = (tierRouting != null && (tierRouting.tierModel() != null || tierRouting.routerModel() != null))
-                ? new Model(tierRouting.tierModel(), tierRouting.routerModel(), FallbackUsage.consume())
+        // #1691: consumed on every event so a failover flag can never outlive its request on the
+        // thread; a failover is reported even when no tier routing ran (tiering off, simple chat).
+        boolean fallbackUsed = FallbackUsage.consume();
+        boolean tierModelsKnown =
+                tierRouting != null && (tierRouting.tierModel() != null || tierRouting.routerModel() != null);
+        Model model = tierModelsKnown || fallbackUsed
+                ? new Model(
+                        tierRouting != null ? tierRouting.tierModel() : null,
+                        tierRouting != null ? tierRouting.routerModel() : null,
+                        fallbackUsed)
                 : null;
         Write write = writeCapableToolsPresent ? new Write(true, null, null) : null;
 

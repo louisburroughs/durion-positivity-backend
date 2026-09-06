@@ -23,6 +23,12 @@ import reactor.core.publisher.Flux;
 /** #1691: a primary failure is answered by the secondary model with the same prompt. */
 class FailoverChatModelTest {
 
+    @org.junit.jupiter.api.AfterEach
+    void clearFallbackFlag() {
+        // A failed assertion before an in-test consume() must not leak TRUE into the next test.
+        FallbackUsage.consume();
+    }
+
     /** A model that records the prompts it receives and either answers or fails. */
     static final class ScriptedModel implements ChatModel, StreamingChatModel {
         final List<Prompt> received = new ArrayList<>();
@@ -143,7 +149,8 @@ class FailoverChatModelTest {
 
         assertThat(tokens).containsExactly("a", "b");
         assertThat(secondary.received.getFirst().getOptions().getModel()).isEqualTo("deepseek-v4-pro:0813");
-        FallbackUsage.consume();
+        // Streams do not set the flag (delivered on another thread); the WARN line is the record.
+        assertThat(FallbackUsage.consume()).isFalse();
     }
 
     @Test

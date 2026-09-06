@@ -105,8 +105,9 @@ populated yet, the rule states the substitute signal it fires on today.
      `FailoverChatModel` wraps the primary `chatModel`/`streamingChatModel` beans when
      `mcp.model.fallback.enabled=true`; a failover logs
      `Primary model call failed (...); failing over to <model> (#1691)` at WARN and sets
-     `Model.fallbackUsed=true` on the blocking path's telemetry event (streaming telemetry may still
-     report false; use the WARN line there).
+     `Model.fallbackUsed=true` on the blocking path's telemetry event — emitted whether or not tier
+     routing ran. Streamed failovers log the WARN line only (the flag is request-thread-local and a
+     stream's error arrives on another thread), so count the WARN line for the streaming surface.
    - Severity: P2
    - Runbook: pos-mcp-server/docs/runbooks/downstream-timeout.md
 

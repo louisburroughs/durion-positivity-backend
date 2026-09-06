@@ -26,7 +26,8 @@ import reactor.core.publisher.Flux;
  *
  * <p>Streaming fails over only while nothing has been emitted yet: once tokens have reached the
  * client, restarting on the secondary would append a second answer to a partial first one, so the
- * error propagates instead.
+ * error propagates instead. A streamed failover is logged but not flagged in telemetry: the flag is
+ * thread-local to the request thread and the stream's error is delivered on another.
  *
  * <p>Failover is deliberately not applied to tool-execution failures: the tool loop lives in the
  * {@code ChatClient} advisor above this wrapper, so a {@code ChatModel.call} here is one model HTTP
@@ -84,8 +85,10 @@ public final class FailoverChatModel implements ChatModel, StreamingChatModel {
                     if (emitted.get() || secondaryStream == null) {
                         return Flux.error(primaryFailure);
                     }
+                    // No FallbackUsage.mark() here: this runs on the thread delivering the error,
+                    // not the request thread, so the flag would land on a stranger's request. The
+                    // WARN line is the record for streams.
                     logFailover("stream", primaryFailure);
-                    FallbackUsage.mark();
                     return secondaryStream.stream(withSecondaryModel(prompt));
                 });
     }
