@@ -996,6 +996,8 @@ services:
       MCP_MODEL_TIERING_ENABLED: ${MCP_MODEL_TIERING_ENABLED:-false}
       MCP_MODEL_ROUTER: ${MCP_MODEL_ROUTER-qwen3:4b}
       MCP_MODEL_SIMPLE: ${MCP_MODEL_SIMPLE:-}
+      # #1818: descriptions per embedding call in the post-readiness tool-embedding backfill.
+      MCP_EMBEDDING_BACKFILL_BATCH_SIZE: ${MCP_EMBEDDING_BACKFILL_BATCH_SIZE:-8}
       MCP_MODEL_COMPLEX: ${MCP_MODEL_COMPLEX:-}
       MCP_MODEL_FALLBACK_ENABLED: ${MCP_MODEL_FALLBACK_ENABLED:-false}
       # Gate 7 (#1195/#1219): adaptive tool-priority tuning. off | shadow | live — shadow computes

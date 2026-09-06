@@ -17,7 +17,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Backfills {@code mcp_screen_registry.embedding} for rows seeded without one (rung 3 of the answer
- * resolution ladder). Mirrors {@link ToolEmbeddingInitializer}. Fail-soft — a per-row embedding
+ * resolution ladder). Stays a synchronous ApplicationRunner — a few dozen rows — where
+ * {@link ToolEmbeddingInitializer} moved off the readiness path (#1818). Fail-soft — a per-row embedding
  * failure is logged and skipped so startup never blocks.
  */
 @Component

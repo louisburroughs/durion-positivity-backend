@@ -1,10 +1,12 @@
 package com.positivity.mcp.internal.config;
 
+import jakarta.annotation.PreDestroy;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.NonNull;
 import org.postgresql.util.PGobject;
 import org.slf4j.Logger;
@@ -29,8 +31,14 @@ import org.springframework.stereotype.Component;
  * while it re-embedded them at ~1.2 s each — longer than the deploy's health wait, so the deploy
  * failed although the container was fine. The backfill now starts on {@link ApplicationReadyEvent}
  * on its own thread, so readiness never waits for it, and it embeds in batches so a large backlog
- * costs one model round-trip per batch rather than per tool. Tool selection tolerates rows without
- * embeddings (they fall back to lexical matching) until the backfill reaches them.
+ * costs one model round-trip per batch rather than per tool. A row without an embedding is
+ * invisible to tool selection (both candidate queries filter on {@code embedding IS NOT NULL})
+ * until the backfill reaches it, so the backfill still wants to be quick — just not on the
+ * readiness path.
+ *
+ * <p>The batch size must fit the embedding client's timeout ({@code OLLAMA_EMBEDDING_TIMEOUT},
+ * 30 s): at alpha's ~1.2 s per description on CPU, 8 descriptions is ~10 s per call with margin;
+ * 32 would time out every batch and fall back to the serial path it exists to replace.
  */
 @Component
 @Profile("!test")
@@ -43,11 +51,15 @@ public class ToolEmbeddingInitializer {
     private final int batchSize;
     /** Counts down when a backfill finishes; tests wait on it instead of sleeping. */
     private final CountDownLatch completed = new CountDownLatch(1);
+    /** One backfill at a time: a second trigger while one runs would double-embed the same rows. */
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    /** Set on context shutdown so a backfill in flight stops at the next batch boundary. */
+    private volatile boolean stopping;
 
     public ToolEmbeddingInitializer(
             @NonNull JdbcTemplate jdbcTemplate,
             @NonNull EmbeddingModel embeddingModel,
-            @Value("${mcp.embedding.backfill-batch-size:32}") int batchSize) {
+            @Value("${mcp.embedding.backfill-batch-size:8}") int batchSize) {
         this.jdbcTemplate = jdbcTemplate;
         this.embeddingModel = embeddingModel;
         this.batchSize = Math.max(1, batchSize);
@@ -59,8 +71,21 @@ public class ToolEmbeddingInitializer {
         Thread.ofVirtual().name("tool-embedding-backfill").start(this::backfill);
     }
 
+    /**
+     * Stops a backfill in flight at its next batch boundary. Without this a SIGTERM mid-backfill
+     * produced one WARN per remaining row once the connection pool had closed.
+     */
+    @PreDestroy
+    public void stop() {
+        stopping = true;
+    }
+
     /** Runs the backfill on the calling thread. Package-private so tests can drive it directly. */
     void backfill() {
+        if (!running.compareAndSet(false, true)) {
+            LOGGER.info("Tool embedding backfill already running; not starting another");
+            return;
+        }
         long totalStartNanos = System.nanoTime();
         try {
             // The vector column is the single validated value from RagEmbeddingSettings (V33, #1207),
@@ -73,7 +98,7 @@ public class ToolEmbeddingInitializer {
                             resultSet.getString("description")));
             LOGGER.info("Tool embedding initialization found {} tools missing embeddings", rows.size());
             int populated = 0;
-            for (int from = 0; from < rows.size(); from += batchSize) {
+            for (int from = 0; from < rows.size() && !stopping; from += batchSize) {
                 List<ToolDescriptionRow> batch = rows.subList(from, Math.min(from + batchSize, rows.size()));
                 populated += embedBatch(batch);
                 LOGGER.info(
@@ -82,12 +107,16 @@ public class ToolEmbeddingInitializer {
                         rows.size(),
                         elapsedMs(totalStartNanos));
             }
+            if (stopping) {
+                LOGGER.info("Tool embedding backfill stopped by shutdown after {} of {} tools", populated, rows.size());
+            }
             LOGGER.info("Populated embeddings for {} tools in {} ms", populated, elapsedMs(totalStartNanos));
         } catch (RuntimeException exception) {
             // Off the main thread now, so nothing else catches this; a backfill that cannot start must
             // be visible in the log rather than vanish with the thread.
             LOGGER.error("Tool embedding backfill aborted after {} ms", elapsedMs(totalStartNanos), exception);
         } finally {
+            running.set(false);
             completed.countDown();
         }
     }
@@ -103,9 +132,7 @@ public class ToolEmbeddingInitializer {
                     batch.stream().map(ToolDescriptionRow::description).toList());
         } catch (RuntimeException exception) {
             LOGGER.warn(
-                    "Batch embedding of {} tools failed; falling back to one call per tool: {}",
-                    batch.size(),
-                    exception.getMessage());
+                    "Batch embedding of {} tools failed; falling back to one call per tool", batch.size(), exception);
             return embedOneByOne(batch);
         }
         if (vectors.size() != batch.size()) {
@@ -149,7 +176,7 @@ public class ToolEmbeddingInitializer {
         }
     }
 
-    /** Waits for the current backfill to finish; for tests and shutdown hooks, never for readiness. */
+    /** Waits for the current backfill to finish; for tests only, never for readiness. */
     boolean awaitCompletion(long timeout, @NonNull TimeUnit unit) throws InterruptedException {
         return completed.await(timeout, unit);
     }
@@ -176,7 +203,8 @@ public class ToolEmbeddingInitializer {
         return object;
     }
 
-    private record ToolDescriptionRow(
+    /** Package-private so the test can build rows without reflection. */
+    record ToolDescriptionRow(
             @NonNull UUID id, @NonNull String name, @NonNull String description) {}
 
     private static long elapsedMs(long startNanos) {
