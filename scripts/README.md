@@ -333,6 +333,10 @@ discovery order from producing noisy diffs; array order is preserved.
 **Notes:**
 - Requires `python3` and `PyYAML` for aggregate generation.
 - Module generation still works with `--no-aggregate`.
+- The `API Artifacts Sync` workflow (`.github/workflows/api-artifacts-sync.yml`,
+  `workflow_dispatch`) runs this script in CI and then regenerates both SDKs and
+  runs the frontend tests against the result. See `docs/DEVELOPMENT_GUIDE.md`
+  ("Generating OpenAPI Specs", Method 3).
 
 ---
 

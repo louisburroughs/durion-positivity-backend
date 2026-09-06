@@ -165,6 +165,21 @@ on startup against `pos-security-service` (`POST /security-service/v1/permission
 `@PreAuthorize("hasAuthority('" + SomePermissions.SOME_ACTION + "')")`. See `docs/OPERATIONS_RUNBOOK.md`
 ("Permission Registration").
 
+### OpenAPI or permissions changed → run `API Artifacts Sync`
+
+Any change to the OpenAPI documentation or the permissions (a controller, DTO or
+`@Operation`/`@Schema` annotation; a `@PreAuthorize` or permission registry; a hand edit to an
+`openapi.yaml` or `permissions.yaml`) must be followed by a run of the `API Artifacts Sync`
+workflow (`.github/workflows/api-artifacts-sync.yml`) once the change is pushed. It regenerates
+the specs and permission manifests here, both SDKs and the frontend's SDK tarballs, runs the
+frontend tests against them, and opens a PR per repo with the result.
+
+```bash
+gh workflow run api-artifacts-sync.yml --ref <branch> -f modules="pos-order"   # omit modules for all
+```
+
+Details: `docs/DEVELOPMENT_GUIDE.md` → "Generating OpenAPI Specs", Method 3.
+
 ## Output Style — Caveman (token compression, default ON)
 
 Chat responses in this repo default to compressed "caveman" style (adopted from the durion

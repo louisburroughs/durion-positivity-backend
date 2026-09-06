@@ -288,6 +288,53 @@ java -jar target/pos-inventory-*.jar --spring.profiles.active=dev --server.port=
 curl http://localhost:8093/v3/api-docs.yaml > openapi.yaml
 ```
 
+**Method 3: GitHub Actions — full contract chain (`API Artifacts Sync`)**
+
+`.github/workflows/api-artifacts-sync.yml` (manual `workflow_dispatch`) walks the whole
+contract chain and reports what the current controllers break downstream:
+
+1. `scripts/generate-openapi.sh` regenerates every module's `openapi.yaml` (or the
+   `modules` input's subset), the aggregate index and the permissions manifests.
+2. `durion-positivity-sdk` regenerates its typescript-fetch clients from those specs and
+   builds them.
+3. `durion-positivity-sdk-angular` regenerates its Angular clients, builds them and packs one
+   tarball per package (`npm run generate` then `npm run pack -- --no-bump`, the documented
+   release flow; `bump_sdk_version=false` keeps the current version).
+4. `durion-positivity-frontend` imports the tarballs into `.sdk-tarballs/`, installs them
+   with `npm run sdk:install`, compiles, and runs `test:contracts` plus the Vitest suite.
+5. A `report` job summarises every stage; the run is red if any stage failed.
+
+Each stage then commits what it regenerated to its own repository, per the `commit_mode`
+input:
+
+| `commit_mode`            | Behaviour                                                                                                                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pull-request` (default) | Pushes `api-artifacts-sync/<run id>` to each repo and opens a PR against the branch the stage ran on. Opened whenever generation succeeded, even if the build or tests after it failed — the PR is where that breakage gets fixed. |
+| `direct`                 | Pushes straight onto the branch the stage ran on, but only when every step of that stage passed.                                                                             |
+| `none`                   | Commits nothing; artifacts only.                                                                                                                                             |
+
+Every stage also uploads its evidence as a workflow artifact: `openapi-specs`,
+`backend-openapi-changes` (a `git diff` patch), `sdk-changes`, `sdk-angular-changes`,
+`sdk-angular-tarballs`, and `frontend-results` (build/test logs plus the `.sdk-tarballs/`
+directory). The run summary links every PR the run opened.
+
+**When to run it:** any time the OpenAPI documentation or the permissions change — a
+controller or DTO edit, an `@Operation`/`@Schema` annotation, a `@PreAuthorize` or permission
+registry change, or a hand edit to an `openapi.yaml` / `permissions.yaml`. Trigger it from the
+Actions tab or the CLI:
+
+```bash
+gh workflow run api-artifacts-sync.yml --repo louisburroughs/durion-positivity-backend \
+  --ref main -f modules="pos-order pos-workorder"      # omit modules to regenerate everything
+```
+
+The `sdk_ref`, `sdk_angular_ref` and `frontend_ref` inputs pick the downstream branches. The
+other repos are checked out with the `CROSS_REPO_TOKEN` secret when it exists, otherwise with
+the workflow token. Committing to the SDK and frontend repos needs the secret: a fine-grained
+PAT with Contents and Pull requests write access on all four repositories. It is also worth
+using for this repo's own PR, since a PR opened with the workflow token does not trigger the
+other workflows on it.
+
 ### Access Points (When Running)
 
 | Endpoint     | URL                                             |
