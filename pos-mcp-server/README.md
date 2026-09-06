@@ -234,9 +234,12 @@ model emitted a tool result instead of composing from it). Non-content replies n
 as-is. `BLANK` goes to the answer-resolution ladder (deep link / capability hint). `TOOL_PAYLOAD`
 first gets **one re-render turn** (#1708): the payload is fed back as the previous assistant message
 with an instruction to answer the question from it as prose and never as JSON, with no tools offered,
-so it cannot loop; if that turn is direct content it is the reply, otherwise the ladder answers as for
-`BLANK`. Log lines: `Bare tool payload re-rendered as prose (#1708)` on success, and the
-`produced no direct answer` warning with the second turn's source on failure.
+so it cannot loop; the instruction says the JSON may be partial or a call's arguments and forbids
+inventing figures. If that turn is direct content it is the reply, otherwise the ladder answers as for
+`BLANK`. Log lines: `Bare tool payload re-rendered as prose (#1708)` on success (the first turn's
+"no direct answer" warning is then suppressed); on failure, `re-render produced no direct answer
+either: source=…` followed by the usual first-turn warning. The render turn carries the conversation
+history but not the layered system prompt or RAG block, and costs a second full model call.
 
 ## Audit & Adaptive Tuning
 
