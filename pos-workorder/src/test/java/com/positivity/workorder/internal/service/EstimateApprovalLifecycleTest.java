@@ -22,6 +22,7 @@ import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.EstimateSnapshot;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
 import com.positivity.workorder.internal.enums.EstimateStatus;
+import com.positivity.workorder.internal.exception.EstimateIncompleteException;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PurchaseOrderRequiredException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
@@ -553,8 +554,9 @@ class EstimateApprovalLifecycleTest {
         void rejectsNonDraft() {
             givenEstimate(estimate(EstimateStatus.PENDING_APPROVAL));
 
+            // #1791: a lifecycle guard on the target's own status, 409 via the module advice.
             assertThatThrownBy(() -> service.submitForApproval(ESTIMATE_ID, "jane.smith"))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(WorkorderResourceConflictException.class)
                     .hasMessageContaining("must be in DRAFT state, current state: PENDING_APPROVAL");
         }
 
@@ -568,6 +570,8 @@ class EstimateApprovalLifecycleTest {
                     .isInstanceOf(EstimateNotFoundException.class);
         }
 
+        // #1791: the four completeness refusals below are one condition — a DRAFT estimate that is
+        // not ready — and answer 422 via the module advice, not the 409 of the status guard above.
         @Test
         @DisplayName("refuses an estimate with no customer")
         void rejectsMissingCustomer() {
@@ -576,7 +580,7 @@ class EstimateApprovalLifecycleTest {
             givenEstimate(estimate);
 
             assertThatThrownBy(() -> service.submitForApproval(ESTIMATE_ID, "jane.smith"))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(EstimateIncompleteException.class)
                     .hasMessage("Cannot submit estimate - no customer assigned");
         }
 
@@ -588,7 +592,7 @@ class EstimateApprovalLifecycleTest {
             givenEstimate(estimate);
 
             assertThatThrownBy(() -> service.submitForApproval(ESTIMATE_ID, "jane.smith"))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(EstimateIncompleteException.class)
                     .hasMessage("Cannot submit estimate - no vehicle assigned");
         }
 
@@ -600,7 +604,7 @@ class EstimateApprovalLifecycleTest {
                     .thenReturn(List.of());
 
             assertThatThrownBy(() -> service.submitForApproval(ESTIMATE_ID, "jane.smith"))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(EstimateIncompleteException.class)
                     .hasMessage("Cannot submit estimate - no line items added");
         }
 
@@ -612,12 +616,12 @@ class EstimateApprovalLifecycleTest {
             givenEstimate(estimate);
 
             assertThatThrownBy(() -> service.submitForApproval(ESTIMATE_ID, "jane.smith"))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(EstimateIncompleteException.class)
                     .hasMessageContaining("totals not calculated");
 
             estimate.setSubtotal(BigDecimal.ZERO);
             assertThatThrownBy(() -> service.submitForApproval(ESTIMATE_ID, "jane.smith"))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(EstimateIncompleteException.class)
                     .hasMessageContaining("totals not calculated");
         }
     }

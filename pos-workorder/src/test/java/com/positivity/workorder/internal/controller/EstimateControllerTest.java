@@ -19,6 +19,7 @@ import com.positivity.workorder.internal.dto.EstimateSnapshotResponse;
 import com.positivity.workorder.internal.dto.EstimateSummaryResponse;
 import com.positivity.workorder.internal.dto.WorkorderResponse;
 import com.positivity.workorder.internal.exception.CustomerRequirementsNotMetException;
+import com.positivity.workorder.internal.exception.EstimateIncompleteException;
 import com.positivity.workorder.internal.exception.EstimateItemNotFoundException;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsistencyException;
@@ -381,21 +382,33 @@ class EstimateControllerTest {
         }
 
         @Test
-        void mapsSubmissionFailuresOntoNotFoundOrBadRequest() {
-            // #1713: the controller no longer catches a not-found to build a bodiless 404. The
-            // module's own type propagates to GlobalExceptionHandler, which answers the enveloped,
-            // correlated 404 required by ADR-0017 §3/§4.
+        void noLongerSwallowsSubmissionFailures() {
+            // No advice runs here: this calls the controller method directly, so the only thing
+            // this test can pin is that the controller does not catch these itself. The status
+            // and envelope each one produces over the wire are asserted in
+            // EstimateApprovalContractBehaviorIT (AP-002 to AP-006).
+            //
+            // #1713: the controller no longer catches a not-found to build a bodiless 404.
             doThrow(new EstimateNotFoundException(ESTIMATE_ID))
                     .when(estimateService)
                     .submitForApproval(any(), anyString());
             assertThatThrownBy(() -> controller.submitForApproval(ESTIMATE_ID))
                     .isInstanceOf(EstimateNotFoundException.class);
 
-            doThrow(new IllegalStateException("not a draft"))
+            // #1791: the not-DRAFT refusal (409) and the completeness refusals (422) propagate
+            // too. Both were previously caught here as IllegalStateException and answered as a
+            // bodiless 400 the OpenAPI contract documented as an EstimateResponse.
+            doThrow(new WorkorderResourceConflictException("not a draft"))
                     .when(estimateService)
                     .submitForApproval(any(), anyString());
-            assertThat(controller.submitForApproval(ESTIMATE_ID).getStatusCode())
-                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThatThrownBy(() -> controller.submitForApproval(ESTIMATE_ID))
+                    .isInstanceOf(WorkorderResourceConflictException.class);
+
+            doThrow(new EstimateIncompleteException("no line items"))
+                    .when(estimateService)
+                    .submitForApproval(any(), anyString());
+            assertThatThrownBy(() -> controller.submitForApproval(ESTIMATE_ID))
+                    .isInstanceOf(EstimateIncompleteException.class);
         }
 
         @Test

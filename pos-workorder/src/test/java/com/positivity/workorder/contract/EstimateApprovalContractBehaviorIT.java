@@ -1,5 +1,6 @@
 package com.positivity.workorder.contract;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
@@ -17,6 +18,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -75,25 +77,30 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                 .ifValidationFails();
     }
 
-    // The three submit-for-approval cases below pin 400, the status that endpoint actually
-    // returns today, rather than the 409 the approval endpoints moved to in #1753. They are a
-    // different endpoint with its own local catch, and its three refusals are not one question:
-    // "not in DRAFT" is a lifecycle transition (409 by ADR-0017 §2), while "no line items" and
-    // "totals not calculated" are completeness rules on a valid payload, which reads closer to
-    // 422. Deciding that needs its own pass; pinning the real status here at least stops the
-    // assertion from passing on a 500.
+    // AP-002 through AP-006 pin the statuses #1791 decided for submitForApproval, which #1773
+    // deliberately left at a bodiless 400 because its refusals were not one question. They are
+    // now two: "not in DRAFT" is a lifecycle-transition guard on the target's own status field,
+    // 409 by ADR-0017 §2 exactly as on the approval endpoints; the four completeness rules (no
+    // customer, no vehicle, no line items, totals not calculated) refuse a DRAFT estimate for an
+    // attribute other than its status, on a request that carries no body to correct, which is
+    // ADR-0017 §2's 422 ("a claim with no lines"). Each asserts the ApiError code and the
+    // correlation id echoed between body and X-Correlation-Id header, the way AP-013 to AP-016
+    // do: an assertion on the status alone is what let the original #1753 defect survive.
     @Test
     @DisplayName("AP-002: Reject submit for approval - estimate has no line items")
     void testSubmitForApproval_NoLineItems() {
         UUID estimateId = seedEstimateWithoutItems();
 
-        givenWithGatewayAuth()
+        assertCorrelationIdEchoed(givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{id}/submit-for-approval", estimateId)
                 .then()
-                .statusCode(400)
+                .statusCode(422)
+                .body("code", equalTo("ESTIMATE_INCOMPLETE"))
+                .body("message", containsString("no line items"))
                 .log()
-                .ifValidationFails();
+                .ifValidationFails()
+                .extract());
     }
 
     @Test
@@ -101,13 +108,16 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
     void testSubmitForApproval_TotalsNotCalculated() {
         UUID estimateId = seedEstimateWithItemsNoTotals();
 
-        givenWithGatewayAuth()
+        assertCorrelationIdEchoed(givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{id}/submit-for-approval", estimateId)
                 .then()
-                .statusCode(400)
+                .statusCode(422)
+                .body("code", equalTo("ESTIMATE_INCOMPLETE"))
+                .body("message", containsString("totals not calculated"))
                 .log()
-                .ifValidationFails();
+                .ifValidationFails()
+                .extract());
     }
 
     @Test
@@ -115,13 +125,50 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
     void testSubmitForApproval_InvalidState() {
         UUID estimateId = seedApprovedEstimate();
 
-        givenWithGatewayAuth()
+        assertCorrelationIdEchoed(givenWithGatewayAuth()
                 .when()
                 .post("/v1/workorders/estimates/{id}/submit-for-approval", estimateId)
                 .then()
-                .statusCode(400)
+                .statusCode(409)
+                .body("code", equalTo("CONFLICT"))
+                .body("message", containsString("must be in DRAFT state"))
                 .log()
-                .ifValidationFails();
+                .ifValidationFails()
+                .extract());
+    }
+
+    @Test
+    @DisplayName("AP-005: Reject submit for approval - estimate has no customer")
+    void testSubmitForApproval_NoCustomer() {
+        UUID estimateId = seedCompleteEstimateMissing(estimate -> estimate.setCustomerId(null));
+
+        assertCorrelationIdEchoed(givenWithGatewayAuth()
+                .when()
+                .post("/v1/workorders/estimates/{id}/submit-for-approval", estimateId)
+                .then()
+                .statusCode(422)
+                .body("code", equalTo("ESTIMATE_INCOMPLETE"))
+                .body("message", containsString("no customer"))
+                .log()
+                .ifValidationFails()
+                .extract());
+    }
+
+    @Test
+    @DisplayName("AP-006: Reject submit for approval - estimate has no vehicle")
+    void testSubmitForApproval_NoVehicle() {
+        UUID estimateId = seedCompleteEstimateMissing(estimate -> estimate.setVehicleId(null));
+
+        assertCorrelationIdEchoed(givenWithGatewayAuth()
+                .when()
+                .post("/v1/workorders/estimates/{id}/submit-for-approval", estimateId)
+                .then()
+                .statusCode(422)
+                .body("code", equalTo("ESTIMATE_INCOMPLETE"))
+                .body("message", containsString("no vehicle"))
+                .log()
+                .ifValidationFails()
+                .extract());
     }
 
     // ========== DIGITAL APPROVAL WITH SELECTIVE LINE ITEM TESTS (Issue #207, #205)
@@ -339,6 +386,37 @@ class EstimateApprovalContractBehaviorIT extends BaseContractIntegrationTest {
                 saved.getId(), EstimateItemType.LABOR, "Oil Change", new BigDecimal("1"), new BigDecimal("50.00")));
         estimateItemRepository.save(buildItem(
                 saved.getId(), EstimateItemType.PART, "Oil Filter", new BigDecimal("1"), new BigDecimal("15.00")));
+
+        return saved.getId();
+    }
+
+    /**
+     * Seed a DRAFT estimate that would be complete but for the one field {@code clear} removes.
+     * Both customer_id and vehicle_id are nullable on the estimate table, so the row persists and
+     * the completeness check, not the database, is what refuses the submission.
+     */
+    private UUID seedCompleteEstimateMissing(Consumer<Estimate> clear) {
+        initTestIds();
+
+        Estimate estimate = Estimate.builder()
+                .estimateNumber("EST-AP-MISSING-" + System.nanoTime())
+                .locationId(testLocationId)
+                .vehicleId(testVehicleId)
+                .customerId(testCustomerId)
+                .currencyUomId("USD")
+                .status(EstimateStatus.DRAFT)
+                .createdByUserId(SYSTEM_USER_ID.toString())
+                .createdById(SYSTEM_USER_ID.toString())
+                .subtotal(new BigDecimal("65.00"))
+                .taxAmount(new BigDecimal("5.36"))
+                .total(new BigDecimal("70.36"))
+                .build();
+        clear.accept(estimate);
+
+        Estimate saved = estimateRepository.save(estimate);
+
+        estimateItemRepository.save(buildItem(
+                saved.getId(), EstimateItemType.LABOR, "Oil Change", new BigDecimal("1"), new BigDecimal("50.00")));
 
         return saved.getId();
     }

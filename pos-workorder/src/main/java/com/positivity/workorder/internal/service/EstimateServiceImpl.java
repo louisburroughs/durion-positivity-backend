@@ -27,6 +27,7 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.event.EstimateCreatedEvent;
 import com.positivity.workorder.internal.event.EstimateRevisedEvent;
+import com.positivity.workorder.internal.exception.EstimateIncompleteException;
 import com.positivity.workorder.internal.exception.EstimateItemNotFoundException;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PurchaseOrderRequiredException;
@@ -660,9 +661,9 @@ public class EstimateServiceImpl implements EstimateService {
      * @param estimateId estimate to submit
      * @param username   username submitting the estimate
      * @return updated estimate in PENDING_APPROVAL state
-     * @throws IllegalArgumentException if estimate not found
-     * @throws IllegalStateException    if estimate is not in DRAFT state or
-     *                                  incomplete
+     * @throws EstimateNotFoundException          if estimate not found
+     * @throws WorkorderResourceConflictException if estimate is not in DRAFT state
+     * @throws EstimateIncompleteException        if estimate is incomplete
      */
     @Override
     @Transactional
@@ -670,9 +671,10 @@ public class EstimateServiceImpl implements EstimateService {
         Estimate estimate =
                 estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId));
 
-        // Validate estimate is in correct state
+        // Validate estimate is in correct state. A lifecycle-transition guard on the target's own
+        // status field: 409 by ADR-0017 §2, same as the approval endpoints (#1753, #1791).
         if (estimate.getStatus() != EstimateStatus.DRAFT) {
-            throw new IllegalStateException(
+            throw new WorkorderResourceConflictException(
                     "Cannot submit estimate - must be in DRAFT state, current state: " + estimate.getStatus());
         }
 
@@ -705,29 +707,32 @@ public class EstimateServiceImpl implements EstimateService {
     /**
      * Validate estimate has all required data to be submitted for approval.
      *
+     * <p>Every refusal here is a completeness rule on a DRAFT estimate, not a lifecycle guard, so
+     * all four answer 422 (issue #1791; ADR-0017 §2 — "a claim with no lines").
+     *
      * @param estimate estimate to validate
-     * @throws IllegalStateException if estimate is incomplete
+     * @throws EstimateIncompleteException if estimate is incomplete
      */
     private void validateEstimateCompleteness(Estimate estimate) {
         // Must have a customer
         if (estimate.getCustomerId() == null) {
-            throw new IllegalStateException("Cannot submit estimate - no customer assigned");
+            throw new EstimateIncompleteException("Cannot submit estimate - no customer assigned");
         }
 
         // Must have a vehicle
         if (estimate.getVehicleId() == null) {
-            throw new IllegalStateException("Cannot submit estimate - no vehicle assigned");
+            throw new EstimateIncompleteException("Cannot submit estimate - no vehicle assigned");
         }
 
         // Must have at least one line item
         List<EstimateItem> items = estimateItemRepository.findByEstimate_IdAndDeletedFalse(estimate.getId());
         if (items == null || items.isEmpty()) {
-            throw new IllegalStateException("Cannot submit estimate - no line items added");
+            throw new EstimateIncompleteException("Cannot submit estimate - no line items added");
         }
 
         // Must have calculated totals (subtotal should be non-null and positive)
         if (estimate.getSubtotal() == null || estimate.getSubtotal().signum() <= 0) {
-            throw new IllegalStateException(
+            throw new EstimateIncompleteException(
                     "Cannot submit estimate - totals not calculated. Call calculate endpoint first.");
         }
 

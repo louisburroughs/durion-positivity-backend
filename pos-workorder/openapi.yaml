@@ -2628,7 +2628,7 @@ paths:
 
         Emits a WORKORDER_ESTIMATE_SUBMIT event and persists a submission snapshot.
 
-        Returns 404 when the estimate does not exist, and 400 when it is not DRAFT or fails a completeness check.
+        Returns 404 when the estimate does not exist, 409 when it is not DRAFT, and 422 when it is DRAFT but fails a completeness check.
 
         '
       operationId: submitEstimateForApproval
@@ -2648,18 +2648,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/EstimateResponse'
           description: Estimate submitted for approval successfully
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EstimateResponse'
-          description: Estimate is incomplete or not in DRAFT state
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Estimate not found (ESTIMATE_NOT_FOUND)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Estimate is not in DRAFT, so it cannot be submitted in its current state (CONFLICT)
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'Estimate is DRAFT but incomplete: no customer, no vehicle, no line items, or totals not yet calculated (ESTIMATE_INCOMPLETE)'
       security:
       - bearerAuth:
         - workorder:estimate:submit
