@@ -6,6 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.exception.InvalidToolArgumentException;
+import com.positivity.mcp.internal.orchestration.tools.DateWindowFacadeTool;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -92,8 +96,11 @@ class SpringAiToolCallbackResolverTest {
         ToolCallback callback = SpringAiToolCallbackResolver.fromObjects(List.of(new SampleTool()))
                 .getFirst();
 
+        // #1829: wrapped like every other binding failure so DefaultToolCallingManager hands it back
+        // to the model as a result it can retry from (#1711); unwrapped it killed the turn.
         assertThatThrownBy(() -> callback.call("not-json"))
-                .isInstanceOf(InvalidToolArgumentException.class)
+                .isInstanceOf(ToolExecutionException.class)
+                .hasCauseInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("Invalid tool input JSON");
     }
 
@@ -140,5 +147,51 @@ class SpringAiToolCallbackResolverTest {
                 .cause()
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("pass YYYY-MM or YYYY");
+    }
+
+    @Test
+    @DisplayName("a missing argument for a primitive parameter is a ToolExecutionException naming it, not a "
+            + "NullPointerException (#1829)")
+    void missingPrimitiveArgumentIsNamed() {
+        ToolCallback callback = SpringAiToolCallbackResolver.fromObjects(List.of(new SampleTool()))
+                .getFirst();
+
+        // SampleTool's third parameter is a primitive boolean; {} used to reach Method.invoke with a
+        // null there and unbox into a JVM stack trace the model could not act on.
+        assertThatThrownBy(() -> callback.call("{}"))
+                .isInstanceOf(ToolExecutionException.class)
+                .hasCauseInstanceOf(InvalidToolArgumentException.class)
+                .hasMessageContaining("Missing argument");
+    }
+
+    private static ToolCallback dateWindowCallback(String name) {
+        DateWindowFacadeTool tool =
+                new DateWindowFacadeTool(Clock.fixed(Instant.parse("2026-09-06T12:00:00Z"), ZoneOffset.UTC));
+        return SpringAiToolCallbackResolver.fromObjects(List.of(tool)).stream()
+                .filter(callback -> callback.getToolDefinition().name().equals(name))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    @Test
+    @DisplayName("resolveDateWindow with no arguments answers a correctable error through the real callback, not a "
+            + "NullPointerException (#1829)")
+    void emptyResolveDateWindowCallIsAnArgumentError() {
+        // Alpha 2026-09-06, gpt-oss:20b on q04: the model called this tool with {} and got "Cannot
+        // invoke Number.intValue() because ... is null" back — and gave up.
+        assertThatThrownBy(() -> dateWindowCallback("resolveDateWindow").call("{}"))
+                .isInstanceOf(ToolExecutionException.class)
+                .hasCauseInstanceOf(InvalidToolArgumentException.class)
+                .hasMessageContaining("Missing argument")
+                .satisfies(e -> assertThat(e.getCause().getMessage()).doesNotContain("NullPointer"));
+    }
+
+    @Test
+    @DisplayName("resolveNamedPeriod with no arguments is named the same way (#1829)")
+    void emptyResolveNamedPeriodCallIsAnArgumentError() {
+        assertThatThrownBy(() -> dateWindowCallback("resolveNamedPeriod").call("{}"))
+                .isInstanceOf(ToolExecutionException.class)
+                .hasCauseInstanceOf(InvalidToolArgumentException.class)
+                .hasMessageContaining("Missing argument 'period'");
     }
 }

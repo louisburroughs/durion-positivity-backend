@@ -375,4 +375,25 @@ class DateWindowFacadeToolTest {
             assertThat(node.get("shape").asText()).isEqualTo("PRIOR_COMPLETE");
         }
     }
+
+    @Test
+    @DisplayName("a missing count called directly names the argument and shows a complete call (#1829)")
+    void missingCountIsAnArgumentError() {
+        assertThatExceptionOfType(InvalidToolArgumentException.class)
+                .isThrownBy(() -> tool.resolveDateWindow("CALENDAR_SPAN", "MONTH", null, null, null))
+                .withMessageContaining("Missing argument 'count'")
+                .withMessageContaining("count=6")
+                .withMessageContaining("whole number");
+    }
+
+    @Test
+    @DisplayName("a missing shape or unit is named the same way (#1829)")
+    void missingShapeOrUnitIsNamed() {
+        assertThatExceptionOfType(InvalidToolArgumentException.class)
+                .isThrownBy(() -> tool.resolveDateWindow(null, "MONTH", 6, null, null))
+                .withMessageContaining("Missing argument 'shape'");
+        assertThatExceptionOfType(InvalidToolArgumentException.class)
+                .isThrownBy(() -> tool.resolveDateWindow("CALENDAR_SPAN", " ", 6, null, null))
+                .withMessageContaining("Missing argument 'unit'");
+    }
 }

@@ -88,17 +88,18 @@ public class DateWindowFacadeTool {
                             description =
                                     "ROLLING, CURRENT_TO_DATE, PRIOR_COMPLETE, CALENDAR_SPAN, or FORWARD — see the tool "
                                             + "description for what each means and which wording maps to it")
-                    @NonNull
+                    @Nullable
                     String shape,
             @ToolParam(
                             description = "DAY, WEEK, MONTH, QUARTER, or YEAR. DAY is only valid with shape=ROLLING "
                                     + "or shape=FORWARD")
-                    @NonNull
+                    @Nullable
                     String unit,
             @ToolParam(
                             description = "Number of units/periods, e.g. 6 for \"the last six months\". Must be 1 "
                                     + "for CURRENT_TO_DATE and PRIOR_COMPLETE")
-                    int count,
+                    @Nullable
+                    Integer count,
             @ToolParam(
                             description = "Comparison window to also resolve: NONE (default), PRIOR_PERIOD, or "
                                     + "YEAR_EARLIER",
@@ -113,10 +114,15 @@ public class DateWindowFacadeTool {
                             required = false)
                     @Nullable
                     String phrase) {
-        DateWindowResolver.Shape parsedShape = parseShape(shape);
-        DateWindowResolver.Unit parsedUnit = parseUnit(unit);
+        // #1829: a small model sends this tool with no arguments now and then. A primitive count made
+        // this module's ReflectiveToolCallback binder hand Method.invoke a null, which unboxed as a
+        // NullPointerException — a JVM stack trace the model cannot act on — where every other bad
+        // argument gets a message it can correct. The binder now names a missing primitive argument
+        // generically; this check adds the tool-specific hint, and covers the String parameters too.
+        DateWindowResolver.Shape parsedShape = parseShape(required("shape", shape, DATE_WINDOW_HINT));
+        DateWindowResolver.Unit parsedUnit = parseUnit(required("unit", unit, DATE_WINDOW_HINT));
         DateWindowResolver.Comparison parsedComparison = parseComparison(comparison);
-        int resolvedCount = count;
+        int resolvedCount = required("count", count, DATE_WINDOW_HINT);
 
         // #1675: the wording decides the shape, and it decides it here rather than in the model.
         // Three rounds of prompt text did not make the classification stick, so where the phrase
@@ -135,7 +141,7 @@ public class DateWindowFacadeTool {
         Optional<WindowPhraseClassifier.Classification> fromPhrase = WindowPhraseClassifier.classify(wording);
         if (fromPhrase.isPresent()) {
             WindowPhraseClassifier.Classification c = fromPhrase.get();
-            if (c.shape() != parsedShape || c.unit() != parsedUnit || c.count() != count) {
+            if (c.shape() != parsedShape || c.unit() != parsedUnit || c.count() != resolvedCount) {
                 // Deliberately logs the model's own range fragment ("last six months") and never
                 // `wording`, which since #1675 may be the caller's entire message. The class
                 // contract above is that this line carries no customer identifier, and the whole
@@ -191,9 +197,10 @@ public class DateWindowFacadeTool {
             @ToolParam(
                             description = "The named calendar period: YYYY (e.g. 2025), YYYY-MM (e.g. 2026-07), "
                                     + "or YYYY-Qn (e.g. 2026-Q3)")
-                    @NonNull
+                    @Nullable
                     String period) {
-        DateWindowResolver.ResolvedWindow resolved = DateWindowResolver.resolveNamed(period);
+        DateWindowResolver.ResolvedWindow resolved =
+                DateWindowResolver.resolveNamed(required("period", period, NAMED_PERIOD_HINT));
         LOGGER.info(
                 "MCP date window resolved shape={} period={} startDate={} endDate={}",
                 resolved.shape(),
@@ -242,6 +249,24 @@ public class DateWindowFacadeTool {
                 resolved.endDate(),
                 comparisonWindow.startDate(),
                 comparisonWindow.endDate());
+    }
+
+    private static final String DATE_WINDOW_HINT =
+            "resolveDateWindow needs shape, unit and count — e.g. shape=CALENDAR_SPAN, unit=MONTH, count=6 for "
+                    + "\"the last six months\"; count is a whole number ≥ 1";
+    private static final String NAMED_PERIOD_HINT =
+            "resolveNamedPeriod needs period — a calendar year YYYY, month YYYY-MM or quarter YYYY-Qn";
+
+    /**
+     * The argument, or an {@link InvalidToolArgumentException} that names it and says what a complete
+     * call looks like. Tool arguments arrive from the model, so a missing one is a correctable model
+     * mistake, not a programming error — and the message is what the model gets to correct it with.
+     */
+    private static <T> @NonNull T required(@NonNull String name, @Nullable T value, @NonNull String hint) {
+        if (value == null || (value instanceof String text && text.isBlank())) {
+            throw new InvalidToolArgumentException("Missing argument '" + name + "': " + hint);
+        }
+        return value;
     }
 
     private static DateWindowResolver.Shape parseShape(@NonNull String raw) {
