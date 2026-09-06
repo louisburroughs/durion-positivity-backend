@@ -198,4 +198,26 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
      * @return true if any workorder already uses it
      */
     boolean existsByWorkorderNumber(@NonNull String workorderNumber);
+
+    /** Projection row for {@link #countOpenGroupedByCustomer(Collection)} — one customer and its open count. */
+    interface OpenCustomerCount {
+        UUID getCustomerId();
+
+        long getOpenWorkorders();
+    }
+
+    /**
+     * One row per customer holding at least one work order in {@code statuses} (#1855).
+     *
+     * <p>Grouping server-side is the point: the cross-domain questions this serves ("customers with
+     * an open work order who also owe money") need every customer with open work, and the search
+     * endpoint pages at 25 rows, so a client-side equivalent is one call per candidate customer.
+     * Work orders with no customer are excluded — they cannot join to anything.
+     */
+    @Query("SELECT w.customerId AS customerId, COUNT(w) AS openWorkorders FROM Workorder w "
+            + "WHERE w.status IN :statuses AND w.customerId IS NOT NULL "
+            + "GROUP BY w.customerId ORDER BY COUNT(w) DESC, w.customerId ASC")
+    @NonNull
+    List<OpenCustomerCount> countOpenGroupedByCustomer(
+            @Param("statuses") @NonNull Collection<WorkorderStatus> statuses);
 }

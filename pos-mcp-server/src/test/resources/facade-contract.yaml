@@ -680,6 +680,17 @@ WorkorderFacadeTool.getWorkorderStatus:
   downstreamPath: "/v1/workorders/{}"
   # Same endpoint as getWorkorder; the response's status field answers the status intent.
 
+WorkorderFacadeTool.getOpenWorkordersByCustomer:
+  verb: GET
+  baseUrlProperty: pos.workorder.base-url
+  templateProperty: pos.workorder.open-by-customer-uri-template
+  template: "/workorder/v1/workorders/analytics/open-by-customer?limit={limit}"
+  route: workorder
+  downstreamPath: "/v1/workorders/analytics/open-by-customer?limit={}"
+  # #1855. searchWorkorders pages at 25 rows and exposes no total-by-customer view, so "which
+  # customers have an open work order" was either a truncated page or one call per customer.
+  # Grouped server-side, in the shape of the #1798 purchase-order summary.
+
 WorkorderFacadeTool.getTechnicianLaborAnalytics:
   verb: GET
   baseUrlProperty: pos.workorder.base-url

@@ -1,21 +1,26 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.workorder.internal.dto.OpenWorkorderCustomerRow;
+import com.positivity.workorder.internal.dto.OpenWorkordersByCustomerResponse;
 import com.positivity.workorder.internal.dto.ReopenedWorkorderAnalyticsResponse;
 import com.positivity.workorder.internal.dto.ReopenedWorkorderRow;
 import com.positivity.workorder.internal.dto.TechnicianLaborAnalyticsResponse;
 import com.positivity.workorder.internal.dto.TechnicianLaborRow;
 import com.positivity.workorder.internal.dto.WorkorderStateTransitionResponse;
 import com.positivity.workorder.internal.dto.WorkorderStatusTransitionsResponse;
+import com.positivity.workorder.internal.entity.ExtCustomerPartyReplica;
 import com.positivity.workorder.internal.entity.ExtInvoiceReplica;
 import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
+import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtInvoiceReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtUserLinkReplicaRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -25,6 +30,7 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -58,6 +64,21 @@ public class WorkorderAnalyticsServiceImpl implements WorkorderAnalyticsService 
      */
     private static final int INTERNAL_FETCH_CAP = 20_000;
 
+    /**
+     * The six statuses the facade's {@code OPEN} alias expands to (#1855): every non-terminal status
+     * except {@code DRAFT}.
+     *
+     * <p>Derived from the terminal set the way {@link WorkorderStatus#getOpenStatuses()} is, so a
+     * newly added status joins it automatically, minus {@code DRAFT}. It deliberately differs from
+     * that method — and so from {@code GET /v1/workorders/count?openOnly=true}, which counts drafts —
+     * because this endpoint answers the same question a {@code status=OPEN} search answers, and a
+     * draft has not been approved into work. On seeded data the two readings are 45 and 137.
+     */
+    private static final Set<WorkorderStatus> OPEN_STATUSES = EnumSet.complementOf(
+            EnumSet.of(WorkorderStatus.COMPLETED, WorkorderStatus.CANCELLED, WorkorderStatus.DRAFT));
+
+    private final WorkorderRepository workorderRepository;
+    private final ExtCustomerPartyReplicaRepository customerPartyRepository;
     private final WorkorderStateTransitionRepository transitionRepository;
     private final WorkorderLaborEntryRepository laborEntryRepository;
     private final ExtInvoiceReplicaRepository invoiceReplicaRepository;
@@ -372,5 +393,51 @@ public class WorkorderAnalyticsServiceImpl implements WorkorderAnalyticsService 
 
     private static Instant plusDays(Instant instant, int days) {
         return instant.plus(days, ChronoUnit.DAYS);
+    }
+
+    /**
+     * #1855: per-customer open work-order counts in one call.
+     *
+     * <p>Grouped in the database rather than assembled from search pages. The search endpoint pages
+     * at 25 rows, so "which customers have an open work order" was previously either a truncated
+     * single page or one call per candidate customer; neither is answerable inside a chat turn's
+     * budget. Totals are reported before the limit so a capped response still states the true size.
+     *
+     * <p>Open = the six non-terminal statuses, matching the facade's {@code OPEN} alias exactly.
+     * DRAFT is not open here: a draft has not been approved into work, and the two readings differ
+     * by an order of magnitude on seeded data, so the endpoint states which one it means.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull OpenWorkordersByCustomerResponse getOpenWorkordersByCustomer(int limit) {
+        List<WorkorderRepository.OpenCustomerCount> counts =
+                workorderRepository.countOpenGroupedByCustomer(OPEN_STATUSES);
+        long totalOpen = counts.stream()
+                .mapToLong(WorkorderRepository.OpenCustomerCount::getOpenWorkorders)
+                .sum();
+        boolean truncated = counts.size() > limit;
+        List<WorkorderRepository.OpenCustomerCount> capped = truncated ? counts.subList(0, limit) : counts;
+        Map<UUID, String> namesById = customerPartyRepository
+                .findAllById(capped.stream()
+                        .map(WorkorderRepository.OpenCustomerCount::getCustomerId)
+                        .toList())
+                .stream()
+                .filter(party -> party.getDisplayName() != null)
+                .collect(
+                        Collectors.toMap(ExtCustomerPartyReplica::getPartyId, ExtCustomerPartyReplica::getDisplayName));
+        List<OpenWorkorderCustomerRow> rows = capped.stream()
+                .map(row -> OpenWorkorderCustomerRow.builder()
+                        .customerId(row.getCustomerId())
+                        .customerName(namesById.get(row.getCustomerId()))
+                        .openWorkorders(row.getOpenWorkorders())
+                        .build())
+                .toList();
+        return OpenWorkordersByCustomerResponse.builder()
+                .rows(rows)
+                .totalCustomers(counts.size())
+                .totalOpenWorkorders(totalOpen)
+                .truncated(truncated)
+                .limit(limit)
+                .build();
     }
 }

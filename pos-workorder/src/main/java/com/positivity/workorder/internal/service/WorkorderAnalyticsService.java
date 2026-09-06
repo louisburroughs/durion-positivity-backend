@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.workorder.internal.dto.OpenWorkordersByCustomerResponse;
 import com.positivity.workorder.internal.dto.ReopenedWorkorderAnalyticsResponse;
 import com.positivity.workorder.internal.dto.TechnicianLaborAnalyticsResponse;
 import com.positivity.workorder.internal.dto.WorkorderStatusTransitionsResponse;
@@ -35,4 +36,12 @@ public interface WorkorderAnalyticsService {
     @NonNull
     TechnicianLaborAnalyticsResponse getTechnicianLabor(
             @NonNull LocalDate startDate, @NonNull LocalDate endDate, int limit);
+
+    /**
+     * #1855: one row per customer holding at least one open work order, ordered by count descending.
+     * "Open" is the six non-terminal statuses — the same set the facade's {@code OPEN} alias expands
+     * to — so an answer built on this endpoint means what a {@code status=OPEN} search means.
+     */
+    @NonNull
+    OpenWorkordersByCustomerResponse getOpenWorkordersByCustomer(int limit);
 }

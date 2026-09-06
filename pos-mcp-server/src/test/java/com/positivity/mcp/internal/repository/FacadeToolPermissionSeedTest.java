@@ -201,7 +201,9 @@ class FacadeToolPermissionSeedTest {
                             "getWorkorder", Set.of(WORKORDER_VIEW),
                             "searchWorkorders", Set.of(WORKORDER_VIEW),
                             "getWorkorderStatus", Set.of(WORKORDER_VIEW),
-                            "getTechnicianLaborAnalytics", Set.of(WORKORDER_ANALYTICS_VIEW))),
+                            "getTechnicianLaborAnalytics", Set.of(WORKORDER_ANALYTICS_VIEW),
+                            // #1855: per-customer open work-order counts, same analytics surface.
+                            "getOpenWorkordersByCustomer", Set.of(WORKORDER_ANALYTICS_VIEW))),
             // getSystemStatus makes no HTTP call and carries no guard, so it contributes no group.
             Map.entry(
                     "AdminFacadeTool",
@@ -464,7 +466,8 @@ class FacadeToolPermissionSeedTest {
                 "V42__wave2_facade_promotion.sql",
                 "V43__date_window_facade_tool.sql",
                 "V44__invoicing_lag_facade_tool.sql",
-                "V46__glossary_facade_tool.sql")) {
+                "V46__glossary_facade_tool.sql",
+                "V47__open_workorders_by_customer_facade_tool.sql")) {
             String sql = read(migration);
             parseFullDeletes(sql).forEach(groups::remove);
             parseGroupSeed(sql).forEach((tool, seeded) -> {

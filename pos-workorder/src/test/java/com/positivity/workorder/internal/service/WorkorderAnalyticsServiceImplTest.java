@@ -2,16 +2,21 @@ package com.positivity.workorder.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.workorder.internal.dto.OpenWorkorderCustomerRow;
+import com.positivity.workorder.internal.dto.OpenWorkordersByCustomerResponse;
 import com.positivity.workorder.internal.dto.ReopenedWorkorderAnalyticsResponse;
 import com.positivity.workorder.internal.dto.TechnicianLaborAnalyticsResponse;
 import com.positivity.workorder.internal.dto.TechnicianLaborRow;
 import com.positivity.workorder.internal.dto.WorkorderStatusTransitionsResponse;
+import com.positivity.workorder.internal.entity.ExtCustomerPartyReplica;
 import com.positivity.workorder.internal.entity.ExtInvoiceReplica;
 import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.ExtUserLinkReplica;
@@ -20,10 +25,12 @@ import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
+import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtInvoiceReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtUserLinkReplicaRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
+import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -36,6 +43,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Pageable;
 
 class WorkorderAnalyticsServiceImplTest {
@@ -45,6 +53,9 @@ class WorkorderAnalyticsServiceImplTest {
     private static final UUID TECH_A = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
     private static final UUID TECH_B = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
 
+    private final WorkorderRepository workorderRepository = mock(WorkorderRepository.class);
+    private final ExtCustomerPartyReplicaRepository customerPartyRepository =
+            mock(ExtCustomerPartyReplicaRepository.class);
     private final WorkorderStateTransitionRepository transitionRepository =
             mock(WorkorderStateTransitionRepository.class);
     private final WorkorderLaborEntryRepository laborEntryRepository = mock(WorkorderLaborEntryRepository.class);
@@ -58,6 +69,8 @@ class WorkorderAnalyticsServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new WorkorderAnalyticsServiceImpl(
+                workorderRepository,
+                customerPartyRepository,
                 transitionRepository,
                 laborEntryRepository,
                 invoiceReplicaRepository,
@@ -475,5 +488,113 @@ class WorkorderAnalyticsServiceImplTest {
         assertThat(response.isTruncated()).isTrue();
         assertThat(response.getRows()).hasSize(1);
         assertThat(response.getRows().get(0).getTechnicianId()).isEqualTo(TECH_B);
+    }
+
+    // ── #1855: per-customer open work-order counts ──────────────────────────────
+
+    /**
+     * A real projection row rather than a mock: building these inside the repository stub's
+     * {@code thenReturn} would nest {@code when()} calls and Mockito rejects that.
+     */
+    private record OpenCount(UUID customerId, long openWorkorders) implements WorkorderRepository.OpenCustomerCount {
+        @Override
+        public UUID getCustomerId() {
+            return customerId;
+        }
+
+        @Override
+        public long getOpenWorkorders() {
+            return openWorkorders;
+        }
+    }
+
+    private static WorkorderRepository.OpenCustomerCount openCount(UUID customerId, long count) {
+        return new OpenCount(customerId, count);
+    }
+
+    @Test
+    @DisplayName("open-by-customer groups server-side, resolves names and reports true totals (#1855)")
+    void openWorkordersByCustomer_returnsRowsWithNamesAndTotals() {
+        UUID named = UUID.fromString("00000000-0000-0000-0000-0000000000c1");
+        UUID unnamed = UUID.fromString("00000000-0000-0000-0000-0000000000c2");
+        when(workorderRepository.countOpenGroupedByCustomer(any()))
+                .thenReturn(List.of(openCount(named, 3L), openCount(unnamed, 1L)));
+        ExtCustomerPartyReplica party = new ExtCustomerPartyReplica();
+        party.setPartyId(named);
+        party.setDisplayName("Harbor Tool & Die Inc");
+        when(customerPartyRepository.findAllById(any())).thenReturn(List.of(party));
+
+        OpenWorkordersByCustomerResponse response = service.getOpenWorkordersByCustomer(100);
+
+        assertThat(response.getRows())
+                .extracting(
+                        OpenWorkorderCustomerRow::getCustomerId,
+                        OpenWorkorderCustomerRow::getCustomerName,
+                        OpenWorkorderCustomerRow::getOpenWorkorders)
+                .containsExactly(tuple(named, "Harbor Tool & Die Inc", 3L), tuple(unnamed, null, 1L));
+        assertThat(response.getTotalCustomers()).isEqualTo(2);
+        assertThat(response.getTotalOpenWorkorders()).isEqualTo(4L);
+        assertThat(response.isTruncated()).isFalse();
+    }
+
+    @Test
+    @DisplayName("a capped response still reports the true totals, so the answer can say it is partial")
+    void openWorkordersByCustomer_cappedReportsTrueTotals() {
+        when(workorderRepository.countOpenGroupedByCustomer(any()))
+                .thenReturn(List.of(
+                        openCount(UUID.randomUUID(), 5L),
+                        openCount(UUID.randomUUID(), 2L),
+                        openCount(UUID.randomUUID(), 1L)));
+        when(customerPartyRepository.findAllById(any())).thenReturn(List.of());
+
+        OpenWorkordersByCustomerResponse response = service.getOpenWorkordersByCustomer(1);
+
+        assertThat(response.getRows()).hasSize(1);
+        assertThat(response.isTruncated()).isTrue();
+        assertThat(response.getTotalCustomers()).isEqualTo(3);
+        assertThat(response.getTotalOpenWorkorders()).isEqualTo(8L);
+        assertThat(response.getLimit()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("this endpoint's open set is the enum's open statuses minus DRAFT, so a new status joins it")
+    void openStatusSetTracksTheEnumMinusDraft() {
+        // Two definitions of "open" live in this module: WorkorderStatus.getOpenStatuses() (every
+        // non-terminal status, drafts included — what GET /workorders/count?openOnly=true uses) and
+        // this endpoint's, which matches a status=OPEN search. Pinning the relationship means a
+        // newly added status cannot silently fall out of one of them.
+        Set<WorkorderStatus> expected = new java.util.HashSet<>(WorkorderStatus.getOpenStatuses());
+        expected.remove(WorkorderStatus.DRAFT);
+
+        when(workorderRepository.countOpenGroupedByCustomer(any())).thenReturn(List.of());
+        when(customerPartyRepository.findAllById(any())).thenReturn(List.of());
+        service.getOpenWorkordersByCustomer(100);
+
+        ArgumentCaptor<java.util.Collection<WorkorderStatus>> statuses =
+                ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(workorderRepository).countOpenGroupedByCustomer(statuses.capture());
+        assertThat(statuses.getValue()).containsExactlyInAnyOrderElementsOf(expected);
+    }
+
+    @Test
+    @DisplayName("open means the six non-terminal statuses — DRAFT, COMPLETED and CANCELLED are not queried")
+    void openWorkordersByCustomer_queriesOnlyNonTerminalStatuses() {
+        when(workorderRepository.countOpenGroupedByCustomer(any())).thenReturn(List.of());
+        when(customerPartyRepository.findAllById(any())).thenReturn(List.of());
+
+        service.getOpenWorkordersByCustomer(100);
+
+        ArgumentCaptor<java.util.Collection<WorkorderStatus>> statuses =
+                ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(workorderRepository).countOpenGroupedByCustomer(statuses.capture());
+        assertThat(statuses.getValue())
+                .containsExactlyInAnyOrder(
+                        WorkorderStatus.APPROVED,
+                        WorkorderStatus.ASSIGNED,
+                        WorkorderStatus.WORK_IN_PROGRESS,
+                        WorkorderStatus.AWAITING_PARTS,
+                        WorkorderStatus.AWAITING_APPROVAL,
+                        WorkorderStatus.READY_FOR_PICKUP)
+                .doesNotContain(WorkorderStatus.DRAFT, WorkorderStatus.COMPLETED, WorkorderStatus.CANCELLED);
     }
 }

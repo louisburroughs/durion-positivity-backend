@@ -31,6 +31,7 @@ public class WorkorderFacadeTool {
     private final String workorderSearchUriTemplate;
     private final String workorderStatusUriTemplate;
     private final String technicianLaborUriTemplate;
+    private final String openByCustomerUriTemplate;
 
     public WorkorderFacadeTool(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
@@ -38,12 +39,14 @@ public class WorkorderFacadeTool {
             @Value("${pos.workorder.workorder-uri-template}") @NonNull String workorderUriTemplate,
             @Value("${pos.workorder.search-uri-template}") @NonNull String workorderSearchUriTemplate,
             @Value("${pos.workorder.status-uri-template}") @NonNull String workorderStatusUriTemplate,
-            @Value("${pos.workorder.technician-labor-uri-template}") @NonNull String technicianLaborUriTemplate) {
+            @Value("${pos.workorder.technician-labor-uri-template}") @NonNull String technicianLaborUriTemplate,
+            @Value("${pos.workorder.open-by-customer-uri-template}") @NonNull String openByCustomerUriTemplate) {
         this.restClient = ToolRestClientSupport.instrumentedClient(restClientBuilder, baseUrl);
         this.workorderUriTemplate = workorderUriTemplate;
         this.workorderSearchUriTemplate = workorderSearchUriTemplate;
         this.workorderStatusUriTemplate = workorderStatusUriTemplate;
         this.technicianLaborUriTemplate = technicianLaborUriTemplate;
+        this.openByCustomerUriTemplate = openByCustomerUriTemplate;
     }
 
     @Tool(description = "Get full workorder details by workorder ID")
@@ -74,8 +77,10 @@ public class WorkorderFacadeTool {
                     + "assigned to one technician but worked by another surfaces under the working technician's "
                     + "id. Row shape: workorderId, workorderNumber, estimateNumber, status, customerId, "
                     + "customerName, vehicleId, vehicleLabel, vin, createdAt. Returns only the first page of "
-                    + "matches (default size 25, hard-capped at 100 — a larger request is silently clamped, "
-                    + "visible in the response's own size/totalElements).")
+                    + "matches unless page/size are given (default size 25, hard-capped at 100 — a larger request "
+                    + "is silently clamped, visible in the response's own size/totalElements). To answer a "
+                    + "question about open work across ALL customers, call getOpenWorkordersByCustomer "
+                    + "instead: one call, grouped server-side, no paging to manage (#1855).")
     public String searchWorkorders(
             @ToolParam(description = "Free-text query matching customer name or a literal workorder id") @NonNull
                     String query,
@@ -102,7 +107,14 @@ public class WorkorderFacadeTool {
                             description = "Optional technician id (UUID) who logged a labor entry on the "
                                     + "workorder — not the assigned technician",
                             required = false)
-                    String technicianId) {
+                    String technicianId,
+            @ToolParam(description = "Optional zero-based page number; omit for the first page", required = false)
+                    Integer page,
+            @ToolParam(
+                            description = "Optional page size, 1-100 (server default 25, larger requests are "
+                                    + "clamped). Raise it when one page is not enough rather than paging blind",
+                            required = false)
+                    Integer size) {
         StringBuilder template = new StringBuilder(workorderSearchUriTemplate);
         Map<String, String> uriParams = new HashMap<>();
         uriParams.put("query", query);
@@ -112,7 +124,35 @@ public class WorkorderFacadeTool {
         appendQueryParam(template, uriParams, "createdFrom", createdFrom);
         appendQueryParam(template, uriParams, "createdTo", createdTo);
         appendQueryParam(template, uriParams, "technicianId", technicianId);
+        appendQueryParam(template, uriParams, "page", page == null ? null : String.valueOf(page));
+        appendQueryParam(template, uriParams, "size", size == null ? null : String.valueOf(size));
         return restClient.get().uri(template.toString(), uriParams).retrieve().body(String.class);
+    }
+
+    @Tool(
+            description = "Get one row per customer who currently holds at least one OPEN work order, with the "
+                    + "customer's display name and their open count, ordered by count descending, plus the "
+                    + "totals before the limit (totalCustomers, totalOpenWorkorders) and truncated. Use this "
+                    + "tool for any question about open work across the whole book — which customers have work "
+                    + "in progress, how many customers have open jobs — and for the work-order half of a "
+                    + "cross-domain question such as customers with both an open job and an unpaid invoice, "
+                    + "where it is ONE call rather than one search per customer. It returns COUNTS, not the "
+                    + "work orders themselves: when the answer needs the individual work orders — their "
+                    + "numbers, statuses or dates, for one customer or for several — use searchWorkorders "
+                    + "with status=OPEN instead, one call per customer. Open means the six "
+                    + "non-terminal statuses (APPROVED, ASSIGNED, WORK_IN_PROGRESS, AWAITING_PARTS, "
+                    + "AWAITING_APPROVAL, READY_FOR_PICKUP) — the same set searchWorkorders' OPEN alias uses; "
+                    + "DRAFT is not open. Required inputs: none; limit is optional (default 100, capped at 500).")
+    public String getOpenWorkordersByCustomer(
+            @ToolParam(
+                            description = "Optional maximum customers to return (default 100, capped at 500)",
+                            required = false)
+                    Integer limit) {
+        return restClient
+                .get()
+                .uri(openByCustomerUriTemplate, Map.of("limit", String.valueOf(limit == null ? 100 : limit)))
+                .retrieve()
+                .body(String.class);
     }
 
     /**

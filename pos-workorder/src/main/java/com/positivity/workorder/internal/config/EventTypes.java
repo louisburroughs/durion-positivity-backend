@@ -553,6 +553,12 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    /** #1855: per-customer open work-order counts, grouped server-side in one call. */
+    public static final EventTypeRegistration WORKORDER_ANALYTICS_OPEN_BY_CUSTOMER_VIEW = EventTypeRegistration.search(
+                    "WORKORDER_ANALYTICS_OPEN_BY_CUSTOMER_VIEW", "Retrieve open work-order counts grouped by customer")
+            .apiVersion("1")
+            .build();
+
     // ==================== ALL EVENT TYPES ====================
 
     /** All event types for registration at startup */
@@ -659,5 +665,6 @@ public final class EventTypes {
             // Analytics events (Wave 2 E5/E6/E7, #1593-#1595)
             WORKORDER_STATUS_TRANSITIONS_VIEW,
             WORKORDER_ANALYTICS_REOPENED_VIEW,
-            WORKORDER_ANALYTICS_TECHNICIAN_LABOR_VIEW);
+            WORKORDER_ANALYTICS_TECHNICIAN_LABOR_VIEW,
+            WORKORDER_ANALYTICS_OPEN_BY_CUSTOMER_VIEW);
 }

@@ -587,6 +587,9 @@ pos:
     status-uri-template: ${POS_WORKORDER_STATUS_URI_TEMPLATE:/workorder/v1/workorders/{workorderId}}
     # W2.3 facade promotion (#1601, E5): per-technician labor/revenue for one date window.
     technician-labor-uri-template: ${POS_WORKORDER_TECHNICIAN_LABOR_URI_TEMPLATE:/workorder/v1/workorders/analytics/technician-labor?startDate={startDate}&endDate={endDate}}
+    # #1855: per-customer open work-order counts in one call. The search endpoint pages at 25
+    # rows, so "which customers have open work" was a truncated page or one call per customer.
+    open-by-customer-uri-template: ${POS_WORKORDER_OPEN_BY_CUSTOMER_URI_TEMPLATE:/workorder/v1/workorders/analytics/open-by-customer?limit={limit}}
   tools:
     http:
       # #1660: the facade RestClient (loadBalancedRestClientBuilder) previously carried no

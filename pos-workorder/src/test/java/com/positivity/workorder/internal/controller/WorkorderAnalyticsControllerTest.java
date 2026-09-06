@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.workorder.config.TestSecurityConfig;
+import com.positivity.workorder.internal.dto.OpenWorkordersByCustomerResponse;
 import com.positivity.workorder.internal.dto.ReopenedWorkorderAnalyticsResponse;
 import com.positivity.workorder.internal.dto.TechnicianLaborAnalyticsResponse;
 import com.positivity.workorder.internal.dto.WorkorderStatusTransitionsResponse;
@@ -165,5 +166,40 @@ class WorkorderAnalyticsControllerTest {
                         eq(LocalDate.of(2026, 6, 1)),
                         eq(LocalDate.of(2026, 6, 30)),
                         eq(50));
+    }
+
+    @Test
+    @DisplayName("GET /analytics/open-by-customer delegates with the default limit and returns 200 (#1855)")
+    void openByCustomer_defaultLimit_returns200() throws Exception {
+        when(analyticsService.getOpenWorkordersByCustomer(eq(100)))
+                .thenReturn(OpenWorkordersByCustomerResponse.builder()
+                        .rows(List.of())
+                        .totalCustomers(0)
+                        .totalOpenWorkorders(0L)
+                        .truncated(false)
+                        .limit(100)
+                        .build());
+
+        mockMvc.perform(get("/v1/workorders/analytics/open-by-customer")).andExpect(status().isOk());
+
+        verify(analyticsService).getOpenWorkordersByCustomer(100);
+    }
+
+    @Test
+    @DisplayName("an over-large limit is clamped to the cap rather than rejected")
+    void openByCustomer_clampsLimit() throws Exception {
+        when(analyticsService.getOpenWorkordersByCustomer(eq(500)))
+                .thenReturn(OpenWorkordersByCustomerResponse.builder()
+                        .rows(List.of())
+                        .totalCustomers(0)
+                        .totalOpenWorkorders(0L)
+                        .truncated(false)
+                        .limit(500)
+                        .build());
+
+        mockMvc.perform(get("/v1/workorders/analytics/open-by-customer").param("limit", "5000"))
+                .andExpect(status().isOk());
+
+        verify(analyticsService).getOpenWorkordersByCustomer(500);
     }
 }
