@@ -71,6 +71,8 @@ Routing rule for new stories: computing **what a customer pays** → pos-price; 
 - `POST|GET /v1/catalog-items/service/{serviceId}/labor-standards`, `POST /.../{standardId}/supersede` — vehicle-keyed estimated service times (book time) with provenance (auth: `catalog:labor_standard:manage` / `:view`)
 - `POST /v1/catalog/labor-guide-imports?sourceCode=`, `GET /.../incomplete`, `GET /.../unmapped` — chunked labor-guide feed import from STORE-licensed sources, with counted completeness and the unmapped-operation curation queue (auth: `catalog:labor_standard:import` / `:view`)
 - `POST /v1/catalog/labor-times/resolve` — the ADR-0058 §5 service-to-service edge: resolve the applicable labor time for (service operation, vehicle) with provenance and typed degradation; sole approved caller is pos-workorder's `CatalogLaborTimeClientImpl` (auth: `catalog:labor_time:resolve`)
+- `GET /v1/catalog/tread-designs/for-product/{productId}` — vendor-supplied MKCAT enrichment matched to a product (auth: `catalog:tread_design:view`)
+- `GET /v1/catalog/tread-designs/unmatched` — tread designs that matched no product, for manual review (auth: `catalog:tread_design:view`)
 
 ## Estimated service time (labor standards, #1569)
 
@@ -138,6 +140,31 @@ Three different nothings reach the page, and the component keeps them apart:
 
 Only the second row justifies telling a customer the vendor is out of stock. Nothing on this path
 defaults a missing quantity to zero.
+
+## MKCAT tread-design enrichment (CAP-324 #1352)
+
+Manufacturer marketing content — names, copy per language, artwork — matched to catalog products by
+fuzzy text matching, never by identifier. `TreadDesignEntity` plus its `tread_design_text` /
+`tread_design_image` child tables (migration V12) and the nullable, additive `product.tread_design_id`
+association are the whole of it: no dimension, load index, article code or price field is ever
+touched by this path, so a vendor's marketing feed can never redefine what a product *is*.
+
+`SupplierCatalogEnrichmentListener` consumes `supplier.catalog.updated` off `supplier.events.v1`
+(its own Kafka consumer group, `pos-catalog-supplier-catalog-enrichment` — a second, independent
+group is required because `SupplierPriceCatalogEventsListener` already consumes the same topic for a
+different event type). An unchanged republication (same `contentHash`) is a no-op; a changed one is
+applied and re-matched, last write wins. Candidates are deliberately scoped, never the whole catalog:
+only the products the design's own vendor has actually priced via PRICAT
+(`SupplierPriceEntryRepository`), scored by `TreadDesignMatcher` — character-trigram Jaccard overlap
+(trigrams tolerate the spacing/punctuation drift between two independently authored strings, e.g.
+"Pilot Sport 4S" vs. "Pilot Sport 4 S") at a 0.5 match threshold. A design may legitimately match
+several product sizes; a design matching nothing is an ordinary, queryable-for-review outcome, not a
+failure.
+
+`GET /v1/catalog/tread-designs/for-product/{productId}` (`getTreadDesignForProduct`) and
+`GET /v1/catalog/tread-designs/unmatched` (`listUnmatchedTreadDesigns`, paged) are the read surface,
+both under `catalog:tread_design:view`. No write endpoint exists — an enrichment exists only because a
+vendor said so, and this module never mutates product identity or structure to accommodate one.
 
 ## Configuration
 

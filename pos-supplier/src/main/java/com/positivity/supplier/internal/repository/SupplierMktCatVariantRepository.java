@@ -30,4 +30,16 @@ public interface SupplierMktCatVariantRepository extends JpaRepository<SupplierM
     @NonNull
     List<SupplierMktCatVariantEntity> findByVendorProfileIdOrderByLastSeenAtDesc(
             @NonNull UUID vendorProfileId, @NonNull Limit limit);
+
+    /**
+     * One vendor's staged variants narrowed to a known {@code hasUnresolvedImages} value (#1645
+     * decision, issue #1638 decision 4).
+     *
+     * <p>Deliberately separate from {@link #findByHasUnresolvedImagesTrueOrderByUpdatedAtAsc}, which
+     * is global (every vendor, {@code true} only) and serves the retry runner's working set — a
+     * different query for a different consumer, not a filter this one should grow a flag onto.
+     */
+    @NonNull
+    List<SupplierMktCatVariantEntity> findByVendorProfileIdAndHasUnresolvedImagesOrderByLastSeenAtDesc(
+            @NonNull UUID vendorProfileId, boolean hasUnresolvedImages, @NonNull Limit limit);
 }

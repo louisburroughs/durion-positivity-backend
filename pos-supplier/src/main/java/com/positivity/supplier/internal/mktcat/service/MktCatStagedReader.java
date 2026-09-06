@@ -7,8 +7,10 @@ import com.positivity.supplier.internal.mktcat.service.model.MarketingEnrichment
 import com.positivity.supplier.internal.repository.SupplierMktCatVariantRepository;
 import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,12 +41,31 @@ public class MktCatStagedReader {
     @NonNull
     @Transactional(readOnly = true)
     public List<MarketingEnrichmentView> findStaged(@NonNull SupplierRef supplierRef, int limit) {
+        return findStaged(supplierRef, limit, null);
+    }
+
+    /**
+     * The variants this catalogue last sent, most recently seen first, optionally narrowed to a
+     * known {@code hasUnresolvedImages} value (#1645, issue #1638 decision 4).
+     *
+     * <p>This is supplier-scoped staged enrichment, not the unmatched-product queue — that worklist
+     * is pos-catalog's {@code listUnmatchedTreadDesigns}, matched by design against products, not by
+     * whether a variant's artwork resolved.
+     *
+     * @param hasUnresolvedImages {@code null} keeps every staged row regardless of image state;
+     *     {@code true}/{@code false} narrows to variants still missing artwork or not
+     */
+    @NonNull
+    @Transactional(readOnly = true)
+    public List<MarketingEnrichmentView> findStaged(
+            @NonNull SupplierRef supplierRef, int limit, @Nullable Boolean hasUnresolvedImages) {
         var binding = profileResolver.resolveBinding(supplierRef, SupplierCapability.MARKETING_CATALOG);
-        return variantRepository
-                .findByVendorProfileIdOrderByLastSeenAtDesc(binding.profile().getVendorProfileId(), Limit.of(limit))
-                .stream()
-                .map(MktCatStagedReader::toView)
-                .toList();
+        UUID vendorProfileId = binding.profile().getVendorProfileId();
+        List<SupplierMktCatVariantEntity> rows = hasUnresolvedImages == null
+                ? variantRepository.findByVendorProfileIdOrderByLastSeenAtDesc(vendorProfileId, Limit.of(limit))
+                : variantRepository.findByVendorProfileIdAndHasUnresolvedImagesOrderByLastSeenAtDesc(
+                        vendorProfileId, hasUnresolvedImages, Limit.of(limit));
+        return rows.stream().map(MktCatStagedReader::toView).toList();
     }
 
     @NonNull

@@ -111,22 +111,38 @@ public class SupplierMarketingCatalogController {
                     including which of them are still missing artwork.
                     Use this tool when a product's marketing copy is not what was expected, to see what the \
                     catalogue actually published; do not read this as catalog content, because nothing here has \
-                    been attached to a product and a variant may match no product at all.
+                    been attached to a product and a variant may match no product at all. This list is \
+                    supplier-scoped staged enrichment — one vendor's own catalogue submission — and is NOT the \
+                    unmatched-product queue: that worklist, matched by design against products, is pos-catalog's \
+                    listUnmatchedTreadDesigns.
                     Preconditions: none.
-                    Required inputs: supplierRef path parameter; limit defaults to 100.
+                    Required inputs: supplierRef path parameter; limit defaults to 100. Optional \
+                    hasUnresolvedImages filters to variants still missing artwork (true) or not (false); \
+                    omitted, every staged row is returned regardless of image state.
                     Emits a SUPPLIER_MKTCAT_VARIANT_LIST event.
                     Returns 200 with the staged variants, which is an empty list when the catalogue has never \
-                    been imported, and 404 when the vendor profile is unknown.
+                    been imported or nothing matches the filter, 400 when hasUnresolvedImages is not a boolean, and \
+                    404 when the vendor profile is unknown.
                     """,
             tags = {"Supplier Marketing Catalog"})
     @ApiResponse(responseCode = "200", description = "Staged enrichment for this catalogue")
+    @ApiResponse(
+            responseCode = "400",
+            description = "hasUnresolvedImages is not a boolean",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Vendor profile unknown",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<MarketingEnrichmentView>> listMarketingCatalogVariants(
             @Parameter(description = "Vendor profile alias", required = true) @PathVariable String supplierRef,
-            @Parameter(description = "Maximum rows to return") @RequestParam(defaultValue = "100") int limit) {
-        return ResponseEntity.ok(stagedReader.findStaged(new SupplierRef(supplierRef), limit));
+            @Parameter(description = "Maximum rows to return") @RequestParam(defaultValue = "100") int limit,
+            @Parameter(
+                            description = "Filter to variants still missing artwork (true) or not (false); omitted"
+                                    + " returns every staged row regardless of image state. This is a"
+                                    + " supplier-scoped filter, not the pos-catalog unmatched-product queue.")
+                    @RequestParam(required = false)
+                    Boolean hasUnresolvedImages) {
+        return ResponseEntity.ok(stagedReader.findStaged(new SupplierRef(supplierRef), limit, hasUnresolvedImages));
     }
 }

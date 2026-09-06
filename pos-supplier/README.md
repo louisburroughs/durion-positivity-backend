@@ -98,6 +98,55 @@ created seconds ago may not be matchable yet, and its line is quarantined until 
 empty replica — Kafka disabled, or nothing consumed yet — reports `CATALOG_UNAVAILABLE` rather than
 turning a whole vendor catalog into `NO_CATALOG_MATCH` misses an operator would go hunting for.
 
+**Freshness and run metadata (#1637 decisions 3-5).** `GET …/price-catalog/{vendorProfileId}/freshness`
+(`getSupplierPriceCatalogFreshness`) answers "can these vendor prices be trusted today" in one read:
+`latestEffectiveDate` — the newest catalog document date the vendor itself stated — is kept apart from
+`lastFetchedAt`/`lastCompletedAt`, this platform's own retrieval record, alongside the open
+unmatched-line count and the stale verdict computed against `pos.supplier.pricat.staleness-threshold`
+(default `P7D`, ISO-8601 duration). A profile with no completed import reports `stale=true` with null
+timestamps, not an error.
+
+V19 (`supplier_pricat_import`: `binding_id`, `window_from`/`window_to`, `checkpoint_state`/
+`checkpoint_at`, `error_code`) adds real run metadata rather than aliasing existing columns:
+`binding_id` distinguishes a profile's multiple feeds (nullable forward-only — runs recorded before
+this migration carry none); window/checkpoint are populated only for an incremental retrieval
+protocol — every PRICAT protocol in service today is full-snapshot (B4.0 returns the whole catalog),
+so all four stay null; `error_code` (`FETCH_FAILED` or `DECODE_FAILED`, CHECK-constrained) is a stable
+machine-readable failure category alongside the free-text `failure_detail`.
+
+`listSupplierPriceCatalogImports` gained `bindingId`, `status`, and a half-open `dateFrom`/`dateTo`
+window on `fetchedAt`. `listSupplierPriceCatalogUnmatchedLines` gained `reason`, `search`
+(case-insensitive contains-match over EAN, vendor article code and cross-reference code, LIKE
+metacharacters literal), the same `dateFrom`/`dateTo` window, and `resolved` (default `false` — the
+open worklist; `true` lists closed lines instead, for auditing what a catalog fix healed).
+
+### Product-keyed availability fan-out (#1637 decision 1) — `supplier:stockavailability:read`
+
+`GET /v1/supplier/stock/availability` (`getSupplierStockAvailability`) resolves one catalog product —
+by exactly one of `productId` or `sku` — to its vendor-queryable identity from the local replica and
+asks every enabled `STOCK_INQUIRY` binding concurrently, on virtual threads
+(`StockAvailabilityFanoutConfig`), under a deadline: `pos.supplier.stockinquiry.fanout-deadline`
+(default `PT10S`). A vendor that has not answered by the deadline is reported `SUPPLIER_UNAVAILABLE`
+alongside the vendors that did, so the response is a 200 with a per-vendor status even when nobody
+answered in time — an empty or all-unavailable `vendors` list is a valid answer, not an error.
+
+Each vendor result carries **two clocks**: `fetchedAt` is when this platform obtained the answer (a
+cached answer keeps its original fetch instant), `asOf` is the vendor's own stated observation time.
+`stale` is judged from `asOf` against `pos.supplier.availability.staleness-threshold` (default
+`PT15M`), echoed on the response as `stalenessThreshold` so every client applies the same freshness
+rule.
+
+`availableQuantity` is the canonical A2.5 item/piece count — the same quantity unit the per-vendor
+stock inquiry uses; no unit of measure or warehouse name travels because neither exists in the
+supplier wire data. **No EAN, UPC or vendor article code appears in the request or response** — which
+codes a product resolved to is this module's implementation detail, kept internal so the frontend
+cannot orchestrate per-vendor inquiries itself.
+
+`sku` resolves entirely from the local replica, never a synchronous call to pos-catalog (ADR-0044
+R1/R3): V20 adds `ext_product_code.sku`, populated from the `catalog.product.updated` fact pos-catalog
+already publishes, matched case-insensitively over a non-unique index. A SKU that ambiguously names
+more than one replicated product is a 409, refused rather than guessed at.
+
 ### Live stock inquiry (A2.5) — `supplier:stock:inquire`
 
 | Route | Operation | Notes |
@@ -172,6 +221,40 @@ Four terminal statuses, and the distinction between the middle two is the point:
 least one usable line), `EMPTY` (the vendor sent no lines), `REJECTED` (the vendor sent lines and
 none of them decoded — a codec or vendor-format break, not a quiet warehouse), `FAILED` (no usable
 answer at all).
+
+### Stock snapshot reads (CAP-322, #1638 decision 5) — `supplier:stocksnapshot:read`
+
+Two-step browse, by immutable `snapshotId`, never contacting a vendor. `GET
+…/vendor-profiles/{vendorProfileId}/stock-snapshots/latest` (`getLatestSupplierStockSnapshot`)
+resolves the profile's newest snapshot — newest by the vendor-stated `snapshotAsOf`, never by fetch
+time — to its metadata, without lines. The ordering is `NULLS LAST` by explicit query rather than a
+derived method: PostgreSQL sorts nulls **first** on `DESC`, which would let a snapshot carrying no
+vendor-stated instant (a failed or unparseable fetch) outrank one that has one; the snapshot id
+tie-breaks rows sharing an instant, newest fetch first.
+
+`GET …/stock-snapshots/{snapshotId}/lines` (`listSupplierStockSnapshotLines`) pages that snapshot's
+lines, addressed by the id resolved above rather than "latest" — a snapshot is append-only and never
+changes, so every page of one browse describes the same document even if a newer report lands
+mid-browse, where paging "latest" directly would silently switch documents between pages. A line's
+`availableQuantity` is nullable and the nullability is the contract: null means the vendor reported
+the article without stating a quantity, zero means it explicitly reported none — the same distinction
+the fetch pipeline preserves end to end (see above).
+
+### Transmission search (ADR-0052, issue #1638 decision 6) — `supplier:transmission:read`
+
+`GET /v1/supplier/transmissions` (`searchSupplierTransmissions`) pages the transmission ledger across
+every purchase order, newest first, filterable by `attemptState`, `vendorProfileId`, `search`
+(case-insensitive contains-match against the purchase-order number and the vendor's own order number)
+and a half-open `dateFrom`/`dateTo` window on the intent's immutable `createdAt`.
+`attemptState=MANUAL_REVIEW` is the operator worklist this filter exists for: transmissions whose
+outcome could not be established automatically and are waiting on a human. It sits alongside
+`listSupplierTransmissionsForPurchaseOrder` (one order's history) and `getSupplierTransmission` (one
+intent by id) on the same controller.
+
+Read-only: nothing is transmitted, retried or changed by this endpoint. Resolving a `MANUAL_REVIEW` row
+found here is `resolveSupplierTransmission` (`supplier:transmission:resolve`), and **no endpoint
+re-sends a transmission** — ADR-0052 treats a blind re-send as how a purchase order becomes two
+deliveries, so recovery from `MANUAL_REVIEW` is always a person's resolution, never a retry.
 
 ### Quarantine re-application
 

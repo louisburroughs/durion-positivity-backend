@@ -977,6 +977,8 @@ paths:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1price-overrides~1{overrideId}~1reject
   /v1/orders/purchase-orders:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders
+  /v1/orders/purchase-orders/summary:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1summary
   /v1/orders/purchase-orders/{poId}:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}
   /v1/orders/purchase-orders/{poId}/approve:
