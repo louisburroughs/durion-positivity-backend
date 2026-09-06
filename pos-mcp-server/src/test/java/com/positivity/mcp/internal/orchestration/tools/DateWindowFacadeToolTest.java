@@ -377,14 +377,13 @@ class DateWindowFacadeToolTest {
     }
 
     @Test
-    @DisplayName("a missing count is an argument error the model can correct, not a NullPointerException (#1829)")
+    @DisplayName("a missing count called directly names the argument and shows a complete call (#1829)")
     void missingCountIsAnArgumentError() {
-        // Alpha 2026-09-06, gpt-oss:20b on q04: the model called this tool with no arguments and got
-        // "Cannot invoke Number.intValue() because ... is null" back — and gave up.
         assertThatExceptionOfType(InvalidToolArgumentException.class)
                 .isThrownBy(() -> tool.resolveDateWindow("CALENDAR_SPAN", "MONTH", null, null, null))
                 .withMessageContaining("Missing argument 'count'")
-                .withMessageContaining("count=6");
+                .withMessageContaining("count=6")
+                .withMessageContaining("whole number");
     }
 
     @Test

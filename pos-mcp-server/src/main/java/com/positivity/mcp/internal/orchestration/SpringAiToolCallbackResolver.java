@@ -103,6 +103,12 @@ final class SpringAiToolCallbackResolver {
             try {
                 Object result = method.invoke(target, resolveArguments(method, toolInput));
                 return result == null ? "" : String.valueOf(result);
+            } catch (InvalidToolArgumentException e) {
+                // Raised by argument binding itself — malformed JSON, or a missing argument for a
+                // primitive parameter (#1829) — before the method runs, so it never came through
+                // InvocationTargetException and escaped the tool loop unwrapped. Same wrapping as
+                // below, for the same reason: the model must be able to read it and retry.
+                throw new ToolExecutionException(getToolDefinition(), e);
             } catch (IllegalAccessException e) {
                 throw new IllegalStateException("Unable to access tool method " + method.getName(), e);
             } catch (InvocationTargetException e) {
@@ -124,6 +130,15 @@ final class SpringAiToolCallbackResolver {
             Object[] resolved = new Object[parameters.length];
             for (ParameterBinding binding : bindings) {
                 Object rawValue = firstPresent(arguments, binding.candidateNames());
+                if (rawValue == null && binding.parameterType().isPrimitive()) {
+                    // #1829: a null for a primitive parameter unboxes inside Method.invoke as a
+                    // NullPointerException — a JVM stack trace the model cannot act on. On alpha
+                    // gpt-oss:20b called resolveDateWindow with {} and gave up on exactly that. Name
+                    // the argument instead; the tool's own message, when it has one, adds the hint.
+                    throw new InvalidToolArgumentException("Missing argument '"
+                            + binding.candidateNames().getFirst() + "' for " + method.getName()
+                            + ": it is required and was not supplied");
+                }
                 resolved[binding.index()] =
                         rawValue == null ? null : OBJECT_MAPPER.convertValue(rawValue, binding.parameterType());
             }
