@@ -81,7 +81,7 @@ final class BoundedToolCallingManager implements ToolCallingManager {
         Round round = executeAnsweringUnknownTools(prompt, chatResponse);
         ToolExecutionResult result = round.result();
         if (result.returnDirect()) {
-            return result;
+            return round.unknownCount() > 0 ? directWithExecutedOnly(round) : result;
         }
         int completedTurns = completedToolTurns(prompt);
         if (completedTurns + 1 < MAX_TOOL_TURNS) {
@@ -96,16 +96,24 @@ final class BoundedToolCallingManager implements ToolCallingManager {
                 "Chat turn hit the tool round-trip cap ({}); returning the tool results gathered so far "
                         + "instead of continuing the loop",
                 MAX_TOOL_TURNS);
-        List<Message> history = result.conversationHistory();
-        if (round.unknownCount() > 0) {
-            // Direct return renders the last round's responses as the answer; keep only the ones a
-            // tool actually produced.
-            history = new ArrayList<>(history.subList(0, history.size() - 1));
-            history.add(
-                    ToolResponseMessage.builder().responses(round.executed()).build());
-        }
+        return round.unknownCount() > 0
+                ? directWithExecutedOnly(round)
+                : DefaultToolExecutionResult.builder()
+                        .conversationHistory(result.conversationHistory())
+                        .returnDirect(true)
+                        .build();
+    }
+
+    /**
+     * A direct return renders the last round's responses as the answer, so only the ones a tool
+     * actually produced may stay in it: the corrections were written for the model.
+     */
+    private static ToolExecutionResult directWithExecutedOnly(Round round) {
+        List<Message> history = round.result().conversationHistory();
+        List<Message> trimmed = new ArrayList<>(history.subList(0, history.size() - 1));
+        trimmed.add(ToolResponseMessage.builder().responses(round.executed()).build());
         return DefaultToolExecutionResult.builder()
-                .conversationHistory(history)
+                .conversationHistory(trimmed)
                 .returnDirect(true)
                 .build();
     }

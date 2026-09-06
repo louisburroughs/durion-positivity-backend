@@ -31,6 +31,8 @@ import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.ai.tool.metadata.ToolMetadata;
 
 /**
  * Runs the real {@code DefaultToolCallingManager} under the bounded wrapper against a real reflective
@@ -129,6 +131,44 @@ class BoundedToolCallingManagerTest {
         assertThat(toolResponses.getResponses())
                 .extracting(ToolResponseMessage.ToolResponse::responseData)
                 .containsExactly("echo:kept");
+    }
+
+    @Test
+    @DisplayName("a tool that returns directly does not carry a sibling correction into the answer")
+    void delegateReturnDirectDropsTheCorrections() {
+        ToolCallback direct = new ToolCallback() {
+            @Override
+            public ToolDefinition getToolDefinition() {
+                return ToolDefinition.builder()
+                        .name("direct")
+                        .description("answers the user directly")
+                        .inputSchema("{\"type\":\"object\",\"properties\":{}}")
+                        .build();
+            }
+
+            @Override
+            public ToolMetadata getToolMetadata() {
+                return ToolMetadata.builder().returnDirect(true).build();
+            }
+
+            @Override
+            public String call(String toolInput) {
+                return "final answer";
+            }
+        };
+        Prompt prompt = new Prompt(
+                List.of(new UserMessage("question")),
+                ToolCallingChatOptions.builder().toolCallbacks(List.of(direct)).build());
+
+        ToolExecutionResult result =
+                manager.executeToolCalls(prompt, response(call("a", "calls", "{}"), call("b", "direct", "{}")));
+
+        assertThat(result.returnDirect()).isTrue();
+        ToolResponseMessage toolResponses =
+                (ToolResponseMessage) result.conversationHistory().getLast();
+        assertThat(toolResponses.getResponses())
+                .extracting(ToolResponseMessage.ToolResponse::responseData)
+                .containsExactly("final answer");
     }
 
     /** A prompt already holding the rounds that bring the next one to {@code MAX_TOOL_TURNS}. */
