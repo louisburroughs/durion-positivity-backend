@@ -171,7 +171,6 @@ jobs:
         shell: bash
         env:
           SYNC_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
-          COMMIT_MODE: ${{ inputs.commit_mode }}
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
@@ -1389,11 +1388,26 @@ jobs:
             [[ "$job" == "success" ]] || failed=1
           done
 
-          # A delivery run that could reach no repository is a failed run, not a
-          # quiet no-op: the artifacts are still uploaded above, but the thing
-          # that was asked for did not happen.
-          if [[ "${COMMIT_MODE}" != "none" && "${DELIVERABLE:-0}" -eq 0 ]]; then
-            echo "::error::commit_mode=${COMMIT_MODE} was requested but the sync credential (${PAT_STATE:-unknown}) can push to no target repository. Nothing was delivered."
+          # A delivery run in which every stage was held back is a failed run,
+          # not a quiet no-op: the artifacts are still uploaded above, but the
+          # thing that was asked for did not happen.
+          #
+          # This counts what the stages actually did rather than what the PAT
+          # could reach. The backend stage delivers to its own repository with
+          # GITHUB_TOKEN and never consults the PAT, so a run with no PAT at all
+          # can still deliver there — and `unchanged` everywhere (nothing to
+          # commit) is a legitimate success, not a held-back run.
+          delivered=0
+          held_back=0
+          for status in "${BACKEND_COMMIT}" "${SDK_COMMIT}" "${SDK_ANGULAR_COMMIT}" "${FRONTEND_COMMIT}"; do
+            case "${status}" in
+              pushed|pull-request) delivered=$((delivered + 1)) ;;
+              skipped)             held_back=$((held_back + 1)) ;;
+            esac
+          done
+
+          if [[ "${COMMIT_MODE}" != "none" && "${delivered}" -eq 0 && "${held_back}" -gt 0 ]]; then
+            echo "::error::commit_mode=${COMMIT_MODE} was requested, but nothing was delivered and ${held_back} stage(s) were held back. See the Delivery table for the reason per repository."
             failed=1
           fi
 
