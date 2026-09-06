@@ -62,6 +62,21 @@ Over-settlement raises `order.payment.integrity-alert`. Applied price overrides 
 `order.line.commission-impact`. All Kafka paths are gated by `pos.order.kafka.enabled`
 (default `false`).
 
+## Purchase order transmission timeline (issue #1638)
+
+- `GET /v1/orders/purchase-orders/{poId}/transmission-events` (`listPurchaseOrderTransmissionEvents`,
+  permission `order:purchase_order:view` — reused, not a new grant) returns a page of the purchase
+  order's append-only vendor observation timeline: every confirmation, rejection, status observation
+  and review escalation heard from pos-supplier about the order.
+- Ordering is the timeline's semantics, not a client choice: entries sort by the vendor's own clock
+  (`observedAt` ascending), ties broken by platform receipt time (`recordedAt`), then by event id. The
+  `sort` query parameter is accepted but ignored.
+- Both timestamps are returned on every entry — `observedAt` (what the vendor says happened) and
+  `recordedAt` (when this platform heard it) — so a late-arriving observation is visible sitting where
+  the vendor placed it, rather than silently reshuffling history.
+- An order that was never transmitted has an empty timeline (200), not a 404; a 404 means the purchase
+  order itself does not exist.
+
 ## Configuration
 
 | Property                | Default  | Description                  |
