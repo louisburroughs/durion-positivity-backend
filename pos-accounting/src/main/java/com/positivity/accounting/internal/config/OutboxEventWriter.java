@@ -3,8 +3,6 @@ package com.positivity.accounting.internal.config;
 import com.positivity.accounting.internal.entity.KafkaOutboxEvent;
 import com.positivity.accounting.internal.repository.KafkaOutboxEventRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
-import java.time.Clock;
-import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -30,7 +28,6 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnProperty(prefix = "pos.accounting.kafka", name = "enabled", havingValue = "true")
 public class OutboxEventWriter {
 
-    private final Clock clock;
     private final ObjectMapper objectMapper;
     private final KafkaOutboxEventRepository outboxEventRepository;
 
@@ -44,7 +41,6 @@ public class OutboxEventWriter {
                 .topic(topic)
                 .recordKey(envelope.recordKey())
                 .payload(serialize(envelope))
-                .createdAt(Instant.now(clock))
                 .build();
         outboxEventRepository.save(event);
         log.debug("Queued outbox event type={} topic={} key={}", envelope.eventType(), topic, envelope.recordKey());

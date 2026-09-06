@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.entity;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -12,6 +13,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Transactional-outbox row for the Kafka facts pos-accounting publishes (ADR-0044 §4, issue
@@ -20,10 +23,11 @@ import lombok.NoArgsConstructor;
  *
  * <p>Distinct from {@link EventOutbox} / {@code event_outbox}, which is this module's in-process
  * Spring-event outbox (drained by {@code OutboxProcessor}) and unrelated to Kafka.
- * {@code createdAt} is stamped by the writer from the injected clock
- * (docs/CLOCK_TIMESTAMP_OWNERSHIP.md).
+ * {@code createdAt} is stamped by JPA auditing (ADR-0024) from the module's clock-backed
+ * {@code DateTimeProvider} (docs/CLOCK_TIMESTAMP_OWNERSHIP.md).
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -46,6 +50,7 @@ public class KafkaOutboxEvent {
     @Column(nullable = false, columnDefinition = "text")
     private String payload;
 
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

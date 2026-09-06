@@ -167,8 +167,9 @@ class InvoiceRevenuePostingServiceTest {
         assertThat(row.getValue().getRevenueAmount()).isEqualByComparingTo("200.00");
         assertThat(row.getValue().getTaxAmount()).isEqualByComparingTo("16.53");
         assertThat(row.getValue().getReversalJournalEntryId()).isNull();
-        assertThat(row.getValue().getCreatedAt()).isEqualTo(Instant.now(TEST_CLOCK));
-        assertThat(row.getValue().getUpdatedAt()).isEqualTo(Instant.now(TEST_CLOCK));
+        // createdAt/updatedAt are stamped by JPA auditing (ADR-0024), not by the service.
+        assertThat(row.getValue().getCreatedAt()).isNull();
+        assertThat(row.getValue().getUpdatedAt()).isNull();
     }
 
     @Test
@@ -357,7 +358,6 @@ class InvoiceRevenuePostingServiceTest {
                         eq("Invoice revenue reversal (DRAFT) - INV#INV-2026-000123"));
         assertThat(open.getReversalJournalEntryId()).isEqualTo(REVERSAL_ENTRY_ID);
         assertThat(open.getReversedAt()).isEqualTo(REVERTED_AT);
-        assertThat(open.getUpdatedAt()).isEqualTo(Instant.now(TEST_CLOCK));
         assertThat(open.isOpen()).isFalse();
         verify(repository).save(open);
 

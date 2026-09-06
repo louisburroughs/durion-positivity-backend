@@ -38,7 +38,7 @@ class OutboxEventWriterTest {
 
     private final KafkaOutboxEventRepository repository = mock(KafkaOutboxEventRepository.class);
     private final ObjectMapper objectMapper = JsonMapper.builder().build();
-    private final OutboxEventWriter writer = new OutboxEventWriter(TEST_CLOCK, objectMapper, repository);
+    private final OutboxEventWriter writer = new OutboxEventWriter(objectMapper, repository);
 
     private DomainEventEnvelope<InvoiceGlPostedV1> envelope() {
         return DomainEventEnvelope.of(
@@ -66,7 +66,8 @@ class OutboxEventWriterTest {
         KafkaOutboxEvent saved = row.getValue();
         assertThat(saved.getTopic()).isEqualTo("accounting.events.v1");
         assertThat(saved.getRecordKey()).isEqualTo(INVOICE_ID.toString());
-        assertThat(saved.getCreatedAt()).isEqualTo(NOW);
+        // createdAt is stamped by JPA auditing (@CreatedDate, ADR-0024), not by the writer.
+        assertThat(saved.getCreatedAt()).isNull();
         assertThat(saved.getPublishedAt()).isNull();
         assertThat(saved.getAttempts()).isZero();
 
@@ -87,7 +88,7 @@ class OutboxEventWriterTest {
     void serializationFailureWritesNothing() {
         ObjectMapper failing = mock(ObjectMapper.class);
         when(failing.writeValueAsString(any())).thenThrow(new IllegalArgumentException("boom"));
-        OutboxEventWriter failingWriter = new OutboxEventWriter(TEST_CLOCK, failing, repository);
+        OutboxEventWriter failingWriter = new OutboxEventWriter(failing, repository);
 
         assertThatExceptionOfType(IllegalStateException.class)
                 .isThrownBy(() -> failingWriter.publish("accounting.events.v1", envelope()))

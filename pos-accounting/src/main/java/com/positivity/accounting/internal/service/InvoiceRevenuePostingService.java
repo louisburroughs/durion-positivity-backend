@@ -151,7 +151,6 @@ public class InvoiceRevenuePostingService {
                 transactionDate,
                 "Invoice revenue recognition - INV#" + displayNumber(payload));
 
-        Instant now = Instant.now(clock);
         invoiceGlPostingRepository.save(InvoiceGlPosting.builder()
                 .invoiceId(invoiceId)
                 .finalizedAt(finalizedAt)
@@ -159,8 +158,6 @@ public class InvoiceRevenuePostingService {
                 .postedAt(finalizedAt)
                 .revenueAmount(revenue)
                 .taxAmount(tax)
-                .createdAt(now)
-                .updatedAt(now)
                 .build());
 
         publishFact(new InvoiceGlPostedV1(
@@ -220,7 +217,6 @@ public class InvoiceRevenuePostingService {
 
         posting.setReversalJournalEntryId(reversalJournalEntryId);
         posting.setReversedAt(occurredAt);
-        posting.setUpdatedAt(Instant.now(clock));
         invoiceGlPostingRepository.save(posting);
 
         publishFact(new InvoiceGlPostedV1(
