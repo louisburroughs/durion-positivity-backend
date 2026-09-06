@@ -40,6 +40,12 @@ spring:
           model: ${OLLAMA_EMBEDDING_MODEL:bge-m3}
         timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
 mcp:
+  discovery:
+    # #1819: a registered domain that contributes no operation in a discovery cycle is kept, not
+    # pruned (absent from a mid-deploy aggregate is "unseen", not "removed"). List domains here that
+    # are genuinely gone — retired service, renamed gateway prefix — so one cycle can reconcile them.
+    # Comma-separated domain keys as stored in mcp_tool.domain (e.g. invoice,workorder).
+    prunable-when-unseen: ${MCP_DISCOVERY_PRUNABLE_WHEN_UNSEEN:}
   # The deployed build, stamped on every eval turn trace (#1806). The alpha compose override sets it
   # from the image tag (sha-<short>); anything else reads "unknown". actuator/info cannot serve this
   # through the gateway, and a permitAll would not change that: GatewayAuthoritiesFilter skips every

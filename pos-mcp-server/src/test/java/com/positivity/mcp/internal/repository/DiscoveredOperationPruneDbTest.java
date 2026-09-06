@@ -205,6 +205,19 @@ class DiscoveredOperationPruneDbTest {
         return insertTool(name, domain, "openapi");
     }
 
+    @Test
+    void discoveredDomains_returnsDistinctOpenapiDomains_ignoringNullAndFacadeRows() {
+        // #1819: the unseen-domain rule compares against exactly this set, so NULL domains (still
+        // prunable) and facade rows (never pruned) must not appear in it.
+        insertTool("accounting_a", "accounting", "openapi");
+        insertTool("accounting_b", "accounting", "openapi");
+        insertTool("order_a", "order", "openapi");
+        insertTool("orphan_no_domain", null, "openapi");
+        insertTool("facade_tool", "inventory", "facade");
+
+        assertThat(repository.discoveredDomains()).containsExactlyInAnyOrder("accounting", "order");
+    }
+
     private UUID insertTool(String name, String domain, String source) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(

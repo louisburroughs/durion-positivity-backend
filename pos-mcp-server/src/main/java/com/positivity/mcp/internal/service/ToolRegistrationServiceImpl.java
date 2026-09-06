@@ -37,6 +37,13 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
     private final OpenApiToolMapper openApiToolMapper;
     private final McpAsyncServer mcpAsyncServer;
     private final ToolMetadataRepository toolMetadataRepository;
+    /**
+     * Domains an operator has declared safe to prune even when they contribute no operation this
+     * cycle (#1819 escape hatch): a retired service, a renamed gateway prefix, a prefix dropped from
+     * the allowlist. Everything else that goes unseen is kept.
+     */
+    private final Set<String> prunableWhenUnseen;
+
     private final String gatewayBaseUrl;
     // #645: discovery/registration metrics. Meter names are dot-cased so Prometheus exposes them as
     // tools_discovered_total / tools_registered_total.
@@ -54,12 +61,14 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
             @NonNull McpAsyncServer mcpAsyncServer,
             @NonNull ToolMetadataRepository toolMetadataRepository,
             @Value("${mcp.server.gateway-base-url:http://api-gateway:8080}") @NonNull String gatewayBaseUrl,
-            @NonNull MeterRegistry meterRegistry) {
+            @NonNull MeterRegistry meterRegistry,
+            @Value("${mcp.discovery.prunable-when-unseen:}") @NonNull List<String> prunableWhenUnseen) {
         this.properties = properties;
         this.openApiDocumentFetcher = openApiDocumentFetcher;
         this.openApiToolMapper = openApiToolMapper;
         this.mcpAsyncServer = mcpAsyncServer;
         this.toolMetadataRepository = toolMetadataRepository;
+        this.prunableWhenUnseen = Set.copyOf(prunableWhenUnseen);
         // Persisted as each discovered op's service_id. Routing is via the gateway base URI (not a
         // Eureka service id): alpha's Eureka registry is empty, and facade tools already reach the
         // gateway by base URL. The Gate 3 executor (G3.2) will call handlerForBaseUri(this).
@@ -292,19 +301,19 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
      * name} is {@code @NonNull} by contract; the filter is a defensive guard so a stray null can never
      * enter the keep-set and turn the prune's {@code NOT IN (...)} into a silent no-op.
      */
+    private static @NonNull Set<String> discoveredNames(@NonNull List<DiscoveredOperation> operations) {
+        return operations.stream()
+                .map(DiscoveredOperation::name)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
     /** The domains the current run's operations belong to, derived exactly as persistOne stores them. */
     private static @NonNull Set<String> discoveredDomains(@NonNull List<DiscoveredOperation> operations) {
         return operations.stream()
                 .map(DiscoveredOperation::httpPath)
                 .filter(java.util.Objects::nonNull)
                 .map(OpenApiToolMapper::extractDomain)
-                .collect(Collectors.toSet());
-    }
-
-    private static @NonNull Set<String> discoveredNames(@NonNull List<DiscoveredOperation> operations) {
-        return operations.stream()
-                .map(DiscoveredOperation::name)
-                .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toSet());
     }
 
@@ -346,17 +355,27 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
 
     /**
      * #1121: reconcile — delete any source='openapi' row absent from this run (orphans left by a spec
-     * change or discovery-mode switch, since persistence is otherwise upsert-only). Guarded on {@code
-     * persisted > 0} so a run that wrote nothing (bad/empty spec, DB trouble) can never wipe the
-     * catalog; {@code pruneDiscoveredOperationsExcept} also no-ops on an empty set.
+     * change, since persistence is otherwise upsert-only). Guarded on {@code persisted > 0} so a run
+     * that wrote nothing (bad/empty spec, DB trouble) can never wipe the catalog; {@code
+     * pruneDiscoveredOperationsExcept} also no-ops on an empty set.
      *
-     * <p>#1632: when any per-service spec fetch failed this cycle, the failed domains' ops are absent
-     * from {@code discoveredNames} not because the services removed them but because we could not see
-     * them — on alpha (2026-09-01) pruning against exactly such a partial aggregate deleted every
-     * previously-registered pos-invoice op after a transient routing fault. The prune still RUNS
-     * (per-prefix, so one permanently flappy service can never starve reconciliation for the healthy
-     * domains) but excludes the failed prefixes' domains; their rows are kept until a cycle sees their
-     * spec again.
+     * <p>Two kinds of domain are excluded from the prune and merely kept this cycle:
+     *
+     * <ul>
+     *   <li>#1632 — domains whose per-service spec fetch failed: their ops are absent because we
+     *       could not see them. On alpha (2026-09-01) pruning against such a partial aggregate
+     *       deleted every pos-invoice op after a transient routing fault.
+     *   <li>#1819 — registered domains that contributed zero operations this run, on any path. On
+     *       the gateway-aggregate path nothing "fails" when a service is down — it is simply absent
+     *       from the aggregate — and on alpha (2026-09-06, mid-deploy) an aggregate carrying one
+     *       service's 70 ops pruned the other 965 rows as stale. Absent is unseen, not removed.
+     * </ul>
+     *
+     * <p>The cost of the second rule is that a domain which genuinely removes every endpoint, is
+     * retired, or has its gateway prefix renamed keeps its rows — and this method logs it at ERROR
+     * every cycle — until an operator lists it in {@code mcp.discovery.prunable-when-unseen}, after
+     * which one cycle reconciles it. The prune still RUNS per domain, so one absent domain never
+     * starves reconciliation for the healthy ones.
      */
     private void pruneStaleOperations(
             int persisted,
@@ -366,34 +385,27 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
         if (persisted <= 0 || discoveredNames.isEmpty()) {
             return;
         }
-        Set<String> excludedDomains = failedPrefixes.stream()
+        Set<String> failedDomains = failedPrefixes.stream()
                 .map(ToolRegistrationServiceImpl::prefixToServiceId)
-                .collect(Collectors.toCollection(HashSet::new));
-        // #1819: a registered domain that contributed zero operations this cycle is unseen, not
-        // removed. On the gateway-aggregate path nothing "fails" when a service is down — it is
-        // simply absent from the aggregate — and on alpha (2026-09-06, mid-deploy) an aggregate
-        // carrying one service's 70 ops pruned the other 965 rows as stale. A domain that really
-        // removes every endpoint keeps its rows until it publishes a spec with at least one op.
+                .collect(Collectors.toSet());
         Set<String> unseenDomains = new HashSet<>(toolMetadataRepository.discoveredDomains());
         unseenDomains.removeAll(discoveredDomains);
-        if (!unseenDomains.isEmpty()) {
-            log.error(
-                    "Running the #1121 stale-op prune with {} registered domain(s) that contributed no operation "
-                            + "this cycle, so their rows are kept, not reconciled (#1819): {}",
-                    unseenDomains.size(),
-                    unseenDomains);
-            excludedDomains.addAll(unseenDomains);
-        }
+        unseenDomains.removeAll(prunableWhenUnseen);
+        Set<String> excludedDomains = new HashSet<>(failedDomains);
+        excludedDomains.addAll(unseenDomains);
         if (excludedDomains.isEmpty()) {
             log.info("Running the #1121 stale-op prune against a complete aggregate (no excluded domains)");
         } else {
-            // ERROR, not WARN: a partial aggregate means whole domains are invisible to discovery,
-            // and their rows are only being kept, not reconciled, this cycle.
+            // ERROR, not WARN: whole domains are invisible to discovery this cycle, and their rows are
+            // only being kept, not reconciled. The two lists name the reason; a domain that stays in
+            // the second list cycle after cycle is retired or renamed and wants
+            // mcp.discovery.prunable-when-unseen.
             log.error(
-                    "Running the #1121 stale-op prune with {} domain(s) excluded because their spec fetch "
-                            + "failed this cycle: {}. Their rows are kept, not reconciled, until a successful fetch.",
+                    "Running the #1121 stale-op prune with {} domain(s) excluded — spec fetch failed this cycle: {}; "
+                            + "registered but contributed no operation this cycle (#1819, kept not reconciled): {}",
                     excludedDomains.size(),
-                    excludedDomains);
+                    failedDomains,
+                    unseenDomains);
         }
         int pruned = toolMetadataRepository.pruneDiscoveredOperationsExcept(discoveredNames, excludedDomains);
         if (pruned > 0) {

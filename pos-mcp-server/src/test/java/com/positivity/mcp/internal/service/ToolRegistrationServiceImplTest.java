@@ -238,11 +238,57 @@ class ToolRegistrationServiceImplTest {
                         Set.of(OpenApiToolMapper.extractDomain("/security-service/v1/users"), "order", "inventory"));
         when(repo.pruneDiscoveredOperationsExcept(any(), any())).thenReturn(0);
 
-        serviceUnderTest(repo).registerDiscoveredTools().block(Duration.ofSeconds(5));
+        ListAppender<ILoggingEvent> logAppender = attachLogAppender();
+        try {
+            serviceUnderTest(repo).registerDiscoveredTools().block(Duration.ofSeconds(5));
 
-        // The two domains that contributed nothing are excluded from the prune; security's own
-        // stale rows are still reconciled.
-        verify(repo).pruneDiscoveredOperationsExcept(Set.of("users_listusers"), Set.of("order", "inventory"));
+            // The two domains that contributed nothing are excluded from the prune; security's own
+            // stale rows are still reconciled — and the cycle says so at ERROR, naming them.
+            verify(repo).pruneDiscoveredOperationsExcept(Set.of("users_listusers"), Set.of("order", "inventory"));
+            assertThat(logAppender.list)
+                    .anyMatch(event -> event.getLevel() == ch.qos.logback.classic.Level.ERROR
+                            && event.getFormattedMessage().contains("#1819")
+                            && event.getFormattedMessage().contains("order")
+                            && event.getFormattedMessage().contains("inventory"));
+        } finally {
+            detachLogAppender(logAppender);
+        }
+    }
+
+    @Test
+    @DisplayName("a domain listed in mcp.discovery.prunable-when-unseen is reconciled even when it contributed "
+            + "nothing — the operator escape hatch for a retired or renamed domain (#1819)")
+    void registerDiscoveredTools_prunesAnUnseenDomainTheOperatorDeclaredGone() {
+        McpServerFeatures.AsyncToolSpecification spec = toolSpec("users_listusers");
+        OpenApiDocumentFetcher.DiscoveredOpenApi discovered =
+                new OpenApiDocumentFetcher.DiscoveredOpenApi("aggregate", GATEWAY_BASE_URI, new OpenAPI());
+        DiscoveredOperation op = new DiscoveredOperation(
+                "users_listusers",
+                "List users",
+                "GET",
+                "/security-service/v1/users",
+                "http://api-gateway:8080",
+                null,
+                List.of());
+        when(openApiDocumentFetcher.fetchAggregateSpec()).thenReturn(Mono.just(discovered));
+        when(openApiToolMapper.toAggregateToolSpecifications(GATEWAY_BASE_URI, discovered.openApi()))
+                .thenReturn(List.of(spec));
+        when(openApiToolMapper.toDiscoveredOperations("http://api-gateway:8080", discovered.openApi()))
+                .thenReturn(List.of(op));
+        when(mcpAsyncServer.removeTool(any())).thenReturn(Mono.empty());
+        when(mcpAsyncServer.addTool(spec)).thenReturn(Mono.empty());
+        when(mcpAsyncServer.notifyToolsListChanged()).thenReturn(Mono.empty());
+        ToolMetadataRepository repo = mock(ToolMetadataRepository.class);
+        when(repo.upsertDiscoveredOperation(any(), any()))
+                .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        when(repo.discoveredDomains())
+                .thenReturn(Set.of(OpenApiToolMapper.extractDomain("/security-service/v1/users"), "order", "legacy"));
+        when(repo.pruneDiscoveredOperationsExcept(any(), any())).thenReturn(4);
+
+        serviceUnderTest(repo, List.of("legacy")).registerDiscoveredTools().block(Duration.ofSeconds(5));
+
+        // "legacy" was declared gone, so it is reconciled; "order" is merely unseen and kept.
+        verify(repo).pruneDiscoveredOperationsExcept(Set.of("users_listusers"), Set.of("order"));
     }
 
     @Test
@@ -274,6 +320,8 @@ class ToolRegistrationServiceImplTest {
         when(repo.upsertDiscoveredOperation(any(), any()))
                 .thenReturn(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         when(repo.pruneDiscoveredOperationsExcept(any(), any())).thenReturn(3);
+        // Every registered domain contributed an op this run, so the #1819 rule excludes nothing.
+        when(repo.discoveredDomains()).thenReturn(Set.of(OpenApiToolMapper.extractDomain("/accounting/v1/invoices")));
 
         serviceUnderTest(repo).registerDiscoveredTools().block(Duration.ofSeconds(5));
 
@@ -598,6 +646,11 @@ class ToolRegistrationServiceImplTest {
     }
 
     private ToolRegistrationServiceImpl serviceUnderTest(ToolMetadataRepository toolMetadataRepository) {
+        return serviceUnderTest(toolMetadataRepository, List.of());
+    }
+
+    private ToolRegistrationServiceImpl serviceUnderTest(
+            ToolMetadataRepository toolMetadataRepository, List<String> prunableWhenUnseen) {
         McpServerProperties properties = new McpServerProperties(
                 "http://localhost:8086",
                 "/mcp/message",
@@ -616,10 +669,12 @@ class ToolRegistrationServiceImplTest {
                 mcpAsyncServer,
                 toolMetadataRepository,
                 "http://api-gateway:8080",
-                meterRegistry);
+                meterRegistry,
+                prunableWhenUnseen);
     }
 
     private ToolRegistrationServiceImpl serviceWithIncludedServices(List<String> includedServices) {
+        List<String> prunableWhenUnseen = List.of();
         McpServerProperties properties = new McpServerProperties(
                 "http://localhost:8086",
                 "/mcp/message",
@@ -638,7 +693,8 @@ class ToolRegistrationServiceImplTest {
                 mcpAsyncServer,
                 mock(ToolMetadataRepository.class),
                 "http://api-gateway:8080",
-                meterRegistry);
+                meterRegistry,
+                prunableWhenUnseen);
     }
 
     private static ListAppender<ILoggingEvent> attachLogAppender() {

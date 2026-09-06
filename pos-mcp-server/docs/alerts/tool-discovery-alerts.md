@@ -63,6 +63,16 @@ permanently true after the first-ever failure).
    - Severity: P3 (informational / investigate)
    - Runbook: pos-mcp-server/docs/runbooks/tool-discovery-failure.md
 
+6. Name: McpToolDomainUnseen
+   - Trigger: log-based — the ERROR `registered but contributed no operation this cycle (#1819, kept not
+     reconciled)` with a non-empty domain list. One occurrence during a rolling deploy is expected (the
+     aggregate is partial while services restart) and the rows are being protected, not lost. The same
+     domain in that list for more than two consecutive cycles (an hour) means the domain is genuinely gone
+     or its gateway prefix changed: confirm, then add it to `MCP_DISCOVERY_PRUNABLE_WHEN_UNSEEN` so the
+     next cycle reconciles it, and remove it again afterwards.
+   - Severity: P3 (protective; becomes housekeeping if it persists)
+   - Runbook: pos-mcp-server/docs/runbooks/tool-discovery-failure.md
+
 ## Implementation Notes
 
 - Grace-period thresholds (e.g. 15m) should exceed startup discovery time plus Eureka registration
