@@ -29,7 +29,7 @@ public class ModelFallbackConfiguration {
             @Value("${OLLAMA_FALLBACK_BASE_URL:${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}}")
                     @NonNull
                     String baseUrl,
-            @Value("${mcp.model.fallback.secondary-model-name:gpt-oss:20b}") @NonNull String modelName,
+            @Value("${mcp.model.fallback.secondary-model-name:deepseek-v4-pro:0813}") @NonNull String modelName,
             @Value("${OLLAMA_API_KEY:}") @NonNull String apiKey,
             @Value("${mcp.model.fallback.timeout:180s}") @NonNull Duration timeout,
             @Value("${spring.ai.ollama.chat.options.temperature:${OLLAMA_CHAT_TEMPERATURE:0.0}}") double temperature,
