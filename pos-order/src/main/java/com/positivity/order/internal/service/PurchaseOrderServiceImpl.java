@@ -28,9 +28,11 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -66,6 +68,14 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     /** Highest sequence value that still renders as 8 base-36 characters. */
     private static final long MAX_PO_NUMBER_SEQUENCE = 2_821_109_907_455L;
+
+    /**
+     * The default population of {@link #summarizePurchaseOrders}: what counts as incoming supply per
+     * the {@link PurchaseOrderStatus} contract. Cancellation does not zero a line's open quantity, so a
+     * status-blind sum would report cancelled units as "on order" (#1798 review).
+     */
+    static final List<PurchaseOrderStatus> OPEN_SUPPLY_STATUSES =
+            List.of(PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.PARTIALLY_RECEIVED);
 
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PurchaseOrderLineRepository purchaseOrderLineRepository;
@@ -208,7 +218,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Override
     @Transactional(readOnly = true)
     public @NonNull PurchaseOrderSummaryResponse summarizePurchaseOrders(
-            @Nullable UUID vendorId, @Nullable PurchaseOrderStatus status) {
+            @Nullable UUID vendorId, @Nullable List<PurchaseOrderStatus> statuses) {
+        List<PurchaseOrderStatus> applied =
+                statuses == null || statuses.isEmpty() ? OPEN_SUPPLY_STATUSES : List.copyOf(statuses);
+        Set<PurchaseOrderStatus> wanted = EnumSet.copyOf(applied);
         List<PurchaseOrderStatusRollup> headers = vendorId == null
                 ? purchaseOrderRepository.rollupByStatus()
                 : purchaseOrderRepository.rollupByStatusForVendor(vendorId);
@@ -219,7 +232,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 lines.stream().collect(Collectors.toMap(PurchaseOrderLineRollup::status, Function.identity()));
 
         List<PurchaseOrderStatusSummary> byStatus = headers.stream()
-                .filter(header -> status == null || header.status() == status)
+                .filter(header -> wanted.contains(header.status()))
                 .sorted(Comparator.comparing(PurchaseOrderStatusRollup::status))
                 .map(header -> {
                     PurchaseOrderLineRollup line = linesByStatus.get(header.status());
@@ -244,7 +257,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 byStatus.stream().map(PurchaseOrderStatusSummary::unitsOpen).reduce(BigDecimal.ZERO, BigDecimal::add);
         return PurchaseOrderSummaryResponse.builder()
                 .vendorId(vendorId)
-                .status(status)
+                .statuses(applied)
                 .orderCount(byStatus.stream()
                         .mapToLong(PurchaseOrderStatusSummary::orderCount)
                         .sum())

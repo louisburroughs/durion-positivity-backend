@@ -1272,7 +1272,7 @@ paths:
 
         Preconditions: none; vendorId and status are optional and independent.
 
-        Required inputs: none; vendorId (UUID) restricts to one vendor and status to one lifecycle status, and without a status filter every status is included and itemised in byStatus.
+        Required inputs: none; vendorId (UUID) restricts to one vendor and status (repeatable, or comma-separated) to the named lifecycle statuses. Without a status filter the population is the incoming-supply set, APPROVED and PARTIALLY_RECEIVED, so unitsOpen is what is genuinely outstanding with vendors; cancelled and draft lines keep an open quantity on the row and are only counted when named explicitly (for example status=CANCELLED).
 
         Emits an ORDER_PURCHASE_ORDER_SUMMARY audit event; read-only.
 
@@ -1291,14 +1291,16 @@ paths:
         name: status
         required: false
         schema:
-          enum:
-          - DRAFT
-          - APPROVED
-          - PARTIALLY_RECEIVED
-          - FULLY_RECEIVED
-          - CLOSED
-          - CANCELLED
-          type: string
+          items:
+            enum:
+            - DRAFT
+            - APPROVED
+            - PARTIALLY_RECEIVED
+            - FULLY_RECEIVED
+            - CLOSED
+            - CANCELLED
+            type: string
+          type: array
       responses:
         '200':
           content:
@@ -3746,7 +3748,7 @@ components:
           - CANCELLED
           type: string
         unitsOpen:
-          description: Units still open — ordered but not yet received (sum of openQuantityDecimal)
+          description: Units still open (sum of openQuantityDecimal). Outstanding supply only for APPROVED / PARTIALLY_RECEIVED; a CANCELLED or DRAFT row keeps its open quantity but nothing is on order.
           type: number
         unitsOrdered:
           description: Units ordered across those lines (sum of quantityDecimal)
@@ -3788,24 +3790,26 @@ components:
           description: Number of purchase orders matching the filter
           format: int64
           type: integer
-        status:
-          description: Status filter that was applied, if any; absent means every status is included
-          enum:
-          - DRAFT
-          - APPROVED
-          - PARTIALLY_RECEIVED
-          - FULLY_RECEIVED
-          - CLOSED
-          - CANCELLED
-          type: string
+        statuses:
+          description: Lifecycle statuses the totals cover. When the request named none this is the incoming-supply set, APPROVED and PARTIALLY_RECEIVED, so unitsOpen is what is genuinely outstanding with vendors. Cancelled and draft lines keep an open quantity on the row; they are only counted when asked for by status, and their open figures are not outstanding supply.
+          items:
+            enum:
+            - DRAFT
+            - APPROVED
+            - PARTIALLY_RECEIVED
+            - FULLY_RECEIVED
+            - CLOSED
+            - CANCELLED
+            type: string
+          type: array
         unitsOpen:
-          description: Units still open — ordered but not yet received
+          description: Units still open — ordered but not yet received — across the statuses covered. Meaningful as outstanding supply only for APPROVED / PARTIALLY_RECEIVED rows.
           type: number
         unitsOrdered:
           description: Units ordered across those lines
           type: number
         unitsReceived:
-          description: Units received, derived as unitsOrdered minus unitsOpen
+          description: Units received, derived as unitsOrdered minus unitsOpen. The authoritative received quantity is pos-inventory's goods receipt; this is the order-side view.
           type: number
         vendorId:
           description: Vendor filter that was applied, if any
@@ -3817,6 +3821,7 @@ components:
       - lineCount
       - openBalanceMinor
       - orderCount
+      - statuses
       - unitsOpen
       - unitsOrdered
       - unitsReceived

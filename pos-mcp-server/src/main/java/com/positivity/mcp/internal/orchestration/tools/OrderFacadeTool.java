@@ -71,7 +71,8 @@ public class OrderFacadeTool {
                     + "listOrders for customer carts. Status is one of DRAFT, APPROVED, PARTIALLY_RECEIVED, "
                     + "FULLY_RECEIVED, CLOSED, CANCELLED: APPROVED and PARTIALLY_RECEIVED are still open with "
                     + "the vendor, DRAFT was never sent, FULLY_RECEIVED and CLOSED are done and CANCELLED is "
-                    + "void — so filter by status=APPROVED when the question is about what is outstanding. Each "
+                    + "void — so filter by status=APPROVED when the question is about what is outstanding "
+                    + "(add PARTIALLY_RECEIVED to include orders that have started arriving). Each "
                     + "line carries the quantity ordered and the quantity still open, which are different "
                     + "numbers. Returns the FIRST PAGE ONLY (20 orders), so never total, count or sum across "
                     + "its rows — for any aggregate (how many units are on order, how many orders are open, "
@@ -97,12 +98,16 @@ public class OrderFacadeTool {
                     + "status in byStatus. Use this for every aggregate question about purchase orders: how "
                     + "many units are still on order, how much is outstanding with a vendor, how many orders "
                     + "are open. 'Still on order' / 'not yet received' is unitsOpen, NOT unitsOrdered — both are "
-                    + "plausible and only one answers the question. Pass status=APPROVED for what is currently "
-                    + "open with vendors; leave status empty to see every status itemised.")
+                    + "plausible and only one answers the question. With no status the population is what is "
+                    + "currently open with vendors (APPROVED and PARTIALLY_RECEIVED), which is what outstanding "
+                    + "questions want; name statuses only to look at other orders, e.g. status=CANCELLED — "
+                    + "their open figures are NOT outstanding supply.")
     public String getPurchaseOrderSummary(
             @ToolParam(
-                            description = "Optional status: DRAFT, APPROVED, PARTIALLY_RECEIVED, FULLY_RECEIVED, "
-                                    + "CLOSED or CANCELLED. Empty means all statuses, itemised in byStatus.",
+                            description =
+                                    "Optional, comma-separated statuses from DRAFT, APPROVED, PARTIALLY_RECEIVED, "
+                                            + "FULLY_RECEIVED, CLOSED, CANCELLED. Empty means the open set, APPROVED and "
+                                            + "PARTIALLY_RECEIVED.",
                             required = false)
                     String status,
             @ToolParam(description = "Optional vendor id (UUID)", required = false) String vendorId) {

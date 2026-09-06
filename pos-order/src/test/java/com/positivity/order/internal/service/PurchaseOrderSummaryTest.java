@@ -1,7 +1,6 @@
 package com.positivity.order.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -29,7 +28,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * #1798: a paged list cannot answer "how many units are on order". The summary sums the whole
- * population per status and lets a caller pick the statuses that mean "open".
+ * population per status; without a status filter that population is incoming supply, because a
+ * cancelled line keeps its open quantity and a status-blind sum would call it "on order".
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("PurchaseOrderServiceImpl.summarizePurchaseOrders")
@@ -69,54 +69,93 @@ class PurchaseOrderSummaryTest {
                 Clock.fixed(Instant.parse("2026-09-05T12:00:00Z"), ZoneOffset.UTC));
     }
 
+    /**
+     * Shaped like alpha on 2026-09-05: cancellation does not zero a line's open quantity, so the
+     * CANCELLED rows carry more "open" units than the orders that are actually outstanding.
+     */
     private void population() {
         when(purchaseOrderRepository.rollupByStatus())
                 .thenReturn(List.of(
+                        new PurchaseOrderStatusRollup(PurchaseOrderStatus.CANCELLED, 90L, 700_000L, 700_000L),
                         new PurchaseOrderStatusRollup(PurchaseOrderStatus.FULLY_RECEIVED, 2L, 50_000L, 0L),
+                        new PurchaseOrderStatusRollup(PurchaseOrderStatus.DRAFT, 1L, 9_000L, 9_000L),
                         new PurchaseOrderStatusRollup(PurchaseOrderStatus.APPROVED, 3L, 100_000L, 40_000L)));
         when(purchaseOrderLineRepository.rollupByStatus())
                 .thenReturn(List.of(
                         new PurchaseOrderLineRollup(
                                 PurchaseOrderStatus.APPROVED, 5L, new BigDecimal("100"), new BigDecimal("40")),
                         new PurchaseOrderLineRollup(
+                                PurchaseOrderStatus.CANCELLED, 200L, new BigDecimal("3450"), new BigDecimal("3450")),
+                        new PurchaseOrderLineRollup(
+                                PurchaseOrderStatus.DRAFT, 2L, new BigDecimal("70"), new BigDecimal("70")),
+                        new PurchaseOrderLineRollup(
                                 PurchaseOrderStatus.FULLY_RECEIVED, 3L, new BigDecimal("50"), BigDecimal.ZERO)));
     }
 
     @Test
-    @DisplayName("with no filter, totals span every status and byStatus is in status order")
-    void unfilteredTotalsSpanEveryStatus() {
+    @DisplayName(
+            "with no status filter, the population is incoming supply — cancelled and draft open units are not on order")
+    void defaultPopulationIsIncomingSupply() {
+        // #1798 review: a status-blind sum would have answered q24 with 40 + 3450 + 70 open units.
         population();
 
         PurchaseOrderSummaryResponse summary = service.summarizePurchaseOrders(null, null);
 
+        assertThat(summary.getStatuses())
+                .containsExactly(PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.PARTIALLY_RECEIVED);
+        assertThat(summary.getOrderCount()).isEqualTo(3);
+        assertThat(summary.getLineCount()).isEqualTo(5);
+        assertThat(summary.getUnitsOrdered()).isEqualByComparingTo("100");
+        assertThat(summary.getUnitsOpen()).isEqualByComparingTo("40");
+        assertThat(summary.getUnitsReceived()).isEqualByComparingTo("60");
+        assertThat(summary.getGrandTotalMinor()).isEqualTo(100_000L);
+        assertThat(summary.getOpenBalanceMinor()).isEqualTo(40_000L);
+        assertThat(summary.getByStatus())
+                .extracting(PurchaseOrderStatusSummary::status)
+                .containsExactly(PurchaseOrderStatus.APPROVED);
+        assertThat(summary.getVendorId()).isNull();
+    }
+
+    @Test
+    @DisplayName("an empty status list means the same as none")
+    void emptyStatusListIsTheDefault() {
+        population();
+
+        assertThat(service.summarizePurchaseOrders(null, List.of()).getUnitsOpen())
+                .isEqualByComparingTo("40");
+    }
+
+    @Test
+    @DisplayName("named statuses widen the population, totals follow, and byStatus is in status order")
+    void namedStatusesWidenThePopulation() {
+        population();
+
+        PurchaseOrderSummaryResponse summary = service.summarizePurchaseOrders(
+                null, List.of(PurchaseOrderStatus.FULLY_RECEIVED, PurchaseOrderStatus.APPROVED));
+
+        assertThat(summary.getStatuses())
+                .containsExactly(PurchaseOrderStatus.FULLY_RECEIVED, PurchaseOrderStatus.APPROVED);
         assertThat(summary.getOrderCount()).isEqualTo(5);
         assertThat(summary.getLineCount()).isEqualTo(8);
         assertThat(summary.getUnitsOrdered()).isEqualByComparingTo("150");
         assertThat(summary.getUnitsOpen()).isEqualByComparingTo("40");
         assertThat(summary.getUnitsReceived()).isEqualByComparingTo("110");
         assertThat(summary.getGrandTotalMinor()).isEqualTo(150_000L);
-        assertThat(summary.getOpenBalanceMinor()).isEqualTo(40_000L);
         assertThat(summary.getByStatus())
                 .extracting(PurchaseOrderStatusSummary::status)
                 .containsExactly(PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.FULLY_RECEIVED);
-        assertThat(summary.getStatus()).isNull();
-        assertThat(summary.getVendorId()).isNull();
     }
 
     @Test
-    @DisplayName("a status filter keeps only that status, and the totals follow")
-    void statusFilterNarrowsTheTotals() {
-        // The q24 trap: units ordered (100) and units open (40) are both plausible answers to "how
-        // many units are still on order"; only the open figure is right.
+    @DisplayName("asking for CANCELLED shows its open units, labelled by status, and nothing else")
+    void cancelledOnlyWhenAskedFor() {
         population();
 
-        PurchaseOrderSummaryResponse summary = service.summarizePurchaseOrders(null, PurchaseOrderStatus.APPROVED);
+        PurchaseOrderSummaryResponse summary =
+                service.summarizePurchaseOrders(null, List.of(PurchaseOrderStatus.CANCELLED));
 
-        assertThat(summary.getStatus()).isEqualTo(PurchaseOrderStatus.APPROVED);
-        assertThat(summary.getOrderCount()).isEqualTo(3);
-        assertThat(summary.getUnitsOrdered()).isEqualByComparingTo("100");
-        assertThat(summary.getUnitsOpen()).isEqualByComparingTo("40");
-        assertThat(summary.getUnitsReceived()).isEqualByComparingTo("60");
+        assertThat(summary.getOrderCount()).isEqualTo(90);
+        assertThat(summary.getUnitsOpen()).isEqualByComparingTo("3450");
         assertThat(summary.getByStatus()).hasSize(1);
     }
 
@@ -141,7 +180,7 @@ class PurchaseOrderSummaryTest {
     @DisplayName("null sums and a status with orders but no lines read as zero, not as a crash")
     void nullSumsAreZero() {
         when(purchaseOrderRepository.rollupByStatus())
-                .thenReturn(List.of(new PurchaseOrderStatusRollup(PurchaseOrderStatus.DRAFT, 4L, null, null)));
+                .thenReturn(List.of(new PurchaseOrderStatusRollup(PurchaseOrderStatus.APPROVED, 4L, null, null)));
         when(purchaseOrderLineRepository.rollupByStatus()).thenReturn(List.of());
 
         PurchaseOrderSummaryResponse summary = service.summarizePurchaseOrders(null, null);
@@ -159,11 +198,11 @@ class PurchaseOrderSummaryTest {
         when(purchaseOrderRepository.rollupByStatus()).thenReturn(List.of());
         when(purchaseOrderLineRepository.rollupByStatus()).thenReturn(List.of());
 
-        PurchaseOrderSummaryResponse summary = service.summarizePurchaseOrders(null, PurchaseOrderStatus.CANCELLED);
+        PurchaseOrderSummaryResponse summary =
+                service.summarizePurchaseOrders(null, List.of(PurchaseOrderStatus.CANCELLED));
 
         assertThat(summary.getOrderCount()).isZero();
         assertThat(summary.getUnitsOpen()).isEqualByComparingTo("0");
         assertThat(summary.getByStatus()).isEmpty();
-        verify(documentQuantityConverter, never()).convertIfPresent(any(), any(), any(), any());
     }
 }

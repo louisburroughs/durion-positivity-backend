@@ -49,60 +49,83 @@ class PurchaseOrderSummaryControllerTest extends BaseControllerSliceTest {
     @MockitoBean
     private ProcurementAvailabilityService procurementAvailabilityService;
 
+    private static PurchaseOrderSummaryResponse.PurchaseOrderSummaryResponseBuilder empty(
+            List<PurchaseOrderStatus> statuses) {
+        return PurchaseOrderSummaryResponse.builder()
+                .statuses(statuses)
+                .unitsOrdered(BigDecimal.ZERO)
+                .unitsOpen(BigDecimal.ZERO)
+                .unitsReceived(BigDecimal.ZERO)
+                .byStatus(List.of());
+    }
+
     @Test
-    @DisplayName("answers the aggregate with the filters parsed, and does not treat 'summary' as an order id")
+    @DisplayName("answers the aggregate with both filters parsed, and does not treat 'summary' as an order id")
     void answersTheAggregate() throws Exception {
-        when(purchaseOrderService.summarizePurchaseOrders(eq(VENDOR_ID), eq(PurchaseOrderStatus.APPROVED)))
+        // Alpha 2026-09-05: nothing approved had been received yet, so ordered and open coincide.
+        List<PurchaseOrderStatus> asked = List.of(PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.CANCELLED);
+        when(purchaseOrderService.summarizePurchaseOrders(eq(VENDOR_ID), eq(asked)))
                 .thenReturn(PurchaseOrderSummaryResponse.builder()
                         .vendorId(VENDOR_ID)
-                        .status(PurchaseOrderStatus.APPROVED)
+                        .statuses(asked)
                         .orderCount(144)
                         .lineCount(600)
-                        .unitsOrdered(new BigDecimal("7849"))
+                        .unitsOrdered(new BigDecimal("2351"))
                         .unitsOpen(new BigDecimal("2351"))
-                        .unitsReceived(new BigDecimal("5498"))
+                        .unitsReceived(BigDecimal.ZERO)
                         .grandTotalMinor(1_000_00L)
-                        .openBalanceMinor(300_00L)
+                        .openBalanceMinor(1_000_00L)
                         .byStatus(List.of(new PurchaseOrderStatusSummary(
                                 PurchaseOrderStatus.APPROVED,
                                 144,
                                 600,
-                                new BigDecimal("7849"),
                                 new BigDecimal("2351"),
-                                new BigDecimal("5498"),
+                                new BigDecimal("2351"),
+                                BigDecimal.ZERO,
                                 1_000_00L,
-                                300_00L)))
+                                1_000_00L)))
                         .build());
 
         mockMvc.perform(withGatewayAuth(
                         get("/v1/orders/purchase-orders/summary")
                                 .param("vendorId", VENDOR_ID.toString())
-                                .param("status", "APPROVED"),
+                                .param("status", "APPROVED", "CANCELLED"),
                         "order:purchase_order:view"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderCount").value(144))
                 .andExpect(jsonPath("$.unitsOpen").value(2351))
-                .andExpect(jsonPath("$.unitsOrdered").value(7849))
+                .andExpect(jsonPath("$.statuses[1]").value("CANCELLED"))
                 .andExpect(jsonPath("$.byStatus[0].status").value("APPROVED"));
 
         verify(purchaseOrderService, never()).getPurchaseOrder(any());
     }
 
     @Test
-    @DisplayName("both filters are optional")
+    @DisplayName("both filters are optional; the service decides what 'no status' means")
     void filtersAreOptional() throws Exception {
         when(purchaseOrderService.summarizePurchaseOrders(isNull(), isNull()))
-                .thenReturn(PurchaseOrderSummaryResponse.builder()
-                        .unitsOrdered(BigDecimal.ZERO)
-                        .unitsOpen(BigDecimal.ZERO)
-                        .unitsReceived(BigDecimal.ZERO)
-                        .byStatus(List.of())
+                .thenReturn(empty(List.of(PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.PARTIALLY_RECEIVED))
                         .build());
 
         mockMvc.perform(withGatewayAuth(get("/v1/orders/purchase-orders/summary"), "order:purchase_order:view"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderCount").value(0))
+                .andExpect(jsonPath("$.statuses[0]").value("APPROVED"))
                 .andExpect(jsonPath("$.byStatus").isEmpty());
+    }
+
+    @Test
+    @DisplayName("a comma-separated status value binds as a list — the facade tool sends one joined value")
+    void commaSeparatedStatusesBind() throws Exception {
+        List<PurchaseOrderStatus> asked = List.of(PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.CLOSED);
+        when(purchaseOrderService.summarizePurchaseOrders(isNull(), eq(asked)))
+                .thenReturn(empty(asked).build());
+
+        mockMvc.perform(withGatewayAuth(
+                        get("/v1/orders/purchase-orders/summary").param("status", "DRAFT,CLOSED"),
+                        "order:purchase_order:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statuses[1]").value("CLOSED"));
     }
 
     @Test

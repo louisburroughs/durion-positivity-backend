@@ -607,7 +607,7 @@
         "min_tool_calls": {
           "getPurchaseOrderSummary": 1
         },
-        "per": "one getPurchaseOrderSummary call (status=APPROVED); the answer is unitsOpen, not unitsOrdered: 2,351 against 7,849, both plausible and only one correct. listPurchaseOrders pages (#1798) and must not be summed.",
+        "per": "one getPurchaseOrderSummary call; with no status it covers the open set (APPROVED, PARTIALLY_RECEIVED) and the answer is unitsOpen, not unitsOrdered. A status-blind sum would add the 3,450 open units still sitting on CANCELLED lines (#1798 review). listPurchaseOrders pages and must not be summed.",
         "declined_reason": "answering with ordered quantity, which is over three times the outstanding figure"
       }
     },

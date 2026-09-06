@@ -24,6 +24,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
@@ -213,8 +214,11 @@ public class PurchaseOrderController {
                     total: it returns one page and any sum over it is partial; call this endpoint instead, and \
                     use listPurchaseOrders only to see individual orders.
                     Preconditions: none; vendorId and status are optional and independent.
-                    Required inputs: none; vendorId (UUID) restricts to one vendor and status to one lifecycle \
-                    status, and without a status filter every status is included and itemised in byStatus.
+                    Required inputs: none; vendorId (UUID) restricts to one vendor and status (repeatable, or \
+                    comma-separated) to the named lifecycle statuses. Without a status filter the population is \
+                    the incoming-supply set, APPROVED and PARTIALLY_RECEIVED, so unitsOpen is what is genuinely \
+                    outstanding with vendors; cancelled and draft lines keep an open quantity on the row and are \
+                    only counted when named explicitly (for example status=CANCELLED).
                     Emits an ORDER_PURCHASE_ORDER_SUMMARY audit event; read-only.
                     Returns 200 with zero totals and an empty byStatus when nothing matches.
                     """,
@@ -231,7 +235,8 @@ public class PurchaseOrderController {
             description = "User lacks required purchase order view authority",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PurchaseOrderSummaryResponse> summarizePurchaseOrders(
-            @RequestParam(required = false) UUID vendorId, @RequestParam(required = false) PurchaseOrderStatus status) {
+            @RequestParam(required = false) UUID vendorId,
+            @RequestParam(required = false) List<PurchaseOrderStatus> status) {
         return ResponseEntity.ok(purchaseOrderService.summarizePurchaseOrders(vendorId, status));
     }
 

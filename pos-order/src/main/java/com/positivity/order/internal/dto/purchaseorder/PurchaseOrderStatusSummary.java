@@ -21,7 +21,9 @@ public record PurchaseOrderStatusSummary(
         BigDecimal unitsOrdered,
 
         @Schema(
-                description = "Units still open — ordered but not yet received (sum of openQuantityDecimal)",
+                description =
+                        "Units still open (sum of openQuantityDecimal). Outstanding supply only for APPROVED / "
+                                + "PARTIALLY_RECEIVED; a CANCELLED or DRAFT row keeps its open quantity but nothing is on order.",
                 requiredMode = REQUIRED)
         BigDecimal unitsOpen,
 

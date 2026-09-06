@@ -29,8 +29,14 @@ public class PurchaseOrderSummaryResponse {
     @Schema(description = "Vendor filter that was applied, if any")
     private UUID vendorId;
 
-    @Schema(description = "Status filter that was applied, if any; absent means every status is included")
-    private PurchaseOrderStatus status;
+    @Schema(
+            description =
+                    "Lifecycle statuses the totals cover. When the request named none this is the incoming-supply "
+                            + "set, APPROVED and PARTIALLY_RECEIVED, so unitsOpen is what is genuinely outstanding with "
+                            + "vendors. Cancelled and draft lines keep an open quantity on the row; they are only counted "
+                            + "when asked for by status, and their open figures are not outstanding supply.",
+            requiredMode = REQUIRED)
+    private List<PurchaseOrderStatus> statuses;
 
     @Schema(description = "Number of purchase orders matching the filter", requiredMode = REQUIRED)
     private long orderCount;
@@ -41,10 +47,16 @@ public class PurchaseOrderSummaryResponse {
     @Schema(description = "Units ordered across those lines", requiredMode = REQUIRED)
     private BigDecimal unitsOrdered;
 
-    @Schema(description = "Units still open — ordered but not yet received", requiredMode = REQUIRED)
+    @Schema(
+            description = "Units still open — ordered but not yet received — across the statuses covered. Meaningful "
+                    + "as outstanding supply only for APPROVED / PARTIALLY_RECEIVED rows.",
+            requiredMode = REQUIRED)
     private BigDecimal unitsOpen;
 
-    @Schema(description = "Units received, derived as unitsOrdered minus unitsOpen", requiredMode = REQUIRED)
+    @Schema(
+            description = "Units received, derived as unitsOrdered minus unitsOpen. The authoritative received "
+                    + "quantity is pos-inventory's goods receipt; this is the order-side view.",
+            requiredMode = REQUIRED)
     private BigDecimal unitsReceived;
 
     @Schema(description = "Sum of order grand totals, in minor currency units", requiredMode = REQUIRED)
