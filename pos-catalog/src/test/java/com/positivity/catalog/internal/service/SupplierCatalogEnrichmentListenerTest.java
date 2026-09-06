@@ -3,6 +3,7 @@ package com.positivity.catalog.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -27,9 +28,13 @@ import com.positivity.catalog.internal.repository.TreadDesignTextRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -123,11 +128,21 @@ class SupplierCatalogEnrichmentListenerTest {
 
     /** A product the sample event's design plainly describes: same brand, same design name. */
     private static ProductEntity michelinProduct(UUID id) {
+        return michelinProductNamed(id, "Michelin Pilot Sport 4S 245/40R18");
+    }
+
+    /** Same brand as {@link #michelinProduct}, a caller-chosen name -- used to steer the score. */
+    private static ProductEntity michelinProductNamed(UUID id, String name) {
         ProductEntity product = new ProductEntity();
         product.setId(id);
         product.setManufacturerBrand("Michelin");
-        product.setName("Michelin Pilot Sport 4S 245/40R18");
+        product.setName(name);
         return product;
+    }
+
+    /** A deterministic, distinct UUID per index -- used to build candidate sets larger than the cap. */
+    private static UUID productId(int index) {
+        return UUID.fromString(String.format("018f0a1b-2c3d-7e4f-8a9b-%012x", 0x600000 + index));
     }
 
     private static String enrichmentEvent(
@@ -512,6 +527,207 @@ class SupplierCatalogEnrichmentListenerTest {
             assertThat(stale.getTreadDesignId()).isNull();
             assertThat(stale.getTreadDesignSource()).isNull();
             verify(productRepository).save(stale);
+        }
+
+        @Test
+        @DisplayName("a rival's stale AUTO attachment on the disputed product is cleared when ambiguity fires")
+        void rivalAutoAttachmentIsClearedWhenAmbiguityFires() {
+            ProductEntity disputed = michelinProduct(PRODUCT_ID);
+            disputed.setTreadDesignId(RIVAL_DESIGN_ID);
+            disputed.setTreadDesignSource(TreadDesignSource.AUTO);
+            vendorHasPriced(disputed);
+            when(treadDesignMatchCandidateRepository.findByProductIdAndTierAndTreadDesignIdNot(
+                            PRODUCT_ID, MatchTier.AUTO, DESIGN_ID))
+                    .thenReturn(List.of(TreadDesignMatchCandidateEntity.builder()
+                            .treadDesignId(RIVAL_DESIGN_ID)
+                            .productId(PRODUCT_ID)
+                            .tier(MatchTier.AUTO)
+                            .build()));
+            when(treadDesignRepository.findById(RIVAL_DESIGN_ID))
+                    .thenReturn(Optional.of(TreadDesignEntity.builder()
+                            .id(RIVAL_DESIGN_ID)
+                            .matchState(TreadDesignMatchState.MATCHED)
+                            .build()));
+
+            listener.onSupplierEvent(enrichmentEvent("e-17", "VAR-1", "hash-1", false));
+
+            verify(productRepository).save(disputed);
+            assertThat(disputed.getTreadDesignId()).isNull();
+            assertThat(disputed.getTreadDesignSource()).isNull();
+        }
+
+        @Test
+        @DisplayName("a MANUAL attachment on the disputed product is left untouched even when a rival claims it")
+        void manualAttachmentIsNotClearedEvenWhenARivalClaimsTheSameProduct() {
+            ProductEntity disputed = michelinProduct(PRODUCT_ID);
+            disputed.setTreadDesignId(RIVAL_DESIGN_ID);
+            disputed.setTreadDesignSource(TreadDesignSource.MANUAL);
+            vendorHasPriced(disputed);
+            // Primed as if ambiguity would fire -- proving the MANUAL guard, not an absence of rivals,
+            // is what keeps this product untouched.
+            when(treadDesignMatchCandidateRepository.findByProductIdAndTierAndTreadDesignIdNot(
+                            PRODUCT_ID, MatchTier.AUTO, DESIGN_ID))
+                    .thenReturn(List.of(TreadDesignMatchCandidateEntity.builder()
+                            .treadDesignId(RIVAL_DESIGN_ID)
+                            .productId(PRODUCT_ID)
+                            .tier(MatchTier.AUTO)
+                            .build()));
+
+            listener.onSupplierEvent(enrichmentEvent("e-18", "VAR-1", "hash-1", false));
+
+            verify(productRepository, never()).save(any());
+            assertThat(disputed.getTreadDesignId()).isEqualTo(RIVAL_DESIGN_ID);
+            assertThat(disputed.getTreadDesignSource()).isEqualTo(TreadDesignSource.MANUAL);
+        }
+
+        @Nested
+        @DisplayName("candidate persistence: AUTO rows are never capped, only REVIEW rows are (ADR-0060 §4)")
+        class CandidatePersistenceCap {
+
+            @Test
+            @DisplayName("every AUTO-tier candidate is persisted, however many clear the auto threshold")
+            void everyAutoTierCandidateIsPersistedUncapped() {
+                List<ProductEntity> candidates = new ArrayList<>();
+                for (int i = 0; i < 25; i++) {
+                    candidates.add(michelinProduct(productId(i)));
+                }
+                vendorHasPriced(candidates.toArray(new ProductEntity[0]));
+
+                listener.onSupplierEvent(enrichmentEvent("e-40", "VAR-1", "hash-40", false));
+
+                ArgumentCaptor<TreadDesignMatchCandidateEntity> candidateCaptor =
+                        ArgumentCaptor.forClass(TreadDesignMatchCandidateEntity.class);
+                verify(treadDesignMatchCandidateRepository, org.mockito.Mockito.times(25))
+                        .save(candidateCaptor.capture());
+                assertThat(candidateCaptor.getAllValues())
+                        .hasSize(25)
+                        .allSatisfy(saved -> assertThat(saved.getTier()).isEqualTo(MatchTier.AUTO));
+
+                ArgumentCaptor<ProductEntity> productCaptor = ArgumentCaptor.forClass(ProductEntity.class);
+                verify(productRepository, org.mockito.Mockito.times(25)).save(productCaptor.capture());
+                Set<UUID> attachedIds = productCaptor.getAllValues().stream()
+                        .map(ProductEntity::getId)
+                        .collect(Collectors.toSet());
+                Set<UUID> candidateRowIds = candidateCaptor.getAllValues().stream()
+                        .map(TreadDesignMatchCandidateEntity::getProductId)
+                        .collect(Collectors.toSet());
+                // Every attached product has a persisted candidate row explaining the attachment, and
+                // every AUTO row corresponds to a product that was actually attached.
+                assertThat(attachedIds).hasSize(25).isEqualTo(candidateRowIds);
+            }
+
+            @Test
+            @DisplayName("a rival claiming a candidate beyond the review cap is still caught -- AUTO rows "
+                    + "are never capped, so the row it needs to see is still there")
+            void rivalClaimBeyondTheReviewCapStillTriggersAmbiguity() {
+                List<ProductEntity> candidates = new ArrayList<>();
+                for (int i = 0; i < 25; i++) {
+                    candidates.add(michelinProduct(productId(i)));
+                }
+                vendorHasPriced(candidates.toArray(new ProductEntity[0]));
+
+                listener.onSupplierEvent(enrichmentEvent("e-41", "VAR-1", "hash-41", false));
+
+                ArgumentCaptor<TreadDesignMatchCandidateEntity> candidateCaptor =
+                        ArgumentCaptor.forClass(TreadDesignMatchCandidateEntity.class);
+                verify(treadDesignMatchCandidateRepository, org.mockito.Mockito.times(25))
+                        .save(candidateCaptor.capture());
+                // Position 21 (index 20) sits beyond the REVIEW-tier cap of 20 -- under the old
+                // capped-everything behaviour this row would never have been persisted.
+                TreadDesignMatchCandidateEntity beyondCap =
+                        candidateCaptor.getAllValues().get(20);
+                assertThat(beyondCap.getTier()).isEqualTo(MatchTier.AUTO);
+                UUID disputedProductId = beyondCap.getProductId();
+
+                // A rival design's later event also claims exactly that product at AUTO tier.
+                when(treadDesignRepository.save(any(TreadDesignEntity.class))).thenAnswer(inv -> {
+                    TreadDesignEntity entity = inv.getArgument(0);
+                    if (entity.getId() == null) {
+                        entity.setId("VAR-RIVAL".equals(entity.getVendorVariantId()) ? RIVAL_DESIGN_ID : DESIGN_ID);
+                    }
+                    return entity;
+                });
+                when(treadDesignRepository.findById(DESIGN_ID))
+                        .thenReturn(Optional.of(TreadDesignEntity.builder()
+                                .id(DESIGN_ID)
+                                .matchState(TreadDesignMatchState.MATCHED)
+                                .build()));
+                when(treadDesignMatchCandidateRepository.findByProductIdAndTierAndTreadDesignIdNot(
+                                disputedProductId, MatchTier.AUTO, RIVAL_DESIGN_ID))
+                        .thenReturn(List.of(TreadDesignMatchCandidateEntity.builder()
+                                .treadDesignId(DESIGN_ID)
+                                .productId(disputedProductId)
+                                .tier(MatchTier.AUTO)
+                                .build()));
+                when(supplierPriceEntryRepository.findDistinctProductIdsByVendorProfileId(VENDOR_PROFILE_ID))
+                        .thenReturn(List.of(disputedProductId));
+                when(productRepository.findAllById(List.of(disputedProductId)))
+                        .thenReturn(List.of(michelinProduct(disputedProductId)));
+
+                listener.onSupplierEvent(enrichmentEvent("e-42", "VAR-RIVAL", "hash-42", false));
+
+                ArgumentCaptor<TreadDesignEntity> designCaptor = ArgumentCaptor.forClass(TreadDesignEntity.class);
+                verify(treadDesignRepository, org.mockito.Mockito.atLeastOnce()).save(designCaptor.capture());
+                assertThat(designCaptor.getAllValues())
+                        .filteredOn(saved -> DESIGN_ID.equals(saved.getId()))
+                        .last()
+                        .satisfies(first -> assertThat(first.getMatchState()).isEqualTo(TreadDesignMatchState.REVIEW));
+                assertThat(designCaptor.getAllValues())
+                        .filteredOn(saved -> RIVAL_DESIGN_ID.equals(saved.getId()))
+                        .last()
+                        .satisfies(rival -> assertThat(rival.getMatchState()).isEqualTo(TreadDesignMatchState.REVIEW));
+                // Parked -- attached to neither design.
+                verify(productRepository, never())
+                        .save(argThat(p ->
+                                disputedProductId.equals(p.getId()) && RIVAL_DESIGN_ID.equals(p.getTreadDesignId())));
+            }
+
+            @Test
+            @DisplayName("REVIEW-tier candidates beyond the cap are dropped, best score first")
+            void reviewTierCandidatesAreCappedBestScoreFirst() {
+                listener = listenerWith(new CatalogEnrichmentProperties(0.90, 0.01, null));
+                // A lower-scoring group, deliberately listed FIRST, so a naive input-order cap would
+                // keep them instead of the higher-scoring group listed after them.
+                List<ProductEntity> lowScoring = new ArrayList<>();
+                for (int i = 0; i < 10; i++) {
+                    lowScoring.add(michelinProductNamed(
+                            productId(100 + i), "Michelin Pilot Sport 4S zzqxvkwjbf1235690zzqxvkwjbf1235690"));
+                }
+                List<ProductEntity> highScoring = new ArrayList<>();
+                for (int i = 0; i < 15; i++) {
+                    highScoring.add(michelinProductNamed(productId(200 + i), "Michelin Pilot Sport 4S"));
+                }
+                List<ProductEntity> ordered = new ArrayList<>();
+                ordered.addAll(lowScoring);
+                ordered.addAll(highScoring);
+                vendorHasPriced(ordered.toArray(new ProductEntity[0]));
+
+                listener.onSupplierEvent(enrichmentEvent("e-43", "VAR-1", "hash-43", false));
+
+                ArgumentCaptor<TreadDesignMatchCandidateEntity> candidateCaptor =
+                        ArgumentCaptor.forClass(TreadDesignMatchCandidateEntity.class);
+                verify(treadDesignMatchCandidateRepository, org.mockito.Mockito.times(20))
+                        .save(candidateCaptor.capture());
+                assertThat(candidateCaptor.getAllValues())
+                        .allSatisfy(saved -> assertThat(saved.getTier()).isEqualTo(MatchTier.REVIEW));
+
+                Set<UUID> persistedIds = candidateCaptor.getAllValues().stream()
+                        .map(TreadDesignMatchCandidateEntity::getProductId)
+                        .collect(Collectors.toSet());
+                Set<UUID> highIds =
+                        highScoring.stream().map(ProductEntity::getId).collect(Collectors.toSet());
+                // All 15 higher-scoring candidates survive despite being listed after the
+                // lower-scoring ones -- the cap ranks by score, not by input position.
+                assertThat(persistedIds).hasSize(20).containsAll(highIds);
+                Set<UUID> survivingLowIds = new HashSet<>(persistedIds);
+                survivingLowIds.removeAll(highIds);
+                Set<UUID> expectedSurvivingLowIds = lowScoring.subList(0, 5).stream()
+                        .map(ProductEntity::getId)
+                        .collect(Collectors.toSet());
+                // Only the best 5 of the 10 lower-scoring candidates fit the remaining cap headroom.
+                assertThat(survivingLowIds).isEqualTo(expectedSurvivingLowIds);
+                verify(productRepository, never()).save(any());
+            }
         }
     }
 

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.catalog.internal.dto.TreadDesignCandidateDto;
 import com.positivity.catalog.internal.dto.TreadDesignDto;
 import com.positivity.catalog.internal.dto.TreadDesignResolveRequest;
 import com.positivity.catalog.internal.entity.ProductEntity;
@@ -31,6 +32,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -216,6 +218,34 @@ class TreadDesignServiceImplTest {
 
             verify(treadDesignMatchCandidateRepository, never()).findByTreadDesignIdInOrderByScoreDesc(any());
         }
+
+        @Test
+        @DisplayName("a worklist row's candidates are bounded to the top 20, however many are persisted "
+                + "(read-time bound only -- storage stays unbounded for AUTO tier, #1645)")
+        void rowCandidatesAreBoundedToTheWorklistCap() {
+            when(treadDesignRepository.findForReview(any(), any(), any()))
+                    .thenReturn(new PageImpl<>(List.of(design())));
+            List<TreadDesignMatchCandidateEntity> stored = new ArrayList<>();
+            for (int i = 0; i < 25; i++) {
+                // Already best-first, as the query itself returns (see the service javadoc).
+                stored.add(candidate(UUID.randomUUID(), String.format("0.%04d", 9900 - (i * 10)), MatchTier.REVIEW));
+            }
+            when(treadDesignMatchCandidateRepository.findByTreadDesignIdInOrderByScoreDesc(List.of(DESIGN_ID)))
+                    .thenReturn(stored);
+
+            TreadDesignDto row = service.findForReview(
+                            List.of(TreadDesignMatchState.REVIEW), null, PageRequest.of(0, 50))
+                    .getContent()
+                    .getFirst();
+
+            assertThat(row.candidates()).hasSize(20);
+            assertThat(row.candidates().stream()
+                            .map(TreadDesignCandidateDto::productId)
+                            .toList())
+                    .isEqualTo(stored.subList(0, 20).stream()
+                            .map(TreadDesignMatchCandidateEntity::getProductId)
+                            .toList());
+        }
     }
 
     @Nested
@@ -238,6 +268,20 @@ class TreadDesignServiceImplTest {
                     .thenReturn(List.of());
 
             assertThat(service.findCandidates(DESIGN_ID)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("findCandidates returns every scored candidate, unbounded by the worklist read-time cap")
+        void returnsEveryScoredCandidateUnboundedByTheWorklistCap() {
+            when(treadDesignRepository.findById(DESIGN_ID)).thenReturn(Optional.of(design()));
+            List<TreadDesignMatchCandidateEntity> stored = new ArrayList<>();
+            for (int i = 0; i < 25; i++) {
+                stored.add(candidate(UUID.randomUUID(), String.format("0.%04d", 9900 - (i * 10)), MatchTier.REVIEW));
+            }
+            when(treadDesignMatchCandidateRepository.findByTreadDesignIdOrderByScoreDesc(DESIGN_ID))
+                    .thenReturn(stored);
+
+            assertThat(service.findCandidates(DESIGN_ID)).hasSize(25);
         }
     }
 
