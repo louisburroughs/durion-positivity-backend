@@ -177,11 +177,6 @@ class ToolSelectionEngineTest {
     }
 
     /**
-     * The tool is additive rather than free: it costs a tool schema in every prompt it joins, so a
-     * question that carries no window must not pull it in. This is the bound on how broad the
-     * keyword set may grow.
-     */
-    /**
      * #1840. The DATE_WINDOW layer gives a windowless report question the contract's default window
      * and sends the model to the resolver for it, so a metric question is dated even when it names
      * no unit. "Who are our ten largest customers by revenue?" lost the resolver to the candidate
@@ -209,6 +204,11 @@ class ToolSelectionEngineTest {
         }
     }
 
+    /**
+     * The tool is additive rather than free: it costs a tool schema in every prompt it joins, so a
+     * question that carries no window must not pull it in. This is the bound on how broad the
+     * keyword set may grow.
+     */
     @Test
     @DisplayName("selectRoleTools withholds resolveDateWindow from a question with no window")
     void selectRoleTools_withholdsTheDateWindowToolWhenNoWindowIsAsked() {
