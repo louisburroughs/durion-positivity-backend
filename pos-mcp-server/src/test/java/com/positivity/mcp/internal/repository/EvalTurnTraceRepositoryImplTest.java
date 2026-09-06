@@ -77,7 +77,8 @@ class EvalTurnTraceRepositoryImplTest {
                 List.of(),
                 "answer",
                 null,
-                "sha-test0000");
+                "sha-test0000",
+                "CONTENT");
     }
 
     @Test

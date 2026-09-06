@@ -356,9 +356,11 @@ class CliModeTest(unittest.TestCase):
         # set from the fetched traces.
         record, markdown = self._live_run_with_traces(
             ask, provenance, fetch_traces,
-            [{"userMessage": "Question?", "serverBuild": "sha-81ff1e0", "toolCalls": []}],
+            [{"userMessage": "Question?", "serverBuild": "sha-81ff1e0", "answerSource": "CONTENT", "toolCalls": []}],
         )
 
+        self.assertEqual(record["results"][0]["answer_source"], "CONTENT")
+        self.assertEqual(record["summary"]["answer_sources"], {"CONTENT": 1})
         self.assertEqual(record["server_build"], {"builds": ["sha-81ff1e0"], "mixed": False})
         self.assertEqual(record["results"][0]["server_build"], "sha-81ff1e0")
         self.assertIn("Server build: sha-81ff1e0", markdown)
@@ -1509,6 +1511,27 @@ class RunSummaryTest(unittest.TestCase):
 
         self.assertEqual(summary["verdict"], "FAIL")
         self.assertEqual(summary["errors"], 1)
+
+    def test_a_ladder_deflection_fails_a_live_run_even_with_a_pass_window(self):
+        # #1816: the tools may have resolved the right window and the user still got "I can't
+        # compute that directly" — the 2026-09-05 q05. Answered-with-a-deflection is not answered.
+        results = [self._live("q01", "PASS"), dict(self._live("q05", "PASS"), answer_source="LADDER")]
+
+        summary = runner.summarize_results(results, replaying=False)
+
+        self.assertEqual(summary["verdict"], "FAIL")
+        self.assertEqual(summary["deflected"], 1)
+        self.assertEqual(summary["answer_sources"], {"LADDER": 1, "unknown": 1})
+
+    def test_a_re_rendered_answer_counts_but_does_not_fail(self):
+        results = [dict(self._live("q05", "PASS"), answer_source="RE_RENDERED"),
+                   dict(self._live("q01", "PASS"), answer_source="CONTENT")]
+
+        summary = runner.summarize_results(results, replaying=False)
+
+        self.assertEqual(summary["verdict"], "PASS")
+        self.assertEqual(summary["deflected"], 0)
+        self.assertEqual(summary["answer_sources"], {"CONTENT": 1, "RE_RENDERED": 1})
 
     def test_a_live_result_without_a_window_check_counts_as_ungraded(self):
         summary = runner.summarize_results([{"fixture_id": "q01", "error": None}], replaying=False)

@@ -102,6 +102,10 @@ public class ToolInvocationRecorder {
         recordTrace(recorder -> recorder.recordPrompt(systemPrompt, toolDefinitions), "record prompt");
     }
 
+    public void recordAnswerSource(@NonNull String answerSource) {
+        recordTrace(recorder -> recorder.recordAnswerSource(answerSource), "record answer source");
+    }
+
     public void completeTurn(@NonNull String response) {
         recordTrace(recorder -> recorder.complete(response), "complete turn");
     }

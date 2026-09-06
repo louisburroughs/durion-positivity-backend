@@ -1222,6 +1222,9 @@ def format_tool_calls(tool_calls):
 
 
 
+DEFLECTION_SOURCES = {"LADDER", "BLANK", "THINKING"}
+
+
 def summarize_results(results, replaying, graded_from_traces=True):
     """One verdict for the run, in both modes.
 
@@ -1244,9 +1247,17 @@ def summarize_results(results, replaying, graded_from_traces=True):
     )
     errors = sum(1 for result in results if result.get("error"))
     window_failed = window_counts.get("FAIL", 0)
+    # #1816: the server says how each reply was produced. LADDER, BLANK and THINKING are deflections
+    # — the tools may have run, but the user did not get an answer — and fail a live run like an
+    # error does. RE_RENDERED is an answered question that needed the #1708 second turn; counted so
+    # a rising share is visible without reading the server log.
+    answer_sources = Counter(result.get("answer_source") or "unknown" for result in results)
+    deflected = sum(count for source, count in answer_sources.items() if source in DEFLECTION_SOURCES)
     summary = {
         "window_counts": dict(sorted(window_counts.items())),
         "errors": errors,
+        "answer_sources": dict(sorted(answer_sources.items())),
+        "deflected": deflected,
     }
     if replaying:
         outcome_counts = Counter(result["outcome"] for result in results)
@@ -1257,7 +1268,7 @@ def summarize_results(results, replaying, graded_from_traces=True):
             "failed": failed,
             "outcomes": dict(sorted(outcome_counts.items())),
         })
-    elif window_failed or errors:
+    elif window_failed or errors or deflected:
         summary["verdict"] = "FAIL"
     else:
         summary["verdict"] = "PASS" if graded_from_traces else "UNGRADED"
@@ -1337,7 +1348,8 @@ def write_markdown(out_dir, record):
             f" {len(record['results'])}",
             (
                 f"Window grading: {summary.get('window_counts')} \u00b7 unanswered (error):"
-                f" {summary.get('errors')} (source: {record.get('trace_source')})"
+                f" {summary.get('errors')} \u00b7 deflected: {summary.get('deflected')}"
+                f" \u00b7 answer sources: {summary.get('answer_sources')} (source: {record.get('trace_source')})"
             ),
             (
                 f"Overall verdict: **{summary.get('verdict', 'UNSUMMARISED')}**"
@@ -1769,6 +1781,7 @@ def main(argv=None):
     # end covers the whole run instead of a request per question (#1743).
     resolved_by_utterance = {}
     build_by_utterance = {}
+    answer_source_by_utterance = {}
     traces = []
     trace_note = "replay mode: no live traces"
     if replay_by_fixture is None and token:
@@ -1789,6 +1802,7 @@ def main(argv=None):
                 message = trace.get("userMessage")
                 if message:
                     build_by_utterance.setdefault(message, trace.get("serverBuild"))
+                    answer_source_by_utterance.setdefault(message, trace.get("answerSource"))
                     # setdefault with the possibly-EMPTY list: a trace that resolved no window is
                     # evidence that none was resolved, which must not be mistaken for "no trace".
                     resolved_by_utterance.setdefault(message, window_from_trace(trace))
@@ -1812,6 +1826,9 @@ def main(argv=None):
         result["window_check"] = {"verdict": verdict, "detail": detail}
         # Per question, so a MIXED run can say which questions ran on which build.
         result["server_build"] = build_by_utterance.get(result["utterance"])
+        # How the server produced the reply (#1816): direct CONTENT, the #1708 RE_RENDERED turn, a
+        # LADDER deflection, or a raw non-content source. A deflection is not an answered question.
+        result["answer_source"] = answer_source_by_utterance.get(result["utterance"])
 
     record["summary"] = summarize_results(
         record["results"],

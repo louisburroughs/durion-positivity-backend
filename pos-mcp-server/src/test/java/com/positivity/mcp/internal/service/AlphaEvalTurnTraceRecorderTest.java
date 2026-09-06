@@ -58,6 +58,7 @@ class AlphaEvalTurnTraceRecorderTest {
                 null,
                 8);
 
+        recorder.recordAnswerSource("RE_RENDERED");
         recorder.complete("Revenue was $1,500.00.");
 
         EvalTurnTrace trace = savedTrace();
@@ -88,6 +89,8 @@ class AlphaEvalTurnTraceRecorderTest {
         assertThat(trace.error()).isNull();
         // #1806: the build that answered, so a run measured across a mid-run deploy can say so.
         assertThat(trace.serverBuild()).isEqualTo("sha-81ff1e0");
+        // #1816: how the reply was produced, so grading can tell answered from deflected.
+        assertThat(trace.answerSource()).isEqualTo("RE_RENDERED");
         assertThat(recorder.hasActiveTurn()).isFalse();
     }
 

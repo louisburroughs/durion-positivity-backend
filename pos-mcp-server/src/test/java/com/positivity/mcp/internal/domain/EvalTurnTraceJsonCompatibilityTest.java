@@ -35,6 +35,7 @@ class EvalTurnTraceJsonCompatibilityTest {
         EvalTurnTrace read = mapper.readValue(LEGACY_PAYLOAD, EvalTurnTrace.class);
 
         assertThat(read.serverBuild()).isNull();
+        assertThat(read.answerSource()).isNull();
         assertThat(read.username()).isEqualTo("admin.alpha");
         assertThat(read.toolCalls()).isEmpty();
     }
@@ -61,11 +62,13 @@ class EvalTurnTraceJsonCompatibilityTest {
                 legacy.toolCalls(),
                 legacy.finalResponse(),
                 legacy.error(),
-                "sha-81ff1e0");
+                "sha-81ff1e0",
+                "RE_RENDERED");
 
         String json = mapper.writeValueAsString(stamped);
 
         assertThat(json).contains("\"serverBuild\":\"sha-81ff1e0\"");
         assertThat(mapper.readValue(json, EvalTurnTrace.class).serverBuild()).isEqualTo("sha-81ff1e0");
+        assertThat(mapper.readValue(json, EvalTurnTrace.class).answerSource()).isEqualTo("RE_RENDERED");
     }
 }
