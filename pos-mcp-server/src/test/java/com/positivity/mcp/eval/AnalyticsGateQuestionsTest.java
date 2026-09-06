@@ -38,6 +38,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -251,6 +252,48 @@ class AnalyticsGateQuestionsTest {
             assertThat(selectionIds)
                     .as("%s: tool_selection_fixture_id '%s' matches no fixture", id, link)
                     .contains(link);
+        }
+    }
+
+    /**
+     * A fixture may only claim a missing tool while the tool is actually missing.
+     *
+     * <p>Three exclusions in this file outlived the gaps they described — q21 said no purchase-order
+     * tool existed after #1785 shipped one, q25 said nothing read replenishment policies after #1794
+     * shipped {@code listReplenishmentPolicies}, and q26 said its question could not be answered in
+     * budget after #1855 added the aggregate. Each was quoted onward as current fact, and an
+     * {@code excluded_reason} is what a reader consults to decide whether a question can be
+     * promoted, so a stale one costs an investigation rather than merely being untidy.
+     *
+     * <p>Prose cannot be checked, so a fixture that claims tool-blockage must name the tool it is
+     * waiting for in {@code blocked_by_missing_tool}, and that name must NOT be in the facade
+     * surface. The day someone adds it, this fails and the claim has to be rewritten.
+     */
+    @Test
+    @DisplayName("a fixture claiming a missing tool names one, and that tool really is missing")
+    void toolBlockedClaimsNameATruelyMissingTool() throws IOException {
+        Set<String> facadeToolNames = facadeToolMethodNames();
+        Pattern claimsMissingTool = Pattern.compile(
+                "no tool|nothing exposes|no facade tool|tool-blocked|no purchase-order tool", Pattern.CASE_INSENSITIVE);
+        for (JsonNode q : questions().get("questions")) {
+            String id = q.path("fixture_id").asText();
+            String reason = q.path("excluded_reason").asText("");
+            // "not a missing tool" and similar corrections are the opposite claim; only a bare claim counts.
+            boolean claims = claimsMissingTool.matcher(reason).find()
+                    && !reason.toLowerCase(Locale.ROOT).contains("not a missing tool")
+                    && !reason.toLowerCase(Locale.ROOT).contains("was tool-blocked when authored");
+            if (!claims) {
+                continue;
+            }
+            String missing = q.path("blocked_by_missing_tool").asText("");
+            assertThat(missing)
+                    .as("%s: an excluded_reason claiming a missing tool must name it in blocked_by_missing_tool", id)
+                    .isNotBlank();
+            assertThat(facadeToolNames)
+                    .as(
+                            "%s: excluded_reason says '%s' is missing, but the facade now has it — rewrite the reason",
+                            id, missing)
+                    .doesNotContain(missing);
         }
     }
 
