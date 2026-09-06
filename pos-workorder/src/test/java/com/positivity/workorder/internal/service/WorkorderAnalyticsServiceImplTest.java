@@ -557,6 +557,26 @@ class WorkorderAnalyticsServiceImplTest {
     }
 
     @Test
+    @DisplayName("this endpoint's open set is the enum's open statuses minus DRAFT, so a new status joins it")
+    void openStatusSetTracksTheEnumMinusDraft() {
+        // Two definitions of "open" live in this module: WorkorderStatus.getOpenStatuses() (every
+        // non-terminal status, drafts included — what GET /workorders/count?openOnly=true uses) and
+        // this endpoint's, which matches a status=OPEN search. Pinning the relationship means a
+        // newly added status cannot silently fall out of one of them.
+        Set<WorkorderStatus> expected = new java.util.HashSet<>(WorkorderStatus.getOpenStatuses());
+        expected.remove(WorkorderStatus.DRAFT);
+
+        when(workorderRepository.countOpenGroupedByCustomer(any())).thenReturn(List.of());
+        when(customerPartyRepository.findAllById(any())).thenReturn(List.of());
+        service.getOpenWorkordersByCustomer(100);
+
+        ArgumentCaptor<java.util.Collection<WorkorderStatus>> statuses =
+                ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(workorderRepository).countOpenGroupedByCustomer(statuses.capture());
+        assertThat(statuses.getValue()).containsExactlyInAnyOrderElementsOf(expected);
+    }
+
+    @Test
     @DisplayName("open means the six non-terminal statuses — DRAFT, COMPLETED and CANCELLED are not queried")
     void openWorkordersByCustomer_queriesOnlyNonTerminalStatuses() {
         when(workorderRepository.countOpenGroupedByCustomer(any())).thenReturn(List.of());

@@ -217,6 +217,7 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
     @Query("SELECT w.customerId AS customerId, COUNT(w) AS openWorkorders FROM Workorder w "
             + "WHERE w.status IN :statuses AND w.customerId IS NOT NULL "
             + "GROUP BY w.customerId ORDER BY COUNT(w) DESC, w.customerId ASC")
+    @NonNull
     List<OpenCustomerCount> countOpenGroupedByCustomer(
             @Param("statuses") @NonNull Collection<WorkorderStatus> statuses);
 }

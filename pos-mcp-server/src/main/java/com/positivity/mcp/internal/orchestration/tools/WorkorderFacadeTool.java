@@ -136,8 +136,10 @@ public class WorkorderFacadeTool {
                     + "tool for any question about open work across the whole book — which customers have work "
                     + "in progress, how many customers have open jobs — and for the work-order half of a "
                     + "cross-domain question such as customers with both an open job and an unpaid invoice, "
-                    + "where it is ONE call rather than one search per customer. Use searchWorkorders instead "
-                    + "when you need the individual work orders for one customer. Open means the six "
+                    + "where it is ONE call rather than one search per customer. It returns COUNTS, not the "
+                    + "work orders themselves: when the answer needs the individual work orders — their "
+                    + "numbers, statuses or dates, for one customer or for several — use searchWorkorders "
+                    + "with status=OPEN instead, one call per customer. Open means the six "
                     + "non-terminal statuses (APPROVED, ASSIGNED, WORK_IN_PROGRESS, AWAITING_PARTS, "
                     + "AWAITING_APPROVAL, READY_FOR_PICKUP) — the same set searchWorkorders' OPEN alias uses; "
                     + "DRAFT is not open. Required inputs: none; limit is optional (default 100, capped at 500).")

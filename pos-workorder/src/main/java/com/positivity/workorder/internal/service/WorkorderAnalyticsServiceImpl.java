@@ -30,6 +30,7 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -63,14 +64,18 @@ public class WorkorderAnalyticsServiceImpl implements WorkorderAnalyticsService 
      */
     private static final int INTERNAL_FETCH_CAP = 20_000;
 
-    /** The six non-terminal statuses — the set the facade's OPEN alias expands to (#1855). */
-    private static final java.util.Set<WorkorderStatus> OPEN_STATUSES = java.util.EnumSet.of(
-            WorkorderStatus.APPROVED,
-            WorkorderStatus.ASSIGNED,
-            WorkorderStatus.WORK_IN_PROGRESS,
-            WorkorderStatus.AWAITING_PARTS,
-            WorkorderStatus.AWAITING_APPROVAL,
-            WorkorderStatus.READY_FOR_PICKUP);
+    /**
+     * The six statuses the facade's {@code OPEN} alias expands to (#1855): every non-terminal status
+     * except {@code DRAFT}.
+     *
+     * <p>Derived from the terminal set the way {@link WorkorderStatus#getOpenStatuses()} is, so a
+     * newly added status joins it automatically, minus {@code DRAFT}. It deliberately differs from
+     * that method — and so from {@code GET /v1/workorders/count?openOnly=true}, which counts drafts —
+     * because this endpoint answers the same question a {@code status=OPEN} search answers, and a
+     * draft has not been approved into work. On seeded data the two readings are 45 and 137.
+     */
+    private static final Set<WorkorderStatus> OPEN_STATUSES = EnumSet.complementOf(
+            EnumSet.of(WorkorderStatus.COMPLETED, WorkorderStatus.CANCELLED, WorkorderStatus.DRAFT));
 
     private final WorkorderRepository workorderRepository;
     private final ExtCustomerPartyReplicaRepository customerPartyRepository;

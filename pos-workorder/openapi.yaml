@@ -1049,6 +1049,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/OpenWorkordersByCustomerResponse'
           description: Forbidden - missing workorder:analytics:view
+      security:
+      - bearerAuth:
+        - workorder:analytics:view
       summary: Get Open Work Order Counts By Customer
       tags:
       - Workorder Analytics
