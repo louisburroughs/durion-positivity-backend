@@ -74,8 +74,43 @@ class McpServerPropertiesDefaultsTest {
                 .withInitializer(loadYaml("application.yml", "application-alpha.yml"))
                 .run(ctx -> assertThat(ctx.getEnvironment().getProperty("mcp.agent.candidate-tool-limit"))
                         // W1.4 (analytics-capability-plan.md §3): widened from 8 so analytical
-                        // intents stop starving multi-domain questions of candidate tools.
+                        // intents stop starving multi-domain questions of candidate tools. #1840:
+                        // widened again past the facade count (18; 17 gated in for alpha's admin);
+                        // at 16 the ranking cut dropped one facade per turn, once the date-window
+                        // resolver.
+                        .isEqualTo("24"));
+    }
+
+    @Test
+    @DisplayName("application-alpha.yml keeps the discovered-operation cap where it was (#1840)")
+    void applicationAlphaYml_keepsTheDiscoveredToolLimit() {
+        // The discovered-OpenAPI cap shared candidate-tool-limit before #1840; splitting it keeps
+        // the facade widening from adding discovered schemas to every prompt.
+        new ApplicationContextRunner()
+                .withInitializer(loadYaml("application.yml", "application-alpha.yml"))
+                .run(ctx -> assertThat(ctx.getEnvironment().getProperty("mcp.agent.discovered-tool-limit"))
                         .isEqualTo("16"));
+    }
+
+    @Test
+    @DisplayName("application-alpha.yml's candidate limit stays at or above the facade count (#1840)")
+    void applicationAlphaYml_candidateLimitCoversEveryFacade() {
+        // #1840's acceptance criterion: the next facade added must not silently reintroduce the
+        // random cut. Facades are the @Component *FacadeTool beans in the tools package.
+        var scanner = new org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider(false);
+        scanner.addIncludeFilter(new org.springframework.core.type.filter.AnnotationTypeFilter(
+                org.springframework.stereotype.Component.class));
+        long facadeCount = scanner.findCandidateComponents("com.positivity.mcp.internal.orchestration.tools").stream()
+                .map(definition -> definition.getBeanClassName())
+                .filter(name -> name != null && name.endsWith("FacadeTool"))
+                .count();
+        assertThat(facadeCount).as("facade tools found by scan").isGreaterThanOrEqualTo(17);
+        new ApplicationContextRunner()
+                .withInitializer(loadYaml("application.yml", "application-alpha.yml"))
+                .run(ctx -> assertThat(
+                                Integer.parseInt(ctx.getEnvironment().getProperty("mcp.agent.candidate-tool-limit")))
+                        .as("alpha candidate-tool-limit vs %d facades", facadeCount)
+                        .isGreaterThanOrEqualTo((int) facadeCount));
     }
 
     @Test

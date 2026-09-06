@@ -190,7 +190,7 @@ public class OpenApiToolProvider {
             @NonNull RequestScopedUserContext userContext,
             @NonNull OperationProxyFactory proxyFactory,
             @NonNull ObjectMapper objectMapper,
-            @Value("${mcp.agent.candidate-tool-limit:8}") int candidateLimit,
+            @Value("${mcp.agent.discovered-tool-limit:${mcp.agent.candidate-tool-limit:8}}") int candidateLimit,
             @Value("${mcp.openapi.tool.timeout:30s}") @NonNull Duration executionTimeout,
             @Nullable ToolInvocationRecorder invocationRecorder) {
         this.repository = repository;

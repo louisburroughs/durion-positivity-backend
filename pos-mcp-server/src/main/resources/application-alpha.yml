@@ -262,7 +262,14 @@ mcp:
     cache-ttl-minutes: 30
     max-cached-agents: 500
     memory-max-messages: 50
-    candidate-tool-limit: 16
+    # #1840: must stay above the facade count (18 facade tools; 17 of them gated in for the alpha
+    # admin caller) — the cut is by ranking, so at 16 one facade per turn was dropped at random,
+    # once the date-window resolver itself. McpServerPropertiesDefaultsTest pins limit >= facades.
+    candidate-tool-limit: 24
+    # #1840: the discovered-OpenAPI-operation cap used to share candidate-tool-limit. Kept at the
+    # pre-#1840 value so widening the facade limit does not add discovered schemas to every prompt
+    # (OLLAMA_NUM_CTX caveat above). Defaults to candidate-tool-limit when unset.
+    discovered-tool-limit: 16
 
 pos:
   accounting:
