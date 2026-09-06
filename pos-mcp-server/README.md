@@ -241,7 +241,11 @@ The model's reply is classified before it reaches the user (`ChatResponseText`):
 `BLANK` (nothing but a reasoning channel), `TOOL_PAYLOAD` (a bare JSON object or array — the
 model emitted a tool result instead of composing from it), or `PROTOCOL_MARKUP` (the model's raw
 harmony channel protocol, `<|channel|>analysis<|message|>…`, with no `final` channel to recover;
-#1834). Non-content replies never reach the user as-is. `BLANK` and `PROTOCOL_MARKUP` go to the
+#1834). Non-content replies never reach the user as-is. The streaming endpoints apply the same
+classification through `StreamingAnswerGuard` (#1838): prose streams through token by token, a reply
+that opens like markup, a payload, a fence or a think block is held and classified when complete, and
+anything non-content (or an empty stream) is replaced by the safe fallback — there is no ladder or
+re-render on the streaming path. `BLANK` and `PROTOCOL_MARKUP` go to the
 answer-resolution ladder (deep link / capability hint). `TOOL_PAYLOAD`
 first gets **one re-render turn** (#1708): the payload is fed back as the previous assistant message
 with an instruction to answer the question from it as prose and never as JSON, with no tools offered,

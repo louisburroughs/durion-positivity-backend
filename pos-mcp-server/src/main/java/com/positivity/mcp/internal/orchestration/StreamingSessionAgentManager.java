@@ -338,7 +338,7 @@ public class StreamingSessionAgentManager
         String role = currentUserContext.primaryRole();
         String correlationId = resolveCorrelationId();
         Prompt prompt = simpleChatFastPath.prompt(currentUserContext, message);
-        return Flux.defer(() -> streamingChatModel.stream(prompt))
+        Flux<String> tokens = Flux.defer(() -> streamingChatModel.stream(prompt))
                 .map(response -> {
                     if (response.getResult() == null || response.getResult().getOutput() == null) {
                         return "";
@@ -346,7 +346,13 @@ public class StreamingSessionAgentManager
                     String text = response.getResult().getOutput().getText();
                     return text == null ? "" : text;
                 })
-                .filter(token -> !token.isEmpty())
+                .filter(token -> !token.isEmpty());
+        // #1838: classified like the blocking simple-chat reply; the raw source is recorded (#1816).
+        return StreamingAnswerGuard.guard(tokens, source -> {
+                    if (toolInvocationRecorder != null) {
+                        toolInvocationRecorder.recordAnswerSource(source.name());
+                    }
+                })
                 .doOnComplete(() -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
                     LOGGER.debug(
