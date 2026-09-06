@@ -28,6 +28,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.core.JacksonException;
 
 /**
  * Issue #1713 (part 3), pos-workorder. {@code EstimateServiceImpl} threw
@@ -45,8 +46,9 @@ import org.springframework.web.server.ResponseStatusException;
  * <p>Issue #1791 re-typed the {@code submitForApproval} refusals — not-DRAFT is a
  * {@link WorkorderResourceConflictException} (409), incompleteness an
  * {@link EstimateIncompleteException} (422) — and removed the controller's local
- * {@code catch (IllegalStateException)}. The two cases at the bottom prove that wire mapping in
- * the slice CI actually runs on a PR, rather than only in the Failsafe IT.
+ * {@code catch (IllegalStateException)}. The cases at the bottom prove that wire mapping, and the
+ * 500 the snapshot endpoint now answers for a serialization fault, in the slice CI actually runs
+ * on a PR, rather than only in the Failsafe IT.
  */
 @WebMvcTest(EstimateController.class)
 @Import(WebCommonErrorAutoConfiguration.class)
@@ -56,6 +58,7 @@ class EstimateControllerErrorHandlingTest {
     private static final UUID ESTIMATE_ID = UUID.fromString("019200aa-0000-7000-8000-000000000301");
     private static final String URL = "/v1/workorders/estimates/{estimateId}/approval";
     private static final String SUBMIT_URL = "/v1/workorders/estimates/{estimateId}/submit-for-approval";
+    private static final String SNAPSHOT_URL = "/v1/workorders/estimates/{estimateId}/snapshots";
 
     private static final String BODY = """
             {"customerId":"019200aa-0000-7000-8000-000000000302",
@@ -187,6 +190,26 @@ class EstimateControllerErrorHandlingTest {
                 .andExpect(jsonPath("$.code").value("ESTIMATE_INCOMPLETE"))
                 .andExpect(jsonPath("$.message").value(message))
                 .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(header().exists("X-Correlation-Id"));
+    }
+
+    /**
+     * #1791 (review): a snapshot serialization failure used to be wrapped in
+     * {@code IllegalStateException}, which this endpoint's local catch answered as a bodiless 409.
+     * The service now lets the raw {@code JacksonException} out and the catch is gone, so a server
+     * fault answers the platform's correlated 500, the same way the JPA case above does.
+     */
+    @Test
+    @WithMockUser(authorities = "workorder:estimate_snapshot:create")
+    @DisplayName("a snapshot serialization fault answers a generic correlated 500, not a bodiless 409")
+    void aSnapshotSerializationFaultAnswersGeneric500() throws Exception {
+        when(estimateService.createEstimateSnapshot(any(UUID.class), anyString(), any()))
+                .thenThrow(new JacksonException("cannot serialize estimate") {});
+
+        mockMvc.perform(post(SNAPSHOT_URL, ESTIMATE_ID))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty())
                 .andExpect(header().exists("X-Correlation-Id"));
     }

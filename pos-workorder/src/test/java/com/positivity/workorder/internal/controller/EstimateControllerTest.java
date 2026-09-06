@@ -49,6 +49,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.core.JacksonException;
 
 /**
  * Estimate endpoints: the controller owns status mapping and the Idempotency-Key replay contract,
@@ -831,18 +832,21 @@ class EstimateControllerTest {
         }
 
         @Test
-        void mapsSnapshotFailuresOntoNotFoundAndConflict() {
+        void noLongerSwallowsSnapshotFailures() {
+            // No advice runs here; the wire statuses are pinned in EstimateControllerErrorHandlingTest.
             doThrow(new EstimateNotFoundException(ESTIMATE_ID))
                     .when(estimateService)
                     .createEstimateSnapshot(any(), anyString(), any());
             assertThatThrownBy(() -> controller.createEstimateSnapshot(ESTIMATE_ID, null))
                     .isInstanceOf(EstimateNotFoundException.class);
 
-            doThrow(new IllegalStateException("snapshot exists"))
-                    .when(estimateService)
-                    .createEstimateSnapshot(any(), anyString(), any());
-            assertThat(controller.createEstimateSnapshot(ESTIMATE_ID, null).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT);
+            // #1791: the service no longer wraps a serialization fault in IllegalStateException, so
+            // the local catch that answered it as a bodiless 409 was dead and is gone; the raw
+            // JacksonException propagates to the platform's correlated 500.
+            JacksonException fault = new JacksonException("cannot serialize") {};
+            doThrow(fault).when(estimateService).createEstimateSnapshot(any(), anyString(), any());
+            assertThatThrownBy(() -> controller.createEstimateSnapshot(ESTIMATE_ID, null))
+                    .isSameAs(fault);
         }
     }
 }

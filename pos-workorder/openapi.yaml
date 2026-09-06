@@ -2569,7 +2569,7 @@ paths:
 
         Emits an ESTIMATE_SNAPSHOT_CREATE event.
 
-        Returns 404 when the estimate does not exist, and 409 when the snapshot cannot be serialized.
+        Returns 404 when the estimate does not exist, and 500 when the snapshot cannot be serialized, which is a server fault rather than anything about the request.
 
         '
       operationId: createEstimateSnapshot
@@ -2600,14 +2600,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateSnapshotResponse'
-          description: Estimate not found
-        '409':
+                $ref: '#/components/schemas/ApiError'
+          description: Estimate not found (ESTIMATE_NOT_FOUND)
+        '500':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstimateSnapshotResponse'
-          description: Snapshot creation failed
+                $ref: '#/components/schemas/ApiError'
+          description: Snapshot could not be serialized (INTERNAL_ERROR)
       security:
       - bearerAuth:
         - workorder:estimate_snapshot:create

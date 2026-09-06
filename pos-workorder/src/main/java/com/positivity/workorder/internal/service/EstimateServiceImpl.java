@@ -668,7 +668,8 @@ public class EstimateServiceImpl implements EstimateService {
      */
     @Override
     @Transactional
-    public @NonNull EstimateResponse submitForApproval(@NonNull UUID estimateId, @NonNull String username) {
+    @NonNull
+    public EstimateResponse submitForApproval(@NonNull UUID estimateId, @NonNull String username) {
         Estimate estimate =
                 estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId));
 
