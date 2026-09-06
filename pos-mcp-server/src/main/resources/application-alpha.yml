@@ -19,7 +19,7 @@ spring:
       base-url: ${OLLAMA_CHAT_BASE_URL:https://ollama.com}
       chat:
         options:
-          model: ${OLLAMA_CHAT_MODEL:gpt-oss:120b}
+          model: ${OLLAMA_CHAT_MODEL:deepseek-v4-flash:0731}
           # #1683: 0 (not 0.2). The analytics gate is graded at n=1, so sampling only adds
           # run-to-run variance to the "did that PR help?" comparison. Override per host with
           # OLLAMA_CHAT_TEMPERATURE if a workload ever needs sampling.

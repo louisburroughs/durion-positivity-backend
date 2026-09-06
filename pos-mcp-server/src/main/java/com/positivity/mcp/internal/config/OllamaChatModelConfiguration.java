@@ -38,7 +38,7 @@ public class OllamaChatModelConfiguration {
             @Value("${spring.ai.ollama.base-url:${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}}")
                     @NonNull
                     String baseUrl,
-            @Value("${spring.ai.ollama.chat.options.model:${OLLAMA_CHAT_MODEL:gpt-oss:120b}}") @NonNull
+            @Value("${spring.ai.ollama.chat.options.model:${OLLAMA_CHAT_MODEL:deepseek-v4-flash:0731}}") @NonNull
                     String modelName,
             @Value("${OLLAMA_API_KEY:}") @NonNull String apiKey,
             @Value("${spring.ai.ollama.chat.timeout:${OLLAMA_CHAT_TIMEOUT:180s}}") @NonNull Duration timeout,
@@ -55,7 +55,7 @@ public class OllamaChatModelConfiguration {
             @Value("${spring.ai.ollama.base-url:${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}}")
                     @NonNull
                     String baseUrl,
-            @Value("${spring.ai.ollama.chat.options.model:${OLLAMA_CHAT_MODEL:gpt-oss:120b}}") @NonNull
+            @Value("${spring.ai.ollama.chat.options.model:${OLLAMA_CHAT_MODEL:deepseek-v4-flash:0731}}") @NonNull
                     String modelName,
             @Value("${OLLAMA_API_KEY:}") @NonNull String apiKey,
             @Value(
@@ -157,8 +157,8 @@ public class OllamaChatModelConfiguration {
      *
      * <p>Thinking is left to the model default unless {@code OLLAMA_CHAT_THINK} is set. We must not
      * send a {@code think} field unconditionally: Ollama rejects it for models that don't support
-     * thinking, and the default executor ({@code gpt-oss:120b}) already returns its answer in the
-     * response's {@code content}. Some reasoning models instead route the answer into the
+     * thinking, and the default executor ({@code deepseek-v4-flash:0731}, #1691; {@code gpt-oss:120b}
+     * before it) returns its answer in the response's {@code content} with its default thinking mode. Some reasoning models instead route the answer into the
      * {@code thinking} channel; since Spring AI maps only {@code content} to {@code getText()}, that
      * would surface as blank chat output. When configuring such a model, set
      * {@code OLLAMA_CHAT_THINK=false} so the answer is returned in {@code content}. The

@@ -93,6 +93,21 @@ class McpServerPropertiesDefaultsTest {
     }
 
     @Test
+    @DisplayName("every profile ships deepseek-v4-flash:0731 as the default executor (#1691)")
+    void allProfiles_shipTheChosenDefaultExecutor() {
+        // #1691: chosen over gpt-oss:120b on the analytics gate. The default is spelled out in each
+        // profile and again as the @Value fallback in the Ollama configuration, so one missed site
+        // would leave a profile on the old executor with nothing else failing.
+        for (String profile : List.of("application.yml", "application-dev.yml", "application-alpha.yml")) {
+            new ApplicationContextRunner()
+                    .withInitializer(loadYamlWithoutAmbientEnvironment(profile))
+                    .run(ctx -> assertThat(ctx.getEnvironment().getProperty("spring.ai.ollama.chat.options.model"))
+                            .as("executor model in %s", profile)
+                            .isEqualTo("deepseek-v4-flash:0731"));
+        }
+    }
+
+    @Test
     @DisplayName("every profile runs the executor at temperature 0 so gate runs are reproducible")
     void allProfiles_runTheExecutorDeterministically() {
         for (String profile : List.of("application.yml", "application-dev.yml", "application-alpha.yml")) {

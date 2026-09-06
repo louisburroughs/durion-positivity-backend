@@ -967,7 +967,7 @@ services:
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
       OLLAMA_CHAT_BASE_URL: ${OLLAMA_CHAT_BASE_URL:-https://ollama.com}
       OLLAMA_EMBEDDING_BASE_URL: ${OLLAMA_EMBEDDING_BASE_URL:-http://ollama:11434}
-      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-gpt-oss:120b}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-deepseek-v4-flash:0731}
       # #1683: the context window is requested explicitly instead of inheriting whatever the
       # backend would pick (a self-hosted daemon's OLLAMA_CONTEXT_LENGTH, or ollama.com's own
       # per-model default). It is a request, not a guarantee -- a backend may still cap it, which

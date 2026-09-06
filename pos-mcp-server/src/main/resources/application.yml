@@ -16,7 +16,7 @@ spring:
           # Deliberate default executor model (Gate 0 config-hygiene). Documented in README.
           # Tier routing (Gate 4) could select a smaller/larger model per request, but is dormant
           # (see mcp.model.tiering-enabled below), so today this is the model for every request.
-          model: ${OLLAMA_CHAT_MODEL:gpt-oss:120b}
+          model: ${OLLAMA_CHAT_MODEL:deepseek-v4-flash:0731}
           # #1683: 0 (not 0.2). The analytics gate is graded at n=1, so sampling only adds
           # run-to-run variance to the "did that PR help?" comparison. Override per host with
           # OLLAMA_CHAT_TEMPERATURE if a workload ever needs sampling.
@@ -352,13 +352,15 @@ mcp:
     # defaults to T2-complex — never silently to a smaller model.
     router: ${MCP_MODEL_ROUTER:qwen3:4b}
     # T2-simple executor (single-tool lookups). Blank = use the default executor model; set to a
-    # smaller pulled model (e.g. gpt-oss:20b) to realize the latency/cost win. Left blank on
+    # model that is faster and cheaper than the executor to realize the latency/cost win — measure
+    # first: gpt-oss:20b was that next to gpt-oss:120b, but next to deepseek-v4-flash:0731 it is
+    # slower (32.6 s vs 8.5-10.2 s per gate question, #1691 bake-off). Left blank on
     # purpose while the analytics gate (#1601) is being measured: a second executor model would
     # add a confound to every gate comparison. Setting it is what makes tiering-enabled=true
     # worth paying for again.
     simple: ${MCP_MODEL_SIMPLE:}
     # T2-complex executor (multi-tool, writes, accounting/tax/admin/security). Blank = use the
-    # default executor model (gpt-oss:120b), which is already the complex-class model.
+    # default executor model (deepseek-v4-flash:0731), which is already the complex-class model.
     complex: ${MCP_MODEL_COMPLEX:}
     # Failover (primary -> secondary within a tier) — orthogonal to tier routing above.
     fallback:
