@@ -3,6 +3,7 @@ package com.positivity.mcp.internal.orchestration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -26,6 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -112,6 +114,49 @@ class SpringAiPosAssistantTest {
         ArgumentCaptor<List<Message>> persisted = messageListCaptor();
         verify(chatMemory).add(eq("user-1::ROLE_ADMIN"), persisted.capture());
         assertThat(persisted.getValue().get(1).getText()).isEqualTo(PROSE);
+    }
+
+    @Test
+    @DisplayName("the turn trace learns how the reply was produced (#1816)")
+    void chat_recordsTheAnswerSourceOnTheTrace() {
+        ChatModel chatModel = mock(ChatModel.class);
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        AnswerResolutionLadder ladder = mock(AnswerResolutionLadder.class);
+        ToolInvocationRecorder recorder = mock(ToolInvocationRecorder.class);
+        when(chatModel.getOptions())
+                .thenReturn(OllamaChatOptions.builder().model("gpt-oss:120b").build());
+        when(ragRetriever.retrieve(any())).thenReturn(List.of());
+        when(chatMemory.get(any())).thenReturn(List.of());
+        when(ladder.resolveFallback(any()))
+                .thenReturn(new LadderResult("View it here — People: /app/people", Rung.DEEP_LINK, "/app/people"));
+        // direct → re-rendered → ladder, one turn each
+        when(chatModel.call(any(Prompt.class)))
+                .thenReturn(chatResponse("Direct answer."))
+                .thenReturn(chatResponse(PAYLOAD))
+                .thenReturn(chatResponse(PROSE))
+                .thenReturn(chatResponse(PAYLOAD))
+                .thenReturn(chatResponse(PAYLOAD));
+        SpringAiPosAssistant assistant = new SpringAiPosAssistant(
+                chatModel,
+                () -> "base prompt",
+                List.of(),
+                ragRetriever,
+                ignored -> chatMemory,
+                null,
+                ladder,
+                recorder,
+                null,
+                null);
+
+        assistant.chat("user-1::ROLE_ADMIN", "q1", "ctx");
+        assistant.chat("user-1::ROLE_ADMIN", "q2", "ctx");
+        assistant.chat("user-1::ROLE_ADMIN", "q3", "ctx");
+
+        InOrder inOrder = inOrder(recorder);
+        inOrder.verify(recorder).recordAnswerSource("CONTENT");
+        inOrder.verify(recorder).recordAnswerSource("RE_RENDERED");
+        inOrder.verify(recorder).recordAnswerSource("LADDER");
     }
 
     @Test

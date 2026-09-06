@@ -136,13 +136,28 @@ final class SpringAiPosAssistant implements PosAssistant {
         if (!resolution.reRendered()) {
             logMissingDirectAnswer(chatResponse, output, extracted, toolCallbacks.size());
         }
+        if (invocationRecorder != null) {
+            invocationRecorder.recordAnswerSource(resolution.answerSource());
+        }
         String response = resolution.text();
         chatMemory.add(memoryId, List.of(new UserMessage(userMessage), new AssistantMessage(response)));
         return response;
     }
 
-    /** The reply text, and whether it came from the #1708 re-render turn rather than the first turn. */
-    record Resolution(@NonNull String text, boolean reRendered) {}
+    /**
+     * The reply text and how it was produced. {@code answerSource} is recorded on the turn trace
+     * (#1816): {@code CONTENT} (direct), {@code RE_RENDERED} (#1708 second turn), {@code LADDER}
+     * (deflection), or the raw non-content source when no ladder is wired.
+     */
+    record Resolution(@NonNull String text, @NonNull String answerSource) {
+        static final String CONTENT = "CONTENT";
+        static final String RE_RENDERED = "RE_RENDERED";
+        static final String LADDER = "LADDER";
+
+        boolean reRendered() {
+            return RE_RENDERED.equals(answerSource);
+        }
+    }
 
     /**
      * Returns the model's direct answer when it produced one. A bare tool payload ({@code
@@ -161,14 +176,14 @@ final class SpringAiPosAssistant implements PosAssistant {
             // re-render turn recovers the answer where the ladder would deflect (#1708).
             String rendered = renderToolPayload(history, userMessage, extracted.text());
             if (rendered != null) {
-                return new Resolution(rendered, true);
+                return new Resolution(rendered, Resolution.RE_RENDERED);
             }
         }
         if (answerResolutionLadder != null && extracted.source() != ChatResponseText.Source.CONTENT) {
             return new Resolution(
-                    answerResolutionLadder.resolveFallback(userMessage).text(), false);
+                    answerResolutionLadder.resolveFallback(userMessage).text(), Resolution.LADDER);
         }
-        return new Resolution(extracted.text(), false);
+        return new Resolution(extracted.text(), extracted.source().name());
     }
 
     /**

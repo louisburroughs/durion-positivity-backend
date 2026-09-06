@@ -88,6 +88,15 @@ public class AlphaEvalTurnTraceRecorder {
                 builder.toolCalls.size() + 1, toolName, arguments, result, error, elapsedMs)));
     }
 
+    /**
+     * How the reply was produced — direct model content, the #1708 re-render, the ladder, or a
+     * pass-through of a non-content source — so grading can tell an answered question from a
+     * deflected one without reading the server log (#1816).
+     */
+    public void recordAnswerSource(@NonNull String answerSource) {
+        current(builder -> builder.answerSource = answerSource);
+    }
+
     public void complete(@NonNull String response) {
         finish(response, null);
     }
@@ -138,6 +147,7 @@ public class AlphaEvalTurnTraceRecorder {
         private String intent;
         private String modelTier;
         private String workflowState;
+        private String answerSource;
         private List<String> selectedTools = List.of();
         private String systemPrompt;
         private List<EvalTurnTrace.ToolDefinitionTrace> offeredTools = List.of();
@@ -173,7 +183,8 @@ public class AlphaEvalTurnTraceRecorder {
                     toolCalls,
                     response,
                     error,
-                    buildId);
+                    buildId,
+                    answerSource);
         }
     }
 }

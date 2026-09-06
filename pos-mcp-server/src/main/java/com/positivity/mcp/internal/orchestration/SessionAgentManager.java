@@ -635,10 +635,16 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
     private @NonNull String simpleChat(
             @NonNull CurrentUserContext currentUserContext, @NonNull String message, long requestStartMs) {
         long simpleStartNanos = System.nanoTime();
-        String response = ChatResponseText.extract(chatModel
+        ChatResponseText.Extracted extracted = ChatResponseText.extractDetailed(chatModel
                 .call(simpleChatFastPath.prompt(currentUserContext, message))
                 .getResult()
                 .getOutput());
+        String response = extracted.text();
+        if (toolInvocationRecorder != null) {
+            // Same field as the agent path (#1816): a simple-chat reply is direct content or a raw
+            // non-content source, never re-rendered or laddered.
+            toolInvocationRecorder.recordAnswerSource(extracted.source().name());
+        }
         int elapsedMs = (int) (System.currentTimeMillis() - requestStartMs);
         LOGGER.info(
                 "MCP simple chat completed role={} modelElapsedMs={} totalElapsedMs={}",
