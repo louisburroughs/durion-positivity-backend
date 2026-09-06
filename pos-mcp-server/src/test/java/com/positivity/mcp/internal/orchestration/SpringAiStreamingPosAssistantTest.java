@@ -36,6 +36,56 @@ class SpringAiStreamingPosAssistantTest {
         return (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
     }
 
+    /**
+     * #1838: the streaming path now classifies the reply like the blocking one. The tokens here are
+     * the shape gpt-oss:20b streamed on 2026-09-06 — protocol markup, not an answer.
+     */
+    @Test
+    void chat_replacesStreamedHarmonyMarkupWithTheFallbackAndRecordsTheSource() {
+        StreamingChatModel streamingChatModel =
+                mock(StreamingChatModel.class, withSettings().extraInterfaces(ChatModel.class));
+        QueryDocumentRetriever ragRetriever = mock(QueryDocumentRetriever.class);
+        ChatMemory chatMemory = mock(ChatMemory.class);
+        com.positivity.mcp.internal.service.ToolInvocationRecorder recorder =
+                mock(com.positivity.mcp.internal.service.ToolInvocationRecorder.class);
+        when(recorder.wrap(any(), any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(((ChatModel) streamingChatModel).getOptions())
+                .thenReturn(OllamaChatOptions.builder()
+                        .model("deepseek-v4-flash:0731")
+                        .build());
+        when(ragRetriever.retrieve(any())).thenReturn(List.of());
+        when(chatMemory.get(any())).thenReturn(List.of());
+        when(streamingChatModel.stream(any(Prompt.class)))
+                .thenReturn(Flux.just(
+                        chatResponse("<|channel|>"),
+                        chatResponse("analysis<|message|>"),
+                        chatResponse("The user asked: who are our ten largest customers?")));
+
+        SpringAiStreamingPosAssistant assistant = new SpringAiStreamingPosAssistant(
+                streamingChatModel,
+                () -> "base prompt",
+                List.of(new PingTool()),
+                ragRetriever,
+                ignored -> chatMemory,
+                null,
+                recorder,
+                null,
+                null);
+
+        List<String> tokens = assistant
+                .chat("user-3::ROLE_ADMIN", "who are our ten largest customers", "ctx")
+                .collectList()
+                .block(Duration.ofSeconds(5));
+
+        assertThat(tokens).containsExactly(ChatResponseText.BLANK_RESPONSE_FALLBACK);
+        verify(recorder).recordAnswerSource("PROTOCOL_MARKUP");
+        ArgumentCaptor<List<org.springframework.ai.chat.messages.Message>> stored = messageListCaptor();
+        verify(chatMemory, times(2)).add(eq("user-3::ROLE_ADMIN"), stored.capture());
+        assertThat(stored.getAllValues().get(1).getFirst().getText())
+                .as("memory stores what the client saw, not the markup")
+                .isEqualTo(ChatResponseText.BLANK_RESPONSE_FALLBACK);
+    }
+
     @Test
     void chat_usesRagRetrieverAndPersistsMemoryIdOnStreamCompletion() {
         StreamingChatModel streamingChatModel =

@@ -50,6 +50,7 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
     private final Function<String, ChatMemory> chatMemoryProvider;
     private final @Nullable OpenApiToolProvider openApiToolProvider;
     private final @Nullable RequestScopedUserContext requestScopedUserContext;
+    private final @Nullable ToolInvocationRecorder invocationRecorder;
 
     SpringAiStreamingPosAssistant(
             @NonNull StreamingChatModel streamingChatModel,
@@ -78,6 +79,7 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
         this.chatMemoryProvider = chatMemoryProvider;
         this.openApiToolProvider = openApiToolProvider;
         this.requestScopedUserContext = requestScopedUserContext;
+        this.invocationRecorder = invocationRecorder;
     }
 
     @Override
@@ -108,22 +110,33 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
         // As of Spring AI 2.0 the tool-execution loop lives in ChatClient's ToolCallingAdvisor;
         // StreamingChatModel.stream only advertises the tool definitions and streams the model's
         // tool-call turn back unexecuted.
-        return chatClient.prompt(prompt).stream()
+        Flux<String> tokens = chatClient.prompt(prompt).stream()
                 .chatResponse()
                 .map(response -> {
                     if (response.getResult() == null || response.getResult().getOutput() == null) {
                         return "";
                     }
-                    return response.getResult().getOutput().getText();
+                    String text = response.getResult().getOutput().getText();
+                    return text == null ? "" : text;
                 })
+                .filter(token -> !token.isEmpty());
+        // #1838: the same classification the blocking path applies, so harmony markup, a bare
+        // payload or a blank reply never reaches the client as the answer. Memory stores what the
+        // client saw.
+        return StreamingAnswerGuard.guard(tokens, this::recordAnswerSource)
                 .doOnNext(token -> responseText.get().append(token))
                 .doOnComplete(() -> {
                     String assistantResponse = responseText.get().toString();
                     if (!assistantResponse.isBlank()) {
                         chatMemory.add(memoryId, List.of(new AssistantMessage(assistantResponse)));
                     }
-                })
-                .filter(token -> !token.isEmpty());
+                });
+    }
+
+    private void recordAnswerSource(ChatResponseText.@NonNull Source source) {
+        if (invocationRecorder != null) {
+            invocationRecorder.recordAnswerSource(source.name());
+        }
     }
 
     private @NonNull String buildSystemPrompt(@NonNull String userMessage, @NonNull String userContext) {
