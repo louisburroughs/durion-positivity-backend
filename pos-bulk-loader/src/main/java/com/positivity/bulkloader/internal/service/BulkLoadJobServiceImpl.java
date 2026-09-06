@@ -181,10 +181,27 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
         if (job.getLocationId() == null) {
             throw new IllegalStateException("Job cannot be processed before a locationId is assigned");
         }
-        bulkLoadBatchLauncher.launch(job, authorizationHeader);
+        // PROCESSING is stamped *before* the launch, not after (issue #1712). The module
+        // configures no TaskExecutor or JobLauncher bean, so Spring Boot Batch's default
+        // JobOperator runs the job on a SyncTaskExecutor — the whole import finishes, and
+        // BulkLoadJobExecutionListener#afterJob writes the terminal status, before launch()
+        // returns. Writing PROCESSING afterwards clobbered that terminal status on the very same
+        // managed entity instance, so every finished job read as PROCESSING for ever while its
+        // row counts said otherwise. In this order the listener has the last word.
+        //
+        // What this does NOT do is make PROCESSING observable to anyone else. This method is
+        // @Transactional and save() on an already-managed entity is a merge, not a flush: the
+        // UPDATE lands at commit, by which time the listener has already replaced the status. A
+        // second connection polling the job during the import still reads CREATED or UPLOADING.
+        // That is a consequence of running the import inside the request transaction, and it goes
+        // away with the same change that makes processing genuinely asynchronous — at which point
+        // the launch must also move after this transaction commits, or the batch thread will race
+        // a row it cannot yet see, and contend with the lock this one would then hold for the
+        // length of the import. See the note on FileUploadController#startProcessing.
         job.setStatus(JobStatus.PROCESSING);
         job.setStartedAt(Instant.now(clock));
         jobRepository.save(job);
+        bulkLoadBatchLauncher.launch(job, authorizationHeader);
     }
 
     private BulkLoadJob findOrThrow(UUID jobId) {

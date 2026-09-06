@@ -1,5 +1,7 @@
 package com.positivity.location.internal.controller;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -17,10 +19,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
 @WebMvcTest(LocationBulkIngestController.class)
@@ -113,7 +117,11 @@ class LocationBulkIngestControllerTest {
         request.setLocationId(LOCATION_ID);
         request.setRecords(List.of(locRecord));
 
-        when(locationService.createLocation(any())).thenThrow(new IllegalArgumentException("Duplicate code"));
+        // The type LocationServiceImpl actually raises for a name collision, not a stand-in — and
+        // the assertions now cover the outcome, not just the counts, so this test can tell the
+        // difference between a rejection and a server fault (issue #1718 review).
+        when(locationService.createLocation(any()))
+                .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "LOCATION_NAME_TAKEN"));
 
         mockMvc.perform(post("/v1/locations/bulk-ingest")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -121,7 +129,38 @@ class LocationBulkIngestControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalSubmitted").value(1))
                 .andExpect(jsonPath("$.successCount").value(0))
-                .andExpect(jsonPath("$.failureCount").value(1));
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("LOCATION_INGEST_FAILED"))
+                .andExpect(jsonPath("$.results[0].errorMessage").value("LOCATION_NAME_TAKEN"));
+    }
+
+    /**
+     * Issue #1718: a row lost to a server-side fault must not carry the exception's text into the
+     * 200 body that reports it. The caller gets a generic code and the request's correlation id.
+     */
+    @Test
+    void bulkIngest_serverFault_reportsGenericFailureAndTheCorrelationId() throws Exception {
+        LocationBulkIngestRecord locRecord = new LocationBulkIngestRecord();
+        locRecord.setName("Broken Store");
+        locRecord.setCode("STORE-002");
+
+        BulkIngestRequest<LocationBulkIngestRecord> request = new BulkIngestRequest<>();
+        request.setJobId(JOB_ID);
+        request.setLocationId(LOCATION_ID);
+        request.setRecords(List.of(locRecord));
+
+        when(locationService.createLocation(any()))
+                .thenThrow(new IllegalStateException("could not execute statement [insert into location ...]"));
+
+        mockMvc.perform(post("/v1/locations/bulk-ingest")
+                        .header("X-Correlation-Id", "corr-from-caller")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("insert into location"))));
     }
 
     @Test

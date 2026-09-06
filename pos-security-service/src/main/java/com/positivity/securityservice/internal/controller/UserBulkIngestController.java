@@ -8,6 +8,8 @@ import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.UserBulkIngestRecord;
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
+import com.positivity.securityservice.internal.exception.RoleNotFoundException;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.internal.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,9 +20,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -43,7 +45,6 @@ import org.springframework.web.bind.annotation.RestController;
         scopes = {"security:user:create"})
 @RequestMapping("/v1/users")
 @RequiredArgsConstructor
-@Slf4j
 @Tag(name = "User Bulk Ingest API", description = "Bulk provision user accounts")
 public class UserBulkIngestController extends AbstractBulkIngestController<UserBulkIngestRecord> {
 
@@ -79,7 +80,9 @@ public class UserBulkIngestController extends AbstractBulkIngestController<UserB
                     through the password reset path.
                     Re-running the same file is safe: an existing username is reported as already provisioned \
                     rather than as a failure.
-                    Returns 200 with a per-record result; check each result rather than the status alone.
+                    Returns 200 with a per-record result; check each result's errorCode rather than the status \
+                    alone, which is USER_INGEST_FAILED with the reason for a row the service refused, or \
+                    INTERNAL_ERROR with a correlationId to quote for a row lost to a server-side fault.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -125,16 +128,7 @@ public class UserBulkIngestController extends AbstractBulkIngestController<UserB
                 results.add(BulkIngestResult.builder().rowIndex(i).success(true).build());
                 successCount++;
             } catch (Exception exception) {
-                // Deliberately logs the username and nothing else: the row carries no secret, and
-                // keeping it that way is the point of this endpoint.
-                log.warn("Failed to provision user at row {}: {}", i, exception.getMessage());
-                String message = exception.getMessage();
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode(INGEST_FAILED)
-                        .errorMessage(message == null || message.isBlank() ? "User ingest failed" : message)
-                        .build());
+                results.add(rowFailure(i, exception));
                 failureCount++;
             }
         }
@@ -145,5 +139,29 @@ public class UserBulkIngestController extends AbstractBulkIngestController<UserB
                 .failureCount(failureCount)
                 .results(results)
                 .build();
+    }
+
+    /**
+     * What user provisioning refuses about the record itself: a username already taken, a role
+     * the row names that does not exist, and plain field validation. Each is what
+     * {@link com.positivity.securityservice.internal.config.GlobalExceptionHandler} answers as a
+     * 4xx, so each names something in the caller\'s own row. Everything else is a server-side
+     * fault and is reported generically against a correlation id (issue #1718) — which also keeps
+     * a persistence failure during password generation from putting anything in the response.
+     */
+    @Override
+    protected Collection<Class<? extends Throwable>> rowRejectionTypes() {
+        return List.of(
+                DuplicateUsernameException.class, RoleNotFoundException.class, SecurityValidationException.class);
+    }
+
+    @Override
+    protected String rowRejectionCode() {
+        return INGEST_FAILED;
+    }
+
+    @Override
+    protected String rowRejectionFallbackMessage() {
+        return "User ingest failed";
     }
 }

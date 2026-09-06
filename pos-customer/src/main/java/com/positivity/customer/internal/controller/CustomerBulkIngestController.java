@@ -8,6 +8,10 @@ import com.positivity.customer.internal.dto.CreatePersonRequest;
 import com.positivity.customer.internal.dto.CustomerBulkIngestRecord;
 import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.enums.PreferredContactMethod;
+import com.positivity.customer.internal.exception.CrmDuplicateResourceException;
+import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
+import com.positivity.customer.internal.exception.CrmUnprocessableEntityException;
+import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.internal.service.PersonService;
 import com.positivity.events.EmitEvent;
@@ -15,6 +19,7 @@ import com.positivity.security.common.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -52,7 +57,9 @@ public class CustomerBulkIngestController extends AbstractBulkIngestController<C
                     Use this tool for migrations and file imports of individuals; do not use createCrmPerson \
                     row by row for large loads, and note this path cannot create commercial accounts.
                     Preconditions: none beyond authorization; rows that fail validation are reported with \
-                    errorCode CUSTOMER_INGEST_FAILED while the rest of the batch proceeds.
+                    errorCode CUSTOMER_INGEST_FAILED and the reason, and rows lost to a server-side fault with \
+                    INTERNAL_ERROR and a correlationId to quote, with no detail of its own, while the \
+                    rest of the batch proceeds.
                     Required inputs: jobId (UUID), locationId (UUID), and a non-empty records list where \
                     each record has firstName and lastName (each max 100) and optionally email, \
                     phoneNumber, primaryAddress, and customerNumber; preferredContactMethod is derived as \
@@ -140,13 +147,7 @@ public class CustomerBulkIngestController extends AbstractBulkIngestController<C
                         .build());
                 successCount++;
             } catch (Exception exception) {
-                log.warn("Failed to ingest customer record at row {}: {}", i, exception.getMessage(), exception);
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode("CUSTOMER_INGEST_FAILED")
-                        .errorMessage(errorMessage(exception))
-                        .build());
+                results.add(rowFailure(i, exception));
                 failureCount++;
             }
         }
@@ -165,8 +166,31 @@ public class CustomerBulkIngestController extends AbstractBulkIngestController<C
                 : PreferredContactMethod.PHONE_CALL;
     }
 
-    private String errorMessage(@NonNull Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? "Customer ingest failed" : message;
+    /**
+     * The failures {@link com.positivity.customer.internal.service.PersonService#createPerson}
+     * raises about the record itself. Its own guards throw {@code ResponseStatusException} with a
+     * 400, which {@link com.positivity.bulkingest.BulkIngestFailures} already recognises as a
+     * rejection, so only the module's CRM exception types need naming here — the ones
+     * {@link com.positivity.customer.internal.config.CrmExceptionHandler} answers as a 4xx.
+     * Everything else is a server-side fault and is reported generically against a correlation id
+     * instead (issue #1718).
+     */
+    @Override
+    protected Collection<Class<? extends Throwable>> rowRejectionTypes() {
+        return List.of(
+                CrmValidationException.class,
+                CrmUnprocessableEntityException.class,
+                CrmDuplicateResourceException.class,
+                CrmResourceNotFoundException.class);
+    }
+
+    @Override
+    protected String rowRejectionCode() {
+        return "CUSTOMER_INGEST_FAILED";
+    }
+
+    @Override
+    protected String rowRejectionFallbackMessage() {
+        return "Customer ingest failed";
     }
 }

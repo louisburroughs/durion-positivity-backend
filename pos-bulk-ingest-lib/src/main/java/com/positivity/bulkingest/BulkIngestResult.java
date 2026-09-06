@@ -39,4 +39,13 @@ public class BulkIngestResult {
             example = "vin must be 17 characters",
             requiredMode = NOT_REQUIRED)
     private String errorMessage;
+
+    @Schema(
+            description = "Correlation id to quote when reporting a row that failed for a server-side reason."
+                    + " Present only alongside errorCode INTERNAL_ERROR, where it is the whole of what the caller"
+                    + " can act on: the exception itself is logged at ERROR against this id and never returned"
+                    + " (ADR-0056). Every failed row of one request carries the same id.",
+            example = "01960003-0000-7000-8000-0000000000ff",
+            requiredMode = NOT_REQUIRED)
+    private String correlationId;
 }

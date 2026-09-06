@@ -1,12 +1,15 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.bulkingest.AbstractBulkIngestController;
+import com.positivity.bulkingest.BulkIngestFailures;
 import com.positivity.bulkingest.BulkIngestRequest;
 import com.positivity.bulkingest.BulkIngestResponse;
 import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.dto.RolePermissionBulkIngestRecord;
+import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
+import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.internal.service.RoleManagementService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -53,6 +56,23 @@ import org.springframework.web.bind.annotation.RestController;
 public class RolePermissionBulkIngestController extends AbstractBulkIngestController<RolePermissionBulkIngestRecord> {
 
     private static final String INGEST_FAILED = "ROLE_PERMISSION_INGEST_FAILED";
+
+    /**
+     * What {@link RoleManagementService#assignPermissionToRole} refuses about a grant: the role or
+     * the permission the row names does not exist. Both are what
+     * {@link com.positivity.securityservice.internal.config.GlobalExceptionHandler} answers 404, so
+     * both name something in the caller's own file — almost always a permission catalogue that has
+     * not been registered yet, which is exactly what the operator needs told. Anything else is a
+     * server-side fault and is reported as one (issue #1718).
+     *
+     * <p>This controller classifies per grant rather than per row, so it calls
+     * {@link BulkIngestFailures} directly instead of overriding
+     * {@code AbstractBulkIngestController#rowRejectionTypes}: a row here carries a role's whole
+     * grant set, and one bad permission in it must not decide the whole row's verdict.
+     */
+    private static final List<Class<? extends Throwable>> ROW_REJECTION_TYPES =
+            List.of(PermissionNotFoundException.class, RoleNotFoundException.class);
+
     private static final String UNKNOWN_ROLE = "ROLE_PERMISSION_ROLE_UNKNOWN";
 
     private static final String BULK_INGEST_EXAMPLE = """
@@ -86,7 +106,9 @@ public class RolePermissionBulkIngestController extends AbstractBulkIngestContro
                     originally, so a grant file is safe to re-apply.
                     Emits a SECURITY_ROLE_PERMISSION_BULK_INGEST event.
                     Returns 200 in all cases; a row naming an unknown role fails with ROLE_PERMISSION_ROLE_UNKNOWN \
-                    while the rest of the batch continues.
+                    while the rest of the batch continues. Grants are applied one at a time, so a row whose grants \
+                    were refused carries ROLE_PERMISSION_INGEST_FAILED and names them, while a row where any grant \
+                    was lost to a server-side fault carries INTERNAL_ERROR and a correlationId to quote instead.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -146,22 +168,55 @@ public class RolePermissionBulkIngestController extends AbstractBulkIngestContro
             // and report one opaque failure; a re-run would stop at the same place. Collecting the
             // failures instead means the row applies everything it can and names exactly what it
             // could not.
+            // Two outcomes are collected separately, because they are not the same news for the
+            // operator: a permission this service refused (it does not exist, it is already
+            // granted) is theirs to fix, while anything unclassifiable is ours. Reporting both as
+            // "could not grant to X" told them the permission names were the problem even when a
+            // database fault was (issue #1718 review).
             List<String> rejected = new ArrayList<>();
+            List<String> serverFaults = new ArrayList<>();
+            String faultCorrelationId = null;
             for (String permission : record.permissions()) {
                 try {
                     roleManagementService.assignPermissionToRole(roleId, permission);
                 } catch (Exception exception) {
-                    log.warn(
-                            "Failed to grant permission {} to role {} at row {}: {}",
-                            permission,
-                            record.roleName(),
-                            i,
-                            exception.getMessage());
-                    rejected.add(permission);
+                    if (BulkIngestFailures.isRowRejection(exception, ROW_REJECTION_TYPES)) {
+                        log.warn(
+                                "Refused permission {} for role {} at row {}: {}",
+                                permission,
+                                record.roleName(),
+                                i,
+                                exception.getMessage());
+                        rejected.add(permission);
+                    } else {
+                        // The exception's own text never reaches the caller; the correlation id
+                        // beside the ERROR entry is the whole handle, per ADR-0056. One id serves
+                        // the row however many of its grants fail.
+                        faultCorrelationId =
+                                faultCorrelationId == null ? BulkIngestFailures.correlationId() : faultCorrelationId;
+                        log.error(
+                                "Failed to grant permission {} to role {} at row {} [correlationId={}]",
+                                permission,
+                                record.roleName(),
+                                i,
+                                faultCorrelationId,
+                                exception);
+                        serverFaults.add(permission);
+                    }
                 }
             }
 
-            if (rejected.isEmpty()) {
+            if (!serverFaults.isEmpty()) {
+                results.add(BulkIngestResult.builder()
+                        .rowIndex(i)
+                        .entityId(roleId)
+                        .success(false)
+                        .errorCode(BulkIngestFailures.INTERNAL_ERROR_CODE)
+                        .errorMessage("Some grants could not be applied because of a server-side error")
+                        .correlationId(faultCorrelationId)
+                        .build());
+                failureCount++;
+            } else if (rejected.isEmpty()) {
                 results.add(BulkIngestResult.builder()
                         .rowIndex(i)
                         .entityId(roleId)

@@ -2119,7 +2119,7 @@ paths:
 
         Emits a SECURITY_ROLE_BULK_INGEST event.
 
-        Returns 200 in all cases; inspect per-record success and failure in the response.
+        Returns 200 in all cases; inspect each record''s errorCode, which is ROLE_INGEST_FAILED with the reason for a row the service refused, or INTERNAL_ERROR with a correlationId to quote for a row lost to a server-side fault.
 
         '
       operationId: bulkIngestRoles
@@ -2394,7 +2394,7 @@ paths:
 
         Emits a SECURITY_ROLE_PERMISSION_BULK_INGEST event.
 
-        Returns 200 in all cases; a row naming an unknown role fails with ROLE_PERMISSION_ROLE_UNKNOWN while the rest of the batch continues.
+        Returns 200 in all cases; a row naming an unknown role fails with ROLE_PERMISSION_ROLE_UNKNOWN while the rest of the batch continues. Grants are applied one at a time, so a row whose grants were refused carries ROLE_PERMISSION_INGEST_FAILED and names them, while a row where any grant was lost to a server-side fault carries INTERNAL_ERROR and a correlationId to quote instead.
 
         '
       operationId: bulkIngestRolePermissions
@@ -3476,7 +3476,7 @@ paths:
 
         Re-running the same file is safe: an existing username is reported as already provisioned rather than as a failure.
 
-        Returns 200 with a per-record result; check each result rather than the status alone.
+        Returns 200 with a per-record result; check each result''s errorCode rather than the status alone, which is USER_INGEST_FAILED with the reason for a row the service refused, or INTERNAL_ERROR with a correlationId to quote for a row lost to a server-side fault.
 
         '
       operationId: bulkIngestUsers
@@ -3548,7 +3548,7 @@ paths:
 
         Re-running the same file is safe: the consumer upserts by username.
 
-        Returns 200 with a per-record result; check each result rather than the status alone.
+        Returns 200 with a per-record result; check each result''s errorCode rather than the status alone, which is USER_PERSON_LINK_INGEST_FAILED with the reason for a row the service refused, or INTERNAL_ERROR with a correlationId to quote for a row lost to a server-side fault.
 
         '
       operationId: bulkIngestUserPersonLinks
@@ -5040,6 +5040,10 @@ components:
     BulkIngestResult:
       description: Per-record outcome of a bulk ingest submission
       properties:
+        correlationId:
+          description: 'Correlation id to quote when reporting a row that failed for a server-side reason. Present only alongside errorCode INTERNAL_ERROR, where it is the whole of what the caller can act on: the exception itself is logged at ERROR against this id and never returned (ADR-0056). Every failed row of one request carries the same id.'
+          example: 01960003-0000-7000-8000-0000000000ff
+          type: string
         entityId:
           description: Identifier of the entity created/updated for this record, when successful
           example: 01960003-0000-7000-8000-000000000001

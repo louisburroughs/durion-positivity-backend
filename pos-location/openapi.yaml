@@ -151,7 +151,7 @@ paths:
 
         Re-running the same file is safe: a bay name already present at its location is reported as already existing rather than as a failure.
 
-        Returns 200 with a per-record result; check each result rather than the status alone.
+        Returns 200 with a per-record result; check each result rather than the status alone. A row the service refused carries errorCode BAY_INGEST_FAILED and the reason; a row lost to a server-side fault carries INTERNAL_ERROR and a correlationId to quote, with no detail of its own.
 
         '
       operationId: bulkIngestBays
@@ -215,7 +215,7 @@ paths:
 
         Emits a LOCATION_BULK_INGEST event, and every successfully created location also publishes a location fact for replica consumers.
 
-        Returns 200 with per-record results even when some records fail (failed rows carry errorCode LOCATION_INGEST_FAILED), and 400 when the batch envelope itself is invalid.
+        Returns 200 with per-record results even when some records fail: a row the service refused carries errorCode LOCATION_INGEST_FAILED and the reason, while a row lost to a server-side fault carries INTERNAL_ERROR and a correlationId to quote, with no detail of its own. Returns 400 when the batch envelope itself is invalid.
 
         '
       operationId: bulkIngestLocations
@@ -384,7 +384,7 @@ paths:
 
         Re-running the same file is safe: a name already present at its site is skipped, not failed, and an existing location is never modified — applying a changed status or capacity to a live location is an operator''s update, not a reseed.
 
-        Returns 200 with a per-record result; check each result rather than the status alone.
+        Returns 200 with a per-record result; check each result rather than the status alone. A row the service refused carries errorCode STORAGE_LOCATION_INGEST_FAILED and the reason; a row lost to a server-side fault carries INTERNAL_ERROR and a correlationId to quote, with no detail of its own.
 
         '
       operationId: bulkIngestStorageLocations
@@ -1874,7 +1874,7 @@ paths:
 
         Re-running the same file is safe: a name already present at its base location is reported as already existing rather than as a failure.
 
-        Returns 200 with a per-record result; check each result rather than the status alone.
+        Returns 200 with a per-record result; check each result''s errorCode rather than the status alone, which is MOBILE_UNIT_INGEST_FAILED with the reason for a row the service refused, or INTERNAL_ERROR with a correlationId to quote for a row lost to a server-side fault.
 
         '
       operationId: bulkIngestMobileUnits
@@ -2905,6 +2905,10 @@ components:
     BulkIngestResult:
       description: Per-record outcome of a bulk ingest submission
       properties:
+        correlationId:
+          description: 'Correlation id to quote when reporting a row that failed for a server-side reason. Present only alongside errorCode INTERNAL_ERROR, where it is the whole of what the caller can act on: the exception itself is logged at ERROR against this id and never returned (ADR-0056). Every failed row of one request carries the same id.'
+          example: 01960003-0000-7000-8000-0000000000ff
+          type: string
         entityId:
           description: Identifier of the entity created/updated for this record, when successful
           example: 01960003-0000-7000-8000-000000000001

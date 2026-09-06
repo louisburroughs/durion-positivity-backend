@@ -9,7 +9,11 @@ import com.positivity.people.internal.dto.CreateEmployeeRequest;
 import com.positivity.people.internal.dto.EmployeeContactInfoDto;
 import com.positivity.people.internal.dto.PersonBulkIngestRecord;
 import com.positivity.people.internal.enums.EmployeeStatus;
+import com.positivity.people.internal.exception.NotFoundException;
+import com.positivity.people.internal.exception.PersonNotFoundException;
 import com.positivity.people.internal.exception.RequestValidationException;
+import com.positivity.people.internal.exception.ResourceStateConflictException;
+import com.positivity.people.internal.exception.SemanticValidationException;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.people.internal.service.EmployeeService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,9 +24,9 @@ import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -38,7 +42,6 @@ import org.springframework.web.bind.annotation.RestController;
         scopes = {"people:employee:create"})
 @RequestMapping("/v1/people")
 @RequiredArgsConstructor
-@Slf4j
 @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_CREATE + "')")
 @Tag(name = "People Bulk Ingest API", description = "Bulk import employee records")
 public class PersonBulkIngestController extends AbstractBulkIngestController<PersonBulkIngestRecord> {
@@ -64,8 +67,11 @@ public class PersonBulkIngestController extends AbstractBulkIngestController<Per
                     employeeNumber, and hireDate as a YYYY-MM-DD string.
                     Emits a PEOPLE_BULK_INGEST event, and each successfully created employee also publishes its \
                     identity upsert command and people.employee.updated fact.
-                    Returns 200 even when individual records fail (inspect per-record success flags and errorCode \
-                    PEOPLE_INGEST_FAILED), and 400 when the envelope itself is invalid or the records list is empty.
+                    Returns 200 even when individual records fail: inspect each record's success flag and errorCode, \
+                    which is PEOPLE_INGEST_FAILED with the reason for a record the service refused, or \
+                    INTERNAL_ERROR with a correlationId to quote and no detail of its own for a record lost \
+                    to a server-side fault. Returns 400 when the envelope itself is invalid or the records list is \
+                    empty.
                     """)
     public ResponseEntity<BulkIngestResponse> bulkIngest(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -129,13 +135,7 @@ public class PersonBulkIngestController extends AbstractBulkIngestController<Per
                         .build());
                 successCount++;
             } catch (Exception exception) {
-                log.warn("Failed to ingest people record at row {}: {}", i, exception.getMessage(), exception);
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode("PEOPLE_INGEST_FAILED")
-                        .errorMessage(errorMessage(exception))
-                        .build());
+                results.add(rowFailure(i, exception));
                 failureCount++;
             }
         }
@@ -148,9 +148,37 @@ public class PersonBulkIngestController extends AbstractBulkIngestController<Per
                 .build();
     }
 
-    private String errorMessage(@NonNull Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? "People ingest failed" : message;
+    /**
+     * What the people services refuse about the record itself: a person the row names that does
+     * not exist, a state the employee record cannot be moved into, a value that is well-formed but
+     * meaningless, and plain field validation. Each is what
+     * {@link com.positivity.people.internal.controller.PeopleExceptionHandler} answers as a 4xx,
+     * so each describes the caller\'s own row. A {@code ResponseStatusException} carrying a 4xx is
+     * recognised platform-wide and needs no entry. Everything else is a server-side fault,
+     * reported generically against a correlation id (issue #1718).
+     *
+     * <p>Bare {@code IllegalStateException} is deliberately absent even though this module\'s
+     * advice answers it 409: it is also what Hibernate and the JDK raise, and its message is the
+     * kind this fix exists to stop echoing.
+     */
+    @Override
+    protected Collection<Class<? extends Throwable>> rowRejectionTypes() {
+        return List.of(
+                PersonNotFoundException.class,
+                ResourceStateConflictException.class,
+                SemanticValidationException.class,
+                RequestValidationException.class,
+                NotFoundException.class);
+    }
+
+    @Override
+    protected String rowRejectionCode() {
+        return "PEOPLE_INGEST_FAILED";
+    }
+
+    @Override
+    protected String rowRejectionFallbackMessage() {
+        return "People ingest failed";
     }
 
     private LocalDate parseHireDate(String hireDateValue) {

@@ -547,7 +547,7 @@ paths:
 
         Emits a CATALOG_BULK_INGEST event; each successful row also publishes a product fact carrying the resolved category and subcategory, and invalidates the product-detail cache.
 
-        Returns 200 even when rows fail, so callers must inspect successCount, failureCount and the per-row results rather than the HTTP status.
+        Returns 200 even when rows fail, so callers must inspect successCount, failureCount and the per-row results rather than the HTTP status. A row the catalog refused carries errorCode CATALOG_INGEST_FAILED and the reason; a row lost to a server-side fault carries INTERNAL_ERROR and a correlationId to quote, with no detail of its own.
 
         '
       operationId: bulkIngestCatalogProducts
@@ -4490,6 +4490,10 @@ components:
     BulkIngestResult:
       description: Per-record outcome of a bulk ingest submission
       properties:
+        correlationId:
+          description: 'Correlation id to quote when reporting a row that failed for a server-side reason. Present only alongside errorCode INTERNAL_ERROR, where it is the whole of what the caller can act on: the exception itself is logged at ERROR against this id and never returned (ADR-0056). Every failed row of one request carries the same id.'
+          example: 01960003-0000-7000-8000-0000000000ff
+          type: string
         entityId:
           description: Identifier of the entity created/updated for this record, when successful
           example: 01960003-0000-7000-8000-000000000001

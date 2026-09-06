@@ -9,6 +9,7 @@ import com.positivity.inventory.internal.cyclecount.service.CycleCountPlanServic
 import com.positivity.inventory.internal.dto.cyclecount.plan.CreateCycleCountPlanRequest;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanBulkIngestRecord;
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanResponse;
+import com.positivity.inventory.internal.exception.InventoryValidationException;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -20,13 +21,13 @@ import jakarta.validation.Valid;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -50,7 +51,6 @@ import org.springframework.web.bind.annotation.RestController;
         scopes = {"inventory:cycle_count:initiate"})
 @RequestMapping("/v1/inventory/cycleCountPlans")
 @RequiredArgsConstructor
-@Slf4j
 @Tag(name = "Cycle Count Plan Bulk Ingest API", description = "Bulk import cycle count plans")
 public class CycleCountPlanBulkIngestController extends AbstractBulkIngestController<CycleCountPlanBulkIngestRecord> {
 
@@ -90,7 +90,8 @@ public class CycleCountPlanBulkIngestController extends AbstractBulkIngestContro
                     Emits an INVENTORY_CYCLE_COUNT_PLAN_BULK_INGEST event and a plan-created event per row.
                     Re-running the same file is safe: a plan whose name is already present at that site is \
                     recognised rather than duplicated, since nothing in the schema makes plan names unique.
-                    Returns 200 with a per-record result; check each result rather than the status alone.
+                    Returns 200 with a per-record result; check each result rather than the status alone. A row the service refused carries errorCode CYCLE_COUNT_PLAN_INGEST_FAILED and the reason; a row lost to a \
+                    server-side fault carries INTERNAL_ERROR and a correlationId to quote, with no detail of its own.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -153,14 +154,7 @@ public class CycleCountPlanBulkIngestController extends AbstractBulkIngestContro
                         .build());
                 successCount++;
             } catch (Exception exception) {
-                log.warn("Failed to ingest cycle count plan at row {}: {}", i, exception.getMessage());
-                String message = exception.getMessage();
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode(INGEST_FAILED)
-                        .errorMessage(message == null || message.isBlank() ? "Cycle count plan ingest failed" : message)
-                        .build());
+                results.add(rowFailure(i, exception));
                 failureCount++;
             }
         }
@@ -209,5 +203,27 @@ public class CycleCountPlanBulkIngestController extends AbstractBulkIngestContro
         return Optional.ofNullable(request.getOperatorId())
                 .filter(operatorId -> !operatorId.isBlank())
                 .orElse("system");
+    }
+
+    /**
+     * What {@link CycleCountPlanService#createPlan} refuses about the record itself: a missing
+     * locationId, an empty zone list, and a scheduled date that is not in the future. That is the
+     * whole of it — a plan naming a site that does not exist is not refused at all, because the
+     * site name is resolved for display only and falls back to null. Everything else is a
+     * server-side fault, reported generically against a correlation id (issue #1718).
+     */
+    @Override
+    protected Collection<Class<? extends Throwable>> rowRejectionTypes() {
+        return List.of(InventoryValidationException.class);
+    }
+
+    @Override
+    protected String rowRejectionCode() {
+        return INGEST_FAILED;
+    }
+
+    @Override
+    protected String rowRejectionFallbackMessage() {
+        return "Cycle count plan ingest failed";
     }
 }

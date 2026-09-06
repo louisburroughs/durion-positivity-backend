@@ -6,6 +6,9 @@ import com.positivity.bulkingest.BulkIngestResponse;
 import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.catalog.internal.dto.CatalogBulkIngestRecord;
 import com.positivity.catalog.internal.dto.ProductCreateRequestDto;
+import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
+import com.positivity.catalog.internal.exception.CatalogNotFoundException;
+import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.security.CatalogPermissions;
 import com.positivity.catalog.internal.service.CategoryNameResolver;
 import com.positivity.catalog.internal.service.ProductMasterDataService;
@@ -16,6 +19,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -65,7 +69,9 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
             Emits a CATALOG_BULK_INGEST event; each successful row also publishes a product fact carrying \
             the resolved category and subcategory, and invalidates the product-detail cache.
             Returns 200 even when rows fail, so callers must inspect successCount, failureCount and the \
-            per-row results rather than the HTTP status.
+            per-row results rather than the HTTP status. A row the catalog refused carries errorCode \
+            CATALOG_INGEST_FAILED and the reason; a row lost to a server-side fault carries \
+            INTERNAL_ERROR and a correlationId to quote, with no detail of its own.
             """)
     @EmitEvent(id = "CATALOG_BULK_INGEST", apiVersion = "1")
     public ResponseEntity<BulkIngestResponse> bulkIngest(
@@ -108,13 +114,7 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
                         .build());
                 successCount++;
             } catch (Exception exception) {
-                log.warn("Failed to ingest catalog record at row {}: {}", i, exception.getMessage(), exception);
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode("CATALOG_INGEST_FAILED")
-                        .errorMessage(errorMessage(exception))
-                        .build());
+                results.add(rowFailure(i, exception));
                 failureCount++;
             }
         }
@@ -158,8 +158,27 @@ public class CatalogBulkIngestController extends AbstractBulkIngestController<Ca
         return fallback;
     }
 
-    private String errorMessage(@NonNull Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? "Catalog ingest failed" : message;
+    /**
+     * What {@link ProductMasterDataService#createProduct} refuses about the record itself: a
+     * malformed field, a business rule the product breaks, and a referenced category or
+     * subcategory that does not exist. All three are what
+     * {@link com.positivity.catalog.internal.controller.CatalogExceptionHandler} answers as a 4xx
+     * on the single-product endpoint, so all three describe the caller's own row. Everything else
+     * is a server-side fault, reported generically against a correlation id (issue #1718).
+     */
+    @Override
+    protected Collection<Class<? extends Throwable>> rowRejectionTypes() {
+        return List.of(
+                CatalogValidationException.class, CatalogBusinessRuleException.class, CatalogNotFoundException.class);
+    }
+
+    @Override
+    protected String rowRejectionCode() {
+        return "CATALOG_INGEST_FAILED";
+    }
+
+    @Override
+    protected String rowRejectionFallbackMessage() {
+        return "Catalog ingest failed";
     }
 }

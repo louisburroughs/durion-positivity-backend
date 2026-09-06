@@ -1,5 +1,7 @@
 package com.positivity.catalog.internal.controller;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -422,15 +424,23 @@ class CatalogBulkIngestControllerTest {
         request.setLocationId(LOCATION_ID);
         request.setRecords(List.of(catalogRecord));
 
-        when(productMasterDataService.createProduct(any())).thenThrow(new IllegalArgumentException("Duplicate SKU"));
+        when(productMasterDataService.createProduct(any()))
+                .thenThrow(new IllegalArgumentException(
+                        "could not extract ResultSet; SQL [select p1_0.sku from catalog_product p1_0]"));
 
         mockMvc.perform(post("/v1/catalog/bulk-ingest")
+                        .header("X-Correlation-Id", "corr-from-caller")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalSubmitted").value(1))
                 .andExpect(jsonPath("$.successCount").value(0))
-                .andExpect(jsonPath("$.failureCount").value(1));
+                .andExpect(jsonPath("$.failureCount").value(1))
+                // Issue #1718: a bare IllegalArgumentException is equally what Hibernate raises,
+                // so it is not classifiable as a rejection and its text never reaches the caller.
+                .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
+                .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("catalog_product"))));
     }
 
     @Test

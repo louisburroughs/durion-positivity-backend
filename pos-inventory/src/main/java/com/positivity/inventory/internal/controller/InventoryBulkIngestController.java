@@ -18,7 +18,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,7 +32,6 @@ import org.springframework.web.bind.annotation.RestController;
         scopes = {"inventory:adjustment:create"})
 @RequestMapping("/v1/inventory")
 @RequiredArgsConstructor
-@Slf4j
 @Tag(name = "Inventory Bulk Ingest API", description = "Bulk import inventory adjustment requests")
 public class InventoryBulkIngestController extends AbstractBulkIngestController<InventoryBulkIngestRecord> {
 
@@ -60,9 +58,10 @@ public class InventoryBulkIngestController extends AbstractBulkIngestController<
                     submits the batch.
                     Emits an INVENTORY_BULK_INGEST event; each accepted row persists a PENDING adjustment request \
                     attributed to the resolved actor.
-                    Returns 200 with per-row results — failed rows carry errorCode INVENTORY_INGEST_FAILED and the \
-                    failure message — and 400 when the envelope itself is invalid because jobId, locationId or \
-                    records are missing.
+                    Returns 200 with per-row results — a row the service refused carries errorCode \
+                    INVENTORY_INGEST_FAILED and the reason, while a row lost to a server-side fault carries \
+                    INTERNAL_ERROR and a correlationId to quote, with no detail of its own — and 400 when \
+                    the envelope itself is invalid because jobId, locationId or records are missing.
                     """,
             tags = {"Inventory Bulk Ingest API"})
     public ResponseEntity<BulkIngestResponse> bulkIngest(
@@ -116,13 +115,7 @@ public class InventoryBulkIngestController extends AbstractBulkIngestController<
                         .build());
                 successCount++;
             } catch (Exception exception) {
-                log.warn("Failed to ingest inventory record at row {}: {}", i, exception.getMessage());
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode("INVENTORY_INGEST_FAILED")
-                        .errorMessage(errorMessage(exception))
-                        .build());
+                results.add(rowFailure(i, exception));
                 failureCount++;
             }
         }
@@ -155,8 +148,21 @@ public class InventoryBulkIngestController extends AbstractBulkIngestController<
         return fallback;
     }
 
-    private String errorMessage(@NonNull Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? "Inventory ingest failed" : message;
+    /**
+     * No rejection types: {@code StockMovementService#createAdjustmentRequest} validates nothing
+     * and refuses nothing — it builds the request and saves it — so a failure on this path is a
+     * persistence fault, not the caller\'s row, and belongs behind a correlation id
+     * (issue #1718). Bare {@code IllegalArgumentException} is deliberately not named even though
+     * this module\'s advice answers it 400: it is equally what Hibernate and the JDK raise, and
+     * its message is the kind this fix exists to stop echoing.
+     */
+    @Override
+    protected String rowRejectionCode() {
+        return "INVENTORY_INGEST_FAILED";
+    }
+
+    @Override
+    protected String rowRejectionFallbackMessage() {
+        return "Inventory ingest failed";
     }
 }

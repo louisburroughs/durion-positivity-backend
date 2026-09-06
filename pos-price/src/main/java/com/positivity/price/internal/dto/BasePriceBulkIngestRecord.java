@@ -11,7 +11,10 @@ import lombok.Data;
 @Schema(description = "Single base-price record within a bulk ingest payload")
 public class BasePriceBulkIngestRecord {
 
-    @Schema(description = "Product identifier the base price applies to", example = "P001", requiredMode = REQUIRED)
+    @Schema(
+            description = "Product identifier the base price applies to",
+            example = "01960003-0000-7000-8000-000000000001",
+            requiredMode = REQUIRED)
     @NotBlank
     private String productId;
 
@@ -24,7 +27,10 @@ public class BasePriceBulkIngestRecord {
     @Size(min = 3, max = 3, message = "currency must be an ISO-4217 3-character code")
     private String currency;
 
-    @Schema(description = "Date the base price becomes effective", example = "2026-03-01", requiredMode = REQUIRED)
+    @Schema(
+            description = "Instant the base price becomes effective, ISO-8601",
+            example = "2026-03-01T00:00:00Z",
+            requiredMode = REQUIRED)
     @NotBlank
     private String effectiveFrom;
 }

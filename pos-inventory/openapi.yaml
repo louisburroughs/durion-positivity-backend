@@ -937,7 +937,7 @@ paths:
 
         Emits an INVENTORY_BULK_INGEST event; each accepted row persists a PENDING adjustment request attributed to the resolved actor.
 
-        Returns 200 with per-row results — failed rows carry errorCode INVENTORY_INGEST_FAILED and the failure message — and 400 when the envelope itself is invalid because jobId, locationId or records are missing.
+        Returns 200 with per-row results — a row the service refused carries errorCode INVENTORY_INGEST_FAILED and the reason, while a row lost to a server-side fault carries INTERNAL_ERROR and a correlationId to quote, with no detail of its own — and 400 when the envelope itself is invalid because jobId, locationId or records are missing.
 
         '
       operationId: bulkIngestInventoryAdjustments
@@ -1881,7 +1881,7 @@ paths:
 
         Re-running the same file is safe: a plan whose name is already present at that site is recognised rather than duplicated, since nothing in the schema makes plan names unique.
 
-        Returns 200 with a per-record result; check each result rather than the status alone.
+        Returns 200 with a per-record result; check each result rather than the status alone. A row the service refused carries errorCode CYCLE_COUNT_PLAN_INGEST_FAILED and the reason; a row lost to a server-side fault carries INTERNAL_ERROR and a correlationId to quote, with no detail of its own.
 
         '
       operationId: bulkIngestCycleCountPlans
@@ -3845,7 +3845,7 @@ paths:
 
         Re-running the same file is safe: a line whose product already has on-hand at its destination is skipped, because adjustments are deltas and posting again would double the stock.
 
-        Returns 200 with a per-record result; check each result rather than the status alone.
+        Returns 200 with a per-record result; check each result rather than the status alone. A row the service refused carries errorCode OPENING_STOCK_INGEST_FAILED and the reason; a row lost to a server-side fault carries INTERNAL_ERROR and a correlationId to quote, with no detail of its own.
 
         '
       operationId: bulkIngestOpeningStock
@@ -4761,7 +4761,7 @@ paths:
 
         At most one enabled ANY rule may exist; a second is reported as already configured, carrying the existing rule''s id so it can be checked — an ANY rule pointing somewhere unintended refuses every unclassified line rather than catching it.
 
-        Returns 200 with a per-record result; check each result rather than the status alone.
+        Returns 200 with a per-record result; check each result rather than the status alone. A row the service refused carries errorCode PUTAWAY_RULE_INGEST_FAILED and the reason; a row lost to a server-side fault carries INTERNAL_ERROR and a correlationId to quote, with no detail of its own.
 
         '
       operationId: bulkIngestPutawayRules
@@ -9318,6 +9318,10 @@ components:
     BulkIngestResult:
       description: Per-record outcome of a bulk ingest submission
       properties:
+        correlationId:
+          description: 'Correlation id to quote when reporting a row that failed for a server-side reason. Present only alongside errorCode INTERNAL_ERROR, where it is the whole of what the caller can act on: the exception itself is logged at ERROR against this id and never returned (ADR-0056). Every failed row of one request carries the same id.'
+          example: 01960003-0000-7000-8000-0000000000ff
+          type: string
         entityId:
           description: Identifier of the entity created/updated for this record, when successful
           example: 01960003-0000-7000-8000-000000000001

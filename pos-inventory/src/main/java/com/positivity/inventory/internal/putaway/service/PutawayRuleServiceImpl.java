@@ -6,6 +6,7 @@ import com.positivity.inventory.internal.entity.PutawayRule;
 import com.positivity.inventory.internal.enums.PutawayDestinationStrategy;
 import com.positivity.inventory.internal.enums.PutawayRuleMatchType;
 import com.positivity.inventory.internal.exception.DuplicateEnabledAnyPutawayRuleException;
+import com.positivity.inventory.internal.exception.InventoryValidationException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.PutawayRuleRepository;
@@ -204,7 +205,7 @@ public class PutawayRuleServiceImpl implements PutawayRuleService {
         if (extStorageLocationReplicaRepository.count() == 0) {
             return;
         }
-        throw new IllegalArgumentException("Destination storage location " + destinationLocationId
+        throw new InventoryValidationException("Destination storage location " + destinationLocationId
                 + " does not exist in the storage-location replica");
     }
 

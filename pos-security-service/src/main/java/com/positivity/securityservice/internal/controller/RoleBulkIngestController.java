@@ -9,6 +9,7 @@ import com.positivity.securityservice.internal.dto.RoleBulkIngestRecord;
 import com.positivity.securityservice.internal.dto.RoleCreateRequest;
 import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.internal.service.RoleManagementService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,9 +20,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -47,7 +48,6 @@ import org.springframework.web.bind.annotation.RestController;
         scopes = {"security:role:create"})
 @RequestMapping("/v1/roles")
 @RequiredArgsConstructor
-@Slf4j
 @Tag(name = "Role Bulk Ingest API", description = "Bulk provision roles with persona metadata")
 public class RoleBulkIngestController extends AbstractBulkIngestController<RoleBulkIngestRecord> {
 
@@ -82,7 +82,9 @@ public class RoleBulkIngestController extends AbstractBulkIngestController<RoleB
                     Persona slots must describe the role rather than instruct the assistant: single line, within the \
                     length cap, and free of imperative control verbs.
                     Emits a SECURITY_ROLE_BULK_INGEST event.
-                    Returns 200 in all cases; inspect per-record success and failure in the response.
+                    Returns 200 in all cases; inspect each record's errorCode, which is ROLE_INGEST_FAILED with \
+                    the reason for a row the service refused, or INTERNAL_ERROR with a correlationId to quote for a \
+                    row lost to a server-side fault.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -136,14 +138,7 @@ public class RoleBulkIngestController extends AbstractBulkIngestController<RoleB
                 results.add(BulkIngestResult.builder().rowIndex(i).success(true).build());
                 successCount++;
             } catch (Exception exception) {
-                log.warn("Failed to provision role at row {}: {}", i, exception.getMessage());
-                String message = exception.getMessage();
-                results.add(BulkIngestResult.builder()
-                        .rowIndex(i)
-                        .success(false)
-                        .errorCode(INGEST_FAILED)
-                        .errorMessage(message == null || message.isBlank() ? "Role ingest failed" : message)
-                        .build());
+                results.add(rowFailure(i, exception));
                 failureCount++;
             }
         }
@@ -154,5 +149,27 @@ public class RoleBulkIngestController extends AbstractBulkIngestController<RoleB
                 .failureCount(failureCount)
                 .results(results)
                 .build();
+    }
+
+    /**
+     * What role creation refuses about the record itself: a name already taken, and plain field
+     * validation. Both are what
+     * {@link com.positivity.securityservice.internal.config.GlobalExceptionHandler} answers as a
+     * 4xx. Everything else is a server-side fault, reported generically against a correlation id
+     * (issue #1718).
+     */
+    @Override
+    protected Collection<Class<? extends Throwable>> rowRejectionTypes() {
+        return List.of(DuplicateRoleNameException.class, SecurityValidationException.class);
+    }
+
+    @Override
+    protected String rowRejectionCode() {
+        return INGEST_FAILED;
+    }
+
+    @Override
+    protected String rowRejectionFallbackMessage() {
+        return "Role ingest failed";
     }
 }

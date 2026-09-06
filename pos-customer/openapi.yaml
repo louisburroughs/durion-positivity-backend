@@ -4168,7 +4168,7 @@ paths:
 
         Use this tool for migrations and file imports of individuals; do not use createCrmPerson row by row for large loads, and note this path cannot create commercial accounts.
 
-        Preconditions: none beyond authorization; rows that fail validation are reported with errorCode CUSTOMER_INGEST_FAILED while the rest of the batch proceeds.
+        Preconditions: none beyond authorization; rows that fail validation are reported with errorCode CUSTOMER_INGEST_FAILED and the reason, and rows lost to a server-side fault with INTERNAL_ERROR and a correlationId to quote, with no detail of its own, while the rest of the batch proceeds.
 
         Required inputs: jobId (UUID), locationId (UUID), and a non-empty records list where each record has firstName and lastName (each max 100) and optionally email, phoneNumber, primaryAddress, and customerNumber; preferredContactMethod is derived as EMAIL when an email is present and PHONE_CALL otherwise, and operatorId falls back to the security context when absent or not a UUID.
 
@@ -4226,7 +4226,7 @@ paths:
 
         Use this tool for migrations and file imports of commercial fleets; individual customers go through bulkIngestCustomers instead.
 
-        Preconditions: none beyond authorization; rows that fail are reported with errorCode COMMERCIAL_INGEST_FAILED while the rest of the batch proceeds.
+        Preconditions: none beyond authorization; rows that fail are reported with errorCode COMMERCIAL_INGEST_FAILED and the reason, and rows lost to a server-side fault with INTERNAL_ERROR and a correlationId to quote, with no detail of its own, while the rest of the batch proceeds.
 
         Required inputs: jobId (UUID), locationId (UUID), and a non-empty records list where each record has legalName (max 255); displayName defaults to the legal name, and taxId and billingTermsId are optional; when contactFirstName and contactLastName are both present, a primary contact person is created (canonical identity lands in pos-people-contact, with contactEmail/contactPhone as its contact points) and attached with the PRIMARY_CONTACT role effective today.
 
@@ -4739,6 +4739,10 @@ components:
     BulkIngestResult:
       description: Per-record outcome of a bulk ingest submission
       properties:
+        correlationId:
+          description: 'Correlation id to quote when reporting a row that failed for a server-side reason. Present only alongside errorCode INTERNAL_ERROR, where it is the whole of what the caller can act on: the exception itself is logged at ERROR against this id and never returned (ADR-0056). Every failed row of one request carries the same id.'
+          example: 01960003-0000-7000-8000-0000000000ff
+          type: string
         entityId:
           description: Identifier of the entity created/updated for this record, when successful
           example: 01960003-0000-7000-8000-000000000001

@@ -39,7 +39,7 @@ paths:
 
         Emits a PRICE_BULK_INGEST event; a new window closes the previous open window at its effectiveFrom and rows are processed independently, so one bad row does not abort the batch.
 
-        Returns 200 with per-row results even when rows fail, marking failed rows with errorCode PRICE_INGEST_FAILED (including overlapping-window conflicts and unparseable values), and 400 when the batch envelope itself is invalid.
+        Returns 200 with per-row results even when rows fail, marking a refused row with errorCode PRICE_INGEST_FAILED and the reason (overlapping-window conflicts and unparseable productId, msrp or effectiveFrom values), and a row lost to a server-side fault with INTERNAL_ERROR and a correlationId to quote, with no detail of its own. Returns 400 when the batch envelope itself is invalid.
 
         '
       operationId: bulkIngestBasePrices
@@ -1352,8 +1352,8 @@ components:
           minLength: 3
           type: string
         effectiveFrom:
-          description: Date the base price becomes effective
-          example: '2026-03-01'
+          description: Instant the base price becomes effective, ISO-8601
+          example: '2026-03-01T00:00:00Z'
           minLength: 1
           type: string
         msrp:
@@ -1363,7 +1363,7 @@ components:
           type: string
         productId:
           description: Product identifier the base price applies to
-          example: P001
+          example: 01960003-0000-7000-8000-000000000001
           minLength: 1
           type: string
       required:
@@ -1432,6 +1432,10 @@ components:
     BulkIngestResult:
       description: Per-record outcome of a bulk ingest submission
       properties:
+        correlationId:
+          description: 'Correlation id to quote when reporting a row that failed for a server-side reason. Present only alongside errorCode INTERNAL_ERROR, where it is the whole of what the caller can act on: the exception itself is logged at ERROR against this id and never returned (ADR-0056). Every failed row of one request carries the same id.'
+          example: 01960003-0000-7000-8000-0000000000ff
+          type: string
         entityId:
           description: Identifier of the entity created/updated for this record, when successful
           example: 01960003-0000-7000-8000-000000000001
