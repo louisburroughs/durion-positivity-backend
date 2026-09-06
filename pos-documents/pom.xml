@@ -16,12 +16,12 @@
     <description>PDF rendering service with multi-format support</description>
 
     <properties>
-        <!-- Coverage ratchet: measured 73.3% line / 75.0% branch by the gate's own
+        <!-- Coverage ratchet: measured 78.8% line / 80.8% branch by the gate's own
              command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
              Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
              IT-inclusive measurement describes coverage the gate cannot see. -->
-        <jacoco.line.min>0.70</jacoco.line.min>
-        <jacoco.branch.min>0.72</jacoco.branch.min>
+        <jacoco.line.min>0.75</jacoco.line.min>
+        <jacoco.branch.min>0.77</jacoco.branch.min>
     </properties>
 
     <dependencies>

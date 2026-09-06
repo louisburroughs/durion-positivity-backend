@@ -12,6 +12,16 @@
   <description>Shared library providing AbstractBulkIngestController base for bulk-ingest endpoints</description>
   <packaging>jar</packaging>
 
+  <properties>
+    <!-- Coverage ratchet: measured 92.9% line / 92.9% branch by the gate's own
+         command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
+         Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
+         IT-inclusive measurement describes coverage the gate cannot see.
+         Regenerate with scripts/update-coverage-floors.sh. -->
+    <jacoco.line.min>0.89</jacoco.line.min>
+    <jacoco.branch.min>0.89</jacoco.branch.min>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>org.springframework.boot</groupId>
