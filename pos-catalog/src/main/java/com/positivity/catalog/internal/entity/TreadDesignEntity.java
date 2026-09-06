@@ -1,9 +1,12 @@
 package com.positivity.catalog.internal.entity;
 
+import com.positivity.catalog.internal.enums.TreadDesignMatchState;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -93,6 +96,30 @@ public class TreadDesignEntity {
     /** Whether any artwork on this design is still missing and awaiting retry (AC: "not as none"). */
     @Column(name = "has_unresolved_images", nullable = false)
     private boolean hasUnresolvedImages;
+
+    /**
+     * Where this design stands in the review cycle (#1645). Never null: a design that has only just
+     * been applied is {@code UNMATCHED}, which is a state, not an absence of one.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "match_state", nullable = false, length = 20)
+    private TreadDesignMatchState matchState;
+
+    /** When {@link #matchState} last changed — the age a review worklist sorts and ages out on. */
+    @Column(name = "match_state_at", nullable = false)
+    private Instant matchStateAt;
+
+    /** The reviewer who last resolved this design; null while no person has ruled on it. */
+    @Column(name = "resolved_by", length = 200)
+    private String resolvedBy;
+
+    /** Free text a reviewer left with that ruling. */
+    @Column(name = "resolution_note", columnDefinition = "text")
+    private String resolutionNote;
+
+    /** Optional date a {@code DEFERRED} design should come back to a reviewer's attention. */
+    @Column(name = "defer_until")
+    private Instant deferUntil;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

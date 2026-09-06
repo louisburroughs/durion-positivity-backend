@@ -2,6 +2,7 @@ package com.positivity.catalog.internal.repository;
 
 import com.positivity.catalog.internal.entity.ProductCodeType;
 import com.positivity.catalog.internal.entity.ProductEntity;
+import com.positivity.catalog.internal.enums.TreadDesignSource;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -99,4 +100,19 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             @Param("brand") String brand,
             @Param("category") String category,
             Pageable pageable);
+
+    /**
+     * Products currently attached to one tread design (#1645) — what an automatic re-match has to
+     * look at before it revises anything, and what a resolve action reports back.
+     */
+    List<ProductEntity> findByTreadDesignId(UUID treadDesignId);
+
+    /**
+     * Whether any product attached to this design was attached by a person (#1645).
+     *
+     * <p>The re-match gate reads this and nothing else: one manual attachment is enough to make the
+     * whole design's attachment set off-limits to the matcher, because a reviewer who connected one
+     * size deliberately did not ask for the rest to be re-shuffled underneath it.
+     */
+    boolean existsByTreadDesignIdAndTreadDesignSource(UUID treadDesignId, TreadDesignSource treadDesignSource);
 }

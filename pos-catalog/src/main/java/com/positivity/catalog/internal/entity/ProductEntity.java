@@ -2,6 +2,7 @@ package com.positivity.catalog.internal.entity;
 
 import com.positivity.catalog.internal.enums.ProductLifecycleState;
 import com.positivity.catalog.internal.enums.ProductStatus;
+import com.positivity.catalog.internal.enums.TreadDesignSource;
 import com.positivity.shared.id.UUIDv7Id;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
@@ -116,6 +117,19 @@ public class ProductEntity implements CatalogItem {
     @Column(name = "tread_design_id", columnDefinition = "UUID")
     @Schema(description = "Matched tread design enrichment id (vendor-supplied), when resolved")
     private UUID treadDesignId;
+
+    /**
+     * Who made the attachment above (#1645): the matcher, or a person through the tread-design
+     * resolve endpoint. Null exactly when {@link #treadDesignId} is null.
+     *
+     * <p>This is what makes a human decision durable. An automatic pass revises its own earlier
+     * guesses freely — that is the point of re-running it — and without a marker it would revise a
+     * reviewer's decision with equal enthusiasm, silently, on the vendor's next publication.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tread_design_source", length = 10)
+    @Schema(description = "Whether the tread-design attachment was made automatically or by a reviewer")
+    private TreadDesignSource treadDesignSource;
 
     @Override
     public String getLongDescription() {
