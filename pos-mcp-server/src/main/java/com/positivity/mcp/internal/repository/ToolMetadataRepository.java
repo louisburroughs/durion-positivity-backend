@@ -60,6 +60,14 @@ public interface ToolMetadataRepository {
      */
     int pruneDiscoveredOperationsExcept(@NonNull Collection<String> keptNames, @NonNull Set<String> excludedDomains);
 
+    /**
+     * Every domain that currently has at least one {@code source='openapi'} row. Used by the prune
+     * to tell "this domain contributed nothing this cycle" (unseen — a service that was down or
+     * absent from the aggregate) from "this domain removed an operation" (#1819).
+     */
+    @NonNull
+    Set<String> discoveredDomains();
+
     /** Gate 3 (G3.1): maps a tool to a workflow state (by name) so it is selectable there. Idempotent. */
     void linkToolToWorkflow(@NonNull UUID toolId, @NonNull String workflowState);
 

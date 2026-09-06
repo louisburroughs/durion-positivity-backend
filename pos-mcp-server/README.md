@@ -226,6 +226,15 @@ catch a stale route between token-nested domains (people-contact's title served 
 `/order`, vehicle-inventory's at `/inventory` all pass containment) or a service with no configured title — in those
 cases behavior is simply no worse than before the guard existed.
 
+**Unseen-domain guard (#1819).** A registered domain that contributes no operation in a discovery cycle is kept, not
+pruned, on every path — on the gateway-aggregate path nothing "fails" when a service is down mid-deploy; it is simply
+absent from the aggregate, and on alpha (2026-09-06) an aggregate carrying one service's 70 ops pruned the other 965
+rows as stale, after which the next container re-embedded them all before readiness (#1818). Each such cycle logs one
+ERROR naming the failed-fetch domains and the unseen domains separately (`registered but contributed no operation
+this cycle (#1819, kept not reconciled)`). A domain that is genuinely gone — retired service, renamed gateway prefix —
+will repeat that line every cycle until an operator lists it in `mcp.discovery.prunable-when-unseen`
+(`MCP_DISCOVERY_PRUNABLE_WHEN_UNSEEN`, comma-separated `mcp_tool.domain` keys), after which one cycle reconciles it.
+
 ## Answer Resolution
 
 The model's reply is classified before it reaches the user (`ChatResponseText`): direct `CONTENT`,

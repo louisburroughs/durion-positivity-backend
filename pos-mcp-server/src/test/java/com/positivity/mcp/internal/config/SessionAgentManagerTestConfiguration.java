@@ -92,6 +92,11 @@ public class SessionAgentManagerTestConfiguration {
             }
 
             @Override
+            public java.util.Set<String> discoveredDomains() {
+                return java.util.Set.of();
+            }
+
+            @Override
             public void linkToolToWorkflow(java.util.UUID toolId, String workflowState) {
                 // no-op stub
             }
