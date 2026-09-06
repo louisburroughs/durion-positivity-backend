@@ -1,8 +1,9 @@
 # Analytics gate — expected answers (TRACKB seed on alpha, EVAL_AS_OF 2026-09-01)
 
 The expected values below are the **live measured output** of this directory's `qNN-*.sql`
-suite against the alpha stack's databases (run 2026-09-02 via `run_ground_truth.sh`; exit 0,
-all 26 sections, zero SQL errors — script-is-spec on the shared environment). Alongside each
+suite against the alpha stack's databases (Q1–Q25 from the run of 2026-09-02 via
+`run_ground_truth.sh`; exit 0, zero SQL errors — script-is-spec on the shared environment.
+Q26 was measured separately on 2026-09-06 against `sha-868b6fa`, noted in its own section). Alongside each
 measured value, the **seed contribution** derived analytically from `../seed/DATASET.md`
 is kept, so the designed invariants stay checkable as seed-relative deltas wherever
 co-tenant data moved the absolute shape. Every seed-contribution figure in the live run
@@ -551,12 +552,14 @@ The third figure is the reason a "running low" answer is currently **empty rathe
 ## Q26 — customers with an open work order who also owe money
 
 Measured 2026-09-06 against alpha (`sha-868b6fa`) via the two sections of
-`q26-open-workorders-with-unpaid-invoices.sql` (both exit 0, zero SQL errors). #1689 band 4 —
-cross-domain join, the band the issue names by example.
+`q26-open-workorders-with-unpaid-invoices.sql` with `as_of_date='2026-09-01'` (both exit 0
+under `ON_ERROR_STOP=1`, zero SQL errors). #1689 band 4 — cross-domain join, the band the
+issue names by example.
 
-Point-in-time, as of 2026-09-01. Open work order = the six non-terminal statuses
+Point-in-time. Open work order = the six non-terminal statuses
 `WorkorderFacadeTool.searchWorkorders` accepts under its `OPEN` alias. Owed = q13's
-`InvoiceBalanceCalculator.balanceDue` derivation, copied verbatim.
+`InvoiceBalanceCalculator.balanceDue` arithmetic **and** q13's as-of rule: an invoice whose
+document date falls after the as-of date is not yet a receivable.
 
 | customer_id | open work orders | statuses | unpaid invoices | amount owed |
 |---|---|---|---|---|
@@ -565,23 +568,34 @@ Point-in-time, as of 2026-09-01. Open work order = the six non-terminal statuses
 | `1dc41416-eec7-5788-9416-042d5af62667` | 1 | APPROVED | 1 | 1,200.0000 |
 
 **Expected answer: exactly three customers, five unpaid invoices, 7,700.0000 owed between them.**
+Populations: 44 customers have an open work order, 43 have an open balance, 3 have both.
 
 ### The error this question exists to catch
 
-Neither domain can answer alone, and each single-domain answer is plausible and much longer:
-44 customers have an open work order, 43 have a balance, and only 3 have both. A model that
-reads one side and reports it produces a list an order of magnitude too long that still looks
-like an answer. This is the sequencing failure #1676 describes, in a form that can be graded.
+Neither domain can answer it, and each single-domain answer is plausible and much longer: 44
+against 43 against 3. A model that reads one side reports a list an order of magnitude too long
+that still looks like an answer. This is the sequencing failure #1676 describes, in a form that
+can be graded.
 
 ### The DRAFT boundary, and why the ground truth is not the obvious one
 
 The seed holds 92 DRAFT work orders. Counting a draft as open is defensible in business terms
-and gives 137 open work orders across 134 customers instead of 45 across 44 — an order of
-magnitude apart. The ground truth follows the **tool's** definition, because a fixture that
-means something the assistant cannot express grades a correct answer as wrong; that is the
-#1659 failure this corpus has already paid for once. Section 1b reports both readings so the
-divergence is visible rather than assumed. The intersection is the same three customers either
-way: no DRAFT-only customer has an open receivable.
+and gives 137 open work orders across 134 customers instead of 45 across 44. The ground truth
+follows the **tool's** definition, because a fixture that means something the assistant cannot
+express grades a correct answer as wrong — the #1659 failure this corpus has already paid for.
+
+Section 1b makes the consequence checkable rather than asserted: it reports both counts and
+lists the 90 customers that only DRAFT would add. None of those 90 appears in section 2, so
+the intersection is the same three customers under either reading — verifiable from the
+recorded output, not taken on trust.
+
+### Why it is out of the chat-path gate
+
+Not "awaiting a live run" — it cannot be answered within budget today. `searchWorkorders`
+exposes no page or size parameter and the backend returns 25 rows by default, so one
+`status=OPEN` call sees 25 of the 45 open work orders in unspecified order and may silently
+omit one of the three expected customers. The only correct plan is one call per AR customer,
+43 on this seed. Filed as a facade gap; the fixture's `expected_plan` records the honest cost.
 
 ### Cross-foot against observed live answers
 

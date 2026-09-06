@@ -31,6 +31,13 @@
 --   and there is no cross-service join anywhere in the platform. The expected answer is their
 --   intersection on customer id, computed from the two outputs — the same shape as q21.
 --
+--   AS-OF: the receivable half takes :as_of_date and excludes invoices whose DOCUMENT date is
+--   after it, exactly as q13 and q05 do and exactly as AccountingFacadeTool.getAgedReceivables
+--   documents ("invoices raised after that date are excluded entirely"). A first draft omitted
+--   both the parameter and the filter while claiming to be q13 verbatim; it was q13's arithmetic
+--   with q13's guard rail removed, so a re-measure at another as-of date would have left this
+--   question alone while every other AR question moved.
+--
 --   Point-in-time, so no window is stated or needed: both "open work order" and "owes us money"
 --   are current-state questions (cf. b11, where an unstated range must not produce a question).
 
@@ -47,24 +54,49 @@ WHERE w.status IN ('APPROVED', 'ASSIGNED', 'WORK_IN_PROGRESS',
 GROUP BY w.customer_id
 ORDER BY open_workorders DESC, w.customer_id;
 
--- Section 1b — the same count with DRAFT included, to show how far the two readings diverge.
+-- Section 1b — how far the two readings of "open" diverge, and which customers only DRAFT adds.
+-- The counts make the divergence visible; the id list makes the invariant checkable against
+-- section 2 instead of asserted.
 SELECT
-    COUNT(*) FILTER (WHERE status <> 'DRAFT')                    AS open_tool_definition,
-    COUNT(*)                                                     AS open_including_draft,
+    COUNT(*) FILTER (WHERE status <> 'DRAFT')                     AS open_tool_definition,
+    COUNT(*)                                                      AS open_including_draft,
     COUNT(DISTINCT customer_id) FILTER (WHERE status <> 'DRAFT')  AS customers_tool_definition,
-    COUNT(DISTINCT customer_id)                                  AS customers_including_draft
+    COUNT(DISTINCT customer_id)                                   AS customers_including_draft
 FROM workorder
 WHERE status IN ('APPROVED', 'ASSIGNED', 'WORK_IN_PROGRESS', 'AWAITING_PARTS',
                  'AWAITING_APPROVAL', 'READY_FOR_PICKUP', 'DRAFT')
   AND customer_id IS NOT NULL;
 
+SELECT w.customer_id AS draft_only_customer_id, COUNT(*) AS draft_workorders
+FROM workorder w
+WHERE w.status = 'DRAFT'
+  AND w.customer_id IS NOT NULL
+  AND NOT EXISTS (
+        SELECT 1 FROM workorder o
+        WHERE o.customer_id = w.customer_id
+          AND o.status IN ('APPROVED', 'ASSIGNED', 'WORK_IN_PROGRESS',
+                           'AWAITING_PARTS', 'AWAITING_APPROVAL', 'READY_FOR_PICKUP'))
+GROUP BY w.customer_id
+ORDER BY w.customer_id;
+
 -- DB: pos_accounting_db
--- Section 2 — customers with a positive open receivable balance, q13's balanceDue derivation.
-WITH ar_invoices AS (
+-- Section 2 — customers with a positive open receivable balance, q13's balanceDue derivation
+-- under q13's as-of rule. Usage: psql -v as_of_date="'2026-09-01'" (default below).
+\if :{?as_of_date}
+\else
+\set as_of_date '2026-09-01'
+\endif
+
+WITH params AS (
+    SELECT DATE :'as_of_date' AS as_of_date
+),
+ar_invoices AS (
     SELECT
         i.invoice_id,
         CAST(i.party_id AS uuid) AS customer_id,
-        COALESCE(i.total, 0)     AS total
+        COALESCE(i.total, 0)     AS total,
+        CAST(COALESCE(i.invoice_created_at, i.finalized_at, i.updated_at)
+             AT TIME ZONE 'UTC' AS date) AS document_date
     FROM ext_invoice i
     WHERE i.status IN ('FINALIZED', 'POSTED')
       AND i.party_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
@@ -72,6 +104,7 @@ WITH ar_invoices AS (
 open_balances AS (
     SELECT
         a.customer_id,
+        a.document_date,
         a.total
             - COALESCE((SELECT SUM(pa.applied_amount)
                         FROM payment_application pa
@@ -96,10 +129,12 @@ open_balances AS (
     FROM ar_invoices a
 )
 SELECT
-    customer_id,
-    COUNT(*)          AS unpaid_invoices,
-    SUM(open_balance) AS amount_owed
-FROM open_balances
-WHERE open_balance > 0
-GROUP BY customer_id
-ORDER BY amount_owed DESC, customer_id;
+    b.customer_id,
+    COUNT(*)            AS unpaid_invoices,
+    SUM(b.open_balance) AS amount_owed
+FROM open_balances b
+CROSS JOIN params p
+WHERE b.open_balance > 0
+  AND b.document_date <= p.as_of_date   -- q13/q05: an invoice raised after the as-of is not yet AR
+GROUP BY b.customer_id
+ORDER BY amount_owed DESC, b.customer_id;

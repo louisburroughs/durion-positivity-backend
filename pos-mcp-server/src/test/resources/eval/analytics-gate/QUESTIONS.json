@@ -640,9 +640,9 @@
       "tool_selection_fixture_id": "q26-open-workorders-with-unpaid-invoices",
       "utterance": "Which customers have an open work order and also owe us money, and how much do they owe?",
       "in_chat_path_gate": false,
-      "excluded_reason": "Newly authored (#1689 band 4). Ground truth is measured on alpha and the question is executable in two calls — searchWorkorders with status=OPEN returns every open work order with its customerId in one page, and getAgedReceivables returns the open balances — but the chat-path gate set must be matched exactly by the offline-replay corpus (#1682) and no replay fixture exists until a turn has been recorded live. Promote once it has run.",
+      "excluded_reason": "Tool-blocked, like q21 and q25. The receivable half is one getAgedReceivables call, but there is no way to enumerate open work orders across customers: WorkorderFacadeTool.searchWorkorders exposes no page or size parameter and the backend defaults to 25 rows, so a single status=OPEN call returns 25 of the seed's 45 open work orders in unspecified order and can silently drop one of the three expected customers. The only correct plan today is one searchWorkorders call per AR customer (43 on this seed), far outside any question's budget. Filed as a facade gap; promote once open work orders can be listed or paged.",
       "plan_wave": "2",
-      "budget": 2,
+      "budget": 44,
       "window": {
         "shape": "point-in-time",
         "resolved_range": "as of 2026-09-01",
@@ -656,11 +656,11 @@
       },
       "expected_plan": {
         "min_tool_calls": {
-          "searchWorkorders": 1,
-          "getAgedReceivables": 1
+          "getAgedReceivables": 1,
+          "searchWorkorders": 43
         },
-        "per": "one call for every open work order (status=OPEN, no customer filter) and one for the aged receivables; the answer is their intersection on customerId",
-        "declined_reason": "answering from one domain — listing every customer with an open work order, or every customer with a balance — instead of intersecting the two"
+        "per": "one getAgedReceivables call for the 43 customers with a balance, then one searchWorkorders (customerId + status=OPEN) per customer; the answer is the customers whose search returns rows. A single unfiltered status=OPEN call is NOT sufficient: it is capped at 25 rows against 45 open work orders.",
+        "declined_reason": "answering from one domain, or taking one page of a capped status=OPEN search as the complete set of open work orders"
       }
     }
   ]
