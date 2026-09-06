@@ -21,6 +21,10 @@ import org.springframework.web.client.RestClient;
  */
 class WorkorderFacadeToolTest {
 
+    /** The OPEN alias as it appears on the wire — RestClient percent-encodes the commas. */
+    private static final String OPEN_STATUS_LIST =
+            "APPROVED%2CASSIGNED%2CWORK_IN_PROGRESS%2CAWAITING_PARTS%2CAWAITING_APPROVAL%2CREADY_FOR_PICKUP";
+
     private static final String BASE_URL = "http://api-gateway";
     private static final String WORKORDER_ID = "01960003-0000-7000-8000-0000000000e0";
     private static final String CUSTOMER_ID = "01960003-0000-7000-8000-000000000050";
@@ -44,7 +48,8 @@ class WorkorderFacadeToolTest {
                 contract("getWorkorder").template(),
                 contract("searchWorkorders").template(),
                 contract("getWorkorderStatus").template(),
-                contract("getTechnicianLaborAnalytics").template());
+                contract("getTechnicianLaborAnalytics").template(),
+                contract("getOpenWorkordersByCustomer").template());
     }
 
     @Test
@@ -71,7 +76,7 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchWorkorders("brakes", null, null, null, null, null, null);
+        String result = tool.searchWorkorders("brakes", null, null, null, null, null, null, null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -89,7 +94,7 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchWorkorders("smith", CUSTOMER_ID, VEHICLE_ID, null, null, null, null);
+        String result = tool.searchWorkorders("smith", CUSTOMER_ID, VEHICLE_ID, null, null, null, null, null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -104,7 +109,7 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchWorkorders("smith", "  ", VEHICLE_ID, null, null, null, null);
+        String result = tool.searchWorkorders("smith", "  ", VEHICLE_ID, null, null, null, null, null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -126,8 +131,8 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result =
-                tool.searchWorkorders("", CUSTOMER_ID, null, "APPROVED", "2026-06-01", "2026-06-30", TECHNICIAN_ID);
+        String result = tool.searchWorkorders(
+                "", CUSTOMER_ID, null, "APPROVED", "2026-06-01", "2026-06-30", TECHNICIAN_ID, null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -142,7 +147,7 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchWorkorders("brakes", null, null, "   ", null, null, null);
+        String result = tool.searchWorkorders("brakes", null, null, "   ", null, null, null, null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -161,7 +166,7 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchWorkorders("", CUSTOMER_ID, null, "OPEN", null, null, null);
+        String result = tool.searchWorkorders("", CUSTOMER_ID, null, "OPEN", null, null, null, null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -179,7 +184,7 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchWorkorders("", null, null, "open", null, null, null);
+        String result = tool.searchWorkorders("", null, null, "open", null, null, null, null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -194,7 +199,8 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchWorkorders("", null, null, "APPROVED,WORK_IN_PROGRESS", null, null, null);
+        String result =
+                tool.searchWorkorders("", null, null, "APPROVED,WORK_IN_PROGRESS", null, null, null, null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -209,7 +215,7 @@ class WorkorderFacadeToolTest {
                 .andExpect(method(entry.httpMethod()))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = tool.searchWorkorders("", null, null, "COMPLETED", null, null, null);
+        String result = tool.searchWorkorders("", null, null, "COMPLETED", null, null, null, null, null);
 
         mockServer.verify();
         assertThat(result).isNotEmpty();
@@ -226,11 +232,13 @@ class WorkorderFacadeToolTest {
                 contract("getWorkorder").template(),
                 "/workorder/v1/workorders/search",
                 contract("getWorkorderStatus").template(),
-                contract("getTechnicianLaborAnalytics").template());
+                contract("getTechnicianLaborAnalytics").template(),
+                contract("getOpenWorkordersByCustomer").template());
         server.expect(requestTo(BASE_URL + "/workorder/v1/workorders/search?customerId=" + CUSTOMER_ID))
                 .andRespond(withSuccess("{\"results\":[]}", MediaType.APPLICATION_JSON));
 
-        String result = pathOnlyTool.searchWorkorders("ignored-by-template", CUSTOMER_ID, null, null, null, null, null);
+        String result = pathOnlyTool.searchWorkorders(
+                "ignored-by-template", CUSTOMER_ID, null, null, null, null, null, null, null);
 
         server.verify();
         assertThat(result).isNotEmpty();
@@ -307,6 +315,47 @@ class WorkorderFacadeToolTest {
                 .isInstanceOf(InvalidToolArgumentException.class)
                 .hasMessageContaining("startDate")
                 .hasMessageContaining("endDate");
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("getOpenWorkordersByCustomer sends GET /analytics/open-by-customer with the default limit")
+    void getOpenWorkordersByCustomer_sendsGetWithDefaultLimit() {
+        FacadeContractManifest.Entry entry = contract("getOpenWorkordersByCustomer");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("limit", "100"))))
+                .andExpect(method(entry.httpMethod()))
+                .andRespond(withSuccess("{\"rows\":[],\"totalCustomers\":0}", MediaType.APPLICATION_JSON));
+
+        String result = tool.getOpenWorkordersByCustomer(null);
+
+        mockServer.verify();
+        assertThat(result).contains("totalCustomers");
+    }
+
+    @Test
+    @DisplayName("getOpenWorkordersByCustomer passes an explicit limit through")
+    void getOpenWorkordersByCustomer_passesExplicitLimit() {
+        FacadeContractManifest.Entry entry = contract("getOpenWorkordersByCustomer");
+        mockServer
+                .expect(requestTo(BASE_URL + entry.expand(Map.of("limit", "25"))))
+                .andRespond(withSuccess("{\"rows\":[]}", MediaType.APPLICATION_JSON));
+
+        tool.getOpenWorkordersByCustomer(25);
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("searchWorkorders passes page and size through so a caller can reach past the first 25 rows (#1855)")
+    void searchWorkorders_passesPageAndSize() {
+        mockServer
+                .expect(requestTo(BASE_URL + "/workorder/v1/workorders/search?q=&status=" + OPEN_STATUS_LIST
+                        + "&page=1&size=100"))
+                .andRespond(withSuccess("{\"content\":[]}", MediaType.APPLICATION_JSON));
+
+        tool.searchWorkorders("", null, null, "OPEN", null, null, null, 1, 100);
 
         mockServer.verify();
     }

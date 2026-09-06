@@ -1005,6 +1005,55 @@ paths:
       - Work Order API
       x-required-permissions:
       - workorder:workorder:create
+  /v1/workorders/analytics/open-by-customer:
+    get:
+      description: "Returns one row per customer who currently holds at least one open work order, with the customer's display name and their open count, ordered by count descending, plus the totals before the limit was applied.
+
+        Use this tool to answer questions about open work across the whole book — which customers have work in progress, how many customers have open jobs, or the work-order half of a cross-domain question such as customers with both an open job and an unpaid invoice; use searchWorkorders instead when you need the individual work orders for one customer, and getWorkorder for one work order's detail.
+
+        Open means the six non-terminal statuses APPROVED, ASSIGNED, WORK_IN_PROGRESS, AWAITING_PARTS, AWAITING_APPROVAL and READY_FOR_PICKUP — the same set searchWorkorders accepts under its OPEN alias. DRAFT is deliberately excluded: a draft has not been approved into work.
+
+        Preconditions: none. Required inputs: none; limit is optional (default 100, hard-capped at 500).
+
+        Emits a WORKORDER_ANALYTICS_OPEN_BY_CUSTOMER_VIEW audit event; no state changes.
+
+        Returns 200 with truncated=true and the true totalCustomers/totalOpenWorkorders when more customers had open work than the limit allowed.
+
+        "
+      operationId: getOpenWorkordersByCustomer
+      parameters:
+      - description: Maximum customers to return (default 100, capped at 500)
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 100
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenWorkordersByCustomerResponse'
+          description: Open work-order counts by customer returned successfully
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenWorkordersByCustomerResponse'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenWorkordersByCustomerResponse'
+          description: Forbidden - missing workorder:analytics:view
+      summary: Get Open Work Order Counts By Customer
+      tags:
+      - Workorder Analytics
+      x-required-permissions:
+      - workorder:analytics:view
   /v1/workorders/analytics/reopened:
     get:
       description: 'Returns one row per reopen event for work orders completed in the window and reopened within withinDays of that completion, per event rather than pre-counted, so a workorder reopened twice inside the window produces two separate rows for the caller to group and count by technician.
@@ -7945,6 +7994,45 @@ components:
       - available
       - status
       - unitId
+      type: object
+    OpenWorkorderCustomerRow:
+      description: One customer and how many open work orders they currently hold
+      properties:
+        customerId:
+          description: Customer (party) id
+          format: uuid
+          type: string
+        customerName:
+          description: Customer display name, resolved server-side; null when the party replica has no record
+          type: string
+        openWorkorders:
+          description: Open work orders this customer currently holds
+          format: int64
+          type: integer
+      type: object
+    OpenWorkordersByCustomerResponse:
+      description: Per-customer open work-order counts, with truncation signalling
+      properties:
+        limit:
+          description: The limit applied to this response
+          format: int32
+          type: integer
+        rows:
+          description: One row per customer with open work, ordered by openWorkorders descending, capped at `limit`
+          items:
+            $ref: '#/components/schemas/OpenWorkorderCustomerRow'
+          type: array
+        totalCustomers:
+          description: Total customers holding open work orders, before the limit was applied
+          format: int32
+          type: integer
+        totalOpenWorkorders:
+          description: Total open work orders across all those customers, before the limit was applied
+          format: int64
+          type: integer
+        truncated:
+          description: True when more customers had open work than `limit` allowed and the result was capped
+          type: boolean
       type: object
     OperationalContextOverrideRequest:
       description: Manager override payload for workorder operational context

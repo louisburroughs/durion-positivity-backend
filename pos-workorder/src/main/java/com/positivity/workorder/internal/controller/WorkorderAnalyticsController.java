@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
+import com.positivity.workorder.internal.dto.OpenWorkordersByCustomerResponse;
 import com.positivity.workorder.internal.dto.ReopenedWorkorderAnalyticsResponse;
 import com.positivity.workorder.internal.dto.TechnicianLaborAnalyticsResponse;
 import com.positivity.workorder.internal.dto.WorkorderStatusTransitionsResponse;
@@ -51,6 +52,9 @@ import org.springframework.web.bind.annotation.RestController;
         scopes = {"workorder:analytics:view"})
 @Validated
 public class WorkorderAnalyticsController {
+
+    /** Hard cap on the per-customer open-work-order page (#1855). */
+    private static final int MAX_OPEN_BY_CUSTOMER_LIMIT = 500;
 
     private static final int DEFAULT_LIMIT = 100;
     private static final int MAX_LIMIT = 500;
@@ -245,5 +249,34 @@ public class WorkorderAnalyticsController {
                     @Max(MAX_LIMIT)
                     int limit) {
         return analyticsService.getTechnicianLabor(startDate, endDate, limit);
+    }
+
+    @GetMapping(value = "/analytics/open-by-customer", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.ANALYTICS_VIEW + "')")
+    @EmitEvent(id = "WORKORDER_ANALYTICS_OPEN_BY_CUSTOMER_VIEW", apiVersion = "1")
+    @Operation(
+            operationId = "getOpenWorkordersByCustomer",
+            summary = "Get Open Work Order Counts By Customer",
+            description = """
+                    Returns one row per customer who currently holds at least one open work order, with                     the customer's display name and their open count, ordered by count descending, plus                     the totals before the limit was applied.
+                    Use this tool to answer questions about open work across the whole book — which                     customers have work in progress, how many customers have open jobs, or the                     work-order half of a cross-domain question such as customers with both an open job                     and an unpaid invoice; use searchWorkorders instead when you need the individual                     work orders for one customer, and getWorkorder for one work order's detail.
+                    Open means the six non-terminal statuses APPROVED, ASSIGNED, WORK_IN_PROGRESS,                     AWAITING_PARTS, AWAITING_APPROVAL and READY_FOR_PICKUP — the same set                     searchWorkorders accepts under its OPEN alias. DRAFT is deliberately excluded: a                     draft has not been approved into work.
+                    Preconditions: none. Required inputs: none; limit is optional (default 100,                     hard-capped at 500).
+                    Emits a WORKORDER_ANALYTICS_OPEN_BY_CUSTOMER_VIEW audit event; no state changes.
+                    Returns 200 with truncated=true and the true totalCustomers/totalOpenWorkorders                     when more customers had open work than the limit allowed.
+                    """,
+            tags = {"Workorder Analytics"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Open work-order counts by customer returned successfully",
+            content = @Content(schema = @Schema(implementation = OpenWorkordersByCustomerResponse.class)))
+    @ApiResponse(responseCode = "401", description = "Unauthorized")
+    @ApiResponse(responseCode = "403", description = "Forbidden - missing workorder:analytics:view")
+    public OpenWorkordersByCustomerResponse getOpenWorkordersByCustomer(
+            @Parameter(description = "Maximum customers to return (default 100, capped at 500)")
+                    @RequestParam(required = false, defaultValue = "100")
+                    int limit) {
+        int effectiveLimit = Math.clamp(limit, 1, MAX_OPEN_BY_CUSTOMER_LIMIT);
+        return analyticsService.getOpenWorkordersByCustomer(effectiveLimit);
     }
 }
