@@ -509,7 +509,7 @@
       "tool_selection_fixture_id": "q21-vendors-owed-with-open-purchase-orders",
       "utterance": "Which vendors do we still owe money to, and do any of them have purchase orders still open with us?",
       "in_chat_path_gate": false,
-      "excluded_reason": "No purchase-order tool exists on the facade surface — AccountingFacadeTool covers the owed half via getAgedPayables, but nothing exposes purchase orders, so the assistant cannot execute the second half at all. Ground truth is measured and correct; the question waits on a PO read tool rather than on data.",
+      "excluded_reason": "Awaiting a live run, not a missing tool. The exclusion originally read 'no purchase-order tool exists'; #1785 added listPurchaseOrders and #1798 added getPurchaseOrderSummary, so both halves are now callable — getAgedPayables for what is owed and the purchase-order tools for what is on order. The chat-path gate set must be matched exactly by the offline-replay corpus (#1682), so promotion waits on a recorded turn, as for q22, q23 and q24.",
       "plan_wave": "3",
       "budget": 4,
       "window": {
@@ -640,9 +640,9 @@
       "tool_selection_fixture_id": "q26-open-workorders-with-unpaid-invoices",
       "utterance": "Which customers have an open work order and also owe us money, and how much do they owe?",
       "in_chat_path_gate": false,
-      "excluded_reason": "Tool-blocked, like q21 and q25. The receivable half is one getAgedReceivables call, but there is no way to enumerate open work orders across customers: WorkorderFacadeTool.searchWorkorders exposes no page or size parameter and the backend defaults to 25 rows, so a single status=OPEN call returns 25 of the seed's 45 open work orders in unspecified order and can silently drop one of the three expected customers. The only correct plan today is one searchWorkorders call per AR customer (43 on this seed), far outside any question's budget. Filed as a facade gap; promote once open work orders can be listed or paged.",
+      "excluded_reason": "Awaiting a deploy and a live run. It was tool-blocked when authored — searchWorkorders pages at 25 rows against 45 open work orders — and #1855 fixed that with getOpenWorkordersByCustomer, one server-side grouped call. Promotion needs that build deployed (the mcp_tool description has to be re-embedded before selection can retrieve the tool) and then a recorded turn, per the model q22 established.",
       "plan_wave": "2",
-      "budget": 44,
+      "budget": 2,
       "window": {
         "shape": "point-in-time",
         "resolved_range": "as of 2026-09-01",
@@ -656,11 +656,11 @@
       },
       "expected_plan": {
         "min_tool_calls": {
-          "getAgedReceivables": 1,
-          "searchWorkorders": 43
+          "getOpenWorkordersByCustomer": 1,
+          "getAgedReceivables": 1
         },
-        "per": "one getAgedReceivables call for the 43 customers with a balance, then one searchWorkorders (customerId + status=OPEN) per customer; the answer is the customers whose search returns rows. A single unfiltered status=OPEN call is NOT sufficient: it is capped at 25 rows against 45 open work orders.",
-        "declined_reason": "answering from one domain, or taking one page of a capped status=OPEN search as the complete set of open work orders"
+        "per": "one getOpenWorkordersByCustomer call for every customer holding open work and one getAgedReceivables for the balances; the answer is their intersection on customerId",
+        "declined_reason": "answering from one domain — every customer with open work, or every customer with a balance — instead of intersecting the two"
       }
     }
   ]
