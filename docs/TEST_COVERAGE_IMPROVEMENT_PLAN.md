@@ -644,7 +644,9 @@ Per `.agents/skills/java-testing` and repo conventions:
 ### 6.1 Authoritative baseline
 
 **Measured the way the gate measures.** Full-reactor
-`./mvnw verify -DskipITs -Darchunit.skipTests=true`, on `main` at `5269162`.
+`./mvnw verify -DskipITs -Darchunit.skipTests=true`. First derived on `main` at
+`5269162` (2026-08-16); the table below was last regenerated on 2026-09-06 from
+`main` at `61cbbd28`, alongside `scripts/update-coverage-floors.sh --apply`.
 The `-DskipITs` is not incidental — it is the whole point. The ratchet job in
 `.github/workflows/ci.yml` runs with `-DskipITs`, so only Surefire
 (`*Test.java`) contributes to the bundle JaCoCo checks. A baseline measured any
@@ -668,54 +670,56 @@ went green or red. `pos-order` failed exactly this way at 704/1122 branches —
 eight branches above its floor — reporting 0.61 in CI and 0.6275 locally on the
 same commit, with neither measurement wrong.
 
-Repo-wide, summing all per-module reports: **80.4% line** (15,791 missed of
-80,683).
+Repo-wide, summing all per-module reports: **83.8% line** (15,265 missed of
+94,276).
 
 | Module | Lines | Line% | Branch% | `jacoco.line.min` | `jacoco.branch.min` |
 |---|---:|---:|---:|---:|---:|
-| `pos-accounting` | 10668 | 80.3 | 67.3 | 0.77 | 0.64 |
-| `pos-inventory` | 10153 | 79.2 | 64.1 | 0.76 | 0.61 |
-| `pos-workorder` | 8373 | 78.8 | 65.0 | 0.75 | 0.62 |
-| `pos-mcp-server` | 6166 | 80.2 | 68.5 | 0.77 | 0.65 |
-| `pos-customer` | 5439 | 83.9 | 74.0 | 0.80 | 0.71 |
-| `pos-supplier` | 6644 | 87.1 | 74.8 | 0.84 | 0.71 |
-| `pos-order` | 4201 | 84.4 | 71.3 | 0.81 | 0.68 |
-| `pos-security-service` | 3559 | 77.1 | 66.6 | 0.74 | 0.63 |
-| `pos-invoice` | 3380 | 77.3 | 63.7 | 0.74 | 0.60 |
-| `pos-catalog` | 3302 | 78.4 | 63.1 | 0.75 | 0.60 |
-| `pos-people` | 2901 | 78.7 | 73.1 | 0.75 | 0.70 |
-| `pos-warranty` | 2638 | 87.3 | 78.9 | 0.84 | 0.75 |
-| `pos-location` | 2208 | 78.1 | 66.1 | 0.75 | 0.63 |
-| `pos-shop-manager` | 2007 | 79.9 | 63.5 | 0.76 | 0.60 |
-| `pos-bulk-loader` | 1770 | 76.6 | 65.3 | 0.73 | 0.62 |
-| `pos-people-contact` | 1481 | 72.8 | 62.2 | 0.69 | 0.59 |
-| `pos-marketing` | 1402 | 90.7 | 85.2 | 0.87 | 0.82 |
-| `pos-price` | 1053 | 94.4 | 80.4 | 0.91 | 0.77 |
-| `pos-vehicle-inventory` | 1017 | 79.2 | 75.0 | 0.76 | 0.72 |
-| `pos-tax` | 984 | 78.5 | 66.8 | 0.75 | 0.63 |
-| `pos-domain-events` | 648 | 84.9 | 78.9 | 0.81 | 0.75 |
-| `pos-vehicle-fitment` | 542 | 78.4 | 63.6 | 0.75 | 0.60 |
-| `pos-event-receiver` | 441 | 77.6 | 87.2 | 0.74 | 0.84 |
+| `pos-accounting` | 11771 | 84.0 | 71.8 | 0.81 | 0.68 |
+| `pos-inventory` | 11670 | 83.5 | 68.9 | 0.80 | 0.65 |
+| `pos-workorder` | 9053 | 83.1 | 69.9 | 0.80 | 0.66 |
+| `pos-mcp-server` | 8185 | 84.3 | 73.2 | 0.81 | 0.70 |
+| `pos-supplier` | 7003 | 87.8 | 76.7 | 0.84 | 0.73 |
+| `pos-customer` | 5352 | 85.7 | 76.7 | 0.82 | 0.73 |
+| `pos-order` | 4578 | 86.3 | 76.6 | 0.83 | 0.73 |
+| `pos-catalog` | 4204 | 83.1 | 70.6 | 0.80 | 0.67 |
+| `pos-security-service` | 3968 | 78.9 | 68.6 | 0.75 | 0.65 |
+| `pos-invoice` | 3617 | 82.9 | 73.3 | 0.79 | 0.70 |
+| `pos-people` | 3203 | 81.5 | 74.8 | 0.78 | 0.71 |
+| `pos-warranty` | 2678 | 88.9 | 83.5 | 0.85 | 0.80 |
+| `pos-location` | 2670 | 81.0 | 70.1 | 0.78 | 0.67 |
+| `pos-shop-manager` | 2635 | 83.2 | 67.9 | 0.80 | 0.64 |
+| `pos-bulk-loader` | 2595 | 80.4 | 68.7 | 0.77 | 0.65 |
+| `pos-marketing` | 1526 | 91.1 | 88.0 | 0.88 | 0.84 |
+| `pos-people-contact` | 1468 | 72.1 | 62.5 | 0.69 | 0.59 |
+| `pos-price` | 1055 | 95.4 | 88.5 | 0.92 | 0.85 |
+| `pos-tax` | 1039 | 83.3 | 79.3 | 0.80 | 0.76 |
+| `pos-vehicle-inventory` | 1019 | 79.1 | 75.6 | 0.76 | 0.72 |
+| `pos-domain-events` | 802 | 85.3 | 80.3 | 0.82 | 0.77 |
+| `pos-vehicle-fitment` | 539 | 84.2 | 66.2 | 0.81 | 0.63 |
+| `pos-event-receiver` | 521 | 80.0 | 86.7 | 0.77 | 0.84 |
+| `pos-security-common` | 462 | 81.6 | 82.8 | 0.78 | 0.79 |
 | `pos-api-gateway` | 451 | 86.0 | 72.7 | 0.83 | 0.69 |
-| `pos-security-common` | 407 | 79.4 | 80.7 | 0.76 | 0.77 |
-| `pos-documents` | 382 | 73.3 | 75.0 | 0.70 | 0.72 |
-| `pos-openapi-validation` | 258 | 94.2 | 81.2 | 0.91 | 0.78 |
-| `pos-vehicle-reference-nhtsa` | 189 | 53.4 | 58.3 | 0.50 | 0.55 |
+| `pos-documents` | 382 | 78.8 | 80.8 | 0.75 | 0.77 |
+| `pos-openapi-validation` | 313 | 93.3 | 81.9 | 0.91 | 0.79 |
 | `pos-events` | 284 | 75.4 | 74.4 | 0.72 | 0.71 |
-| `pos-image` | 213 | 76.1 | 91.7 | 0.73 | 0.88 |
+| `pos-image` | 219 | 80.4 | 93.8 | 0.77 | 0.90 |
+| `pos-reference-mock` | 190 | 91.1 | 80.0 | 0.88 | 0.77 |
+| `pos-vehicle-reference-nhtsa` | 189 | 53.4 | 58.3 | 0.50 | 0.55 |
 | `pos-web-common` | 188 | 84.6 | 63.4 | 0.81 | 0.60 |
 | `pos-document-helper` | 162 | 95.7 | 90.0 | 0.92 | 0.87 |
-| `pos-tax-common` | 104 | 89.4 | 74.1 | 0.86 | 0.71 |
+| `pos-tax-common` | 106 | 89.6 | 74.1 | 0.86 | 0.71 |
 | `pos-vehicle-reference-carapi` | 69 | 78.3 | 88.9 | 0.75 | 0.85 |
+| `pos-bulk-ingest-lib` | 56 | 92.9 | 92.9 | 0.89 | 0.89 |
 | `pos-shared-dtos` | 34 | 0.0 | 0.0 | — *(unguarded)* | — |
 | `pos-inquiry` | 16 | 0.0 | — | — *(unguarded)* | — |
 | `pos-service-discovery` | 4 | 0.0 | — | — *(unguarded)* | — |
-| `pos-bulk-ingest-lib` | 3 | 0.0 | — | — *(unguarded)* | — |
 
-`pos-shared-dtos`, `pos-inquiry`, `pos-service-discovery` and
-`pos-bulk-ingest-lib` carry no floor — a handful of lines each, or all-zero
-coverage. A `0.00` floor is not a gate; they need first tests, not thresholds
-(§7).
+`pos-shared-dtos`, `pos-inquiry` and `pos-service-discovery` carry no floor —
+a handful of lines each, or all-zero coverage. A `0.00` floor is not a gate;
+they need first tests, not thresholds (§7). `pos-bulk-ingest-lib` left that
+group on 2026-09-06: it grew past the 50-line threshold and gained its first
+floors in the re-derivation below.
 
 ### 6.2 How the ratchet works
 

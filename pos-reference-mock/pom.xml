@@ -25,13 +25,13 @@
 
     <packaging>jar</packaging>
     <properties>
-        <!-- Coverage ratchet: measured 87.6% line / 79.2% branch by the gate's own
+        <!-- Coverage ratchet: measured 91.1% line / 80.0% branch by the gate's own
              command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
              Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
              IT-inclusive measurement describes coverage the gate cannot see.
              Regenerate with scripts/update-coverage-floors.sh. -->
-        <jacoco.line.min>0.84</jacoco.line.min>
-        <jacoco.branch.min>0.76</jacoco.branch.min>
+        <jacoco.line.min>0.88</jacoco.line.min>
+        <jacoco.branch.min>0.77</jacoco.branch.min>
     </properties>
 
     <dependencies>
