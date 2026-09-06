@@ -37,7 +37,12 @@ class NltiObservabilityMetricsConfigTest {
     @Test
     @DisplayName("agentCacheSizeGauge registers session cache size gauge")
     void agentCacheSizeGauge_registersGauge() {
-        Gauge gauge = config.agentCacheSizeGauge(registry, cacheMetricsWithSize(7L));
+        // Micrometer holds the gauged object WEAKLY; a temporary here is collectable before value()
+        // is read, and the gauge then reads NaN (#1811: CI hit exactly that). Keep the reference alive
+        // for the life of the test, and invite the collector so the test exercises the condition.
+        SessionAgentCacheMetrics metrics = cacheMetricsWithSize(7L);
+        Gauge gauge = config.agentCacheSizeGauge(registry, metrics);
+        System.gc();
 
         assertThat(gauge).isNotNull();
         assertThat(registry.get("mcp.agent.cache.size").gauge()).isSameAs(gauge);
@@ -47,7 +52,9 @@ class NltiObservabilityMetricsConfigTest {
     @Test
     @DisplayName("streamingAgentCacheSizeGauge registers streaming cache size gauge")
     void streamingAgentCacheSizeGauge_registersGauge() {
-        Gauge gauge = config.streamingAgentCacheSizeGauge(registry, streamingCacheMetricsWithSize(3L));
+        StreamingSessionAgentCacheMetrics metrics = streamingCacheMetricsWithSize(3L);
+        Gauge gauge = config.streamingAgentCacheSizeGauge(registry, metrics);
+        System.gc();
 
         assertThat(gauge).isNotNull();
         assertThat(registry.get("mcp.streaming.agent.cache.size").gauge()).isSameAs(gauge);
