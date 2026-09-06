@@ -11,6 +11,7 @@ import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationReviewCaseNotFoundException;
+import com.positivity.securityservice.internal.exception.TokenUserIdMissingException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -87,7 +88,12 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * Bad Request
  * - RoleNotFoundException, UserNotFoundException,
  * RoleAssignmentNotFoundException, PermissionNotFoundException, EntityNotFoundException →
- * 404 Not Found
+ * 404 Not Found. UserNotFoundException is the one answer for a user reference that does not
+ * resolve, on every entry point — user management and token issuance alike (ADR-0017 §2 "one
+ * condition, one status", #1802); a token-issuance throw carries a generic message plus a
+ * logDetail, handled the same way as SecurityValidationException's
+ * - TokenUserIdMissingException → 422 Unprocessable Entity (TOKEN_USER_ID_MISSING) — a valid
+ * token that carries no uid/userId claim (ADR-0017 §2 question 3, #1803)
  * - ObjectOptimisticLockingFailureException → 409 Conflict (retry needed)
  *
  * <p>This class deliberately does NOT map bare {@code IllegalArgumentException} or a
@@ -153,7 +159,17 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleUserNotFoundException(UserNotFoundException ex, WebRequest request) {
 
         String correlationId = extractCorrelationId(request);
-        log.warn("User not found (correlationId={}): {}", correlationId, ex.getMessage());
+        // A UserNotFoundException carrying a logDetail has a deliberately generic message because
+        // the real reason is information the caller must not receive (#1715 — the token-issuance
+        // endpoints must not name the subject that failed to resolve): the detail goes to the log
+        // keyed by the correlation id, never into the response body. Same contract as
+        // handleSecurityValidationException below.
+        String logDetail = ex.getLogDetail();
+        if (logDetail != null) {
+            log.warn("User not found (correlationId={}): {} — {}", correlationId, ex.getMessage(), logDetail);
+        } else {
+            log.warn("User not found (correlationId={}): {}", correlationId, ex.getMessage());
+        }
 
         return respond(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", ex.getMessage(), correlationId);
     }
@@ -303,6 +319,30 @@ public class GlobalExceptionHandler {
                 null,
                 "Ask an administrator to assign at least one role to this account, then sign in again",
                 null);
+    }
+
+    /**
+     * Handles TokenUserIdMissingException: a token that passed full validation but carries
+     * neither a {@code uid} nor a legacy {@code userId} claim, so no user id can be extracted.
+     *
+     * **HTTP Status:** 422 Unprocessable Entity (ADR-0017 §2 question 3 — a well-formed request
+     * refused by a domain rule that keeps failing until the caller presents a different token;
+     * #1803). Not 401: the token is genuine and current, and telling the caller to replace it
+     * would misdirect the fix. Not 400: neither the request nor the token is malformed.
+     *
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 422 status and correlation ID
+     */
+    @ExceptionHandler(TokenUserIdMissingException.class)
+    @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+    public ResponseEntity<ApiError> handleTokenUserIdMissingException(
+            TokenUserIdMissingException ex, WebRequest request) {
+
+        String correlationId = extractCorrelationId(request);
+        log.warn("Token carries no user id claim (correlationId={}): {}", correlationId, ex.getMessage());
+
+        return respond(HttpStatus.UNPROCESSABLE_ENTITY, "TOKEN_USER_ID_MISSING", ex.getMessage(), correlationId);
     }
 
     @ExceptionHandler({

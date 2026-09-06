@@ -684,7 +684,7 @@ paths:
 
         Emits a SECURITY_AUTH_INTERNAL_TOKEN_ISSUE event and persists the issued token so validateToken and revokeToken recognize it.
 
-        Returns 400 when the subject is blank, no user exists for the subject, or the role set is empty.
+        Returns 400 when the subject is blank or the role set is empty, and 404 with USER_NOT_FOUND when no user exists for the subject; the 404 body is generic and never names the subject.
 
         '
       operationId: issueInternalToken
@@ -727,6 +727,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'Forbidden: internal admin context required'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No user exists for the subject (USER_NOT_FOUND); the body never names the subject
         '500':
           content:
             application/json:
@@ -1088,7 +1094,7 @@ paths:
 
         Emits a SECURITY_AUTH_TOKEN_PAIR event and persists the pair so validateToken and refreshTokenPair recognize it.
 
-        Returns 400 when the subject is blank, no user exists for the subject, or the role set is empty.
+        Returns 400 when the subject is blank or the role set is empty, and 404 with USER_NOT_FOUND when no user exists for the subject; the 404 body is generic and never names the subject.
 
         '
       operationId: issueTokenPair
@@ -1132,6 +1138,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'Forbidden: missing security:token:issue_internal permission'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No user exists for the subject (USER_NOT_FOUND); the body never names the subject
         '500':
           content:
             application/json:
@@ -1158,7 +1170,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only claim extraction.
 
-        Returns 401 when the token is invalid, expired, revoked, or unknown to the token store.
+        Returns 401 when the token is invalid, expired, revoked, or unknown to the token store, and 422 with TOKEN_USER_ID_MISSING when the token is valid but carries neither a uid nor a legacy userId claim.
 
         '
       operationId: getTokenUserId
@@ -1187,6 +1199,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Token invalid or expired
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Token is valid but carries no uid or userId claim (TOKEN_USER_ID_MISSING)
       security:
       - bearerAuth: []
       summary: Extract User Id From JWT Token
@@ -3801,7 +3819,7 @@ paths:
 
         Emits a SECURITY_USER_UPDATE event; a supplied password is re-hashed before storage.
 
-        Returns 400 with VALIDATION_ERROR when the user or a named role cannot be found; the miss surfaces as 400 rather than 404.
+        Returns 404 with USER_NOT_FOUND when no user exists for the id, and 400 with VALIDATION_ERROR when a named role cannot be found.
 
         '
       operationId: updateUser
@@ -3840,7 +3858,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: User or named role not found (VALIDATION_ERROR); the miss surfaces as 400, not 404.
+          description: Named role not found (VALIDATION_ERROR).
         '401':
           content:
             application/json:
@@ -3853,6 +3871,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: User not found (USER_NOT_FOUND).
       security:
       - bearerAuth:
         - security:user:edit
@@ -4487,7 +4511,7 @@ paths:
 
         Emits a SECURITY_USER_ASSIGN_ROLES event.
 
-        Returns 400 with VALIDATION_ERROR when the user or a named role cannot be found; the miss surfaces as 400 rather than 404.
+        Returns 404 with USER_NOT_FOUND when the username does not resolve to a user, and 400 with VALIDATION_ERROR when a named role cannot be found.
 
         '
       operationId: assignUserRolesByUsername
@@ -4524,7 +4548,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: User or named role not found (VALIDATION_ERROR); the miss surfaces as 400, not 404.
+          description: Named role not found (VALIDATION_ERROR).
         '401':
           content:
             application/json:
@@ -4537,6 +4561,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: User not found (USER_NOT_FOUND).
       security:
       - bearerAuth:
         - security:role:assign

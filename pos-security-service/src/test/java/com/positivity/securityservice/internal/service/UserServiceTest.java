@@ -277,8 +277,10 @@ class UserServiceTest {
         when(userRepository.findById(id)).thenReturn(Optional.empty());
 
         UserUpdateRequest req = new UserUpdateRequest();
+        // A user reference that does not resolve is UserNotFoundException (404) on every entry
+        // point, not the 400 validation type (ADR-0017 §2, #1802).
         assertThatThrownBy(() -> userService.updateUser(id, req))
-                .isInstanceOf(SecurityValidationException.class)
+                .isInstanceOf(com.positivity.securityservice.internal.exception.UserNotFoundException.class)
                 .hasMessageContaining("User not found");
     }
 
@@ -303,8 +305,11 @@ class UserServiceTest {
         when(userRepository.findByUsername("ghost")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> userService.assignRoles("ghost", Set.of("ADMIN")))
-                .isInstanceOf(SecurityValidationException.class)
-                .hasMessageContaining("User not found");
+                .isInstanceOf(com.positivity.securityservice.internal.exception.UserNotFoundException.class)
+                .hasMessage("User not found")
+                // The username is caller-supplied text and must not be echoed (ADR-0056 §1).
+                .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(ex.getMessage())
+                        .doesNotContain("ghost"));
     }
 
     @Test

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -16,6 +17,7 @@ import com.positivity.securityservice.internal.dto.UserAuthContext;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
 import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
+import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import com.positivity.securityservice.internal.security.service.JwtService;
 import com.positivity.securityservice.internal.service.CustomUserDetailsService;
@@ -26,6 +28,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -189,16 +192,22 @@ class JwtControllerErrorHandlingTest {
     }
 
     /**
-     * Issue #1715: the 400 for a token-issuance subject that does not exist must not say so. The
-     * old body echoed {@code "User not found for subject: " + subject}, which let any caller
-     * holding {@code security:token:issue_internal} enumerate which accounts exist by comparing
-     * that message against the answer for a subject that does exist. The message is now generic
-     * and identical either way; the subject survives only in the correlated WARN log
-     * (ADR-0056 §1 — rejected values are never echoed).
+     * Issue #1715: the response for a token-issuance subject that does not exist must not say
+     * which subject or why. The old body echoed {@code "User not found for subject: " + subject},
+     * which let any caller holding {@code security:token:issue_internal} enumerate which accounts
+     * exist by comparing that message against the answer for a subject that does exist. The
+     * message is generic and identical either way; the subject survives only in the correlated
+     * WARN log (ADR-0056 §1 — rejected values are never echoed).
+     *
+     * <p>Issue #1802 moved the status from 400 to 404 {@code USER_NOT_FOUND}: an unresolvable
+     * subject is a domain condition, not request shape, and 404 is what every other user
+     * reference in this module already answers (ADR-0017 §2, "one condition, one status"). The
+     * non-disclosure property survives the move — the body still never names the subject, and
+     * the {@code logDetail} channel now rides on {@link UserNotFoundException}.
      */
     @Test
     @WithMockUser(authorities = "security:token:issue_internal")
-    @DisplayName("issueInternalToken hides whether the subject exists: the 400 body never names it or the reason")
+    @DisplayName("issueInternalToken answers 404 USER_NOT_FOUND for an unknown subject without naming it or the reason")
     void issueInternalTokenDoesNotDiscloseWhetherTheSubjectExists() throws Exception {
         when(userService.getUserByUsername("ghost.account")).thenReturn(Optional.empty());
 
@@ -207,24 +216,21 @@ class JwtControllerErrorHandlingTest {
                         .header("X-Correlation-Id", CORRELATION_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"subject\":\"ghost.account\",\"roles\":[\"SHOP_MGR\"]}"))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isNotFound())
                 .andExpect(header().string("X-Correlation-Id", CORRELATION_ID))
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"))
                 .andExpect(jsonPath("$.message").value("Token issuance request is invalid"))
                 .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
 
-        assertThat(body)
-                .doesNotContain("ghost.account")
-                .doesNotContain("not found")
-                .doesNotContain("User");
+        assertThat(body).doesNotContain("ghost.account").doesNotContain("subject:");
     }
 
     @Test
     @WithMockUser(authorities = "security:token:issue_internal")
-    @DisplayName("generateTokenPair hides whether the subject exists on the same terms as issueInternalToken")
+    @DisplayName("generateTokenPair answers 404 for an unknown subject on the same terms as issueInternalToken")
     void generateTokenPairDoesNotDiscloseWhetherTheSubjectExists() throws Exception {
         when(userService.getUserByUsername("ghost.account")).thenReturn(Optional.empty());
 
@@ -233,18 +239,18 @@ class JwtControllerErrorHandlingTest {
                         .header("X-Correlation-Id", CORRELATION_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"subject\":\"ghost.account\",\"roles\":[\"SHOP_MGR\"]}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"))
                 .andExpect(jsonPath("$.message").value("Token issuance request is invalid"))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
 
-        assertThat(body).doesNotContain("ghost.account").doesNotContain("not found");
+        assertThat(body).doesNotContain("ghost.account").doesNotContain("subject:");
     }
 
     /**
-     * The other half of issue #1715's oracle: the message for a subject that DOES exist but whose
+     * The other half of issue #1715's oracle: the answer for a subject that DOES exist but whose
      * stored record has no id must be indistinguishable in the same way — it previously echoed
      * "User exists but id is missing for subject: X".
      */
@@ -260,13 +266,13 @@ class JwtControllerErrorHandlingTest {
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"subject\":\"real.account\",\"roles\":[\"SHOP_MGR\"]}"))
-                .andExpect(status().isBadRequest())
-                // The code and message must be byte-identical to the missing-subject path above.
-                // Asserting only the status let the previous version through, where this branch
-                // answered INVALID_STATE "Resolved user record is missing an id" — a distinct code
-                // and a phrase that both tell the caller the subject resolved, which is exactly
-                // what the generic message exists to hide.
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(status().isNotFound())
+                // The status, code and message must be byte-identical to the missing-subject path
+                // above. Asserting only the status let the previous version through, where this
+                // branch answered INVALID_STATE "Resolved user record is missing an id" — a
+                // distinct code and a phrase that both tell the caller the subject resolved,
+                // which is exactly what the generic message exists to hide.
+                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"))
                 .andExpect(jsonPath("$.message").value("Token issuance request is invalid"))
                 .andReturn()
                 .getResponse()
@@ -276,6 +282,80 @@ class JwtControllerErrorHandlingTest {
                 .doesNotContain("real.account")
                 .doesNotContain("INVALID_STATE")
                 .doesNotContain("missing an id");
+    }
+
+    /**
+     * A blank subject is request shape, so it stays 400 (ADR-0017 §1) and must be decided before
+     * the user lookup: without the guard an empty subject would fall out of the lookup as the
+     * 404 that a subject which does not resolve answers, and one condition would answer two
+     * statuses depending on which check ran first (#1802).
+     */
+    @Test
+    @WithMockUser(authorities = "security:token:issue_internal")
+    @DisplayName("issueInternalToken answers 400 VALIDATION_ERROR, not 404, for a blank subject")
+    void issueInternalTokenAnswers400ForABlankSubject() throws Exception {
+        mockMvc.perform(post("/v1/auth/internal/token")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"subject\":\"  \",\"roles\":[\"SHOP_MGR\"]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("Subject cannot be blank"));
+
+        org.mockito.Mockito.verify(userService, org.mockito.Mockito.never()).getUserByUsername(anyString());
+    }
+
+    @Test
+    @WithMockUser(authorities = "security:token:issue_internal")
+    @DisplayName("generateTokenPair answers 400 VALIDATION_ERROR, not 404, for a blank subject")
+    void generateTokenPairAnswers400ForABlankSubject() throws Exception {
+        mockMvc.perform(post("/v1/auth/token-pair")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"subject\":\"\",\"roles\":[\"SHOP_MGR\"]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("Subject cannot be blank"));
+
+        org.mockito.Mockito.verify(userService, org.mockito.Mockito.never()).getUserByUsername(anyString());
+    }
+
+    /**
+     * Issue #1803 (2): {@code JwtServiceImpl#getUserIdFromToken} returns {@code null} by design
+     * for a token with neither a {@code uid} nor a legacy {@code userId} claim, and the
+     * controller used to call {@code .toString()} on it — a NullPointerException rendered as a
+     * generic 500 for what is really a property of the caller's token. It now answers a
+     * deliberate 422 {@code TOKEN_USER_ID_MISSING} (ADR-0017 §2 question 3).
+     */
+    @Test
+    @WithMockUser
+    @DisplayName("getUserId answers 422 TOKEN_USER_ID_MISSING, not a 500, for a valid token with no uid claim")
+    void getUserIdAnswers422WhenTheTokenCarriesNoUserIdClaim() throws Exception {
+        when(jwtService.validateToken("legacy-token")).thenReturn(true);
+        when(jwtService.getUserIdFromToken("legacy-token")).thenReturn(null);
+
+        mockMvc.perform(get("/v1/auth/user-id")
+                        .param("token", "legacy-token")
+                        .header("X-Correlation-Id", CORRELATION_ID))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(header().string("X-Correlation-Id", CORRELATION_ID))
+                .andExpect(jsonPath("$.code").value("TOKEN_USER_ID_MISSING"))
+                .andExpect(jsonPath("$.message").value("Token does not carry a uid or userId claim"))
+                .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID));
+    }
+
+    @Test
+    @WithMockUser
+    @DisplayName("getUserId still answers the uid as a plain string when the claim is present")
+    void getUserIdAnswersTheUidWhenPresent() throws Exception {
+        UUID uid = UUID.fromString("01990000-0000-7000-8000-000000000042");
+        when(jwtService.validateToken("good-token")).thenReturn(true);
+        when(jwtService.getUserIdFromToken("good-token")).thenReturn(uid);
+
+        mockMvc.perform(get("/v1/auth/user-id").param("token", "good-token"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .string(uid.toString()));
     }
 
     /** Clock for {@code GlobalExceptionHandler} and {@code pos-web-common}'s advice, plus method security. */

@@ -191,11 +191,25 @@ Two rules constrain what those bodies may contain and where they can come from (
   Both filters fail closed on a bad credential, by different means, and the distinction matters:
   - `JwtAuthenticationFilter` **clears** the security context whenever a bearer token is present
     and does not authenticate — whether it threw (a `perm_bits` claim that no longer decodes, a
-    stale `perm_ver`, a subject that no longer resolves to a user) or `validateToken` simply
-    refused it (expired, revoked, logged out, absent from the token store). Clearing rather than
-    returning is what stops a refused credential from riding on gateway-header authorities: the
-    gateway checks signature, issuer, audience and expiry but **not revocation**, so a revoked or
-    logged-out token still arrives here with valid-looking `X-Perm-Bits`.
+    stale `perm_ver`, a subject that no longer resolves to a user, an account that is disabled,
+    locked or expired) or `validateToken` simply refused it (expired, revoked, logged out, absent
+    from the token store). Clearing rather than returning is what stops a refused credential from
+    riding on gateway-header authorities: the gateway checks signature, issuer, audience and
+    expiry but **not revocation**, so a revoked or logged-out token still arrives here with
+    valid-looking `X-Perm-Bits`.
+  - `JwtAuthenticationFilter` **enforces account state** on every bearer token (#1803). No
+    `AuthenticationProvider` runs on this path, so Spring's `AccountStatusUserDetailsChecker` —
+    which the credential login path gets for free from `DaoAuthenticationProvider` — ran nowhere
+    here, and a disabled, locked or expired account's live access token kept authenticating until
+    it expired. The admin state endpoints revoke every token they know about, but a lockout raised
+    by `LockoutServiceImpl`, an expiry that has since passed, or a state change written outside
+    those endpoints never touched the token store. The filter now runs the checker before it
+    builds the authentication; the refusal is a `LockedException` / `DisabledException` /
+    `AccountExpiredException`, caught as a bad credential and answered with the **same generic
+    401 `INVALID_CREDENTIALS`** as any other rejected token — not `ACCOUNT_LOCKED` /
+    `ACCOUNT_DISABLED`, which would tell the unauthenticated holder of a stolen token why it
+    stopped working. The reason is in the filter's WARN log against the correlation id the 401
+    quotes.
   - `GatewayHeaderAuthenticationFilter` **yields no authorities** when `X-Perm-Bits` is present
     but will not decode; it never falls back to `X-Authorities` for that request. It has no
     earlier authentication to clear, being the first of the two to run.
@@ -211,21 +225,29 @@ Two rules constrain what those bodies may contain and where they can come from (
   `SecurityBeansConfig` disables the servlet-container registration Spring Boot would otherwise
   add for it at `/*`. Without that, the container copy runs *after* `springSecurityFilterChain`
   on every other chain, clearing the context after authorization has already passed.
-- **An error message never reveals whether an account exists.** The token-issuance endpoints
-  (`POST /v1/auth/internal/token`, `POST /v1/auth/token-pair`) answer an unresolvable subject with
-  a generic `400 VALIDATION_ERROR` that names neither the subject nor the reason; the subject goes
-  to the correlated WARN log via `SecurityValidationException`'s `logDetail`, never into the body
-  (ADR-0056 §1 — rejected values are never echoed), sanitised through `LogSanitizer` because the
-  subject is unvalidated request text (CWE-117). Both refusal paths — no such user, and a resolved
-  user record with no id — answer a byte-identical body, since a distinct code or phrase would
-  disclose what the generic message exists to hide.
+- **An error message never names the subject that failed to resolve.** The token-issuance
+  endpoints (`POST /v1/auth/internal/token`, `POST /v1/auth/token-pair`) answer an unresolvable
+  subject with `404 USER_NOT_FOUND` and a generic message ("Token issuance request is invalid")
+  that names neither the subject nor the reason; the subject goes to the correlated WARN log via
+  `UserNotFoundException.withLogDetail`, never into the body (ADR-0056 §1 — rejected values are
+  never echoed), sanitised through `LogSanitizer` because the subject is unvalidated request text
+  (CWE-117). Both refusal paths — no such user, and a resolved user record with no id — answer a
+  byte-identical body, since a distinct code or phrase would disclose what the generic message
+  exists to hide.
 
-  The status stays `400`, which is a **known ADR-0017 deviation tracked in #1802**, not a
-  compliant choice: §2 reserves `400` for request shape and says it "is never a domain-condition
-  answer", and an unresolvable subject is a domain condition. `400` is kept here only because
-  `UserServiceImpl#assignRoles` / `#updateUser` already answer it for the same condition, so
-  moving one entry point without the others would break "one condition, one status" the other
-  way, and moving all of them is a published-contract change.
+  The status is `404`, not `400`, since #1802: ADR-0017 §2 reserves `400` for request shape and
+  says it "is never a domain-condition answer", and an unresolvable subject is a domain condition
+  — the same one `GET /v1/users/{id}`, `PUT /v1/users/{id}` and `PUT /v1/users/{username}/roles`
+  answer, so all of them now throw `UserNotFoundException` and the status is encoded once on that
+  class ("one condition, one status"). A *blank* subject is request shape and stays
+  `400 VALIDATION_ERROR`; it is decided before the user lookup so it cannot fall through to the
+  404. A named role that does not resolve is still `400 VALIDATION_ERROR` (out of #1802's scope).
+
+- **A valid token with no user id is not a server fault.** `GET /v1/auth/user-id` answers
+  `422 TOKEN_USER_ID_MISSING` when the token passes full validation but carries neither a `uid`
+  nor a legacy `userId` claim (#1803). It used to `NullPointerException` into the generic 500;
+  the token is genuine, so 401 would misdirect the caller into replacing it, and it parsed, so it
+  is not 400 — ADR-0017 §2 question 3.
 
 The published `openapi.yaml` lists only the error statuses an operation can actually produce.
 Because the advice is module-wide, springdoc would otherwise attach its 400/401/403/404/409 to

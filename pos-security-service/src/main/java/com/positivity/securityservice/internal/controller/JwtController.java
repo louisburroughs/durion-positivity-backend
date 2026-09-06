@@ -8,6 +8,8 @@ import com.positivity.securityservice.internal.dto.TokenPairRequest;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import com.positivity.securityservice.internal.dto.TokenResponse;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
+import com.positivity.securityservice.internal.exception.TokenUserIdMissingException;
+import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.internal.security.service.JwtService;
 import com.positivity.securityservice.internal.service.UserService;
@@ -20,6 +22,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -65,6 +68,19 @@ public class JwtController {
      */
     private static final String TOKEN_REQUEST_REJECTED = "Token issuance request is invalid";
 
+    /**
+     * 400 message for a token-issuance request with no subject. Request shape, so it is decided
+     * before the user lookup: a blank subject must not fall through to the 404 that a subject
+     * which does not resolve answers (ADR-0017 §2 — 400 is the request-shape answer, 404 the
+     * domain-condition answer, and one condition must not answer both).
+     */
+    private static final String SUBJECT_REQUIRED = "Subject cannot be blank";
+
+    /**
+     * Client-facing message for {@link #getUserId} when a valid token carries no user id claim.
+     */
+    private static final String TOKEN_USER_ID_MISSING = "Token does not carry a uid or userId claim";
+
     private final JwtService jwtService;
     private final UserService userService;
 
@@ -86,7 +102,8 @@ public class JwtController {
                     effective role set is rejected, so supply at least one role name.
                     Emits a SECURITY_AUTH_INTERNAL_TOKEN_ISSUE event and persists the issued token so validateToken \
                     and revokeToken recognize it.
-                    Returns 400 when the subject is blank, no user exists for the subject, or the role set is empty.
+                    Returns 400 when the subject is blank or the role set is empty, and 404 with USER_NOT_FOUND when \
+                    no user exists for the subject; the 404 body is generic and never names the subject.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -99,6 +116,10 @@ public class JwtController {
     @ApiResponse(
             responseCode = "403",
             description = "Forbidden: internal admin context required",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "No user exists for the subject (USER_NOT_FOUND); the body never names the subject",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "500",
@@ -128,7 +149,13 @@ public class JwtController {
                 LogSanitizer.forLog(request.subject()),
                 request.roles() != null ? request.roles().size() : 0);
 
-        // The 400 body must not say *why* the subject was rejected: echoing "User not found for
+        if (request.subject() == null || request.subject().isBlank()) {
+            throw new SecurityValidationException(SUBJECT_REQUIRED);
+        }
+        // An unresolvable subject is a domain condition — a referenced resource that does not
+        // exist — so it answers 404 USER_NOT_FOUND like every other user reference in this module
+        // (ADR-0017 §1; §2 "one condition, one status", encoded on UserNotFoundException rather
+        // than here; #1802). The body must still not say *why*: echoing "User not found for
         // subject: X" turned this endpoint into an account-existence oracle for any caller holding
         // security:token:issue_internal (issue #1715). Both refusal paths below therefore answer
         // the identical generic message, and the real reason rides along as the exception's
@@ -136,26 +163,18 @@ public class JwtController {
         // never puts in the ApiError body (ADR-0056 §1: rejected values are never echoed). The
         // subject is sanitised on the way to the log because it is unvalidated request text and
         // could otherwise forge log lines (CWE-117).
-        //
-        // KNOWN ADR-0017 DEVIATION (#1802): the status stays 400, but §2 reserves 400 for request
-        // shape and says it "is never a domain-condition answer" — an unresolvable subject is a
-        // domain condition, so §1/§2 point at 404 or 422. 400 is kept here only because
-        // UserServiceImpl#assignRoles/#updateUser already answer 400 for the same condition and
-        // both endpoints document it; moving one without the other would break "one condition, one
-        // status" in the other direction, and moving both changes the published contract. Tracked
-        // separately rather than settled inside a security fix.
         var user = userService
                 .getUserByUsername(request.subject())
-                .orElseThrow(() -> SecurityValidationException.withLogDetail(
+                .orElseThrow(() -> UserNotFoundException.withLogDetail(
                         TOKEN_REQUEST_REJECTED,
                         "no user exists for subject: " + LogSanitizer.forLog(request.subject())));
         if (user.getId() == null) {
             // A persisted user row with no primary key is a server-side data defect, so ADR-0017
-            // §1 would put it at 500; it answers the same 400 as the branch above because the
+            // §1 would put it at 500; it answers the same 404 as the branch above because the
             // alternative discloses what that branch exists to hide — a distinct status or code
             // tells the caller the subject resolved. Unreachable by construction (id is the PK of
-            // a row just loaded); the defect is diagnosable from the logDetail. Also #1802.
-            throw SecurityValidationException.withLogDetail(
+            // a row just loaded); the defect is diagnosable from the logDetail.
+            throw UserNotFoundException.withLogDetail(
                     TOKEN_REQUEST_REJECTED,
                     "user record has no id for subject: " + LogSanitizer.forLog(request.subject()));
         }
@@ -185,7 +204,8 @@ public class JwtController {
                     expanded to authorities and encoded into the perm_bits bitset claim.
                     Emits a SECURITY_AUTH_TOKEN_PAIR event and persists the pair so validateToken and \
                     refreshTokenPair recognize it.
-                    Returns 400 when the subject is blank, no user exists for the subject, or the role set is empty.
+                    Returns 400 when the subject is blank or the role set is empty, and 404 with USER_NOT_FOUND when \
+                    no user exists for the subject; the 404 body is generic and never names the subject.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -198,6 +218,10 @@ public class JwtController {
     @ApiResponse(
             responseCode = "403",
             description = "Forbidden: missing security:token:issue_internal permission",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "No user exists for the subject (USER_NOT_FOUND); the body never names the subject",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "500",
@@ -228,7 +252,13 @@ public class JwtController {
                 LogSanitizer.forLog(request.subject()),
                 request.roles() != null ? request.roles().size() : 0);
 
-        // The 400 body must not say *why* the subject was rejected: echoing "User not found for
+        if (request.subject() == null || request.subject().isBlank()) {
+            throw new SecurityValidationException(SUBJECT_REQUIRED);
+        }
+        // An unresolvable subject is a domain condition — a referenced resource that does not
+        // exist — so it answers 404 USER_NOT_FOUND like every other user reference in this module
+        // (ADR-0017 §1; §2 "one condition, one status", encoded on UserNotFoundException rather
+        // than here; #1802). The body must still not say *why*: echoing "User not found for
         // subject: X" turned this endpoint into an account-existence oracle for any caller holding
         // security:token:issue_internal (issue #1715). Both refusal paths below therefore answer
         // the identical generic message, and the real reason rides along as the exception's
@@ -236,26 +266,18 @@ public class JwtController {
         // never puts in the ApiError body (ADR-0056 §1: rejected values are never echoed). The
         // subject is sanitised on the way to the log because it is unvalidated request text and
         // could otherwise forge log lines (CWE-117).
-        //
-        // KNOWN ADR-0017 DEVIATION (#1802): the status stays 400, but §2 reserves 400 for request
-        // shape and says it "is never a domain-condition answer" — an unresolvable subject is a
-        // domain condition, so §1/§2 point at 404 or 422. 400 is kept here only because
-        // UserServiceImpl#assignRoles/#updateUser already answer 400 for the same condition and
-        // both endpoints document it; moving one without the other would break "one condition, one
-        // status" in the other direction, and moving both changes the published contract. Tracked
-        // separately rather than settled inside a security fix.
         var user = userService
                 .getUserByUsername(request.subject())
-                .orElseThrow(() -> SecurityValidationException.withLogDetail(
+                .orElseThrow(() -> UserNotFoundException.withLogDetail(
                         TOKEN_REQUEST_REJECTED,
                         "no user exists for subject: " + LogSanitizer.forLog(request.subject())));
         if (user.getId() == null) {
             // A persisted user row with no primary key is a server-side data defect, so ADR-0017
-            // §1 would put it at 500; it answers the same 400 as the branch above because the
+            // §1 would put it at 500; it answers the same 404 as the branch above because the
             // alternative discloses what that branch exists to hide — a distinct status or code
             // tells the caller the subject resolved. Unreachable by construction (id is the PK of
-            // a row just loaded); the defect is diagnosable from the logDetail. Also #1802.
-            throw SecurityValidationException.withLogDetail(
+            // a row just loaded); the defect is diagnosable from the logDetail.
+            throw UserNotFoundException.withLogDetail(
                     TOKEN_REQUEST_REJECTED,
                     "user record has no id for subject: " + LogSanitizer.forLog(request.subject()));
         }
@@ -472,10 +494,16 @@ public class JwtController {
                     Preconditions: the token must pass full validation, including revocation and token-store checks.
                     Required inputs: token as a query parameter.
                     No events are emitted and no state changes; this is a read-only claim extraction.
-                    Returns 401 when the token is invalid, expired, revoked, or unknown to the token store.
+                    Returns 401 when the token is invalid, expired, revoked, or unknown to the token store, and \
+                    422 with TOKEN_USER_ID_MISSING when the token is valid but carries neither a uid nor a legacy \
+                    userId claim.
                     """)
     @ApiResponse(responseCode = "200", description = "userId extracted successfully")
     @ApiResponse(responseCode = "401", description = "Token invalid or expired")
+    @ApiResponse(
+            responseCode = "422",
+            description = "Token is valid but carries no uid or userId claim (TOKEN_USER_ID_MISSING)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/user-id")
@@ -483,7 +511,14 @@ public class JwtController {
         if (!jwtService.validateToken(token)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        return ResponseEntity.ok(jwtService.getUserIdFromToken(token).toString());
+        // getUserIdFromToken returns null by design for a token with neither claim (#1803). That
+        // is a property of the caller's token, not a server fault, so it is answered deliberately
+        // as a 422 instead of letting a NullPointerException reach the generic 500 fallback.
+        UUID userId = jwtService.getUserIdFromToken(token);
+        if (userId == null) {
+            throw new TokenUserIdMissingException(TOKEN_USER_ID_MISSING);
+        }
+        return ResponseEntity.ok(userId.toString());
     }
 
     /**

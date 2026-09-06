@@ -259,6 +259,50 @@ class GlobalExceptionHandlerTest {
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().code()).isEqualTo("USER_NOT_FOUND");
         }
+
+        /**
+         * #1802 moved the token-issuance "subject does not resolve" refusal onto this handler;
+         * #1715's non-disclosure rule rides along as a {@code logDetail} that must reach the log
+         * and never the body.
+         */
+        @Test
+        @DisplayName("echoes only the generic message when the exception carries a logDetail")
+        void echoesOnlyTheGenericMessageWhenALogDetailIsPresent() {
+            UserNotFoundException ex = UserNotFoundException.withLogDetail(
+                    "Token issuance request is invalid", "no user exists for subject: ghost.account");
+
+            ResponseEntity<ApiError> response = sut.handleUserNotFoundException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("USER_NOT_FOUND");
+            assertThat(response.getBody().message()).isEqualTo("Token issuance request is invalid");
+            assertThat(response.getBody().toString()).doesNotContain("ghost.account");
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handleTokenUserIdMissingException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleTokenUserIdMissingException")
+    class HandleTokenUserIdMissingException {
+
+        @Test
+        @DisplayName("returns 422 TOKEN_USER_ID_MISSING with the message (#1803)")
+        void returns422TokenUserIdMissing() {
+            var ex = new com.positivity.securityservice.internal.exception.TokenUserIdMissingException(
+                    "Token does not carry a uid or userId claim");
+
+            ResponseEntity<ApiError> response = sut.handleTokenUserIdMissingException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("TOKEN_USER_ID_MISSING");
+            assertThat(response.getBody().message()).isEqualTo("Token does not carry a uid or userId claim");
+            assertThat(response.getBody().status()).isEqualTo(422);
+        }
     }
 
     // ---------------------------------------------------------------
@@ -830,6 +874,11 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleNoRolesAssignedException", (HandlerInvocation)
                             request -> handler.handleNoRolesAssignedException(
                                     new NoRolesAssignedException("User has no roles assigned"), request)),
+                    Named.of("handleTokenUserIdMissingException", (HandlerInvocation)
+                            request -> handler.handleTokenUserIdMissingException(
+                                    new com.positivity.securityservice.internal.exception.TokenUserIdMissingException(
+                                            "Token does not carry a uid or userId claim"),
+                                    request)),
                     Named.of("handleBadRequestExceptions", (HandlerInvocation) request -> {
                         HttpMessageNotReadableException ex = mock(HttpMessageNotReadableException.class);
                         when(ex.getMessage()).thenReturn("JSON parse error");

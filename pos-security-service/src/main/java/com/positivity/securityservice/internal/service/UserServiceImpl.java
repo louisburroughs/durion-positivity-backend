@@ -8,6 +8,7 @@ import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
+import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -89,10 +90,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void deleteUser(UUID id) {
-        User user = userRepository
-                .findById(id)
-                .orElseThrow(() -> new com.positivity.securityservice.internal.exception.UserNotFoundException(
-                        "User not found: " + id));
+        User user = userRepository.findById(id).orElseThrow(() -> new UserNotFoundException("User not found: " + id));
         // The user-person link is owned by pos-people-contact (amended ADR-0043, #876): queue its
         // removal in the same transaction so the link (and every consumer's projection of it)
         // follows the account out.
@@ -106,8 +104,7 @@ public class UserServiceImpl implements UserService {
     public void requestPersonLink(UUID userId, UUID personId) {
         User user = userRepository
                 .findById(userId)
-                .orElseThrow(() -> new com.positivity.securityservice.internal.exception.UserNotFoundException(
-                        "User not found: " + userId));
+                .orElseThrow(() -> new UserNotFoundException("User not found: " + userId));
         // The link is owned by pos-people-contact (amended ADR-0043 §2): request it over the
         // command channel; users.person_id is a projection written only by the link-fact
         // consumer, so this method never touches it directly.
@@ -119,9 +116,11 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserDto assignRoles(String username, Set<String> roleNames) {
-        User user = userRepository
-                .findByUsername(username)
-                .orElseThrow(() -> new SecurityValidationException("User not found"));
+        // A username that does not resolve is a referenced resource that does not exist, so it
+        // answers 404 USER_NOT_FOUND like every other user reference (ADR-0017 §2, #1802); the
+        // name itself is caller-supplied text and is not echoed (ADR-0056 §1).
+        User user =
+                userRepository.findByUsername(username).orElseThrow(() -> new UserNotFoundException("User not found"));
         Set<Role> roles = new HashSet<>();
         for (String roleName : roleNames) {
             Role role = roleRepository
@@ -137,7 +136,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserDto updateUser(UUID id, UserUpdateRequest request) {
         User existingUser =
-                userRepository.findById(id).orElseThrow(() -> new SecurityValidationException("User not found"));
+                userRepository.findById(id).orElseThrow(() -> new UserNotFoundException("User not found: " + id));
 
         if (request.getUsername() != null && !request.getUsername().isBlank()) {
             existingUser.setUsername(request.getUsername());

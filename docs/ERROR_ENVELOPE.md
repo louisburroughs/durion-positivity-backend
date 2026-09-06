@@ -204,14 +204,15 @@ Any service may therefore return these in addition to its module codes below.
 | Code | Status | Description |
 |------|--------|-------------|
 | `ROLE_NOT_FOUND` | 404 | Role does not exist |
-| `USER_NOT_FOUND` | 404 | User does not exist |
+| `USER_NOT_FOUND` | 404 | A referenced user does not resolve — by id or by username, on every entry point that references one (user management and token issuance alike; ADR-0017 §2 "one condition, one status", #1802). The token-issuance endpoints answer it with a generic message that never names the subject (#1715) |
+| `TOKEN_USER_ID_MISSING` | 422 | `GET /v1/auth/user-id`: the token passed full validation but carries neither a `uid` nor a legacy `userId` claim (#1803). Not 401 — the token is genuine — and not 400 — it parsed; ADR-0017 §2 question 3 |
 | `DUPLICATE_ROLE_NAME` | 409 | Role name is already taken |
 | `ACCOUNT_LOCKED` | 401 | Account is locked due to repeated failures |
 | `ACCOUNT_DISABLED` | 401 | Account has been disabled by an administrator |
 | `BAD_CREDENTIALS` | 401 | Username or password is incorrect |
 | `FORBIDDEN` | 403 | Caller lacks required permissions |
 | `USER_HAS_NO_ROLES` | 403 | Credentials or refresh token are valid, but the account currently has no roles assigned; answered the same on login and refresh (ADR-0017 §2 question 1, #1725). `nextAction` tells the caller to have an administrator assign a role |
-| `VALIDATION_ERROR` | 400 | This module's own field/reference validation failure (`SecurityValidationException`): a blank required field, a malformed permission key or bitset, an unsupported `perm_ver`, or a role/user reference that does not resolve. Aligned onto the fleet-wide spelling in #1730; it answered `INVALID_REQUEST` between #1694 and #1730 |
+| `VALIDATION_ERROR` | 400 | This module's own field/reference validation failure (`SecurityValidationException`): a blank required field, a malformed permission key or bitset, an unsupported `perm_ver`, or a role reference that does not resolve. A *user* reference that does not resolve is `USER_NOT_FOUND` (404) since #1802. Aligned onto the fleet-wide spelling in #1730; it answered `INVALID_REQUEST` between #1694 and #1730 |
 | `INVALID_REQUEST` | 400 | Request-binding failure raised by the framework before the controller runs — an unreadable body, a missing query parameter, a bean-validation rejection. A pre-existing code with consumers, so #1730 deliberately did **not** rename it. Clients that switch on validation codes should handle both this and `VALIDATION_ERROR` |
 
 ### pos-accounting

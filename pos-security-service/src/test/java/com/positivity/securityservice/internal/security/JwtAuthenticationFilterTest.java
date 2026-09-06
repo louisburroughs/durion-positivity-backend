@@ -199,6 +199,123 @@ class JwtAuthenticationFilterTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Account state (#1803): a live token must not outlast the account's fitness to hold one
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Issue #1803 (1): no {@code AuthenticationProvider} runs on this path, so Spring's
+     * {@code AccountStatusUserDetailsChecker} — which enforces enabled / non-locked / non-expired
+     * on the credential path — was invoked by nothing here. {@code CustomUserDetailsService}
+     * populates all the flags faithfully; the filter simply never read them, so disabling or
+     * locking an account left every access token it already held working until expiry.
+     */
+    @Test
+    @DisplayName(
+            "disabledAccount_isRefused: a valid token for a disabled account leaves the request unauthenticated without throwing")
+    void disabledAccount_isRefused() {
+        stubValidTokenFor(accountWith(true, false, true));
+
+        MockFilterChain chain = new MockFilterChain();
+
+        assertThatCode(() -> filter.doFilter(bearerRequest(), new MockHttpServletResponse(), chain))
+                .doesNotThrowAnyException();
+        assertThat(SecurityContextHolder.getContext().getAuthentication())
+                .as("a disabled account's live token must stop authenticating immediately")
+                .isNull();
+        assertThat(chain.getRequest())
+                .as("the chain must still run so the entry point renders the 401 envelope")
+                .isNotNull();
+    }
+
+    @Test
+    @DisplayName("lockedAccount_isRefused: a valid token for a locked account leaves the request unauthenticated")
+    void lockedAccount_isRefused() {
+        stubValidTokenFor(accountWith(false, true, true));
+
+        MockFilterChain chain = new MockFilterChain();
+
+        assertThatCode(() -> filter.doFilter(bearerRequest(), new MockHttpServletResponse(), chain))
+                .doesNotThrowAnyException();
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        assertThat(chain.getRequest()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("expiredAccount_isRefused: a valid token for an expired account leaves the request unauthenticated")
+    void expiredAccount_isRefused() {
+        stubValidTokenFor(accountWith(true, true, false));
+
+        MockFilterChain chain = new MockFilterChain();
+
+        assertThatCode(() -> filter.doFilter(bearerRequest(), new MockHttpServletResponse(), chain))
+                .doesNotThrowAnyException();
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        assertThat(chain.getRequest()).isNotNull();
+    }
+
+    @Test
+    @DisplayName(
+            "disabledAccount_clearsGatewayAuth: a disabled account's token never rides on gateway-header authorities")
+    void disabledAccount_clearsGatewayAuth() throws Exception {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        "gateway-user", null, List.of(new SimpleGrantedAuthority("security:token:issue_internal"))));
+        stubValidTokenFor(accountWith(true, false, true));
+
+        filter.doFilter(bearerRequest(), new MockHttpServletResponse(), new MockFilterChain());
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication())
+                .as("fail closed — the account state refusal must deny the request, not fall back to headers")
+                .isNull();
+    }
+
+    /**
+     * The status check is a credential refusal, so it must answer as one: no enveloped 500, and
+     * no response written by the filter — the entry point renders the 401 later in the chain.
+     */
+    @Test
+    @DisplayName("disabledAccount_isNotAServerFault: the refusal writes nothing and is not answered as a 500")
+    void disabledAccount_isNotAServerFault() throws Exception {
+        stubValidTokenFor(accountWith(true, false, true));
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        filter.doFilter(bearerRequest(), response, new MockFilterChain());
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getContentAsString()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("healthyAccount_stillAuthenticates: all account-state flags true is the happy path unchanged")
+    void healthyAccount_stillAuthenticates() throws Exception {
+        stubValidTokenFor(accountWith(true, true, true));
+
+        filter.doFilter(bearerRequest(), new MockHttpServletResponse(), new MockFilterChain());
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+    }
+
+    private void stubValidTokenFor(User account) {
+        when(jwtService.validateToken(TOKEN)).thenReturn(true);
+        when(jwtService.getUsernameFromToken(TOKEN)).thenReturn(account.getUsername());
+        when(jwtService.getRolesFromToken(TOKEN)).thenReturn(Set.of("SHOP_MGR"));
+        when(jwtService.getAuthoritiesFromToken(TOKEN)).thenReturn(Set.of("order:shipment:cancel"));
+        when(userDetailsService.loadUserByUsername(account.getUsername())).thenReturn(account);
+    }
+
+    /** Mirrors the constructor order {@code CustomUserDetailsService} uses. */
+    private static User accountWith(boolean accountNonLocked, boolean enabled, boolean accountNonExpired) {
+        return new User(
+                "jane.doe",
+                "",
+                enabled,
+                accountNonExpired,
+                /* credentialsNonExpired */ true,
+                accountNonLocked,
+                List.of(new SimpleGrantedAuthority("ignored")));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Non-token requests are untouched
     // ─────────────────────────────────────────────────────────────────────────
 
