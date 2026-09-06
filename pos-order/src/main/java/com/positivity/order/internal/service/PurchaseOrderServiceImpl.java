@@ -41,9 +41,9 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -193,26 +193,37 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Transactional(readOnly = true)
     public @NonNull Page<PurchaseOrderResponse> listPurchaseOrders(
             @NonNull ListPurchaseOrdersRequest filter, @NonNull Pageable pageable) {
-        Page<PurchaseOrderEntity> page;
-        if (filter.getVendorId() != null && filter.getStatus() != null) {
-            page = purchaseOrderRepository.findByVendorIdAndStatus(filter.getVendorId(), filter.getStatus(), pageable);
-        } else if (filter.getVendorId() != null) {
-            page = purchaseOrderRepository.findByVendorId(filter.getVendorId(), pageable);
-        } else if (filter.getStatus() != null) {
-            page = purchaseOrderRepository.findByStatus(filter.getStatus(), pageable);
-        } else {
-            page = purchaseOrderRepository.findAll(pageable);
+        return purchaseOrderRepository
+                .findAll(listSpecification(filter), pageable)
+                .map(this::toResponse);
+    }
+
+    /**
+     * Every supplied filter becomes a predicate on the query, so the page holds the first
+     * {@code size} matching rows and {@code totalElements} counts only matching rows (#1804).
+     * Filtering a fetched page in memory did neither: rows matching {@code currency} or
+     * {@code locationId} beyond the first unfiltered page were unreachable, and the total still
+     * counted them.
+     *
+     * <p>Currency matches case-insensitively, as the in-memory filter it replaces did.
+     */
+    private static @NonNull Specification<PurchaseOrderEntity> listSpecification(
+            @NonNull ListPurchaseOrdersRequest filter) {
+        Specification<PurchaseOrderEntity> spec = (root, query, cb) -> cb.conjunction();
+        if (filter.getVendorId() != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("vendorId"), filter.getVendorId()));
         }
-
-        List<PurchaseOrderResponse> content = page.getContent().stream()
-                .filter(po ->
-                        filter.getCurrency() == null || filter.getCurrency().equalsIgnoreCase(po.getCurrency()))
-                .filter(po ->
-                        filter.getLocationId() == null || filter.getLocationId().equals(po.getShipToLocationId()))
-                .map(this::toResponse)
-                .toList();
-
-        return new PageImpl<>(content, pageable, page.getTotalElements());
+        if (filter.getStatus() != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), filter.getStatus()));
+        }
+        if (filter.getCurrency() != null) {
+            String currency = filter.getCurrency().toUpperCase(Locale.ROOT);
+            spec = spec.and((root, query, cb) -> cb.equal(cb.upper(root.get("currency")), currency));
+        }
+        if (filter.getLocationId() != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("shipToLocationId"), filter.getLocationId()));
+        }
+        return spec;
     }
 
     @Override
