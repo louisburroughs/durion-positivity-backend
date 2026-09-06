@@ -42,6 +42,22 @@ final class SpringAiPosAssistant implements PosAssistant {
      */
     private static final String RAG_CONTEXT_PREFIX = RagGroundingInstruction.CONTEXT_PREFIX;
 
+    /**
+     * System instruction for the one tool-less re-render turn (#1708). The payload may be a tool
+     * result, a partial result (one month of six), or even the argument object of a call the model
+     * never made — so the instruction must not assert it answers the question, or the model will
+     * invent figures from it.
+     */
+    private static final String RENDER_INSTRUCTION =
+            "The previous assistant turn is a raw JSON object or array the assistant emitted instead of an "
+                    + "answer. It may be a tool result, a partial result, or the arguments of a call that was "
+                    + "never made. If it contains the data needed to answer the user's question, write the "
+                    + "answer from it as a short, direct reply: state the figures with their units and the "
+                    + "period or as-of date they cover, use a table when there are several rows, and do not "
+                    + "mention JSON, tools or fields. If it does not answer the question, or covers only part "
+                    + "of it, say so plainly and state only what the data shows — invent nothing. Do not call "
+                    + "any tool. Reply with prose only, never with a JSON object or array.";
+
     private final ChatModel chatModel;
     private final ChatClient chatClient;
     private final Supplier<String> systemPromptSupplier;
@@ -100,7 +116,8 @@ final class SpringAiPosAssistant implements PosAssistant {
                     .toList();
             invocationRecorder.recordPrompt(systemPrompt, toolDefinitions);
         }
-        List<Message> promptMessages = new ArrayList<>(chatMemory.get(memoryId));
+        List<Message> history = chatMemory.get(memoryId);
+        List<Message> promptMessages = new ArrayList<>(history);
         promptMessages.add(new SystemMessage(systemPrompt));
         promptMessages.add(new UserMessage(userMessage));
 
@@ -115,27 +132,81 @@ final class SpringAiPosAssistant implements PosAssistant {
                 ? chatResponse.getResult().getOutput()
                 : null;
         ChatResponseText.Extracted extracted = ChatResponseText.extractDetailed(output);
-        logMissingDirectAnswer(chatResponse, output, extracted, toolCallbacks.size());
-        String response = resolveResponse(userMessage, extracted);
+        Resolution resolution = resolveResponse(history, userMessage, extracted);
+        if (!resolution.reRendered()) {
+            logMissingDirectAnswer(chatResponse, output, extracted, toolCallbacks.size());
+        }
+        String response = resolution.text();
         chatMemory.add(memoryId, List.of(new UserMessage(userMessage), new AssistantMessage(response)));
         return response;
     }
 
+    /** The reply text, and whether it came from the #1708 re-render turn rather than the first turn. */
+    record Resolution(@NonNull String text, boolean reRendered) {}
+
     /**
-     * Returns the model's direct answer when it produced one. When it did not
-     * (blank {@code content},
-     * so the text would otherwise be recovered thinking or the blank fallback) and
-     * a ladder is wired,
-     * hand off to the ladder rather than surface the reasoning channel. With no
-     * ladder, behaviour is
-     * unchanged — the extracted text (including thinking recovery) is returned.
+     * Returns the model's direct answer when it produced one. A bare tool payload ({@code
+     * TOOL_PAYLOAD}) first gets one tool-less re-render turn; its prose is the reply. When the
+     * model did not answer (blank {@code content}, so the text would otherwise be recovered
+     * thinking or the blank fallback; or a payload the re-render could not turn into prose) and a
+     * ladder is wired, hand off to the ladder rather than surface the reasoning channel. With no
+     * ladder, behaviour is unchanged — the extracted text (including thinking recovery) is returned.
      */
-    private @NonNull String resolveResponse(
-            @NonNull String userMessage, ChatResponseText.@NonNull Extracted extracted) {
-        if (answerResolutionLadder != null && extracted.source() != ChatResponseText.Source.CONTENT) {
-            return answerResolutionLadder.resolveFallback(userMessage).text();
+    private @NonNull Resolution resolveResponse(
+            @NonNull List<Message> history,
+            @NonNull String userMessage,
+            ChatResponseText.@NonNull Extracted extracted) {
+        if (extracted.source() == ChatResponseText.Source.TOOL_PAYLOAD) {
+            // The tools ran and the data is in hand; only the composition stage was skipped. One
+            // re-render turn recovers the answer where the ladder would deflect (#1708).
+            String rendered = renderToolPayload(history, userMessage, extracted.text());
+            if (rendered != null) {
+                return new Resolution(rendered, true);
+            }
         }
-        return extracted.text();
+        if (answerResolutionLadder != null && extracted.source() != ChatResponseText.Source.CONTENT) {
+            return new Resolution(
+                    answerResolutionLadder.resolveFallback(userMessage).text(), false);
+        }
+        return new Resolution(extracted.text(), false);
+    }
+
+    /**
+     * Asks the model, once and without tools, to compose the answer from a bare tool payload it
+     * emitted as its reply. Returns the prose, or {@code null} when the second turn produced no
+     * direct answer either — the caller then falls back to the ladder as before.
+     *
+     * <p>Seen live on 2026-09-05 (q05): the guard from PR #1726 classified the payload correctly and
+     * the ladder answered "I can't compute that directly, but you can view it here" — a deflection
+     * for a turn whose tools had all run. The data was already in hand; only the last stage was
+     * missing.
+     *
+     * <p>The render prompt carries the conversation history (so a follow-up such as "and what open
+     * work orders do they have?" keeps its referent) but not the layered system prompt or the RAG
+     * block: those exist to drive tool selection and grounding, and this turn offers no tools. The
+     * as-of / period conventions come from the payload itself, which the instruction asks for.
+     * Latency: this is a second full model call on a path that only runs after the guard fired.
+     */
+    private @Nullable String renderToolPayload(
+            @NonNull List<Message> history, @NonNull String userMessage, @NonNull String payload) {
+        List<Message> messages = new ArrayList<>();
+        messages.add(new SystemMessage(RENDER_INSTRUCTION));
+        messages.addAll(history);
+        messages.add(new UserMessage(userMessage));
+        messages.add(new AssistantMessage(payload));
+        messages.add(new UserMessage("Answer my question from the result above, as prose."));
+        ChatResponse rendered = callModel(new Prompt(messages, chatModel.getOptions()));
+        AssistantMessage output = rendered != null && rendered.getResult() != null
+                ? rendered.getResult().getOutput()
+                : null;
+        ChatResponseText.Extracted extracted = ChatResponseText.extractDetailed(output);
+        if (extracted.source() == ChatResponseText.Source.CONTENT) {
+            LOGGER.info("Bare tool payload re-rendered as prose (#1708)");
+            return extracted.text();
+        }
+        LOGGER.warn(
+                "Bare tool payload re-render produced no direct answer either: source={} (#1708)", extracted.source());
+        return null;
     }
 
     /**
