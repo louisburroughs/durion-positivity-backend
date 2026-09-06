@@ -71,7 +71,18 @@ public final class CatalogEventTypes {
                                 "CATALOG_TREAD_DESIGN_FOR_PRODUCT", "Get vendor tread-design enrichment for a product")
                         .build(),
                 EventTypeRegistration.search(
-                                "CATALOG_TREAD_DESIGN_UNMATCHED_LIST", "List tread designs matched to no product")
+                                "CATALOG_TREAD_DESIGN_UNMATCHED_LIST", "List tread designs awaiting enrichment review")
+                        .build(),
+                // Enrichment review (#1645). The candidate list is a fastRead — one design's scored
+                // products, opened from a worklist row. The resolve action is approval-grade: it is
+                // a person overruling the matcher, and it changes what every shop sees on a product.
+                EventTypeRegistration.fastRead(
+                                "CATALOG_TREAD_DESIGN_CANDIDATES_LIST",
+                                "List the products the matcher scored against a tread design")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "CATALOG_TREAD_DESIGN_RESOLVE",
+                                "Attach, reject or defer a tread design awaiting review")
                         .build(),
                 EventTypeRegistration.write(
                                 "CATALOG_PRODUCT_LIFECYCLE_UPDATE", "Set product lifecycle state with effective date")

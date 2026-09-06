@@ -32,12 +32,12 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
-    // 508 / 73: catalog v73 added shop:dashboard:view (the shop manager dashboard
-    // aggregate read in pos-shop-manager, #1658) at bit 506.
+    // 509 / 75: catalog v75 added catalog:tread_design:resolve (the tread-design
+    // enrichment review resolve action in pos-catalog, #1645) at bit 508.
     // Both numbers move together by design: the version bump is what tells a running gateway
     // its cached catalog is stale.
-    private static final int EXPECTED_PERMISSION_COUNT = 508;
-    private static final int EXPECTED_CATALOG_VERSION = 74;
+    private static final int EXPECTED_PERMISSION_COUNT = 509;
+    private static final int EXPECTED_CATALOG_VERSION = 75;
 
     // -------------------------------------------------------------------------
     // AC-1: Catalog size — EXPECTED_PERMISSION_COUNT entries

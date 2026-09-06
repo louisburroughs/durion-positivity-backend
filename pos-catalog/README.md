@@ -72,7 +72,9 @@ Routing rule for new stories: computing **what a customer pays** → pos-price; 
 - `POST /v1/catalog/labor-guide-imports?sourceCode=`, `GET /.../incomplete`, `GET /.../unmapped` — chunked labor-guide feed import from STORE-licensed sources, with counted completeness and the unmapped-operation curation queue (auth: `catalog:labor_standard:import` / `:view`)
 - `POST /v1/catalog/labor-times/resolve` — the ADR-0058 §5 service-to-service edge: resolve the applicable labor time for (service operation, vehicle) with provenance and typed degradation; sole approved caller is pos-workorder's `CatalogLaborTimeClientImpl` (auth: `catalog:labor_time:resolve`)
 - `GET /v1/catalog/tread-designs/for-product/{productId}` — vendor-supplied MKCAT enrichment matched to a product (auth: `catalog:tread_design:view`)
-- `GET /v1/catalog/tread-designs/unmatched` — tread designs that matched no product, for manual review (auth: `catalog:tread_design:view`)
+- `GET /v1/catalog/tread-designs/unmatched` — enrichment review worklist (`matchState` defaults to `UNMATCHED,REVIEW`; auth: `catalog:tread_design:view`)
+- `GET /v1/catalog/tread-designs/{treadDesignId}/candidates` — every scored candidate for one design (auth: `catalog:tread_design:view`)
+- `POST /v1/catalog/tread-designs/{treadDesignId}/resolve` — reviewer decision: `ATTACH` / `REJECT` / `DEFER` (auth: `catalog:tread_design:resolve`)
 
 ## Estimated service time (labor standards, #1569)
 
@@ -157,14 +159,55 @@ applied and re-matched, last write wins. Candidates are deliberately scoped, nev
 only the products the design's own vendor has actually priced via PRICAT
 (`SupplierPriceEntryRepository`), scored by `TreadDesignMatcher` — character-trigram Jaccard overlap
 (trigrams tolerate the spacing/punctuation drift between two independently authored strings, e.g.
-"Pilot Sport 4S" vs. "Pilot Sport 4 S") at a 0.5 match threshold. A design may legitimately match
-several product sizes; a design matching nothing is an ordinary, queryable-for-review outcome, not a
-failure.
+"Pilot Sport 4S" vs. "Pilot Sport 4 S") behind a brand gate and confidence tiers
+(see *Enrichment review* below). A design may legitimately match several product sizes; a design
+matching nothing is an ordinary, queryable-for-review outcome, not a failure.
 
 `GET /v1/catalog/tread-designs/for-product/{productId}` (`getTreadDesignForProduct`) and
 `GET /v1/catalog/tread-designs/unmatched` (`listUnmatchedTreadDesigns`, paged) are the read surface,
-both under `catalog:tread_design:view`. No write endpoint exists — an enrichment exists only because a
-vendor said so, and this module never mutates product identity or structure to accommodate one.
+both under `catalog:tread_design:view`; the only write is the reviewer's `resolveTreadDesign` (below).
+An enrichment exists only because a vendor said so, and this module never mutates product identity
+or structure to accommodate one.
+
+### Enrichment review (#1645)
+
+Matching a vendor's tread design to a catalog product is a guess, and this module now records how
+confident the guess was instead of acting on all of them identically.
+
+A candidate must clear two gates. **Brand is a hard gate**: brands are normalised (lower-cased,
+punctuation and trailing legal suffixes stripped) and resolved through the configured alias map
+before comparison, and a disagreement ends the comparison whatever the design text says. Only then
+does the trigram score decide a **tier**:
+
+| Score (after the brand gate) | Tier | What happens |
+| --- | --- | --- |
+| `>= pos.catalog.enrichment.auto-threshold` | `AUTO` | Attached automatically, if nothing else claims the product |
+| `>= review-threshold`, `< auto-threshold` | `REVIEW` | Recorded as a candidate; the design is parked for a person |
+| `< review-threshold` | `NONE` | Not a candidate; not recorded |
+
+Two rules keep the automatic pass honest, and both are why `product.tread_design_source` exists:
+
+- **Ambiguity is parked, not guessed.** A product two designs claim at `AUTO` tier is attached to
+  neither, and both designs move to `REVIEW`.
+- **A manual attachment is never re-pointed.** A product a reviewer attached (`MANUAL`) is left alone
+  by every later automatic pass; only automatic (`AUTO`) attachments are revised or cleared.
+
+A changed `contentHash` re-runs matching for every design except one already attached by hand —
+including a `REJECTED` one, because the rejection was of what the vendor said and the vendor has now
+said something else.
+
+Reviewers work the queue through three operations, all under `/v1/catalog/tread-designs`:
+
+| Operation | Method & path | Permission |
+| --- | --- | --- |
+| `listUnmatchedTreadDesigns` (review worklist; `matchState` defaults to `UNMATCHED,REVIEW`, `vendorProfileId` optional) | `GET /unmatched` | `catalog:tread_design:view` |
+| `listTreadDesignCandidates` | `GET /{treadDesignId}/candidates` | `catalog:tread_design:view` |
+| `resolveTreadDesign` (`ATTACH` / `REJECT` / `DEFER`) | `POST /{treadDesignId}/resolve` | `catalog:tread_design:resolve` |
+
+`ATTACH` requires at least one product and marks each one `MANUAL`; `REJECT` detaches nothing a
+person attached earlier; `DEFER` optionally carries a `deferUntil`. Invalid combinations answer 400,
+an unknown design or product 404, and attaching a product another design already holds by a
+reviewer's decision 409 — all in the standard `ApiError` envelope.
 
 ## Configuration
 
@@ -173,6 +216,9 @@ vendor said so, and this module never mutates product identity or structure to a
 | `SPRING_DATASOURCE_URL`                 | required | PostgreSQL connection URL                                        |
 | `EUREKA_SERVER_URL`                     | required | Eureka service discovery URL                                     |
 | `pos.supplier.stock.vendor-profile-id`  | unset    | Vendor profile asked for live stock; unset disables the component |
+| `pos.catalog.enrichment.auto-threshold` | `0.80`   | Score at or above which an unambiguous candidate is attached automatically |
+| `pos.catalog.enrichment.review-threshold` | `0.50` | Score at or above which a candidate is parked for review          |
+| `pos.catalog.enrichment.brand-aliases`  | empty    | Map of normalised brand alias to canonical brand, applied before the brand gate |
 
 ## Dependencies
 

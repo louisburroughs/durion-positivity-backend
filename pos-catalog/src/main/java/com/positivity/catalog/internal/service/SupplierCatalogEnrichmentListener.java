@@ -4,20 +4,30 @@ import com.positivity.catalog.internal.entity.ProcessedEvent;
 import com.positivity.catalog.internal.entity.ProductEntity;
 import com.positivity.catalog.internal.entity.TreadDesignEntity;
 import com.positivity.catalog.internal.entity.TreadDesignImageEntity;
+import com.positivity.catalog.internal.entity.TreadDesignMatchCandidateEntity;
 import com.positivity.catalog.internal.entity.TreadDesignTextEntity;
+import com.positivity.catalog.internal.enums.MatchTier;
+import com.positivity.catalog.internal.enums.TreadDesignMatchState;
+import com.positivity.catalog.internal.enums.TreadDesignSource;
 import com.positivity.catalog.internal.repository.ProcessedEventRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.internal.repository.SupplierPriceEntryRepository;
 import com.positivity.catalog.internal.repository.TreadDesignImageRepository;
+import com.positivity.catalog.internal.repository.TreadDesignMatchCandidateRepository;
 import com.positivity.catalog.internal.repository.TreadDesignRepository;
 import com.positivity.catalog.internal.repository.TreadDesignTextRepository;
 import com.positivity.domainevents.supplier.SupplierCatalogEnrichmentImage;
 import com.positivity.domainevents.supplier.SupplierCatalogEnrichmentText;
 import com.positivity.domainevents.supplier.SupplierCatalogUpdatedV1;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -53,6 +63,15 @@ import tools.jackson.databind.ObjectMapper;
  * {@link TreadDesignMatcher}. A design matching nothing is an ordinary outcome — the row stays,
  * queryable for review, and nothing is treated as an error.
  *
+ * <h2>Confidence, not a single threshold (#1645)</h2>
+ *
+ * The matcher now returns a tier per candidate. Only unambiguous AUTO-tier candidates are attached;
+ * REVIEW-tier ones are recorded and the design is parked in {@code REVIEW} for a person. Two designs
+ * claiming one product at AUTO tier park both and attach neither — under #1352 the later event
+ * simply won, which meant a product's enrichment could change because of an unrelated vendor's
+ * publication and nothing recorded that it had. A product a reviewer attached by hand
+ * ({@code tread_design_source = MANUAL}) is never re-pointed here at all.
+ *
  * <h2>What this never does</h2>
  *
  * Only {@code product.tread_design_id} is written on a product. No dimension, load index, article
@@ -68,12 +87,31 @@ public class SupplierCatalogEnrichmentListener {
     /** Producing domain, per the repo-wide processed_events convention. */
     static final String OWNER = "supplier";
 
+    /**
+     * How many {@code REVIEW}-tier candidates are kept per design, best score first.
+     *
+     * <p>{@code AUTO}-tier candidates are never capped, unlike {@code REVIEW}-tier ones: they are
+     * exactly the rows {@link #matchProducts}'s attach loop and {@link #parkAmbiguousClaim}'s rival
+     * lookup depend on for correctness, not just for a reviewer's convenience. Capping them would
+     * mean an attachment beyond the cap has no candidate row to explain it, and a design with more
+     * AUTO-tier candidates than the cap could let a later rival attach uncontested because the
+     * ambiguity check can only see what got persisted. {@code REVIEW}-tier rows carry no such
+     * obligation — nothing acts on them automatically, a person only ever looks at them — so they
+     * stay capped for the reason #1352 never intended a reviewer to page through a vendor's entire
+     * priced catalogue to find the handful worth a decision.
+     */
+    static final int MAX_STORED_REVIEW_CANDIDATES = 20;
+
+    /** Matches {@code numeric(5,4)} in V20 — the stored score must equal the compared score. */
+    private static final int SCORE_SCALE = 4;
+
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final TreadDesignRepository treadDesignRepository;
     private final TreadDesignTextRepository treadDesignTextRepository;
     private final TreadDesignImageRepository treadDesignImageRepository;
+    private final TreadDesignMatchCandidateRepository treadDesignMatchCandidateRepository;
     private final SupplierPriceEntryRepository supplierPriceEntryRepository;
     private final ProductRepository productRepository;
     private final TreadDesignMatcher treadDesignMatcher;
@@ -136,6 +174,12 @@ public class SupplierCatalogEnrichmentListener {
         }
 
         TreadDesignEntity design = existing != null ? existing : new TreadDesignEntity();
+        if (design.getMatchState() == null) {
+            // A design that has only just arrived has not matched anything yet, which is a state
+            // rather than the absence of one — matchProducts below replaces it with the outcome.
+            design.setMatchState(TreadDesignMatchState.UNMATCHED);
+            design.setMatchStateAt(Instant.now(clock));
+        }
         design.setVendorProfileId(payload.vendorProfileId());
         design.setSupplierRef(payload.supplierRef());
         design.setVendorVariantId(payload.vendorVariantId());
@@ -151,7 +195,9 @@ public class SupplierCatalogEnrichmentListener {
 
         replaceTexts(saved.getId(), payload.texts());
         replaceImages(saved.getId(), payload.images());
-        matchProducts(saved);
+        if (shouldRematch(saved)) {
+            matchProducts(saved);
+        }
 
         log.debug(
                 "Applied tread design vendorProfileId={} vendorVariantId={}",
@@ -189,23 +235,178 @@ public class SupplierCatalogEnrichmentListener {
     }
 
     /**
-     * Attaches this design to every candidate product that matches. Candidates are restricted to
-     * products this vendor has actually priced (see class javadoc) — an empty candidate set (a
-     * vendor with a marketing feed but no PRICAT prices yet) is not searched further, since nothing
-     * in the whole catalog is a scoped candidate.
+     * Whether an automatic pass may touch this design's attachments (#1645).
+     *
+     * <p>Everything re-enters matching when the vendor changes what it published — including a
+     * design a reviewer REJECTED, because the rejection was of the words the vendor used and the
+     * vendor has now used different ones. The single exception is a design a person has already
+     * attached by hand: re-running the matcher over it would either confirm what the reviewer
+     * already decided or contradict it silently, and neither is worth doing.
+     */
+    private boolean shouldRematch(TreadDesignEntity design) {
+        if (design.getMatchState() != TreadDesignMatchState.MATCHED) {
+            return true;
+        }
+        return !productRepository.existsByTreadDesignIdAndTreadDesignSource(design.getId(), TreadDesignSource.MANUAL);
+    }
+
+    /**
+     * Scores this design against the products its vendor has priced, records what it saw, and
+     * attaches only what it is entitled to attach (#1645).
+     *
+     * <p>Candidates are restricted to products this exact vendor has actually priced (see class
+     * javadoc) — an empty candidate set (a vendor with a marketing feed but no PRICAT prices yet)
+     * leaves the design UNMATCHED, which is an ordinary outcome and not an error.
+     *
+     * <p>Three rules decide what happens to an AUTO-tier candidate, and all three exist because
+     * #1352 had none of them: a product a person attached by hand is never re-pointed; a product
+     * two designs both claim at AUTO tier is attached to neither, because picking one would make an
+     * arbitrary choice permanent and invisible; and an AUTO attachment this design made earlier
+     * that no longer scores is cleared, because leaving it would let a stale guess outlive the text
+     * that justified it.
      */
     private void matchProducts(TreadDesignEntity design) {
         List<UUID> candidateIds =
                 supplierPriceEntryRepository.findDistinctProductIdsByVendorProfileId(design.getVendorProfileId());
-        if (candidateIds.isEmpty()) {
-            return;
+        List<ProductEntity> candidates =
+                candidateIds.isEmpty() ? List.of() : productRepository.findAllById(candidateIds);
+        List<TreadDesignMatcher.ScoredCandidate> scored = treadDesignMatcher.evaluateCandidates(design, candidates);
+
+        recordCandidates(design, scored);
+
+        List<ProductEntity> attachable = new ArrayList<>();
+        for (TreadDesignMatcher.ScoredCandidate candidate : scored) {
+            if (candidate.tier() != MatchTier.AUTO) {
+                continue;
+            }
+            ProductEntity product = candidate.product();
+            if (TreadDesignSource.MANUAL == product.getTreadDesignSource()) {
+                log.debug(
+                        "Leaving manually attached product productId={} alone for designId={}",
+                        product.getId(),
+                        design.getId());
+                continue;
+            }
+            if (parkAmbiguousClaim(design, product)) {
+                continue;
+            }
+            attachable.add(product);
         }
-        List<ProductEntity> candidates = productRepository.findAllById(candidateIds);
-        for (ProductEntity product : treadDesignMatcher.matchingProducts(design, candidates)) {
-            if (!design.getId().equals(product.getTreadDesignId())) {
-                product.setTreadDesignId(design.getId());
-                productRepository.save(product);
+
+        clearStaleAutoAttachments(design, attachable);
+        for (ProductEntity product : attachable) {
+            product.setTreadDesignId(design.getId());
+            product.setTreadDesignSource(TreadDesignSource.AUTO);
+            productRepository.save(product);
+        }
+
+        if (!attachable.isEmpty()) {
+            setState(design, TreadDesignMatchState.MATCHED);
+        } else if (!scored.isEmpty()) {
+            // Something resembled this design but nothing was attachable — the case a person has to
+            // look at, and the case #1352 could not express at all.
+            setState(design, TreadDesignMatchState.REVIEW);
+        } else {
+            setState(design, TreadDesignMatchState.UNMATCHED);
+        }
+    }
+
+    /**
+     * Replaces this design's candidate rows with the current scoring: every {@code AUTO}-tier
+     * candidate, plus the best-scoring {@link #MAX_STORED_REVIEW_CANDIDATES} {@code REVIEW}-tier
+     * ones. {@code scored} arrives best-score-first (see {@link TreadDesignMatcher#evaluateCandidates})
+     * and {@code AUTO} always outscores {@code REVIEW} under the configured thresholds, so a single
+     * pass in that order caps only the {@code REVIEW} tail without needing to partition first.
+     *
+     * <p>This is deliberately the exact set {@link #matchProducts}'s attach loop iterates over for
+     * {@code AUTO} candidates — persisting fewer would silently break both traceability (an
+     * attachment with no candidate row) and {@link #parkAmbiguousClaim}'s rival lookup, which only
+     * ever sees rows that made it to this table.
+     */
+    private void recordCandidates(TreadDesignEntity design, List<TreadDesignMatcher.ScoredCandidate> scored) {
+        treadDesignMatchCandidateRepository.deleteByTreadDesignId(design.getId());
+        int reviewKept = 0;
+        for (TreadDesignMatcher.ScoredCandidate candidate : scored) {
+            if (candidate.tier() == MatchTier.REVIEW) {
+                if (reviewKept >= MAX_STORED_REVIEW_CANDIDATES) {
+                    continue;
+                }
+                reviewKept++;
+            }
+            treadDesignMatchCandidateRepository.save(TreadDesignMatchCandidateEntity.builder()
+                    .treadDesignId(design.getId())
+                    .productId(candidate.product().getId())
+                    .score(BigDecimal.valueOf(candidate.score()).setScale(SCORE_SCALE, RoundingMode.HALF_UP))
+                    .tier(candidate.tier())
+                    .build());
+        }
+    }
+
+    /**
+     * Parks both designs when another design also claims this product at AUTO tier, and reports
+     * whether it did.
+     *
+     * <p>The other design is moved to REVIEW as well, and an AUTO attachment it already holds on
+     * this product is cleared: the moment a second claimant appears, the first claim stopped being
+     * a confident answer, and continuing to display it as one is the failure this rule exists to
+     * prevent. A MANUAL attachment is not touched here — it never reached this method.
+     */
+    private boolean parkAmbiguousClaim(TreadDesignEntity design, ProductEntity product) {
+        List<TreadDesignMatchCandidateEntity> rivals =
+                treadDesignMatchCandidateRepository.findByProductIdAndTierAndTreadDesignIdNot(
+                        product.getId(), MatchTier.AUTO, design.getId());
+        if (rivals.isEmpty()) {
+            return false;
+        }
+        log.info(
+                "Parking ambiguous tread-design claim productId={} designId={} rivals={}",
+                product.getId(),
+                design.getId(),
+                rivals.size());
+        for (TreadDesignMatchCandidateEntity rival : rivals) {
+            treadDesignRepository.findById(rival.getTreadDesignId()).ifPresent(rivalDesign -> {
+                if (rivalDesign.getMatchState() != TreadDesignMatchState.REVIEW) {
+                    setState(rivalDesign, TreadDesignMatchState.REVIEW);
+                }
+            });
+        }
+        if (product.getTreadDesignId() != null
+                && TreadDesignSource.AUTO == product.getTreadDesignSource()
+                && rivals.stream().anyMatch(rival -> rival.getTreadDesignId().equals(product.getTreadDesignId()))) {
+            product.setTreadDesignId(null);
+            product.setTreadDesignSource(null);
+            productRepository.save(product);
+        }
+        return true;
+    }
+
+    /**
+     * Detaches products this design attached automatically that no longer score at AUTO tier.
+     * MANUAL attachments are excluded by their source, not by an accident of ordering.
+     */
+    private void clearStaleAutoAttachments(TreadDesignEntity design, List<ProductEntity> keeping) {
+        Set<UUID> keepIds = keeping.stream().map(ProductEntity::getId).collect(Collectors.toSet());
+        for (ProductEntity attached : productRepository.findByTreadDesignId(design.getId())) {
+            if (TreadDesignSource.AUTO == attached.getTreadDesignSource() && !keepIds.contains(attached.getId())) {
+                attached.setTreadDesignId(null);
+                attached.setTreadDesignSource(null);
+                productRepository.save(attached);
             }
         }
+    }
+
+    /**
+     * Sets the design's match state, ageing {@code matchStateAt} only when the state actually
+     * moves. The review worklist orders on {@code matchStateAt} (see {@link
+     * com.positivity.catalog.internal.repository.TreadDesignRepository#findForReview}) precisely so
+     * it ages on decisions changing, not on every vendor re-publication or re-match that happens to
+     * land the design back on the state it already had.
+     */
+    private void setState(TreadDesignEntity design, TreadDesignMatchState state) {
+        if (design.getMatchState() != state) {
+            design.setMatchStateAt(Instant.now(clock));
+        }
+        design.setMatchState(state);
+        treadDesignRepository.save(design);
     }
 }
