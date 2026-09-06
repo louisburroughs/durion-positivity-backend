@@ -49,8 +49,8 @@ public class ToolEmbeddingInitializer {
     private final JdbcTemplate jdbcTemplate;
     private final EmbeddingModel embeddingModel;
     private final int batchSize;
-    /** Counts down when a backfill finishes; tests wait on it instead of sleeping. */
-    private final CountDownLatch completed = new CountDownLatch(1);
+    /** Counts down when the current backfill finishes; tests wait on it instead of sleeping. */
+    private volatile CountDownLatch completed = new CountDownLatch(1);
     /** One backfill at a time: a second trigger while one runs would double-embed the same rows. */
     private final AtomicBoolean running = new AtomicBoolean(false);
     /** Set on context shutdown so a backfill in flight stops at the next batch boundary. */
@@ -68,6 +68,17 @@ public class ToolEmbeddingInitializer {
     /** Readiness is already reported when this fires; the backfill must not hold it up. */
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
+        backfillAsync();
+    }
+
+    /**
+     * Starts a backfill on its own thread and returns at once. Also called after each scheduled
+     * re-discovery (#1824): rows a later discovery cycle inserts would otherwise stay without an
+     * embedding — invisible to selection — until the next restart. A backfill already running is
+     * left alone; it will pick up the new rows on its own if they arrive before it queries, and the
+     * next cycle catches the rest.
+     */
+    public void backfillAsync() {
         Thread.ofVirtual().name("tool-embedding-backfill").start(this::backfill);
     }
 
@@ -86,6 +97,7 @@ public class ToolEmbeddingInitializer {
             LOGGER.info("Tool embedding backfill already running; not starting another");
             return;
         }
+        completed = new CountDownLatch(1);
         long totalStartNanos = System.nanoTime();
         try {
             // The vector column is the single validated value from RagEmbeddingSettings (V33, #1207),
