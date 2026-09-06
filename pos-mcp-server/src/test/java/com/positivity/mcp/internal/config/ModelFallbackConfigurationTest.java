@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
+import org.springframework.core.retry.RetryTemplate;
 
 /**
  * Unit tests for {@link ModelFallbackConfiguration}.
@@ -19,13 +20,16 @@ import org.springframework.ai.ollama.api.OllamaChatOptions;
  */
 class ModelFallbackConfigurationTest {
 
+    private static final RetryTemplate RETRY = new OllamaChatModelConfiguration()
+            .ollamaChatRetryTemplate(2, Duration.ofMillis(20), 2, Duration.ofMillis(100));
+
     private final ModelFallbackConfiguration configuration = new ModelFallbackConfiguration();
 
     @Test
     @DisplayName("fallbackChatModel returns a non-null ChatModel when called with valid parameters")
     void fallbackChatModel_isConfigured_whenCalled() {
         ChatModel model = configuration.fallbackChatModel(
-                "http://localhost:11434", "mistral:7b", "", Duration.ofMinutes(3), 0.0d, 32768);
+                "http://localhost:11434", "mistral:7b", "", Duration.ofMinutes(3), 0.0d, 32768, RETRY);
 
         assertThat(model).isNotNull();
     }
@@ -34,9 +38,9 @@ class ModelFallbackConfigurationTest {
     @DisplayName("fallbackChatModel returns a distinct instance per invocation")
     void fallbackChatModel_returnsDistinctInstances() {
         ChatModel first = configuration.fallbackChatModel(
-                "http://localhost:11434", "mistral:7b", "", Duration.ofMinutes(3), 0.0d, 32768);
+                "http://localhost:11434", "mistral:7b", "", Duration.ofMinutes(3), 0.0d, 32768, RETRY);
         ChatModel second = configuration.fallbackChatModel(
-                "http://localhost:11434", "llama3:8b", "", Duration.ofMinutes(3), 0.0d, 32768);
+                "http://localhost:11434", "llama3:8b", "", Duration.ofMinutes(3), 0.0d, 32768, RETRY);
 
         assertThat(first).isNotSameAs(second);
     }
@@ -55,7 +59,7 @@ class ModelFallbackConfigurationTest {
     @DisplayName("fallbackChatModel inherits the primary's temperature and context window")
     void fallbackChatModel_inheritsDeterminismAndContextWindow() {
         ChatModel model = configuration.fallbackChatModel(
-                "http://localhost:11434", "mistral:7b", "", Duration.ofMinutes(3), 0.0d, 32768);
+                "http://localhost:11434", "mistral:7b", "", Duration.ofMinutes(3), 0.0d, 32768, RETRY);
 
         assertThat(model.getOptions()).isInstanceOf(OllamaChatOptions.class);
         OllamaChatOptions options = (OllamaChatOptions) model.getOptions();
