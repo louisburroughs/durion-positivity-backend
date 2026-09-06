@@ -437,6 +437,35 @@
         "facade"
       ],
       "notes": "#1689. No tool reads replenishment_policy, which is why the question is out of the gate."
+    },
+    {
+      "fixture_id": "q26-open-workorders-with-unpaid-invoices",
+      "utterance": "Which customers have an open work order and also owe us money, and how much do they owe?",
+      "actor": {
+        "role": "ROLE_ACCOUNTING_ASSOCIATE",
+        "permission_codes": [
+          "accounting:coa:view",
+          "reporting:view:financial-statements",
+          "workorder:workorder:view"
+        ],
+        "workflow_state": "IDLE"
+      },
+      "expected": {
+        "tool_ids": [
+          "AccountingFacadeTool",
+          "WorkorderFacadeTool"
+        ],
+        "forbidden_tool_ids": [
+          "AdminFacadeTool"
+        ],
+        "k": 5
+      },
+      "tags": [
+        "analytics-gate",
+        "facade",
+        "cross-domain"
+      ],
+      "notes": "#1689 band 4. The answer lives in neither domain alone: open work orders come from WorkorderFacadeTool (status=OPEN) and balances from AccountingFacadeTool, intersected on customerId. Selecting only one of the two is the failure this fixture pins."
     }
   ]
 }

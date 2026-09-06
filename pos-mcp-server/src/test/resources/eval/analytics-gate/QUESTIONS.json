@@ -632,6 +632,36 @@
           "note": "Point-in-time. Graded on the as-of date, not a resolver shape."
         }
       }
+    },
+    {
+      "fixture_id": "q26",
+      "expected_section": "Q26",
+      "ground_truth_sql": "ground-truth/q26-open-workorders-with-unpaid-invoices.sql",
+      "tool_selection_fixture_id": "q26-open-workorders-with-unpaid-invoices",
+      "utterance": "Which customers have an open work order and also owe us money, and how much do they owe?",
+      "in_chat_path_gate": false,
+      "excluded_reason": "Newly authored (#1689 band 4). Ground truth is measured on alpha and the question is executable in two calls — searchWorkorders with status=OPEN returns every open work order with its customerId in one page, and getAgedReceivables returns the open balances — but the chat-path gate set must be matched exactly by the offline-replay corpus (#1682) and no replay fixture exists until a turn has been recorded live. Promote once it has run.",
+      "plan_wave": "2",
+      "budget": 2,
+      "window": {
+        "shape": "point-in-time",
+        "resolved_range": "as of 2026-09-01",
+        "stated_in_question": false,
+        "notes": "Both halves are current-state: an open work order is open now and a balance is owed now. No range is stated and none is needed, so asking about one is the b11 failure. The as-of date only fixes which invoices are outstanding.",
+        "expected": {
+          "shape": null,
+          "as_of_offset_days": 0,
+          "note": "Point-in-time. Graded on the as-of date, not a resolver shape."
+        }
+      },
+      "expected_plan": {
+        "min_tool_calls": {
+          "searchWorkorders": 1,
+          "getAgedReceivables": 1
+        },
+        "per": "one call for every open work order (status=OPEN, no customer filter) and one for the aged receivables; the answer is their intersection on customerId",
+        "declined_reason": "answering from one domain — listing every customer with an open work order, or every customer with a balance — instead of intersecting the two"
+      }
     }
   ]
 }

@@ -547,3 +547,49 @@ The third figure is the reason a "running low" answer is currently **empty rathe
 
 "Running low" itself is ATP-at-now below the policy minimum per the ratified glossary (`BusinessGlossary` 2026-09-05.2) — deliberately not the engine's projected-available-at-lead-horizon.
 
+
+## Q26 — customers with an open work order who also owe money
+
+Measured 2026-09-06 against alpha (`sha-868b6fa`) via the two sections of
+`q26-open-workorders-with-unpaid-invoices.sql` (both exit 0, zero SQL errors). #1689 band 4 —
+cross-domain join, the band the issue names by example.
+
+Point-in-time, as of 2026-09-01. Open work order = the six non-terminal statuses
+`WorkorderFacadeTool.searchWorkorders` accepts under its `OPEN` alias. Owed = q13's
+`InvoiceBalanceCalculator.balanceDue` derivation, copied verbatim.
+
+| customer_id | open work orders | statuses | unpaid invoices | amount owed |
+|---|---|---|---|---|
+| `e79a3e7a-e63b-5633-ae72-2c84233f0dfc` | 2 | ASSIGNED, WORK_IN_PROGRESS | 2 | 4,500.0000 |
+| `b4b79106-4dde-5458-8e66-c017ffc2f111` | 1 | AWAITING_PARTS | 2 | 2,000.0000 |
+| `1dc41416-eec7-5788-9416-042d5af62667` | 1 | APPROVED | 1 | 1,200.0000 |
+
+**Expected answer: exactly three customers, five unpaid invoices, 7,700.0000 owed between them.**
+
+### The error this question exists to catch
+
+Neither domain can answer alone, and each single-domain answer is plausible and much longer:
+44 customers have an open work order, 43 have a balance, and only 3 have both. A model that
+reads one side and reports it produces a list an order of magnitude too long that still looks
+like an answer. This is the sequencing failure #1676 describes, in a form that can be graded.
+
+### The DRAFT boundary, and why the ground truth is not the obvious one
+
+The seed holds 92 DRAFT work orders. Counting a draft as open is defensible in business terms
+and gives 137 open work orders across 134 customers instead of 45 across 44 — an order of
+magnitude apart. The ground truth follows the **tool's** definition, because a fixture that
+means something the assistant cannot express grades a correct answer as wrong; that is the
+#1659 failure this corpus has already paid for once. Section 1b reports both readings so the
+divergence is visible rather than assumed. The intersection is the same three customers either
+way: no DRAFT-only customer has an open receivable.
+
+### Cross-foot against observed live answers
+
+All three rows were independently produced by the assistant in earlier gate runs, which is the
+strongest check available short of a second query path:
+
+- sequence s01 (2026-09-06 12:05Z): Bluerock Freight LLC `e79a3e7a…` → $4,500.00 outstanding;
+  Alice Prescott `1dc41416…` → $1,200.00.
+- sequence s05 (2026-09-06 14:16Z): Harbor Tool & Die Inc `b4b79106…` → outstanding $2,000.00,
+  and its single open work order `TRACKB-WO-OPEN-C2-PARTS` in AWAITING_PARTS — the same one
+  count and status this section measures.

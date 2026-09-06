@@ -77,8 +77,11 @@ class AnalyticsGateQuestionsTest {
     private static final Path FACADE_CONTRACT =
             Paths.get(System.getProperty("user.dir"), "src/test/resources/facade-contract.yaml");
 
-    /** Plan §6 is a twenty-question matrix; the file carries all twenty, gated or not. */
-    private static final int PLAN_QUESTION_COUNT = 25;
+    /**
+     * Plan §6 started as a twenty-question matrix; the file carries every question authored since,
+     * gated or not. #1689 grows it band by band — 26 with q26, the first cross-domain join.
+     */
+    private static final int PLAN_QUESTION_COUNT = 26;
 
     private static final Set<String> WINDOW_SHAPES = Set.of("calendar", "rolling", "point-in-time", "mixed");
 
