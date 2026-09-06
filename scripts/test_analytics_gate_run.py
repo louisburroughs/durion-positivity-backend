@@ -1456,3 +1456,93 @@ class TurnIsolationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RunSummaryTest(unittest.TestCase):
+    """#1806: a live run must carry a verdict, and a window FAIL must fail it.
+
+    The 2026-09-05 baseline (alpha sha-81ff1e0) graded 12 questions from traces — PASS 6, FAIL 2,
+    UNGRADED 4 — and wrote ``summary: null``. The summary block only ran under the replay branch,
+    so in the mode where the number matters most there was none, and two window FAILs failed
+    nothing.
+    """
+
+    @staticmethod
+    def _live(fixture_id, verdict, error=None):
+        return {
+            "fixture_id": fixture_id,
+            "window_check": {"verdict": verdict, "detail": "x"},
+            "error": error,
+            "answer": "" if error else "some prose",
+        }
+
+    def test_a_live_run_with_a_window_fail_fails(self):
+        results = [self._live("q01", "PASS"), self._live("q03", "FAIL"), self._live("q04", "UNGRADED")]
+
+        summary = runner.summarize_results(results, replaying=False)
+
+        self.assertEqual(summary["verdict"], "FAIL")
+        self.assertEqual(summary["window_counts"], {"FAIL": 1, "PASS": 1, "UNGRADED": 1})
+        self.assertEqual(summary["errors"], 0)
+
+    def test_a_live_run_with_only_pass_and_ungraded_passes(self):
+        results = [self._live("q01", "PASS"), self._live("q04", "UNGRADED")]
+
+        summary = runner.summarize_results(results, replaying=False)
+
+        self.assertEqual(summary["verdict"], "PASS")
+
+    def test_a_transport_error_fails_a_live_run_even_when_its_window_is_ungraded(self):
+        # q04 timed out at 180s on the baseline run. Its window is UNGRADED (no answer, no trace),
+        # which does not fail the run on its own — but the question was not answered, and a run
+        # that reports PASS while one of twelve questions never came back is lying.
+        results = [self._live("q01", "PASS"), self._live("q04", "UNGRADED", error="TimeoutError: timed out")]
+
+        summary = runner.summarize_results(results, replaying=False)
+
+        self.assertEqual(summary["verdict"], "FAIL")
+        self.assertEqual(summary["errors"], 1)
+
+    def test_a_live_result_without_a_window_check_counts_as_ungraded(self):
+        summary = runner.summarize_results([{"fixture_id": "q01", "error": None}], replaying=False)
+
+        self.assertEqual(summary["window_counts"], {"UNGRADED": 1})
+        self.assertEqual(summary["verdict"], "PASS")
+
+    def test_replay_keeps_its_outcome_fields_and_still_fails_on_a_window_fail(self):
+        results = [
+            {"fixture_id": "q01", "verdict": "PASS", "outcome": "ANSWERED", "error": None,
+             "window_check": {"verdict": "PASS", "detail": ""}},
+            {"fixture_id": "q09", "verdict": "PASS", "outcome": "ANSWERED", "error": None,
+             "window_check": {"verdict": "FAIL", "detail": ""}},
+        ]
+
+        summary = runner.summarize_results(results, replaying=True)
+
+        self.assertEqual(summary["verdict"], "FAIL")
+        self.assertEqual(summary["passed"], 2)
+        self.assertEqual(summary["failed"], 0)
+        self.assertEqual(summary["outcomes"], {"ANSWERED": 2})
+        self.assertEqual(summary["window_counts"], {"FAIL": 1, "PASS": 1})
+
+    def test_the_live_markdown_report_states_the_overall_verdict(self):
+        # The JSON field is not enough: run.md is what gets pasted into an issue, and before this
+        # the live report had no verdict line at all — a reader had to count the table rows.
+        results = [self._live("q01", "PASS"), self._live("q03", "FAIL")]
+        for result in results:
+            result.update({
+                "expected_section": "Q1", "utterance": "u", "plan_check": None, "tool_calls": None,
+                "elapsed_s": 1.0, "window": {"shape": "calendar", "resolved_range": "r"},
+            })
+        record = {
+            "started_at": "t", "endpoint": "http://x/v1/mcp/chat", "eval_as_of": "2026-09-01",
+            "graded_as_of": "2026-09-05", "actor": {}, "results": results,
+            "questions_file": {"path": "q.json", "blob_sha": "abc", "commit": "c", "uncommitted": False}, "trace_source": "2 trace(s)",
+            "summary": runner.summarize_results(results, replaying=False),
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            runner.write_markdown(Path(tmp), record)
+            report = (Path(tmp) / "run.md").read_text(encoding="utf-8")
+
+        self.assertIn("Overall verdict: **FAIL**", report)
+        self.assertIn("'FAIL': 1", report)

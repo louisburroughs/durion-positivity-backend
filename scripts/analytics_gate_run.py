@@ -1222,6 +1222,42 @@ def format_tool_calls(tool_calls):
 
 
 
+def summarize_results(results, replaying):
+    """One verdict for the run, in both modes.
+
+    Live runs never had one: the summary block sat under the replay-only branch, so the 2026-09-05
+    baseline (PASS 6 / FAIL 2 / UNGRADED 4 on the window axis, alpha sha-81ff1e0) wrote
+    ``summary: null`` and its two window FAILs failed nothing (#1806).
+
+    A window FAIL fails the run in either mode — answering the right question on the wrong six
+    months is a wrong answer, and a verdict that ignored it would report PASS for exactly the
+    q09/q12/q15 failures this work exists to catch. A transport error (timeout, dropped connection)
+    fails a live run too: its window grades UNGRADED, which does not fail anything on its own, but
+    the question was never answered.
+    """
+    window_counts = Counter(
+        (result.get("window_check") or {}).get("verdict", "UNGRADED") for result in results
+    )
+    errors = sum(1 for result in results if result.get("error"))
+    window_failed = window_counts.get("FAIL", 0)
+    summary = {
+        "window_counts": dict(sorted(window_counts.items())),
+        "errors": errors,
+    }
+    if replaying:
+        outcome_counts = Counter(result["outcome"] for result in results)
+        failed = sum(result["verdict"] == "FAIL" for result in results)
+        summary.update({
+            "verdict": "PASS" if failed == 0 and window_failed == 0 else "FAIL",
+            "passed": len(results) - failed,
+            "failed": failed,
+            "outcomes": dict(sorted(outcome_counts.items())),
+        })
+    else:
+        summary["verdict"] = "PASS" if window_failed == 0 and errors == 0 else "FAIL"
+    return summary
+
+
 def _actor_line(actor):
     """One line naming who asked. A score is not comparable without it (#1706)."""
     if actor.get("not_applicable"):
@@ -1279,9 +1315,18 @@ def write_markdown(out_dir, record):
             "|---|---|---|---|---|---|",
         ])
     else:
+        summary = record.get("summary") or {}
         lines.extend([
             f"Endpoint: `{record['endpoint']}` \u00b7 questions asked:"
             f" {len(record['results'])}",
+            (
+                f"Window grading: {summary.get('window_counts')} \u00b7 transport errors:"
+                f" {summary.get('errors')} (source: {record.get('trace_source')})"
+            ),
+            (
+                f"Overall verdict: **{summary.get('verdict', 'UNSUMMARISED')}**"
+                + (" \u2014 but see the VOID banner above; this verdict is not usable" if record.get("void") else "")
+            ),
             "",
             "Verdicts are graded by hand against the ground truth (plan \u00a72.1 criterion 1);"
             " this file is generated with the Verdict column empty. Tool calls are not observable"
@@ -1743,29 +1788,11 @@ def main(argv=None):
         )
         result["window_check"] = {"verdict": verdict, "detail": detail}
 
-    if replay_by_fixture is not None:
-        outcome_counts = Counter(result["outcome"] for result in record["results"])
-        # A window FAIL must be able to fail the run. Recording it in a JSON field a reader has to go
-        # looking for is the same "clean-looking report" failure #1706 was about, one axis down.
-        window_counts = Counter(
-            (result.get("window_check") or {}).get("verdict", "UNGRADED") for result in record["results"]
-        )
-        failed = sum(result["verdict"] == "FAIL" for result in record["results"])
-        window_failed = window_counts.get("FAIL", 0)
-        record["summary"] = {
-            # A window FAIL fails the run. The window is not a side note: answering the right
-            # question on the wrong six months is a wrong answer, and a verdict that ignored it
-            # would report PASS for exactly the q09/q12/q15 failures this work exists to catch.
-            "verdict": "PASS" if failed == 0 and window_failed == 0 else "FAIL",
-            "passed": len(record["results"]) - failed,
-            "failed": failed,
-            "outcomes": dict(sorted(outcome_counts.items())),
-            "window_counts": dict(sorted(window_counts.items())),
-        }
+    record["summary"] = summarize_results(record["results"], replaying=replay_by_fixture is not None)
 
     (out_dir / "run.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     write_markdown(out_dir, record)
-    print(f"\nwrote {out_dir / 'run.json'} and {out_dir / 'run.md'}")
+    print(f"\nwrote {out_dir / 'run.json'} and {out_dir / 'run.md'}  summary={record['summary']}")
     print(f"questions blob sha: {record['questions_file']['blob_sha']}")
 
 
