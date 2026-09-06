@@ -19,18 +19,32 @@
 #     5. report               one summary table; the run is red if any stage
 #                             above failed.
 #
-#   Nothing is committed or pushed. Every stage uploads what it produced
-#   (regenerated specs, a `git diff` patch per SDK repo, the tarballs, the
-#   frontend's ready-to-commit .sdk-tarballs/ directory and the test logs) so
-#   the changes can be reviewed and applied by hand.
+#   Each stage then commits what it regenerated back to its own repository,
+#   according to `commit_mode`:
+#
+#     pull-request (default)  push api-artifacts-sync/<run id> and open a PR
+#                             against the branch the stage ran on. Opened
+#                             whenever generation succeeded, even if the build
+#                             or tests after it failed — the PR is where that
+#                             breakage gets reviewed.
+#     direct                  push straight onto the branch the stage ran on,
+#                             but only when every step of that stage passed.
+#     none                    commit nothing; artifacts only.
+#
+#   Every stage also uploads what it produced (regenerated specs, a `git diff`
+#   patch per SDK repo, the tarballs, the frontend's .sdk-tarballs/ directory
+#   and the test logs) as workflow artifacts.
 #
 # Notes:
 #   - Stage 1 boots every spec-producing module in turn, so a full run takes a
 #     while. Pass a space-separated `modules` list to regenerate a subset; the
 #     aggregate index still covers every module.
 #   - The SDK and frontend repos are checked out with CROSS_REPO_TOKEN when the
-#     secret exists, falling back to the workflow token (enough for public
-#     repos). Set the secret if any of them is private.
+#     secret exists, falling back to the workflow token (enough to read public
+#     repos). Committing to those repos needs the secret: a fine-grained PAT
+#     with Contents and Pull requests write access on all four repositories.
+#     It is also worth using for this repo's own PR, since a PR opened with the
+#     workflow token does not trigger the other workflows on it.
 #   - Generation and test steps use continue-on-error so a failure early in the
 #     chain still produces the downstream evidence; the report job turns those
 #     outcomes into the run's final status.
@@ -78,6 +92,18 @@ on:
         required: false
         default: true
         type: boolean
+      commit_mode:
+        description: >-
+          How each stage delivers what it regenerated to its repository:
+          pull-request (branch + PR), direct (push onto the stage's branch, only
+          when the whole stage passed) or none (artifacts only).
+        required: false
+        default: pull-request
+        type: choice
+        options:
+          - pull-request
+          - direct
+          - none
 
 # Job-level permissions only; jobs without a permissions block get no token
 # scopes.
@@ -96,6 +122,9 @@ env:
   SDK_DIR: durion-positivity-sdk
   SDK_ANGULAR_DIR: durion-positivity-sdk-angular
   FRONTEND_DIR: durion-positivity-frontend
+  # Branch every stage pushes in pull-request mode; one name across the four
+  # repositories so a run's PRs are easy to find together.
+  SYNC_BRANCH: api-artifacts-sync/${{ github.run_id }}
 
 jobs:
   # ───────────────────────────────────────────────────────────────────────────
@@ -106,10 +135,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 240
     permissions:
-      contents: read
+      # write scopes let the commit step deliver to this repo with the
+      # workflow token when CROSS_REPO_TOKEN is not configured.
+      contents: write
+      pull-requests: write
     outputs:
       generate: ${{ steps.generate.outcome }}
       changed_files: ${{ steps.changes.outputs.changed_files }}
+      commit_status: ${{ steps.commit.outputs.status || 'skipped' }}
+      pr_url: ${{ steps.commit.outputs.pr-url }}
     defaults:
       run:
         shell: bash
@@ -121,6 +155,9 @@ jobs:
         with:
           path: ${{ env.BACKEND_DIR }}
           fetch-depth: 1
+          # The commit step supplies its own credential; a persisted one would
+          # be sent alongside it.
+          persist-credentials: false
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v5
@@ -223,6 +260,74 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Decide how to deliver the backend changes
+        id: delivery
+        if: always()
+        env:
+          COMMIT_MODE: ${{ inputs.commit_mode }}
+          GENERATE: ${{ steps.generate.outcome }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          set -euo pipefail
+          mode="${COMMIT_MODE}"
+          if [[ "${GENERATE}" != "success" ]]; then
+            echo "::warning::OpenAPI generation did not succeed; not committing the backend artifacts."
+            mode=none
+          elif [[ "${mode}" != "none" && "${REF_TYPE}" != "branch" ]]; then
+            echo "::warning::The workflow ran on a ${REF_TYPE}, not a branch; nothing to deliver the backend artifacts to."
+            mode=none
+          fi
+          echo "mode=${mode}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit regenerated backend artifacts
+        id: commit
+        if: always() && steps.delivery.outputs.mode != 'none'
+        uses: ./durion-positivity-backend/.github/actions/commit-generated-artifacts
+        with:
+          repository: ${{ github.repository }}
+          working-directory: ${{ env.BACKEND_DIR }}
+          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
+          mode: ${{ steps.delivery.outputs.mode }}
+          base-branch: ${{ github.ref_name }}
+          head-branch: ${{ env.SYNC_BRANCH }}
+          commit-message: |
+            chore(openapi): regenerate API artifacts
+
+            Regenerated by the API Artifacts Sync workflow (run ${{ github.run_id }})
+            with scripts/generate-openapi.sh: module openapi.yaml files, the
+            aggregate index and the permissions manifests.
+
+            Modules: ${{ inputs.modules || 'all configured' }}
+          pr-title: "chore(openapi): regenerate API artifacts (sync run ${{ github.run_number }})"
+          pr-body: |
+            ## Capability & Traceability
+            - Capability: n/a — automated artifact regeneration
+            - Source: [API Artifacts Sync run ${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            ## Contract References (REQUIRED for backend PRs touching API/event behavior)
+            - Contract guide entry (durion): no `BACKEND_CONTRACT_GUIDE.md` change; this PR only regenerates artifacts from the controllers already on `${{ github.ref_name }}`.
+            - Durion contract PR (if applicable): n/a
+
+            ## Contract Chain (when a Controller changed)
+            - [x] OpenAPI annotations updated on the controller (already on the base branch)
+            - [x] `openapi.yaml` (+ `pos-api-gateway/docs/openapi-aggregate.yaml`) regenerated
+            - [x] Angular SDK regenerated (`durion-positivity-sdk-angular`) — see the sibling PR opened by the same run
+
+            ## Scope
+            - What changed: `scripts/generate-openapi.sh` output for `${{ inputs.modules || 'all configured modules' }}` (validation mode `${{ inputs.validation_mode }}`), plus the permissions manifests it regenerates.
+            - Why: keep the committed specs and permission manifests in sync with the controllers.
+
+            ## Tests
+            - [x] OpenAPI validation ran in the workflow (`${{ inputs.validation_mode }}` mode)
+            - How to run: `scripts/generate-openapi.sh` locally, or re-run the workflow.
+
+            ## Risk & Rollback
+            - Risk level: Low — generated artifacts only, no code change.
+            - Rollback plan: revert this PR.
+
+            ## Checklist
+            - [x] Required CI checks passing (see the checks on this PR)
+
   # ───────────────────────────────────────────────────────────────────────────
   # Stage 2: regenerate the typescript-fetch SDK.
   # ───────────────────────────────────────────────────────────────────────────
@@ -236,12 +341,24 @@ jobs:
     outputs:
       generate: ${{ steps.generate.outcome }}
       build: ${{ steps.build.outcome }}
+      commit_status: ${{ steps.commit.outputs.status || 'skipped' }}
+      pr_url: ${{ steps.commit.outputs.pr-url }}
     defaults:
       run:
         shell: bash
         working-directory: ${{ env.SDK_DIR }}
 
     steps:
+      - name: Checkout this repo's composite actions
+        # Only .github/actions is needed here; the specs come from the
+        # artifact downloaded below into the same directory.
+        uses: actions/checkout@v5
+        with:
+          path: ${{ env.BACKEND_DIR }}
+          sparse-checkout: .github/actions
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Checkout durion-positivity-sdk
         uses: actions/checkout@v5
         with:
@@ -326,6 +443,56 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Decide how to deliver the SDK changes
+        id: delivery
+        if: always()
+        env:
+          COMMIT_MODE: ${{ inputs.commit_mode }}
+          GENERATE: ${{ steps.generate.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+        run: |
+          set -euo pipefail
+          mode="${COMMIT_MODE}"
+          if [[ "${GENERATE}" != "success" ]]; then
+            echo "::warning::SDK generation did not succeed; not committing durion-positivity-sdk."
+            mode=none
+          elif [[ "${mode}" == "direct" && "${BUILD}" != "success" ]]; then
+            echo "::warning::SDK build failed; direct mode only pushes a passing stage. Re-run with commit_mode=pull-request to review the breakage."
+            mode=none
+          fi
+          echo "mode=${mode}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit regenerated SDK
+        id: commit
+        if: always() && steps.delivery.outputs.mode != 'none'
+        uses: ./durion-positivity-backend/.github/actions/commit-generated-artifacts
+        with:
+          repository: louisburroughs/durion-positivity-sdk
+          working-directory: ${{ env.SDK_DIR }}
+          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
+          mode: ${{ steps.delivery.outputs.mode }}
+          base-branch: ${{ inputs.sdk_ref }}
+          head-branch: ${{ env.SYNC_BRANCH }}
+          commit-message: |
+            chore(generate): regenerate clients from backend OpenAPI specs
+
+            Regenerated by the API Artifacts Sync workflow (run ${{ github.run_id }})
+            against durion-positivity-backend@${{ github.sha }}.
+          pr-title: "chore(generate): regenerate clients from backend OpenAPI specs (sync run ${{ github.run_number }})"
+          pr-body: |
+            ## Summary
+
+            Regenerated by [API Artifacts Sync run ${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) against `durion-positivity-backend@${{ github.sha }}` (modules: `${{ inputs.modules || 'all configured' }}`).
+
+            Backend PR: ${{ needs.backend-openapi.outputs.pr_url || 'none (no backend changes, or not in pull-request mode)' }}
+
+            ## Validation
+
+            - `npm run generate`: `${{ steps.generate.outcome }}`
+            - `npm run build`: `${{ steps.build.outcome }}`
+
+            A failing build here means the regenerated clients no longer compile against the hand-written index files or workflows; fix those in this PR.
+
   # ───────────────────────────────────────────────────────────────────────────
   # Stage 3: regenerate, build and pack the Angular SDK.
   # ───────────────────────────────────────────────────────────────────────────
@@ -340,12 +507,22 @@ jobs:
       generate: ${{ steps.generate.outcome }}
       pack: ${{ steps.pack.outcome }}
       version: ${{ steps.version.outputs.version }}
+      commit_status: ${{ steps.commit.outputs.status || 'skipped' }}
+      pr_url: ${{ steps.commit.outputs.pr-url }}
     defaults:
       run:
         shell: bash
         working-directory: ${{ env.SDK_ANGULAR_DIR }}
 
     steps:
+      - name: Checkout this repo's composite actions
+        uses: actions/checkout@v5
+        with:
+          path: ${{ env.BACKEND_DIR }}
+          sparse-checkout: .github/actions
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Checkout durion-positivity-sdk-angular
         uses: actions/checkout@v5
         with:
@@ -491,6 +668,59 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Decide how to deliver the Angular SDK changes
+        id: delivery
+        if: always()
+        env:
+          COMMIT_MODE: ${{ inputs.commit_mode }}
+          GENERATE: ${{ steps.generate.outcome }}
+          PACK: ${{ steps.pack.outcome }}
+        run: |
+          set -euo pipefail
+          mode="${COMMIT_MODE}"
+          if [[ "${GENERATE}" != "success" ]]; then
+            echo "::warning::Angular SDK generation did not succeed; not committing durion-positivity-sdk-angular."
+            mode=none
+          elif [[ "${mode}" == "direct" && "${PACK}" != "success" ]]; then
+            echo "::warning::Angular SDK build/pack failed; direct mode only pushes a passing stage. Re-run with commit_mode=pull-request to review the breakage."
+            mode=none
+          fi
+          echo "mode=${mode}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit regenerated Angular SDK
+        id: commit
+        if: always() && steps.delivery.outputs.mode != 'none'
+        uses: ./durion-positivity-backend/.github/actions/commit-generated-artifacts
+        with:
+          repository: louisburroughs/durion-positivity-sdk-angular
+          working-directory: ${{ env.SDK_ANGULAR_DIR }}
+          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
+          mode: ${{ steps.delivery.outputs.mode }}
+          base-branch: ${{ inputs.sdk_angular_ref }}
+          head-branch: ${{ env.SYNC_BRANCH }}
+          commit-message: |
+            chore(generate): regenerate Angular clients at ${{ steps.version.outputs.version }}
+
+            Regenerated by the API Artifacts Sync workflow (run ${{ github.run_id }})
+            against durion-positivity-backend@${{ github.sha }}. Version bump:
+            ${{ inputs.bump_sdk_version }}.
+          pr-title: "chore(generate): regenerate Angular clients at ${{ steps.version.outputs.version }} (sync run ${{ github.run_number }})"
+          pr-body: |
+            ## Summary
+
+            Regenerated by [API Artifacts Sync run ${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) against `durion-positivity-backend@${{ github.sha }}` (modules: `${{ inputs.modules || 'all configured' }}`).
+
+            - SDK version: `${{ steps.version.outputs.version }}` (bump before generate: `${{ inputs.bump_sdk_version }}`)
+            - Backend PR: ${{ needs.backend-openapi.outputs.pr_url || 'none (no backend changes, or not in pull-request mode)' }}
+            - Frontend PR: opened by the same run once its tests finish; see the run summary.
+
+            ## Validation
+
+            - `npm run generate`: `${{ steps.generate.outcome }}`
+            - `npm run pack -- --no-bump` (builds every package with ng-packagr): `${{ steps.pack.outcome }}`
+
+            The tarballs this version produced are in the run's `sdk-angular-tarballs` artifact and were imported into the frontend by the same run.
+
       - name: Fail the job if packing failed
         # The frontend stage cannot run without tarballs; make the dependency
         # explicit so it is skipped with a clear cause instead of failing on a
@@ -515,12 +745,22 @@ jobs:
       build: ${{ steps.build.outcome }}
       contract_tests: ${{ steps.contract_tests.outcome }}
       unit_tests: ${{ steps.unit_tests.outcome }}
+      commit_status: ${{ steps.commit.outputs.status || 'skipped' }}
+      pr_url: ${{ steps.commit.outputs.pr-url }}
     defaults:
       run:
         shell: bash
         working-directory: ${{ env.FRONTEND_DIR }}
 
     steps:
+      - name: Checkout this repo's composite actions
+        uses: actions/checkout@v5
+        with:
+          path: ${{ env.BACKEND_DIR }}
+          sparse-checkout: .github/actions
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Checkout durion-positivity-frontend
         uses: actions/checkout@v5
         with:
@@ -710,6 +950,70 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Decide how to deliver the frontend changes
+        id: delivery
+        if: always()
+        env:
+          COMMIT_MODE: ${{ inputs.commit_mode }}
+          SDK_INSTALL: ${{ steps.sdk_install.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          CONTRACT_TESTS: ${{ steps.contract_tests.outcome }}
+          UNIT_TESTS: ${{ steps.unit_tests.outcome }}
+        run: |
+          set -euo pipefail
+          mode="${COMMIT_MODE}"
+          if [[ "${SDK_INSTALL}" != "success" ]]; then
+            echo "::warning::The imported tarballs did not install; not committing durion-positivity-frontend."
+            mode=none
+          elif [[ "${mode}" == "direct" && ( "${BUILD}" != "success" || "${CONTRACT_TESTS}" != "success" || "${UNIT_TESTS}" != "success" ) ]]; then
+            echo "::warning::Frontend compile or tests failed against the new SDK; direct mode only pushes a passing stage. Re-run with commit_mode=pull-request to review the breakage."
+            mode=none
+          fi
+          echo "mode=${mode}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit imported SDK tarballs
+        id: commit
+        if: always() && steps.delivery.outputs.mode != 'none'
+        uses: ./durion-positivity-backend/.github/actions/commit-generated-artifacts
+        with:
+          repository: louisburroughs/durion-positivity-frontend
+          working-directory: ${{ env.FRONTEND_DIR }}
+          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
+          mode: ${{ steps.delivery.outputs.mode }}
+          base-branch: ${{ inputs.frontend_ref }}
+          head-branch: ${{ env.SYNC_BRANCH }}
+          commit-message: |
+            chore(sdk): import Angular SDK ${{ needs.generate-sdk-angular.outputs.version }} tarballs
+
+            Imported by the API Artifacts Sync workflow (run ${{ github.run_id }})
+            from durion-positivity-sdk-angular regenerated against
+            durion-positivity-backend@${{ github.sha }}.
+          pr-title: "chore(sdk): import Angular SDK ${{ needs.generate-sdk-angular.outputs.version }} tarballs (sync run ${{ github.run_number }})"
+          pr-body: |
+            ## Summary
+
+            - Replaces `.sdk-tarballs/` with Angular SDK `${{ needs.generate-sdk-angular.outputs.version }}`, regenerated by [API Artifacts Sync run ${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) against `durion-positivity-backend@${{ github.sha }}`.
+            - Backend PR: ${{ needs.backend-openapi.outputs.pr_url || 'none (no backend changes, or not in pull-request mode)' }}
+            - Angular SDK PR: ${{ needs.generate-sdk-angular.outputs.pr_url || 'none (no SDK changes, or not in pull-request mode)' }}
+
+            ## Validation
+
+            Run against the imported tarballs in the workflow:
+
+            - [${{ steps.build.outcome == 'success' && 'x' || ' ' }}] `npm run build` (`ng build --configuration development`): `${{ steps.build.outcome }}`
+            - [${{ steps.contract_tests.outcome == 'success' && 'x' || ' ' }}] `npm run test:contracts`: `${{ steps.contract_tests.outcome }}`
+            - [${{ steps.unit_tests.outcome == 'success' && 'x' || ' ' }}] `npm run test` (Vitest, ChromiumHeadless): `${{ steps.unit_tests.outcome }}`
+
+            Failing specs and compiler errors are listed in the run summary; full logs are in its `frontend-results` artifact. A red row means the frontend needs code changes for the new API surface — make them on this branch.
+
+            ## Accessibility Verification (Required for Changed UI)
+
+            - No UI changed; only SDK tarballs.
+
+            ## Notes / Follow-ups
+
+            - Generated by the API Artifacts Sync workflow; do not hand-edit the tarballs.
+
   # ───────────────────────────────────────────────────────────────────────────
   # Stage 5: one verdict for the whole chain.
   # ───────────────────────────────────────────────────────────────────────────
@@ -744,9 +1048,30 @@ jobs:
           FRONTEND_BUILD: ${{ needs.frontend-tests.outputs.build }}
           FRONTEND_CONTRACT_TESTS: ${{ needs.frontend-tests.outputs.contract_tests }}
           FRONTEND_UNIT_TESTS: ${{ needs.frontend-tests.outputs.unit_tests }}
+          COMMIT_MODE: ${{ inputs.commit_mode }}
+          BACKEND_COMMIT: ${{ needs.backend-openapi.outputs.commit_status }}
+          BACKEND_PR: ${{ needs.backend-openapi.outputs.pr_url }}
+          SDK_COMMIT: ${{ needs.generate-sdk.outputs.commit_status }}
+          SDK_PR: ${{ needs.generate-sdk.outputs.pr_url }}
+          SDK_ANGULAR_COMMIT: ${{ needs.generate-sdk-angular.outputs.commit_status }}
+          SDK_ANGULAR_PR: ${{ needs.generate-sdk-angular.outputs.pr_url }}
+          FRONTEND_COMMIT: ${{ needs.frontend-tests.outputs.commit_status }}
+          FRONTEND_PR: ${{ needs.frontend-tests.outputs.pr_url }}
         run: |
           set -euo pipefail
           failed=0
+
+          delivery() {
+            # delivery <repo> <status> <pr-url>; informational only, never fails the run.
+            local repo="$1" status="${2:-skipped}" pr="${3:-}"
+            local where="—"
+            if [[ -n "$pr" ]]; then
+              where="$pr"
+            elif [[ "$status" == "pushed" ]]; then
+              where="pushed to the stage's branch"
+            fi
+            printf '| %s | `%s` | %s |\n' "$repo" "$status" "$where"
+          }
 
           row() {
             # row <stage> <outcome>; anything but success counts against the run.
@@ -780,6 +1105,17 @@ jobs:
             echo "| generate-sdk | \`${SDK_JOB}\` |"
             echo "| generate-sdk-angular | \`${SDK_ANGULAR_JOB}\` (version ${SDK_ANGULAR_VERSION:-unknown}) |"
             echo "| frontend-tests | \`${FRONTEND_JOB}\` |"
+            echo ""
+            echo "## Delivery (commit_mode: \`${COMMIT_MODE}\`)"
+            echo ""
+            echo "| Repository | Status | Where |"
+            echo "|---|---|---|"
+            delivery "durion-positivity-backend" "${BACKEND_COMMIT}" "${BACKEND_PR}"
+            delivery "durion-positivity-sdk" "${SDK_COMMIT}" "${SDK_PR}"
+            delivery "durion-positivity-sdk-angular" "${SDK_ANGULAR_COMMIT}" "${SDK_ANGULAR_PR}"
+            delivery "durion-positivity-frontend" "${FRONTEND_COMMIT}" "${FRONTEND_PR}"
+            echo ""
+            echo "\`unchanged\` = nothing to commit; \`skipped\` = held back (generation failed, or direct mode with a failing stage)."
             echo ""
             echo "Artifacts: \`openapi-specs\`, \`backend-openapi-changes\`, \`sdk-changes\`, \`sdk-angular-changes\`, \`sdk-angular-tarballs\`, \`frontend-results\`."
           } >> "$GITHUB_STEP_SUMMARY"

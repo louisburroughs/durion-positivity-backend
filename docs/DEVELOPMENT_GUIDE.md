@@ -304,15 +304,36 @@ contract chain and reports what the current controllers break downstream:
    with `npm run sdk:install`, compiles, and runs `test:contracts` plus the Vitest suite.
 5. A `report` job summarises every stage; the run is red if any stage failed.
 
-Nothing is committed or pushed. Each stage uploads its evidence as a workflow artifact:
-`openapi-specs`, `backend-openapi-changes` (a `git diff` patch), `sdk-changes`,
-`sdk-angular-changes`, `sdk-angular-tarballs`, and `frontend-results` (build/test logs plus the
-ready-to-commit `.sdk-tarballs/` directory). Apply the patches and tarballs by hand to land a
-sync.
+Each stage then commits what it regenerated to its own repository, per the `commit_mode`
+input:
+
+| `commit_mode`            | Behaviour                                                                                                                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pull-request` (default) | Pushes `api-artifacts-sync/<run id>` to each repo and opens a PR against the branch the stage ran on. Opened whenever generation succeeded, even if the build or tests after it failed — the PR is where that breakage gets fixed. |
+| `direct`                 | Pushes straight onto the branch the stage ran on, but only when every step of that stage passed.                                                                             |
+| `none`                   | Commits nothing; artifacts only.                                                                                                                                             |
+
+Every stage also uploads its evidence as a workflow artifact: `openapi-specs`,
+`backend-openapi-changes` (a `git diff` patch), `sdk-changes`, `sdk-angular-changes`,
+`sdk-angular-tarballs`, and `frontend-results` (build/test logs plus the `.sdk-tarballs/`
+directory). The run summary links every PR the run opened.
+
+**When to run it:** any time the OpenAPI documentation or the permissions change — a
+controller or DTO edit, an `@Operation`/`@Schema` annotation, a `@PreAuthorize` or permission
+registry change, or a hand edit to an `openapi.yaml` / `permissions.yaml`. Trigger it from the
+Actions tab or the CLI:
+
+```bash
+gh workflow run api-artifacts-sync.yml --repo louisburroughs/durion-positivity-backend \
+  --ref main -f modules="pos-order pos-workorder"      # omit modules to regenerate everything
+```
 
 The `sdk_ref`, `sdk_angular_ref` and `frontend_ref` inputs pick the downstream branches. The
 other repos are checked out with the `CROSS_REPO_TOKEN` secret when it exists, otherwise with
-the workflow token; set the secret if any of them is private.
+the workflow token. Committing to the SDK and frontend repos needs the secret: a fine-grained
+PAT with Contents and Pull requests write access on all four repositories. It is also worth
+using for this repo's own PR, since a PR opened with the workflow token does not trigger the
+other workflows on it.
 
 ### Access Points (When Running)
 

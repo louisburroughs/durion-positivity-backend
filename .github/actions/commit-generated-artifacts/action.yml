@@ -1,0 +1,164 @@
+# .github/actions/commit-generated-artifacts/action.yml
+#
+# Commit whatever a generation step left in a checkout and deliver it to the
+# repository the checkout came from, in one of three modes:
+#
+#   none          leave the working tree alone (artifacts-only run)
+#   pull-request  push a new branch and open a pull request against base-branch
+#   direct        push straight onto base-branch
+#
+# Used by api-artifacts-sync.yml for each repo in the contract chain. The
+# token must be able to push to `repository` (and open PRs in pull-request
+# mode); the workflow token only covers the repo running the workflow.
+
+name: Commit generated artifacts
+description: Commit a checkout's changes and push them to a branch or open a pull request.
+
+inputs:
+  repository:
+    description: owner/repo the checkout came from
+    required: true
+  working-directory:
+    description: Path of the checkout, relative to the workspace
+    required: true
+  token:
+    description: Token with push (and pull-request) access to the repository
+    required: true
+  mode:
+    description: none, pull-request or direct
+    required: true
+  base-branch:
+    description: Branch to push onto (direct) or to open the pull request against (pull-request)
+    required: true
+  head-branch:
+    description: Branch to push in pull-request mode
+    required: false
+    default: ""
+  commit-message:
+    description: Commit message
+    required: true
+  pr-title:
+    description: Pull request title (pull-request mode)
+    required: false
+    default: ""
+  pr-body:
+    description: Pull request body (pull-request mode)
+    required: false
+    default: ""
+
+outputs:
+  status:
+    description: unchanged, skipped, pushed or pull-request
+    value: ${{ steps.deliver.outputs.status }}
+  commit:
+    description: SHA of the commit that was created, if any
+    value: ${{ steps.deliver.outputs.commit }}
+  pr-url:
+    description: URL of the pull request, if one was opened or already existed
+    value: ${{ steps.deliver.outputs.pr-url }}
+  changed-files:
+    description: Number of files the commit touched
+    value: ${{ steps.deliver.outputs.changed-files }}
+
+runs:
+  using: composite
+  steps:
+    - name: Commit and deliver
+      id: deliver
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        REPOSITORY: ${{ inputs.repository }}
+        TOKEN: ${{ inputs.token }}
+        MODE: ${{ inputs.mode }}
+        BASE_BRANCH: ${{ inputs.base-branch }}
+        HEAD_BRANCH: ${{ inputs.head-branch }}
+        COMMIT_MESSAGE: ${{ inputs.commit-message }}
+        PR_TITLE: ${{ inputs.pr-title }}
+        PR_BODY: ${{ inputs.pr-body }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+
+        emit() { echo "$1=$2" >> "$GITHUB_OUTPUT"; }
+        emit status unchanged
+        emit commit ""
+        emit pr-url ""
+        emit changed-files 0
+
+        case "${MODE}" in
+          none|pull-request|direct) ;;
+          *)
+            echo "::error::Unknown mode '${MODE}' (expected none, pull-request or direct)"
+            exit 1
+            ;;
+        esac
+
+        if [[ "${MODE}" == "pull-request" && -z "${HEAD_BRANCH}" ]]; then
+          echo "::error::head-branch is required in pull-request mode"
+          exit 1
+        fi
+
+        # Stage everything the generators touched, including deletions and new
+        # files. Ignored paths (build output, node_modules) stay out.
+        git add -A
+        CHANGED="$(git diff --cached --name-only | wc -l | tr -d ' ')"
+        emit changed-files "${CHANGED}"
+
+        if [[ "${CHANGED}" -eq 0 ]]; then
+          echo "No changes to commit in ${REPOSITORY}."
+          exit 0
+        fi
+
+        if [[ "${MODE}" == "none" ]]; then
+          echo "${CHANGED} changed file(s) in ${REPOSITORY}; commit_mode=none, leaving them uncommitted."
+          git reset -q
+          emit status skipped
+          exit 0
+        fi
+
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git commit -q -m "${COMMIT_MESSAGE}"
+        COMMIT_SHA="$(git rev-parse HEAD)"
+        emit commit "${COMMIT_SHA}"
+        echo "Committed ${CHANGED} file(s) as ${COMMIT_SHA::7}."
+
+        # Push with the supplied token. The checkouts use persist-credentials:
+        # false, so this is the only credential on the wire.
+        git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${REPOSITORY}.git"
+
+        if [[ "${MODE}" == "direct" ]]; then
+          if ! git ls-remote --exit-code --heads origin "${BASE_BRANCH}" >/dev/null; then
+            echo "::error::'${BASE_BRANCH}' is not a branch on ${REPOSITORY}; direct mode needs a branch to push onto."
+            exit 1
+          fi
+          git push origin "HEAD:refs/heads/${BASE_BRANCH}"
+          echo "Pushed ${COMMIT_SHA::7} to ${REPOSITORY}@${BASE_BRANCH}."
+          emit status pushed
+          exit 0
+        fi
+
+        git push origin "HEAD:refs/heads/${HEAD_BRANCH}"
+        echo "Pushed ${COMMIT_SHA::7} to ${REPOSITORY}@${HEAD_BRANCH}."
+
+        EXISTING="$(gh pr list --repo "${REPOSITORY}" --head "${HEAD_BRANCH}" --base "${BASE_BRANCH}" --state open --json url --jq '.[0].url // empty')"
+        if [[ -n "${EXISTING}" ]]; then
+          echo "Pull request already open: ${EXISTING}"
+          emit pr-url "${EXISTING}"
+          emit status pull-request
+          exit 0
+        fi
+
+        BODY_FILE="$(mktemp)"
+        printf '%s\n' "${PR_BODY}" > "${BODY_FILE}"
+        PR_URL="$(gh pr create \
+          --repo "${REPOSITORY}" \
+          --base "${BASE_BRANCH}" \
+          --head "${HEAD_BRANCH}" \
+          --title "${PR_TITLE:-${COMMIT_MESSAGE%%$'\n'*}}" \
+          --body-file "${BODY_FILE}")"
+        rm -f "${BODY_FILE}"
+        echo "Opened ${PR_URL}"
+        emit pr-url "${PR_URL}"
+        emit status pull-request
