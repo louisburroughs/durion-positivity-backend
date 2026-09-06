@@ -591,11 +591,13 @@ recorded output, not taken on trust.
 
 ### Why it is out of the chat-path gate
 
-Not "awaiting a live run" — it cannot be answered within budget today. `searchWorkorders`
-exposes no page or size parameter and the backend returns 25 rows by default, so one
-`status=OPEN` call sees 25 of the 45 open work orders in unspecified order and may silently
-omit one of the three expected customers. The only correct plan is one call per AR customer,
-43 on this seed. Filed as a facade gap; the fixture's `expected_plan` records the honest cost.
+It was tool-blocked when authored: `searchWorkorders` exposes no page or size parameter and
+the backend returns 25 rows by default, so one `status=OPEN` call saw 25 of the 45 open work
+orders in unspecified order and could silently omit one of the three expected customers,
+leaving one call per AR customer — 43 on this seed — as the only correct plan. #1855 closed
+that gap with `getOpenWorkordersByCustomer`, one server-side grouped call, so the plan is now
+two calls. Promotion waits on that build being deployed — the `mcp_tool` description has to be
+re-embedded before selection can retrieve the tool — and then a recorded live turn.
 
 ### Cross-foot against observed live answers
 
