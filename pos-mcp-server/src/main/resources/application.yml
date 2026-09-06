@@ -352,7 +352,9 @@ mcp:
     # defaults to T2-complex — never silently to a smaller model.
     router: ${MCP_MODEL_ROUTER:qwen3:4b}
     # T2-simple executor (single-tool lookups). Blank = use the default executor model; set to a
-    # smaller pulled model (e.g. gpt-oss:20b) to realize the latency/cost win. Left blank on
+    # model that is faster and cheaper than the executor to realize the latency/cost win — measure
+    # first: gpt-oss:20b was that next to gpt-oss:120b, but next to deepseek-v4-flash:0731 it is
+    # slower (32.6 s vs 8.5-10.2 s per gate question, #1691 bake-off). Left blank on
     # purpose while the analytics gate (#1601) is being measured: a second executor model would
     # add a confound to every gate comparison. Setting it is what makes tiering-enabled=true
     # worth paying for again.
