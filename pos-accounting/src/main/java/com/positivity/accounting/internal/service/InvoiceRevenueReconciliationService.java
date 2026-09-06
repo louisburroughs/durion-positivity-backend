@@ -19,6 +19,7 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 
 /**
@@ -102,10 +103,12 @@ public class InvoiceRevenueReconciliationService {
             // Half-open upper bound; "now plus a day" keeps clock skew between services out of it.
             Instant to =
                     request.finalizedTo() == null ? Instant.now(clock).plus(Duration.ofDays(1)) : request.finalizedTo();
+            // The cap is applied by the query, not after loading every row in the window.
+            Limit limit = request.limit() == null ? Limit.unlimited() : Limit.of(request.limit());
             rows =
                     extInvoiceRepository
                             .findByStatusInAndFinalizedAtGreaterThanEqualAndFinalizedAtLessThanOrderByFinalizedAtAsc(
-                                    InvoiceRevenuePostingService.POSTING_STATUSES, from, to);
+                                    InvoiceRevenuePostingService.POSTING_STATUSES, from, to, limit);
         }
         if (request.limit() != null && rows.size() > request.limit()) {
             return rows.subList(0, request.limit());

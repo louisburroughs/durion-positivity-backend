@@ -52,7 +52,7 @@ permissions_by_domain:
     description: View accounting events
     source: pos-accounting/src/main/resources/permissions.yaml
   - name: accounting:gl:reconcile
-    description: Reconcile invoice revenue GL postings from the invoice replica
+    description: Reconcile gl
     source: pos-accounting/src/main/resources/permissions.yaml
   - name: accounting:je:create
     description: Create journal entries

@@ -67,7 +67,7 @@ class InvoiceRevenueReconciliationServiceTest {
     private void windowReturns(ExtInvoice... rows) {
         when(extInvoiceRepository
                         .findByStatusInAndFinalizedAtGreaterThanEqualAndFinalizedAtLessThanOrderByFinalizedAtAsc(
-                                any(), any(), any()))
+                                any(), any(), any(), any()))
                 .thenReturn(List.of(rows));
     }
 
@@ -220,7 +220,7 @@ class InvoiceRevenueReconciliationServiceTest {
 
         verify(extInvoiceRepository, never())
                 .findByStatusInAndFinalizedAtGreaterThanEqualAndFinalizedAtLessThanOrderByFinalizedAtAsc(
-                        any(), any(), any());
+                        any(), any(), any(), any());
         assertThat(response.scanned()).isEqualTo(1);
         assertThat(response.outcomes().getFirst().invoiceId())
                 .as("oldest first")
@@ -238,6 +238,7 @@ class InvoiceRevenueReconciliationServiceTest {
                 .findByStatusInAndFinalizedAtGreaterThanEqualAndFinalizedAtLessThanOrderByFinalizedAtAsc(
                         eq(InvoiceRevenuePostingService.POSTING_STATUSES),
                         eq(InvoiceRevenueReconciliationService.EARLIEST),
-                        eq(NOW.plus(java.time.Duration.ofDays(1))));
+                        eq(NOW.plus(java.time.Duration.ofDays(1))),
+                        eq(org.springframework.data.domain.Limit.unlimited()));
     }
 }

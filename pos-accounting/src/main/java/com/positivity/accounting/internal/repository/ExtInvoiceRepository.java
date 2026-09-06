@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -73,5 +74,5 @@ public interface ExtInvoiceRepository extends JpaRepository<ExtInvoice, UUID> {
      * candidate set for invoice revenue reconciliation (#1851).
      */
     List<ExtInvoice> findByStatusInAndFinalizedAtGreaterThanEqualAndFinalizedAtLessThanOrderByFinalizedAtAsc(
-            Collection<String> statuses, Instant from, Instant to);
+            Collection<String> statuses, Instant from, Instant to, Limit limit);
 }
