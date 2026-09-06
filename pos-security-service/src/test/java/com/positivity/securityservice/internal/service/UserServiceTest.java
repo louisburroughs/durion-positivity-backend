@@ -12,7 +12,7 @@ import com.positivity.securityservice.internal.dto.UserUpdateRequest;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
-import com.positivity.securityservice.internal.exception.SecurityValidationException;
+import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -156,7 +156,7 @@ class UserServiceTest {
         when(roleRepository.findByName("UNKNOWN")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> userService.createUser("bob", "pass", Set.of("UNKNOWN")))
-                .isInstanceOf(SecurityValidationException.class)
+                .isInstanceOf(RoleNotFoundException.class)
                 .hasMessageContaining("Role not found");
     }
 
@@ -277,8 +277,10 @@ class UserServiceTest {
         when(userRepository.findById(id)).thenReturn(Optional.empty());
 
         UserUpdateRequest req = new UserUpdateRequest();
+        // A user reference that does not resolve is UserNotFoundException (404) on every entry
+        // point, not the 400 validation type (ADR-0017 §2, #1802).
         assertThatThrownBy(() -> userService.updateUser(id, req))
-                .isInstanceOf(SecurityValidationException.class)
+                .isInstanceOf(com.positivity.securityservice.internal.exception.UserNotFoundException.class)
                 .hasMessageContaining("User not found");
     }
 
@@ -294,7 +296,7 @@ class UserServiceTest {
         req.setRoles(Set.of("GHOST"));
 
         assertThatThrownBy(() -> userService.updateUser(id, req))
-                .isInstanceOf(SecurityValidationException.class)
+                .isInstanceOf(RoleNotFoundException.class)
                 .hasMessageContaining("Role not found");
     }
 
@@ -303,8 +305,11 @@ class UserServiceTest {
         when(userRepository.findByUsername("ghost")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> userService.assignRoles("ghost", Set.of("ADMIN")))
-                .isInstanceOf(SecurityValidationException.class)
-                .hasMessageContaining("User not found");
+                .isInstanceOf(com.positivity.securityservice.internal.exception.UserNotFoundException.class)
+                .hasMessage("User not found")
+                // The username is caller-supplied text and must not be echoed (ADR-0056 §1).
+                .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(ex.getMessage())
+                        .doesNotContain("ghost"));
     }
 
     @Test
@@ -315,7 +320,7 @@ class UserServiceTest {
         when(roleRepository.findByName("GHOST")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> userService.assignRoles("alice", Set.of("GHOST")))
-                .isInstanceOf(SecurityValidationException.class)
+                .isInstanceOf(RoleNotFoundException.class)
                 .hasMessageContaining("Role not found");
     }
 }

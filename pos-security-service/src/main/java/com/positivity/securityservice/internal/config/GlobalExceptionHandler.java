@@ -4,6 +4,7 @@ import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
+import com.positivity.securityservice.internal.exception.InvalidTokenException;
 import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
@@ -11,6 +12,7 @@ import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationReviewCaseNotFoundException;
+import com.positivity.securityservice.internal.exception.TokenUserIdMissingException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -74,6 +76,9 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * token, but the account currently holds no roles and so no effective permissions (ADR-0017 §2
  * question 1: a refusal about the caller's authorization, answered the same on login and refresh)
  * - InvalidRefreshTokenException → 401 Unauthorized
+ * - InvalidTokenException → 401 Unauthorized (INVALID_TOKEN) — the token query parameter of the
+ * token utility endpoints (GET /v1/auth/roles, /subject, /user-id) failed validation; enveloped
+ * since the #1808 review, previously a bare 401
  * - LockedException → 401 Unauthorized
  * - DisabledException → 401 Unauthorized
  * - AccountExpiredException → 401 Unauthorized
@@ -87,7 +92,12 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * Bad Request
  * - RoleNotFoundException, UserNotFoundException,
  * RoleAssignmentNotFoundException, PermissionNotFoundException, EntityNotFoundException →
- * 404 Not Found
+ * 404 Not Found. UserNotFoundException is the one answer for a user reference that does not
+ * resolve, on every entry point — user management and token issuance alike (ADR-0017 §2 "one
+ * condition, one status", #1802); a token-issuance throw carries a generic message plus a
+ * logDetail, handled the same way as SecurityValidationException's
+ * - TokenUserIdMissingException → 422 Unprocessable Entity (TOKEN_USER_ID_MISSING) — a valid
+ * token that carries no uid/userId claim (ADR-0017 §2 question 3, #1803)
  * - ObjectOptimisticLockingFailureException → 409 Conflict (retry needed)
  *
  * <p>This class deliberately does NOT map bare {@code IllegalArgumentException} or a
@@ -153,7 +163,17 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleUserNotFoundException(UserNotFoundException ex, WebRequest request) {
 
         String correlationId = extractCorrelationId(request);
-        log.warn("User not found (correlationId={}): {}", correlationId, ex.getMessage());
+        // A UserNotFoundException carrying a logDetail has a deliberately generic message because
+        // the real reason is information the caller must not receive (#1715 — the token-issuance
+        // endpoints must not name the subject that failed to resolve): the detail goes to the log
+        // keyed by the correlation id, never into the response body. Same contract as
+        // handleSecurityValidationException below.
+        String logDetail = ex.getLogDetail();
+        if (logDetail != null) {
+            log.warn("User not found (correlationId={}): {} — {}", correlationId, ex.getMessage(), logDetail);
+        } else {
+            log.warn("User not found (correlationId={}): {}", correlationId, ex.getMessage());
+        }
 
         return respond(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", ex.getMessage(), correlationId);
     }
@@ -303,6 +323,30 @@ public class GlobalExceptionHandler {
                 null,
                 "Ask an administrator to assign at least one role to this account, then sign in again",
                 null);
+    }
+
+    /**
+     * Handles TokenUserIdMissingException: a token that passed full validation but carries
+     * neither a {@code uid} nor a legacy {@code userId} claim, so no user id can be extracted.
+     *
+     * **HTTP Status:** 422 Unprocessable Entity (ADR-0017 §2 question 3 — a well-formed request
+     * refused by a domain rule that keeps failing until the caller presents a different token;
+     * #1803). Not 401: the token is genuine and current, and telling the caller to replace it
+     * would misdirect the fix. Not 400: neither the request nor the token is malformed.
+     *
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 422 status and correlation ID
+     */
+    @ExceptionHandler(TokenUserIdMissingException.class)
+    @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+    public ResponseEntity<ApiError> handleTokenUserIdMissingException(
+            TokenUserIdMissingException ex, WebRequest request) {
+
+        String correlationId = extractCorrelationId(request);
+        log.warn("Token carries no user id claim (correlationId={}): {}", correlationId, ex.getMessage());
+
+        return respond(HttpStatus.UNPROCESSABLE_ENTITY, "TOKEN_USER_ID_MISSING", ex.getMessage(), correlationId);
     }
 
     @ExceptionHandler({
@@ -469,6 +513,28 @@ public class GlobalExceptionHandler {
         String correlationId = extractCorrelationId(request);
         log.warn("Invalid refresh token (correlationId={}): {}", correlationId, ex.getMessage());
         return respond(HttpStatus.UNAUTHORIZED, "INVALID_REFRESH_TOKEN", ex.getMessage(), correlationId);
+    }
+
+    /**
+     * Handles InvalidTokenException: the {@code token} query parameter of a token utility endpoint
+     * ({@code GET /v1/auth/roles}, {@code /subject}, {@code /user-id}) was refused by
+     * {@code JwtService#validateToken} — expired, revoked, unknown to the token store, or malformed.
+     *
+     * <p>
+     * <b>HTTP Status:</b> 401 Unauthorized (INVALID_TOKEN). The controllers used to answer a bare
+     * 401 with no body; routing the refusal through this advice gives it the {@code ApiError}
+     * envelope and the correlation id the spec already documented (ADR-0017 §3/§4, #1808 review).
+     *
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 401 status and correlation ID
+     */
+    @ExceptionHandler(InvalidTokenException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ResponseEntity<ApiError> handleInvalidTokenException(InvalidTokenException ex, WebRequest request) {
+        String correlationId = extractCorrelationId(request);
+        log.warn("Invalid token (correlationId={}): {}", correlationId, ex.getMessage());
+        return respond(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", ex.getMessage(), correlationId);
     }
 
     @ExceptionHandler(LockedException.class)

@@ -6,9 +6,14 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
+import com.positivity.securityservice.internal.exception.InvalidTokenException;
 import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
@@ -40,6 +45,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -258,6 +264,139 @@ class GlobalExceptionHandlerTest {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getBody().code()).isEqualTo("USER_NOT_FOUND");
+        }
+
+        /**
+         * #1802 moved the token-issuance "subject does not resolve" refusal onto this handler;
+         * #1715's non-disclosure rule rides along as a {@code logDetail} that must reach the log
+         * and never the body.
+         */
+        @Test
+        @DisplayName("echoes only the generic message when the exception carries a logDetail")
+        void echoesOnlyTheGenericMessageWhenALogDetailIsPresent() {
+            UserNotFoundException ex = UserNotFoundException.withLogDetail(
+                    "Token issuance request is invalid", "no user exists for subject: ghost.account");
+
+            ResponseEntity<ApiError> response = sut.handleUserNotFoundException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("USER_NOT_FOUND");
+            assertThat(response.getBody().message()).isEqualTo("Token issuance request is invalid");
+            assertThat(response.getBody().toString()).doesNotContain("ghost.account");
+        }
+
+        /**
+         * The other half of the non-disclosure contract (#1715, #1808 review): the detail the body
+         * withholds must actually reach the WARN log, keyed by the correlation id the body quotes,
+         * or the operator has no way to find out which subject failed to resolve.
+         */
+        @Test
+        @DisplayName("logs the logDetail at WARN against the correlation id, and never in the body")
+        void logsTheLogDetailAtWarnAgainstTheCorrelationIdAndNeverInTheBody() {
+            UserNotFoundException ex = UserNotFoundException.withLogDetail(
+                    "Token issuance request is invalid", "no user exists for subject: ghost.account");
+
+            ListAppender<ILoggingEvent> appender = attachAppender();
+            ResponseEntity<ApiError> response;
+            try {
+                response = sut.handleUserNotFoundException(ex, requestWithHeader());
+            } finally {
+                detachAppender(appender);
+            }
+
+            assertThat(appender.list)
+                    .filteredOn(event -> event.getLevel() == Level.WARN)
+                    .singleElement()
+                    .extracting(ILoggingEvent::getFormattedMessage)
+                    .asString()
+                    .contains("ghost.account")
+                    .contains(CORRELATION_ID);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().message()).doesNotContain("ghost.account");
+        }
+
+        @Test
+        @DisplayName("logs no detail suffix when the exception carries no logDetail")
+        void logsNoDetailSuffixWhenThereIsNoLogDetail() {
+            UserNotFoundException ex = new UserNotFoundException("User not found");
+
+            ListAppender<ILoggingEvent> appender = attachAppender();
+            try {
+                sut.handleUserNotFoundException(ex, requestWithHeader());
+            } finally {
+                detachAppender(appender);
+            }
+
+            assertThat(appender.list)
+                    .filteredOn(event -> event.getLevel() == Level.WARN)
+                    .singleElement()
+                    .extracting(ILoggingEvent::getFormattedMessage)
+                    .asString()
+                    .contains(CORRELATION_ID)
+                    .contains("User not found")
+                    .doesNotContain(" — ");
+        }
+
+        private ListAppender<ILoggingEvent> attachAppender() {
+            Logger logger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
+            ListAppender<ILoggingEvent> appender = new ListAppender<>();
+            appender.start();
+            logger.addAppender(appender);
+            return appender;
+        }
+
+        private void detachAppender(ListAppender<ILoggingEvent> appender) {
+            Logger logger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
+            logger.detachAppender(appender);
+            appender.stop();
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handleTokenUserIdMissingException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleTokenUserIdMissingException")
+    class HandleTokenUserIdMissingException {
+
+        @Test
+        @DisplayName("returns 422 TOKEN_USER_ID_MISSING with the message (#1803)")
+        void returns422TokenUserIdMissing() {
+            var ex = new com.positivity.securityservice.internal.exception.TokenUserIdMissingException(
+                    "Token does not carry a uid or userId claim");
+
+            ResponseEntity<ApiError> response = sut.handleTokenUserIdMissingException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("TOKEN_USER_ID_MISSING");
+            assertThat(response.getBody().message()).isEqualTo("Token does not carry a uid or userId claim");
+            assertThat(response.getBody().status()).isEqualTo(422);
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handleInvalidTokenException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleInvalidTokenException")
+    class HandleInvalidTokenException {
+
+        @Test
+        @DisplayName("returns 401 INVALID_TOKEN with the message, enveloped (#1808 review)")
+        void returns401InvalidToken() {
+            var ex = new InvalidTokenException("Token invalid or expired");
+
+            ResponseEntity<ApiError> response = sut.handleInvalidTokenException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("INVALID_TOKEN");
+            assertThat(response.getBody().message()).isEqualTo("Token invalid or expired");
+            assertThat(response.getBody().status()).isEqualTo(401);
         }
     }
 
@@ -830,6 +969,11 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleNoRolesAssignedException", (HandlerInvocation)
                             request -> handler.handleNoRolesAssignedException(
                                     new NoRolesAssignedException("User has no roles assigned"), request)),
+                    Named.of("handleTokenUserIdMissingException", (HandlerInvocation)
+                            request -> handler.handleTokenUserIdMissingException(
+                                    new com.positivity.securityservice.internal.exception.TokenUserIdMissingException(
+                                            "Token does not carry a uid or userId claim"),
+                                    request)),
                     Named.of("handleBadRequestExceptions", (HandlerInvocation) request -> {
                         HttpMessageNotReadableException ex = mock(HttpMessageNotReadableException.class);
                         when(ex.getMessage()).thenReturn("JSON parse error");
@@ -853,6 +997,9 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleInvalidRefreshTokenException", (HandlerInvocation)
                             request -> handler.handleInvalidRefreshTokenException(
                                     new InvalidRefreshTokenException("Refresh token invalid"), request)),
+                    Named.of("handleInvalidTokenException", (HandlerInvocation)
+                            request -> handler.handleInvalidTokenException(
+                                    new InvalidTokenException("Token invalid or expired"), request)),
                     Named.of("handleLockedException", (HandlerInvocation)
                             request -> handler.handleLockedException(new LockedException("Account locked"), request)),
                     Named.of("handleDisabledException", (HandlerInvocation) request ->

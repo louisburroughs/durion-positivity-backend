@@ -43,10 +43,14 @@ public class UserController {
                         every named role must already exist.
                         Required inputs: username, password, and roles, a non-empty array of existing role names.
                         Emits a SECURITY_USER_CREATE event; the password is hashed before storage.
-                        Returns 409 when the username already exists, and 400 when a field is missing or a named \
-                        role is not found.
+                        Returns 409 when the username already exists, 400 with INVALID_REQUEST when a required field \
+                        is missing, and 404 with ROLE_NOT_FOUND when a named role does not exist.
                         """)
     @ApiResponse(responseCode = "201", description = "User created successfully.")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Named role not found (ROLE_NOT_FOUND).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Username already exists",
@@ -136,13 +140,14 @@ public class UserController {
                         Required inputs: id (UUID) as a path parameter; username, password, and roles are all optional, \
                         and omitted or blank fields are left unchanged.
                         Emits a SECURITY_USER_UPDATE event; a supplied password is re-hashed before storage.
-                        Returns 400 with VALIDATION_ERROR when the user or a named role cannot be found; the miss \
-                        surfaces as 400 rather than 404.
+                        Returns 404 with USER_NOT_FOUND when no user exists for the id, and 404 with ROLE_NOT_FOUND \
+                        when a named role does not exist.
                         """)
     @ApiResponse(responseCode = "200", description = "User updated successfully.")
     @ApiResponse(
-            responseCode = "400",
-            description = "User or named role not found (VALIDATION_ERROR); the miss surfaces as 400, not 404.")
+            responseCode = "404",
+            description = "User or named role not found (USER_NOT_FOUND / ROLE_NOT_FOUND).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "SECURITY_USER_UPDATE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
@@ -250,13 +255,14 @@ public class UserController {
                         Required inputs: username as a path parameter and roles, an array of existing role names, in \
                         the body; the set replaces all current direct roles.
                         Emits a SECURITY_USER_ASSIGN_ROLES event.
-                        Returns 400 with VALIDATION_ERROR when the user or a named role cannot be found; the miss \
-                        surfaces as 400 rather than 404.
+                        Returns 404 with USER_NOT_FOUND when the username does not resolve to a user, and 404 with \
+                        ROLE_NOT_FOUND when a named role does not exist.
                         """)
     @ApiResponse(responseCode = "200", description = "User roles updated successfully.")
     @ApiResponse(
-            responseCode = "400",
-            description = "User or named role not found (VALIDATION_ERROR); the miss surfaces as 400, not 404.")
+            responseCode = "404",
+            description = "User or named role not found (USER_NOT_FOUND / ROLE_NOT_FOUND).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "SECURITY_USER_ASSIGN_ROLES", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

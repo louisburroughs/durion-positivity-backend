@@ -2,6 +2,9 @@ package com.positivity.securityservice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.securityservice.internal.entity.Role;
@@ -9,7 +12,10 @@ import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -44,6 +51,9 @@ class CustomUserDetailsServiceTest {
 
     @Mock
     private RoleAssignmentRepository roleAssignmentRepository;
+
+    @Spy
+    private Clock clock = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     @InjectMocks
     private CustomUserDetailsService sut;
@@ -122,6 +132,72 @@ class CustomUserDetailsServiceTest {
                     .as("principal.isAccountNonLocked() must reflect entity.accountNonLocked == false; "
                             + "fails RED because 3-arg constructor defaults to true")
                     .isFalse();
+        }
+    }
+
+    // =========================================================
+    // #1803 / #1808 review: "locked" is one definition shared with LockoutServiceImpl
+    // =========================================================
+
+    /**
+     * A timed lockout whose {@code lockedUntil} has passed is not a lock; an administrative lock
+     * ({@code lockedUntil == null}) and a lockout still in force are. Mirrors
+     * {@code LockoutServiceImpl#isLockedOut} so the bearer path (JwtAuthenticationFilter) and the
+     * login path agree — otherwise a lapsed lockout kept refusing bearer tokens until someone
+     * attempted a password login. The persisted flag is not cleared here: a read path must not
+     * write.
+     */
+    @Nested
+    @DisplayName("loadUserByUsername: lapsed timed lockout is not a lock; admin and future locks are")
+    class TimedLockoutMapping {
+
+        private static final Instant CLOCK_NOW = Instant.parse("2024-01-01T00:00:00Z");
+
+        @Test
+        @DisplayName("accountNonLocked=false with lockedUntil in the past → isAccountNonLocked() is true")
+        void lapsedTimedLockout_isNotLocked() {
+            User entity = entityWithDefaults("lapsed.lockout");
+            entity.setAccountNonLocked(false);
+            entity.setLockedUntil(CLOCK_NOW.minusSeconds(60));
+            when(userRepository.findByUsername("lapsed.lockout")).thenReturn(Optional.of(entity));
+
+            UserDetails principal = sut.loadUserByUsername("lapsed.lockout");
+
+            assertThat(principal.isAccountNonLocked())
+                    .as("a lockout that has expired must not keep refusing bearer tokens")
+                    .isTrue();
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("accountNonLocked=false with lockedUntil in the future → isAccountNonLocked() is false")
+        void lockoutStillInForce_isLocked() {
+            User entity = entityWithDefaults("active.lockout");
+            entity.setAccountNonLocked(false);
+            entity.setLockedUntil(CLOCK_NOW.plusSeconds(60));
+            when(userRepository.findByUsername("active.lockout")).thenReturn(Optional.of(entity));
+
+            UserDetails principal = sut.loadUserByUsername("active.lockout");
+
+            assertThat(principal.isAccountNonLocked()).isFalse();
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName(
+                "accountNonLocked=false with lockedUntil == null (administrative lock) → isAccountNonLocked() is false")
+        void administrativeLock_isLocked() {
+            User entity = entityWithDefaults("admin.locked");
+            entity.setAccountNonLocked(false);
+            entity.setLockedUntil(null);
+            when(userRepository.findByUsername("admin.locked")).thenReturn(Optional.of(entity));
+
+            UserDetails principal = sut.loadUserByUsername("admin.locked");
+
+            assertThat(principal.isAccountNonLocked())
+                    .as("an administrative lock has no expiry and must stay a lock")
+                    .isFalse();
+            verify(userRepository, never()).save(any());
         }
     }
 

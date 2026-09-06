@@ -199,6 +199,174 @@ class JwtAuthenticationFilterTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Account state (#1803): a live token must not outlast the account's fitness to hold one
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Issue #1803 (1): no {@code AuthenticationProvider} runs on this path, so Spring's
+     * {@code AccountStatusUserDetailsChecker} — which enforces enabled / non-locked / non-expired
+     * on the credential path — was invoked by nothing here. {@code CustomUserDetailsService}
+     * populates all the flags faithfully; the filter simply never read them, so disabling or
+     * locking an account left every access token it already held working until expiry.
+     */
+    @Test
+    @DisplayName(
+            "disabledAccount_isRefused: a valid token for a disabled account leaves the request unauthenticated without throwing")
+    void disabledAccount_isRefused() {
+        stubValidTokenFor(disabledAccount());
+
+        MockFilterChain chain = new MockFilterChain();
+
+        assertThatCode(() -> filter.doFilter(bearerRequest(), new MockHttpServletResponse(), chain))
+                .doesNotThrowAnyException();
+        assertThat(SecurityContextHolder.getContext().getAuthentication())
+                .as("a disabled account's live token must stop authenticating immediately")
+                .isNull();
+        assertThat(chain.getRequest())
+                .as("the chain must still run so the entry point renders the 401 envelope")
+                .isNotNull();
+    }
+
+    @Test
+    @DisplayName("lockedAccount_isRefused: a valid token for a locked account leaves the request unauthenticated")
+    void lockedAccount_isRefused() {
+        stubValidTokenFor(lockedAccount());
+
+        MockFilterChain chain = new MockFilterChain();
+
+        assertThatCode(() -> filter.doFilter(bearerRequest(), new MockHttpServletResponse(), chain))
+                .doesNotThrowAnyException();
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        assertThat(chain.getRequest()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("expiredAccount_isRefused: a valid token for an expired account leaves the request unauthenticated")
+    void expiredAccount_isRefused() {
+        stubValidTokenFor(expiredAccount());
+
+        MockFilterChain chain = new MockFilterChain();
+
+        assertThatCode(() -> filter.doFilter(bearerRequest(), new MockHttpServletResponse(), chain))
+                .doesNotThrowAnyException();
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        assertThat(chain.getRequest()).isNotNull();
+    }
+
+    /**
+     * The fourth flag. Nothing on this path checks a password, but {@code JwtController#issueInternalToken}
+     * mints tokens with no password check at all, so a token minted after the credentials expired
+     * would otherwise keep working. {@code AccountStatusUserDetailsChecker} throws
+     * {@code CredentialsExpiredException} for it, and the filter must answer exactly as it does
+     * for the other three: unauthenticated, chain continues, nothing written.
+     */
+    @Test
+    @DisplayName(
+            "credentialsExpired_isRefused: a valid token for an account whose credentials have expired leaves the request unauthenticated")
+    void credentialsExpired_isRefused() throws Exception {
+        stubValidTokenFor(credentialsExpiredAccount());
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        assertThatCode(() -> filter.doFilter(bearerRequest(), response, chain)).doesNotThrowAnyException();
+        assertThat(SecurityContextHolder.getContext().getAuthentication())
+                .as("expired credentials must stop a live token authenticating, like the other three flags")
+                .isNull();
+        assertThat(chain.getRequest())
+                .as("the chain must still run so the entry point renders the 401 envelope")
+                .isNotNull();
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getContentAsString()).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "disabledAccount_clearsGatewayAuth: a disabled account's token never rides on gateway-header authorities")
+    void disabledAccount_clearsGatewayAuth() throws Exception {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(
+                        "gateway-user", null, List.of(new SimpleGrantedAuthority("security:token:issue_internal"))));
+        stubValidTokenFor(disabledAccount());
+
+        filter.doFilter(bearerRequest(), new MockHttpServletResponse(), new MockFilterChain());
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication())
+                .as("fail closed — the account state refusal must deny the request, not fall back to headers")
+                .isNull();
+    }
+
+    /**
+     * The status check is a credential refusal, so it must answer as one: no enveloped 500, and
+     * no response written by the filter — the entry point renders the 401 later in the chain.
+     */
+    @Test
+    @DisplayName("disabledAccount_isNotAServerFault: the refusal writes nothing and is not answered as a 500")
+    void disabledAccount_isNotAServerFault() throws Exception {
+        stubValidTokenFor(disabledAccount());
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        filter.doFilter(bearerRequest(), response, new MockFilterChain());
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getContentAsString()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("healthyAccount_stillAuthenticates: all account-state flags true is the happy path unchanged")
+    void healthyAccount_stillAuthenticates() throws Exception {
+        stubValidTokenFor(healthyAccount());
+
+        filter.doFilter(bearerRequest(), new MockHttpServletResponse(), new MockFilterChain());
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+    }
+
+    private void stubValidTokenFor(User account) {
+        when(jwtService.validateToken(TOKEN)).thenReturn(true);
+        when(jwtService.getUsernameFromToken(TOKEN)).thenReturn(account.getUsername());
+        when(jwtService.getRolesFromToken(TOKEN)).thenReturn(Set.of("SHOP_MGR"));
+        when(jwtService.getAuthoritiesFromToken(TOKEN)).thenReturn(Set.of("order:shipment:cancel"));
+        when(userDetailsService.loadUserByUsername(account.getUsername())).thenReturn(account);
+    }
+
+    // Named factories over Spring's User(username, password, enabled, accountNonExpired,
+    // credentialsNonExpired, accountNonLocked, authorities) constructor: each flips exactly one
+    // flag, so a test reads as the account state it exercises rather than as a positional triple.
+
+    private static User healthyAccount() {
+        return account(true, true, true, true);
+    }
+
+    private static User disabledAccount() {
+        return account(false, true, true, true);
+    }
+
+    private static User expiredAccount() {
+        return account(true, false, true, true);
+    }
+
+    private static User credentialsExpiredAccount() {
+        return account(true, true, false, true);
+    }
+
+    private static User lockedAccount() {
+        return account(true, true, true, false);
+    }
+
+    private static User account(
+            boolean enabled, boolean accountNonExpired, boolean credentialsNonExpired, boolean accountNonLocked) {
+        return new User(
+                "jane.doe",
+                "",
+                enabled,
+                accountNonExpired,
+                credentialsNonExpired,
+                accountNonLocked,
+                List.of(new SimpleGrantedAuthority("ignored")));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Non-token requests are untouched
     // ─────────────────────────────────────────────────────────────────────────
 

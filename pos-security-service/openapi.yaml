@@ -684,7 +684,7 @@ paths:
 
         Emits a SECURITY_AUTH_INTERNAL_TOKEN_ISSUE event and persists the issued token so validateToken and revokeToken recognize it.
 
-        Returns 400 when the subject is blank, no user exists for the subject, or the role set is empty.
+        Returns 400 when the subject is blank or the role set is empty, and 404 with USER_NOT_FOUND when no user exists for the subject; the 404 body is generic and never names the subject.
 
         '
       operationId: issueInternalToken
@@ -727,6 +727,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'Forbidden: internal admin context required'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No user exists for the subject (USER_NOT_FOUND); the body never names the subject
         '500':
           content:
             application/json:
@@ -810,13 +816,13 @@ paths:
 
         Use this tool when an access token nears expiry and the client still holds a refresh token; do not use loginUser, which requires credentials, and do not use validateToken, which only checks a token without renewing it.
 
-        Preconditions: the refresh token must be unexpired, unrevoked, present in the token store, and its user must still exist with at least one role.
+        Preconditions: the refresh token must be unexpired, unrevoked, present in the token store, and its user must still exist with at least one role and be enabled, unlocked, unexpired and holding unexpired credentials.
 
         Required inputs: refreshToken, the exact refresh token string previously issued.
 
         Emits a SECURITY_AUTH_REFRESH event, revokes the old access and refresh token JTIs in Redis, deletes the stored pair, and persists the replacement pair.
 
-        Returns 400 when the refresh token is invalid, expired, revoked, or unknown; 401 with INVALID_REFRESH_TOKEN when the referenced user no longer exists; 409 when concurrent refreshes race on the same token; and 403 with USER_HAS_NO_ROLES when the referenced user currently has no roles assigned — the token itself is valid, but the account holds no effective permissions until an administrator assigns a role.
+        Returns 400 when the refresh token is invalid, expired, revoked, or unknown; 401 with INVALID_REFRESH_TOKEN when the referenced user no longer exists; 401 with ACCOUNT_LOCKED, ACCOUNT_DISABLED, ACCOUNT_EXPIRED or CREDENTIALS_EXPIRED when the account''s state forbids the refresh (the same answers the credential login path gives, because a refresh-token holder is a credential-equivalent caller); 409 when concurrent refreshes race on the same token; and 403 with USER_HAS_NO_ROLES when the referenced user currently has no roles assigned — the token itself is valid, but the account holds no effective permissions until an administrator assigns a role.
 
         '
       operationId: refreshTokenPair
@@ -850,7 +856,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Refresh token is invalid, revoked, or references a user that no longer exists
+          description: Refresh token is invalid, revoked, or references a user that no longer exists (INVALID_REFRESH_TOKEN); or the account's state forbids the refresh (ACCOUNT_LOCKED / ACCOUNT_DISABLED / ACCOUNT_EXPIRED / CREDENTIALS_EXPIRED)
         '403':
           content:
             application/json:
@@ -1088,7 +1094,7 @@ paths:
 
         Emits a SECURITY_AUTH_TOKEN_PAIR event and persists the pair so validateToken and refreshTokenPair recognize it.
 
-        Returns 400 when the subject is blank, no user exists for the subject, or the role set is empty.
+        Returns 400 when the subject is blank or the role set is empty, and 404 with USER_NOT_FOUND when no user exists for the subject; the 404 body is generic and never names the subject.
 
         '
       operationId: issueTokenPair
@@ -1132,6 +1138,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'Forbidden: missing security:token:issue_internal permission'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No user exists for the subject (USER_NOT_FOUND); the body never names the subject
         '500':
           content:
             application/json:
@@ -1158,7 +1170,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only claim extraction.
 
-        Returns 401 when the token is invalid, expired, revoked, or unknown to the token store.
+        Returns 401 when the token is invalid, expired, revoked, or unknown to the token store, and 422 with TOKEN_USER_ID_MISSING when the token is valid but carries neither a uid nor a legacy userId claim.
 
         '
       operationId: getTokenUserId
@@ -1187,6 +1199,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Token invalid or expired
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Token is valid but carries no uid or userId claim (TOKEN_USER_ID_MISSING)
       security:
       - bearerAuth: []
       summary: Extract User Id From JWT Token
@@ -3275,7 +3293,7 @@ paths:
 
         Emits a SECURITY_USER_CREATE event; the password is hashed before storage.
 
-        Returns 409 when the username already exists, and 400 when a field is missing or a named role is not found.
+        Returns 409 when the username already exists, 400 with INVALID_REQUEST when a required field is missing, and 404 with ROLE_NOT_FOUND when a named role does not exist.
 
         '
       operationId: createUser
@@ -3319,6 +3337,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Named role not found (ROLE_NOT_FOUND).
         '409':
           content:
             application/json:
@@ -3801,7 +3825,7 @@ paths:
 
         Emits a SECURITY_USER_UPDATE event; a supplied password is re-hashed before storage.
 
-        Returns 400 with VALIDATION_ERROR when the user or a named role cannot be found; the miss surfaces as 400 rather than 404.
+        Returns 404 with USER_NOT_FOUND when no user exists for the id, and 404 with ROLE_NOT_FOUND when a named role does not exist.
 
         '
       operationId: updateUser
@@ -3840,7 +3864,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: User or named role not found (VALIDATION_ERROR); the miss surfaces as 400, not 404.
+          description: Bad Request
         '401':
           content:
             application/json:
@@ -3853,6 +3877,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: User or named role not found (USER_NOT_FOUND / ROLE_NOT_FOUND).
       security:
       - bearerAuth:
         - security:user:edit
@@ -4487,7 +4517,7 @@ paths:
 
         Emits a SECURITY_USER_ASSIGN_ROLES event.
 
-        Returns 400 with VALIDATION_ERROR when the user or a named role cannot be found; the miss surfaces as 400 rather than 404.
+        Returns 404 with USER_NOT_FOUND when the username does not resolve to a user, and 404 with ROLE_NOT_FOUND when a named role does not exist.
 
         '
       operationId: assignUserRolesByUsername
@@ -4524,7 +4554,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: User or named role not found (VALIDATION_ERROR); the miss surfaces as 400, not 404.
+          description: Bad Request
         '401':
           content:
             application/json:
@@ -4537,6 +4567,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: User or named role not found (USER_NOT_FOUND / ROLE_NOT_FOUND).
       security:
       - bearerAuth:
         - security:role:assign
