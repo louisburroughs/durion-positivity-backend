@@ -1509,8 +1509,10 @@ def server_build_from_traces(traces):
 
     A gate number is only comparable against another if both name the build they ran against. On
     2026-09-05 a deploy landed mid-run and the results were unattributable after the fact. The first
-    attempt probed actuator/info, which GatewaySecurityConfig denies on every service by design
-    (only health and prometheus are reachable), so it answered 401 on its first live run. Since
+    attempt probed actuator/info and answered 401 on its first live run, and no permitAll would have
+    fixed it: GatewayAuthoritiesFilter skips every /actuator path so the caller arrives anonymous at a
+    denyAll rule (hence 401, not 403), and pos-mcp-server serves its actuator on a separate random
+    management port, so the app port the gateway routes to would 404 the path regardless. Since
     #1806 the server stamps `serverBuild` (its image tag) on every trace, so the run reads the build
     from the same traces it grades — and a deploy that lands mid-run shows up as two builds rather
     than as a mystery.
@@ -1695,8 +1697,8 @@ def main(argv=None):
         "questions_file": provenance,
         "actor": actor,
         # Replay mode is offline by contract: it reads recorded fixtures and makes no HTTP call, so
-        # it must not probe the server for a build, and it has no live traces to claim provenance
-        # over. Both fields say "not applicable" rather than guessing.
+        # it has no live traces to claim provenance over (server_build, read from those traces, is
+        # set after the trace fetch below and says "replay mode" here).
         "graded_from_traces": not replaying,
         "void": bool(role_mismatch),
         "results": [],
@@ -1766,6 +1768,7 @@ def main(argv=None):
     # Grade windows AFTER the loop: traces are written as each turn completes, so one fetch at the
     # end covers the whole run instead of a request per question (#1743).
     resolved_by_utterance = {}
+    build_by_utterance = {}
     traces = []
     trace_note = "replay mode: no live traces"
     if replay_by_fixture is None and token:
@@ -1782,7 +1785,6 @@ def main(argv=None):
             # could not measure what it claims to measure.
             record["graded_from_traces"] = False
         else:
-            build_by_utterance = {}
             for trace in traces:
                 message = trace.get("userMessage")
                 if message:
@@ -1808,6 +1810,8 @@ def main(argv=None):
             resolved,
         )
         result["window_check"] = {"verdict": verdict, "detail": detail}
+        # Per question, so a MIXED run can say which questions ran on which build.
+        result["server_build"] = build_by_utterance.get(result["utterance"])
 
     record["summary"] = summarize_results(
         record["results"],

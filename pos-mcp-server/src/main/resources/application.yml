@@ -41,8 +41,11 @@ spring:
         timeout: ${OLLAMA_EMBEDDING_TIMEOUT:30s}
 mcp:
   # The deployed build, stamped on every eval turn trace (#1806). The alpha compose override sets it
-  # from the image tag (sha-<short>); anything else reads "unknown". actuator/info cannot serve this:
-  # GatewaySecurityConfig denies every actuator path but health and prometheus, by design.
+  # from the image tag (sha-<short>); anything else reads "unknown". actuator/info cannot serve this
+  # through the gateway, and a permitAll would not change that: GatewayAuthoritiesFilter skips every
+  # /actuator path so the caller reaches GatewaySecurityConfig's denyAll anonymous (401), and the
+  # actuator lives on the separate random management port below, not the app port the gateway
+  # routes to. The build would also need a build-info goal this module does not run.
   build:
     id: ${MCP_BUILD_ID:unknown}
   # Role persona sync from pos-security-service (#1613). Startup pull, on-miss fetch, and this

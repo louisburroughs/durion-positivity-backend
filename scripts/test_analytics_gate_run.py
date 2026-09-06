@@ -322,11 +322,63 @@ class CliModeTest(unittest.TestCase):
             markdown = (out_dir / "run.md").read_text(encoding="utf-8")
 
         ask.assert_not_called()
+        # Replay has no server to attribute a build to, and must never go looking for one.
+        self.assertIn("replay mode", record["server_build"]["error"])
         self.assertEqual("PASS", record["results"][0]["verdict"])
         self.assertIn("argument_accuracy", record["results"][0]["axes"])
         self.assertIn("Overall verdict: **PASS**", markdown)
         self.assertIn("getRevenue", markdown)
         self.assertNotIn("always reads n/a", markdown)
+
+    def _live_run_with_traces(self, ask, provenance, fetch_traces, traces):
+        provenance.return_value = {"path": "questions.json", "blob_sha": "abc", "commit": "def", "uncommitted": False}
+        ask.return_value = {"answer": "live answer", "error": None, "elapsed_s": 1.0}
+        fetch_traces.return_value = (traces, None)
+        with tempfile.TemporaryDirectory() as directory, mock.patch.dict(os.environ, {}, clear=True):
+            directory = Path(directory)
+            questions_path = directory / "questions.json"
+            questions_path.write_text(json.dumps(self.document()), encoding="utf-8")
+            out_dir = directory / "out"
+            runner.main([
+                "--out", str(out_dir), "--questions", str(questions_path),
+                "--token", _token({"sub": "admin.alpha", "roles": ["ROLE_ADMIN"], "perm_bits": "t"}),
+            ])
+            record = json.loads((out_dir / "run.json").read_text(encoding="utf-8"))
+            markdown = (out_dir / "run.md").read_text(encoding="utf-8")
+        return record, markdown
+
+    @mock.patch.object(runner, "fetch_traces")
+    @mock.patch.object(runner, "questions_provenance")
+    @mock.patch.object(runner, "ask")
+    def test_live_mode_records_the_build_its_traces_carry(self, ask, provenance, fetch_traces):
+        # #1806: asserted on main()'s own output. The #1807 review found every direct test of the
+        # helper green with the wiring reverted; this one fails if record["server_build"] is not
+        # set from the fetched traces.
+        record, markdown = self._live_run_with_traces(
+            ask, provenance, fetch_traces,
+            [{"userMessage": "Question?", "serverBuild": "sha-81ff1e0", "toolCalls": []}],
+        )
+
+        self.assertEqual(record["server_build"], {"builds": ["sha-81ff1e0"], "mixed": False})
+        self.assertEqual(record["results"][0]["server_build"], "sha-81ff1e0")
+        self.assertIn("Server build: sha-81ff1e0", markdown)
+        self.assertNotIn("MIXED", markdown)
+
+    @mock.patch.object(runner, "fetch_traces")
+    @mock.patch.object(runner, "questions_provenance")
+    @mock.patch.object(runner, "ask")
+    def test_a_deploy_landing_mid_run_shows_up_as_a_mixed_build(self, ask, provenance, fetch_traces):
+        record, markdown = self._live_run_with_traces(
+            ask, provenance, fetch_traces,
+            [
+                {"userMessage": "Question?", "serverBuild": "sha-81ff1e0", "toolCalls": []},
+                {"userMessage": "another turn", "serverBuild": "sha-fef3150", "toolCalls": []},
+            ],
+        )
+
+        self.assertTrue(record["server_build"]["mixed"])
+        self.assertEqual(record["server_build"]["builds"], ["sha-81ff1e0", "sha-fef3150"])
+        self.assertIn("MIXED", markdown)
 
     @mock.patch.object(runner, "questions_provenance")
     @mock.patch.object(runner, "ask")
@@ -382,7 +434,7 @@ class CliModeTest(unittest.TestCase):
         # And the build is read from the traces, never from actuator/info (denied by design, #1806):
         # with no traces the file says why the build is unknown instead of recording a 401.
         self.assertTrue(record["server_build"]["error"].startswith("no traces"))
-        self.assertIn("Server build: unknown", markdown)
+        self.assertIn("Server build: unknown \u2014 no traces", markdown)
 
 
 class ExistingHelperBehaviorTest(unittest.TestCase):
