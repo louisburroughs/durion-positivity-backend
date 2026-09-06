@@ -24,6 +24,8 @@ tags:
   name: Supplier Prices
 - description: Per-product unit-of-measure conversion set (purchase/pack UoMs with factor to base UoM)
   name: Product UoM API
+- description: Vendor-supplied MKCAT marketing content — names, copy per language, artwork — attached to catalog products by matching, not by identifier. Read, plus a review action for the matches a person has to decide.
+  name: Tread Design Enrichment
 - description: Bulk import catalog products
   name: Catalog Bulk Ingest API
 - description: Replay of vendor-specific article-code facts derived from PRICAT imports, for seeding or repairing consumer replicas such as pos-order's purchase-order transmission.
@@ -40,8 +42,6 @@ tags:
   name: Price Book API
 - description: API for managing catalog items by type
   name: Catalog Items API
-- description: Vendor-supplied MKCAT marketing content — names, copy per language, artwork — attached to catalog products by matching, not by identifier. Read-only.
-  name: Tread Design Enrichment
 paths:
   /v1/catalog-items/service/{serviceId}/labor-standards:
     get:
@@ -1074,7 +1074,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TreadDesignDto'
-          description: The matched design's enrichment.
+          description: The matched design's enrichment. The candidates array is empty on this read.
         '404':
           description: The product does not exist, or matches no tread design. The response has NO body.
       security:
@@ -1088,27 +1088,56 @@ paths:
       - catalog:tread_design:view
   /v1/catalog/tread-designs/unmatched:
     get:
-      description: 'Returns tread designs that fuzzy matching, scoped to each design''s own vendor''s priced products,
+      description: 'Returns the enrichment review worklist: tread designs in the requested match states, most recently
 
-        could not resolve to any catalog product, newest applied first.
+        changed first, each with the products the matcher scored against it and how confident it was.
 
-        Use this tool to review enrichment a person needs to connect manually; do not use it to look up one
+        Use this tool to work a queue of enrichment decisions a person has to make; do not use it to look up
 
-        product''s enrichment, which is getTreadDesignForProduct. A design matching nothing is an ordinary
+        one product''s enrichment, which is getTreadDesignForProduct. A design matching nothing is an ordinary
 
         outcome here, not a failure of ingestion.
 
-        Preconditions: none; an empty result means every applied design has matched at least one product.
+        Preconditions: none; an empty result means nothing is waiting in the requested states.
 
-        Required inputs: none; page and size are optional, with size defaulting to 50 and capped at 200.
+        Required inputs: none. matchState defaults to UNMATCHED,REVIEW — the designs actually awaiting a
+
+        decision — and accepts any of UNMATCHED, REVIEW, MATCHED, REJECTED, DEFERRED, repeated or comma
+
+        separated. vendorProfileId narrows the worklist to one vendor profile. page and size are optional,
+
+        with size defaulting to 50 and capped at 200.
 
         Emits a CATALOG_TREAD_DESIGN_UNMATCHED_LIST event; no state changes.
 
-        Returns 200 with an empty items array when nothing is unmatched.
+        Returns 200 with an empty items array when nothing is waiting, and 400 when a match state is not one
+
+        of the five above or the page size is out of range.
 
         '
       operationId: listUnmatchedTreadDesigns
       parameters:
+      - description: Match states to include. Defaults to the states awaiting a decision.
+        in: query
+        name: matchState
+        required: false
+        schema:
+          items:
+            enum:
+            - UNMATCHED
+            - REVIEW
+            - MATCHED
+            - REJECTED
+            - DEFERRED
+            type: string
+          type: array
+      - description: Narrow the worklist to one vendor profile.
+        in: query
+        name: vendorProfileId
+        required: false
+        schema:
+          format: uuid
+          type: string
       - description: Zero-based page index.
         in: query
         name: page
@@ -1133,22 +1162,168 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Page'
-          description: A page of unmatched tread designs, newest applied first.
+          description: A page of designs in the requested states, most recently changed first.
         '400':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: The page size is out of range.
+          description: An unknown match state, or a page size out of range.
       security:
       - bearerAuth:
         - ROLE_ADMIN
         - catalog:tread_design:view
-      summary: List Vendor Tread Designs Matched to No Product
+      summary: List Tread Designs Awaiting Enrichment Review (review worklist)
       tags:
       - Tread Design Enrichment
       x-required-permissions:
       - catalog:tread_design:view
+  /v1/catalog/tread-designs/{treadDesignId}/candidates:
+    get:
+      description: 'Returns every catalog product the matcher scored against one tread design, best score first, with the
+
+        confidence tier each score fell in.
+
+        Use this tool to show a reviewer what the matcher saw before they attach, reject or defer a design;
+
+        do not use it as a product search, since the candidates are only ever products the design''s own
+
+        vendor has priced.
+
+        Preconditions: the design must exist. An empty array is a real answer — nothing resembled it closely
+
+        enough to be worth recording — and is not the same as an unknown design.
+
+        Required inputs: treadDesignId path parameter; there is no request body.
+
+        Emits a CATALOG_TREAD_DESIGN_CANDIDATES_LIST event; no state changes.
+
+        Returns 404 when no such design exists.
+
+        '
+      operationId: listTreadDesignCandidates
+      parameters:
+      - description: The tread design whose candidates to list.
+        in: path
+        name: treadDesignId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/TreadDesignCandidateDto'
+                type: array
+          description: The scored candidates, best first; empty when nothing scored above the review floor.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No such tread design.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:tread_design:view
+      summary: List the Products Scored Against a Tread Design
+      tags:
+      - Tread Design Enrichment
+      x-required-permissions:
+      - catalog:tread_design:view
+  /v1/catalog/tread-designs/{treadDesignId}/resolve:
+    post:
+      description: 'Records a person''s decision about a tread design: ATTACH it to named products, REJECT the matcher''s
+
+        suggestions, or DEFER the decision.
+
+        Use this tool when a reviewer has judged a worklist row; do not use it to correct the vendor''s
+
+        marketing content, which this module never edits — only the association is decided here.
+
+        An ATTACH marks each product as manually attached, and a manual attachment is never re-pointed by a
+
+        later automatic pass, so this is how a human decision is made to stick. A REJECT detaches nothing that
+
+        a person attached earlier — rejecting the machine''s suggestions says nothing about a human decision.
+
+        Preconditions: the design must exist; ATTACH requires at least one existing product and none of them
+
+        may already be manually attached to a different design.
+
+        Required inputs: treadDesignId path parameter and a body carrying action; productIds is required for
+
+        ATTACH and rejected otherwise, deferUntil is accepted for DEFER only, note is always optional.
+
+        Emits a CATALOG_TREAD_DESIGN_RESOLVE event and changes the design''s match state.
+
+        Returns 400 for an action and payload that cannot go together, 404 for an unknown design or product,
+
+        and 409 when a named product is already manually attached to a different design.
+
+        '
+      operationId: resolveTreadDesign
+      parameters:
+      - description: The tread design being resolved.
+        in: path
+        name: treadDesignId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Attach two sizes:
+                description: Attach two sizes
+                value:
+                  action: ATTACH
+                  note: Confirmed against the vendor's catalogue
+                  productIds:
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+            schema:
+              $ref: '#/components/schemas/TreadDesignResolveRequest'
+        description: 'The reviewer''s decision: ATTACH with the products this design describes, REJECT when none of the candidates is right, or DEFER to decide later. productIds is required for ATTACH and rejected otherwise; deferUntil is accepted for DEFER only; note is always optional.'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreadDesignDto'
+          description: The design as it now stands, with its candidates.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: An action and payload that cannot go together — ATTACH with no products, for instance.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No such tread design, or a named product does not exist.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A named product is already manually attached to a different tread design.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:tread_design:resolve
+      summary: Resolve a Tread Design Awaiting Review
+      tags:
+      - Tread Design Enrichment
+      x-required-permissions:
+      - catalog:tread_design:resolve
   /v1/catalogs:
     post:
       description: 'Creates a named catalog that groups existing products, services and non-inventory products for presentation; the catalog does not own the items, it only references them.
@@ -7232,11 +7407,39 @@ components:
           format: uuid
           type: string
       type: object
+    TreadDesignCandidateDto:
+      description: A product the matcher scored against a tread design, with its confidence tier.
+      properties:
+        productId:
+          description: The candidate catalog product.
+          format: uuid
+          type: string
+        score:
+          description: Trigram similarity in [0.0000, 1.0000] after the brand gate.
+          example: 0.8421
+          type: number
+        tier:
+          description: What that score means under the configured thresholds.
+          enum:
+          - AUTO
+          - REVIEW
+          - NONE
+          type: string
+      type: object
     TreadDesignDto:
       description: Vendor-supplied tread-design marketing enrichment, distinct from catalog-owned product data.
       properties:
         brand:
           description: Brand as stated by the vendor.
+          type: string
+        candidates:
+          description: Products the matcher scored against this design, best first. Empty on the product-scoped read, which is about one resolved match rather than about a pending decision.
+          items:
+            $ref: '#/components/schemas/TreadDesignCandidateDto'
+          type: array
+        deferUntil:
+          description: When a deferred design should return to the worklist, when set.
+          format: date-time
           type: string
         hasUnresolvedImages:
           description: Whether any artwork on this design is still missing and awaiting retry.
@@ -7250,8 +7453,28 @@ components:
           items:
             $ref: '#/components/schemas/TreadDesignImageDto'
           type: array
+        matchState:
+          description: Where this design stands in the enrichment review cycle.
+          enum:
+          - UNMATCHED
+          - REVIEW
+          - MATCHED
+          - REJECTED
+          - DEFERRED
+          example: REVIEW
+          type: string
+        matchStateAt:
+          description: When the review state last changed.
+          format: date-time
+          type: string
         productName:
           description: Vendor's product name, where given.
+          type: string
+        resolutionNote:
+          description: Note the reviewer left with that resolution.
+          type: string
+        resolvedBy:
+          description: Reviewer who last resolved this design, when one has.
           type: string
         seasonality:
           description: Seasonality as the vendor states it, not mapped to a Durion vocabulary.
@@ -7298,6 +7521,32 @@ components:
         unresolved:
           description: Whether the artwork is still missing and awaiting a future republication.
           type: boolean
+      type: object
+    TreadDesignResolveRequest:
+      description: A reviewer's decision about a tread design awaiting review.
+      properties:
+        action:
+          description: ATTACH, REJECT or DEFER.
+          enum:
+          - ATTACH
+          - REJECT
+          - DEFER
+          type: string
+        deferUntil:
+          description: When a deferred design should come back. DEFER only.
+          format: date-time
+          type: string
+        note:
+          description: Why. Stored with the design and shown in the worklist.
+          type: string
+        productIds:
+          description: Products to attach. Required for ATTACH, rejected for the other actions.
+          items:
+            format: uuid
+            type: string
+          type: array
+      required:
+      - action
       type: object
     TreadDesignTextDto:
       description: Vendor-supplied marketing copy in one language.

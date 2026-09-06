@@ -1,9 +1,9 @@
-generatedAt: "2026-09-04T22:37:33.856252+00:00"
+generatedAt: "2026-09-06T15:03:52.311547+00:00"
 root: "."
 summary:
   manifestCount: 23
-  permissionCount: 472
-  uniquePermissionCount: 472
+  permissionCount: 473
+  uniquePermissionCount: 473
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -136,7 +136,7 @@ manifests:
     domain: "catalog"
     serviceName: "pos-catalog"
     version: "1.0"
-    permissionCount: 43
+    permissionCount: 44
     permissions:
       - name: "catalog:catalog_grouping:delete"
         description: "Delete a catalog grouping"
@@ -208,6 +208,8 @@ manifests:
         description: "View supplier item cost structures"
       - name: "catalog:supplier_cost:write"
         description: "Create, update, and delete supplier item cost structures"
+      - name: "catalog:tread_design:resolve"
+        description: "Attach, reject or defer a vendor tread design awaiting review"
       - name: "catalog:tread_design:view"
         description: "View vendor tread-design enrichment matched to products"
       - name: "catalog:uom_conversion:edit"
@@ -1667,6 +1669,12 @@ permissions:
     source: "pos-catalog/src/main/resources/permissions.yaml"
   - name: "catalog:supplier_cost:write"
     description: "Create, update, and delete supplier item cost structures"
+    domain: "catalog"
+    serviceName: "pos-catalog"
+    module: "pos-catalog"
+    source: "pos-catalog/src/main/resources/permissions.yaml"
+  - name: "catalog:tread_design:resolve"
+    description: "Attach, reject or defer a vendor tread design awaiting review"
     domain: "catalog"
     serviceName: "pos-catalog"
     module: "pos-catalog"

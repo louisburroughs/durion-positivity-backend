@@ -293,6 +293,10 @@ paths:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1tread-designs~1for-product~1{productId}
   /v1/catalog/tread-designs/unmatched:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1tread-designs~1unmatched
+  /v1/catalog/tread-designs/{treadDesignId}/candidates:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1tread-designs~1{treadDesignId}~1candidates
+  /v1/catalog/tread-designs/{treadDesignId}/resolve:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1tread-designs~1{treadDesignId}~1resolve
   /v1/catalogs:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalogs
   /v1/catalogs/name/{name}:
