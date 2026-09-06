@@ -4,6 +4,7 @@ import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
+import com.positivity.securityservice.internal.exception.InvalidTokenException;
 import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
@@ -75,6 +76,9 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * token, but the account currently holds no roles and so no effective permissions (ADR-0017 §2
  * question 1: a refusal about the caller's authorization, answered the same on login and refresh)
  * - InvalidRefreshTokenException → 401 Unauthorized
+ * - InvalidTokenException → 401 Unauthorized (INVALID_TOKEN) — the token query parameter of the
+ * token utility endpoints (GET /v1/auth/roles, /subject, /user-id) failed validation; enveloped
+ * since the #1808 review, previously a bare 401
  * - LockedException → 401 Unauthorized
  * - DisabledException → 401 Unauthorized
  * - AccountExpiredException → 401 Unauthorized
@@ -509,6 +513,28 @@ public class GlobalExceptionHandler {
         String correlationId = extractCorrelationId(request);
         log.warn("Invalid refresh token (correlationId={}): {}", correlationId, ex.getMessage());
         return respond(HttpStatus.UNAUTHORIZED, "INVALID_REFRESH_TOKEN", ex.getMessage(), correlationId);
+    }
+
+    /**
+     * Handles InvalidTokenException: the {@code token} query parameter of a token utility endpoint
+     * ({@code GET /v1/auth/roles}, {@code /subject}, {@code /user-id}) was refused by
+     * {@code JwtService#validateToken} — expired, revoked, unknown to the token store, or malformed.
+     *
+     * <p>
+     * <b>HTTP Status:</b> 401 Unauthorized (INVALID_TOKEN). The controllers used to answer a bare
+     * 401 with no body; routing the refusal through this advice gives it the {@code ApiError}
+     * envelope and the correlation id the spec already documented (ADR-0017 §3/§4, #1808 review).
+     *
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 401 status and correlation ID
+     */
+    @ExceptionHandler(InvalidTokenException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ResponseEntity<ApiError> handleInvalidTokenException(InvalidTokenException ex, WebRequest request) {
+        String correlationId = extractCorrelationId(request);
+        log.warn("Invalid token (correlationId={}): {}", correlationId, ex.getMessage());
+        return respond(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", ex.getMessage(), correlationId);
     }
 
     @ExceptionHandler(LockedException.class)

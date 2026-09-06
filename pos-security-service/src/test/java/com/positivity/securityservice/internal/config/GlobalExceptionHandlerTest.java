@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
+import com.positivity.securityservice.internal.exception.InvalidTokenException;
 import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
@@ -302,6 +303,29 @@ class GlobalExceptionHandlerTest {
             assertThat(response.getBody().code()).isEqualTo("TOKEN_USER_ID_MISSING");
             assertThat(response.getBody().message()).isEqualTo("Token does not carry a uid or userId claim");
             assertThat(response.getBody().status()).isEqualTo(422);
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // handleInvalidTokenException
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleInvalidTokenException")
+    class HandleInvalidTokenException {
+
+        @Test
+        @DisplayName("returns 401 INVALID_TOKEN with the message, enveloped (#1808 review)")
+        void returns401InvalidToken() {
+            var ex = new InvalidTokenException("Token invalid or expired");
+
+            ResponseEntity<ApiError> response = sut.handleInvalidTokenException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("INVALID_TOKEN");
+            assertThat(response.getBody().message()).isEqualTo("Token invalid or expired");
+            assertThat(response.getBody().status()).isEqualTo(401);
         }
     }
 
@@ -902,6 +926,9 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleInvalidRefreshTokenException", (HandlerInvocation)
                             request -> handler.handleInvalidRefreshTokenException(
                                     new InvalidRefreshTokenException("Refresh token invalid"), request)),
+                    Named.of("handleInvalidTokenException", (HandlerInvocation)
+                            request -> handler.handleInvalidTokenException(
+                                    new InvalidTokenException("Token invalid or expired"), request)),
                     Named.of("handleLockedException", (HandlerInvocation)
                             request -> handler.handleLockedException(new LockedException("Account locked"), request)),
                     Named.of("handleDisabledException", (HandlerInvocation) request ->

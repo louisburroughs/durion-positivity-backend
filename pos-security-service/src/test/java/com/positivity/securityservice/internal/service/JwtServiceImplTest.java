@@ -43,6 +43,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -65,6 +67,9 @@ class JwtServiceImplTest {
     @Mock
     private TokenRevocationManager tokenRevocationManager;
 
+    @Mock
+    private UserDetailsService userDetailsService;
+
     @InjectMocks
     private JwtServiceImpl sut;
 
@@ -85,6 +90,14 @@ class JwtServiceImplTest {
                         .username("alice")
                         .roles(Set.of("ADMIN"))
                         .build()));
+        // refreshAccessToken runs AccountStatusUserDetailsChecker on the token's user (#1803);
+        // by default the account is enabled, unlocked and unexpired.
+        org.mockito.Mockito.lenient()
+                .when(userDetailsService.loadUserByUsername(anyString()))
+                .thenAnswer(invocation -> User.withUsername(invocation.getArgument(0))
+                        .password("{noop}unused")
+                        .roles("ADMIN")
+                        .build());
     }
 
     @Test
@@ -184,7 +197,12 @@ class JwtServiceImplTest {
     @DisplayName("initializeSecretKey: blank secret throws IllegalStateException")
     void initializeSecretKey_blankSecret_throws() {
         JwtServiceImpl fresh = new JwtServiceImpl(
-                TEST_CLOCK, jwtTokenRepository, roleAuthorityService, userService, tokenRevocationManager);
+                TEST_CLOCK,
+                jwtTokenRepository,
+                roleAuthorityService,
+                userService,
+                tokenRevocationManager,
+                userDetailsService);
         ReflectionTestUtils.setField(fresh, "jwtSecret", "");
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(fresh, "initializeSecretKey"))
@@ -196,7 +214,12 @@ class JwtServiceImplTest {
     @DisplayName("initializeSecretKey: secret shorter than 32 bytes throws IllegalStateException")
     void initializeSecretKey_tooShortSecret_throws() {
         JwtServiceImpl fresh = new JwtServiceImpl(
-                TEST_CLOCK, jwtTokenRepository, roleAuthorityService, userService, tokenRevocationManager);
+                TEST_CLOCK,
+                jwtTokenRepository,
+                roleAuthorityService,
+                userService,
+                tokenRevocationManager,
+                userDetailsService);
         ReflectionTestUtils.setField(fresh, "jwtSecret", "short");
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(fresh, "initializeSecretKey"))

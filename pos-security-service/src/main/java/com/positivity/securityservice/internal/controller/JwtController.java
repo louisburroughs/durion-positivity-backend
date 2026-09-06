@@ -7,6 +7,7 @@ import com.positivity.securityservice.internal.dto.RefreshTokenRequest;
 import com.positivity.securityservice.internal.dto.TokenPairRequest;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import com.positivity.securityservice.internal.dto.TokenResponse;
+import com.positivity.securityservice.internal.exception.InvalidTokenException;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.exception.TokenUserIdMissingException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
@@ -25,7 +26,6 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -80,6 +80,14 @@ public class JwtController {
      * Client-facing message for {@link #getUserId} when a valid token carries no user id claim.
      */
     private static final String TOKEN_USER_ID_MISSING = "Token does not carry a uid or userId claim";
+
+    /**
+     * Client-facing message for {@link #getRoles}, {@link #getSubject} and {@link #getUserId} when
+     * {@link JwtService#validateToken} refuses the {@code token} query parameter. Thrown as
+     * {@link InvalidTokenException} so the 401 is enveloped and correlated like every other error
+     * this module answers (ADR-0017 §3/§4) — it used to be a bare {@code 401} with no body.
+     */
+    private static final String TOKEN_INVALID = "Token invalid or expired";
 
     private final JwtService jwtService;
     private final UserService userService;
@@ -301,15 +309,19 @@ public class JwtController {
                     not use loginUser, which requires credentials, and do not use validateToken, which only checks \
                     a token without renewing it.
                     Preconditions: the refresh token must be unexpired, unrevoked, present in the token store, and \
-                    its user must still exist with at least one role.
+                    its user must still exist with at least one role and be enabled, unlocked, unexpired and \
+                    holding unexpired credentials.
                     Required inputs: refreshToken, the exact refresh token string previously issued.
                     Emits a SECURITY_AUTH_REFRESH event, revokes the old access and refresh token JTIs in Redis, \
                     deletes the stored pair, and persists the replacement pair.
                     Returns 400 when the refresh token is invalid, expired, revoked, or unknown; 401 with \
-                    INVALID_REFRESH_TOKEN when the referenced user no longer exists; 409 when concurrent refreshes \
-                    race on the same token; and 403 with USER_HAS_NO_ROLES when the referenced user currently has \
-                    no roles assigned — the token itself is valid, but the account holds no effective \
-                    permissions until an administrator assigns a role.
+                    INVALID_REFRESH_TOKEN when the referenced user no longer exists; 401 with ACCOUNT_LOCKED, \
+                    ACCOUNT_DISABLED, ACCOUNT_EXPIRED or CREDENTIALS_EXPIRED when the account's state forbids \
+                    the refresh (the same answers the credential login path gives, because a refresh-token \
+                    holder is a credential-equivalent caller); 409 when concurrent refreshes race on the same \
+                    token; and 403 with USER_HAS_NO_ROLES when the referenced user currently has no roles \
+                    assigned — the token itself is valid, but the account holds no effective permissions until \
+                    an administrator assigns a role.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -321,7 +333,9 @@ public class JwtController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "401",
-            description = "Refresh token is invalid, revoked, or references a user that no longer exists",
+            description = "Refresh token is invalid, revoked, or references a user that no longer exists "
+                    + "(INVALID_REFRESH_TOKEN); or the account's state forbids the refresh (ACCOUNT_LOCKED / "
+                    + "ACCOUNT_DISABLED / ACCOUNT_EXPIRED / CREDENTIALS_EXPIRED)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
@@ -426,7 +440,7 @@ public class JwtController {
      * Extracts and returns roles from a valid JWT token.
      *
      * @param token JWT token
-     * @return set of roles or 401 if token invalid
+     * @return set of roles; 401 INVALID_TOKEN if the token is invalid
      */
     @Operation(operationId = "getTokenRoles", summary = "Extract Roles From JWT Token", description = """
                     Extracts the roles claim from a valid JWT token and returns the normalized role names.
@@ -439,13 +453,16 @@ public class JwtController {
                     Returns 401 when the token is invalid, expired, revoked, or unknown to the token store.
                     """)
     @ApiResponse(responseCode = "200", description = "Roles extracted successfully")
-    @ApiResponse(responseCode = "401", description = "Token invalid or expired")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Token invalid or expired",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/roles")
     public ResponseEntity<Set<String>> getRoles(@RequestParam String token) {
         if (!jwtService.validateToken(token)) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            throw new InvalidTokenException(TOKEN_INVALID);
         }
         Set<String> roles = jwtService.getRolesFromToken(token);
         return ResponseEntity.ok(roles);
@@ -455,7 +472,7 @@ public class JwtController {
      * Extracts and returns the subject (username) from a valid JWT token.
      *
      * @param token JWT token
-     * @return subject (username) or 401 if token invalid
+     * @return subject (username); 401 INVALID_TOKEN if the token is invalid
      */
     @Operation(operationId = "getTokenSubject", summary = "Extract Subject From JWT Token", description = """
                     Extracts the subject claim, the username, from a valid JWT token and returns it as a plain \
@@ -468,13 +485,16 @@ public class JwtController {
                     Returns 401 when the token is invalid, expired, revoked, or unknown to the token store.
                     """)
     @ApiResponse(responseCode = "200", description = "Subject extracted successfully")
-    @ApiResponse(responseCode = "401", description = "Token invalid or expired")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Token invalid or expired",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/subject")
     public ResponseEntity<String> getSubject(@RequestParam String token) {
         if (!jwtService.validateToken(token)) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            throw new InvalidTokenException(TOKEN_INVALID);
         }
         String subject = jwtService.getUsernameFromToken(token);
         return ResponseEntity.ok(subject);
@@ -484,7 +504,7 @@ public class JwtController {
      * Extracts and returns the stable user identifier from a valid JWT token.
      *
      * @param token JWT token
-     * @return userId or 401 if token invalid
+     * @return userId; 401 INVALID_TOKEN if the token is invalid
      */
     @Operation(operationId = "getTokenUserId", summary = "Extract User Id From JWT Token", description = """
                     Extracts the stable user identifier from a valid JWT token's uid claim (falling back to the \
@@ -499,7 +519,10 @@ public class JwtController {
                     userId claim.
                     """)
     @ApiResponse(responseCode = "200", description = "userId extracted successfully")
-    @ApiResponse(responseCode = "401", description = "Token invalid or expired")
+    @ApiResponse(
+            responseCode = "401",
+            description = "Token invalid or expired",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
             description = "Token is valid but carries no uid or userId claim (TOKEN_USER_ID_MISSING)",
@@ -509,7 +532,7 @@ public class JwtController {
     @GetMapping("/user-id")
     public ResponseEntity<String> getUserId(@RequestParam String token) {
         if (!jwtService.validateToken(token)) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            throw new InvalidTokenException(TOKEN_INVALID);
         }
         // getUserIdFromToken returns null by design for a token with neither claim (#1803). That
         // is a property of the caller's token, not a server fault, so it is answered deliberately

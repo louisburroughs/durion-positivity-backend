@@ -36,6 +36,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.AccountStatusUserDetailsChecker;
+import org.springframework.security.core.userdetails.UserDetailsChecker;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,10 +57,18 @@ public class JwtServiceImpl implements JwtService {
     private static final String ISSUER = "pos-security-service";
     private static final String AUDIENCE = "api-gateway";
 
+    /**
+     * Enforces {@code isEnabled()}, {@code isAccountNonLocked()}, {@code isAccountNonExpired()} and
+     * {@code isCredentialsNonExpired()} on the refresh path (#1803), the same checker
+     * {@code JwtAuthenticationFilter} runs on the bearer path. Stateless and thread-safe.
+     */
+    private static final UserDetailsChecker ACCOUNT_STATUS_CHECKER = new AccountStatusUserDetailsChecker();
+
     private final JwtTokenRepository jwtTokenRepository;
     private final RoleAuthorityService roleAuthorityService;
     private final UserService userService;
     private final TokenRevocationManager tokenRevocationManager;
+    private final UserDetailsService userDetailsService;
 
     @Value("${security.jwt.secret}")
     private String jwtSecret;
@@ -439,6 +450,17 @@ public class JwtServiceImpl implements JwtService {
             throw new InvalidRefreshTokenException("Refresh token references a user that no longer exists");
         }
         UserDto user = userOpt.get();
+        // /v1/auth/refresh is permitAll and carries the refresh token in the body, so
+        // JwtAuthenticationFilter — and the account-state check it runs on bearer tokens — never
+        // sees this request. LockoutServiceImpl locks an account without revoking its tokens, so
+        // without this check a locked-out account could rotate a refresh token into a fresh access
+        // token (#1803). The checker throws LockedException / DisabledException /
+        // AccountExpiredException / CredentialsExpiredException, which GlobalExceptionHandler
+        // answers as 401 ACCOUNT_LOCKED / ACCOUNT_DISABLED / ACCOUNT_EXPIRED / CREDENTIALS_EXPIRED —
+        // the same explicit answers the credential login path gives. That is deliberate and differs
+        // from the bearer path, where the filter stays generic (INVALID_CREDENTIALS): a
+        // refresh-token holder is a credential-equivalent caller, not an anonymous bearer.
+        ACCOUNT_STATUS_CHECKER.check(userDetailsService.loadUserByUsername(user.getUsername()));
         Set<String> roles = user.getRoles() == null ? Collections.<String>emptySet() : user.getRoles();
         if (roles.isEmpty()) {
             // ADR-0017 §2 (question 1): the refresh token is well-formed, unexpired, unrevoked,

@@ -4,6 +4,8 @@ import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -25,6 +27,7 @@ import org.springframework.stereotype.Service;
 public class CustomUserDetailsService implements UserDetailsService {
     private final UserRepository userRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
+    private final Clock clock;
 
     @Override
     public UserDetails loadUserByUsername(@NonNull String username) throws UsernameNotFoundException {
@@ -44,13 +47,22 @@ public class CustomUserDetailsService implements UserDetailsService {
         Set<GrantedAuthority> authorities = effectiveRoles.stream()
                 .map(roleName -> new SimpleGrantedAuthority("ROLE_" + roleName))
                 .collect(Collectors.toSet());
+        // A timed lockout whose lockedUntil has passed is not a lock; an administrative lock has
+        // lockedUntil == null and stays one. This mirrors LockoutServiceImpl#isLockedOut so the
+        // bearer path (JwtAuthenticationFilter) and the login path share one definition of
+        // "locked" (#1803) — otherwise a lapsed lockout kept refusing bearer tokens until someone
+        // attempted a password login. The persisted flag itself is cleared by
+        // LockoutServiceImpl#unlockIfCooldownExpired on the next login and is deliberately not
+        // written here: a read path must not write.
+        boolean accountNonLocked = user.isAccountNonLocked()
+                || (user.getLockedUntil() != null && !user.getLockedUntil().isAfter(Instant.now(clock)));
         var delegate = new org.springframework.security.core.userdetails.User(
                 user.getUsername(),
                 user.getPassword(),
                 user.isEnabled(),
                 user.isAccountNonExpired(),
                 user.isCredentialsNonExpired(),
-                user.isAccountNonLocked(),
+                accountNonLocked,
                 authorities);
         return new SecurityUserPrincipal(user.getId(), user.getPersonId(), delegate);
     }

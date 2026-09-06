@@ -7,7 +7,7 @@ import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
-import com.positivity.securityservice.internal.exception.SecurityValidationException;
+import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
@@ -32,6 +32,11 @@ public class UserServiceImpl implements UserService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int GENERATED_PASSWORD_BYTES = 32;
 
+    /**
+     * Prefix of the {@link RoleNotFoundException} message for a named role that does not resolve —
+     * 404 {@code ROLE_NOT_FOUND} on every entry point, the same answer the role-management
+     * endpoints give (ADR-0017 §2 "one condition, one status", #1802 / #1808 review).
+     */
     private static final String ROLE_NOT_FOUND_PREFIX = "Role not found: ";
 
     private final UserRepository userRepository;
@@ -62,7 +67,7 @@ public class UserServiceImpl implements UserService {
         for (String roleName : roleNames) {
             Role role = roleRepository
                     .findByName(roleName)
-                    .orElseThrow(() -> new SecurityValidationException(ROLE_NOT_FOUND_PREFIX + roleName));
+                    .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleName));
             roles.add(role);
         }
         User user = new User();
@@ -117,15 +122,17 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserDto assignRoles(String username, Set<String> roleNames) {
         // A username that does not resolve is a referenced resource that does not exist, so it
-        // answers 404 USER_NOT_FOUND like every other user reference (ADR-0017 §2, #1802); the
-        // name itself is caller-supplied text and is not echoed (ADR-0056 §1).
+        // answers 404 USER_NOT_FOUND like every other user reference (ADR-0017 §2, #1802). The
+        // message is kept generic — the username is unvalidated caller text and naming it would
+        // let a caller enumerate accounts (ADR-0056 §1, #1715). Role names below are different:
+        // they are a fixed catalogue, so RoleNotFoundException echoes the one that did not resolve.
         User user =
                 userRepository.findByUsername(username).orElseThrow(() -> new UserNotFoundException("User not found"));
         Set<Role> roles = new HashSet<>();
         for (String roleName : roleNames) {
             Role role = roleRepository
                     .findByName(roleName)
-                    .orElseThrow(() -> new SecurityValidationException(ROLE_NOT_FOUND_PREFIX + roleName));
+                    .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleName));
             roles.add(role);
         }
         user.setRoles(roles);
@@ -149,7 +156,7 @@ public class UserServiceImpl implements UserService {
             for (String roleName : request.getRoles()) {
                 Role role = roleRepository
                         .findByName(roleName)
-                        .orElseThrow(() -> new SecurityValidationException(ROLE_NOT_FOUND_PREFIX + roleName));
+                        .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleName));
                 roles.add(role);
             }
             existingUser.setRoles(roles);

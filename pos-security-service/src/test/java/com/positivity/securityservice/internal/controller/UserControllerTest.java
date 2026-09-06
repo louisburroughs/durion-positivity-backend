@@ -180,7 +180,8 @@ class UserControllerTest {
      * from these two endpoints while {@code GET /v1/users/{id}} answered 404 for the same
      * condition. Both now surface {@link com.positivity.securityservice.internal.exception.UserNotFoundException}
      * through the advice as 404 {@code USER_NOT_FOUND} (ADR-0017 §2 "one condition, one status").
-     * A named role that does not resolve is still this module's 400 validation type.
+     * A named role that does not resolve is the same defect on the same operations and answers 404
+     * {@code ROLE_NOT_FOUND} (#1808 review).
      */
     @Nested
     @DisplayName("PUT /v1/users/{id} and PUT /v1/users/{username}/roles — user not found (#1802)")
@@ -208,17 +209,17 @@ class UserControllerTest {
         }
 
         @Test
-        void updateUser_unknownRole_stillReturns400ValidationError() throws Exception {
+        void updateUser_unknownRole_returns404RoleNotFound() throws Exception {
             when(userService.updateUser(any(), any()))
-                    .thenThrow(new com.positivity.securityservice.internal.exception.SecurityValidationException(
+                    .thenThrow(new com.positivity.securityservice.internal.exception.RoleNotFoundException(
                             "Role not found: GHOST"));
 
             mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(UPDATE_PATH)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"roles\":[\"GHOST\"]}")
                             .with(user("admin-user").authorities(() -> "security:user:edit")))
-                    .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("ROLE_NOT_FOUND"));
         }
 
         @Test

@@ -76,13 +76,18 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * {@code AuthenticationProvider} runs on this path — the filter authenticates directly from the
  * loaded {@link UserDetails} — so Spring's {@link AccountStatusUserDetailsChecker}, which
  * {@code AbstractUserDetailsAuthenticationProvider} runs on the credential path, was invoked by
- * nothing here, and a disabled, locked or expired account's live access token kept authenticating
- * until it expired (#1803). The admin state endpoints do revoke every token they can see, but a
- * lockout raised by {@code LockoutServiceImpl}, an expiry timestamp that has since passed, or a
- * state change written outside those endpoints never went near the token store. The checker now
- * runs before the authentication is built; it throws {@code LockedException},
- * {@code DisabledException} or {@code AccountExpiredException}, all {@link AuthenticationException}s,
- * which the catch below turns into the same fail-closed 401 as any other bad credential.
+ * nothing here, and a disabled, locked, expired or credentials-expired account's live access token
+ * kept authenticating until it expired (#1803). The admin state endpoints do revoke every token
+ * they can see, but a lockout raised by {@code LockoutServiceImpl}, an expiry timestamp that has
+ * since passed, or a state change written outside those endpoints never went near the token store.
+ * The checker now runs before the authentication is built; it enforces all four flags —
+ * {@code isAccountNonLocked()}, {@code isEnabled()}, {@code isAccountNonExpired()} and
+ * {@code isCredentialsNonExpired()} — and throws {@code LockedException},
+ * {@code DisabledException}, {@code AccountExpiredException} or {@code CredentialsExpiredException},
+ * all {@link AuthenticationException}s, which the catch below turns into the same fail-closed 401
+ * as any other bad credential. Expired credentials matter on this path even though no password is
+ * checked here: {@code JwtController#issueInternalToken} mints tokens with no password check at
+ * all, so a token minted after the credentials expired would otherwise keep working.
  * Deliberately the <em>same</em> 401: the entry point renders {@code INVALID_CREDENTIALS}, not
  * {@code ACCOUNT_LOCKED} / {@code ACCOUNT_DISABLED}, because distinguishing them here would tell
  * an unauthenticated caller why a stolen token stopped working (the disclosure #1715 was about);
@@ -114,9 +119,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
 
     /**
-     * Enforces {@code isEnabled()}, {@code isAccountNonLocked()} and {@code isAccountNonExpired()}
-     * on the bearer-token path (#1803). Stateless and thread-safe, so one instance serves every
-     * request.
+     * Enforces all four account-state flags — {@code isAccountNonLocked()}, {@code isEnabled()},
+     * {@code isAccountNonExpired()} and {@code isCredentialsNonExpired()} — on the bearer-token
+     * path (#1803). Stateless and thread-safe, so one instance serves every request.
      */
     private static final UserDetailsChecker ACCOUNT_STATUS_CHECKER = new AccountStatusUserDetailsChecker();
 
@@ -153,8 +158,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     | AuthenticationException e) {
                 // The credential is bad: malformed perm_bits, an unsupported perm_ver, a claim
                 // re-parse that validateToken accepted but a later read rejects, a subject that
-                // no longer resolves to a user, or an account that is disabled, locked or expired.
-                // Fail closed and let the entry point answer 401.
+                // no longer resolves to a user, or an account that is disabled, locked, expired or
+                // whose credentials have expired. Fail closed and let the entry point answer 401.
                 SecurityContextHolder.clearContext();
                 log.warn(
                         "Access-token authentication rejected; clearing auth context uri={} correlationId={} error={} reason={}",
@@ -192,8 +197,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String username = jwtService.getUsernameFromToken(token);
         UserDetails userDetails = userDetailsService.loadUserByUsername(username);
         // A live token must not outlast the account's fitness to hold one: the checker throws
-        // LockedException / DisabledException / AccountExpiredException, caught above as a bad
-        // credential (#1803). CustomUserDetailsService populates all three flags from the entity.
+        // LockedException / DisabledException / AccountExpiredException / CredentialsExpiredException,
+        // caught above as a bad credential (#1803). CustomUserDetailsService populates all four
+        // flags from the entity (treating a lapsed timed lockout as not locked).
         ACCOUNT_STATUS_CHECKER.check(userDetails);
         Set<String> roles = jwtService.getRolesFromToken(token);
         Set<String> authorities = jwtService.getAuthoritiesFromToken(token);

@@ -192,24 +192,40 @@ Two rules constrain what those bodies may contain and where they can come from (
   - `JwtAuthenticationFilter` **clears** the security context whenever a bearer token is present
     and does not authenticate — whether it threw (a `perm_bits` claim that no longer decodes, a
     stale `perm_ver`, a subject that no longer resolves to a user, an account that is disabled,
-    locked or expired) or `validateToken` simply refused it (expired, revoked, logged out, absent
+    locked, expired or whose credentials have expired) or `validateToken` simply refused it
+    (expired, revoked, logged out, absent
     from the token store). Clearing rather than returning is what stops a refused credential from
     riding on gateway-header authorities: the gateway checks signature, issuer, audience and
     expiry but **not revocation**, so a revoked or logged-out token still arrives here with
     valid-looking `X-Perm-Bits`.
-  - `JwtAuthenticationFilter` **enforces account state** on every bearer token (#1803). No
+  - `JwtAuthenticationFilter` **enforces account state** on every bearer token on the
+    `/v1/auth/**` chain (the only chain that carries the filter) (#1803). No
     `AuthenticationProvider` runs on this path, so Spring's `AccountStatusUserDetailsChecker` —
     which the credential login path gets for free from `DaoAuthenticationProvider` — ran nowhere
-    here, and a disabled, locked or expired account's live access token kept authenticating until
-    it expired. The admin state endpoints revoke every token they know about, but a lockout raised
-    by `LockoutServiceImpl`, an expiry that has since passed, or a state change written outside
-    those endpoints never touched the token store. The filter now runs the checker before it
-    builds the authentication; the refusal is a `LockedException` / `DisabledException` /
-    `AccountExpiredException`, caught as a bad credential and answered with the **same generic
-    401 `INVALID_CREDENTIALS`** as any other rejected token — not `ACCOUNT_LOCKED` /
-    `ACCOUNT_DISABLED`, which would tell the unauthenticated holder of a stolen token why it
-    stopped working. The reason is in the filter's WARN log against the correlation id the 401
-    quotes.
+    here, and a disabled, locked, expired or credentials-expired account's live access token kept
+    authenticating until it expired. The admin state endpoints revoke every token they know about,
+    but a lockout raised by `LockoutServiceImpl`, an expiry that has since passed, or a state
+    change written outside those endpoints never touched the token store. The filter now runs the
+    checker before it builds the authentication; it enforces all four flags (`accountNonLocked`,
+    `enabled`, `accountNonExpired`, `credentialsNonExpired` — credentials expiry matters here
+    because `issueInternalToken` mints tokens with no password check, so a token minted after the
+    credentials expired would otherwise keep working), and the refusal is a `LockedException` /
+    `DisabledException` / `AccountExpiredException` / `CredentialsExpiredException`, caught as a
+    bad credential and answered with the **same generic 401 `INVALID_CREDENTIALS`** as any other
+    rejected token — not `ACCOUNT_LOCKED` / `ACCOUNT_DISABLED`, which would tell the
+    unauthenticated holder of a stolen token why it stopped working. The reason is in the filter's
+    WARN log against the correlation id the 401 quotes. `CustomUserDetailsService` reports a timed
+    lockout whose `lockedUntil` has passed as *not* locked, mirroring
+    `LockoutServiceImpl#isLockedOut`, so the bearer path and the login path share one definition
+    of locked; an administrative lock (`lockedUntil` null) stays a lock.
+
+    The refresh path (`POST /v1/auth/refresh`) is `permitAll` and carries its token in the body,
+    so the filter never sees it; `JwtServiceImpl#refreshAccessToken` runs the same checker on the
+    token's user and enforces the same four flags. There the refusal answers the login path's
+    explicit `ACCOUNT_LOCKED` / `ACCOUNT_DISABLED` / `ACCOUNT_EXPIRED` / `CREDENTIALS_EXPIRED`
+    codes, because a refresh-token holder is a credential-equivalent caller, not an anonymous
+    bearer — and without it a `LockoutServiceImpl` lockout, which never revokes, could rotate a
+    refresh token into a fresh access token.
   - `GatewayHeaderAuthenticationFilter` **yields no authorities** when `X-Perm-Bits` is present
     but will not decode; it never falls back to `X-Authorities` for that request. It has no
     earlier authentication to clear, being the first of the two to run.
@@ -241,7 +257,15 @@ Two rules constrain what those bodies may contain and where they can come from (
   answer, so all of them now throw `UserNotFoundException` and the status is encoded once on that
   class ("one condition, one status"). A *blank* subject is request shape and stays
   `400 VALIDATION_ERROR`; it is decided before the user lookup so it cannot fall through to the
-  404. A named role that does not resolve is still `400 VALIDATION_ERROR` (out of #1802's scope).
+  404. A named role that does not resolve answers `404 ROLE_NOT_FOUND` on every entry point too —
+  `createUser`, `updateUser`, `assignUserRolesByUsername` and the role-management endpoints — via
+  `RoleNotFoundException` (the same ADR-0017 §2 defect as the user half, fixed in the #1808
+  review); role names are a fixed catalogue, so that message does echo the name.
+
+- **A refused token utility lookup is enveloped.** `GET /v1/auth/roles`, `/subject` and
+  `/user-id` answer `401 INVALID_TOKEN` through `InvalidTokenException` when `validateToken`
+  refuses the `token` query parameter; they used to return a bare 401 with no body and no
+  `X-Correlation-Id`, contradicting the `ApiError` body the spec documented for them.
 
 - **A valid token with no user id is not a server fault.** `GET /v1/auth/user-id` answers
   `422 TOKEN_USER_ID_MISSING` when the token passes full validation but carries neither a `uid`

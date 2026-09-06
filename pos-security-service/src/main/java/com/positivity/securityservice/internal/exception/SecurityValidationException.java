@@ -4,10 +4,10 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * A genuine client input-validation failure in this module — a blank required field, a
- * malformed permission key or scope/location combination, a role name that does not resolve, a
- * malformed Base64URL bitset, an unsupported {@code perm_ver}. A <em>user</em> reference that
- * does not resolve is not this: it is {@link UserNotFoundException} (404) on every entry point
- * (#1802). Services and controllers must throw this (never bare
+ * malformed permission key or scope/location combination, a malformed Base64URL bitset, an
+ * unsupported {@code perm_ver}. A <em>role</em> or <em>user</em> reference that does not resolve
+ * is not this: it is {@link RoleNotFoundException} / {@link UserNotFoundException} (404) on every
+ * entry point (#1802, #1808 review). Services and controllers must throw this (never bare
  * {@code IllegalArgumentException}) for that case:
  * {@code GlobalExceptionHandler} maps it to {@code 400 VALIDATION_ERROR} (ADR-0017 §1), echoing
  * the message — or, when the two-argument {@code (message, logDetail)} form is used, echoing only

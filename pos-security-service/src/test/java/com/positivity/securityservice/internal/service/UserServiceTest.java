@@ -12,7 +12,7 @@ import com.positivity.securityservice.internal.dto.UserUpdateRequest;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
-import com.positivity.securityservice.internal.exception.SecurityValidationException;
+import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -156,7 +156,7 @@ class UserServiceTest {
         when(roleRepository.findByName("UNKNOWN")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> userService.createUser("bob", "pass", Set.of("UNKNOWN")))
-                .isInstanceOf(SecurityValidationException.class)
+                .isInstanceOf(RoleNotFoundException.class)
                 .hasMessageContaining("Role not found");
     }
 
@@ -296,7 +296,7 @@ class UserServiceTest {
         req.setRoles(Set.of("GHOST"));
 
         assertThatThrownBy(() -> userService.updateUser(id, req))
-                .isInstanceOf(SecurityValidationException.class)
+                .isInstanceOf(RoleNotFoundException.class)
                 .hasMessageContaining("Role not found");
     }
 
@@ -320,7 +320,7 @@ class UserServiceTest {
         when(roleRepository.findByName("GHOST")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> userService.assignRoles("alice", Set.of("GHOST")))
-                .isInstanceOf(SecurityValidationException.class)
+                .isInstanceOf(RoleNotFoundException.class)
                 .hasMessageContaining("Role not found");
     }
 }
