@@ -323,6 +323,38 @@ class SupplierCatalogEnrichmentListenerTest {
 
             verify(productRepository).save(any(ProductEntity.class));
         }
+
+        @Test
+        @DisplayName("re-matching to the same decision state leaves matchStateAt untouched, so the worklist "
+                + "does not re-age on a vendor re-publication or re-match that lands back on the same state")
+        void reMatchingToTheSameStateLeavesMatchStateAtUntouched() {
+            // High auto threshold, low review floor: the candidate scores below AUTO but above REVIEW,
+            // so the design lands on REVIEW both before and after this re-match.
+            listener = listenerWith(new CatalogEnrichmentProperties(0.99, 0.05, null));
+            existingDesignIs(TreadDesignMatchState.REVIEW);
+
+            listener.onSupplierEvent(enrichmentEvent("e-23", "VAR-1", "new-hash", false));
+
+            ArgumentCaptor<TreadDesignEntity> captor = ArgumentCaptor.forClass(TreadDesignEntity.class);
+            verify(treadDesignRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
+            TreadDesignEntity saved = captor.getValue();
+            assertThat(saved.getMatchState()).isEqualTo(TreadDesignMatchState.REVIEW);
+            assertThat(saved.getMatchStateAt()).isEqualTo(Instant.parse("2026-08-01T00:00:00Z"));
+        }
+
+        @Test
+        @DisplayName("a re-match that actually moves the decision ages matchStateAt to now")
+        void reMatchingToADifferentStateUpdatesMatchStateAt() {
+            existingDesignIs(TreadDesignMatchState.UNMATCHED);
+
+            listener.onSupplierEvent(enrichmentEvent("e-24", "VAR-1", "new-hash", false));
+
+            ArgumentCaptor<TreadDesignEntity> captor = ArgumentCaptor.forClass(TreadDesignEntity.class);
+            verify(treadDesignRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
+            TreadDesignEntity saved = captor.getValue();
+            assertThat(saved.getMatchState()).isEqualTo(TreadDesignMatchState.MATCHED);
+            assertThat(saved.getMatchStateAt()).isEqualTo(CLOCK.instant());
+        }
     }
 
     @Nested

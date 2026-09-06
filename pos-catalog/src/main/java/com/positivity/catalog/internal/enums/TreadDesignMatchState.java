@@ -15,9 +15,12 @@ public enum TreadDesignMatchState {
     UNMATCHED,
 
     /**
-     * Matching found candidates worth a person's attention but attached nothing — either because
-     * the best score fell short of the auto tier, or because two designs claimed one product at the
-     * auto tier and guessing between them would be worse than asking.
+     * Matching found candidates worth a person's attention and needs a person's decision — either
+     * because the best score fell short of the auto tier, or because two designs claimed one
+     * product at the auto tier and guessing between them would be worse than asking. This does not
+     * mean the design holds no attachments: ambiguity parking (see the enrichment listener's
+     * ambiguous-claim handling) can move an already-{@code MATCHED} rival design back to {@code
+     * REVIEW} without clearing its other, unrelated attachments from earlier passes.
      */
     REVIEW,
 

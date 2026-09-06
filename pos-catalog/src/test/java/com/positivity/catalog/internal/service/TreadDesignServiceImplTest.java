@@ -340,6 +340,25 @@ class TreadDesignServiceImplTest {
         }
 
         @Test
+        @DisplayName("re-resolving to the same state leaves matchStateAt untouched, only the note moves")
+        void reResolvingToTheSameStateLeavesMatchStateAtUntouched() {
+            TreadDesignEntity alreadyRejected = design();
+            alreadyRejected.setMatchState(TreadDesignMatchState.REJECTED);
+            when(treadDesignRepository.findById(DESIGN_ID)).thenReturn(Optional.of(alreadyRejected));
+
+            TreadDesignDto result = service.resolve(
+                    DESIGN_ID,
+                    new TreadDesignResolveRequest(TreadDesignResolutionAction.REJECT, null, "still not it", null),
+                    "reviewer@example.com");
+
+            assertThat(result.matchState()).isEqualTo(TreadDesignMatchState.REJECTED);
+            // The decision did not move (REJECTED -> REJECTED), so the worklist must not re-age it —
+            // only the note and resolver, which did change, are expected to move.
+            assertThat(result.matchStateAt()).isEqualTo(Instant.parse("2026-08-18T09:00:00Z"));
+            assertThat(result.resolutionNote()).isEqualTo("still not it");
+        }
+
+        @Test
         @DisplayName("REJECT carrying products is refused — the fields do not go together")
         void rejectWithProductsIsInvalid() {
             when(treadDesignRepository.findById(DESIGN_ID)).thenReturn(Optional.of(design()));

@@ -369,9 +369,18 @@ public class SupplierCatalogEnrichmentListener {
         }
     }
 
+    /**
+     * Sets the design's match state, ageing {@code matchStateAt} only when the state actually
+     * moves. The review worklist orders on {@code matchStateAt} (see {@link
+     * com.positivity.catalog.internal.repository.TreadDesignRepository#findForReview}) precisely so
+     * it ages on decisions changing, not on every vendor re-publication or re-match that happens to
+     * land the design back on the state it already had.
+     */
     private void setState(TreadDesignEntity design, TreadDesignMatchState state) {
+        if (design.getMatchState() != state) {
+            design.setMatchStateAt(Instant.now(clock));
+        }
         design.setMatchState(state);
-        design.setMatchStateAt(Instant.now(clock));
         treadDesignRepository.save(design);
     }
 }
