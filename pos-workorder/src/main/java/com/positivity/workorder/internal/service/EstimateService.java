@@ -143,7 +143,8 @@ public interface EstimateService {
      *                                                                                        DRAFT state
      * @throws com.positivity.workorder.internal.exception.EstimateIncompleteException        if estimate is incomplete
      */
-    EstimateResponse submitForApproval(UUID estimateId, String username);
+    @NonNull
+    EstimateResponse submitForApproval(@NonNull UUID estimateId, @NonNull String username);
 
     /**
      * Get the most specific approval configuration for a location and customer.

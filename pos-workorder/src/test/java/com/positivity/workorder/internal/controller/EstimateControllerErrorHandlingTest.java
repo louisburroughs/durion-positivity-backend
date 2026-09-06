@@ -10,7 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import com.positivity.workorder.internal.config.GlobalExceptionHandler;
+import com.positivity.workorder.internal.exception.EstimateIncompleteException;
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.service.EstimateService;
 import com.positivity.workorder.internal.service.IdempotencyService;
 import com.positivity.workorder.internal.service.WorkorderService;
@@ -39,14 +41,21 @@ import org.springframework.web.server.ResponseStatusException;
  * {@code EstimateItemNotFoundException} for a missing line), which
  * {@link GlobalExceptionHandler} already maps to an enveloped, correlated 404 — the same shape
  * {@code addEstimateItem} has answered since #1694.
+ *
+ * <p>Issue #1791 re-typed the {@code submitForApproval} refusals — not-DRAFT is a
+ * {@link WorkorderResourceConflictException} (409), incompleteness an
+ * {@link EstimateIncompleteException} (422) — and removed the controller's local
+ * {@code catch (IllegalStateException)}. The two cases at the bottom prove that wire mapping in
+ * the slice CI actually runs on a PR, rather than only in the Failsafe IT.
  */
 @WebMvcTest(EstimateController.class)
 @Import(WebCommonErrorAutoConfiguration.class)
-@DisplayName("Estimate endpoints answer a missing estimate with the ApiError envelope (#1713)")
+@DisplayName("Estimate endpoints answer refusals with the ApiError envelope (#1713 and #1791)")
 class EstimateControllerErrorHandlingTest {
 
     private static final UUID ESTIMATE_ID = UUID.fromString("019200aa-0000-7000-8000-000000000301");
     private static final String URL = "/v1/workorders/estimates/{estimateId}/approval";
+    private static final String SUBMIT_URL = "/v1/workorders/estimates/{estimateId}/submit-for-approval";
 
     private static final String BODY = """
             {"customerId":"019200aa-0000-7000-8000-000000000302",
@@ -134,6 +143,50 @@ class EstimateControllerErrorHandlingTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ESTIMATE_NOT_FOUND"))
                 .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(header().exists("X-Correlation-Id"));
+    }
+
+    /**
+     * #1791: with the controller's {@code catch (IllegalStateException)} gone, the not-DRAFT
+     * refusal must reach the module advice as the typed conflict and answer an enveloped 409 —
+     * not a bodiless status, and not the platform 500.
+     */
+    @Test
+    @WithMockUser(authorities = "workorder:estimate:submit")
+    @DisplayName("submitting a non-DRAFT estimate answers an enveloped, correlated 409 CONFLICT")
+    void submittingANonDraftEstimateAnswersEnvelopedConflict() throws Exception {
+        String message = "Cannot submit estimate - must be in DRAFT state, current state: APPROVED";
+        when(estimateService.submitForApproval(any(UUID.class), anyString()))
+                .thenThrow(new WorkorderResourceConflictException(message));
+
+        mockMvc.perform(post(SUBMIT_URL, ESTIMATE_ID))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONFLICT"))
+                .andExpect(jsonPath("$.message").value(message))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(header().exists("X-Correlation-Id"));
+    }
+
+    /**
+     * #1791: a DRAFT estimate that is not ready is a different refusal from the status guard
+     * above and must answer 422 {@code ESTIMATE_INCOMPLETE} (ADR-0017 §2), not the 409 the
+     * removed catch used to fabricate for every {@code IllegalStateException}.
+     */
+    @Test
+    @WithMockUser(authorities = "workorder:estimate:submit")
+    @DisplayName("submitting an incomplete DRAFT estimate answers an enveloped, correlated 422 ESTIMATE_INCOMPLETE")
+    void submittingAnIncompleteEstimateAnswersEnvelopedUnprocessable() throws Exception {
+        String message = "Cannot submit estimate - no line items added";
+        when(estimateService.submitForApproval(any(UUID.class), anyString()))
+                .thenThrow(new EstimateIncompleteException(message));
+
+        mockMvc.perform(post(SUBMIT_URL, ESTIMATE_ID))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("ESTIMATE_INCOMPLETE"))
+                .andExpect(jsonPath("$.message").value(message))
+                .andExpect(jsonPath("$.status").value(422))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty())
                 .andExpect(header().exists("X-Correlation-Id"));
     }

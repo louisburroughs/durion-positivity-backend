@@ -60,6 +60,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
@@ -667,7 +668,7 @@ public class EstimateServiceImpl implements EstimateService {
      */
     @Override
     @Transactional
-    public EstimateResponse submitForApproval(UUID estimateId, String username) {
+    public @NonNull EstimateResponse submitForApproval(@NonNull UUID estimateId, @NonNull String username) {
         Estimate estimate =
                 estimateRepository.findById(estimateId).orElseThrow(() -> new EstimateNotFoundException(estimateId));
 
@@ -1510,9 +1511,14 @@ public class EstimateServiceImpl implements EstimateService {
         String snapshotJson;
         try {
             snapshotJson = objectMapper.writeValueAsString(snapshotData);
-        } catch (Exception e) {
+        } catch (JacksonException e) {
+            // (issue #1791) A serialization failure is a server fault, so it is logged and rethrown
+            // unwrapped rather than re-typed to IllegalStateException: this module's advice maps
+            // that type to 409 CONFLICT, which would report our defect to the caller as a state
+            // they could retry around. Nothing maps JacksonException, so it falls through to the
+            // platform's correlated 500 INTERNAL_ERROR (ADR-0056).
             log.error("Failed to serialize estimate snapshot for estimateId={}", estimateId, e);
-            throw new IllegalStateException("Failed to create snapshot: JSON serialization error", e);
+            throw e;
         }
 
         // Create snapshot entity
