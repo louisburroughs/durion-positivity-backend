@@ -288,6 +288,32 @@ java -jar target/pos-inventory-*.jar --spring.profiles.active=dev --server.port=
 curl http://localhost:8093/v3/api-docs.yaml > openapi.yaml
 ```
 
+**Method 3: GitHub Actions — full contract chain (`API Artifacts Sync`)**
+
+`.github/workflows/api-artifacts-sync.yml` (manual `workflow_dispatch`) walks the whole
+contract chain and reports what the current controllers break downstream:
+
+1. `scripts/generate-openapi.sh` regenerates every module's `openapi.yaml` (or the
+   `modules` input's subset), the aggregate index and the permissions manifests.
+2. `durion-positivity-sdk` regenerates its typescript-fetch clients from those specs and
+   builds them.
+3. `durion-positivity-sdk-angular` regenerates its Angular clients, builds them and packs one
+   tarball per package (`npm run generate` then `npm run pack -- --no-bump`, the documented
+   release flow; `bump_sdk_version=false` keeps the current version).
+4. `durion-positivity-frontend` imports the tarballs into `.sdk-tarballs/`, installs them
+   with `npm run sdk:install`, compiles, and runs `test:contracts` plus the Vitest suite.
+5. A `report` job summarises every stage; the run is red if any stage failed.
+
+Nothing is committed or pushed. Each stage uploads its evidence as a workflow artifact:
+`openapi-specs`, `backend-openapi-changes` (a `git diff` patch), `sdk-changes`,
+`sdk-angular-changes`, `sdk-angular-tarballs`, and `frontend-results` (build/test logs plus the
+ready-to-commit `.sdk-tarballs/` directory). Apply the patches and tarballs by hand to land a
+sync.
+
+The `sdk_ref`, `sdk_angular_ref` and `frontend_ref` inputs pick the downstream branches. The
+other repos are checked out with the `CROSS_REPO_TOKEN` secret when it exists, otherwise with
+the workflow token; set the secret if any of them is private.
+
 ### Access Points (When Running)
 
 | Endpoint     | URL                                             |
