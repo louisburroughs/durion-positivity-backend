@@ -269,7 +269,7 @@ public class InvoiceController {
                     the body are optional below the cap and for override holders.
                     Emits an INVOICE_FINALIZED event and publishes the invoice.invoice.updated fact (status \
                     FINALIZED); pos-accounting consumes it and posts the revenue journal entry, and the invoice \
-                    becomes POSTED asynchronously when accounting's accounting.invoice.gl-posted fact arrives. The \
+                    becomes POSTED asynchronously when the accounting.invoice.gl-posted fact from pos-accounting arrives. The \
                     tax commit tolerates a provider outage by recording PENDING_COMMIT in pos-tax for the re-commit \
                     job, and is skipped entirely when nothing is taxable.
                     Returns 200 with the finalized invoice, 404 when the invoice does not exist, 409 when the \
