@@ -1224,7 +1224,7 @@ def format_tool_calls(tool_calls):
 
 # Replies the user could not use as an answer: a ladder deflection, blank content, recovered
 # reasoning shown as text, or a bare tool payload that no ladder intercepted (#1816).
-DEFLECTION_SOURCES = {"LADDER", "BLANK", "THINKING", "TOOL_PAYLOAD"}
+DEFLECTION_SOURCES = {"LADDER", "BLANK", "THINKING", "TOOL_PAYLOAD", "PROTOCOL_MARKUP"}
 
 
 def summarize_results(results, replaying, graded_from_traces=True):

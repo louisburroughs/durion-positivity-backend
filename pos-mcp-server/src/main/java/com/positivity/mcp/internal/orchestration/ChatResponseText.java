@@ -19,12 +19,24 @@ import org.springframework.ai.chat.messages.AssistantMessage;
  * empty string. This helper prefers {@code content} (with any inline {@code <think>} block removed)
  * and, when that is blank, recovers the {@code thinking} channel so the caller never receives a
  * silent blank. Both empty is reported to the caller as a fixed, safe message.
+ *
+ * <p>Harmony markup (#1834): a model served with a broken chat template can return its raw channel
+ * protocol — {@code <|channel|>analysis<|message|>…} — as {@code content}. Protocol tokens must never
+ * reach a user, so such a reply is either reduced to its {@code final} channel, when one is present,
+ * or reported as {@link Source#PROTOCOL_MARKUP} with the safe fallback text.
  */
 final class ChatResponseText {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ChatResponseText.class);
     private static final String THINKING_METADATA_KEY = "thinking";
     private static final Pattern THINK_BLOCK = Pattern.compile("(?is)<think>.*?</think>");
+    /** Any harmony protocol token — the markers a chat template normally consumes. */
+    private static final Pattern HARMONY_MARKER =
+            Pattern.compile("<\\|(?:channel|message|start|end|call|return|constrain)\\|>");
+    /** The text of a harmony {@code final} channel, up to the next protocol token. */
+    private static final Pattern HARMONY_FINAL = Pattern.compile(
+            "(?s)<\\|channel\\|>final<\\|message\\|>(.*?)(?:<\\|end\\|>|<\\|return\\|>|<\\|start\\|>|<\\|channel\\|>|\\z)");
+
     static final String BLANK_RESPONSE_FALLBACK =
             "I couldn't produce a response for that. Please rephrase or try again.";
 
@@ -49,7 +61,18 @@ final class ChatResponseText {
          * JSON, and a grader reading the reply records a data failure for a turn whose tools all
          * ran correctly.
          */
-        TOOL_PAYLOAD
+        TOOL_PAYLOAD,
+        /**
+         * {@code content} was the model's raw harmony channel protocol with no {@code final}
+         * channel to recover (#1834).
+         *
+         * <p>Observed on the 2026-09-06 sequences run: every {@code T2_SIMPLE} turn served by
+         * {@code gpt-oss:20b} came back as {@code <|channel|>analysis<|message|>The user asked…},
+         * sometimes followed by a {@code commentary to=functions.…<|call|>} block. That is the model
+         * thinking and requesting tools in its own protocol, not an answer; the text carried is the
+         * safe fallback, never the markup.
+         */
+        PROTOCOL_MARKUP
     }
 
     /** The extracted user-facing text plus its {@link Source}. */
@@ -70,6 +93,17 @@ final class ChatResponseText {
             return new Extracted(BLANK_RESPONSE_FALLBACK, Source.BLANK);
         }
         String content = stripThinkBlocks(message.getText());
+        if (HARMONY_MARKER.matcher(content).find()) {
+            String finalChannel = harmonyFinalChannel(content);
+            if (finalChannel.isBlank()) {
+                // The markup is not logged: it carries the model's tool arguments.
+                LOGGER.warn("Chat model returned raw harmony channel markup with no final channel; "
+                        + "treating it as no direct answer (#1834)");
+                return new Extracted(BLANK_RESPONSE_FALLBACK, Source.PROTOCOL_MARKUP);
+            }
+            LOGGER.warn("Chat model returned raw harmony channel markup; recovered the final channel (#1834)");
+            content = finalChannel;
+        }
         if (!content.isBlank()) {
             if (isBareToolPayload(content)) {
                 // Deliberately does not say "tool payload": this helper also serves the tool-less
@@ -127,6 +161,16 @@ final class ChatResponseText {
         } catch (JacksonException notJson) {
             return false;
         }
+    }
+
+    /** The last {@code final} channel's text, or empty when the markup has none. */
+    private static @NonNull String harmonyFinalChannel(@NonNull String content) {
+        Matcher matcher = HARMONY_FINAL.matcher(content);
+        String last = "";
+        while (matcher.find()) {
+            last = matcher.group(1).strip();
+        }
+        return last;
     }
 
     private static @NonNull String stripThinkBlocks(@Nullable String text) {
