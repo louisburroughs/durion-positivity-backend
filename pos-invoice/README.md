@@ -15,7 +15,8 @@ Invoice and payment service for the Durion Positivity ETSMS platform. Creates in
 ## Key Classes
 
 - `InvoiceService` — invoice lifecycle (create, retrieve, revert)
-- `InvoiceFinalizationService` — transitions invoice to FINALIZED state and triggers downstream events
+- `InvoiceFinalizationService` — transitions invoice DRAFT → FINALIZED (emitting the `invoice.invoice.updated` fact that drives GL posting in pos-accounting) and FINALIZED → POSTED when accounting's GL-posted fact arrives
+- `AccountingEventsListener` — consumes `accounting.events.v1`; applies `accounting.invoice.gl-posted` to move a FINALIZED invoice to POSTED and record its `glEntryId` (#1843)
 - `PaymentService` — initiates payment intents with idempotency; delegates to gateway adapter
 - `PaymentReversalService` — voids and refunds settled or unsettled payments
 - `ReceiptService` — generates PDF receipts and dispatches print/email actions
@@ -43,6 +44,29 @@ Invoice and payment service for the Durion Positivity ETSMS platform. Creates in
 - `POST /v1/invoices/{invoiceId}/receipts/{receiptId}/email` — email a receipt
 - `POST /v1/invoices/{invoiceId}/receipts/{receiptId}/print` — print a receipt
 - `GET /v1/billing/rules/{partyId}` — retrieve billing rules for a party
+
+## Finalization and GL posting
+
+Invoice status moves `DRAFT → FINALIZED → POSTED`; `POSTED` is immutable. pos-invoice never
+posts to the ledger itself — the flow is event-only (ADR-0044 §6, #1843):
+
+1. `POST /v1/invoices/{invoiceId}/finalize` freezes tax, totals and due-date facts, saves the
+   invoice as `FINALIZED`, and emits `invoice.invoice.updated` (status `FINALIZED`) through the
+   transactional outbox on `invoice.events.v1`.
+2. pos-accounting consumes that fact and posts the revenue journal entry
+   (`Dr Accounts Receivable / Cr Service Revenue / Cr Sales Tax Payable`, dated at
+   `finalizedAt`), then publishes `accounting.invoice.gl-posted` on `accounting.events.v1`.
+3. `AccountingEventsListener` consumes the fact. A `POSTED` fact whose `finalizedAt` matches the
+   invoice's moves it `FINALIZED → POSTED`, records the journal entry id as `glEntryId`
+   (`invoices.gl_entry_id`), and emits `invoice.invoice.updated` (status `POSTED`) so downstream
+   replicas see it. A duplicate delivery (already `POSTED` under the same entry) is a no-op; a
+   fact for an invoice that was reverted or cancelled in the meantime (`DRAFT`/`CANCELLED`) is
+   logged and skipped — pos-accounting reverses the entry when it sees that fact and answers
+   with a `REVERSED` fact, which changes nothing in pos-invoice.
+
+Requires `pos.invoice.kafka.enabled=true`; topic and consumer group are
+`POS_INVOICE_ACCOUNTING_EVENTS_TOPIC` (`accounting.events.v1`) and
+`POS_INVOICE_ACCOUNTING_EVENTS_CONSUMER_GROUP` (`pos-invoice-accounting-events`).
 
 ## Payment settlement events
 

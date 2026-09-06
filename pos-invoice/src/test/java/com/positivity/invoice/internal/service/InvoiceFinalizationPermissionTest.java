@@ -28,7 +28,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -65,9 +64,6 @@ class InvoiceFinalizationPermissionTest {
      */
     @Mock
     private InvoiceRepository invoiceRepository;
-
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
 
     @Mock
     private ElevationTokenService elevationTokenService;

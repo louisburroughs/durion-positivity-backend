@@ -122,9 +122,14 @@ public class Invoice {
     @Column(name = "deposit_source_id", columnDefinition = "UUID", updatable = false)
     private UUID depositSourceId;
 
-    // Pending Flyway migration: keep these fields transient until DB columns exist.
-    @Transient
+    /**
+     * The revenue journal entry pos-accounting posted for this invoice (#1843), recorded when
+     * its {@code accounting.invoice.gl-posted} fact moves the invoice to POSTED. Null until then.
+     */
+    @Column(name = "gl_entry_id", columnDefinition = "UUID")
     private UUID glEntryId;
+
+    // Pending Flyway migration: keep these fields transient until DB columns exist.
 
     @Transient
     private Instant revertedAt;
