@@ -145,10 +145,11 @@ class McpServerPropertiesDefaultsTest {
     @Test
     @DisplayName("every profile ships deepseek-v4-pro:0813 as the fallback model (#1691)")
     void allProfiles_shipTheChosenFallbackModel() {
-        // The name is defined once, in application.yml; the profiles inherit it, so each is loaded on top.
+        // The name is defined once, in application.yml. The loader ranks the FIRST resource highest,
+        // so the profile goes first: an override there would surface, as it would under Spring Boot.
         for (String profile : List.of("application.yml", "application-dev.yml", "application-alpha.yml")) {
             new ApplicationContextRunner()
-                    .withInitializer(loadYamlWithoutAmbientEnvironment("application.yml", profile))
+                    .withInitializer(loadYamlWithoutAmbientEnvironment(profile, "application.yml"))
                     .run(ctx -> assertThat(ctx.getEnvironment().getProperty("mcp.model.fallback.secondary-model-name"))
                             .as("fallback model in %s", profile)
                             .isEqualTo("deepseek-v4-pro:0813"));

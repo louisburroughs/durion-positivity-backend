@@ -36,7 +36,7 @@ public class OllamaConfigurationDiagnosticRunner implements ApplicationRunner {
                     String fallbackBaseUrl,
             @Value("${mcp.model.fallback.secondary-model-name:${OLLAMA_FALLBACK_MODEL:deepseek-v4-pro:0813}}") @NonNull
                     String fallbackModel,
-            @Value("${MCP_MODEL_FALLBACK_ENABLED:false}") boolean fallbackEnabled,
+            @Value("${mcp.model.fallback.enabled:${MCP_MODEL_FALLBACK_ENABLED:false}}") boolean fallbackEnabled,
             @Value("${OLLAMA_API_KEY:}") @NonNull String apiKey) {
         this.chatBaseUrl = chatBaseUrl;
         this.chatModel = chatModel;

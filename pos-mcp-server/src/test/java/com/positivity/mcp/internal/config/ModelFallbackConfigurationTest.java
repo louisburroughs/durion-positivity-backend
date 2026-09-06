@@ -51,9 +51,8 @@ class ModelFallbackConfigurationTest {
      * because deleting {@code .numCtx(numCtx)} from the bean otherwise breaks nothing — the two
      * parameters were threaded through the call sites with no assertion behind them.
      *
-     * <p>The bean is currently unreachable ({@code docs/alerts/nlti-alerts.md} records that
-     * {@code fallbackChatModel} is never injected into a call path), so this guards the wiring
-     * against the day it is, not behaviour in production today.
+     * <p>Since #1691 the bean is reached through {@link FailoverChatModel}, which wraps the primary
+     * executors when {@code mcp.model.fallback.enabled=true}; see {@code ModelFallbackWiringTest}.
      */
     @Test
     @DisplayName("fallbackChatModel inherits the primary's temperature and context window")
