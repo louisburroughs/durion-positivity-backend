@@ -7,6 +7,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /** Repository for the accounting-side location dimension (issue #731). */
 public interface LocationProfileRepository extends JpaRepository<LocationProfile, UUID> {
@@ -20,13 +22,17 @@ public interface LocationProfileRepository extends JpaRepository<LocationProfile
     Optional<LocationProfile> findByLocationCode(@NonNull String locationCode);
 
     /**
-     * Batch form of {@link #findByLocationCode} for display resolution (issue #1778): one
-     * {@code IN} query for every location referenced by a response, rather than one per
-     * reference.
+     * Batch, case-insensitive form of {@link #findByLocationCode} for display resolution (issues
+     * #1778, #1797): one {@code IN} query for every location referenced by a response, rather
+     * than one per reference. Event producers do not all spell a location code the way the
+     * profile stores it, so the comparison is on the upper-cased code.
      *
-     * @param locationCodes the location codes to look up
+     * @param upperCaseLocationCodes the location codes to look up, already upper-cased by the
+     *                               caller
      * @return the profiles that exist; codes with no accounting-side master data are simply absent
      */
     @NonNull
-    List<LocationProfile> findByLocationCodeIn(@NonNull Collection<String> locationCodes);
+    @Query("select p from LocationProfile p where upper(p.locationCode) in :codes")
+    List<LocationProfile> findByLocationCodeInIgnoreCase(
+            @NonNull @Param("codes") Collection<String> upperCaseLocationCodes);
 }

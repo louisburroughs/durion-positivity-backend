@@ -21,20 +21,24 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Builds the display projection that accompanies an accounting event's raw payload
- * (issue #1778).
+ * (issues #1778, #1797).
  *
  * <p>The raw payload is an immutable audit artifact and is never modified, reordered or redacted
- * here — this projector only reads it. It walks the payload for keys known to carry a
- * UUID-backed reference, resolves each one through {@link DisplayReferenceResolver} (accounting's
- * own records and its event-fed replicas — no cross-domain call, ADR-0044), and returns one entry
- * per recognized value. Anything accounting cannot name is still projected, with null display
- * values: a caller then knows the reference exists and renders nothing for it, rather than being
- * handed a UUID dressed up as a label.
+ * here — this projector only reads it. It walks the payload for keys known to carry a reference,
+ * resolves each one through {@link DisplayReferenceResolver} (accounting's own records and its
+ * event-fed replicas — no cross-domain call, ADR-0044), and returns one entry per recognized
+ * value. Anything accounting cannot name is still projected, with null display values: a caller
+ * then knows the reference exists and renders nothing for it, rather than being handed an
+ * identifier dressed up as a label.
  *
  * <p>Key recognition is by name, case-insensitively and in both camelCase and snake_case, because
- * event payloads are free-form maps submitted by many producers. A key whose value does not parse
- * as a UUID is skipped — this is a display concern, and guessing at a malformed identifier would
- * be worse than omitting it.
+ * event payloads are free-form maps submitted by many producers. What counts as a usable value
+ * depends on how the reference type is keyed ({@link DisplayReferenceType#isCodeKeyed()}): a
+ * UUID-keyed type needs a value that parses as a UUID, while a code-keyed type such as
+ * {@link DisplayReferenceType#LOCATION} takes any non-blank string, because accounting's location
+ * dimension is a code ({@code LOC_USA}), not a UUID. A recognized key whose value fits neither is
+ * skipped — this is a display concern, and guessing at a malformed identifier would be worse than
+ * omitting it.
  */
 @Slf4j
 @Component
@@ -68,13 +72,20 @@ public class EventPayloadReferenceProjector {
 
     private static final int MAX_REFERENCES = 200;
 
+    /**
+     * Longest string accepted as a code-keyed reference value. Matches the width of
+     * {@code accounting_location_profile.location_code}: nothing longer can be a location code,
+     * so nothing longer is worth a lookup.
+     */
+    private static final int MAX_CODE_LENGTH = 100;
+
     private final DisplayReferenceResolver displayReferenceResolver;
 
     /**
      * Project the recognized references in one event payload.
      *
      * @param payload the event's raw payload; not modified, and may be null or empty
-     * @return one entry per recognized UUID-backed value, ordered by payload path; empty when the
+     * @return one entry per recognized reference value, ordered by payload path; empty when the
      *         payload holds no recognized reference
      */
     @NonNull
@@ -90,24 +101,42 @@ public class EventPayloadReferenceProjector {
             return List.of();
         }
 
-        // One resolver call per reference type present — never one per payload value.
+        // One resolver call per reference type present — never one per payload value. UUID-keyed
+        // and code-keyed types are batched separately because they resolve by different shapes.
         Map<DisplayReferenceType, Set<UUID>> idsByType = new EnumMap<>(DisplayReferenceType.class);
+        Map<DisplayReferenceType, Set<String>> codesByType = new EnumMap<>(DisplayReferenceType.class);
         for (FoundReference reference : found) {
-            idsByType
-                    .computeIfAbsent(reference.type(), type -> new LinkedHashSet<>())
-                    .add(reference.id());
+            if (reference.type().isCodeKeyed()) {
+                codesByType
+                        .computeIfAbsent(reference.type(), type -> new LinkedHashSet<>())
+                        .add(reference.rawValue());
+            } else {
+                idsByType
+                        .computeIfAbsent(reference.type(), type -> new LinkedHashSet<>())
+                        .add(reference.id());
+            }
         }
-        Map<DisplayReferenceType, Map<UUID, ResolvedDisplayReference>> resolved =
+        Map<DisplayReferenceType, Map<UUID, ResolvedDisplayReference>> resolvedById =
                 new EnumMap<>(DisplayReferenceType.class);
-        idsByType.forEach((type, ids) -> resolved.put(type, displayReferenceResolver.resolve(type, ids)));
+        idsByType.forEach((type, ids) -> resolvedById.put(type, displayReferenceResolver.resolve(type, ids)));
+        Map<DisplayReferenceType, Map<String, ResolvedDisplayReference>> resolvedByCode =
+                new EnumMap<>(DisplayReferenceType.class);
+        codesByType.forEach(
+                (type, codes) -> resolvedByCode.put(type, displayReferenceResolver.resolveCodes(type, codes)));
 
         List<EventPayloadReference> projection = new ArrayList<>(found.size());
         for (FoundReference reference : found) {
-            ResolvedDisplayReference display = resolved.getOrDefault(reference.type(), Map.of())
-                    .getOrDefault(reference.id(), ResolvedDisplayReference.EMPTY);
+            ResolvedDisplayReference display = reference.type().isCodeKeyed()
+                    ? resolvedByCode
+                            .getOrDefault(reference.type(), Map.of())
+                            .getOrDefault(reference.rawValue(), ResolvedDisplayReference.EMPTY)
+                    : resolvedById
+                            .getOrDefault(reference.type(), Map.of())
+                            .getOrDefault(reference.id(), ResolvedDisplayReference.EMPTY);
             projection.add(EventPayloadReference.builder()
                     .path(reference.path())
                     .referenceType(reference.type())
+                    .rawValue(reference.rawValue())
                     .id(reference.id())
                     .displayName(display.displayName())
                     .displayReference(display.displayReference())
@@ -141,9 +170,9 @@ public class EventPayloadReferenceProjector {
                     String childPath = path.isEmpty() ? key : path + "." + key;
                     DisplayReferenceType type = RECOGNIZED_KEYS.get(normalizeKey(key));
                     if (type != null) {
-                        UUID id = asUuid(entry.getValue());
-                        if (id != null) {
-                            found.add(new FoundReference(childPath, type, id));
+                        FoundReference reference = recognize(childPath, type, entry.getValue());
+                        if (reference != null) {
+                            found.add(reference);
                             if (found.size() >= MAX_REFERENCES) {
                                 log.debug("Stopped payload reference walk: reference limit {} reached", MAX_REFERENCES);
                                 return;
@@ -151,7 +180,7 @@ public class EventPayloadReferenceProjector {
                             // A scalar reference has nothing beneath it: done with this key.
                             continue;
                         }
-                        // A recognized key whose value is not a UUID is left unprojected — the raw
+                        // A recognized key whose value is not usable is left unprojected — the raw
                         // payload still carries it verbatim for diagnostics — but the walk must
                         // still descend into it. Producers legitimately wrap a reference in an
                         // object ({"customerId": {"id": "...", "invoiceId": "..."}}), and
@@ -172,6 +201,26 @@ public class EventPayloadReferenceProjector {
         }
     }
 
+    /**
+     * Decide whether the value under a recognized key is a usable reference of the key's type.
+     *
+     * <p>A UUID-keyed type requires a value that parses as a UUID. A code-keyed type takes any
+     * non-blank string of plausible length, and still records the parsed UUID when the code happens
+     * to be one, so {@code id} is populated whenever it can be.
+     */
+    @Nullable
+    private static FoundReference recognize(String path, DisplayReferenceType type, @Nullable Object value) {
+        String rawValue = asText(value);
+        if (rawValue == null) {
+            return null;
+        }
+        UUID id = asUuid(rawValue);
+        if (type.isCodeKeyed()) {
+            return rawValue.length() > MAX_CODE_LENGTH ? null : new FoundReference(path, type, rawValue, id);
+        }
+        return id == null ? null : new FoundReference(path, type, rawValue, id);
+    }
+
     /** Lowercase and strip separators so camelCase and snake_case keys compare equal. */
     private static String normalizeKey(String key) {
         return key.toLowerCase(Locale.ROOT).replace("_", "").replace("-", "");
@@ -179,23 +228,36 @@ public class EventPayloadReferenceProjector {
 
     /**
      * Payload values arrive as whatever the producer serialized — usually a string, occasionally
-     * an already-typed {@link UUID}. Anything else, or a malformed string, is not a reference.
+     * an already-typed {@link UUID}. Anything else, or a blank string, is not a reference value.
+     * Strings are trimmed: surrounding whitespace is producer noise, not part of an identifier.
      */
     @Nullable
-    private static UUID asUuid(@Nullable Object value) {
+    private static String asText(@Nullable Object value) {
         if (value instanceof UUID uuid) {
-            return uuid;
+            return uuid.toString();
         }
         if (!(value instanceof String text) || text.isBlank()) {
             return null;
         }
+        return text.trim();
+    }
+
+    @Nullable
+    private static UUID asUuid(String text) {
         try {
-            return UUID.fromString(text.trim());
+            return UUID.fromString(text);
         } catch (IllegalArgumentException notAUuid) {
             return null;
         }
     }
 
-    /** A recognized reference located in the payload, before display resolution. */
-    private record FoundReference(String path, DisplayReferenceType type, UUID id) {}
+    /**
+     * A recognized reference located in the payload, before display resolution. {@code id} is
+     * null only for a code-keyed type whose value is not UUID-shaped.
+     */
+    private record FoundReference(
+            String path,
+            DisplayReferenceType type,
+            String rawValue,
+            @Nullable UUID id) {}
 }
