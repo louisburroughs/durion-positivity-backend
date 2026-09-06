@@ -7,15 +7,21 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.catalog.internal.config.CatalogEnrichmentProperties;
 import com.positivity.catalog.internal.entity.ProcessedEvent;
 import com.positivity.catalog.internal.entity.ProductEntity;
 import com.positivity.catalog.internal.entity.TreadDesignEntity;
 import com.positivity.catalog.internal.entity.TreadDesignImageEntity;
+import com.positivity.catalog.internal.entity.TreadDesignMatchCandidateEntity;
 import com.positivity.catalog.internal.entity.TreadDesignTextEntity;
+import com.positivity.catalog.internal.enums.MatchTier;
+import com.positivity.catalog.internal.enums.TreadDesignMatchState;
+import com.positivity.catalog.internal.enums.TreadDesignSource;
 import com.positivity.catalog.internal.repository.ProcessedEventRepository;
 import com.positivity.catalog.internal.repository.ProductRepository;
 import com.positivity.catalog.internal.repository.SupplierPriceEntryRepository;
 import com.positivity.catalog.internal.repository.TreadDesignImageRepository;
+import com.positivity.catalog.internal.repository.TreadDesignMatchCandidateRepository;
 import com.positivity.catalog.internal.repository.TreadDesignRepository;
 import com.positivity.catalog.internal.repository.TreadDesignTextRepository;
 import java.time.Clock;
@@ -39,13 +45,23 @@ import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-@DisplayName("supplier.events.v1 -> tread design enrichment (CAP-324 #1352)")
+@DisplayName("supplier.events.v1 -> tread design enrichment (CAP-324 #1352, confidence tiers #1645)")
 class SupplierCatalogEnrichmentListenerTest {
 
     private static final UUID VENDOR_PROFILE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01");
     private static final UUID DESIGN_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b02");
     private static final UUID PRODUCT_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b03");
+    private static final UUID RIVAL_DESIGN_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b04");
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-18T09:00:00Z"), ZoneOffset.UTC);
+
+    /**
+     * Thresholds are deliberately loose in most of these tests: the subject here is which candidate
+     * the listener is <em>allowed</em> to attach, not where the score cut-offs sit — those belong to
+     * {@link TreadDesignMatcherTest}. A low auto threshold makes every plausible candidate AUTO-tier
+     * so the attachment rules are the only thing being exercised.
+     */
+    private static final CatalogEnrichmentProperties LOOSE_THRESHOLDS =
+            new CatalogEnrichmentProperties(0.10, 0.05, null);
 
     @Mock
     private ProcessedEventRepository processedEventRepository;
@@ -60,6 +76,9 @@ class SupplierCatalogEnrichmentListenerTest {
     private TreadDesignImageRepository treadDesignImageRepository;
 
     @Mock
+    private TreadDesignMatchCandidateRepository treadDesignMatchCandidateRepository;
+
+    @Mock
     private SupplierPriceEntryRepository supplierPriceEntryRepository;
 
     @Mock
@@ -69,16 +88,7 @@ class SupplierCatalogEnrichmentListenerTest {
 
     @BeforeEach
     void setUp() {
-        listener = new SupplierCatalogEnrichmentListener(
-                CLOCK,
-                new ObjectMapper(),
-                processedEventRepository,
-                treadDesignRepository,
-                treadDesignTextRepository,
-                treadDesignImageRepository,
-                supplierPriceEntryRepository,
-                productRepository,
-                new TreadDesignMatcher());
+        listener = listenerWith(LOOSE_THRESHOLDS);
         when(treadDesignRepository.findByVendorProfileIdAndVendorVariantId(any(), any()))
                 .thenReturn(Optional.empty());
         when(treadDesignRepository.save(any(TreadDesignEntity.class))).thenAnswer(inv -> {
@@ -90,6 +100,34 @@ class SupplierCatalogEnrichmentListenerTest {
         });
         when(supplierPriceEntryRepository.findDistinctProductIdsByVendorProfileId(any()))
                 .thenReturn(List.of());
+        when(treadDesignMatchCandidateRepository.findByProductIdAndTierAndTreadDesignIdNot(any(), any(), any()))
+                .thenReturn(List.of());
+        when(productRepository.findByTreadDesignId(any())).thenReturn(List.of());
+        when(productRepository.existsByTreadDesignIdAndTreadDesignSource(any(), any()))
+                .thenReturn(false);
+    }
+
+    private SupplierCatalogEnrichmentListener listenerWith(CatalogEnrichmentProperties properties) {
+        return new SupplierCatalogEnrichmentListener(
+                CLOCK,
+                new ObjectMapper(),
+                processedEventRepository,
+                treadDesignRepository,
+                treadDesignTextRepository,
+                treadDesignImageRepository,
+                treadDesignMatchCandidateRepository,
+                supplierPriceEntryRepository,
+                productRepository,
+                new TreadDesignMatcher(properties, new BrandNormalizer(properties)));
+    }
+
+    /** A product the sample event's design plainly describes: same brand, same design name. */
+    private static ProductEntity michelinProduct(UUID id) {
+        ProductEntity product = new ProductEntity();
+        product.setId(id);
+        product.setManufacturerBrand("Michelin");
+        product.setName("Michelin Pilot Sport 4S 245/40R18");
+        return product;
     }
 
     private static String enrichmentEvent(
@@ -127,7 +165,7 @@ class SupplierCatalogEnrichmentListenerTest {
             listener.onSupplierEvent(enrichmentEvent("e-1", "VAR-1", "hash-1", false));
 
             ArgumentCaptor<TreadDesignEntity> designCaptor = ArgumentCaptor.forClass(TreadDesignEntity.class);
-            verify(treadDesignRepository).save(designCaptor.capture());
+            verify(treadDesignRepository, org.mockito.Mockito.atLeastOnce()).save(designCaptor.capture());
             TreadDesignEntity saved = designCaptor.getValue();
             assertThat(saved.getVendorProfileId()).isEqualTo(VENDOR_PROFILE_ID);
             assertThat(saved.getVendorVariantId()).isEqualTo("VAR-1");
@@ -158,7 +196,7 @@ class SupplierCatalogEnrichmentListenerTest {
             listener.onSupplierEvent(enrichmentEvent("e-2", "VAR-2", "hash-1", true));
 
             ArgumentCaptor<TreadDesignEntity> designCaptor = ArgumentCaptor.forClass(TreadDesignEntity.class);
-            verify(treadDesignRepository).save(designCaptor.capture());
+            verify(treadDesignRepository, org.mockito.Mockito.atLeastOnce()).save(designCaptor.capture());
             assertThat(designCaptor.getValue().isHasUnresolvedImages()).isTrue();
 
             ArgumentCaptor<TreadDesignImageEntity> imageCaptor = ArgumentCaptor.forClass(TreadDesignImageEntity.class);
@@ -216,14 +254,94 @@ class SupplierCatalogEnrichmentListenerTest {
             listener.onSupplierEvent(enrichmentEvent("e-5", "VAR-1", "new-hash", false));
 
             ArgumentCaptor<TreadDesignEntity> captor = ArgumentCaptor.forClass(TreadDesignEntity.class);
-            verify(treadDesignRepository).save(captor.capture());
+            verify(treadDesignRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
             assertThat(captor.getValue().getContentHash()).isEqualTo("new-hash");
+        }
+    }
+
+    @Nested
+    @DisplayName("re-matching when the vendor changes what it published")
+    class Rematching {
+
+        private TreadDesignEntity existing(TreadDesignMatchState state) {
+            return TreadDesignEntity.builder()
+                    .id(DESIGN_ID)
+                    .vendorProfileId(VENDOR_PROFILE_ID)
+                    .vendorVariantId("VAR-1")
+                    .contentHash("old-hash")
+                    .matchState(state)
+                    .matchStateAt(Instant.parse("2026-08-01T00:00:00Z"))
+                    .build();
+        }
+
+        private void existingDesignIs(TreadDesignMatchState state) {
+            when(treadDesignRepository.findByVendorProfileIdAndVendorVariantId(VENDOR_PROFILE_ID, "VAR-1"))
+                    .thenReturn(Optional.of(existing(state)));
+            when(supplierPriceEntryRepository.findDistinctProductIdsByVendorProfileId(VENDOR_PROFILE_ID))
+                    .thenReturn(List.of(PRODUCT_ID));
+            when(productRepository.findAllById(List.of(PRODUCT_ID))).thenReturn(List.of(michelinProduct(PRODUCT_ID)));
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(
+                value = TreadDesignMatchState.class,
+                names = {"UNMATCHED", "REVIEW", "DEFERRED", "REJECTED"})
+        @DisplayName("an undecided or rejected design re-enters matching — the vendor changed its words")
+        void changedContentReRunsMatching(TreadDesignMatchState state) {
+            existingDesignIs(state);
+
+            listener.onSupplierEvent(enrichmentEvent("e-20-" + state, "VAR-1", "new-hash", false));
+
+            // A REJECTED design re-enters deliberately: the rejection was of what the vendor said,
+            // and the vendor has now said something different.
+            verify(productRepository).save(any(ProductEntity.class));
+        }
+
+        @Test
+        @DisplayName("a design a person attached by hand is left alone, however the content changes")
+        void manuallyMatchedDesignsAreNotReMatched() {
+            existingDesignIs(TreadDesignMatchState.MATCHED);
+            when(productRepository.existsByTreadDesignIdAndTreadDesignSource(DESIGN_ID, TreadDesignSource.MANUAL))
+                    .thenReturn(true);
+
+            listener.onSupplierEvent(enrichmentEvent("e-21", "VAR-1", "new-hash", false));
+
+            verify(productRepository, never()).save(any());
+            verify(treadDesignMatchCandidateRepository, never()).deleteByTreadDesignId(any());
+            // The content itself is still applied — only the matching is left alone.
+            verify(treadDesignRepository).save(any(TreadDesignEntity.class));
+        }
+
+        @Test
+        @DisplayName("a matched design holding only automatic attachments is re-evaluated")
+        void automaticallyMatchedDesignsAreReEvaluated() {
+            existingDesignIs(TreadDesignMatchState.MATCHED);
+            when(productRepository.existsByTreadDesignIdAndTreadDesignSource(DESIGN_ID, TreadDesignSource.MANUAL))
+                    .thenReturn(false);
+
+            listener.onSupplierEvent(enrichmentEvent("e-22", "VAR-1", "new-hash", false));
+
+            verify(productRepository).save(any(ProductEntity.class));
         }
     }
 
     @Nested
     @DisplayName("matching to products")
     class Matching {
+
+        private void vendorHasPriced(ProductEntity... products) {
+            List<UUID> ids =
+                    java.util.Arrays.stream(products).map(ProductEntity::getId).toList();
+            when(supplierPriceEntryRepository.findDistinctProductIdsByVendorProfileId(VENDOR_PROFILE_ID))
+                    .thenReturn(ids);
+            when(productRepository.findAllById(ids)).thenReturn(List.of(products));
+        }
+
+        private TreadDesignEntity savedDesign() {
+            ArgumentCaptor<TreadDesignEntity> captor = ArgumentCaptor.forClass(TreadDesignEntity.class);
+            verify(treadDesignRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
+            return captor.getValue();
+        }
 
         @Test
         void aDesignThatMatchesNothingIsParkedForReviewNotAnError() {
@@ -235,31 +353,27 @@ class SupplierCatalogEnrichmentListenerTest {
             verify(productRepository, never()).findAllById(any());
             verify(productRepository, never()).save(any());
             // Still applied and recorded -- an unmatched design is an ordinary outcome.
-            verify(treadDesignRepository).save(any(TreadDesignEntity.class));
+            assertThat(savedDesign().getMatchState()).isEqualTo(TreadDesignMatchState.UNMATCHED);
             verify(processedEventRepository).save(any(ProcessedEvent.class));
         }
 
         @Test
         void aMatchedCandidateGetsTheDesignIdAndNothingElseChanges() {
-            ProductEntity candidate = new ProductEntity();
-            candidate.setId(PRODUCT_ID);
-            candidate.setManufacturerBrand("Michelin");
-            candidate.setName("Michelin Pilot Sport 4S 245/40R18");
+            ProductEntity candidate = michelinProduct(PRODUCT_ID);
             candidate.setSku("SKU-KEEP");
             candidate.setManufacturerPartNumber("MPN-KEEP");
-
-            when(supplierPriceEntryRepository.findDistinctProductIdsByVendorProfileId(VENDOR_PROFILE_ID))
-                    .thenReturn(List.of(PRODUCT_ID));
-            when(productRepository.findAllById(List.of(PRODUCT_ID))).thenReturn(List.of(candidate));
+            vendorHasPriced(candidate);
 
             listener.onSupplierEvent(enrichmentEvent("e-7", "VAR-1", "hash-1", false));
 
             ArgumentCaptor<ProductEntity> productCaptor = ArgumentCaptor.forClass(ProductEntity.class);
             verify(productRepository).save(productCaptor.capture());
             assertThat(productCaptor.getValue().getTreadDesignId()).isEqualTo(DESIGN_ID);
+            assertThat(productCaptor.getValue().getTreadDesignSource()).isEqualTo(TreadDesignSource.AUTO);
             // Product identity and structure are untouched -- only the association was written.
             assertThat(productCaptor.getValue().getSku()).isEqualTo("SKU-KEEP");
             assertThat(productCaptor.getValue().getManufacturerPartNumber()).isEqualTo("MPN-KEEP");
+            assertThat(savedDesign().getMatchState()).isEqualTo(TreadDesignMatchState.MATCHED);
         }
 
         @Test
@@ -268,14 +382,104 @@ class SupplierCatalogEnrichmentListenerTest {
             unrelated.setId(PRODUCT_ID);
             unrelated.setManufacturerBrand("Continental");
             unrelated.setName("Continental ExtremeContact");
-
-            when(supplierPriceEntryRepository.findDistinctProductIdsByVendorProfileId(VENDOR_PROFILE_ID))
-                    .thenReturn(List.of(PRODUCT_ID));
-            when(productRepository.findAllById(List.of(PRODUCT_ID))).thenReturn(List.of(unrelated));
+            vendorHasPriced(unrelated);
 
             listener.onSupplierEvent(enrichmentEvent("e-8", "VAR-1", "hash-1", false));
 
             verify(productRepository, never()).save(any());
+            assertThat(savedDesign().getMatchState()).isEqualTo(TreadDesignMatchState.UNMATCHED);
+        }
+
+        @Test
+        @DisplayName("what the matcher saw is recorded, so a reviewer can judge it instead of re-running it")
+        void scoredCandidatesAreRecorded() {
+            vendorHasPriced(michelinProduct(PRODUCT_ID));
+
+            listener.onSupplierEvent(enrichmentEvent("e-12", "VAR-1", "hash-1", false));
+
+            verify(treadDesignMatchCandidateRepository).deleteByTreadDesignId(DESIGN_ID);
+            ArgumentCaptor<TreadDesignMatchCandidateEntity> captor =
+                    ArgumentCaptor.forClass(TreadDesignMatchCandidateEntity.class);
+            verify(treadDesignMatchCandidateRepository).save(captor.capture());
+            assertThat(captor.getValue().getProductId()).isEqualTo(PRODUCT_ID);
+            assertThat(captor.getValue().getTier()).isEqualTo(MatchTier.AUTO);
+            assertThat(captor.getValue().getScore()).isGreaterThan(java.math.BigDecimal.ZERO);
+        }
+
+        @Test
+        @DisplayName("a candidate below the auto threshold is parked for review, never attached")
+        void belowAutoIsParkedForReview() {
+            listener = listenerWith(new CatalogEnrichmentProperties(0.99, 0.05, null));
+            vendorHasPriced(michelinProduct(PRODUCT_ID));
+
+            listener.onSupplierEvent(enrichmentEvent("e-13", "VAR-1", "hash-1", false));
+
+            verify(productRepository, never()).save(any());
+            assertThat(savedDesign().getMatchState()).isEqualTo(TreadDesignMatchState.REVIEW);
+        }
+
+        @Test
+        @DisplayName("a product two designs claim at auto tier is attached to neither, and both are parked")
+        void ambiguousClaimsParkBothDesigns() {
+            vendorHasPriced(michelinProduct(PRODUCT_ID));
+            when(treadDesignMatchCandidateRepository.findByProductIdAndTierAndTreadDesignIdNot(
+                            PRODUCT_ID, MatchTier.AUTO, DESIGN_ID))
+                    .thenReturn(List.of(TreadDesignMatchCandidateEntity.builder()
+                            .treadDesignId(RIVAL_DESIGN_ID)
+                            .productId(PRODUCT_ID)
+                            .tier(MatchTier.AUTO)
+                            .build()));
+            when(treadDesignRepository.findById(RIVAL_DESIGN_ID))
+                    .thenReturn(Optional.of(TreadDesignEntity.builder()
+                            .id(RIVAL_DESIGN_ID)
+                            .matchState(TreadDesignMatchState.MATCHED)
+                            .build()));
+
+            listener.onSupplierEvent(enrichmentEvent("e-14", "VAR-1", "hash-1", false));
+
+            verify(productRepository, never()).save(any());
+            ArgumentCaptor<TreadDesignEntity> captor = ArgumentCaptor.forClass(TreadDesignEntity.class);
+            verify(treadDesignRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
+            assertThat(captor.getAllValues())
+                    .filteredOn(saved -> RIVAL_DESIGN_ID.equals(saved.getId()))
+                    .singleElement()
+                    .satisfies(rival -> assertThat(rival.getMatchState()).isEqualTo(TreadDesignMatchState.REVIEW));
+            assertThat(captor.getAllValues())
+                    .filteredOn(saved -> DESIGN_ID.equals(saved.getId()))
+                    .last()
+                    .satisfies(mine -> assertThat(mine.getMatchState()).isEqualTo(TreadDesignMatchState.REVIEW));
+        }
+
+        @Test
+        @DisplayName("a product a person attached is never re-pointed by an automatic pass")
+        void manualAttachmentsAreNeverOverwritten() {
+            ProductEntity manual = michelinProduct(PRODUCT_ID);
+            manual.setTreadDesignId(RIVAL_DESIGN_ID);
+            manual.setTreadDesignSource(TreadDesignSource.MANUAL);
+            vendorHasPriced(manual);
+
+            listener.onSupplierEvent(enrichmentEvent("e-15", "VAR-1", "hash-1", false));
+
+            verify(productRepository, never()).save(any());
+            assertThat(manual.getTreadDesignId()).isEqualTo(RIVAL_DESIGN_ID);
+            assertThat(manual.getTreadDesignSource()).isEqualTo(TreadDesignSource.MANUAL);
+            assertThat(savedDesign().getMatchState()).isEqualTo(TreadDesignMatchState.REVIEW);
+        }
+
+        @Test
+        @DisplayName("an automatic attachment this design no longer scores is cleared rather than left stale")
+        void staleAutoAttachmentsAreCleared() {
+            ProductEntity stale = new ProductEntity();
+            stale.setId(UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b09"));
+            stale.setTreadDesignId(DESIGN_ID);
+            stale.setTreadDesignSource(TreadDesignSource.AUTO);
+            when(productRepository.findByTreadDesignId(DESIGN_ID)).thenReturn(List.of(stale));
+
+            listener.onSupplierEvent(enrichmentEvent("e-16", "VAR-1", "hash-1", false));
+
+            assertThat(stale.getTreadDesignId()).isNull();
+            assertThat(stale.getTreadDesignSource()).isNull();
+            verify(productRepository).save(stale);
         }
     }
 
