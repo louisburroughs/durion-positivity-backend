@@ -26,7 +26,7 @@ public class OllamaConfigurationDiagnosticRunner implements ApplicationRunner {
 
     public OllamaConfigurationDiagnosticRunner(
             @Value("${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}") @NonNull String chatBaseUrl,
-            @Value("${spring.ai.ollama.chat.options.model:${OLLAMA_CHAT_MODEL:gpt-oss:120b}}") @NonNull
+            @Value("${spring.ai.ollama.chat.options.model:${OLLAMA_CHAT_MODEL:deepseek-v4-flash:0731}}") @NonNull
                     String chatModel,
             @Value("${OLLAMA_EMBEDDING_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}") @NonNull
                     String embeddingBaseUrl,

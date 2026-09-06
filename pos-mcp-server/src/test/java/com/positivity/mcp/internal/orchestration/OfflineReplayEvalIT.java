@@ -239,7 +239,7 @@ class OfflineReplayEvalIT {
      */
     private static @NonNull ChatModel buildChatModel() {
         String baseUrl = env("OLLAMA_CHAT_BASE_URL", "https://ollama.com");
-        String modelName = env("OLLAMA_CHAT_MODEL", "gpt-oss:120b");
+        String modelName = env("OLLAMA_CHAT_MODEL", "deepseek-v4-flash:0731");
         String apiKey = env("OLLAMA_API_KEY", "");
         int timeoutMillis = Math.toIntExact(
                 Duration.parse("PT" + env("OLLAMA_CHAT_TIMEOUT", "180S").toUpperCase())
