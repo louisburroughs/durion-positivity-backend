@@ -2758,7 +2758,7 @@ paths:
 
         Emits a SUPPLIER_MKTCAT_VARIANT_LIST event.
 
-        Returns 200 with the staged variants, which is an empty list when the catalogue has never been imported or nothing matches the filter, and 404 when the vendor profile is unknown.
+        Returns 200 with the staged variants, which is an empty list when the catalogue has never been imported or nothing matches the filter, 400 when hasUnresolvedImages is not a boolean, and 404 when the vendor profile is unknown.
 
         '
       operationId: listMarketingCatalogVariants
@@ -2792,6 +2792,12 @@ paths:
                   $ref: '#/components/schemas/MarketingEnrichmentView'
                 type: array
           description: Staged enrichment for this catalogue
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: hasUnresolvedImages is not a boolean
         '404':
           content:
             application/json:

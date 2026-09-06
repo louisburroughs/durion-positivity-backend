@@ -121,10 +121,15 @@ public class SupplierMarketingCatalogController {
                     omitted, every staged row is returned regardless of image state.
                     Emits a SUPPLIER_MKTCAT_VARIANT_LIST event.
                     Returns 200 with the staged variants, which is an empty list when the catalogue has never \
-                    been imported or nothing matches the filter, and 404 when the vendor profile is unknown.
+                    been imported or nothing matches the filter, 400 when hasUnresolvedImages is not a boolean, and \
+                    404 when the vendor profile is unknown.
                     """,
             tags = {"Supplier Marketing Catalog"})
     @ApiResponse(responseCode = "200", description = "Staged enrichment for this catalogue")
+    @ApiResponse(
+            responseCode = "400",
+            description = "hasUnresolvedImages is not a boolean",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Vendor profile unknown",
