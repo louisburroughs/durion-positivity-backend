@@ -128,11 +128,16 @@ runs:
         # false, so this is the only credential on the wire.
         git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${REPOSITORY}.git"
 
+        # Both modes need base-branch to be a real branch: direct pushes onto it,
+        # and a pull request needs it as a base. The workflow's ref inputs accept
+        # a tag or a SHA, which reach here unchanged — without this check the tag
+        # case dies inside `gh pr create` with a much less obvious message.
+        if ! git ls-remote --exit-code --heads origin "${BASE_BRANCH}" >/dev/null; then
+          echo "::error::'${BASE_BRANCH}' is not a branch on ${REPOSITORY}; ${MODE} mode needs a branch, not a tag or SHA."
+          exit 1
+        fi
+
         if [[ "${MODE}" == "direct" ]]; then
-          if ! git ls-remote --exit-code --heads origin "${BASE_BRANCH}" >/dev/null; then
-            echo "::error::'${BASE_BRANCH}' is not a branch on ${REPOSITORY}; direct mode needs a branch to push onto."
-            exit 1
-          fi
           git push origin "HEAD:refs/heads/${BASE_BRANCH}"
           echo "Pushed ${COMMIT_SHA::7} to ${REPOSITORY}@${BASE_BRANCH}."
           emit status pushed

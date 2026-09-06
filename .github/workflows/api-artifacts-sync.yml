@@ -204,6 +204,13 @@ jobs:
       - name: Collect backend changes
         id: changes
         if: always()
+        env:
+          # Free-form dispatch inputs reach the shell through the environment,
+          # never through `${{ }}` inside the script: an expression is pasted in
+          # before bash parses the line, so a crafted `modules` value would run
+          # as code in a job that holds contents: write and the sync token.
+          MODULES_INPUT: ${{ inputs.modules }}
+          VALIDATION_MODE: ${{ inputs.validation_mode }}
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/backend-changes"
@@ -221,8 +228,8 @@ jobs:
             echo "| Item | Value |"
             echo "|---|---|"
             echo "| Generation | \`${{ steps.generate.outcome }}\` |"
-            echo "| Modules | \`${{ inputs.modules || 'all configured' }}\` |"
-            echo "| Validation mode | \`${{ inputs.validation_mode }}\` |"
+            echo "| Modules | \`${MODULES_INPUT:-all configured}\` |"
+            echo "| Validation mode | \`${VALIDATION_MODE}\` |"
             echo "| Changed files | ${CHANGED} |"
             echo ""
             if [[ "${CHANGED}" -gt 0 ]]; then
@@ -405,6 +412,10 @@ jobs:
 
       - name: Collect SDK changes
         if: always()
+        env:
+          # Through the environment, not `${{ }}` in the script — see the note
+          # on the backend stage's change-collection step.
+          SDK_REF: ${{ inputs.sdk_ref }}
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/sdk-changes"
@@ -418,7 +429,7 @@ jobs:
             echo ""
             echo "| Item | Value |"
             echo "|---|---|"
-            echo "| Ref | \`${{ inputs.sdk_ref }}\` |"
+            echo "| Ref | \`${SDK_REF}\` |"
             echo "| Generation | \`${{ steps.generate.outcome }}\` |"
             echo "| Build | \`${{ steps.build.outcome }}\` |"
             echo "| Changed files | ${CHANGED} |"
@@ -450,10 +461,25 @@ jobs:
           COMMIT_MODE: ${{ inputs.commit_mode }}
           GENERATE: ${{ steps.generate.outcome }}
           BUILD: ${{ steps.build.outcome }}
+          # Cross-repo delivery needs the PAT. A job's `permissions:` block only
+          # scopes the workflow token to the repository running the workflow, so
+          # GITHUB_TOKEN cannot write to durion-positivity-sdk however it is scoped;
+          # without the secret the push would fail at the very end of the job.
+          HAS_SYNC_TOKEN: ${{ secrets.CROSS_REPO_TOKEN != '' }}
+          # The specs artifact uploads even when stage 1 fails, so these outputs
+          # may have come from the committed specs rather than regenerated ones.
+          # Never deliver that as a regeneration.
+          BACKEND_GENERATE: ${{ needs.backend-openapi.outputs.generate }}
         run: |
           set -euo pipefail
           mode="${COMMIT_MODE}"
-          if [[ "${GENERATE}" != "success" ]]; then
+          if [[ "${mode}" != "none" && "${HAS_SYNC_TOKEN}" != "true" ]]; then
+            echo "::warning::CROSS_REPO_TOKEN is not set; the workflow token cannot write to durion-positivity-sdk. Set the secret, or run with commit_mode=none."
+            mode=none
+          elif [[ "${BACKEND_GENERATE}" != "success" ]]; then
+            echo "::warning::Backend OpenAPI generation did not succeed, so this stage ran against the committed specs rather than regenerated ones; not committing durion-positivity-sdk."
+            mode=none
+          elif [[ "${GENERATE}" != "success" ]]; then
             echo "::warning::SDK generation did not succeed; not committing durion-positivity-sdk."
             mode=none
           elif [[ "${mode}" == "direct" && "${BUILD}" != "success" ]]; then
@@ -571,7 +597,17 @@ jobs:
       - name: Record SDK version
         id: version
         if: always()
-        run: echo "version=$(node scripts/version.mjs current)" >> "$GITHUB_OUTPUT"
+        run: |
+          # `echo "x=$(cmd)"` reports echo's exit status, so a failing
+          # version.mjs would pass this step and emit an empty version that
+          # every downstream PR title and commit message then renders blank.
+          set -euo pipefail
+          version="$(node scripts/version.mjs current)"
+          if [[ -z "${version}" ]]; then
+            echo "::error::scripts/version.mjs produced an empty version."
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
 
       - name: Build and pack SDK tarballs
         # `npm pack` runs each package's `prepare` hook, so ng-packagr builds
@@ -620,6 +656,11 @@ jobs:
 
       - name: Collect Angular SDK changes
         if: always()
+        env:
+          # Through the environment, not `${{ }}` in the script — see the note
+          # on the backend stage's change-collection step.
+          SDK_ANGULAR_REF: ${{ inputs.sdk_angular_ref }}
+          SDK_VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/sdk-angular-changes"
@@ -633,10 +674,10 @@ jobs:
             echo ""
             echo "| Item | Value |"
             echo "|---|---|"
-            echo "| Ref | \`${{ inputs.sdk_angular_ref }}\` |"
+            echo "| Ref | \`${SDK_ANGULAR_REF}\` |"
             echo "| Generation | \`${{ steps.generate.outcome }}\` |"
             echo "| Build + pack | \`${{ steps.pack.outcome }}\` |"
-            echo "| SDK version | \`${{ steps.version.outputs.version }}\` |"
+            echo "| SDK version | \`${SDK_VERSION:-unknown}\` |"
             echo "| Changed files | ${CHANGED} |"
             echo ""
             if [[ "${CHANGED}" -gt 0 ]]; then
@@ -675,10 +716,25 @@ jobs:
           COMMIT_MODE: ${{ inputs.commit_mode }}
           GENERATE: ${{ steps.generate.outcome }}
           PACK: ${{ steps.pack.outcome }}
+          # Cross-repo delivery needs the PAT. A job's `permissions:` block only
+          # scopes the workflow token to the repository running the workflow, so
+          # GITHUB_TOKEN cannot write to durion-positivity-sdk-angular however it is scoped;
+          # without the secret the push would fail at the very end of the job.
+          HAS_SYNC_TOKEN: ${{ secrets.CROSS_REPO_TOKEN != '' }}
+          # The specs artifact uploads even when stage 1 fails, so these outputs
+          # may have come from the committed specs rather than regenerated ones.
+          # Never deliver that as a regeneration.
+          BACKEND_GENERATE: ${{ needs.backend-openapi.outputs.generate }}
         run: |
           set -euo pipefail
           mode="${COMMIT_MODE}"
-          if [[ "${GENERATE}" != "success" ]]; then
+          if [[ "${mode}" != "none" && "${HAS_SYNC_TOKEN}" != "true" ]]; then
+            echo "::warning::CROSS_REPO_TOKEN is not set; the workflow token cannot write to durion-positivity-sdk-angular. Set the secret, or run with commit_mode=none."
+            mode=none
+          elif [[ "${BACKEND_GENERATE}" != "success" ]]; then
+            echo "::warning::Backend OpenAPI generation did not succeed, so this stage ran against the committed specs rather than regenerated ones; not committing durion-positivity-sdk-angular."
+            mode=none
+          elif [[ "${GENERATE}" != "success" ]]; then
             echo "::warning::Angular SDK generation did not succeed; not committing durion-positivity-sdk-angular."
             mode=none
           elif [[ "${mode}" == "direct" && "${PACK}" != "success" ]]; then
@@ -885,10 +941,22 @@ jobs:
         if: always()
         env:
           RESULTS_DIR: ${{ runner.temp }}/frontend-results
+          # Through the environment, not `${{ }}` in the script — see the note
+          # on the backend stage's change-collection step.
+          FRONTEND_REF: ${{ inputs.frontend_ref }}
+          SDK_VERSION: ${{ needs.generate-sdk-angular.outputs.version }}
         run: |
           set -euo pipefail
           mkdir -p "${RESULTS_DIR}"
-          cp -R .sdk-tarballs "${RESULTS_DIR}/sdk-tarballs"
+          # The import step can exit before it writes .sdk-tarballs/ (a package
+          # the frontend needs was not packed). This step is `if: always()` and
+          # runs under `set -e`, so an unguarded cp would kill it and lose the
+          # build and test evidence the whole run exists to produce.
+          if [[ -d .sdk-tarballs ]]; then
+            cp -R .sdk-tarballs "${RESULTS_DIR}/sdk-tarballs"
+          else
+            echo "::warning::.sdk-tarballs/ is absent; the tarball import did not complete."
+          fi
 
           vitest_totals() {
             # Vitest's closing summary, e.g. "Test Files  2 failed | 180 passed (182)".
@@ -903,11 +971,11 @@ jobs:
           }
 
           {
-            echo "## Stage 4 — Frontend against SDK ${{ needs.generate-sdk-angular.outputs.version }}"
+            echo "## Stage 4 — Frontend against SDK ${SDK_VERSION:-unknown}"
             echo ""
             echo "| Step | Outcome |"
             echo "|---|---|"
-            echo "| Ref | \`${{ inputs.frontend_ref }}\` |"
+            echo "| Ref | \`${FRONTEND_REF}\` |"
             echo "| SDK install | \`${{ steps.sdk_install.outcome }}\` |"
             echo "| Compile (ng build) | \`${{ steps.build.outcome }}\` |"
             echo "| Contract tests | \`${{ steps.contract_tests.outcome }}\` |"
@@ -965,10 +1033,25 @@ jobs:
           BUILD: ${{ steps.build.outcome }}
           CONTRACT_TESTS: ${{ steps.contract_tests.outcome }}
           UNIT_TESTS: ${{ steps.unit_tests.outcome }}
+          # Cross-repo delivery needs the PAT. A job's `permissions:` block only
+          # scopes the workflow token to the repository running the workflow, so
+          # GITHUB_TOKEN cannot write to durion-positivity-frontend however it is scoped;
+          # without the secret the push would fail at the very end of the job.
+          HAS_SYNC_TOKEN: ${{ secrets.CROSS_REPO_TOKEN != '' }}
+          # The specs artifact uploads even when stage 1 fails, so these outputs
+          # may have come from the committed specs rather than regenerated ones.
+          # Never deliver that as a regeneration.
+          BACKEND_GENERATE: ${{ needs.backend-openapi.outputs.generate }}
         run: |
           set -euo pipefail
           mode="${COMMIT_MODE}"
-          if [[ "${SDK_INSTALL}" != "success" ]]; then
+          if [[ "${mode}" != "none" && "${HAS_SYNC_TOKEN}" != "true" ]]; then
+            echo "::warning::CROSS_REPO_TOKEN is not set; the workflow token cannot write to durion-positivity-frontend. Set the secret, or run with commit_mode=none."
+            mode=none
+          elif [[ "${BACKEND_GENERATE}" != "success" ]]; then
+            echo "::warning::Backend OpenAPI generation did not succeed, so this stage ran against the committed specs rather than regenerated ones; not committing durion-positivity-frontend."
+            mode=none
+          elif [[ "${SDK_INSTALL}" != "success" ]]; then
             echo "::warning::The imported tarballs did not install; not committing durion-positivity-frontend."
             mode=none
           elif [[ "${mode}" == "direct" && ( "${BUILD}" != "success" || "${CONTRACT_TESTS}" != "success" || "${UNIT_TESTS}" != "success" ) ]]; then
