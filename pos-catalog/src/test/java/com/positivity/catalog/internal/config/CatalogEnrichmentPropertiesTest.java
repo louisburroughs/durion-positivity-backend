@@ -63,6 +63,30 @@ class CatalogEnrichmentPropertiesTest {
         }
 
         @Test
+        @DisplayName("a NaN threshold is rejected rather than silently disabling every tier")
+        void nanThresholdsAreRejected() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> new CatalogEnrichmentProperties(Double.NaN, 0.5, null))
+                    .withMessageContaining("auto-threshold")
+                    .withMessageContaining("finite");
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> new CatalogEnrichmentProperties(0.8, Double.NaN, null))
+                    .withMessageContaining("review-threshold")
+                    .withMessageContaining("finite");
+        }
+
+        @Test
+        @DisplayName("an infinite threshold is rejected")
+        void infiniteThresholdsAreRejected() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> new CatalogEnrichmentProperties(Double.POSITIVE_INFINITY, 0.5, null))
+                    .withMessageContaining("auto-threshold");
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> new CatalogEnrichmentProperties(0.8, Double.NEGATIVE_INFINITY, null))
+                    .withMessageContaining("review-threshold");
+        }
+
+        @Test
         @DisplayName("review-threshold above 1.0 is rejected")
         void reviewThresholdAboveOneIsRejected() {
             assertThatIllegalArgumentException()

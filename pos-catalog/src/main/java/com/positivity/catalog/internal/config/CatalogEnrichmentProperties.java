@@ -72,13 +72,16 @@ public record CatalogEnrichmentProperties(
     public CatalogEnrichmentProperties {
         double effectiveAuto = autoThreshold != null ? autoThreshold : DEFAULT_AUTO_THRESHOLD;
         double effectiveReview = reviewThreshold != null ? reviewThreshold : DEFAULT_REVIEW_THRESHOLD;
-        if (effectiveAuto < 0.0 || effectiveAuto > 1.0) {
+        // NaN passes every ordered comparison, so a plain range check would let it through and
+        // every tier test in the matcher would then be false; require a finite value explicitly.
+        if (!Double.isFinite(effectiveAuto) || effectiveAuto < 0.0 || effectiveAuto > 1.0) {
             throw new IllegalArgumentException(
-                    "pos.catalog.enrichment.auto-threshold must be within [0,1], got " + effectiveAuto);
+                    "pos.catalog.enrichment.auto-threshold must be a finite number within [0,1], got " + effectiveAuto);
         }
-        if (effectiveReview < 0.0 || effectiveReview > 1.0) {
+        if (!Double.isFinite(effectiveReview) || effectiveReview < 0.0 || effectiveReview > 1.0) {
             throw new IllegalArgumentException(
-                    "pos.catalog.enrichment.review-threshold must be within [0,1], got " + effectiveReview);
+                    "pos.catalog.enrichment.review-threshold must be a finite number within [0,1], got "
+                            + effectiveReview);
         }
         if (effectiveAuto < effectiveReview) {
             throw new IllegalArgumentException("pos.catalog.enrichment.auto-threshold (" + effectiveAuto
