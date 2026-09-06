@@ -370,6 +370,15 @@ class CliModeTest(unittest.TestCase):
         # being ambiguous with "checked and valid" — the ambiguity #1706 was filed about.
         self.assertIs(record["void"], False)
         self.assertIn("n/a (not exposed by the endpoint)", markdown)
+        # #1806: the summary was only assigned under the replay branch, so a live run wrote
+        # summary: null. Asserted on main()'s own output, not on summarize_results — a revert of
+        # the wiring alone left every direct test of the function green. No trace endpoint answers
+        # here, so the run is UNGRADED, and the report must say so rather than PASS.
+        self.assertIs(record["graded_from_traces"], False)
+        self.assertIsNotNone(record["summary"])
+        self.assertEqual(record["summary"]["verdict"], "UNGRADED")
+        self.assertEqual(record["summary"]["window_counts"], {"UNGRADED": 1})
+        self.assertIn("Overall verdict: **UNGRADED**", markdown)
 
 
 class ExistingHelperBehaviorTest(unittest.TestCase):
@@ -1239,6 +1248,135 @@ class ForwardWindowCoverageTest(unittest.TestCase):
         self.assertEqual(verdict, "FAIL")
 
 
+class TransportResilienceTest(unittest.TestCase):
+    """A transport failure is data about one turn, not grounds for losing the run.
+
+    On 2026-09-05 an SSM tunnel dropped during question 2 of 12. urllib raises RemoteDisconnected
+    unwrapped — it is a ConnectionResetError, not a URLError — so it escaped both handlers, the
+    exception propagated out of the runner, and question 1's completed result was discarded along
+    with the ten never attempted. No run.json was written at all.
+    """
+
+    def _ask_raising(self, exc):
+        def fake_urlopen(request, timeout=None):
+            raise exc
+
+        with mock.patch.object(runner.urllib.request, "urlopen", fake_urlopen):
+            return runner.ask("http://x", "t", "1", "hello", 30)
+
+    def test_a_dropped_connection_is_recorded_not_raised(self):
+        import http.client
+
+        outcome = self._ask_raising(http.client.RemoteDisconnected("closed without response"))
+
+        self.assertEqual(outcome["answer"], "")
+        self.assertIn("RemoteDisconnected", outcome["error"])
+
+    def test_a_reset_connection_is_recorded_not_raised(self):
+        outcome = self._ask_raising(ConnectionResetError("reset by peer"))
+
+        self.assertIn("ConnectionResetError", outcome["error"])
+
+    def test_a_refused_connection_is_recorded_not_raised(self):
+        outcome = self._ask_raising(ConnectionRefusedError("refused"))
+
+        self.assertIn("ConnectionRefusedError", outcome["error"])
+class RunProvenanceTest(unittest.TestCase):
+    """#1735 follow-on: a run must say what it measured against.
+
+    On 2026-09-05 a deploy landed mid-run. The service restarted underneath the gate, the trace
+    endpoint answered 503, eleven of twelve questions came back UNGRADED, and the output was
+    indistinguishable from a genuine collapse in capability — the file recorded the questions blob
+    and the actor, and nothing about the server. Attributing it needed container logs.
+    """
+
+    def test_replay_mode_makes_no_server_call_and_claims_no_trace_provenance(self):
+        # Replay is offline by contract. A first draft inverted this condition and probed the
+        # server exactly when replaying — the opposite of the requirement, and invisible without a
+        # test because the field would still be populated.
+        calls = []
+
+        def record_call(request, timeout=None):
+            calls.append(request)
+            raise ConnectionRefusedError("should not be reached in replay mode")
+
+        with mock.patch.object(runner.urllib.request, "urlopen", record_call):
+            replaying = True
+            build = {"error": "replay mode: no server"} if replaying else runner.server_build("http://x/v1/y", "t")
+            graded_from_traces = not replaying
+
+        self.assertEqual(calls, [])
+        self.assertIn("replay mode", build["error"])
+        self.assertFalse(graded_from_traces)
+
+    def test_the_base_url_keeps_an_earlier_version_segment(self):
+        # split() takes the FIRST "/v1/" and would truncate a base URL carrying one earlier in its
+        # path; rsplit takes the last, matching traces_url_for. Asserts the URL the function
+        # actually requests, not a string operation restated in the test.
+        requested = []
+
+        class FakeResponse:
+            def read(self):
+                return json.dumps({"build": {"version": "x"}}).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def capture(request, timeout=None):
+            requested.append(request.full_url)
+            return FakeResponse()
+
+        with mock.patch.object(runner.urllib.request, "urlopen", capture):
+            runner.server_build("http://host/api/v1/mcp-server/v1/mcp/chat", "tok")
+
+        self.assertEqual(requested, ["http://host/api/v1/mcp-server/actuator/info"])
+
+    def test_server_build_extracts_the_build_section(self):
+        class FakeResponse:
+            def read(self):
+                return json.dumps({"build": {"name": "pos-mcp-server", "version": "0.1.81ff1e0"}}).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        with mock.patch.object(runner.urllib.request, "urlopen", lambda r, timeout=None: FakeResponse()):
+            build = runner.server_build("http://x/mcp-server/v1/mcp/chat", "tok")
+
+        self.assertEqual(build["version"], "0.1.81ff1e0")
+
+    def test_server_build_reports_a_reason_rather_than_raising(self):
+        # Not knowing the build must never stop a run.
+        def boom(request, timeout=None):
+            raise ConnectionRefusedError("refused")
+
+        with mock.patch.object(runner.urllib.request, "urlopen", boom):
+            build = runner.server_build("http://x/mcp-server/v1/mcp/chat", "tok")
+
+        self.assertIn("ConnectionRefusedError", build["error"])
+
+    def test_server_build_handles_info_without_a_build_section(self):
+        class FakeResponse:
+            def read(self):
+                return json.dumps({"git": {"branch": "main"}}).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        with mock.patch.object(runner.urllib.request, "urlopen", lambda r, timeout=None: FakeResponse()):
+            build = runner.server_build("http://x/mcp-server/v1/mcp/chat", "tok")
+
+        self.assertIn("no build section", build["error"])
+
+
 class TurnIsolationTest(unittest.TestCase):
     """#1735: twelve questions from one actor shared one twelve-turn memory."""
 
@@ -1323,6 +1461,115 @@ class TurnIsolationTest(unittest.TestCase):
             runner.ask("http://x", "t", "1", "hello", 30, conversation_id="gate-X-q01")
 
         self.assertEqual(captured["body"]["conversationId"], "gate-X-q01")
+
+
+class RunSummaryTest(unittest.TestCase):
+    """#1806: a live run must carry a verdict, and a window FAIL must fail it.
+
+    The 2026-09-05 baseline (alpha sha-81ff1e0) graded 12 questions from traces — PASS 6, FAIL 2,
+    UNGRADED 4 — and wrote ``summary: null``. The summary block only ran under the replay branch,
+    so in the mode where the number matters most there was none, and two window FAILs failed
+    nothing.
+    """
+
+    @staticmethod
+    def _live(fixture_id, verdict, error=None):
+        return {
+            "fixture_id": fixture_id,
+            "window_check": {"verdict": verdict, "detail": "x"},
+            "error": error,
+            "answer": "" if error else "some prose",
+        }
+
+    def test_a_live_run_with_a_window_fail_fails(self):
+        results = [self._live("q01", "PASS"), self._live("q03", "FAIL"), self._live("q04", "UNGRADED")]
+
+        summary = runner.summarize_results(results, replaying=False)
+
+        self.assertEqual(summary["verdict"], "FAIL")
+        self.assertEqual(summary["window_counts"], {"FAIL": 1, "PASS": 1, "UNGRADED": 1})
+        self.assertEqual(summary["errors"], 0)
+
+    def test_a_live_run_with_only_pass_and_ungraded_passes(self):
+        results = [self._live("q01", "PASS"), self._live("q04", "UNGRADED")]
+
+        summary = runner.summarize_results(results, replaying=False)
+
+        self.assertEqual(summary["verdict"], "PASS")
+
+    def test_a_transport_error_fails_a_live_run_even_when_its_window_is_ungraded(self):
+        # q04 timed out at 180s on the baseline run. Its window is UNGRADED (no answer, no trace),
+        # which does not fail the run on its own — but the question was not answered, and a run
+        # that reports PASS while one of twelve questions never came back is lying.
+        results = [self._live("q01", "PASS"), self._live("q04", "UNGRADED", error="TimeoutError: timed out")]
+
+        summary = runner.summarize_results(results, replaying=False)
+
+        self.assertEqual(summary["verdict"], "FAIL")
+        self.assertEqual(summary["errors"], 1)
+
+    def test_a_live_result_without_a_window_check_counts_as_ungraded(self):
+        summary = runner.summarize_results([{"fixture_id": "q01", "error": None}], replaying=False)
+
+        self.assertEqual(summary["window_counts"], {"UNGRADED": 1})
+        self.assertEqual(summary["verdict"], "PASS")
+
+    def test_replay_keeps_its_outcome_fields_and_still_fails_on_a_window_fail(self):
+        results = [
+            {"fixture_id": "q01", "verdict": "PASS", "outcome": "ANSWERED", "error": None,
+             "window_check": {"verdict": "PASS", "detail": ""}},
+            {"fixture_id": "q09", "verdict": "PASS", "outcome": "ANSWERED", "error": None,
+             "window_check": {"verdict": "FAIL", "detail": ""}},
+        ]
+
+        summary = runner.summarize_results(results, replaying=True)
+
+        self.assertEqual(summary["verdict"], "FAIL")
+        self.assertEqual(summary["passed"], 2)
+        self.assertEqual(summary["failed"], 0)
+        self.assertEqual(summary["outcomes"], {"ANSWERED": 2})
+        self.assertEqual(summary["window_counts"], {"FAIL": 1, "PASS": 1})
+
+    def test_the_live_markdown_report_states_the_overall_verdict(self):
+        # The JSON field is not enough: run.md is what gets pasted into an issue, and before this
+        # the live report had no verdict line at all — a reader had to count the table rows.
+        results = [self._live("q01", "PASS"), self._live("q03", "FAIL")]
+        for result in results:
+            result.update({
+                "expected_section": "Q1", "utterance": "u", "plan_check": None, "tool_calls": None,
+                "elapsed_s": 1.0, "window": {"shape": "calendar", "resolved_range": "r"},
+            })
+        record = {
+            "started_at": "t", "mode": "live", "endpoint": "http://x/v1/mcp/chat", "eval_as_of": "2026-09-01",
+            "graded_as_of": "2026-09-05", "actor": {}, "results": results,
+            "questions_file": {"path": "q.json", "blob_sha": "abc", "commit": "c", "uncommitted": False}, "trace_source": "2 trace(s)",
+            "summary": runner.summarize_results(results, replaying=False),
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            runner.write_markdown(Path(tmp), record)
+            report = (Path(tmp) / "run.md").read_text(encoding="utf-8")
+
+        self.assertIn("Overall verdict: **FAIL**", report)
+        self.assertIn("Window grading:", report)
+        self.assertEqual(record["summary"]["window_counts"]["FAIL"], 1)
+
+    def test_a_live_run_that_could_not_fetch_traces_is_ungraded_not_pass(self):
+        # The 2026-09-05 mid-deploy run: trace endpoint 503, eleven of twelve UNGRADED, no error on
+        # any single question. Every window UNGRADED and errors == 0 would read PASS.
+        results = [self._live("q01", "UNGRADED"), self._live("q03", "UNGRADED")]
+
+        summary = runner.summarize_results(results, replaying=False, graded_from_traces=False)
+
+        self.assertEqual(summary["verdict"], "UNGRADED")
+
+    def test_a_window_fail_still_fails_a_run_that_could_not_fetch_traces(self):
+        # Answer parsing can still catch a FAIL without traces; not being able to read the traces
+        # must not soften one that was read off the answer.
+        results = [self._live("q09", "FAIL"), self._live("q03", "UNGRADED")]
+
+        summary = runner.summarize_results(results, replaying=False, graded_from_traces=False)
+
+        self.assertEqual(summary["verdict"], "FAIL")
 
 
 if __name__ == "__main__":
