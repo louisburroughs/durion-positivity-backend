@@ -1516,8 +1516,9 @@ class RunSummaryTest(unittest.TestCase):
     def test_a_deflection_fails_a_live_run_even_with_a_pass_window(self):
         # #1816: the tools may have resolved the right window and the user still got "I can't
         # compute that directly" — the 2026-09-05 q05. Answered-with-a-deflection is not answered,
-        # and neither is recovered reasoning, blank content, or a bare payload no ladder caught.
-        for source in ("LADDER", "BLANK", "THINKING", "TOOL_PAYLOAD"):
+        # and neither is recovered reasoning, blank content, a bare payload no ladder caught, or
+        # the model's raw channel protocol (#1834).
+        for source in ("LADDER", "BLANK", "THINKING", "TOOL_PAYLOAD", "PROTOCOL_MARKUP"):
             with self.subTest(source=source):
                 results = [self._live("q01", "PASS"), dict(self._live("q05", "PASS"), answer_source=source)]
 

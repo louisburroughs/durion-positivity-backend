@@ -238,9 +238,11 @@ will repeat that line every cycle until an operator lists it in `mcp.discovery.p
 ## Answer Resolution
 
 The model's reply is classified before it reaches the user (`ChatResponseText`): direct `CONTENT`,
-`BLANK` (nothing but a reasoning channel), or `TOOL_PAYLOAD` (a bare JSON object or array — the
-model emitted a tool result instead of composing from it). Non-content replies never reach the user
-as-is. `BLANK` goes to the answer-resolution ladder (deep link / capability hint). `TOOL_PAYLOAD`
+`BLANK` (nothing but a reasoning channel), `TOOL_PAYLOAD` (a bare JSON object or array — the
+model emitted a tool result instead of composing from it), or `PROTOCOL_MARKUP` (the model's raw
+harmony channel protocol, `<|channel|>analysis<|message|>…`, with no `final` channel to recover;
+#1834). Non-content replies never reach the user as-is. `BLANK` and `PROTOCOL_MARKUP` go to the
+answer-resolution ladder (deep link / capability hint). `TOOL_PAYLOAD`
 first gets **one re-render turn** (#1708): the payload is fed back as the previous assistant message
 with an instruction to answer the question from it as prose and never as JSON, with no tools offered,
 so it cannot loop; the instruction says the JSON may be partial or a call's arguments and forbids
@@ -270,7 +272,7 @@ JSON trace per completed/failed chat turn — assembled system prompt, offered t
 tool calls with arguments/results, the final response or error, and the build that answered
 (`serverBuild`, from `MCP_BUILD_ID`, the image tag on alpha; #1806), and how the reply was
 produced (`answerSource`: `CONTENT`, `RE_RENDERED`, `LADDER`, or the raw non-content source —
-`BLANK`, `THINKING`, `TOOL_PAYLOAD`; #1816; simple-chat replies record their raw source) — persisted
+`BLANK`, `THINKING`, `TOOL_PAYLOAD`, `PROTOCOL_MARKUP`; #1816; simple-chat replies record their raw source) — persisted
 with a configurable
 retention window and cleaned up on a schedule. Twelve committed fixtures replay the live analytics gate's
 `in_chat_path_gate` questions against a real model with canned tool responses, so a candidate fix is

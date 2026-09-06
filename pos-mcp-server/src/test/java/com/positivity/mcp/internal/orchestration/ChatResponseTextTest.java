@@ -48,6 +48,57 @@ class ChatResponseTextTest {
         assertThat(ChatResponseText.extract(null)).isEqualTo(ChatResponseText.BLANK_RESPONSE_FALLBACK);
     }
 
+    // ── #1834: raw harmony channel markup is not an answer ──────────────────
+
+    @Test
+    @DisplayName("analysis-channel markup with no final channel is reported as protocol markup with the safe text")
+    void extractDetailed_harmonyAnalysisOnly_isProtocolMarkup() {
+        // s03 turn 1 on the 2026-09-06 sequences run, T2_SIMPLE on gpt-oss:20b, verbatim shape.
+        AssistantMessage message = new AssistantMessage("<|channel|>analysis<|message|>The user asked: "
+                + "\"Who are our ten largest customers by revenue?\" The tool gets revenue by customer but "
+                + "the default window is trailing 12 complete calendar months.");
+
+        ChatResponseText.Extracted extracted = ChatResponseText.extractDetailed(message);
+
+        assertThat(extracted.source()).isEqualTo(ChatResponseText.Source.PROTOCOL_MARKUP);
+        assertThat(extracted.text()).isEqualTo(ChatResponseText.BLANK_RESPONSE_FALLBACK);
+    }
+
+    @Test
+    @DisplayName("a commentary tool-call block in harmony markup is protocol markup, not content")
+    void extractDetailed_harmonyToolCallMarkup_isProtocolMarkup() {
+        // s04 turn 1: analysis, then a tool request in the model's own protocol.
+        AssistantMessage message = new AssistantMessage("<|channel|>analysis<|message|>Let's call getRevenueReport."
+                + "<|end|><|start|>assistant<|channel|>commentary to=functions.getRevenueReport <|constrain|>json"
+                + "<|message|>{\"startDate\":\"2026-08-01\",\"endDate\":\"2026-08-31\"}<|call|>");
+
+        ChatResponseText.Extracted extracted = ChatResponseText.extractDetailed(message);
+
+        assertThat(extracted.source()).isEqualTo(ChatResponseText.Source.PROTOCOL_MARKUP);
+        assertThat(extracted.text()).doesNotContain("<|");
+    }
+
+    @Test
+    @DisplayName("when the markup carries a final channel, that text is the answer")
+    void extractDetailed_harmonyWithFinalChannel_recoversTheAnswer() {
+        AssistantMessage message = new AssistantMessage("<|channel|>analysis<|message|>Sum the two months."
+                + "<|end|><|start|>assistant<|channel|>final<|message|>Revenue for August 2026 was $12,400.<|return|>");
+
+        ChatResponseText.Extracted extracted = ChatResponseText.extractDetailed(message);
+
+        assertThat(extracted.source()).isEqualTo(ChatResponseText.Source.CONTENT);
+        assertThat(extracted.text()).isEqualTo("Revenue for August 2026 was $12,400.");
+    }
+
+    @Test
+    @DisplayName("a final channel that is only a payload is still a payload")
+    void extractDetailed_harmonyFinalPayload_isToolPayload() {
+        AssistantMessage message =
+                new AssistantMessage("<|channel|>final<|message|>{\"startDate\":\"2026-08-01\",\"rows\":[]}");
+
+        assertThat(ChatResponseText.extractDetailed(message).source()).isEqualTo(ChatResponseText.Source.TOOL_PAYLOAD);
+    }
+
     // ── #1708: a bare tool payload is not an answer ──────────────────────────
 
     @Test
