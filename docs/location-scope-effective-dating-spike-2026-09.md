@@ -33,11 +33,12 @@ Three findings changed the shape of the answer:
    issue frames the cost around `PermissionCode` / `GatewayPermissionCatalog` /
    `PermissionBitsetCodec` / `CATALOG_VERSION` lockstep. That cost is only incurred by
    encodings that put location *inside* the permission bitset. Two additive claims —
-   `loc_bits` (which permissions are location-limited, reusing the same bit indexes) and
-   `loc_scope` (the location nodes assigned) — leave the bitset semantics, the catalog and the
-   catalog version untouched. Because a node covers its descendants and is evaluated at check
-   time, a Region manager carries **one** node id whether the region has 3 shops or 300.
-   Worst normal case **+204 bytes**, 1.31% of the header budget.
+   `loc_fin_bits` / `loc_oth_bits` (which permissions are location-limited, and on which
+   hierarchy dimension, reusing the same bit indexes) and `loc_scope` (the assigned nodes) —
+   leave the bitset semantics, the catalog and the catalog version untouched. Because a node
+   covers its descendants and is evaluated at check time, a Region manager carries **one** node
+   id whether the region has 3 shops or 300. Worst case **+348 bytes**, 1.53% of the header
+   budget.
 
 **Recommendation:** retire the pos-security-service scope model; put `location_scope`
 (`ALL` | `LOCATION`) on the role; assign scope to a location node that covers its descendants,
@@ -218,30 +219,43 @@ latter must not silently widen the former:
 | Claim | Value |
 | --- | --- |
 | `perm_bits` | **unchanged** — every permission the caller holds |
-| `loc_bits` | the subset of `perm_bits` granted *only* by `LOCATION`-scoped roles |
-| `loc_scope` | discriminated: `"ALL"`, or the list of assigned node ids; omitted when `loc_bits` is empty |
+| `loc_fin_bits` | permissions location-scoped along the `FINANCIAL` dimension |
+| `loc_oth_bits` | permissions location-scoped along the `OTHER` dimension |
+| `loc_scope` | discriminated: `"ALL"`, or the list of assigned node ids; omitted when both bitsets are empty |
 
-`loc_bits` reuses `PermissionBitsetCodec` and the same bit indexes as `perm_bits`, so it is
-covered by the existing `perm_ver` and **requires no `CATALOG_VERSION` bump**.
+A permission absent from **both** bitsets is global. A permission may appear in both — if one
+role grants it along `FINANCIAL` and another along `OTHER`, either reach satisfies the check.
+Two independent bitsets rather than one bitset plus a flag, because that "both" case is real
+and a single dimension flag per permission cannot express it.
+
+The assigned nodes are **not** partitioned by dimension. `EmployeeLocationAssignment.role` is
+free-text staffing metadata (`"TECHNICIAN"`), not a security role, so a person's assigned nodes
+are the same regardless of which security role is being exercised — only the *traversal* differs.
+
+Both bitsets reuse `PermissionBitsetCodec` and the same bit indexes as `perm_bits`, so they are
+covered by the existing `perm_ver` and **require no `CATALOG_VERSION` bump**.
 
 **Enforcement rule.** At an endpoint checking permission `P` for location `L`:
 
 ```
-if P ∉ loc_bits            → allow (the grant is global)
-else if loc_scope == ALL   → allow
-else if loc_scope ∩ ancestors(L) ≠ ∅  → allow      // L is an assigned node, or beneath one
-else                       → deny
+if P ∉ loc_fin_bits ∪ loc_oth_bits          → allow (the grant is global)
+if loc_scope == ALL                          → allow
+if P ∈ loc_fin_bits
+   and loc_scope ∩ ancestors(L, FINANCIAL) ≠ ∅  → allow
+if P ∈ loc_oth_bits
+   and loc_scope ∩ ancestors(L, OTHER) ≠ ∅      → allow
+                                              → deny
 ```
 
-`ancestors(L)` is the materialised ancestor set of `L` **inclusive of `L` itself**, so a node
-assigned directly matches without a special case.
+`ancestors(L, dim)` is the materialised ancestor set of `L` on that dimension, **inclusive of
+`L` itself**, so a node assigned directly matches without a special case.
 
 **Union semantics.** A permission granted by both a `LOCATION` role and an `ALL` role is
-global — its bit is *not* set in `loc_bits`. The broader grant wins, which is standard RBAC
+global — its bit is set in *neither* bitset. The broader grant wins, which is standard RBAC
 union behaviour and keeps the claim consistent with how `perm_bits` already composes.
 
 **Fail closed.** A caller holding `LOCATION`-scoped roles with no resolvable assigned node gets
-`loc_bits` set and `loc_scope` absent, which denies. Absence must never widen to unrestricted
+scope bits set and `loc_scope` absent, which denies. Absence must never widen to unrestricted
 reach. `V3__backfill_primary_location_assignments.sql` records that employees with several
 active assignments and no primary exist and are "genuinely ambiguous" — that population is
 exactly this case.
@@ -250,7 +264,7 @@ exactly this case.
 APIs against descendants. It confers no administrative right to grant scope to others; scoped
 delegation is a separate concern on the role-assignment surface and is out of scope here.
 
-### The hierarchy is multi-dimensional — scope must name its dimension
+### The hierarchy is multi-dimensional — the dimension is a role property
 
 `pos-location` does not model one tree. `Location` holds `Set<LocationParent> parents`, and
 `LocationParent` is unique on **`(child_id, parent_type)`** — so a location has at most one
@@ -259,18 +273,26 @@ parent *per dimension*, giving several overlapping trees rather than one tree or
 `ParentType` has seven values: `HOME_OFFICE`, `HEADQUARTERS`, `REGION`, `DISTRICT`, `PHYSICAL`,
 `ORGANIZATIONAL`, `FINANCIAL`. Both traversal APIs take one —
 `LocationServiceImpl.getAllChildrenDto(parentId, parentType)` and
-`getDescendantsDto(locationId, parentType)` — and `getDescendantsDto` **defaults to
-`PHYSICAL`** when none is supplied.
+`getDescendantsDto(locationId, parentType)` — and `getDescendantsDto` defaults to `PHYSICAL`.
 
-**"Covers descendants" is therefore ambiguous until a dimension is named**, and the default is
-almost certainly the wrong one for authorization. Rolling up a `FINANCIAL` parent would grant
-reach along a reporting line; `PHYSICAL` would grant it along a building's geography. Neither
-is what "a Region manager can act on their shops" means.
+**Decision: the dimension is a property of the role**, alongside `location_scope`:
 
-This is an open decision (§5) and it must be settled before enforcement is written, because
-choosing wrongly silently over- or under-grants at all 77 endpoints. Traversing *all* seven
-dimensions is not a safe default — it is the union of every rollup the business has, which is
-the broadest possible reading.
+| `roles.location_hierarchy` | Traverses | Roles |
+| --- | --- | --- |
+| `FINANCIAL` | the `FINANCIAL` parent chain | accounting and general-manager roles — `ACCOUNT_MANAGER`, `ACCOUNTANT`, `CONTROLLER`, `GENERAL_MANAGER` |
+| `OTHER` | the union of the six non-financial types (`HOME_OFFICE`, `HEADQUARTERS`, `REGION`, `DISTRICT`, `PHYSICAL`, `ORGANIZATIONAL`) | every other role |
+
+A financial rollup and an operational rollup are genuinely different questions — who owns the
+numbers for a site is not who runs it — so the two must not be conflated, and traversing all
+seven types indiscriminately would be the union of every rollup the business has.
+
+Two cautions for seeding:
+
+- **`INVENTORY_CONTROLLER` is not an accounting role.** Any name-based sweep for "CONTROLLER"
+  will pick it up incorrectly; it belongs to `OTHER`.
+- **`OTHER` branches.** It is the union of six dimensions, so a location may have up to six
+  distinct non-financial parents and the ancestor closure is a DAG, not a chain. `FINANCIAL`
+  alone is a chain. Materialisation (#1878) must handle both shapes.
 
 There is also no cycle guard at the `Location` level. `StorageLocationServiceImpl` has
 `wouldCreateCycle` / `existsCycleForParent`; `LocationServiceImpl` has no equivalent, so
@@ -302,25 +324,27 @@ full bitset is 64 bytes → **86** Base64URL characters. Baseline access token �
 
 Measured with `scripts/measure-scope-claim-size.py`, which reproduces
 `PermissionBitsetCodec.encode` exactly and builds real JWS compact serialisations with the
-claim set from `JwtServiceImpl.generateTokenPair`. One assigned node:
+claim set from `JwtServiceImpl.generateTokenPair`. One assigned node; *realistic* is
+near-disjoint dimensions (~40% of permissions scoped along `OTHER`, ~10% along `FINANCIAL`),
+*worst case* is every permission scoped along both at once:
 
-| Permission profile | unscoped | half scoped | all scoped | worst delta |
+| Permission profile | unscoped | realistic | worst case | worst delta |
 | --- | ---: | ---: | ---: | ---: |
-| DISPATCHER-like (11) | 643 | 825 | 836 | +193 |
-| SHOP_MANAGER-like (17) | 648 | 837 | 847 | +199 |
-| CONTROLLER-like (52) | 651 | 851 | 852 | +201 |
-| ADMIN-like (387) | 653 | 857 | 857 | +204 |
-| whole catalog (510) | 653 | 857 | 857 | +204 |
+| DISPATCHER-like (11) | 643 | 849 | 969 | +326 |
+| SHOP_MANAGER-like (17) | 648 | 865 | 985 | +337 |
+| CONTROLLER-like (52) | 651 | 972 | 993 | +342 |
+| ADMIN-like (387) | 653 | 999 | 1 001 | +348 |
+| whole catalog (510) | 653 | 999 | 1 001 | +348 |
 
-Cost of additional assigned nodes (ADMIN-like, all scoped): 1 → 857 B, 2 → 909 B, 4 → 1 013 B,
-8 → 1 221 B, 16 → 1 637 B.
+Cost of additional assigned nodes (ADMIN-like, worst case): 1 → 1 001 B, 2 → 1 053 B,
+4 → 1 157 B, 8 → 1 365 B, 16 → 1 781 B.
 
-**Worst normal case 857 B against a 65 514 B header budget — 1.31%.** `loc_bits` is bounded by
-the catalog at 86 characters; `loc_scope` grows only with assigned-node count, which hierarchy
-keeps at 1–2.
+**Worst case 1 001 B against a 65 514 B header budget — 1.53%.** Each bitset is bounded by the
+catalog at 86 characters; `loc_scope` grows only with assigned-node count, which hierarchy keeps
+at 1–2.
 
 A cap of ~8 assigned nodes is worth having as an **assertion that the hierarchy was modelled
-correctly**, not as a size limit — 16 nodes still costs under 1.5 KB. Exceeding it should
+correctly**, not as a size limit — 16 nodes still costs under 1.8 KB. Exceeding it should
 surface as a configuration error, not degrade to a runtime lookup.
 
 ### Why locations are not encoded as a bitset
@@ -431,9 +455,9 @@ Recommended, in preference order — all three, they compose:
 4. **Scope assigned at a node covers that node and every descendant**, evaluated at check time
    against a materialised ancestor set replicated onto `ExtLocationReplica` — never expanded
    into the token. This is what supplies the middle management tier, and it is what keeps the
-   claim small. **Which `ParentType` dimension(s) authorization traverses is an open decision**
-   and blocks enforcement — see §3 and #1878.
-5. **Carry two additive claims**, `loc_bits` and `loc_scope` (§3). No `CATALOG_VERSION` bump,
+   claim small. **The dimension traversed is a role property**: `FINANCIAL` for accounting and
+   general-manager roles, `OTHER` (the six non-financial `ParentType`s) for everything else.
+5. **Carry three additive claims**, `loc_fin_bits`, `loc_oth_bits` and `loc_scope` (§3). No `CATALOG_VERSION` bump,
    no change to `perm_bits` semantics. `loc_scope` is discriminated so a denser encoding can be
    adopted later without a version bump.
 6. **Enforce in the owning service** at the 77 endpoints, starting with the demand cases:
@@ -458,7 +482,9 @@ Recommended, in preference order — all three, they compose:
   fit one subtree. Whether such cases should instead get a dedicated group node — keeping
   assignment at one node — is a modelling question for #1876. Note the multi-dimensional model
   already offers a third option: a second `LocationParent` row on a different `parent_type`.
-- **Which `ParentType` dimension(s) authorization traverses.** Blocks enforcement; see §3.
+- **Per-role dimension seeding.** Every seeded role needs a recorded `location_hierarchy` value.
+  `INVENTORY_CONTROLLER` is an inventory role, not an accounting one, and must not be swept into
+  `FINANCIAL` by a name match on "CONTROLLER".
 
 ---
 

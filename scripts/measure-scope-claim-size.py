@@ -15,9 +15,12 @@ what pos-security-service actually issues:
 
 The adopted claim (ADR-0061) is two claims:
 
-  * ``loc_bits`` -- the subset of ``perm_bits`` granted only by LOCATION-scoped
-    roles. Same bit indexes, same codec, same ``perm_ver``, so no catalog
-    version bump.
+  * ``loc_fin_bits`` / ``loc_oth_bits`` -- the permissions that are location
+    scoped, split by which hierarchy dimension their granting role traverses:
+    FINANCIAL (accounting and general-manager roles) or OTHER (every other
+    role, traversing the six non-financial ParentType dimensions). Same bit
+    indexes as perm_bits, same codec, same ``perm_ver``, so no catalog version
+    bump. A permission absent from BOTH is global.
   * ``loc_scope`` -- discriminated: ``"ALL"``, or the location nodes the caller
     is assigned to. A node may be a shop, or a District/Region/HQ node, in which
     case it covers every descendant (evaluated at check time against the
@@ -109,29 +112,35 @@ PERM_PROFILES = [
 
 
 def adopted():
-    """ADR-0061 section 2: loc_bits (scoped permission subset) + loc_scope (nodes).
+    """ADR-0061 section 2: two dimension bitsets + the assigned nodes.
 
     Three cases per profile, all with a single assigned node (the expected shape
     once hierarchy carries the middle tier):
-      unscoped   -- every role is ALL-scoped; neither claim is emitted
-      half       -- a realistic mix: half the permissions come from LOCATION roles
-      all scoped -- every permission is location-limited (worst case for loc_bits)
+      unscoped   -- every role is ALL-scoped; no scope claims emitted
+      realistic  -- near-disjoint dimensions: ~40% of permissions scoped along
+                    OTHER, ~10% along FINANCIAL (accounting permissions)
+      worst case -- every permission scoped along BOTH dimensions at once
     """
-    print("=== Adopted encoding: loc_bits + loc_scope ===\n")
-    print(f"{'permission profile':<22}{'unscoped':>10}{'half scoped':>13}"
-          f"{'all scoped':>12}{'worst delta':>13}")
+    print("=== Adopted: loc_fin_bits + loc_oth_bits + loc_scope ===\n")
+    print(f"{'permission profile':<22}{'unscoped':>10}{'realistic':>13}"
+          f"{'worst case':>12}{'worst delta':>13}")
     worst = 0
     for name, n in PERM_PROFILES:
         base = base_payload(n)
         unscoped = jws_size(base)
 
+        # Realistic: the two dimensions are near-disjoint (accounting permissions
+        # vs operational ones), so each bitset is sparse.
         half = dict(base)
-        half["loc_bits"] = perm_bits(max(1, n // 2))
+        half["loc_oth_bits"] = perm_bits(max(1, int(n * 0.4)))
+        half["loc_fin_bits"] = perm_bits(max(1, int(n * 0.1)))
         half["loc_scope"] = [str(uuid.uuid4())]
         s_half = jws_size(half)
 
+        # Worst case: every permission scoped along BOTH dimensions.
         full = dict(base)
-        full["loc_bits"] = perm_bits(n)
+        full["loc_oth_bits"] = perm_bits(n)
+        full["loc_fin_bits"] = perm_bits(n)
         full["loc_scope"] = [str(uuid.uuid4())]
         s_full = jws_size(full)
 
@@ -141,13 +150,14 @@ def adopted():
     budget = MAX_HTTP_HEADER_SIZE - BEARER_OVERHEAD
     print(f"\nWorst case {worst} B against a {budget} B header budget "
           f"({worst / budget:.2%}).")
-    print("loc_bits is bounded by the catalog (86 chars). loc_scope grows only with")
+    print("Each bitset is bounded by the catalog (86 chars). loc_scope grows only with")
     print("the number of ASSIGNED NODES, which hierarchy keeps at 1-2 in the normal")
     print("case -- a Region manager holds the Region node, not its shops.\n")
 
     print("Cost of additional assigned nodes (ADMIN-like profile, all scoped):")
     b = base_payload(387)
-    b["loc_bits"] = perm_bits(387)
+    b["loc_oth_bits"] = perm_bits(387)
+    b["loc_fin_bits"] = perm_bits(387)
     for nodes in (1, 2, 4, 8, 16):
         p = dict(b)
         p["loc_scope"] = [str(uuid.uuid4()) for _ in range(nodes)]
