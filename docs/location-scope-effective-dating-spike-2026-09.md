@@ -270,8 +270,9 @@ delegation is a separate concern on the role-assignment surface and is out of sc
 `LocationParent` is unique on **`(child_id, parent_type)`** — so a location has at most one
 parent *per dimension*, giving several overlapping trees rather than one tree or a free DAG.
 
-`ParentType` has seven values: `HOME_OFFICE`, `HEADQUARTERS`, `REGION`, `DISTRICT`, `PHYSICAL`,
-`ORGANIZATIONAL`, `FINANCIAL`. Both traversal APIs take one —
+`ParentType` has eight values: `HOME_OFFICE`, `HEADQUARTERS`, `REGION`, `DISTRICT`, `PHYSICAL`,
+`ORGANIZATIONAL`, `FINANCIAL`, `SHIPPING`. (An earlier revision of this document said seven; the
+enum's last constant has no trailing comma and was missed by the grep.) Both traversal APIs take one —
 `LocationServiceImpl.getAllChildrenDto(parentId, parentType)` and
 `getDescendantsDto(locationId, parentType)` — and `getDescendantsDto` defaults to `PHYSICAL`.
 
@@ -280,23 +281,28 @@ parent *per dimension*, giving several overlapping trees rather than one tree or
 | `roles.location_hierarchy` | Traverses | Roles |
 | --- | --- | --- |
 | `FINANCIAL` | the `FINANCIAL` parent chain | accounting and general-manager roles — `ACCOUNT_MANAGER`, `ACCOUNTANT`, `CONTROLLER`, `GENERAL_MANAGER` |
-| `OTHER` | the union of the six non-financial types (`HOME_OFFICE`, `HEADQUARTERS`, `REGION`, `DISTRICT`, `PHYSICAL`, `ORGANIZATIONAL`) | every other role |
+| `OTHER` | the union of the seven non-financial types (`HOME_OFFICE`, `HEADQUARTERS`, `REGION`, `DISTRICT`, `PHYSICAL`, `ORGANIZATIONAL`, `SHIPPING`) | every other role |
 
 A financial rollup and an operational rollup are genuinely different questions — who owns the
 numbers for a site is not who runs it — so the two must not be conflated, and traversing all
-seven types indiscriminately would be the union of every rollup the business has.
+eight types indiscriminately would be the union of every rollup the business has.
 
 Two cautions for seeding:
 
 - **`INVENTORY_CONTROLLER` is not an accounting role.** Any name-based sweep for "CONTROLLER"
   will pick it up incorrectly; it belongs to `OTHER`.
-- **`OTHER` branches.** It is the union of six dimensions, so a location may have up to six
+- **`OTHER` branches.** It is the union of seven dimensions, so a location may have up to seven
   distinct non-financial parents and the ancestor closure is a DAG, not a chain. `FINANCIAL`
   alone is a chain. Materialisation (#1878) must handle both shapes.
 
-There is also no cycle guard at the `Location` level. `StorageLocationServiceImpl` has
-`wouldCreateCycle` / `existsCycleForParent`; `LocationServiceImpl` has no equivalent, so
-ancestor materialisation cannot currently assume termination.
+**Correction on the cycle guard.** An earlier revision said `LocationServiceImpl` had no cycle
+guard. It did — a depth-1 inverse check plus a `WITH RECURSIVE` `isDescendant` native query —
+but it ignored `parent_type`, which made it *stricter* than this model: it rejected A→B on
+`PHYSICAL` with B→A on `FINANCIAL`, a legal DAG. It also threw `IllegalStateException`, which
+had no handler and surfaced as a 500. The gap was dimension conflation, not absence. #1878
+replaced it with a per-dimension walk rejecting 409 `CYCLE_DETECTED`, the same status and reason
+`StorageLocationServiceImpl.wouldCreateCycle` uses. `LocationParent` also carries a second unique
+constraint on `(child_id, parent_id)`, so the same pair can never appear on two dimensions.
 
 ### Hierarchy is evaluated at check time, not expanded at issuance
 
@@ -458,7 +464,7 @@ Recommended, in preference order — all three, they compose:
    against a materialised ancestor set replicated onto `ExtLocationReplica` — never expanded
    into the token. This is what supplies the middle management tier, and it is what keeps the
    claim small. **The dimension traversed is a role property**: `FINANCIAL` for accounting and
-   general-manager roles, `OTHER` (the six non-financial `ParentType`s) for everything else.
+   general-manager roles, `OTHER` (the seven non-financial `ParentType`s) for everything else.
 5. **Carry three additive claims**, `loc_fin_bits`, `loc_oth_bits` and `loc_scope` (§3). No `CATALOG_VERSION` bump,
    no change to `perm_bits` semantics. `loc_scope` is discriminated so a denser encoding can be
    adopted later without a version bump.
