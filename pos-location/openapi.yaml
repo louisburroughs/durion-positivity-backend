@@ -481,13 +481,15 @@ paths:
 
         Use this tool when building the location hierarchy; do not use listLocationChildren or listLocationDescendants, which only read the hierarchy.
 
-        Preconditions: both locations must exist, the child must not already have a parent of that type, the pair must not already be linked in either direction, and the parent must not be a descendant of the child because cycles are forbidden by ADR-0016.
+        Preconditions: both locations must exist, the child must not already have a parent of that type, the pair must not already be linked in either direction, and the parent must not be a descendant of the child on the requested parentType because cycles are forbidden by ADR-0016. Cycle detection is per parentType: only edges of the requested parentType are walked, so an edge that would close a cycle on PHYSICAL is rejected while the same edge on FINANCIAL or REGION is legal.
 
         Required inputs: childId and parentId (UUIDs) as path parameters and a parentType query parameter, one of HOME_OFFICE, HEADQUARTERS, REGION, DISTRICT, PHYSICAL, ORGANIZATIONAL, FINANCIAL or SHIPPING.
 
         Emits a LOCATION_PARENT_ADD event and republishes the child''s location fact, which carries the new edge to replica consumers.
 
-        Returns 400 when parentType is not a recognized value; self-parenting, duplicate, inverse or circular relationships are rejected before the edge is written.
+        Returns 400 when parentType is not a recognized value; duplicate and inverse relationships are rejected before the edge is written. Returns 409 CYCLE_DETECTED when childId equals parentId or when the edge would close a cycle on the requested parentType.
+
+        Error responses carry an RFC 9457 ProblemDetail body (application/problem+json) whose detail holds the machine-readable code and whose correlationId matches the X-Correlation-Id response header.
 
         '
       operationId: addLocationParent
@@ -523,10 +525,26 @@ paths:
           description: Parent relationship added successfully.
         '400':
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/LocationParentResponseDTO'
+                $ref: '#/components/schemas/ProblemDetail'
           description: Invalid parentType value.
+        '409':
+          content:
+            application/problem+json:
+              examples:
+                cycleDetected:
+                  description: cycleDetected
+                  value:
+                    correlationId: 019507b4-1f3a-7000-8e04-5c9d3a4f6e12
+                    detail: CYCLE_DETECTED
+                    instance: /v1/locations/018e1c9f-6b5a-7890-abcd-1234567890ab/parents/018e1c9f-0000-7890-abcd-1234567890ab
+                    status: 409
+                    title: Conflict
+                    type: about:blank
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+          description: 'CYCLE_DETECTED: childId equals parentId, or the edge would close a cycle on the requested parentType. Cycle detection is per parentType, so the same edge on another parentType is legal.'
       security:
       - bearerAuth:
         - location:write
@@ -3804,6 +3822,24 @@ components:
           type: string
       required:
       - postalCode
+      type: object
+    ProblemDetail:
+      properties:
+        detail:
+          type: string
+        instance:
+          format: uri
+          type: string
+        properties:
+          type: object
+        status:
+          format: int32
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
       type: object
     ServiceAreaRequest:
       description: Request payload for creating or updating a service area

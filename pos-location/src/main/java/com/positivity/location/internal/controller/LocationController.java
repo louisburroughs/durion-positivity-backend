@@ -16,6 +16,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,6 +31,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -65,6 +67,15 @@ public class LocationController {
              "operatingHours":[{"dayOfWeek":"MONDAY","openTime":"08:00","closeTime":"17:00"}],
              "checkInBufferMinutes":15,
              "cleanupBufferMinutes":10}
+            """;
+
+    private static final String CYCLE_DETECTED_EXAMPLE = """
+            {"type":"about:blank",
+             "title":"Conflict",
+             "status":409,
+             "detail":"CYCLE_DETECTED",
+             "instance":"/v1/locations/018e1c9f-6b5a-7890-abcd-1234567890ab/parents/018e1c9f-0000-7890-abcd-1234567890ab",
+             "correlationId":"019507b4-1f3a-7000-8e04-5c9d3a4f6e12"}
             """;
 
     private final LocationService locationService;
@@ -390,17 +401,40 @@ public class LocationController {
                     listLocationDescendants, which only read the hierarchy.
                     Preconditions: both locations must exist, the child must not already have a parent of that \
                     type, the pair must not already be linked in either direction, and the parent must not be a \
-                    descendant of the child because cycles are forbidden by ADR-0016.
+                    descendant of the child on the requested parentType because cycles are forbidden by ADR-0016. \
+                    Cycle detection is per parentType: only edges of the requested parentType are walked, so an \
+                    edge that would close a cycle on PHYSICAL is rejected while the same edge on FINANCIAL or \
+                    REGION is legal.
                     Required inputs: childId and parentId (UUIDs) as path parameters and a parentType query \
                     parameter, one of HOME_OFFICE, HEADQUARTERS, REGION, DISTRICT, PHYSICAL, ORGANIZATIONAL, \
                     FINANCIAL or SHIPPING.
                     Emits a LOCATION_PARENT_ADD event and republishes the child's location fact, which carries \
                     the new edge to replica consumers.
-                    Returns 400 when parentType is not a recognized value; self-parenting, duplicate, inverse or \
-                    circular relationships are rejected before the edge is written.
+                    Returns 400 when parentType is not a recognized value; duplicate and inverse relationships \
+                    are rejected before the edge is written. Returns 409 CYCLE_DETECTED when childId equals \
+                    parentId or when the edge would close a cycle on the requested parentType.
+                    Error responses carry an RFC 9457 ProblemDetail body (application/problem+json) whose \
+                    detail holds the machine-readable code and whose correlationId matches the \
+                    X-Correlation-Id response header.
                     """)
     @ApiResponse(responseCode = "200", description = "Parent relationship added successfully.")
-    @ApiResponse(responseCode = "400", description = "Invalid parentType value.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid parentType value.",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "CYCLE_DETECTED: childId equals parentId, or the edge would close a cycle on the requested"
+                    + " parentType. Cycle detection is per parentType, so the same edge on another parentType is"
+                    + " legal.",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class),
+                            examples = @ExampleObject(name = "cycleDetected", value = CYCLE_DETECTED_EXAMPLE)))
     @EmitEvent(id = "LOCATION_PARENT_ADD", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @SecurityRequirement(
