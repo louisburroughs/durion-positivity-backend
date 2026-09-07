@@ -13,8 +13,6 @@ import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
-import com.positivity.securityservice.internal.enums.ScopeType;
-import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
@@ -117,28 +115,21 @@ class RoleManagementServiceImplTest {
         RoleAssignment assignment = new RoleAssignment();
         assignment.setUser(user);
         assignment.setRole(role);
-        assignment.setScopeType(ScopeType.GLOBAL);
         assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
         RoleAssignmentRequest request = new RoleAssignmentRequest(
-                userId,
-                roleId,
-                ScopeType.GLOBAL,
-                Set.of(),
-                LocalDateTime.now(TEST_CLOCK).minusHours(1),
-                null);
+                userId, roleId, LocalDateTime.now(TEST_CLOCK).minusHours(1), null);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
-        when(roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(userId, roleId, ScopeType.GLOBAL))
-                .thenReturn(List.of());
+        when(roleAssignmentRepository.findByUser_IdAndRole_Id(userId, roleId)).thenReturn(List.of());
         when(roleAssignmentRepository.save(any(RoleAssignment.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of(assignment));
         when(roleAssignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
 
         var createdAssignment = roleManagementService.createRoleAssignment(request);
-        boolean hasPermission = roleManagementService.userHasPermission(userId, "security:role:grant", "loc-1");
+        boolean hasPermission = roleManagementService.userHasPermission(userId, "security:role:grant");
         roleManagementService.revokeRoleAssignment(
                 assignmentId, LocalDateTime.now(TEST_CLOCK).plusDays(1));
 
@@ -147,17 +138,7 @@ class RoleManagementServiceImplTest {
     }
 
     @Test
-    void validationBranches_throwOnInvalidScopeAndMissingRole() {
-        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-
-        RoleAssignmentRequest invalidLocationRequest = new RoleAssignmentRequest(
-                userId, roleId, ScopeType.LOCATION, Set.of(), LocalDateTime.now(TEST_CLOCK), null);
-
-        assertThatThrownBy(() -> roleManagementService.createRoleAssignment(invalidLocationRequest))
-                .isInstanceOf(SecurityValidationException.class)
-                .hasMessageContaining("LOCATION scope requires at least one location ID");
-
+    void getRoleByName_missingRole_throws() {
         when(roleRepository.findByName("MISSING")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> roleManagementService.getRoleByName("MISSING"))
                 .isInstanceOf(RuntimeException.class)

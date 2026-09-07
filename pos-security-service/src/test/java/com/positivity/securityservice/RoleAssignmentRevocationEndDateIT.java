@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
-import com.positivity.securityservice.internal.enums.ScopeType;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -73,7 +72,6 @@ public class RoleAssignmentRevocationEndDateIT extends BaseIntegrationTest {
         testAssignment = new RoleAssignment();
         testAssignment.setUser(testUser);
         testAssignment.setRole(testRole);
-        testAssignment.setScopeType(ScopeType.GLOBAL);
         testAssignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
         testAssignment.setCreatedBy(TEST_USER);
         testAssignment = roleAssignmentRepository.save(testAssignment);

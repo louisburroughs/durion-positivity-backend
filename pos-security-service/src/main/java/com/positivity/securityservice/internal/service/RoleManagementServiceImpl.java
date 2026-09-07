@@ -14,12 +14,10 @@ import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
-import com.positivity.securityservice.internal.enums.ScopeType;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
-import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
@@ -43,8 +41,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service for managing roles, role assignments, and role-permission mappings.
- * Implements the foundational RBAC framework with scope support.
+ * Service for managing roles, effective-dated role assignments, and role-permission mappings.
  */
 @Service
 @RequiredArgsConstructor
@@ -177,18 +174,6 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     @Override
     @Transactional
     public RoleAssignmentDto createRoleAssignment(RoleAssignmentRequest request) {
-        if (request.getScopeType() == ScopeType.LOCATION
-                && (request.getScopeLocationIds() == null
-                        || request.getScopeLocationIds().isEmpty())) {
-            throw new SecurityValidationException("LOCATION scope requires at least one location ID");
-        }
-
-        if (request.getScopeType() == ScopeType.GLOBAL
-                && request.getScopeLocationIds() != null
-                && !request.getScopeLocationIds().isEmpty()) {
-            throw new SecurityValidationException("GLOBAL scope cannot have location IDs");
-        }
-
         User user = userRepository
                 .findById(request.getUserId())
                 .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_PREFIX + request.getUserId()));
@@ -201,53 +186,34 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 request.getEffectiveStartDate() != null ? request.getEffectiveStartDate() : LocalDateTime.now(clock);
         LocalDateTime requestEnd = request.getEffectiveEndDate();
 
-        validateNoOverlappingAssignment(user.getId(), role.getId(), request, requestStart, requestEnd);
+        validateNoOverlappingAssignment(user.getId(), role.getId(), requestStart, requestEnd);
 
         RoleAssignment assignment = new RoleAssignment();
         assignment.setUser(user);
         assignment.setRole(role);
-        assignment.setScopeType(request.getScopeType());
-        assignment.setScopeLocationIds(
-                request.getScopeLocationIds() != null ? request.getScopeLocationIds() : new HashSet<>());
         assignment.setEffectiveStartDate(requestStart);
         assignment.setEffectiveEndDate(request.getEffectiveEndDate());
         assignment.setCreatedBy(getCurrentUsername());
         assignment.setCreatedAt(Instant.now(clock));
 
         log.info(
-                "Created role assignment: user={}, role={}, scope={}, locations={}",
+                "Created role assignment: user={}, role={}, effectiveStart={}, effectiveEnd={}",
                 user.getUsername(),
                 role.getName(),
-                assignment.getScopeType(),
-                assignment.getScopeLocationIds());
+                assignment.getEffectiveStartDate(),
+                assignment.getEffectiveEndDate());
 
         return toRoleAssignmentDto(roleAssignmentRepository.save(assignment));
     }
 
     private void validateNoOverlappingAssignment(
-            UUID userId,
-            UUID roleId,
-            RoleAssignmentRequest request,
-            LocalDateTime requestStart,
-            LocalDateTime requestEnd) {
+            UUID userId, UUID roleId, LocalDateTime requestStart, LocalDateTime requestEnd) {
 
-        List<RoleAssignment> existingAssignments =
-                roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(userId, roleId, request.getScopeType());
+        List<RoleAssignment> existingAssignments = roleAssignmentRepository.findByUser_IdAndRole_Id(userId, roleId);
 
         for (RoleAssignment existing : existingAssignments) {
-            boolean sameRoleAndScope =
-                    existing.getRole().getId().equals(roleId) && existing.getScopeType() == request.getScopeType();
-
-            if (sameRoleAndScope && hasDateOverlap(existing, requestStart, requestEnd)) {
-                if (request.getScopeType() == ScopeType.LOCATION) {
-                    if (hasLocationOverlap(existing.getScopeLocationIds(), request.getScopeLocationIds())) {
-                        throw new IllegalStateException(
-                                "Overlapping role assignment exists for same role, scope, and location(s)");
-                    }
-                } else {
-                    throw new IllegalStateException(
-                            "Overlapping role assignment exists for same role and GLOBAL scope");
-                }
+            if (hasDateOverlap(existing, requestStart, requestEnd)) {
+                throw new IllegalStateException("Overlapping role assignment exists for same user and role");
             }
         }
     }
@@ -258,14 +224,6 @@ public class RoleManagementServiceImpl implements RoleManagementService {
 
         return (existingEnd == null || !requestStart.isAfter(existingEnd))
                 && (requestEnd == null || !existingStart.isAfter(requestEnd));
-    }
-
-    private boolean hasLocationOverlap(Set<String> existingLocationIds, Set<String> requestLocationIds) {
-        Set<String> existingLocs = new HashSet<>(existingLocationIds);
-        Set<String> requestLocs = requestLocationIds != null ? new HashSet<>(requestLocationIds) : new HashSet<>();
-
-        existingLocs.retainAll(requestLocs);
-        return !existingLocs.isEmpty();
     }
 
     /**
@@ -288,8 +246,12 @@ public class RoleManagementServiceImpl implements RoleManagementService {
 
     /**
      * Get all permissions for a user (from all their effective role assignments).
+     *
+     * <p>Read-only transaction: {@code Role.permissions} is lazy, and this read must not depend on
+     * an open-in-view session being present.
      */
     @Override
+    @Transactional(readOnly = true)
     public Set<PermissionDto> getUserPermissions(UUID userId) {
         List<RoleAssignment> assignments = getAssignmentEntitiesForUser(userId, false);
         Set<PermissionDto> allPermissions = new HashSet<>();
@@ -304,17 +266,18 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     }
 
     /**
-     * Check if a user has a specific permission, considering scope.
+     * Check whether a user holds a permission through a currently effective role assignment.
+     *
+     * <p>Effective dating is the only filter: {@code getAssignmentEntitiesForUser(userId, false)}
+     * resolves through {@code findEffectiveAssignmentsByUser}, so assignments outside their
+     * window are never consulted. Location scope is not evaluated here (ADR-0061 §1).
      */
     @Override
-    public boolean userHasPermission(UUID userId, String permissionName, String locationId) {
+    @Transactional(readOnly = true)
+    public boolean userHasPermission(UUID userId, String permissionName) {
         List<RoleAssignment> assignments = getAssignmentEntitiesForUser(userId, false);
 
         for (RoleAssignment assignment : assignments) {
-            if (!assignment.coversLocation(locationId)) {
-                continue;
-            }
-
             for (Permission permission : assignment.getRole().getPermissions()) {
                 if (permission.getName().equals(permissionName)) {
                     return true;
@@ -431,7 +394,6 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         RoleAssignment assignment = new RoleAssignment();
         assignment.setUser(user);
         assignment.setRole(role);
-        assignment.setScopeType(ScopeType.GLOBAL);
         assignment.setEffectiveStartDate(LocalDateTime.now(clock));
         assignment.setCreatedBy(getCurrentUsername());
         assignment.setCreatedAt(Instant.now(clock));
@@ -532,8 +494,6 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 .id(assignment.getId())
                 .userId(assignment.getUser().getId())
                 .roleId(assignment.getRole().getId())
-                .scopeType(assignment.getScopeType())
-                .scopeLocationIds(assignment.getScopeLocationIds())
                 .effectiveStartDate(assignment.getEffectiveStartDate())
                 .effectiveEndDate(assignment.getEffectiveEndDate())
                 .revokedAt(assignment.getRevokedAt())

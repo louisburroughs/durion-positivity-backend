@@ -3,7 +3,6 @@ package com.positivity.securityservice.internal.repository;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
-import com.positivity.securityservice.internal.enums.ScopeType;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -18,7 +17,7 @@ public interface RoleAssignmentRepository extends JpaRepository<RoleAssignment, 
     @EntityGraph(attributePaths = {"user", "role"})
     List<RoleAssignment> findAllByUser_Id(UUID userId);
 
-    List<RoleAssignment> findByUser_IdAndRole_IdAndScopeType(UUID userId, UUID roleId, ScopeType scopeType);
+    List<RoleAssignment> findByUser_IdAndRole_Id(UUID userId, UUID roleId);
 
     List<RoleAssignment> findByRole(Role role);
 

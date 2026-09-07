@@ -408,7 +408,7 @@ Do not confuse the three tables:
 | --- | --- |
 | `role_permissions` | **role → permission** grants — what a role can do |
 | `user_roles` | **user → role**, unscoped — feeds token issuance |
-| `role_assignments` | **user → role** with scope type, location scope and effective dating — read by `check-permission`, but does **not** narrow a JWT |
+| `role_assignments` | **user → role**, effective-dated (`effective_start_date`, `effective_end_date`, `revoked_at`) — feeds `getUserPermissions`; carries no location scope (that is `roles.location_scope` plus the pos-people staffing assignment, ADR-0061 §1) and does **not** narrow a JWT |
 
 ### Provisioning Role Grants
 
@@ -483,7 +483,11 @@ Authorization: Bearer {JWT_TOKEN}
 
 ### Assigning Roles to Users
 
-**Global Scope:**
+Assignments are effective-dated only. Location reach is not set per assignment: it is the
+role's `location_scope` (ADR-0061 §1) resolved against the user's pos-people staffing
+assignment when the token is issued.
+
+**Open-ended:**
 
 ```bash
 POST /api/roles/assignments
@@ -493,12 +497,11 @@ Authorization: Bearer {JWT_TOKEN}
 {
   "userId": 123,
   "roleId": 1,
-  "scopeType": "GLOBAL",
   "effectiveStartDate": "2026-01-13"
 }
 ```
 
-**Location-Scoped:**
+**Bounded window:**
 
 ```bash
 POST /api/roles/assignments
@@ -508,8 +511,6 @@ Authorization: Bearer {JWT_TOKEN}
 {
   "userId": 123,
   "roleId": 2,
-  "scopeType": "LOCATION",
-  "scopeLocationIds": ["STORE-001", "STORE-002"],
   "effectiveStartDate": "2026-01-13",
   "effectiveEndDate": "2026-12-31"
 }
@@ -517,10 +518,10 @@ Authorization: Bearer {JWT_TOKEN}
 
 ### Checking Permissions
 
-```bash
-# Check if user has permission
-GET /api/roles/check-permission?userId=123&permission=pos:order:create&locationId=STORE-001
+There is no per-user `check-permission` probe: location-scoped decisions are made by the owning
+service from the token's `loc_fin_bits` / `loc_oth_bits` / `loc_scope` claims (ADR-0061 §3).
 
+```bash
 # Get all user permissions
 GET /api/roles/permissions/user/123
 

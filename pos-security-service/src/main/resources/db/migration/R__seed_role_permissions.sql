@@ -102,7 +102,7 @@
 --   INVENTORY_LEAD creates and views adjustment requests;
 --   INVENTORY_MANAGER and INVENTORY_CONTROLLER additionally approve them. The two
 --   approver roles hold an identical permission set on purpose — location versus
---   global reach is a property of role_assignments.scope_type, not of
+--   global reach is a property of roles.location_scope (V37, ADR-0061 §1), not of
 --   role_permissions, so it cannot be expressed by granting different rows here.
 --   INVENTORY_CONTROLLER alone also holds inventory:adjustment:override, the
 --   negative-stock escape hatch ScrapServiceImpl checks, because only a
@@ -171,7 +171,7 @@
 --     (strict-superset rule). No new MARKETING role.
 --   - Supplier (all 12 codes) -> the inventory-control pair INVENTORY_MANAGER
 --     and INVENTORY_CONTROLLER, which hold identical sets by design (#1373;
---     location vs. global reach is a role_assignments.scope_type property,
+--     location vs. global reach is a roles.location_scope property,
 --     not a role_permissions difference), plus ADMIN. INVENTORY_LEAD also
 --     holds the read-only pair (supplier:stock:inquire, supplier:profile:read),
 --     granted with the accepted §2 matrix (see the bullet below).

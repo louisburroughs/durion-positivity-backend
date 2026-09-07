@@ -798,8 +798,8 @@ VALUES ('e7b4a283-5c91-4d6e-8f0b-2a3c1d9e7f85'::uuid, 'bulkImport:status:read', 
 ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, bit_index = COALESCE(EXCLUDED.bit_index, permissions.bit_index);
 
 -- Role assignments
-INSERT INTO role_assignments (id, user_id, role_id, scope_type, effective_start_date, created_at, created_by)
-VALUES ('4f0e5eea-bf75-2da2-0f8a-de2c522d237e'::uuid, 'd981cd20-55a1-b43c-9332-0ef2cd630e1a'::uuid, '7a276629-86e5-ee4a-1ee7-0f598b322aea'::uuid, 'GLOBAL', CURRENT_DATE, NOW(), 'seed-generator')
+INSERT INTO role_assignments (id, user_id, role_id, effective_start_date, created_at, created_by)
+VALUES ('4f0e5eea-bf75-2da2-0f8a-de2c522d237e'::uuid, 'd981cd20-55a1-b43c-9332-0ef2cd630e1a'::uuid, '7a276629-86e5-ee4a-1ee7-0f598b322aea'::uuid, CURRENT_DATE, NOW(), 'seed-generator')
 ON CONFLICT (id) DO NOTHING;
 
 -- Role/permission mapping

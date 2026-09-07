@@ -240,15 +240,15 @@ Three tables are easy to confuse:
 | --- | --- | --- |
 | `role_permissions` | **role → permission** grants | Token issuance (`RoleAuthorityService`), `AuthorizationService`, `RoleManagementService` |
 | `user_roles` | **user → role**, unscoped | Token issuance, `AuthorizationService.authorizePerson` |
-| `role_assignments` | **user → role**, with `scope_type`, optional location scope and effective dating | `RoleManagementService.getUserPermissions` / `check-permission` only |
+| `role_assignments` | **user → role**, effective-dated (`effective_start_date`, `effective_end_date`, `revoked_at`) | `RoleManagementService.getUserPermissions` / `userHasPermission` — does **not** narrow a JWT |
 
-`role_assignments.scope_type` and `role_assignment_scope_locations` are retired by ADR-0061 §1:
-they are still honoured by `RoleManagementService.userHasPermission` but reach no enforcement
-point and never narrowed the grants in a JWT. Location reach is now the role's `location_scope`
+`role_assignments` carries no location scope: `scope_type` and `role_assignment_scope_locations`
+were dropped by `V38__drop_role_assignment_scope.sql` (ADR-0061 §1, #1875), and with them
+`GET /v1/roles/check-permission`, the only reader. Location reach is the role's `location_scope`
 plus the pos-people staffing assignment, carried as the scope claims described under
 [Role location scope](#role-location-scope); `perm_bits` itself still takes the union of every
-role a user holds. Location-sensitive decisions are enforced by the owning service from those
-claims.
+role a user holds, and location-sensitive decisions are enforced by the owning service from
+those claims.
 
 ## Key Classes
 
@@ -271,6 +271,8 @@ claims.
 - `POST /v1/roles` — create a role
 - `POST /v1/roles/{roleId}/permissions/{permissionKey}` — assign permission to role
 - `DELETE /v1/roles/{roleId}/permissions/{permissionKey}` — remove permission from role
+- `POST /v1/roles/assignments` / `DELETE /v1/roles/assignments/{assignmentId}` — create / revoke an effective-dated role assignment
+- `GET /v1/roles/assignments/user/{userId}` — list a user's role assignments (there is no `check-permission` probe; location scope is decided from the token's scope claims)
 - `GET /v1/users/{id}` — retrieve a user
 - `POST /v1/users/{id}/unlock` — admin: unlock account
 - `POST /v1/users/{id}/enable` / `disable` — admin: enable/disable account

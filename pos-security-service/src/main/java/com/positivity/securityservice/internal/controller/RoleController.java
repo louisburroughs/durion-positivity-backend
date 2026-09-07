@@ -359,20 +359,22 @@ public class RoleController {
             name = "bearerAuth",
             scopes = {"security:role:assign"})
     @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_ASSIGN + "')")
-    @Operation(operationId = "createRoleAssignment", summary = "Create a Scoped Role Assignment", description = """
-                    Assigns a role to a user with a scope (GLOBAL or LOCATION) and an optional effective date \
-                    window.
-                    Use this tool when the assignment needs scope or dates; do not use assignUserRole, the simple \
-                    path-parameter variant that always creates a GLOBAL assignment starting now.
+    @Operation(
+            operationId = "createRoleAssignment",
+            summary = "Create an Effective-Dated Role Assignment",
+            description = """
+                    Assigns a role to a user with an optional effective date window.
+                    Use this tool when the assignment needs dates; do not use assignUserRole, the simple \
+                    path-parameter variant that always creates an assignment starting now.
+                    Location reach is not set here: it is a property of the role (location_scope) resolved \
+                    against the user's pos-people staffing assignment at token issuance.
                     Preconditions: the caller must hold security:role:assign, the user and role must exist, and no \
-                    overlapping assignment may exist for the same role, scope, and (for LOCATION scope) location.
-                    Required inputs: userId and roleId (UUIDs); scopeType defaults to GLOBAL, scopeLocationIds is \
-                    required for LOCATION scope and forbidden for GLOBAL, and effectiveStartDate defaults to now \
-                    with an open-ended effectiveEndDate.
+                    overlapping assignment may exist for the same user and role.
+                    Required inputs: userId and roleId (UUIDs); effectiveStartDate defaults to now with an \
+                    open-ended effectiveEndDate.
                     Emits a SECURITY_ROLE_ASSIGNMENT_CREATE event.
-                    Returns 400 when the scope and location combination is invalid, 404 when the user or role does \
-                    not exist, and 409 with ROLE_ASSIGNMENT_CONFLICT when the date window overlaps an existing \
-                    assignment.
+                    Returns 404 when the user or role does not exist, and 409 with ROLE_ASSIGNMENT_CONFLICT when \
+                    the date window overlaps an existing assignment.
                     """)
     @ApiResponse(responseCode = "201", description = "Role assignment created")
     @ApiResponse(
@@ -381,21 +383,19 @@ public class RoleController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Overlapping role assignment for the same user, role, and scope",
+            description = "Overlapping role assignment for the same user and role",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<RoleAssignmentDto> createRoleAssignment(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "The user, role, scope, and effective window of the assignment to create.",
+                            description = "The user, role, and effective window of the assignment to create.",
                             required = true,
                             content =
                                     @Content(
                                             mediaType = "application/json",
                                             examples =
-                                                    @ExampleObject(name = "Location-scoped assignment", value = """
+                                                    @ExampleObject(name = "Effective-dated assignment", value = """
                                                                     {"userId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
                                                                      "roleId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
-                                                                     "scopeType":"LOCATION",
-                                                                     "scopeLocationIds":["018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d"],
                                                                      "effectiveStartDate":"2026-01-15T00:00:00",
                                                                      "effectiveEndDate":"2026-12-31T00:00:00"}
                                                                     """)))
@@ -414,9 +414,9 @@ public class RoleController {
             scopes = {"security:role:view"})
     @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_VIEW + "')")
     @Operation(operationId = "listUserRoleAssignments", summary = "List a User's Role Assignments", description = """
-                    Returns a user's role assignments with their scope and effective window, limited to currently \
+                    Returns a user's role assignments with their effective window, limited to currently \
                     effective assignments by default.
-                    Use this tool to inspect who holds which roles and in what scope; use getUserPermissions \
+                    Use this tool to inspect who holds which roles and for what window; use getUserPermissions \
                     instead when only the flattened permission set matters.
                     Preconditions: the caller must hold security:role:view and the user must exist.
                     Required inputs: userId (UUID) as a path parameter; includeHistory defaults to false and, when \
@@ -498,7 +498,7 @@ public class RoleController {
                     Returns the authority codes a role name expands to: the ROLE_ prefixed authority plus every \
                     permission code granted to that role in role_permissions.
                     Use this tool to prebuild per-role permission or tool caches, as pos-mcp-server does; do not \
-                    use getUserPermissions, which reads one specific user's scoped role assignments rather than \
+                    use getUserPermissions, which reads one specific user's effective role assignments rather than \
                     the authority set a role carries.
                     Preconditions: the caller must hold security:role:view; the role name does not need to exist in \
                     the database.
@@ -513,43 +513,6 @@ public class RoleController {
         Set<String> authorities = roleAuthorityService.expandRolesToAuthorities(Set.of(role));
         List<String> permissions = authorities.stream().sorted().toList();
         return ResponseEntity.ok(new RoleDefaultPermissionsResponse(role, permissions));
-    }
-
-    /**
-     * Check if a user has a specific permission
-     */
-    @GetMapping("/check-permission")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
-            name = "bearerAuth",
-            scopes = {"security:permission:view"})
-    @PreAuthorize("hasAuthority('" + SecurityPermissions.PERMISSION_VIEW + "')")
-    @Operation(
-            operationId = "checkUserPermission",
-            summary = "Check One User Permission at a Location",
-            description = """
-                    Checks whether a user holds a specific permission through a currently effective role assignment \
-                    whose scope covers the given location.
-                    Use this tool for a point authorization probe by user UUID; use getAuthorizationDecision \
-                    instead when the caller has a principal identifier from the RBAC matrix rather than a user id.
-                    Preconditions: the caller must hold security:permission:view and the user must exist.
-                    Required inputs: userId (UUID) and permission (domain:resource:action) as query parameters; \
-                    locationId is optional and defaults to GLOBAL.
-                    No events are emitted and no state changes; this is a read-only check.
-                    Returns 200 with a plain boolean body, and 404 when the user does not exist.
-                    """)
-    @ApiResponse(responseCode = "200", description = "Permission check completed")
-    @ApiResponse(
-            responseCode = "404",
-            description = "User not found",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
-    public ResponseEntity<Boolean> checkUserPermission(
-            @RequestParam UUID userId,
-            @RequestParam String permission,
-            @RequestParam(required = false) String locationId) {
-
-        boolean hasPermission =
-                roleManagementService.userHasPermission(userId, permission, locationId != null ? locationId : "GLOBAL");
-        return ResponseEntity.ok(hasPermission);
     }
 
     /**

@@ -41,8 +41,8 @@ public class AuthorizationController {
                     Returns an allow or deny decision for a principal identifier and permission key, evaluated \
                     against the principal-role matrix populated by assignPrincipalRole.
                     Use this tool for matrix-based checks keyed by principal string; use \
-                    getPersonAuthorizationDecision instead when the caller has a personId, and checkUserPermission \
-                    when it has a user UUID and location.
+                    getPersonAuthorizationDecision instead when the caller has a personId; location reach is decided by \
+                    the owning service from the token's scope claims (ADR-0061 §3), not by this endpoint.
                     Preconditions: the caller must hold security:authorization:decide; the principal needs no prior \
                     registration.
                     Required inputs: principalId and permission (domain:resource:action) as query parameters.

@@ -45,10 +45,9 @@ public class UserRoleController {
             scopes = {"security:role:assign"})
     @PreAuthorize("hasAuthority('" + SecurityPermissions.ROLE_ASSIGN + "')")
     @Operation(operationId = "assignUserRole", summary = "Assign a Role to a User", description = """
-                    Creates a GLOBAL-scoped role assignment linking a user to a role, effective immediately with no \
-                    end date.
-                    Use this tool for the common unscoped grant; do not use createRoleAssignment, which supports \
-                    LOCATION scope and effective date windows, and do not use assignPrincipalRole, which targets \
+                    Creates a role assignment linking a user to a role, effective immediately with no end date.
+                    Use this tool for the common grant; do not use createRoleAssignment, which supports \
+                    effective date windows, and do not use assignPrincipalRole, which targets \
                     the string-keyed RBAC principal matrix.
                     Preconditions: the caller must hold security:role:assign and both the user and role must exist; \
                     no overlap check is performed here, so repeated calls create duplicate assignments.
@@ -107,7 +106,7 @@ public class UserRoleController {
     @Operation(operationId = "getUserPermissions", summary = "Get a User's Effective Permissions", description = """
                     Returns the union of permissions granted through a user's currently effective role assignments.
                     Use this tool for a user's flattened effective permission set; use listUserRoleAssignments \
-                    instead to see the assignments and scopes behind it.
+                    instead to see the assignments and effective windows behind it.
                     Preconditions: the user must exist, and the caller must either hold \
                     security:permission:view or be asking about themselves.
                     Required inputs: userId (UUID) as a path parameter.

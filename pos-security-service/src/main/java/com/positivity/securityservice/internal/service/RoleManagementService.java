@@ -16,8 +16,11 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
 /**
- * Service for managing roles, role assignments, and role-permission mappings.
- * Implements the foundational RBAC framework with scope support.
+ * Service for managing roles, effective-dated role assignments, and role-permission mappings.
+ *
+ * <p>Location scope is not a property of an assignment: it lives on the role
+ * ({@code roles.location_scope}) and is resolved against pos-people's staffing assignment at
+ * token issuance (ADR-0061 §1).
  */
 public interface RoleManagementService {
 
@@ -72,9 +75,12 @@ public interface RoleManagementService {
     Set<PermissionDto> getUserPermissions(UUID userId);
 
     /**
-     * Check if a user has a specific permission, considering scope
+     * Check whether a user holds a permission through a role assignment that is effective now.
+     *
+     * <p>Only assignments whose effective window contains the current date are consulted;
+     * expired, revoked and not-yet-started assignments never grant.
      */
-    boolean userHasPermission(UUID userId, String permissionName, String locationId);
+    boolean userHasPermission(UUID userId, String permissionName);
 
     /**
      * Revoke a role assignment

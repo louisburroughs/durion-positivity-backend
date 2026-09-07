@@ -3,18 +3,16 @@ package com.positivity.securityservice.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
-import com.positivity.securityservice.internal.enums.ScopeType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.Set;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.Value;
 
 @Value
 @Builder
-@Schema(description = "A role assignment binding a user to a role within a scope")
+@Schema(description = "An effective-dated role assignment binding a user to a role")
 public class RoleAssignmentDto {
     @Schema(
             description = "Role assignment identifier",
@@ -33,14 +31,6 @@ public class RoleAssignmentDto {
             example = "01960003-0000-7000-8000-000000000010",
             requiredMode = REQUIRED)
     UUID roleId;
-
-    @Schema(description = "Scope type that constrains the assignment", example = "GLOBAL", requiredMode = REQUIRED)
-    ScopeType scopeType;
-
-    @Schema(
-            description = "Location identifiers the assignment applies to when scopeType is LOCATION",
-            requiredMode = NOT_REQUIRED)
-    Set<String> scopeLocationIds;
 
     @Schema(
             description = "Inclusive start of the effective window",

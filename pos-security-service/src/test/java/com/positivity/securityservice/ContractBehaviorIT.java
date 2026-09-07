@@ -57,7 +57,7 @@ import org.springframework.test.web.servlet.MvcResult;
  * - Redis integration: Token revocation caching, graceful degradation
  * - Error handling: GlobalExceptionHandler with correlation IDs
  * - User Management: Create users, login, assign roles
- * - Role Management: Create roles, assign permissions, check permissions
+ * - Role Management: Create roles, assign permissions
  * - Permission Registry: Register permissions, validate format, check existence
  * - Contract compliance: Responses match BACKEND_CONTRACT_GUIDE.md v2.1
  *
@@ -71,8 +71,7 @@ import org.springframework.test.web.servlet.MvcResult;
  * - JWT Endpoints: POST /v1/auth/internal/token, /token-pair, /refresh, etc.
  * - User Endpoints: POST /v1/users, /v1/users/login, PUT
  * /v1/users/{username}/roles
- * - Role Endpoints: POST /v1/roles, PUT /v1/roles/permissions, GET
- * /v1/roles/check-permission
+ * - Role Endpoints: POST /v1/roles, PUT /v1/roles/permissions
  * - Permission Endpoints: POST /v1/permissions/register, GET
  * /v1/permissions/validate/{name}
  * - Request format: LoginRequest, TokenPairRequest, RefreshTokenRequest,
@@ -816,42 +815,6 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
             // Expected if not running with proper authentication setup
             // Test will be skipped in non-mocked scenarios
         }
-    }
-
-    /**
-     * Test R2: Check User Permission
-     *
-     * **Scenario:** Verify if user has specific permission
-     * **Expected:** 200 OK with boolean result
-     */
-    @Test
-    @DisplayName("R2: Check user permission returns boolean")
-    void testCheckUserPermission() throws Exception {
-        String createPayload = """
-                                {
-                                    "username": "checkuser",
-                                    "password": "CheckPass123!",
-                                    "roles": ["SHOP_MGR"]
-                                }
-                                """;
-        MvcResult createUserResult = mockMvc.perform(post("/v1/users")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(createPayload))
-                .andExpect(status().isCreated())
-                .andReturn();
-        String userId = objectMapper
-                .readTree(createUserResult.getResponse().getContentAsString())
-                .get("id")
-                .asString();
-
-        // Act & Assert
-        mockMvc.perform(get("/v1/roles/check-permission")
-                        .param("userId", userId)
-                        .param("permission", "order:create")
-                        .param("locationId", "GLOBAL"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON));
-        // Result is boolean, exact value depends on test data setup
     }
 
     // ========== PERMISSION REGISTRY TESTS ==========

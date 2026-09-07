@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,12 +19,10 @@ import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
-import com.positivity.securityservice.internal.enums.ScopeType;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
-import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
@@ -492,7 +492,6 @@ class RoleManagementServiceTest {
             RoleAssignment assignment = new RoleAssignment();
             assignment.setUser(user);
             assignment.setRole(role);
-            assignment.setScopeType(ScopeType.GLOBAL);
             assignment.setEffectiveStartDate(
                     java.time.LocalDateTime.now(TEST_CLOCK).minusDays(1));
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
@@ -617,14 +616,12 @@ class RoleManagementServiceTest {
         RoleAssignment past = new RoleAssignment();
         past.setUser(user);
         past.setRole(role);
-        past.setScopeType(ScopeType.GLOBAL);
         past.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(10));
         // effectiveEndDate already set (in the past)
 
         RoleAssignment current = new RoleAssignment();
         current.setUser(user);
         current.setRole(role);
-        current.setScopeType(ScopeType.GLOBAL);
         current.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
@@ -635,15 +632,15 @@ class RoleManagementServiceTest {
         assertThat(result).hasSize(2);
     }
 
-    // ── userHasPermission — missing branches ──────────────────────────────────
+    // ── userHasPermission — effective dating without a scope branch (#1875) ───
 
     @Nested
-    @DisplayName("userHasPermission() — coverage branches")
+    @DisplayName("userHasPermission() — effective dating is the only filter")
     class UserHasPermission {
 
         @Test
-        @DisplayName("assignment does not cover requested location — returns false")
-        void userHasPermission_locationNotCovered_returnsFalse() {
+        @DisplayName("permission held through a currently effective assignment — returns true")
+        void userHasPermission_effectiveAssignmentGrants_returnsTrue() {
             User user = new User();
             user.setId(USER_ID);
 
@@ -654,24 +651,49 @@ class RoleManagementServiceTest {
             role.setId(ROLE_ID);
             role.setPermissions(Set.of(perm));
 
-            // LOCATION scope with "loc-A", but we query for "loc-Z" → coversLocation=false
             RoleAssignment assignment = new RoleAssignment();
             assignment.setUser(user);
             assignment.setRole(role);
-            assignment.setScopeType(ScopeType.LOCATION);
-            assignment.setScopeLocationIds(Set.of("loc-A"));
             assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
             when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of(assignment));
 
-            boolean result = sut.userHasPermission(USER_ID, "security:roles:create", "loc-Z");
-
-            assertThat(result).isFalse();
+            assertThat(sut.userHasPermission(USER_ID, "security:roles:create")).isTrue();
         }
 
         @Test
-        @DisplayName("assignment covers location but permission not in role — returns false")
+        @DisplayName("only effective assignments are consulted — history is never read")
+        void userHasPermission_consultsEffectiveAssignmentsOnly() {
+            User user = new User();
+            user.setId(USER_ID);
+
+            Permission perm = new Permission();
+            perm.setName("security:roles:create");
+
+            Role role = new Role();
+            role.setId(ROLE_ID);
+            role.setPermissions(Set.of(perm));
+
+            // The user once held the role, but the assignment has ended: it exists in history
+            // and is absent from the effective-dated projection.
+            RoleAssignment expired = new RoleAssignment();
+            expired.setUser(user);
+            expired.setRole(role);
+            expired.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(30));
+            expired.setEffectiveEndDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
+
+            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of());
+            lenient().when(roleAssignmentRepository.findAllByUser_Id(USER_ID)).thenReturn(List.of(expired));
+
+            assertThat(sut.userHasPermission(USER_ID, "security:roles:create")).isFalse();
+            verify(roleAssignmentRepository).findEffectiveAssignmentsByUser(user);
+            verify(roleAssignmentRepository, never()).findAllByUser_Id(any());
+        }
+
+        @Test
+        @DisplayName("effective assignment whose role lacks the permission — returns false")
         void userHasPermission_permissionNotInRole_returnsFalse() {
             User user = new User();
             user.setId(USER_ID);
@@ -683,19 +705,16 @@ class RoleManagementServiceTest {
             role.setId(ROLE_ID);
             role.setPermissions(Set.of(perm));
 
-            // GLOBAL scope covers any location, but permission name doesn't match
             RoleAssignment assignment = new RoleAssignment();
             assignment.setUser(user);
             assignment.setRole(role);
-            assignment.setScopeType(ScopeType.GLOBAL);
             assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
             when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of(assignment));
 
-            boolean result = sut.userHasPermission(USER_ID, "security:other:permission", "loc-1");
-
-            assertThat(result).isFalse();
+            assertThat(sut.userHasPermission(USER_ID, "security:other:permission"))
+                    .isFalse();
         }
     }
 
@@ -706,21 +725,10 @@ class RoleManagementServiceTest {
     class CreateRoleAssignment {
 
         @Test
-        @DisplayName("GLOBAL scope with location IDs throws IllegalArgumentException")
-        void createRoleAssignment_globalScopeWithLocationIds_throwsIllegalArgument() {
-            RoleAssignmentRequest request = new RoleAssignmentRequest(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL, Set.of("loc-1"), LocalDateTime.now(TEST_CLOCK), null);
-
-            assertThatThrownBy(() -> sut.createRoleAssignment(request))
-                    .isInstanceOf(SecurityValidationException.class)
-                    .hasMessageContaining("GLOBAL scope cannot have location IDs");
-        }
-
-        @Test
         @DisplayName("user not found throws UserNotFoundException")
         void createRoleAssignment_userNotFound_throwsUserNotFoundException() {
-            RoleAssignmentRequest request = new RoleAssignmentRequest(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL, null, LocalDateTime.now(TEST_CLOCK), null);
+            RoleAssignmentRequest request =
+                    new RoleAssignmentRequest(USER_ID, ROLE_ID, LocalDateTime.now(TEST_CLOCK), null);
             when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> sut.createRoleAssignment(request)).isInstanceOf(UserNotFoundException.class);
@@ -731,8 +739,8 @@ class RoleManagementServiceTest {
         void createRoleAssignment_roleNotFound_throwsRoleNotFoundException() {
             User user = new User();
             user.setId(USER_ID);
-            RoleAssignmentRequest request = new RoleAssignmentRequest(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL, null, LocalDateTime.now(TEST_CLOCK), null);
+            RoleAssignmentRequest request =
+                    new RoleAssignmentRequest(USER_ID, ROLE_ID, LocalDateTime.now(TEST_CLOCK), null);
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.empty());
 
@@ -751,12 +759,11 @@ class RoleManagementServiceTest {
             role.setName("Tester");
             role.setPermissions(new HashSet<>());
 
-            RoleAssignmentRequest request =
-                    new RoleAssignmentRequest(USER_ID, ROLE_ID, ScopeType.GLOBAL, null, null, null); // null start date
+            RoleAssignmentRequest request = new RoleAssignmentRequest(USER_ID, ROLE_ID, null, null); // null start date
 
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
-            when(roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(USER_ID, ROLE_ID, ScopeType.GLOBAL))
+            when(roleAssignmentRepository.findByUser_IdAndRole_Id(USER_ID, ROLE_ID))
                     .thenReturn(List.of());
             when(roleAssignmentRepository.save(any(RoleAssignment.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -766,8 +773,8 @@ class RoleManagementServiceTest {
         }
 
         @Test
-        @DisplayName("overlapping GLOBAL assignment throws IllegalStateException")
-        void createRoleAssignment_overlappingGlobal_throwsIllegalState() {
+        @DisplayName("overlapping assignment for the same user and role throws IllegalStateException")
+        void createRoleAssignment_overlappingWindow_throwsIllegalState() {
             User user = new User();
             user.setId(USER_ID);
 
@@ -776,54 +783,51 @@ class RoleManagementServiceTest {
 
             RoleAssignment existing = new RoleAssignment();
             existing.setRole(role);
-            existing.setScopeType(ScopeType.GLOBAL);
             existing.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
             // effectiveEndDate = null (open-ended) → overlaps with any new request
 
-            RoleAssignmentRequest request = new RoleAssignmentRequest(
-                    USER_ID, ROLE_ID, ScopeType.GLOBAL, null, LocalDateTime.now(TEST_CLOCK), null);
+            RoleAssignmentRequest request =
+                    new RoleAssignmentRequest(USER_ID, ROLE_ID, LocalDateTime.now(TEST_CLOCK), null);
 
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
-            when(roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(USER_ID, ROLE_ID, ScopeType.GLOBAL))
+            when(roleAssignmentRepository.findByUser_IdAndRole_Id(USER_ID, ROLE_ID))
                     .thenReturn(List.of(existing));
 
             assertThatThrownBy(() -> sut.createRoleAssignment(request))
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("GLOBAL scope");
+                    .hasMessageContaining("Overlapping role assignment");
         }
 
         @Test
-        @DisplayName("overlapping LOCATION assignment throws IllegalStateException")
-        void createRoleAssignment_overlappingLocation_throwsIllegalState() {
+        @DisplayName("non-overlapping windows for the same user and role are accepted")
+        void createRoleAssignment_disjointWindow_isAccepted() {
             User user = new User();
             user.setId(USER_ID);
+            user.setUsername("tester");
 
             Role role = new Role();
             role.setId(ROLE_ID);
+            role.setName("Tester");
+            role.setPermissions(new HashSet<>());
 
-            RoleAssignment existing = new RoleAssignment();
-            existing.setRole(role);
-            existing.setScopeType(ScopeType.LOCATION);
-            existing.setScopeLocationIds(Set.of("loc-1", "loc-2"));
-            existing.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
+            RoleAssignment ended = new RoleAssignment();
+            ended.setRole(role);
+            ended.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(30));
+            ended.setEffectiveEndDate(LocalDateTime.now(TEST_CLOCK).minusDays(10));
 
-            RoleAssignmentRequest request = new RoleAssignmentRequest(
-                    USER_ID,
-                    ROLE_ID,
-                    ScopeType.LOCATION,
-                    Set.of("loc-1"), // overlaps with existing
-                    LocalDateTime.now(TEST_CLOCK),
-                    null);
+            RoleAssignmentRequest request =
+                    new RoleAssignmentRequest(USER_ID, ROLE_ID, LocalDateTime.now(TEST_CLOCK), null);
 
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
-            when(roleAssignmentRepository.findByUser_IdAndRole_IdAndScopeType(USER_ID, ROLE_ID, ScopeType.LOCATION))
-                    .thenReturn(List.of(existing));
+            when(roleAssignmentRepository.findByUser_IdAndRole_Id(USER_ID, ROLE_ID))
+                    .thenReturn(List.of(ended));
+            when(roleAssignmentRepository.save(any(RoleAssignment.class))).thenAnswer(inv -> inv.getArgument(0));
 
-            assertThatThrownBy(() -> sut.createRoleAssignment(request))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("location");
+            RoleAssignmentDto result = sut.createRoleAssignment(request);
+
+            assertThat(result.getEffectiveStartDate()).isEqualTo(LocalDateTime.now(TEST_CLOCK));
         }
     }
 
@@ -863,13 +867,11 @@ class RoleManagementServiceTest {
         RoleAssignment ra1 = new RoleAssignment();
         ra1.setUser(user);
         ra1.setRole(role1);
-        ra1.setScopeType(ScopeType.GLOBAL);
         ra1.setEffectiveStartDate(java.time.LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
         RoleAssignment ra2 = new RoleAssignment();
         ra2.setUser(user);
         ra2.setRole(role2);
-        ra2.setScopeType(ScopeType.GLOBAL);
         ra2.setEffectiveStartDate(java.time.LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
