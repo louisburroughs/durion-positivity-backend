@@ -268,10 +268,18 @@ default — neither is conditional on the absence of the other.
 **Method 1: Maven Profile (Recommended)**
 
 ```bash
-cd pos-inventory
-./mvnw -Popenapi clean verify -DskipTests -Djacoco.skip=true
-# Output: openapi.yaml
+./mvnw -pl pos-inventory -am -Popenapi verify -DskipTests -Djacoco.skip=true -Dspotless.check.skip=true
+# Output: pos-inventory/openapi.yaml
 ```
+
+> Run from the repo root with `-pl <module> -am`, not from inside the module directory.
+> The profile starts the service on H2 (no Docker needed), but the module's sibling
+> `com.positivity:*:SNAPSHOT` dependencies are only resolvable when the reactor builds
+> them in the same run; `cd <module> && ./mvnw -Popenapi …` fails on unresolved
+> artifacts unless they happen to be in `~/.m2`. `clean` is optional and worth omitting
+> when other builds share the checkout. `-Dspotless.check.skip=true` only bypasses the
+> format gate on *upstream* modules being compiled along the way — run
+> `./mvnw -pl <module> spotless:check` separately for the module you changed.
 
 > `-Djacoco.skip=true` is required, not optional. With `-DskipTests` the JaCoCo
 > ratchet (`jacoco:check`) fails on near-zero coverage, and because the
@@ -586,8 +594,8 @@ restClient.get().uri(url).retrieve().body(Response.class);
 # Run single module
 cd pos-order && ./mvnw spring-boot:run
 
-# Generate OpenAPI spec
-./mvnw -pl pos-order -Popenapi clean verify -DskipTests -Djacoco.skip=true
+# Generate OpenAPI spec (from the repo root; -am so sibling SNAPSHOTs resolve)
+./mvnw -pl pos-order -am -Popenapi verify -DskipTests -Djacoco.skip=true -Dspotless.check.skip=true
 
 # Check dependency updates
 ./mvnw versions:display-dependency-updates
