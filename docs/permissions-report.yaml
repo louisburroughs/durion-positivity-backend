@@ -1,9 +1,9 @@
-generatedAt: "2026-09-07T02:09:10.573749+00:00"
+generatedAt: "2026-09-07T15:35:17.073617+00:00"
 root: "."
 summary:
   manifestCount: 23
-  permissionCount: 480
-  uniquePermissionCount: 480
+  permissionCount: 481
+  uniquePermissionCount: 481
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -138,7 +138,7 @@ manifests:
     domain: "catalog"
     serviceName: "pos-catalog"
     version: "1.0"
-    permissionCount: 46
+    permissionCount: 47
     permissions:
       - name: "catalog:catalog_grouping:delete"
         description: "Delete a catalog grouping"
@@ -196,6 +196,8 @@ manifests:
         description: "Add, update, and delete a product's alternate units of measure"
       - name: "catalog:product_uom:view"
         description: "View a product's alternate units of measure"
+      - name: "catalog:service:ingest"
+        description: "Bulk import service operations through the seed pipeline"
       - name: "catalog:service_package:manage"
         description: "Define service packages and fleet requirement sets, and compose their members"
       - name: "catalog:service_package:view"
@@ -1647,6 +1649,12 @@ permissions:
     source: "pos-catalog/src/main/resources/permissions.yaml"
   - name: "catalog:product_uom:view"
     description: "View a product's alternate units of measure"
+    domain: "catalog"
+    serviceName: "pos-catalog"
+    module: "pos-catalog"
+    source: "pos-catalog/src/main/resources/permissions.yaml"
+  - name: "catalog:service:ingest"
+    description: "Bulk import service operations through the seed pipeline"
     domain: "catalog"
     serviceName: "pos-catalog"
     module: "pos-catalog"
