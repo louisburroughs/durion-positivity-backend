@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 import lombok.Data;
 
 @Data
@@ -67,6 +68,20 @@ public class ServiceLaborStandardRequestDto {
             example = "[\"BRAKE-ROTOR-FRONT-PAIR\"]",
             requiredMode = NOT_REQUIRED)
     private List<String> includedOpCodes;
+
+    @Schema(
+            description = "Who owns this time: PLATFORM (every location resolves it) or SHOP (one"
+                    + " location's own number, which outranks platform rows for that location);"
+                    + " defaults to PLATFORM",
+            example = "SHOP",
+            allowableValues = {"PLATFORM", "SHOP"},
+            requiredMode = NOT_REQUIRED)
+    private String ownerScope;
+
+    @Schema(
+            description = "Owning location; required when ownerScope is SHOP, rejected otherwise",
+            requiredMode = NOT_REQUIRED)
+    private UUID ownerLocationId;
 
     @Schema(
             description = "Date the time was published or decided; omitted means undated",

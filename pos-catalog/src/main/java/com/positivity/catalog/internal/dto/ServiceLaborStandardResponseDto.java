@@ -39,6 +39,15 @@ public class ServiceLaborStandardResponseDto {
     @Schema(description = "Labor hours, decimal hours in tenths", example = "1.5", requiredMode = REQUIRED)
     private BigDecimal laborHours;
 
+    @Schema(
+            description = "PLATFORM (every location resolves it) or SHOP (one location's own number)",
+            example = "PLATFORM",
+            requiredMode = REQUIRED)
+    private String ownerScope;
+
+    @Schema(description = "Owning location when ownerScope is SHOP; null for PLATFORM", requiredMode = NOT_REQUIRED)
+    private UUID ownerLocationId;
+
     @Schema(description = "Kind of published time", example = "DURION_STANDARD", requiredMode = REQUIRED)
     private String timeType;
 

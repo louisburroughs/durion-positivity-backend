@@ -111,14 +111,19 @@ public class ArchitectureTest {
     static final ArchRule only_service_layer_should_be_public_api = classes()
             .that()
             .resideInAPackage("com.positivity.price.service..")
+            .and()
+            // Grant-statement javadoc holders, not API types (pos-supplier / pos-catalog convention).
+            .doNotHaveSimpleName("package-info")
             .should()
             .bePublic()
             .allowEmptyShould(true)
             .because("service layer is the public API of this module");
 
     // ADR-0026 D4: the public service package is a grant surface. Grant-surface types may not
-    // depend on this module's internal implementation. pos-price holds no grant, so this package
-    // is empty; the rule (with allowEmptyShould) keeps it honest if a grant is ever added.
+    // depend on this module's internal implementation. pos-price holds one grant —
+    // ShopLaborRateService, the labor-rate half of a labor line (#1575 Tier 0, ADR-0044 amendment
+    // 2026-09-07) — so this rule is now load-bearing rather than a placeholder: the contract
+    // records in service.model must stay free of internal enums and entities.
     // Package patterns are exact-anchored on purpose: "com.positivity.price.service.." must NOT
     // match "com.positivity.price.internal.service".
     @ArchTest

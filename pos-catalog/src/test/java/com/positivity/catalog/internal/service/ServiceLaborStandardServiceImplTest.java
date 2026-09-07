@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.catalog.internal.dto.ServiceLaborStandardRequestDto;
 import com.positivity.catalog.internal.dto.ServiceLaborStandardResponseDto;
 import com.positivity.catalog.internal.entity.ServiceLaborStandardEntity;
+import com.positivity.catalog.internal.enums.LaborStandardOwnerScope;
 import com.positivity.catalog.internal.enums.LaborTimeType;
 import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
 import com.positivity.catalog.internal.exception.CatalogNotFoundException;
@@ -89,6 +90,119 @@ class ServiceLaborStandardServiceImplTest {
         row.setSourceCode("DURION");
         row.setSourceRevision("2026-08-01T00:00:00Z");
         return row;
+    }
+
+    @Nested
+    @DisplayName("shop ownership (#1575 Tier 0)")
+    class ShopOwnership {
+
+        private static final UUID SHOP_A = UUID.fromString("0198f2a1-0000-7000-8000-00000000000a");
+        private static final UUID SHOP_B = UUID.fromString("0198f2a1-0000-7000-8000-00000000000b");
+
+        @Test
+        @DisplayName("defaults to PLATFORM with no owning location when the request says nothing")
+        void defaultsToPlatform() {
+            ServiceLaborStandardResponseDto response = service.create(SERVICE_ID, request());
+
+            assertThat(response.getOwnerScope()).isEqualTo("PLATFORM");
+            assertThat(response.getOwnerLocationId()).isNull();
+        }
+
+        @Test
+        @DisplayName("a SHOP row records its owning location and stays DURION-sourced")
+        void shopRowRecordsItsOwner() {
+            ServiceLaborStandardRequestDto shopRequest = request();
+            shopRequest.setOwnerScope("SHOP");
+            shopRequest.setOwnerLocationId(SHOP_A);
+
+            ServiceLaborStandardResponseDto response = service.create(SERVICE_ID, shopRequest);
+
+            assertThat(response.getOwnerScope()).isEqualTo("SHOP");
+            assertThat(response.getOwnerLocationId()).isEqualTo(SHOP_A);
+            assertThat(response.getSourceCode()).isEqualTo("DURION");
+        }
+
+        @Test
+        @DisplayName("SHOP without a location is refused — such a row would resolve for nobody")
+        void shopWithoutLocationRejected() {
+            ServiceLaborStandardRequestDto bad = request();
+            bad.setOwnerScope("SHOP");
+
+            assertThatThrownBy(() -> service.create(SERVICE_ID, bad))
+                    .isInstanceOf(CatalogValidationException.class)
+                    .hasMessageContaining("ownerLocationId is required");
+            verify(laborStandardRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("PLATFORM with a location is refused — the row would lie about its reach")
+        void platformWithLocationRejected() {
+            ServiceLaborStandardRequestDto bad = request();
+            bad.setOwnerLocationId(SHOP_A);
+
+            assertThatThrownBy(() -> service.create(SERVICE_ID, bad))
+                    .isInstanceOf(CatalogValidationException.class)
+                    .hasMessageContaining("must be omitted");
+        }
+
+        @Test
+        @DisplayName("an unknown ownerScope is a validation error, not a silent PLATFORM default")
+        void unknownScopeRejected() {
+            ServiceLaborStandardRequestDto bad = request();
+            bad.setOwnerScope("REGION");
+
+            assertThatThrownBy(() -> service.create(SERVICE_ID, bad))
+                    .isInstanceOf(CatalogValidationException.class)
+                    .hasMessageContaining("ownerScope");
+        }
+
+        @Test
+        @DisplayName("two shops may hold their own time for the same vehicle key — that is not a duplicate")
+        void differentShopsCoexistOnTheSameKey() {
+            ServiceLaborStandardEntity shopBRow = activeDurionRow();
+            shopBRow.setOwnerScope(LaborStandardOwnerScope.SHOP);
+            shopBRow.setOwnerLocationId(SHOP_B);
+            when(laborStandardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(SERVICE_ID))
+                    .thenReturn(List.of(shopBRow));
+
+            ServiceLaborStandardRequestDto shopARequest = request();
+            shopARequest.setOwnerScope("SHOP");
+            shopARequest.setOwnerLocationId(SHOP_A);
+
+            assertThat(service.create(SERVICE_ID, shopARequest).getOwnerLocationId())
+                    .isEqualTo(SHOP_A);
+        }
+
+        @Test
+        @DisplayName("but one shop may not hold two active times for the same vehicle key")
+        void sameShopDuplicateRejected() {
+            ServiceLaborStandardEntity shopARow = activeDurionRow();
+            shopARow.setOwnerScope(LaborStandardOwnerScope.SHOP);
+            shopARow.setOwnerLocationId(SHOP_A);
+            when(laborStandardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(SERVICE_ID))
+                    .thenReturn(List.of(shopARow));
+
+            ServiceLaborStandardRequestDto shopARequest = request();
+            shopARequest.setOwnerScope("SHOP");
+            shopARequest.setOwnerLocationId(SHOP_A);
+
+            assertThatThrownBy(() -> service.create(SERVICE_ID, shopARequest))
+                    .isInstanceOf(CatalogBusinessRuleException.class)
+                    .hasMessageContaining("supersede");
+        }
+
+        @Test
+        @DisplayName("a shop row does not collide with the platform row on the same vehicle key")
+        void shopRowDoesNotCollideWithPlatformRow() {
+            when(laborStandardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(SERVICE_ID))
+                    .thenReturn(List.of(activeDurionRow()));
+
+            ServiceLaborStandardRequestDto shopRequest = request();
+            shopRequest.setOwnerScope("SHOP");
+            shopRequest.setOwnerLocationId(SHOP_A);
+
+            assertThat(service.create(SERVICE_ID, shopRequest).getOwnerScope()).isEqualTo("SHOP");
+        }
     }
 
     @Nested

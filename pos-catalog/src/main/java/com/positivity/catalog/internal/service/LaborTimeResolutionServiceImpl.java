@@ -4,8 +4,11 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Expiry;
 import com.positivity.catalog.internal.entity.LaborTimeSourcePolicyEntity;
+import com.positivity.catalog.internal.entity.ServiceEntity;
 import com.positivity.catalog.internal.entity.ServiceLaborStandardEntity;
+import com.positivity.catalog.internal.enums.LaborStandardOwnerScope;
 import com.positivity.catalog.internal.enums.LaborTimeType;
+import com.positivity.catalog.internal.enums.OperationCategory;
 import com.positivity.catalog.internal.repository.LaborTimeSourcePolicyRepository;
 import com.positivity.catalog.internal.repository.ServiceLaborStandardRepository;
 import com.positivity.catalog.internal.repository.ServiceOperationXrefRepository;
@@ -39,8 +42,12 @@ import org.springframework.transaction.annotation.Transactional;
  * <h2>Order of answers</h2>
  *
  * <ol>
- *   <li>Stored {@code service_labor_standard} rows: most specific vehicle match first, then
- *       policy precedence, then time-type preference.</li>
+ *   <li>Stored {@code service_labor_standard} rows, ranked owner-first: a {@code SHOP} row owned
+ *       by the asking location beats every platform row, because a shop that has priced its own
+ *       work is not overruled by a published guide (#1575 Tier 0). Shop rows owned by any other
+ *       location are not candidates. Then most specific vehicle match, then time-type
+ *       preference, then policy precedence — which is category-aware, so "tire operations prefer
+ *       the manufacturer's install time" is a policy row rather than a release.</li>
  *   <li>QUERY_ONLY live sources through the SPI, under a per-source TTL cache whose lifetime is
  *       a license term, never persisted beyond it (ADR-0058 §4).</li>
  *   <li>The service's scalar {@code default_labor_hours} — deliberately last and graded
@@ -125,14 +132,24 @@ public class LaborTimeResolutionServiceImpl implements LaborTimeResolutionServic
     @NonNull
     @Transactional(readOnly = true)
     public LaborTimeResolution resolve(
-            @NonNull UUID serviceId, @NonNull VehicleKey vehicle, @Nullable LaborTimeType preferredTimeType) {
+            @NonNull UUID serviceId,
+            @NonNull VehicleKey vehicle,
+            @Nullable LaborTimeType preferredTimeType,
+            @Nullable UUID locationId) {
+
+        // The service's category selects the applicable precedence policy (R1); a service with no
+        // category simply matches only the category-less policy rows.
+        Optional<ServiceEntity> service = serviceRepository.findById(serviceId);
+        OperationCategory category =
+                service.map(ServiceEntity::getOperationCategory).orElse(null);
 
         // 1. Stored standards, best candidate wins.
         Optional<Candidate> stored =
                 standardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(serviceId).stream()
+                        .filter(row -> ownedByAsker(row, locationId))
                         .map(row -> toCandidate(row, vehicle))
                         .flatMap(Optional::stream)
-                        .min(candidateOrder(preferredTimeType, policyPrecedenceIndex()));
+                        .min(candidateOrder(preferredTimeType, policyPrecedenceIndex(), category));
         if (stored.isPresent()) {
             return stored.get().toResolution();
         }
@@ -164,7 +181,8 @@ public class LaborTimeResolutionServiceImpl implements LaborTimeResolutionServic
                             // internal widening, so the platform reports it as exact.
                             MatchGrade.EXACT,
                             time.overlapGroup(),
-                            time.includedOperations());
+                            time.includedOperations(),
+                            LaborStandardOwnerScope.PLATFORM.name());
                 }
             } catch (ProviderCallException e) {
                 liveSourceFailed = true;
@@ -173,18 +191,17 @@ public class LaborTimeResolutionServiceImpl implements LaborTimeResolutionServic
         }
 
         // 3. The vehicle-agnostic default the taxonomy carries (V17).
-        Optional<LaborTimeResolution> defaultHours = serviceRepository
-                .findById(serviceId)
-                .filter(service -> service.getDefaultLaborHours() != null)
-                .map(service -> new LaborTimeResolution(
+        Optional<LaborTimeResolution> defaultHours = service.filter(row -> row.getDefaultLaborHours() != null)
+                .map(row -> new LaborTimeResolution(
                         Status.RESOLVED,
-                        service.getDefaultLaborHours(),
+                        row.getDefaultLaborHours(),
                         LaborTimeType.DURION_STANDARD.name(),
                         "DURION",
                         "default-hours",
                         MatchGrade.DEFAULT_HOURS,
                         null,
-                        List.of()));
+                        List.of(),
+                        LaborStandardOwnerScope.PLATFORM.name()));
         if (defaultHours.isPresent()) {
             return defaultHours.get();
         }
@@ -206,7 +223,8 @@ public class LaborTimeResolutionServiceImpl implements LaborTimeResolutionServic
                     row.getSourceRevision(),
                     grade,
                     row.getOverlapGroup(),
-                    row.getIncludedOpCodes() == null ? List.of() : row.getIncludedOpCodes());
+                    row.getIncludedOpCodes() == null ? List.of() : row.getIncludedOpCodes(),
+                    row.getOwnerScope().name());
         }
     }
 
@@ -239,8 +257,25 @@ public class LaborTimeResolutionServiceImpl implements LaborTimeResolutionServic
         return rowValue == null || Objects.equals(rowValue, requestValue);
     }
 
+    /**
+     * A shop's own row is a candidate only for the location that owns it; every other location
+     * must never see it, which is a filter rather than a ranking because a low-ranked shop row
+     * would still answer when nothing else did.
+     */
+    private static boolean ownedByAsker(ServiceLaborStandardEntity row, @Nullable UUID locationId) {
+        return row.getOwnerScope() != LaborStandardOwnerScope.SHOP
+                || (locationId != null && locationId.equals(row.getOwnerLocationId()));
+    }
+
     private Comparator<Candidate> candidateOrder(
-            @Nullable LaborTimeType preferredTimeType, Map<String, Integer> policyPrecedence) {
+            @Nullable LaborTimeType preferredTimeType,
+            Map<String, Integer> policyPrecedence,
+            @Nullable OperationCategory category) {
+        // Ownership outranks everything else, vehicle specificity included: a shop's model-level
+        // number for its own work beats a guide's engine-exact one, because the shop is quoting
+        // what it will actually charge.
+        Comparator<Candidate> byOwner =
+                Comparator.comparingInt(c -> c.row().getOwnerScope() == LaborStandardOwnerScope.SHOP ? 0 : 1);
         Comparator<Candidate> bySpecificity = Comparator.comparingInt((Candidate c) -> -c.specificity());
         Comparator<Candidate> byTypePreference = Comparator.comparingInt(c -> {
             LaborTimeType type = c.row().getTimeType();
@@ -250,22 +285,45 @@ public class LaborTimeResolutionServiceImpl implements LaborTimeResolutionServic
             int index = DEFAULT_TYPE_ORDER.indexOf(type);
             return index < 0 ? DEFAULT_TYPE_ORDER.size() : index;
         });
-        Comparator<Candidate> byPolicy = Comparator.comparingInt(c -> policyPrecedence.getOrDefault(
-                policyKey(c.row().getTimeType(), c.row().getSourceCode()),
-                defaultPrecedence(c.row().getSourceCode())));
-        return bySpecificity.thenComparing(byTypePreference).thenComparing(byPolicy);
+        Comparator<Candidate> byPolicy = Comparator.comparingInt(c ->
+                precedenceFor(policyPrecedence, c.row().getTimeType(), c.row().getSourceCode(), category));
+        return byOwner.thenComparing(bySpecificity)
+                .thenComparing(byTypePreference)
+                .thenComparing(byPolicy);
+    }
+
+    /**
+     * A policy row naming this operation's category wins over a category-less one for the same
+     * (time type, source) — that specificity is the whole point of R1: MICHELIN outranks the
+     * aggregator for TIRE_SERVICE without outranking it everywhere. Falling through to the
+     * category-less row and then to the provider's configured default keeps every pre-Tier-0
+     * policy row meaning exactly what it meant before the column existed.
+     */
+    private int precedenceFor(
+            Map<String, Integer> policyPrecedence,
+            LaborTimeType timeType,
+            String sourceCode,
+            @Nullable OperationCategory category) {
+        if (category != null) {
+            Integer scoped = policyPrecedence.get(policyKey(timeType, sourceCode, category));
+            if (scoped != null) {
+                return scoped;
+            }
+        }
+        return policyPrecedence.getOrDefault(policyKey(timeType, sourceCode, null), defaultPrecedence(sourceCode));
     }
 
     private Map<String, Integer> policyPrecedenceIndex() {
         return policyRepository.findByEnabledTrue().stream()
                 .collect(java.util.stream.Collectors.toMap(
-                        p -> policyKey(p.getTimeType(), p.getSourceCode()),
+                        p -> policyKey(p.getTimeType(), p.getSourceCode(), p.getOperationCategory()),
                         LaborTimeSourcePolicyEntity::getPrecedence,
                         Math::min));
     }
 
-    private static String policyKey(LaborTimeType timeType, String sourceCode) {
-        return timeType.name() + "|" + sourceCode.toUpperCase(Locale.ROOT);
+    private static String policyKey(LaborTimeType timeType, String sourceCode, @Nullable OperationCategory category) {
+        return timeType.name() + "|" + sourceCode.toUpperCase(Locale.ROOT) + "|"
+                + (category == null ? "" : category.name());
     }
 
     private int defaultPrecedence(String sourceCode) {

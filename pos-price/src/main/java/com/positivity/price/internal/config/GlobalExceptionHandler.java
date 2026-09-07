@@ -4,6 +4,7 @@ import com.positivity.price.internal.exception.BasePriceUnavailableException;
 import com.positivity.price.internal.exception.BasePriceWindowConflictException;
 import com.positivity.price.internal.exception.DuplicatePromoCodeException;
 import com.positivity.price.internal.exception.EligibilityRuleNotFoundException;
+import com.positivity.price.internal.exception.LaborRateValidationException;
 import com.positivity.price.internal.exception.PromotionCodeNotFoundException;
 import com.positivity.price.internal.exception.PromotionMultipleNotAllowedException;
 import com.positivity.price.internal.exception.PromotionNotApplicableException;
@@ -120,6 +121,13 @@ public class GlobalExceptionHandler {
         log.error("Restriction evaluation service unavailable: {}", ex.getMessage());
         return buildErrorResponse(
                 HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE", ex.getMessage(), null, request);
+    }
+
+    @ExceptionHandler(LaborRateValidationException.class)
+    public ResponseEntity<ApiError> handleLaborRateValidation(
+            LaborRateValidationException exception, HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.UNPROCESSABLE_CONTENT, "LABOR_RATE_INVALID", exception.getMessage(), null, request);
     }
 
     @ExceptionHandler(RestrictionRuleNotFoundException.class)

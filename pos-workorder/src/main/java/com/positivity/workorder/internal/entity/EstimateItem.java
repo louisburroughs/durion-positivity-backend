@@ -131,6 +131,36 @@ public class EstimateItem {
     @Nullable
     private String guideIncludedOpCodes;
 
+    // Labor-rate snapshot (#1575 Tier 0 / #1569 R4): where the price on this LABOR line came
+    // from. The mirror of the guide-time block above — unitPrice stays the CHARGED rate, these
+    // record what pos-price published and which matrix steps produced it, so an adjusted quote
+    // keeps both numbers the way it already keeps guide hours beside agreed hours.
+    @Column(name = "rate_hourly", precision = 10, scale = 4)
+    @Nullable
+    private BigDecimal rateHourly;
+
+    @Column(name = "rate_base_hourly", precision = 10, scale = 4)
+    @Nullable
+    private BigDecimal rateBaseHourly;
+
+    @Column(name = "rate_currency", length = 3)
+    @Nullable
+    private String rateCurrency;
+
+    @Column(name = "rate_scope", length = 24)
+    @Nullable
+    private String rateScope;
+
+    @Column(name = "rate_id")
+    @Nullable
+    private UUID rateId;
+
+    // Comma-separated labor-matrix codes that actually applied; read back whole to show the
+    // derivation, never queried relationally.
+    @Column(name = "rate_adjustment_codes")
+    @Nullable
+    private String rateAdjustmentCodes;
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

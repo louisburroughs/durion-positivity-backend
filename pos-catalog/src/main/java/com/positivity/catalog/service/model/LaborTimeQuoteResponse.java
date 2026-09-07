@@ -20,6 +20,8 @@ import org.jspecify.annotations.Nullable;
  * @param matchGrade vehicle-match confidence; callers may show it beside the prefill
  * @param overlapGroup shared-setup group for overlap-aware summation
  * @param includedOpCodes Durion operation codes whose time this one already includes
+ * @param ownerScope {@code SHOP} when the quoting location's own authored time answered,
+ *     {@code PLATFORM} otherwise
  */
 @Schema(
         name = "LaborTimeQuoteResponse",
@@ -48,7 +50,13 @@ public record LaborTimeQuoteResponse(
         String overlapGroup,
 
         @Schema(description = "Durion operation codes already included in this time.") @NonNull
-        List<String> includedOpCodes) {
+        List<String> includedOpCodes,
+
+        @Schema(
+                description = "SHOP when the quoting location's own authored time answered, else PLATFORM.",
+                example = "PLATFORM")
+        @Nullable
+        String ownerScope) {
 
     /** Typed resolution outcomes; misses are statuses, never errors. */
     @Schema(name = "LaborTimeQuoteStatus")
@@ -71,6 +79,6 @@ public record LaborTimeQuoteResponse(
     }
 
     public static LaborTimeQuoteResponse miss(@NonNull Status status) {
-        return new LaborTimeQuoteResponse(status, null, null, null, null, null, null, List.of());
+        return new LaborTimeQuoteResponse(status, null, null, null, null, null, null, List.of(), null);
     }
 }

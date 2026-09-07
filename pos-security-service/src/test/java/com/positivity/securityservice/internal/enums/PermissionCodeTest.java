@@ -32,12 +32,12 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
-    // 510 / 76: catalog v76 added accounting:gl:reconcile (the invoice revenue
-    // reconciliation operation in pos-accounting, #1851) at bit 509.
+    // 516 / 79: catalog v79 added workorder:labor_intelligence:view (#1575 Tier 0) at bit 515,
+    // on top of v78's catalog service packages (513-514) and v77's pricing labor rates (510-512).
     // Both numbers move together by design: the version bump is what tells a running gateway
     // its cached catalog is stale.
-    private static final int EXPECTED_PERMISSION_COUNT = 510;
-    private static final int EXPECTED_CATALOG_VERSION = 76;
+    private static final int EXPECTED_PERMISSION_COUNT = 516;
+    private static final int EXPECTED_CATALOG_VERSION = 79;
 
     // -------------------------------------------------------------------------
     // AC-1: Catalog size — EXPECTED_PERMISSION_COUNT entries

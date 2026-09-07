@@ -261,16 +261,16 @@ public class WorkorderAnalyticsController {
                     Use this tool to answer questions about open work across the whole book — which \
                     customers have work in progress, how many customers have open jobs, or the \
                     work-order half of a cross-domain question such as customers with both an open job \
-                    and an unpaid invoice. It returns COUNTS, not the work orders themselves: use \
-                    searchWorkorders (status=OPEN, optionally customerId) when the answer needs the \
-                    individual work orders, and getWorkorder for one work order's detail.
+                    and an unpaid invoice; it returns COUNTS, so do not use it when the answer needs \
+                    the individual work orders, which is searchWorkorders (status=OPEN, optionally \
+                    customerId), or getWorkorder for one work order's detail.
                     Open means the six non-terminal statuses APPROVED, ASSIGNED, WORK_IN_PROGRESS, \
                     AWAITING_PARTS, AWAITING_APPROVAL and READY_FOR_PICKUP — the same set \
-                    searchWorkorders accepts under its OPEN alias. DRAFT is deliberately excluded: a \
-                    draft has not been approved into work. The workorder count endpoint \
-                    (GET /v1/workorders/count?openOnly=true) counts DRAFT as open, so the two \
-                    deliberately disagree; this one matches what a status=OPEN search returns.
-                    Preconditions: none. Required inputs: none; limit is optional (default 100, \
+                    searchWorkorders accepts under its OPEN alias — while DRAFT is deliberately \
+                    excluded, because a draft has not been approved into work; the workorder count \
+                    endpoint (GET /v1/workorders/count?openOnly=true) counts DRAFT as open, so the two \
+                    deliberately disagree, and this one matches what a status=OPEN search returns.
+                    Preconditions: none; required inputs: none, and limit is optional (default 100, \
                     hard-capped at 500).
                     Emits a WORKORDER_ANALYTICS_OPEN_BY_CUSTOMER_VIEW audit event; no state changes.
                     Returns 200 with truncated=true and the true totalCustomers/totalOpenWorkorders \

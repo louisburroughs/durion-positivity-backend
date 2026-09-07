@@ -164,9 +164,11 @@ class EstimateApprovalLifecycleTest {
                 vehicleReferenceService,
                 estimateFactPublisher,
                 org.mockito.Mockito.mock(PartQuantityDivisibilityService.class),
-                // Un-stubbed mock: lookupGuideTime answers Optional.empty(), i.e. "no guide",
-                // which keeps every pre-#1569 scenario behaviorally identical.
-                org.mockito.Mockito.mock(LaborTimeDefaultingService.class));
+                // Un-stubbed mocks: lookupGuideTime and lookupLaborRate answer Optional.empty(),
+                // i.e. "no guide" and "no rate", which keeps every pre-#1569 scenario behaviorally
+                // identical.
+                org.mockito.Mockito.mock(LaborTimeDefaultingService.class),
+                org.mockito.Mockito.mock(LaborRateDefaultingService.class));
     }
 
     private Estimate estimate(EstimateStatus status) {

@@ -32,10 +32,14 @@ ON CONFLICT (source_code, provider_op_code) DO NOTHING;
 -- Default resolution precedence (lower wins). One row per (time_type, source) that stores
 -- rows; the QUERY_ONLY live source and any unlisted pair fall back to the provider's
 -- configured default precedence.
-INSERT INTO labor_time_source_policy (id, time_type, source_code, precedence, enabled, created_at, updated_at)
+-- operation_category is stated as NULL rather than omitted: V22 widened the uniqueness key to
+-- (time_type, source_code, operation_category) NULLS NOT DISTINCT, and the ON CONFLICT target
+-- below has to name the whole key. NULL keeps these rows meaning what they meant before the
+-- column existed — applicable to every operation category.
+INSERT INTO labor_time_source_policy (id, time_type, source_code, operation_category, precedence, enabled, created_at, updated_at)
 VALUES
-    (md5('ltsp:RETAIL_FLAT_RATE:MOCKGUIDE')::uuid,     'RETAIL_FLAT_RATE',     'MOCKGUIDE', 100, true, NOW(), NOW()),
-    (md5('ltsp:OEM_WARRANTY:MOCKGUIDE')::uuid,         'OEM_WARRANTY',         'MOCKGUIDE', 100, true, NOW(), NOW()),
-    (md5('ltsp:MANUFACTURER_INSTALL:MOCKGUIDE')::uuid, 'MANUFACTURER_INSTALL', 'MOCKGUIDE', 100, true, NOW(), NOW()),
-    (md5('ltsp:DURION_STANDARD:DURION')::uuid,         'DURION_STANDARD',      'DURION',    100, true, NOW(), NOW())
-ON CONFLICT (time_type, source_code) DO NOTHING;
+    (md5('ltsp:RETAIL_FLAT_RATE:MOCKGUIDE')::uuid,     'RETAIL_FLAT_RATE',     'MOCKGUIDE', NULL, 100, true, NOW(), NOW()),
+    (md5('ltsp:OEM_WARRANTY:MOCKGUIDE')::uuid,         'OEM_WARRANTY',         'MOCKGUIDE', NULL, 100, true, NOW(), NOW()),
+    (md5('ltsp:MANUFACTURER_INSTALL:MOCKGUIDE')::uuid, 'MANUFACTURER_INSTALL', 'MOCKGUIDE', NULL, 100, true, NOW(), NOW()),
+    (md5('ltsp:DURION_STANDARD:DURION')::uuid,         'DURION_STANDARD',      'DURION',    NULL, 100, true, NOW(), NOW())
+ON CONFLICT (time_type, source_code, operation_category) DO NOTHING;

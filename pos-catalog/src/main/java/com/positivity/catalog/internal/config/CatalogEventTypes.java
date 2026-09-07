@@ -181,6 +181,33 @@ public final class CatalogEventTypes {
                 EventTypeRegistration.search(
                                 "CATALOG_LABOR_STANDARD_LIST", "List a service's labor standards with provenance")
                         .build(),
+                // search, not fastRead: the conflict sweep compares every active row against every
+                // other for its operation, which is deliberately not a quote-path shape. It is an
+                // admin curation report and its budget should say so.
+                EventTypeRegistration.search(
+                                "CATALOG_LABOR_STANDARD_CONFLICTS",
+                                "List labor standards where two sources publish disagreeing times")
+                        .build(),
+                // Service packages and fleet requirement sets (#1575 Tier 0)
+                EventTypeRegistration.write(
+                                "CATALOG_SERVICE_PACKAGE_CREATE",
+                                "Create a service package or a fleet account's requirement set")
+                        .build(),
+                EventTypeRegistration.write(
+                                "CATALOG_SERVICE_PACKAGE_MEMBER_ADD", "Add a service operation to a package")
+                        .build(),
+                EventTypeRegistration.write(
+                                "CATALOG_SERVICE_PACKAGE_MEMBER_REMOVE", "Remove a service operation from a package")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "CATALOG_SERVICE_PACKAGE_GET", "Read one service package with its members")
+                        .build(),
+                // search, not fastRead: this reads a location's packages and then every member of
+                // each in a batch, which is a listing shape rather than a keyed lookup.
+                EventTypeRegistration.search(
+                                "CATALOG_SERVICE_PACKAGE_LIST",
+                                "List the service packages a location may sell, or a fleet's requirement set")
+                        .build(),
                 // Labor-guide ingestion + resolution (#1569 Phase 1). The import gets an
                 // approval-grade budget for the same reason the fact replays do: one call
                 // legitimately writes thousands of rows, so a write threshold would alert on

@@ -40,14 +40,14 @@ class LaborTimeDefaultingServiceTest {
         when(vehicleReferenceService.resolve(any(), any()))
                 .thenReturn(new VehicleReferenceService.VehicleReference(
                         "2021 Honda Civic", "VIN1", "2021", "Honda", "Civic"));
-        when(client.resolveLaborTime(any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(client.resolveLaborTime(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         when(replicaRepository.findById(SERVICE_ID)).thenReturn(Optional.empty());
     }
 
     @Test
     @DisplayName("an edge answer wins and carries its provenance, with included codes comma-joined")
     void edgeAnswerWins() {
-        when(client.resolveLaborTime(SERVICE_ID, "2021", "Honda", "Civic"))
+        when(client.resolveLaborTime(SERVICE_ID, "2021", "Honda", "Civic", null))
                 .thenReturn(Optional.of(new CatalogLaborTimeClient.GuideTime(
                         new BigDecimal("1.5"),
                         "RETAIL_FLAT_RATE",
@@ -55,9 +55,11 @@ class LaborTimeDefaultingServiceTest {
                         "2026-09-01",
                         "EXACT",
                         "WHEEL-OFF",
-                        List.of("BRAKE-PAD-FRONT", "BRAKE-PAD-REAR"))));
+                        List.of("BRAKE-PAD-FRONT", "BRAKE-PAD-REAR"),
+                        "PLATFORM")));
 
-        var guide = service.lookupGuideTime(SERVICE_ID, CUSTOMER_ID, VEHICLE_ID).orElseThrow();
+        var guide = service.lookupGuideTime(SERVICE_ID, CUSTOMER_ID, VEHICLE_ID, null)
+                .orElseThrow();
 
         assertThat(guide.hours()).isEqualByComparingTo("1.5");
         assertThat(guide.sourceCode()).isEqualTo("MOCKGUIDE");
@@ -70,7 +72,8 @@ class LaborTimeDefaultingServiceTest {
     void replicaDefaultAnswersWhenEdgeSilent() {
         when(replicaRepository.findById(SERVICE_ID)).thenReturn(Optional.of(replica(new BigDecimal("2.0"), true)));
 
-        var guide = service.lookupGuideTime(SERVICE_ID, CUSTOMER_ID, VEHICLE_ID).orElseThrow();
+        var guide = service.lookupGuideTime(SERVICE_ID, CUSTOMER_ID, VEHICLE_ID, null)
+                .orElseThrow();
 
         assertThat(guide.hours()).isEqualByComparingTo("2.0");
         assertThat(guide.matchGrade()).isEqualTo("DEFAULT_HOURS");
@@ -82,13 +85,15 @@ class LaborTimeDefaultingServiceTest {
     void tombstonedReplicaAnswersNothing() {
         when(replicaRepository.findById(SERVICE_ID)).thenReturn(Optional.of(replica(new BigDecimal("2.0"), false)));
 
-        assertThat(service.lookupGuideTime(SERVICE_ID, CUSTOMER_ID, VEHICLE_ID)).isEmpty();
+        assertThat(service.lookupGuideTime(SERVICE_ID, CUSTOMER_ID, VEHICLE_ID, null))
+                .isEmpty();
     }
 
     @Test
     @DisplayName("nothing anywhere is a clean empty — the writer types the hours")
     void nothingAnywhereIsEmpty() {
-        assertThat(service.lookupGuideTime(SERVICE_ID, CUSTOMER_ID, VEHICLE_ID)).isEmpty();
+        assertThat(service.lookupGuideTime(SERVICE_ID, CUSTOMER_ID, VEHICLE_ID, null))
+                .isEmpty();
     }
 
     private static ExtCatalogServiceReplica replica(BigDecimal hours, boolean active) {
