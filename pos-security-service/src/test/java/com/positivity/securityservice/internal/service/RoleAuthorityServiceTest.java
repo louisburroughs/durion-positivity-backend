@@ -6,9 +6,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.domain.RoleGrant;
+import com.positivity.securityservice.internal.dto.RoleGrantRow;
+import com.positivity.securityservice.internal.enums.LocationHierarchy;
+import com.positivity.securityservice.internal.enums.LocationScope;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -120,5 +125,79 @@ class RoleAuthorityServiceTest {
 
         assertThat(service().expandRolesToAuthorities(roles)).isEmpty();
         verify(roleRepository, never()).findPermissionNamesByRoleNames(anyCollection());
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // resolveRoleGrants (ADR-0061 §2, #1868): the per-role, scope-carrying form of the same grants
+    // ---------------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("resolveRoleGrants groups rows per role, carrying that role's scope and hierarchy")
+    void resolveRoleGrants_groupsRowsPerRoleWithScope() {
+        when(roleRepository.findGrantRowsByRoleNames(anyCollection()))
+                .thenReturn(List.of(
+                        new RoleGrantRow(
+                                "INVENTORY_MANAGER", LocationScope.LOCATION, LocationHierarchy.OTHER, "inv:adj:view"),
+                        new RoleGrantRow(
+                                "ACCOUNTANT", LocationScope.LOCATION, LocationHierarchy.FINANCIAL, "acc:je:view"),
+                        new RoleGrantRow(
+                                "INVENTORY_MANAGER",
+                                LocationScope.LOCATION,
+                                LocationHierarchy.OTHER,
+                                "inv:adj:approve")));
+
+        List<RoleGrant> grants = service().resolveRoleGrants(Set.of("INVENTORY_MANAGER", "ACCOUNTANT"));
+
+        assertThat(grants)
+                .containsExactly(
+                        new RoleGrant(
+                                "ACCOUNTANT",
+                                LocationScope.LOCATION,
+                                LocationHierarchy.FINANCIAL,
+                                Set.of("acc:je:view")),
+                        new RoleGrant(
+                                "INVENTORY_MANAGER",
+                                LocationScope.LOCATION,
+                                LocationHierarchy.OTHER,
+                                Set.of("inv:adj:view", "inv:adj:approve")));
+    }
+
+    @Test
+    @DisplayName("resolveRoleGrants normalizes names before lookup and keys the result by the normalized name")
+    void resolveRoleGrants_normalizesRoleNames() {
+        when(roleRepository.findGrantRowsByRoleNames(anyCollection()))
+                .thenReturn(List.of(
+                        new RoleGrantRow("Dispatcher", LocationScope.LOCATION, LocationHierarchy.OTHER, "x:y:z")));
+
+        List<RoleGrant> grants = service().resolveRoleGrants(Set.of("ROLE_dispatcher", "  technician  "));
+
+        assertThat(grants).extracting(RoleGrant::roleName).containsExactly("DISPATCHER");
+
+        ArgumentCaptor<Collection<String>> captor = ArgumentCaptor.captor();
+        verify(roleRepository).findGrantRowsByRoleNames(captor.capture());
+        assertThat(captor.getValue()).containsExactlyInAnyOrder("DISPATCHER", "TECHNICIAN");
+    }
+
+    @Test
+    @DisplayName(
+            "resolveRoleGrants fails closed: unknown or ungranted roles contribute no entry and no ROLE_ authority")
+    void resolveRoleGrants_ungrantedRole_contributesNothing() {
+        when(roleRepository.findGrantRowsByRoleNames(anyCollection())).thenReturn(List.of());
+
+        assertThat(service().resolveRoleGrants(Set.of("MECHANIC", "SELF_SERVICE_CUSTOMER")))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("resolveRoleGrants with null, empty, or blank-only roles does no lookup")
+    void resolveRoleGrants_noUsableRoles_noLookup() {
+        Set<String> blanks = new HashSet<>();
+        blanks.add(null);
+        blanks.add(" ");
+
+        assertThat(service().resolveRoleGrants(null)).isEmpty();
+        assertThat(service().resolveRoleGrants(Set.of())).isEmpty();
+        assertThat(service().resolveRoleGrants(blanks)).isEmpty();
+        verify(roleRepository, never()).findGrantRowsByRoleNames(anyCollection());
     }
 }

@@ -82,10 +82,82 @@ those start with no grants and are outside this baseline.
 | `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN`, `DISPATCHER`, `ACCOUNTING_ASSOCIATE`, `ACCOUNT_MANAGER`, `MANAGER`, `GENERAL_MANAGER` | Least privilege, scoped to the role's job function. |
 | `ACCOUNTANT`, `AP_CLERK`, `CONTROLLER`, `CSR`, `FLEET_MANAGER`, `GL_ANALYST` | **Not granted, and not created.** The retired hardcoded switch expanded these, but no migration or initializer creates the role, and `user_roles` / `role_assignments` are foreign-keyed to `roles(id)` — so no user could ever hold one. They were unreachable branches, documentation personas rather than security roles. To make one real, create the role first, then grant it. |
 | `INVENTORY_LEAD` | The parts-receiving persona (#1439): the receiving surface (`inventory:asn:*`, `inventory:receiving:*`, `inventory:goods_receipt:create/view`, `inventory:issue:parts`, `inventory:putaway:claim/execute/generate/view`, `inventory:shortage:*`, `inventory:on_hand:*`) and purchase-order entry (`order:purchase_order:create/view/availability_view`), plus adjustment requests (`inventory:adjustment:create`, `inventory:adjustment:view`) — it raises adjustments, it does not approve them — and the read-only catalog/order/pricing views and assistant entrypoints. The elevated escape hatches (`inventory:goods_receipt:override`, putaway capacity/compatibility overrides) are deliberately not granted. |
-| `INVENTORY_MANAGER`, `INVENTORY_CONTROLLER` | Create, approve, and view inventory adjustments. **Permission-identical on the adjustment surface on purpose**: the "location-scoped" vs "global" distinction is a property of `role_assignments.scope_type`, not of `role_permissions`, so it cannot be expressed by granting different rows. `INVENTORY_CONTROLLER` additionally holds `inventory:adjustment:override`, the negative-stock escape hatch — only a globally scoped approver should drive on-hand below zero. `INVENTORY_MANAGER` (with `LOCATION_MANAGER`) is also a PO-approver persona (#1438): `order:purchase_order:approve/transmit/view/availability_view`. |
+| `INVENTORY_MANAGER`, `INVENTORY_CONTROLLER` | Create, approve, and view inventory adjustments. **Permission-identical on the adjustment surface on purpose**: the "location-scoped" vs "global" distinction is a property of the role's `location_scope` (`INVENTORY_MANAGER` is `LOCATION`, `INVENTORY_CONTROLLER` is `ALL`; see [Role location scope](#role-location-scope)), not of `role_permissions`, so it cannot be expressed by granting different rows. `INVENTORY_CONTROLLER` additionally holds `inventory:adjustment:override`, the negative-stock escape hatch — only a globally scoped approver should drive on-hand below zero. `INVENTORY_MANAGER` (with `LOCATION_MANAGER`) is also a PO-approver persona (#1438): `order:purchase_order:approve/transmit/view/availability_view`. |
 | `SHOP_MANAGER` | The shop surface its role description names — `shop:location:view`, `shop:bay:view`, `shop:bay:assign`, `shop:schedule:view`, `shop:schedule:edit`, `shop:technician:view` — plus `invoice:finalize:override` (#1374). No audit grant: the shop domain defines no audit permission, so "audit review" in the V3 description has nothing to map to. |
 | `CUSTOMER`, `SELF_SERVICE_CUSTOMER` | **Assistant entrypoints only**, confirmed deliberate on #1373 rather than inherited. External-facing; any domain grant to them is a new product decision. |
 | `SECURITY_ADMIN`, `READ_ONLY_SCHEDULER` | **Deleted.** `V3__seed_candidate_roles.sql` created them as unratified "Candidate Roles v0"; nothing in the codebase ever referenced either, and `SECURITY_ADMIN`'s described scope is already held by `SYSTEM_ADMINISTRATOR`. `V23__drop_unratified_candidate_roles.sql` removes them (#1373). V3 is left untouched — it is applied everywhere, so editing it would break its checksum. |
+
+### Role location scope
+
+Since ADR-0061 (#1868) every role carries two columns that say how far its grants reach. They are
+properties of the **role**, not of the assignment or the employee: two roles may hold identical
+grants and differ only here.
+
+| Column | Values | Meaning |
+| --- | --- | --- |
+| `location_scope` | `ALL` (default) \| `LOCATION` | `ALL`: the grants apply everywhere — today's behaviour. `LOCATION`: the grants apply only at the location nodes pos-people assigns the holder to (`ext_people_staffing_assignment`, below) and every descendant of those nodes. |
+| `location_hierarchy` | `FINANCIAL` \| `OTHER` (default) | Which pos-location parent dimension a `LOCATION` role is evaluated along at check time. `FINANCIAL` is the accounting rollup; `OTHER` is the union of the seven non-financial parent types. |
+
+Seeded values (`V37__add_role_location_scope.sql`, pinned by `RoleLocationScopeSeedTest`):
+
+| Role | `location_scope` | `location_hierarchy` |
+| --- | --- | --- |
+| `ADMIN`, `SYSTEM_ADMINISTRATOR`, `INVENTORY_CONTROLLER`, `SELF_SERVICE_CUSTOMER` | `ALL` | `OTHER` |
+| `CONTROLLER` | `ALL` | `FINANCIAL` |
+| `ACCOUNT_MANAGER`, `ACCOUNTANT`, `GENERAL_MANAGER` | `LOCATION` | `FINANCIAL` |
+| `INVENTORY_MANAGER`, `LOCATION_MANAGER`, `SHOP_MANAGER`, `MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN`, `DISPATCHER` | `LOCATION` | `OTHER` |
+
+`INVENTORY_CONTROLLER` is an inventory role, not an accounting one — it is `OTHER`, and must never
+be classified by a name match on "CONTROLLER". `ACCOUNTING_ASSOCIATE`, `INVENTORY_LEAD` and
+`CUSTOMER` are not named by the ADR and keep the defaults.
+
+Two things about provisioning:
+
+- **A role created later** — through `POST /v1/roles` or `POST /v1/roles/bulk-ingest` — gets the
+  defaults, `ALL` / `OTHER`. Nothing narrows by omission, and nothing widens either: `ALL`
+  only continues what every role does today. The role create/response DTOs do not yet expose
+  the two columns; changing them is a data change (SQL) until that API surface is extended.
+- **A reseed cannot reset these columns.** `R__seed_reference_security.sql` creates only the
+  bootstrap floor (`ADMIN`, `SYSTEM_ADMINISTRATOR` — both at the defaults) with
+  `ON CONFLICT (name) DO NOTHING`, so an existing row is never rewritten; V37 sets the values
+  once, by name. On a *fresh* database the roles the bulk loader provisions after startup arrive
+  at the defaults, so `roles.csv`-provisioned `LOCATION` roles need the same UPDATE applied
+  (or the loader taught the two columns) before location scope is enforced there.
+
+`LOCATION` has no effect until an endpoint checks the scope claims below (#1870+); until then a
+`LOCATION` role behaves exactly as an `ALL` one.
+
+#### Scope claims in the access token
+
+`JwtService.generateTokenPair` composes three **additive** claims next to `perm_bits`
+(ADR-0061 §2). `perm_bits` and `CATALOG_VERSION` are unchanged.
+
+| Claim | Value |
+| --- | --- |
+| `loc_fin_bits` | Base64URL bitset (same `PermissionBitsetCodec`, same bit indexes and `perm_ver` as `perm_bits`) of the permissions that are location-scoped along `FINANCIAL`. Always present; `""` when empty. |
+| `loc_oth_bits` | The same along `OTHER`. |
+| `loc_scope` | `{"v":1,"nodes":["<uuid>", ...]}` — the holder's assigned location nodes, verbatim and never expanded. Omitted when both bitsets are empty. `v` is a discriminator so a denser encoding can be added later without a catalog bump. |
+
+Composition, per permission, from `RoleAuthorityService.resolveRoleGrants`:
+
+- Granted by **any** `ALL` role → global: in neither bitset. The broader grant wins.
+- Otherwise, in `loc_fin_bits` if any granting `LOCATION` role is `FINANCIAL`, and in
+  `loc_oth_bits` if any is `OTHER`. A permission may be in **both**.
+- **Fail closed.** If either bitset is non-empty but no assigned node resolves (the token has no
+  `personId`, or `StaffingAssignmentProjectionService` returns nothing for today), the bitsets
+  are emitted and `loc_scope` is **omitted**. Absence denies; it is never substituted with `ALL`.
+
+Refresh tokens never carry any of the three. Readers: `getFinancialLocationScopedPermissionsFromToken`,
+`getOtherLocationScopedPermissionsFromToken`, `getLocationScopeFromToken` (absent → `Optional.empty()`).
+
+#### Effective-dating clamp on `exp`
+
+When either scope bitset is non-empty, the access token's `exp` is
+`min(now + 3600s, end of the day the earliest contributing staffing assignment ends)` in the
+issuer clock's zone (ADR-0061 §4, #1873). Tokens with no location-scoped grant, and holders whose
+assignments are open-ended, are unaffected. Refresh tokens keep their own lifetime, and because
+`refreshAccessToken` re-enters `generateTokenPair`, the clamp is re-evaluated on every refresh
+rather than inherited.
 
 ### Assistant baseline
 
@@ -130,20 +202,22 @@ Three tables are easy to confuse:
 | `user_roles` | **user → role**, unscoped | Token issuance, `AuthorizationService.authorizePerson` |
 | `role_assignments` | **user → role**, with `scope_type`, optional location scope and effective dating | `RoleManagementService.getUserPermissions` / `check-permission` only |
 
-Location scope and effective dating live on `role_assignments` and are honoured by
-`RoleManagementService.userHasPermission`. They do **not** narrow the grants in a JWT: token
-issuance takes the union of the roles a user holds and encodes every permission those roles
-grant. Location-sensitive decisions must therefore be enforced by the owning service, or asked
-of `GET /v1/roles/check-permission`, rather than assumed from the token.
+`role_assignments.scope_type` and `role_assignment_scope_locations` are retired by ADR-0061 §1:
+they are still honoured by `RoleManagementService.userHasPermission` but reach no enforcement
+point and never narrowed the grants in a JWT. Location reach is now the role's `location_scope`
+plus the pos-people staffing assignment, carried as the scope claims described under
+[Role location scope](#role-location-scope); `perm_bits` itself still takes the union of every
+role a user holds. Location-sensitive decisions are enforced by the owning service from those
+claims.
 
 ## Key Classes
 
-- `JwtService` — issues and validates JWTs; encodes `perm_bits` via `PermissionBitsetCodec`
+- `JwtService` — issues and validates JWTs; encodes `perm_bits` and the `loc_fin_bits` / `loc_oth_bits` / `loc_scope` scope claims via `PermissionBitsetCodec`, and clamps `exp` to the earliest contributing staffing assignment
 - `AuthenticationService` — login flow; delegates to Spring Security `AuthenticationManager`
 - `LockoutService` — configurable failed-login lockout with automatic and manual unlock
 - `PermissionService` — permission catalog management (bit index assignment)
 - `RoleManagementService` — role CRUD and role-to-permission assignment
-- `RoleAuthorityService` — resolves a role's authorities from persisted `role_permissions` grants
+- `RoleAuthorityService` — resolves a role's authorities from persisted `role_permissions` grants, and (`resolveRoleGrants`) the same grants per role with each role's location reach
 - `SelfRegistrationService` / `SelfRegistrationReviewService` — user self-registration and admin review
 
 ## API Endpoints

@@ -1,5 +1,7 @@
 package com.positivity.securityservice.internal.entity;
 
+import com.positivity.securityservice.internal.enums.LocationHierarchy;
+import com.positivity.securityservice.internal.enums.LocationScope;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.*;
 import java.time.Instant;
@@ -77,6 +79,29 @@ public class Role {
     @ColumnDefault("true")
     @Column(name = "mcp_persona_eligible", nullable = false)
     private boolean mcpPersonaEligible = true;
+
+    /**
+     * Whether this role's grants reach every location or only the holder's assigned nodes
+     * (ADR-0061 §1, #1868). {@code ALL} preserves today's behaviour and is the default for a role
+     * created through the API; {@code LOCATION} only takes effect at endpoints that check the
+     * {@code loc_fin_bits} / {@code loc_oth_bits} / {@code loc_scope} claims.
+     */
+    // @ColumnDefault mirrors V37's DEFAULT into the H2 test schema for the same reason as
+    // mcp_persona_eligible above: inserts that do not name the column must still succeed.
+    @ColumnDefault("'ALL'")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "location_scope", nullable = false, length = 16)
+    private LocationScope locationScope = LocationScope.ALL;
+
+    /**
+     * Which pos-location parent dimension a {@code LOCATION}-scoped role is evaluated along
+     * (ADR-0061 §2). Meaningful only when {@link #locationScope} is {@code LOCATION}; kept
+     * populated regardless so the value is already right if the scope is later narrowed.
+     */
+    @ColumnDefault("'OTHER'")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "location_hierarchy", nullable = false, length = 16)
+    private LocationHierarchy locationHierarchy = LocationHierarchy.OTHER;
 
     @CreatedDate
     @Column(nullable = false)

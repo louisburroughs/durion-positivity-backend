@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.repository;
 
+import com.positivity.securityservice.internal.dto.RoleGrantRow;
 import com.positivity.securityservice.internal.dto.RolePersonaDto;
 import com.positivity.securityservice.internal.entity.Role;
 import java.time.Instant;
@@ -43,6 +44,31 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
      */
     @Query("SELECT DISTINCT p.name FROM Role r JOIN r.permissions p WHERE UPPER(r.name) IN :names")
     Set<String> findPermissionNamesByRoleNames(@Param("names") Collection<String> names);
+
+    /**
+     * Every {@code role_permissions} row of the given roles, each carrying the granting role's
+     * {@code location_scope} and {@code location_hierarchy} (ADR-0061 §2, #1868).
+     *
+     * <p>The per-role form of {@link #findPermissionNamesByRoleNames}: that query's
+     * {@code DISTINCT} collapse is right for {@code perm_bits} but loses which role granted what,
+     * and the location-scope bitsets need exactly that. Same matching rules — case-insensitive on
+     * a name the caller has already normalized — and the same fail-closed shape: an unknown role,
+     * or one with no grants, yields no rows.
+     *
+     * <p>A constructor projection rather than a {@link Role} fetch for the same reason as
+     * {@link #findAllPersonas()}: the four columns are what token issuance needs, and hydrating
+     * the entity graph would materialize every {@code Permission} row of every role held.
+     *
+     * @param names role names, already normalized to upper case with any {@code ROLE_} prefix stripped
+     * @return one row per (role, permission) grant; empty when no role matches or none has grants
+     */
+    @Query("""
+            SELECT new com.positivity.securityservice.internal.dto.RoleGrantRow(
+                r.name, r.locationScope, r.locationHierarchy, p.name)
+            FROM Role r JOIN r.permissions p
+            WHERE UPPER(r.name) IN :names
+            """)
+    List<RoleGrantRow> findGrantRowsByRoleNames(@Param("names") Collection<String> names);
 
     /**
      * Every role's MCP persona metadata, ordered by rank then name (#1613).

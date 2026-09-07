@@ -2,9 +2,12 @@ package com.positivity.securityservice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.securityservice.internal.domain.RoleGrant;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.enums.LocationHierarchy;
+import com.positivity.securityservice.internal.enums.LocationScope;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -148,6 +151,82 @@ class EffectivePermissionResolutionIT {
                 .containsExactly("ROLE_" + role.getName());
     }
 
+    // ---------------------------------------------------------------------------------------
+    // ADR-0061 §2 (#1868): per-role grants with location reach, end to end against H2
+    // ---------------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("resolveRoleGrants returns each role's grants with its own location reach, ordered by name")
+    void resolveRoleGrants_returnsPerRoleGrantsWithReach() {
+        Permission view = permission("accounting:je:view", 0);
+        Permission approve = permission("inventory:adjustment:approve", 57);
+        Role financial =
+                role(uniqueName("IT_A_FIN"), LocationScope.LOCATION, LocationHierarchy.FINANCIAL, Set.of(view));
+        Role operational =
+                role(uniqueName("IT_B_OTH"), LocationScope.LOCATION, LocationHierarchy.OTHER, Set.of(approve, view));
+        Role ungranted = role(uniqueName("IT_C_ALL"), Set.of());
+
+        entityManager.clear();
+
+        assertThat(roleAuthorityService.resolveRoleGrants(
+                        Set.of(financial.getName(), operational.getName(), ungranted.getName())))
+                .containsExactly(
+                        new RoleGrant(
+                                financial.getName(),
+                                LocationScope.LOCATION,
+                                LocationHierarchy.FINANCIAL,
+                                Set.of("accounting:je:view")),
+                        new RoleGrant(
+                                operational.getName(),
+                                LocationScope.LOCATION,
+                                LocationHierarchy.OTHER,
+                                Set.of("accounting:je:view", "inventory:adjustment:approve")));
+    }
+
+    @Test
+    @DisplayName("a role saved without setting scope is ALL / OTHER, and its grants stay global in the token")
+    void roleDefaults_areAllOther_andGrantsStayGlobal() {
+        Permission view = permission("accounting:je:view", 0);
+        Role role = role(Set.of(view));
+        User user = user(Set.of(role));
+
+        entityManager.clear();
+
+        Role stored = roleRepository.findById(role.getId()).orElseThrow();
+        assertThat(stored.getLocationScope()).isEqualTo(LocationScope.ALL);
+        assertThat(stored.getLocationHierarchy()).isEqualTo(LocationHierarchy.OTHER);
+
+        JwtService.TokenPair pair =
+                jwtService.generateTokenPair(user.getUsername(), user.getId(), null, Set.of(role.getName()));
+        assertThat(jwtService.getAuthoritiesFromToken(pair.accessToken())).contains("accounting:je:view");
+        assertThat(jwtService.getFinancialLocationScopedPermissionsFromToken(pair.accessToken()))
+                .isEmpty();
+        assertThat(jwtService.getOtherLocationScopedPermissionsFromToken(pair.accessToken()))
+                .isEmpty();
+        assertThat(jwtService.getLocationScopeFromToken(pair.accessToken())).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a LOCATION role's grants reach the scope bitset of its hierarchy; with no person the token fails closed")
+    void locationScopedRole_grantsReachScopeBitset_andFailClosedWithoutPerson() {
+        Permission view = permission("accounting:je:view", 0);
+        Role role = role(uniqueName("IT_SCOPED"), LocationScope.LOCATION, LocationHierarchy.OTHER, Set.of(view));
+        User user = user(Set.of(role));
+
+        entityManager.clear();
+
+        JwtService.TokenPair pair =
+                jwtService.generateTokenPair(user.getUsername(), user.getId(), null, Set.of(role.getName()));
+        assertThat(jwtService.getAuthoritiesFromToken(pair.accessToken())).contains("accounting:je:view");
+        assertThat(jwtService.getOtherLocationScopedPermissionsFromToken(pair.accessToken()))
+                .containsExactly("accounting:je:view");
+        assertThat(jwtService.getFinancialLocationScopedPermissionsFromToken(pair.accessToken()))
+                .isEmpty();
+        // No personId → no assigned node can be resolved → loc_scope omitted, never ALL.
+        assertThat(jwtService.getLocationScopeFromToken(pair.accessToken())).isEmpty();
+    }
+
     private Permission permission(String name, int bitIndex) {
         return permissionRepository.findByName(name).orElseGet(() -> {
             Permission permission = new Permission();
@@ -166,14 +245,30 @@ class EffectivePermissionResolutionIT {
         return role(name, permissions);
     }
 
+    /** Scope left untouched on purpose: the entity defaults (ALL / OTHER) are what get persisted. */
     private Role role(String name, Set<Permission> permissions) {
+        return roleRepository.saveAndFlush(newRole(name, permissions));
+    }
+
+    private Role role(String name, LocationScope scope, LocationHierarchy hierarchy, Set<Permission> permissions) {
+        Role role = newRole(name, permissions);
+        role.setLocationScope(scope);
+        role.setLocationHierarchy(hierarchy);
+        return roleRepository.saveAndFlush(role);
+    }
+
+    private static Role newRole(String name, Set<Permission> permissions) {
         Role role = new Role();
         role.setName(name);
         role.setDescription("Integration-test role");
         role.setCreatedAt(Instant.now());
         role.setCreatedBy("test");
         role.setPermissions(new java.util.HashSet<>(permissions));
-        return roleRepository.saveAndFlush(role);
+        return role;
+    }
+
+    private static String uniqueName(String prefix) {
+        return prefix + "_" + UUID.randomUUID().toString().replace("-", "").toUpperCase(java.util.Locale.ROOT);
     }
 
     private User user(Set<Role> roles) {
