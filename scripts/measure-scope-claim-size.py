@@ -45,9 +45,13 @@ import uuid
 # --- production constants (keep in step with the Java) ------------------------
 CATALOG_SIZE = 510  # PermissionCode values
 HS256_SIG_BYTES = 32
-# Tomcat cap configured across the services' application.yml
+# Tomcat's server.tomcat.max-http-header-size, configured across the services'
+# application.yml. NOTE: this caps the request line PLUS ALL headers together --
+# it is not a budget reserved for the token. Cookies, tracing and correlation
+# headers all draw on the same 64 KB, so the percentages below are a floor on
+# the token's share, not the headroom actually available to it.
 MAX_HTTP_HEADER_SIZE = 65536
-# "Authorization: Bearer " prefix counts against the header budget
+# "Authorization: Bearer " prefix, counted with the token
 BEARER_OVERHEAD = len("Authorization: Bearer ")
 
 
@@ -68,14 +72,21 @@ def java_bitset_bytes(indexes) -> bytes:
 
 
 def perm_bits(count: int) -> str:
-    """Encode `count` permissions. Worst case for size is a high bit index, so
-    spread the grants across the whole catalog rather than packing them low."""
+    """Encode `count` permissions, sized conservatively.
+
+    BitSet.toByteArray() length is driven by the HIGHEST set bit, not by the
+    number of bits set, so the worst case for token size is a grant at the top
+    of the catalog. The top index is therefore always included and the rest are
+    spread beneath it; otherwise low counts top out well short of the catalog
+    end and the measured sizes come out optimistic.
+    """
     if count >= CATALOG_SIZE:
-        idx = range(CATALOG_SIZE)
+        idx = set(range(CATALOG_SIZE))
     else:
         step = CATALOG_SIZE / count
-        idx = sorted({min(CATALOG_SIZE - 1, int(i * step)) for i in range(count)})
-    return b64url(java_bitset_bytes(idx))
+        idx = {min(CATALOG_SIZE - 1, int(i * step)) for i in range(count)}
+        idx.add(CATALOG_SIZE - 1)
+    return b64url(java_bitset_bytes(sorted(idx)))
 
 
 def jws_size(payload: dict) -> int:
@@ -88,7 +99,10 @@ def jws_size(payload: dict) -> int:
 def base_payload(nperms: int) -> dict:
     return {
         "iss": "pos-security-service",
-        "aud": "durion-positivity",
+        # JwtServiceImpl builds this with JJWT's .audience().add(AUDIENCE),
+        # which serialises as an array; AUDIENCE = "api-gateway"
+        # (JwtServiceImplTest asserts containsExactly("api-gateway")).
+        "aud": ["api-gateway"],
         "sub": "felicia.grant",
         "jti": str(uuid.uuid4()),
         "iat": 1788000000,
@@ -114,56 +128,51 @@ PERM_PROFILES = [
 def adopted():
     """ADR-0061 section 2: two dimension bitsets + the assigned nodes.
 
-    Three cases per profile, all with a single assigned node (the expected shape
-    once hierarchy carries the middle tier):
-      unscoped   -- every role is ALL-scoped; no scope claims emitted
-      realistic  -- near-disjoint dimensions: ~40% of permissions scoped along
-                    OTHER, ~10% along FINANCIAL (accounting permissions)
-      worst case -- every permission scoped along BOTH dimensions at once
+    Measured conservatively: perm_bits() always sets the top catalog bit, so the
+    bitset is full-length (64 bytes) whichever role is modelled. That makes the
+    permission profile drop out of the result entirely -- an important finding in
+    its own right, and the reason this reports one figure rather than a per-role
+    table. See PERM_PROFILES below for the spread that is deliberately NOT shown.
     """
     print("=== Adopted: loc_fin_bits + loc_oth_bits + loc_scope ===\n")
-    print(f"{'permission profile':<22}{'unscoped':>10}{'realistic':>13}"
-          f"{'worst case':>12}{'worst delta':>13}")
-    worst = 0
+
+    base = base_payload(387)
+    unscoped = jws_size(base)
+
+    scoped = dict(base)
+    scoped["loc_oth_bits"] = perm_bits(387)
+    scoped["loc_fin_bits"] = perm_bits(387)
+    scoped["loc_scope"] = [str(uuid.uuid4())]
+    s_scoped = jws_size(scoped)
+
+    limit = MAX_HTTP_HEADER_SIZE - BEARER_OVERHEAD
+    print(f"  no scope claims (today)      {unscoped:>6} B")
+    print(f"  + loc_fin_bits/loc_oth_bits/loc_scope, one assigned node"
+          f"   {s_scoped:>6} B   (+{s_scoped - unscoped})")
+    print(f"\n  {s_scoped / limit:.2%} of the {MAX_HTTP_HEADER_SIZE} B max-http-header-size limit")
+    print("  (which caps the request line and ALL headers together, not the token")
+    print("   alone -- cookies and tracing headers draw on the same allowance, so")
+    print("   treat this as the token's share, not the headroom available to it).")
+
+    print("\nWhy there is no per-role breakdown: BitSet.toByteArray() is sized by the")
+    print("HIGHEST set bit, not the number set, so any role holding a grant near the")
+    print("end of a 510-code catalog carries a full 64-byte bitset. Measured")
+    print("conservatively, a DISPATCHER-like role costs the same as ADMIN.")
     for name, n in PERM_PROFILES:
-        base = base_payload(n)
-        unscoped = jws_size(base)
+        p2 = dict(base)
+        p2["perm_bits"] = perm_bits(n)
+        p2["loc_oth_bits"] = perm_bits(n)
+        p2["loc_fin_bits"] = perm_bits(n)
+        p2["loc_scope"] = [str(uuid.uuid4())]
+        print(f"    {name:<20} ({n:>3} permissions): {jws_size(p2):>5} B")
 
-        # Realistic: the two dimensions are near-disjoint (accounting permissions
-        # vs operational ones), so each bitset is sparse.
-        half = dict(base)
-        half["loc_oth_bits"] = perm_bits(max(1, int(n * 0.4)))
-        half["loc_fin_bits"] = perm_bits(max(1, int(n * 0.1)))
-        half["loc_scope"] = [str(uuid.uuid4())]
-        s_half = jws_size(half)
-
-        # Worst case: every permission scoped along BOTH dimensions.
-        full = dict(base)
-        full["loc_oth_bits"] = perm_bits(n)
-        full["loc_fin_bits"] = perm_bits(n)
-        full["loc_scope"] = [str(uuid.uuid4())]
-        s_full = jws_size(full)
-
-        worst = max(worst, s_full)
-        print(f"{name:<22}{unscoped:>10}{s_half:>13}{s_full:>12}{s_full - unscoped:>13}")
-
-    budget = MAX_HTTP_HEADER_SIZE - BEARER_OVERHEAD
-    print(f"\nWorst case {worst} B against a {budget} B header budget "
-          f"({worst / budget:.2%}).")
-    print("Each bitset is bounded by the catalog (86 chars). loc_scope grows only with")
-    print("the number of ASSIGNED NODES, which hierarchy keeps at 1-2 in the normal")
-    print("case -- a Region manager holds the Region node, not its shops.\n")
-
-    print("Cost of additional assigned nodes (ADMIN-like profile, all scoped):")
-    b = base_payload(387)
-    b["loc_oth_bits"] = perm_bits(387)
-    b["loc_fin_bits"] = perm_bits(387)
+    print("\nCost of additional assigned nodes:")
     for nodes in (1, 2, 4, 8, 16):
-        p = dict(b)
-        p["loc_scope"] = [str(uuid.uuid4()) for _ in range(nodes)]
-        print(f"  {nodes:>2} node(s): {jws_size(p):>5} B")
+        p3 = dict(scoped)
+        p3["loc_scope"] = [str(uuid.uuid4()) for _ in range(nodes)]
+        print(f"  {nodes:>2} node(s): {jws_size(p3):>5} B")
     print("\nA cap of ~8 assigned nodes is an assertion that the hierarchy was modelled")
-    print("correctly, not a size limit -- 16 nodes still costs under 1.5 KB.")
+    print("correctly, not a size limit -- 16 nodes still costs well under 2 KB.")
 
 
 def rejected():

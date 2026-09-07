@@ -37,8 +37,8 @@ Three findings changed the shape of the answer:
    hierarchy dimension, reusing the same bit indexes) and `loc_scope` (the assigned nodes) —
    leave the bitset semantics, the catalog and the catalog version untouched. Because a node
    covers its descendants and is evaluated at check time, a Region manager carries **one** node
-   id whether the region has 3 shops or 300. Worst case **+348 bytes**, 1.53% of the header
-   budget.
+   id whether the region has 3 shops or 300. Worst case **+348 bytes**, 1.52% of the `max-http-header-size`
+   limit.
 
 **Recommendation:** retire the pos-security-service scope model; put `location_scope`
 (`ALL` | `LOCATION`) on the role; assign scope to a location node that covers its descendants,
@@ -323,28 +323,30 @@ Two consequences, both deliberate:
 full bitset is 64 bytes → **86** Base64URL characters. Baseline access token ≈ **650 bytes**.
 
 Measured with `scripts/measure-scope-claim-size.py`, which reproduces
-`PermissionBitsetCodec.encode` exactly and builds real JWS compact serialisations with the
-claim set from `JwtServiceImpl.generateTokenPair`. One assigned node; *realistic* is
-near-disjoint dimensions (~40% of permissions scoped along `OTHER`, ~10% along `FINANCIAL`),
-*worst case* is every permission scoped along both at once:
+`PermissionBitsetCodec.encode` exactly (Java `BitSet.toByteArray()` little-endian bit order
+within bytes, Base64URL unpadded) and builds real JWS compact serialisations with the claim set
+from `JwtServiceImpl.generateTokenPair`, including its multi-valued `aud` (`["api-gateway"]`).
 
-| Permission profile | unscoped | realistic | worst case | worst delta |
-| --- | ---: | ---: | ---: | ---: |
-| DISPATCHER-like (11) | 643 | 849 | 969 | +326 |
-| SHOP_MANAGER-like (17) | 648 | 865 | 985 | +337 |
-| CONTROLLER-like (52) | 651 | 972 | 993 | +342 |
-| ADMIN-like (387) | 653 | 999 | 1 001 | +348 |
-| whole catalog (510) | 653 | 999 | 1 001 | +348 |
+| | Size |
+| --- | ---: |
+| No scope claims (today) | 648 B |
+| `loc_fin_bits` + `loc_oth_bits` + `loc_scope`, one assigned node | **996 B** (+348) |
 
-Cost of additional assigned nodes (ADMIN-like, worst case): 1 → 1 001 B, 2 → 1 053 B,
-4 → 1 157 B, 8 → 1 365 B, 16 → 1 781 B.
+Additional assigned nodes: 2 → 1 048 B, 4 → 1 152 B, 8 → 1 360 B, 16 → 1 776 B.
 
-**Worst case 1 001 B against a 65 514 B header budget — 1.53%.** Each bitset is bounded by the
-catalog at 86 characters; `loc_scope` grows only with assigned-node count, which hierarchy keeps
-at 1–2.
+**996 B is 1.52% of the 65 536 B `max-http-header-size` limit.** That limit caps the request
+line and *all* headers together — it is not a budget reserved for the token, and cookies,
+tracing and correlation headers draw on the same allowance. Treat the percentage as the token's
+share, not as headroom available to it.
+
+**There is deliberately no per-role breakdown.** `BitSet.toByteArray()` is sized by the *highest*
+set bit, not the number of bits set, so any role holding a grant near the end of a 510-code
+catalog carries a full 64-byte bitset. Measured conservatively — always setting the top bit — a
+DISPATCHER-like role with 11 permissions costs exactly what ADMIN does with 387: 996 B. Token
+size is therefore independent of permission count, and varies only with assigned-node count.
 
 A cap of ~8 assigned nodes is worth having as an **assertion that the hierarchy was modelled
-correctly**, not as a size limit — 16 nodes still costs under 1.8 KB. Exceeding it should
+correctly**, not as a size limit — 16 nodes still costs well under 2 KB. Exceeding it should
 surface as a configuration error, not degrade to a runtime lookup.
 
 ### Why locations are not encoded as a bitset
@@ -502,7 +504,7 @@ Recommended, in preference order — all three, they compose:
 | [#1874](https://github.com/louisburroughs/durion-positivity-backend/issues/1874) | Revoke live tokens on staffing-assignment change; decide Redis-unavailable policy | M | #1867, #1873 |
 | [#1875](https://github.com/louisburroughs/durion-positivity-backend/issues/1875) | Remove `role_assignments.scope_type`, `role_assignment_scope_locations` and `GET /v1/roles/check-permission` | M | #1872 |
 | [#1876](https://github.com/louisburroughs/durion-positivity-backend/issues/1876) | Decide node granularity for irregular coverage: multi-node assignment vs. group nodes | S | — |
-| [#1878](https://github.com/louisburroughs/durion-positivity-backend/issues/1878) | Materialise a location ancestor set onto `ExtLocationReplica` via location events | M | — |
+| [#1878](https://github.com/louisburroughs/durion-positivity-backend/issues/1878) | Materialise `FINANCIAL` and `OTHER` ancestor sets onto the location replicas | L | — |
 
 All eleven are sub-issues of #1375. Sizes: S ≤ 1 day, M 2–4 days, L 1–2 weeks.
 
