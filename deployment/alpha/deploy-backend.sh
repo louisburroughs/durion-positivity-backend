@@ -258,7 +258,11 @@ run_periodic_docker_prune() {
   docker system df || true
 
   if docker system prune -af; then
-    date +%s > "${DOCKER_PRUNE_STATE_FILE}"
+    # Same guard as reclaim_disk_before_pull's: `set -e` is suspended for an `if` condition
+    # but not inside its body, so an unwritable state file would fail an otherwise green
+    # deploy on its last line.
+    date +%s > "${DOCKER_PRUNE_STATE_FILE}" \
+      || echo "Warning: could not stamp ${DOCKER_PRUNE_STATE_FILE}; the next prune will run sooner." >&2
     echo "Docker disk usage after prune:"
     docker system df || true
     return 0
@@ -304,7 +308,7 @@ reclaim_disk_before_pull() {
     return 0
   fi
 
-  local root free after running
+  local root free after
   root="$(docker_data_root)"
 
   # `free_gib_for_path` is a pipeline, so under `pipefail` a failing df makes this bare
@@ -325,32 +329,37 @@ reclaim_disk_before_pull() {
   echo "Pre-pull disk check: ${free}GiB free on ${root}, under the ${DOCKER_MIN_FREE_GIB}GiB floor. Reclaiming."
   docker system df || true
 
-  # `docker system prune` removes stopped containers first, then every image no longer
-  # referenced by one. With the stack up, each serving image is pinned by its running
-  # container and survives; with the stack down — the window right after a reboot, before
-  # restart policies have fired — nothing is pinned and this clears every image on the box.
-  # That is still the right trade at this point: under the floor the pull is going to fail
-  # for want of space anyway, and everything removed is a tag ECR can serve again. Say so in
-  # the log, because it changes what a failed pull afterwards leaves behind.
-  running="$(docker ps -q 2>/dev/null | wc -l)" || running=0
-  if [[ "${running}" -eq 0 ]]; then
-    echo "Note: no containers are running, so this reclaim will remove every image on the box." >&2
-  fi
-
-  # -a without --volumes: named volumes, and so every database, are left untouched.
-  if docker system prune -af; then
+  # `docker image prune -af`, deliberately NOT `docker system prune -af`, which the periodic
+  # prune at the end of a green deploy uses.
+  #
+  # `system prune` removes stopped containers before it touches images. That is harmless at the
+  # end of a green deploy, where every tier is up behind --wait, but this runs at an arbitrary
+  # point — including the window after a reboot, before restart policies have fired. Stopped
+  # containers are what `service_has_container` reads to tell "this image was retagged out from
+  # under a live service, stop the sync" from "this service was never deployed here, skip it"
+  # (#1577, #1646). Deleting them turns a genuine ECR break into a silent partial sync.
+  #
+  # Nothing is given up by narrowing it: on alpha when this wedged, containers accounted for
+  # 4.238MB with 0B reclaimable, against 61.42GB reclaimable in images. `image prune -a` still
+  # removes every image no container references, which is exactly the stale deploy tags. Images
+  # pinned by a container, running or stopped, stay — and so does every named volume, and so
+  # every database, since no volume is touched without --volumes.
+  if docker image prune -af; then
     # Recording a cleanup that did happen. A failed stamp must not abort the deploy either.
     date +%s > "${DOCKER_PRUNE_STATE_FILE}" \
       || echo "Warning: could not stamp ${DOCKER_PRUNE_STATE_FILE}; the periodic prune will run again sooner." >&2
 
     after="$(free_gib_for_path "${root}")" || after=""
-    if [[ -n "${after}" && "${after}" -lt "${DOCKER_MIN_FREE_GIB}" ]]; then
+    if [[ -z "${after}" ]]; then
+      # df working before the prune and failing after it says the box got worse, not better.
+      echo "Warning: could not re-read free space on ${root} after the reclaim." >&2
+    elif [[ "${after}" -lt "${DOCKER_MIN_FREE_GIB}" ]]; then
       echo "Warning: still ${after}GiB free after reclaim, under the ${DOCKER_MIN_FREE_GIB}GiB floor — the pull may fail." >&2
     else
-      echo "Reclaimed: ${after:-unknown}GiB free on ${root}."
+      echo "Reclaimed: ${after}GiB free on ${root}."
     fi
   else
-    echo "Warning: pre-pull docker system prune failed; continuing with ${free}GiB free." >&2
+    echo "Warning: pre-pull docker image prune failed; continuing with ${free}GiB free." >&2
   fi
 
   return 0
@@ -518,11 +527,6 @@ BACKEND_SERVICES=(
 verify_checksum "prod override" "${PROD_OVERRIDE}" "${PROD_OVERRIDE_SHA256:-}"
 verify_checksum "base compose" "${BACKEND_DIR}/docker-compose.yml" "${BASE_COMPOSE_SHA256:-}"
 
-# Before either mode pulls anything, and before the ECR login and env writes that a nearly
-# full box would fail on first. --config-only pulls too (#1577) and exits before the periodic
-# prune, so it has never had any reclaim of its own.
-reclaim_disk_before_pull
-
 if [[ "${MODE}" == "config-only" ]]; then
   # The compose interpolation still needs these; a full deploy wrote them to the env
   # file, and config-only never changes them.
@@ -565,6 +569,14 @@ else
 
   ecr_login "${ECR_REGISTRY}"
 fi
+
+# Behind every guard above and ahead of every pull below, in both modes. Behind the guards
+# because require_env_entry, require_supplier_audit_key and the BCrypt-shape check all exit 1
+# on a promise that nothing on the host was touched; reclaiming first would break that promise
+# on exactly the runs that keep it most carefully. Ahead of the pulls because --config-only
+# pulls too (#1577) and exits before the periodic prune, so it has never had a reclaim of its
+# own — every `compose pull` in either mode is downstream of COMPOSE_ARGS, defined just below.
+reclaim_disk_before_pull
 
 cd "${BACKEND_DIR}"
 

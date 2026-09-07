@@ -19,7 +19,7 @@ set -euo pipefail
 #   7. the shipped DOCKER_MIN_FREE_GIB default, above and below the floor
 #   8. `docker info` failing (daemon down) -> data root falls back cleanly
 #   9. a non-default Docker data root  -> that path is measured and reported
-#  10. no containers running          -> prune still runs, but says it clears every image
+#  10. df fails only after the prune  -> warned, never a line that scans as success
 #  11. prune frees too little         -> warned rather than reported as success
 #  12. prune state file unwritable    -> warned, returns 0
 #
@@ -43,15 +43,20 @@ extract_functions() {
     closing && /^\}$/ { exit }
   ' "${SCRIPT}" > "${WORK}/functions.sh"
 
-  # Carry the shipped DOCKER_MIN_FREE_GIB default in too. Cases that set it explicitly can
-  # never catch a bad default, and under `set -u` an unset one would abort.
-  local default_line
-  default_line="$(grep -m1 '^DOCKER_MIN_FREE_GIB=' "${SCRIPT}" || true)"
-  if [[ -z "${default_line}" ]]; then
-    echo "FATAL: could not find the DOCKER_MIN_FREE_GIB default in ${SCRIPT}." >&2
-    exit 1
-  fi
-  printf '%s\n' "${default_line}" | cat - "${WORK}/functions.sh" > "${WORK}/functions.tmp"
+  # Carry every default the reclaim reads. Cases that set these explicitly can never catch a
+  # bad default, and under `set -u` an unset one aborts the shell outright — which no `||` in
+  # the function can catch, so it would break the never-aborts contract invisibly.
+  : > "${WORK}/defaults.sh"
+  local var default_line
+  for var in ALPHA_ROOT DOCKER_MIN_FREE_GIB DOCKER_PRUNE_STATE_FILE; do
+    default_line="$(grep -m1 "^${var}=" "${SCRIPT}" || true)"
+    if [[ -z "${default_line}" ]]; then
+      echo "FATAL: could not find the ${var} default in ${SCRIPT}." >&2
+      exit 1
+    fi
+    printf '%s\n' "${default_line}" >> "${WORK}/defaults.sh"
+  done
+  cat "${WORK}/defaults.sh" "${WORK}/functions.sh" > "${WORK}/functions.tmp"
   mv "${WORK}/functions.tmp" "${WORK}/functions.sh"
 
   local fn
@@ -77,15 +82,14 @@ case "${1:-} ${2:-}" in
     if [[ -n "${DAEMON_DOWN:-}" ]]; then echo ""; exit 1; fi
     echo "${STUB_DATA_ROOT:-/var/lib/docker}"
     ;;
-  "system prune")
-    # A real prune frees space; FREE_KIB_AFTER lets a case say how much.
+  "image prune")
+    # A real prune frees space; FREE_KIB_AFTER lets a case say how much. DF_FAIL_AFTER models
+    # a box that got worse, not better: df worked before the prune and fails after it.
+    [[ -n "${DF_FAIL_AFTER:-}" ]] && echo "FAIL" > "${WORK_FREE_FILE}"
     [[ -n "${FREE_KIB_AFTER:-}" ]] && echo "${FREE_KIB_AFTER}" > "${WORK_FREE_FILE}"
     exit "${PRUNE_EXIT:-0}"
     ;;
   "system df") echo "stub docker system df" ;;
-  "ps -q")
-    for _ in $(seq 1 "${RUNNING_CONTAINERS:-3}"); do echo "deadbeefcafe"; done
-    ;;
 esac
 exit 0
 STUB
@@ -108,6 +112,7 @@ free="${FREE_KIB:-}"
 # sees a different number than the pre-check — as it does on a real box.
 if [[ -n "${WORK_FREE_FILE:-}" && -s "${WORK_FREE_FILE}" ]]; then
   free="$(cat "${WORK_FREE_FILE}")"
+  [[ "${free}" == "FAIL" ]] && { echo "df: read error" >&2; exit 1; }
 fi
 if [[ -z "${free}" ]]; then
   echo "df: unreadable" >&2
@@ -148,7 +153,15 @@ run_case() {
   fi
 
   local pruned=no
-  grep -q "^docker system prune -af$" "${log}" && pruned=yes
+  grep -q "^docker image prune -af$" "${log}" && pruned=yes
+
+  # The reclaim must never remove stopped containers: service_has_container reads them to tell
+  # a retagged-out-from-under-a-live-service break from a never-deployed-here skip (#1577).
+  if grep -qE "^docker (system|container) prune" "${log}"; then
+    echo "FAIL ${name}: reclaim removed containers; only images may be pruned here"
+    FAILURES=$((FAILURES + 1))
+    return
+  fi
 
   if [[ "${pruned}" != "${expect_prune}" ]]; then
     echo "FAIL ${name}: expected prune=${expect_prune}, got prune=${pruned}"
@@ -181,8 +194,51 @@ assert_output_contains() {
   fi
 }
 
+# The self-test drives the functions in isolation, so nothing in it observes whether they are
+# ever CALLED, or called in the right place. Ordering is the entire point of the fix, so pin it
+# statically: behind the mode branch's guards, ahead of every pull, in both modes.
+assert_call_site() {
+  local call_line branch_line first_pull_line last_fn_line
+  call_line="$(grep -n '^reclaim_disk_before_pull$' "${SCRIPT}" | head -1 | cut -d: -f1)"
+  last_fn_line="$(grep -n '^reclaim_disk_before_pull() {' "${SCRIPT}" | head -1 | cut -d: -f1)"
+  # Every pull runs through COMPOSE_ARGS, and COMPOSE_ARGS is built at top level after the
+  # mode branch. Anchoring there covers pulls inside functions too, which a grep for the first
+  # `compose … pull` would not: those sit in function bodies defined near the top of the file.
+  first_pull_line="$(grep -n '^COMPOSE_ARGS=(' "${SCRIPT}" | head -1 | cut -d: -f1)"
+  # The LAST mode branch that still guards work, i.e. the one the call must sit after.
+  branch_line="$(grep -n 'require_supplier_audit_key' "${SCRIPT}" | tail -1 | cut -d: -f1)"
+
+  if [[ -z "${call_line}" ]]; then
+    echo "FAIL call-site: reclaim_disk_before_pull is never called in ${SCRIPT##*/}"
+    FAILURES=$((FAILURES + 1))
+    return
+  fi
+  if [[ "$(grep -c '^reclaim_disk_before_pull$' "${SCRIPT}")" -ne 1 ]]; then
+    echo "FAIL call-site: reclaim_disk_before_pull is called more than once"
+    FAILURES=$((FAILURES + 1))
+    return
+  fi
+  if [[ "${call_line}" -le "${last_fn_line}" ]]; then
+    echo "FAIL call-site: called at line ${call_line}, before its own definition at ${last_fn_line}"
+    FAILURES=$((FAILURES + 1))
+    return
+  fi
+  if [[ "${call_line}" -le "${branch_line}" ]]; then
+    echo "FAIL call-site: called at line ${call_line}, ahead of the guards at ${branch_line} that promise the host is untouched"
+    FAILURES=$((FAILURES + 1))
+    return
+  fi
+  if [[ "${call_line}" -ge "${first_pull_line}" ]]; then
+    echo "FAIL call-site: called at line ${call_line}, after COMPOSE_ARGS is built at ${first_pull_line} — a pull could precede it"
+    FAILURES=$((FAILURES + 1))
+    return
+  fi
+  echo "PASS call-site (line ${call_line}: after the guards at ${branch_line}, before COMPOSE_ARGS at ${first_pull_line})"
+}
+
 extract_functions
 make_stubs
+assert_call_site
 
 # 60GiB free, floor 25 -> nothing to do.
 run_case above-floor no no FREE_KIB=$((60 * 1048576)) DOCKER_MIN_FREE_GIB=25
@@ -194,9 +250,16 @@ assert_output_contains below-floor "under the 25GiB floor"
 
 # The prune failing must not take the deploy down with it.
 run_case prune-fails yes no FREE_KIB=$((3 * 1048576)) DOCKER_MIN_FREE_GIB=25 PRUNE_EXIT=1
-assert_output_contains prune-fails "pre-pull docker system prune failed"
+assert_output_contains prune-fails "pre-pull docker image prune failed"
 
+# Asserting silence, not just "no prune": with the floor at 0 a fallthrough would still take
+# the above-floor branch and print a disk-check line, so only the early return prints nothing.
 run_case disabled     no no FREE_KIB=$((1 * 1048576)) DOCKER_MIN_FREE_GIB=0
+if grep -qE "Pre-pull disk check|Reclaim|prune" "${WORK}/disabled.out"; then
+  echo "FAIL disabled: reclaim spoke when it should have returned immediately"
+  sed 's/^/      /' "${WORK}/disabled.out"
+  FAILURES=$((FAILURES + 1))
+fi
 run_case non-integer  no no FREE_KIB=$((1 * 1048576)) DOCKER_MIN_FREE_GIB=twenty
 assert_output_contains non-integer "must be an integer"
 
@@ -207,8 +270,9 @@ run_case df-unreadable no no DOCKER_MIN_FREE_GIB=25
 assert_output_contains df-unreadable "could not read free space"
 
 # The shipped default, exercised with DOCKER_MIN_FREE_GIB unset (also the `set -u` check).
-run_case default-above no  no FREE_KIB=$((60 * 1048576))
-run_case default-below yes yes FREE_KIB=$((10 * 1048576)) FREE_KIB_AFTER=$((90 * 1048576))
+# Bracketed tightly around the shipped 25: a default that drifted either way fails here.
+run_case default-above no  no FREE_KIB=$((26 * 1048576))
+run_case default-below yes yes FREE_KIB=$((24 * 1048576)) FREE_KIB_AFTER=$((90 * 1048576))
 
 # A client-only `docker info` prints an empty line AND exits non-zero. Falling back by
 # concatenation would make the data root '\n/var/lib/docker' and df would fail on it.
@@ -219,16 +283,34 @@ assert_output_contains daemon-down "/var/lib/docker"
 run_case custom-data-root no no FREE_KIB=$((60 * 1048576)) DOCKER_MIN_FREE_GIB=25 STUB_DATA_ROOT=/mnt/docker
 assert_output_contains custom-data-root "/mnt/docker"
 
-# Right after a reboot nothing is running, so a prune clears every image. That is still the
-# right trade under the floor, but it must be said out loud in the log.
-run_case no-containers yes yes FREE_KIB=$((3 * 1048576)) FREE_KIB_AFTER=$((90 * 1048576)) \
-    DOCKER_MIN_FREE_GIB=25 RUNNING_CONTAINERS=0
-assert_output_contains no-containers "remove every image on the box"
+# A df that fails only after the prune says the box got worse. It must not print a line that
+# scans as success.
+run_case df-fails-after yes yes FREE_KIB=$((3 * 1048576)) DOCKER_MIN_FREE_GIB=25 DF_FAIL_AFTER=1
+assert_output_contains df-fails-after "could not re-read free space"
 
 # A prune that frees almost nothing must not read like success.
 run_case still-below-floor yes yes FREE_KIB=$((3 * 1048576)) FREE_KIB_AFTER=$((4 * 1048576)) \
     DOCKER_MIN_FREE_GIB=25
 assert_output_contains still-below-floor "still 4GiB free after reclaim"
+
+# Nothing set but the free space: the shipped ALPHA_ROOT / DOCKER_PRUNE_STATE_FILE defaults are
+# what run. Under `set -u` an unbound one aborts the shell, which no `||` in the function can
+# catch — so this is the case that keeps the never-aborts contract honest.
+DEFAULTS_OUT="${WORK}/shipped-defaults.out"
+rc=0
+env -i PATH="${WORK}/bin:/usr/bin:/bin" \
+    LOG="${WORK}/shipped-defaults.log" \
+    WORK_FREE_FILE="${WORK}/shipped-defaults.free" \
+    FREE_KIB=$((3 * 1048576)) FREE_KIB_AFTER=$((90 * 1048576)) \
+    bash -c 'set -euo pipefail; source "$0"; reclaim_disk_before_pull' "${WORK}/functions.sh" \
+    > "${DEFAULTS_OUT}" 2>&1 || rc=$?
+if [[ "${rc}" -ne 0 ]]; then
+  echo "FAIL shipped-defaults: returned ${rc}, expected 0"
+  sed 's/^/      /' "${DEFAULTS_OUT}"
+  FAILURES=$((FAILURES + 1))
+else
+  echo "PASS shipped-defaults"
+fi
 
 # An unwritable prune state file must warn, not abort mid-deploy: `set -e` is suspended for
 # an `if` condition but not inside its body, and this write lives in the body.

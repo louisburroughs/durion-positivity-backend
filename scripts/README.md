@@ -451,9 +451,11 @@ Cases:
 - the shipped `DOCKER_MIN_FREE_GIB` default, above and below the floor
 - `docker info` failing with the daemon down — the data root falls back to a usable path
 - a non-default Docker data root — that path is the one measured and reported
-- no containers running — the prune still runs, but logs that it clears every image
+- `df` failing only after the prune — warned, never a line that scans as success
 - a prune that frees too little — warned rather than reported as success
+- the shipped `ALPHA_ROOT` and prune-state-file defaults, with nothing injected
 - an unwritable prune state file — warned, returns 0
+- the call site's position in `deploy-backend.sh`, asserted statically
 
 **Usage:**
 ```bash
@@ -470,6 +472,16 @@ bash scripts/tests/deploy-backend-disk-reclaim-selftest.sh
 - Each case runs under `set -euo pipefail`, because that is what `deploy-backend.sh` runs under and
   shell options do not cross a new `bash`. Without them the harness cannot observe the failure that
   matters: a bare assignment from a failing pipeline aborting the deploy.
+- The reclaim uses `docker image prune -af`, not the `docker system prune -af` the periodic prune
+  runs. `system prune` removes stopped containers first, and `service_has_container` reads those to
+  tell "this image was retagged out from under a live service, stop the sync" from "this service was
+  never deployed here, skip it". Nothing is given up: on alpha when this wedged, containers held
+  4.238 MB with 0 B reclaimable against 61.42 GB reclaimable in images. Every case asserts no
+  container prune ever runs.
+- The functions are driven in isolation, so nothing in them observes whether they are *called*.
+  Ordering is the point of the fix, so `assert_call_site` pins it against the script text: called
+  exactly once, after the guards that promise the host is untouched, before `COMPOSE_ARGS` is built
+  and so before any pull in either mode.
 
 ---
 
