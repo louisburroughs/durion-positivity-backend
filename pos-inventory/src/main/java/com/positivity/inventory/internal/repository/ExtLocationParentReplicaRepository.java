@@ -19,6 +19,12 @@ public interface ExtLocationParentReplicaRepository
     /** Batched downward traversal (all edge types) for proximity BFS (odoo-parity H1, #1037). */
     List<ExtLocationParentReplica> findByParentIdIn(Collection<UUID> parentIds);
 
+    /** Upward step: the child's stored direct parent edges, every type (ADR-0061 §2, #1878). */
+    List<ExtLocationParentReplica> findByChildId(UUID childId);
+
+    /** Downward step: every stored edge naming this parent, every type (ADR-0061 §2, #1878). */
+    List<ExtLocationParentReplica> findByParentId(UUID parentId);
+
     @Modifying
     void deleteByChildId(UUID childId);
 }

@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
@@ -9,6 +10,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,6 +26,11 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * maintained by the location sync flow (CAP-214 #40). Other inventory
  * records reference {@code locationId}; pos-location remains the source
  * of truth for identity, name, status, and timezone.
+ *
+ * <p>Also carries the two materialised, inclusive-of-self location-scope ancestor sets
+ * (ADR-0061 §2, #1878), recomputed by the event consumer from the {@link ExtLocationParentReplica}
+ * edges on every location fact. A scope check intersects the caller's assigned nodes with the set
+ * for the role's hierarchy dimension; an unknown location yields empty sets and therefore denies.
  */
 @Entity
 @Table(name = "location_ref")
@@ -75,6 +83,21 @@ public class LocationRefEntity {
 
     @Column(name = "deactivated_at")
     private Instant deactivatedAt;
+
+    /** Ancestors along the {@code FINANCIAL} parent chain, inclusive of this location (ADR-0061 §2). */
+    @Builder.Default
+    @Convert(converter = UuidSetConverter.class)
+    @Column(name = "financial_ancestor_ids", nullable = false, columnDefinition = "text")
+    private Set<UUID> financialAncestorIds = new LinkedHashSet<>();
+
+    /**
+     * Ancestors along the union of every non-financial parent type (HOME_OFFICE, HEADQUARTERS,
+     * REGION, DISTRICT, PHYSICAL, ORGANIZATIONAL, SHIPPING), inclusive of this location (ADR-0061 §2).
+     */
+    @Builder.Default
+    @Convert(converter = UuidSetConverter.class)
+    @Column(name = "other_ancestor_ids", nullable = false, columnDefinition = "text")
+    private Set<UUID> otherAncestorIds = new LinkedHashSet<>();
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

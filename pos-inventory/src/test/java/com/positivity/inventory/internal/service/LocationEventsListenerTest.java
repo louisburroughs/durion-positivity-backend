@@ -48,6 +48,7 @@ class LocationEventsListenerTest {
             mock(ExtLocationParentReplicaRepository.class);
     private final ExtStorageLocationReplicaRepository extStorageLocations =
             mock(ExtStorageLocationReplicaRepository.class);
+    private final LocationHierarchyService locationHierarchy = mock(LocationHierarchyService.class);
 
     private LocationEventsListener listener;
 
@@ -60,6 +61,7 @@ class LocationEventsListenerTest {
                 locationRefs,
                 extLocationParents,
                 extStorageLocations,
+                locationHierarchy,
                 org.mockito.Mockito.mock(ObjectProvider.class));
     }
 
