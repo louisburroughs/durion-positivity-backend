@@ -7986,7 +7986,9 @@ components:
           type: string
         engineCode:
           description: Engine code; null = any
-          type: string
+          type:
+          - string
+          - 'null'
         id:
           description: Labor standard identifier
           format: uuid
@@ -8002,17 +8004,23 @@ components:
           type: number
         make:
           description: Vehicle make; null = any
-          type: string
+          type:
+          - string
+          - 'null'
         model:
           description: Vehicle model; null = any
-          type: string
+          type:
+          - string
+          - 'null'
         overlapGroup:
           description: Overlap group shared with other operations
           type: string
         ownerLocationId:
           description: Owning location when ownerScope is SHOP; null for PLATFORM
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         ownerScope:
           description: PLATFORM (every location resolves it) or SHOP (one location's own number)
           example: PLATFORM
@@ -8033,18 +8041,24 @@ components:
           type: string
         submodel:
           description: Vehicle submodel or trim; null = any
-          type: string
+          type:
+          - string
+          - 'null'
         supersededAt:
           description: When a newer row replaced this one; null while active
           format: date-time
-          type: string
+          type:
+          - string
+          - 'null'
         timeType:
           description: Kind of published time
           example: DURION_STANDARD
           type: string
         vehicleYear:
           description: Model year or year range; null = any
-          type: string
+          type:
+          - string
+          - 'null'
       required:
       - createdAt
       - id
@@ -8265,7 +8279,9 @@ components:
         fleetPartyId:
           description: Fleet account this is the requirement set for; null for a general offering
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         id:
           description: Package identifier
           format: uuid
@@ -8281,7 +8297,9 @@ components:
         ownerLocationId:
           description: Owning location when ownerScope is SHOP; null for PLATFORM
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         ownerScope:
           description: PLATFORM or SHOP
           example: PLATFORM

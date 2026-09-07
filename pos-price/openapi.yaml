@@ -2384,7 +2384,9 @@ components:
         effectiveTo:
           description: End of the effective window, exclusive; null = open-ended
           format: date-time
-          type: string
+          type:
+          - string
+          - 'null'
         id:
           description: Step identifier
           format: uuid
@@ -2392,10 +2394,14 @@ components:
         locationId:
           description: Location; null = platform default matrix
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         operationCategory:
           description: Operation category; null = every category
-          type: string
+          type:
+          - string
+          - 'null'
         sequence:
           description: Application order within the matrix
           example: 10
@@ -2573,7 +2579,9 @@ components:
         effectiveTo:
           description: End of the effective window, exclusive; null = open-ended
           format: date-time
-          type: string
+          type:
+          - string
+          - 'null'
         hourlyRate:
           description: Hourly rate
           example: 125.0
@@ -2585,10 +2593,14 @@ components:
         locationId:
           description: Location; null = platform default
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         operationCategory:
           description: Operation category; null = every category
-          type: string
+          type:
+          - string
+          - 'null'
       type: object
     LineItemContext:
       description: Single estimate line item used for promotion and pricing calculations

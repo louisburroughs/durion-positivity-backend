@@ -13,10 +13,10 @@ public class LaborRateAdjustmentResponse {
     @Schema(description = "Step identifier")
     private UUID id;
 
-    @Schema(description = "Location; null = platform default matrix")
+    @Schema(description = "Location; null = platform default matrix", nullable = true)
     private UUID locationId;
 
-    @Schema(description = "Operation category; null = every category")
+    @Schema(description = "Operation category; null = every category", nullable = true)
     private String operationCategory;
 
     @Schema(description = "Code a quote names to opt this step in", example = "CORROSION")
@@ -37,6 +37,6 @@ public class LaborRateAdjustmentResponse {
     @Schema(description = "Start of the effective window, inclusive")
     private Instant effectiveFrom;
 
-    @Schema(description = "End of the effective window, exclusive; null = open-ended")
+    @Schema(description = "End of the effective window, exclusive; null = open-ended", nullable = true)
     private Instant effectiveTo;
 }

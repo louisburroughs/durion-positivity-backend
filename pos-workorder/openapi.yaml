@@ -8139,7 +8139,9 @@ components:
           type: string
         customerName:
           description: Customer display name, resolved server-side; null when the party replica has no record
-          type: string
+          type:
+          - string
+          - 'null'
         openWorkorders:
           description: Open work orders this customer currently holds
           format: int64

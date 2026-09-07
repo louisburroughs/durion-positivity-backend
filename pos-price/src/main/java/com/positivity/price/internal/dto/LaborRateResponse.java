@@ -13,10 +13,10 @@ public class LaborRateResponse {
     @Schema(description = "Rate identifier")
     private UUID id;
 
-    @Schema(description = "Location; null = platform default")
+    @Schema(description = "Location; null = platform default", nullable = true)
     private UUID locationId;
 
-    @Schema(description = "Operation category; null = every category")
+    @Schema(description = "Operation category; null = every category", nullable = true)
     private String operationCategory;
 
     @Schema(description = "ISO 4217 currency", example = "USD")
@@ -28,6 +28,6 @@ public class LaborRateResponse {
     @Schema(description = "Start of the effective window, inclusive")
     private Instant effectiveFrom;
 
-    @Schema(description = "End of the effective window, exclusive; null = open-ended")
+    @Schema(description = "End of the effective window, exclusive; null = open-ended", nullable = true)
     private Instant effectiveTo;
 }

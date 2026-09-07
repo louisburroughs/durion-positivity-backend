@@ -27,10 +27,10 @@ public class ServicePackageResponseDto {
     @Schema(description = "PLATFORM or SHOP", example = "PLATFORM")
     private String ownerScope;
 
-    @Schema(description = "Owning location when ownerScope is SHOP; null for PLATFORM")
+    @Schema(description = "Owning location when ownerScope is SHOP; null for PLATFORM", nullable = true)
     private UUID ownerLocationId;
 
-    @Schema(description = "Fleet account this is the requirement set for; null for a general offering")
+    @Schema(description = "Fleet account this is the requirement set for; null for a general offering", nullable = true)
     private UUID fleetPartyId;
 
     @Schema(description = "Authored labor hours for the package as sold", example = "1.2")
