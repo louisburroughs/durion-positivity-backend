@@ -300,6 +300,9 @@ committed spec against the controllers' declarations and fails on drift in eithe
 | `EUREKA_SERVER_URL`                 | required     | Eureka service discovery URL          |
 | `SECURITY_SEED_ADMIN_PASSWORD_HASH` | required     | BCrypt hash for seed admin user       |
 | `security.lockout.threshold`        | configurable | Failed login threshold before lockout |
+| `pos.security-service.kafka.people-events-topic` | `people.events.v1` | Staffing-assignment facts feeding the assigned-node read model (ADR-0061 §1) |
+| `pos.security-service.kafka.people-manifest-topic` | `people.manifest.v1` | Reconciliation manifests for that read model; drift requests a replay on `people-commands-topic` |
+| `pos.security-service.location-scope.assigned-node-cap` | `8` | Assigned-node count above which `security.location-scope.assigned-nodes.cap-exceeded` fires (WARN + metric, never truncated) |
 
 ## Dependencies
 
@@ -309,6 +312,8 @@ committed spec against the controllers' declarations and fails on drift in eithe
 ## Database
 
 Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`. Seed admin password hash is injected as a Flyway placeholder; never commit real hashes in SQL files.
+
+`ext_people_staffing_assignment` is a read model of pos-people's `employee_location_assignment` (ADR-0061 §1): one row per assignment keyed by `assignment_id`, storing the assigned location node *verbatim* (shop or District/Region/HQ — never expanded), `is_primary`, `status` (`ACTIVE`/`ENDED`, ended rows are kept), and effective dates. Written only by `PeopleEventsListener`; read through `StaffingAssignmentProjectionService` ("nodes effective on date D", "earliest `effective_to`").
 
 ## Development
 

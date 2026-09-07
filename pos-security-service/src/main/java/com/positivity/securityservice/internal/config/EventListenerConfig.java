@@ -15,7 +15,8 @@ import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
  *
  * <p>This module's inbound surface is {@code people-contact.events.v1} and
  * {@code people-contact.manifest.v1} — the {@code users.person_id} projection and identity
- * replica consumers (amended ADR-0043, #876).
+ * replica consumers (amended ADR-0043, #876) — plus {@code people.events.v1} and
+ * {@code people.manifest.v1} for the staffing-assignment read model (ADR-0061 §1, #1867).
  */
 @Slf4j
 @Configuration

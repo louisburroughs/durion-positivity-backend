@@ -89,6 +89,14 @@ pos:
       people-contact-manifest-topic: ${POS_SECURITY_PC_MANIFEST_TOPIC:people-contact.manifest.v1}
       people-contact-manifest-consumer-group: ${POS_SECURITY_PC_MANIFEST_CONSUMER_GROUP:pos-security-people-contact-manifests}
       people-contact-commands-topic: ${POS_SECURITY_PC_COMMANDS_TOPIC:people-contact.commands.v1}
+      # ADR-0061 §1 (#1867): people.events.v1 staffing-assignment facts feed the
+      # ext_people_staffing_assignment read model (assigned location nodes per person);
+      # people.manifest.v1 drives reconciliation, replay requests go to people.commands.v1.
+      people-events-topic: ${POS_SECURITY_PEOPLE_EVENTS_TOPIC:people.events.v1}
+      people-events-consumer-group: ${POS_SECURITY_PEOPLE_EVENTS_CONSUMER_GROUP:pos-security-people-events}
+      people-manifest-topic: ${POS_SECURITY_PEOPLE_MANIFEST_TOPIC:people.manifest.v1}
+      people-manifest-consumer-group: ${POS_SECURITY_PEOPLE_MANIFEST_CONSUMER_GROUP:pos-security-people-manifests}
+      people-commands-topic: ${POS_SECURITY_PEOPLE_COMMANDS_TOPIC:people.commands.v1}
       # Customer person-identity replica feed + reconciliation (ADR-0044 §6, #891)
       customer-events-topic: ${POS_SECURITY_CUSTOMER_EVENTS_TOPIC:customer.events.v1}
       customer-events-consumer-group: ${POS_SECURITY_CUSTOMER_EVENTS_CONSUMER_GROUP:pos-security-customer-events}
@@ -98,6 +106,11 @@ pos:
       # Role persona facts consumed by pos-mcp-server so a persona edit reaches the assistant
       # without waiting for its scheduled pull (#1613).
       security-events-topic: ${POS_SECURITY_EVENTS_TOPIC:security.events.v1}
+    location-scope:
+      # ADR-0061 §2: assertion that the hierarchy was modelled correctly, not a size limit.
+      # A person whose effective assigned-node set exceeds this is logged at WARN and counted
+      # (security.location-scope.assigned-nodes.cap-exceeded); the set is never truncated.
+      assigned-node-cap: ${POS_SECURITY_LOCATION_SCOPE_ASSIGNED_NODE_CAP:8}
   security:
     lockout:
       max-attempts: 5
