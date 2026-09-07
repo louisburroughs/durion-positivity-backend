@@ -52,7 +52,7 @@ class CatalogLaborTimeClientImplTest {
                          "overlapGroup":"WHEEL-OFF","includedOpCodes":["BRAKE-PAD-FRONT"]}
                         """, MediaType.APPLICATION_JSON));
 
-        var time = client.resolveLaborTime(SERVICE_ID, "2019-2023", "Honda", "Civic")
+        var time = client.resolveLaborTime(SERVICE_ID, "2019-2023", "Honda", "Civic", null)
                 .orElseThrow();
 
         assertThat(time.laborHours()).isEqualByComparingTo("1.5");
@@ -70,7 +70,7 @@ class CatalogLaborTimeClientImplTest {
                         {"status":"NO_TIME_AVAILABLE","includedOpCodes":[]}
                         """, MediaType.APPLICATION_JSON));
 
-        assertThat(client.resolveLaborTime(SERVICE_ID, null, null, null)).isEmpty();
+        assertThat(client.resolveLaborTime(SERVICE_ID, null, null, null, null)).isEmpty();
     }
 
     @Test
@@ -79,6 +79,6 @@ class CatalogLaborTimeClientImplTest {
         server.expect(requestTo("http://catalog/v1/catalog/labor-times/resolve"))
                 .andRespond(withServerError());
 
-        assertThat(client.resolveLaborTime(SERVICE_ID, null, null, null)).isEmpty();
+        assertThat(client.resolveLaborTime(SERVICE_ID, null, null, null, null)).isEmpty();
     }
 }

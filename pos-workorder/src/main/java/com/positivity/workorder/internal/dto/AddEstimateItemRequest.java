@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -69,10 +70,26 @@ public class AddEstimateItemRequest {
         return itemType == EstimateItemType.LABOR && serviceId != null;
     }
 
-    @NotNull(message = "unitPrice is required")
+    @Nullable
     @DecimalMin(value = "0.00", message = "unitPrice must be 0 or greater")
-    @Schema(description = "Unit price for the line item", example = "49.99", requiredMode = REQUIRED)
+    @Schema(
+            description = "Unit price for the line item (hourly labor rate for LABOR). Required, EXCEPT on a"
+                    + " LABOR item that names a serviceId: omitting it there asks pos-price to prefill the"
+                    + " shop's labor rate with its labor matrix applied (#1575 Tier 0); when no rate is"
+                    + " available the request is rejected and an explicit unitPrice must be sent. A supplied"
+                    + " unitPrice always wins over the resolved rate.",
+            example = "49.99",
+            requiredMode = NOT_REQUIRED)
     private BigDecimal unitPrice;
+
+    @jakarta.validation.constraints.AssertTrue(
+            message = "unitPrice is required unless a LABOR item names a serviceId for labor-rate defaulting")
+    private boolean isUnitPricePresentWhenRequired() {
+        if (unitPrice != null) {
+            return true;
+        }
+        return itemType == EstimateItemType.LABOR && serviceId != null;
+    }
 
     @Nullable
     @Schema(description = "Optional tax code", example = "TX-GENERAL", requiredMode = NOT_REQUIRED)
@@ -100,6 +117,15 @@ public class AddEstimateItemRequest {
             example = "QT",
             requiredMode = NOT_REQUIRED)
     private String uomCode;
+
+    @Nullable
+    @Schema(
+            description = "Labor-matrix step codes the writer agreed apply to this line (e.g. CORROSION,"
+                    + " AFTER_HOURS, FLEET_CONTRACT). LABOR items only; codes the shop has not priced are"
+                    + " ignored rather than rejected.",
+            example = "[\"CORROSION\"]",
+            requiredMode = NOT_REQUIRED)
+    private List<String> rateAdjustmentCodes;
 
     @jakarta.validation.constraints.AssertTrue(message = "uomCode is not valid for LABOR items")
     private boolean isUomCodeValidForItemType() {

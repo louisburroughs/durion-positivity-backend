@@ -86,6 +86,7 @@ public class EstimateServiceImpl implements EstimateService {
     private final EstimateFactPublisher estimateFactPublisher;
     private final PartQuantityDivisibilityService partQuantityDivisibilityService;
     private final LaborTimeDefaultingService laborTimeDefaultingService;
+    private final LaborRateDefaultingService laborRateDefaultingService;
 
     // Configuration defaults
     private static final String DEFAULT_CURRENCY = "USD";
@@ -936,13 +937,29 @@ public class EstimateServiceImpl implements EstimateService {
         // snapshotted as the baseline; it becomes the quantity only when the writer sent none —
         // a prefill, never a lock. A writer's explicit quantity is the agreed hours and wins.
         LaborTimeDefaultingService.GuideDefault guide = null;
+        LaborRateDefaultingService.RateDefault rate = null;
         BigDecimal quantity = request.getQuantity();
+        BigDecimal unitPrice = request.getUnitPrice();
         if (request.getItemType() == EstimateItemType.LABOR && request.getServiceId() != null) {
             guide = laborTimeDefaultingService
-                    .lookupGuideTime(request.getServiceId(), estimate.getCustomerId(), estimate.getVehicleId())
+                    .lookupGuideTime(
+                            request.getServiceId(),
+                            estimate.getCustomerId(),
+                            estimate.getVehicleId(),
+                            estimate.getLocationId())
                     .orElse(null);
             if (quantity == null && guide != null) {
                 quantity = guide.hours();
+            }
+            // Rate defaulting (#1575 Tier 0, #1569 R4): the price half of the line, resolved the
+            // same way and with the same rule — always snapshotted as the baseline, the charged
+            // price only when the writer sent none. #1569 recorded this operand as hand-typed
+            // with no modelled source; the shop's labor rate is now that source.
+            rate = laborRateDefaultingService
+                    .lookupLaborRate(request.getServiceId(), estimate.getLocationId(), request.getRateAdjustmentCodes())
+                    .orElse(null);
+            if (unitPrice == null && rate != null) {
+                unitPrice = rate.hourlyRate();
             }
         }
         if (quantity == null) {
@@ -950,6 +967,13 @@ public class EstimateServiceImpl implements EstimateService {
             // guide miss must surface as a request problem, not a null-quantity row.
             throw new WorkorderRequestValidationException(
                     "quantity is required: no labor guide time is available for this service and vehicle");
+        }
+        if (unitPrice == null) {
+            // Same shape as the quantity rule above: bean validation lets unitPrice be omitted
+            // only for rate-eligible LABOR lines, so a rate miss is a request problem rather than
+            // a line with no price.
+            throw new WorkorderRequestValidationException(
+                    "unitPrice is required: no labor rate is available for this location and operation");
         }
 
         // Build and validate item
@@ -959,7 +983,7 @@ public class EstimateServiceImpl implements EstimateService {
                 .description(request.getDescription())
                 .quantity(quantity)
                 .uomCode(normalizedUomCode)
-                .unitPrice(request.getUnitPrice())
+                .unitPrice(unitPrice)
                 .taxCode(request.getTaxCode())
                 .productId(request.getProductId())
                 .serviceId(request.getServiceId())
@@ -969,6 +993,12 @@ public class EstimateServiceImpl implements EstimateService {
                 .guideMatchGrade(guide == null ? null : guide.matchGrade())
                 .guideOverlapGroup(guide == null ? null : guide.overlapGroup())
                 .guideIncludedOpCodes(guide == null ? null : guide.includedOpCodes())
+                .rateHourly(rate == null ? null : rate.hourlyRate())
+                .rateBaseHourly(rate == null ? null : rate.baseHourlyRate())
+                .rateCurrency(rate == null ? null : rate.currency())
+                .rateScope(rate == null ? null : rate.scope())
+                .rateId(rate == null ? null : rate.rateId())
+                .rateAdjustmentCodes(rate == null ? null : rate.appliedCodes())
                 .createdById(username)
                 .build();
 

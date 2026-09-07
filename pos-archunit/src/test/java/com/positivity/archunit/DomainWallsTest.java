@@ -135,7 +135,17 @@ class DomainWallsTest {
             // all; the degraded/offline path is the vehicle-agnostic default hours on the catalog
             // service fact, not a replica of the matrix.
             "pos-workorder",
-            Map.of("CatalogLaborTimeClientImpl.java", Set.of("pos-catalog")));
+            // The second pos-workorder grant, and deliberately a matched pair with the first:
+            // pos-catalog answers how long an operation takes, pos-price answers what an hour of
+            // it costs, and a LABOR line is the product (#1575 Tier 0, ADR-0044 amendment
+            // 2026-09-07). The rate cannot ride an event because the labor matrix makes the
+            // answer a function of the quote — which conditions the writer agreed apply, and in
+            // which order they compound — so a replica would have to re-implement the
+            // compounding, and two implementations of that is two answers to what a customer is
+            // charged.
+            Map.of(
+                    "CatalogLaborTimeClientImpl.java", Set.of("pos-catalog"),
+                    "PriceLaborRateClientImpl.java", Set.of("pos-price")));
 
     /**
      * Startup-infra classes exempt per ADR-0044 R2 (registration calls, best-effort
@@ -161,7 +171,8 @@ class DomainWallsTest {
     void fileScopedGrantsAreExhaustiveAndOneFileEach() {
         assertThat(SCOPED_FILE_EXCEPTIONS)
                 .as("the file-scoped grant census: supplier stock (2 callers, ADR-0044 amendment"
-                        + " 2026-08-10) and catalog labor time (1 caller, ADR-0044 amendment 2026-09-02)")
+                        + " 2026-08-10), catalog labor time (1 caller, ADR-0044 amendment 2026-09-02)"
+                        + " and price labor rate (1 caller, ADR-0044 amendment 2026-09-07)")
                 .containsOnlyKeys("pos-catalog", "pos-order", "pos-workorder");
 
         // Supplier stock: pos-catalog and pos-order, one named class, one target each.
@@ -174,13 +185,18 @@ class DomainWallsTest {
                     .containsExactly("pos-supplier");
         }
 
-        // Catalog labor time: pos-workorder, one named class, one target (#1569, ADR-0058 §5).
+        // The two labor-line edges: pos-workorder, one named class each, one target each
+        // (#1569 / ADR-0058 §5 for the time; #1575 Tier 0 for the rate). Two grants, not one
+        // widened grant — a third client reaching for either module still has to argue its case.
         assertThat(SCOPED_FILE_EXCEPTIONS.get("pos-workorder"))
-                .as("pos-workorder grants the catalog labor-time edge to exactly one file")
-                .containsOnlyKeys("CatalogLaborTimeClientImpl.java");
+                .as("pos-workorder grants the two labor-line edges to exactly one file each")
+                .containsOnlyKeys("CatalogLaborTimeClientImpl.java", "PriceLaborRateClientImpl.java");
         assertThat(SCOPED_FILE_EXCEPTIONS.get("pos-workorder").get("CatalogLaborTimeClientImpl.java"))
-                .as("pos-workorder grants that file exactly one target")
+                .as("pos-workorder grants the labor-time file exactly one target")
                 .containsExactly("pos-catalog");
+        assertThat(SCOPED_FILE_EXCEPTIONS.get("pos-workorder").get("PriceLaborRateClientImpl.java"))
+                .as("pos-workorder grants the labor-rate file exactly one target")
+                .containsExactly("pos-price");
 
         // A module-level grant would defeat the point: SCOPED_MODULE_EXCEPTIONS must not quietly
         // acquire any file-granted target for these modules.
@@ -188,7 +204,7 @@ class DomainWallsTest {
                 .doesNotContain("pos-supplier");
         assertThat(SCOPED_MODULE_EXCEPTIONS.getOrDefault("pos-order", Set.of())).doesNotContain("pos-supplier");
         assertThat(SCOPED_MODULE_EXCEPTIONS.getOrDefault("pos-workorder", Set.of()))
-                .doesNotContain("pos-catalog");
+                .doesNotContain("pos-catalog", "pos-price");
     }
 
     @Test
