@@ -421,6 +421,11 @@ bash scripts/tests/deploy-backend-config-only-selftest.sh
 **Notes:**
 - The stub reads `MISSING_IMAGES` and `EXISTING_CONTAINERS` (space-separated service names); it never
   parses the compose files, which only have to exist.
+- Run it after any change to the `--config-only` branch of `deploy-backend.sh`.
+- Built-but-undeployed modules carry an `ALLOWLIST` entry in the script with a status and a reason.
+  Placeholder status is not durable — the stale-entry checks are what notice when it stops being true.
+- The module <-> compose-service mapping is read from each service's `build.context`, so
+  `pos-service-discovery` running as the compose service `eureka-server` needs no special case.
 
 ---
 
@@ -442,7 +447,13 @@ Cases:
 - the prune itself fails — warned, returns 0 so the deploy continues, state file left unstamped
 - `DOCKER_MIN_FREE_GIB=0` — reclaim disabled
 - `DOCKER_MIN_FREE_GIB` not an integer — skipped with a message
-- `df` cannot read the Docker data root — skipped, never a blind prune
+- `df` cannot read the Docker data root — skipped, and the deploy is **not** aborted
+- the shipped `DOCKER_MIN_FREE_GIB` default, above and below the floor
+- `docker info` failing with the daemon down — the data root falls back to a usable path
+- a non-default Docker data root — that path is the one measured and reported
+- no containers running — the prune still runs, but logs that it clears every image
+- a prune that frees too little — warned rather than reported as success
+- an unwritable prune state file — warned, returns 0
 
 **Usage:**
 ```bash
@@ -454,11 +465,11 @@ bash scripts/tests/deploy-backend-disk-reclaim-selftest.sh
   slices the three reclaim functions out of it. The slice asserts all three are present, so renaming
   or reordering them fails the test loudly instead of leaving it asserting nothing.
 - The `df` stub reads `FREE_KIB`; leaving it unset makes `df` fail, which is the unreadable case.
-- Run it after any change to the `--config-only` branch of `deploy-backend.sh`.
-- Built-but-undeployed modules carry an `ALLOWLIST` entry in the script with a status and a reason.
-  Placeholder status is not durable — the stale-entry checks are what notice when it stops being true.
-- The module <-> compose-service mapping is read from each service's `build.context`, so
-  `pos-service-discovery` running as the compose service `eureka-server` needs no special case.
+  It also rejects a malformed path the way real `df` does, so a caller that builds a bad data root
+  is caught rather than silently measured.
+- Each case runs under `set -euo pipefail`, because that is what `deploy-backend.sh` runs under and
+  shell options do not cross a new `bash`. Without them the harness cannot observe the failure that
+  matters: a bare assignment from a failing pipeline aborting the deploy.
 
 ---
 
