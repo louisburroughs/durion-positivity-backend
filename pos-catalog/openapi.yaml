@@ -24,6 +24,8 @@ tags:
   name: Supplier Prices
 - description: Per-product unit-of-measure conversion set (purchase/pack UoMs with factor to base UoM)
   name: Product UoM API
+- description: Named sets of service operations sold together, and fleet accounts' requirement sets (a package scoped to one fleet party).
+  name: Service Packages
 - description: Vendor-supplied MKCAT marketing content — names, copy per language, artwork — attached to catalog products by matching, not by identifier. Read, plus a review action for the matches a person has to decide.
   name: Tread Design Enrichment
 - description: Bulk import catalog products
@@ -36,6 +38,8 @@ tags:
   name: Labor Time Resolution
 - description: Manage MSRP values with effective dates
   name: Product MSRP API
+- description: 'Curation report: pairs of active labor standards from different sources that would answer for the same vehicle and time type but disagree.'
+  name: Labor Standard Conflicts
 - description: API for managing catalogs
   name: Catalog API
 - description: Manage price books, pricing rules, and resolution
@@ -726,6 +730,65 @@ paths:
       summary: List Vendor Operation Codes Awaiting Curation
       tags:
       - Labor Guide Imports
+      x-required-permissions:
+      - catalog:labor_standard:view
+  /v1/catalog/labor-standards/conflicts:
+    get:
+      description: 'Lists pairs of active labor standards from different sources that would both answer for the same vehicle and the same time type, but publish times differing by more than the threshold, widest disagreement first.
+
+        Use this tool to find where a curation decision is owed — which operations two guides price differently, and by how much; do not use it to find the time a job will actually be quoted at, which is resolveLaborTime, because resolution still picks one of these deterministically by precedence.
+
+        Preconditions: none. Rows count as answering for the same vehicle when their keys OVERLAP, not only when they are identical: a manufacturer''s wildcard time and an aggregator''s time for one year/make/model both answer for that vehicle, which is the disagreement that goes unnoticed today. Time types are never compared across each other — warranty time is meant to differ from retail time.
+
+        Required inputs: none; thresholdHours is optional and defaults to 0.3.
+
+        Emits a CATALOG_LABOR_STANDARD_CONFLICTS event; no state changes.
+
+        Returns 200 with the conflicting pairs, and an empty list when every source agrees within the threshold.
+
+        '
+      operationId: listLaborStandardConflicts
+      parameters:
+      - description: Report a pair only when the two times differ by more than this many hours. Book time is published in tenths, so anything below 0.1 is noise.
+        example: 0.3
+        in: query
+        name: thresholdHours
+        required: false
+        schema:
+          minimum: 0.0
+          type: number
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LaborStandardConflictDto'
+                type: array
+          description: The conflicting pairs, widest disagreement first.
+        '401':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LaborStandardConflictDto'
+                type: array
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LaborStandardConflictDto'
+                type: array
+          description: Insufficient permissions.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:labor_standard:view
+      summary: List Labor Standards Where Sources Disagree
+      tags:
+      - Labor Standard Conflicts
       x-required-permissions:
       - catalog:labor_standard:view
   /v1/catalog/labor-times/resolve:
@@ -4516,6 +4579,328 @@ paths:
       - Product UoM API
       x-required-permissions:
       - catalog:product_uom:edit
+  /v1/service-packages:
+    get:
+      description: 'Lists the active packages a location may sell — its own plus every platform package, its own first — each with its member operations in presentation order.
+
+        Use this tool to show what can be added to a job as a unit, or with fleetPartyId to show what one fleet account requires on every visit; do not use it to look up a single package you already have the id for, which is getServicePackage.
+
+        Preconditions: none. Fleet requirement sets are excluded from a general listing because they belong to one account and are not on offer — naming a fleetPartyId includes them, as does includeFleetPackages.
+
+        Required inputs: none; locationId, fleetPartyId and includeFleetPackages are optional. Omitting locationId lists platform packages only, which is the right answer for a caller quoting as the platform.
+
+        Emits a CATALOG_SERVICE_PACKAGE_LIST event; no state changes.
+
+        Returns 200 with the packages, and an empty list when none match.
+
+        '
+      operationId: listServicePackages
+      parameters:
+      - description: Location whose packages to include alongside platform ones
+        in: query
+        name: locationId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Narrow to one fleet account's requirement set
+        in: query
+        name: fleetPartyId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Include fleet requirement sets in a general listing; defaults to false
+        in: query
+        name: includeFleetPackages
+        required: false
+        schema:
+          default: false
+          type: boolean
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ServicePackageResponseDto'
+                type: array
+          description: The matching packages with their members.
+        '401':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ServicePackageResponseDto'
+                type: array
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ServicePackageResponseDto'
+                type: array
+          description: Insufficient permissions.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:service_package:view
+      summary: List Service Packages
+      tags:
+      - Service Packages
+      x-required-permissions:
+      - catalog:service_package:view
+    post:
+      description: 'Creates a named set of operations sold together — a four-tyre install with the balance and TPMS reset, a fleet PM interval, a seasonal changeover — or, with fleetPartyId set, one fleet account''s requirement set.
+
+        Use this tool to define what a shop offers as a unit; do not use it to add work to a workorder, which is addEstimateItem.
+
+        Preconditions: packageCode must be unique platform-wide. packageLaborHours is AUTHORED, not derived from the members — the overlap arithmetic that turns member times into a total lives in the workorder, and a shop prices a package as a number it chose.
+
+        Required inputs: packageCode and name; ownerScope, ownerLocationId, fleetPartyId, packageLaborHours, active and the effective window are optional.
+
+        Emits a CATALOG_SERVICE_PACKAGE_CREATE event. The package is created empty; add operations with addServicePackageMember.
+
+        Returns 201 with the stored package, 409 when the code is taken, and 422 when a field is not storable as described.
+
+        '
+      operationId: createServicePackage
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServicePackageRequestDto'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Service package created.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Insufficient permissions.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: A package already exists with that code.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: The package cannot be stored as described.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:service_package:manage
+      summary: Create A Service Package
+      tags:
+      - Service Packages
+      x-required-permissions:
+      - catalog:service_package:manage
+  /v1/service-packages/{packageId}:
+    get:
+      description: 'Returns one package with its member operations in presentation order, including inactive packages.
+
+        Use this tool when you already hold the package id; use listServicePackages to discover what a location sells.
+
+        Preconditions: the package must exist.
+
+        Required inputs: packageId.
+
+        Emits a CATALOG_SERVICE_PACKAGE_GET event; no state changes.
+
+        Returns 200 with the package, and 404 when no package has that id.
+
+        '
+      operationId: getServicePackage
+      parameters:
+      - in: path
+        name: packageId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: The package with its members.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Insufficient permissions.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: No package has that id.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:service_package:view
+      summary: Get A Service Package
+      tags:
+      - Service Packages
+      x-required-permissions:
+      - catalog:service_package:view
+  /v1/service-packages/{packageId}/members:
+    post:
+      description: 'Adds one catalog service operation to a package, required by default.
+
+        Use this tool to compose a package; required=false marks an operation the package offers as an upsell rather than includes by definition — which is what separates a fleet requirement from a suggestion.
+
+        Preconditions: the package and the service must both exist, and the service must not already be a member. Wanting two of an operation is a quantity, not a second membership.
+
+        Required inputs: serviceId; sequence, quantity and required are optional, and an omitted sequence appends to the end.
+
+        Emits a CATALOG_SERVICE_PACKAGE_MEMBER_ADD event.
+
+        Returns 200 with the whole package including its updated member list, 404 when the package or service does not exist, and 409 when the service is already a member.
+
+        '
+      operationId: addServicePackageMember
+      parameters:
+      - in: path
+        name: packageId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServicePackageMemberRequestDto'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: The package with its updated members.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Insufficient permissions.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: The package or the service does not exist.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: That service is already a member.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:service_package:manage
+      summary: Add An Operation To A Package
+      tags:
+      - Service Packages
+      x-required-permissions:
+      - catalog:service_package:manage
+  /v1/service-packages/{packageId}/members/{memberId}:
+    delete:
+      description: 'Removes one operation''s membership of a package.
+
+        Use this tool to correct a package''s composition; removing a member does not affect any workorder already quoted from the package, which snapshots its own lines.
+
+        Preconditions: the membership must exist and belong to the named package.
+
+        Required inputs: packageId and memberId.
+
+        Emits a CATALOG_SERVICE_PACKAGE_MEMBER_REMOVE event.
+
+        Returns 200 with the whole package including its updated member list, and 404 when the membership does not exist in that package.
+
+        '
+      operationId: removeServicePackageMember
+      parameters:
+      - in: path
+        name: packageId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: memberId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: The package with its updated members.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Insufficient permissions.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: That membership does not exist in that package.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:service_package:manage
+      summary: Remove An Operation From A Package
+      tags:
+      - Service Packages
+      x-required-permissions:
+      - catalog:service_package:manage
 components:
   schemas:
     ApiError:
@@ -5323,6 +5708,54 @@ components:
       - occurrenceCount
       - providerOpCode
       - sourceCode
+      type: object
+    LaborStandardConflictDto:
+      description: 'Two active labor standards from different sources that would answer for the same vehicle and time type, disagreeing by more than the requested threshold. Curation material: the platform still resolves one of them by precedence, this says the choice is contested.'
+      properties:
+        differenceHours:
+          description: Absolute difference between the two published times
+          example: 0.3
+          type: number
+        laborHours:
+          description: Hours the first row publishes
+          example: 1.1
+          type: number
+        operationCode:
+          description: Durion operation code, when the service carries one
+          example: TIRE-INSTALL-SET-4
+          type: string
+        otherLaborHours:
+          description: Hours the second row publishes
+          example: 1.4
+          type: number
+        otherSourceCode:
+          description: Source of the second row
+          example: MOCKGUIDE
+          type: string
+        otherStandardId:
+          description: Identifier of the second row
+          format: uuid
+          type: string
+        serviceId:
+          description: Service whose operation the two rows describe
+          format: uuid
+          type: string
+        sourceCode:
+          description: Source of the first row
+          example: MICHELIN
+          type: string
+        standardId:
+          description: Identifier of the first row
+          format: uuid
+          type: string
+        timeType:
+          description: Time class both rows publish
+          example: MANUFACTURER_INSTALL
+          type: string
+        vehicleKey:
+          description: The narrower row's vehicle key, rendered for reading
+          example: 2019|Honda|Civic|*|*
+          type: string
       type: object
     LaborTimeQuoteRequest:
       description: Which service operation is being quoted, on which vehicle (null fields widen the match), and which time class the workorder wants (null = retail-first).
@@ -7112,6 +7545,163 @@ components:
       - sourceCode
       - sourceRevision
       - timeType
+      type: object
+    ServicePackageMemberRequestDto:
+      description: One operation's membership of a package.
+      properties:
+        quantity:
+          description: How many of this operation the package includes; defaults to 1
+          example: 1
+          type: number
+        required:
+          description: True = included by definition (what makes a fleet requirement a requirement); false = an upsell the package offers. Defaults to true.
+          type: boolean
+        sequence:
+          description: Presentation and work order within the package; defaults to the end
+          format: int32
+          type: integer
+        serviceId:
+          description: Catalog service this membership names
+          format: uuid
+          type: string
+      required:
+      - serviceId
+      type: object
+    ServicePackageMemberResponseDto:
+      description: One operation's membership of a package.
+      properties:
+        id:
+          description: Membership identifier
+          format: uuid
+          type: string
+        operationCode:
+          description: Durion operation code, when the service carries one
+          example: WHEEL-BALANCE-SET-4
+          type: string
+        quantity:
+          description: How many of this operation the package includes
+          example: 1.0
+          type: number
+        required:
+          description: True = included by definition; false = an upsell the package offers
+          type: boolean
+        sequence:
+          description: Presentation and work order within the package
+          format: int32
+          type: integer
+        serviceId:
+          description: Catalog service this membership names
+          format: uuid
+          type: string
+        serviceName:
+          description: Service name
+          type: string
+      type: object
+    ServicePackageRequestDto:
+      description: A named set of operations sold together. With fleetPartyId set it is that account's requirement set rather than a general offering.
+      properties:
+        active:
+          description: Whether the package is currently offered; defaults to true
+          type: boolean
+        description:
+          description: What the package covers
+          type: string
+        effectiveFrom:
+          description: First day the package is offered
+          format: date
+          type: string
+        effectiveTo:
+          description: Last day the package is offered
+          format: date
+          type: string
+        fleetPartyId:
+          description: Fleet account this package is the requirement set for; omit for a general offering
+          format: uuid
+          type: string
+        name:
+          description: Display name
+          example: Four Tire Installation Package
+          maxLength: 255
+          minLength: 0
+          type: string
+        ownerLocationId:
+          description: Owning location; required when ownerScope is SHOP, rejected otherwise
+          format: uuid
+          type: string
+        ownerScope:
+          description: PLATFORM (every location sells it) or SHOP (one location's own); defaults to PLATFORM
+          enum:
+          - PLATFORM
+          - SHOP
+          example: PLATFORM
+          type: string
+        packageCode:
+          description: Stable package identity, unique platform-wide
+          example: TIRE-INSTALL-PKG-4
+          maxLength: 64
+          minLength: 0
+          type: string
+        packageLaborHours:
+          description: 'Authored labor hours for the package as sold, decimal hours in tenths. Not derived from the members: a shop prices a package as a number it chose.'
+          example: 1.2
+          type: number
+      required:
+      - name
+      - packageCode
+      type: object
+    ServicePackageResponseDto:
+      description: A service package with its members in presentation order.
+      properties:
+        active:
+          description: Whether the package is currently offered
+          type: boolean
+        createdAt:
+          description: When the package was created
+          format: date-time
+          type: string
+        description:
+          description: What the package covers
+          type: string
+        effectiveFrom:
+          description: First day the package is offered
+          format: date
+          type: string
+        effectiveTo:
+          description: Last day the package is offered
+          format: date
+          type: string
+        fleetPartyId:
+          description: Fleet account this is the requirement set for; null for a general offering
+          format: uuid
+          type: string
+        id:
+          description: Package identifier
+          format: uuid
+          type: string
+        members:
+          description: Member operations, in presentation order
+          items:
+            $ref: '#/components/schemas/ServicePackageMemberResponseDto'
+          type: array
+        name:
+          description: Display name
+          type: string
+        ownerLocationId:
+          description: Owning location when ownerScope is SHOP; null for PLATFORM
+          format: uuid
+          type: string
+        ownerScope:
+          description: PLATFORM or SHOP
+          example: PLATFORM
+          type: string
+        packageCode:
+          description: Stable package identity
+          example: TIRE-INSTALL-PKG-4
+          type: string
+        packageLaborHours:
+          description: Authored labor hours for the package as sold
+          example: 1.2
+          type: number
       type: object
     SortObject:
       properties:

@@ -238,6 +238,14 @@ public final class CatalogPermissions {
      */
     public static final String LABOR_STANDARD_IMPORT = "catalog:labor_standard:import";
 
+    // ── Service packages (#1575 Tier 0) ─────────────────────────────────────────────────
+
+    /** Define service packages and fleet requirement sets, and compose their members. */
+    public static final String SERVICE_PACKAGE_MANAGE = "catalog:service_package:manage";
+
+    /** List and read service packages and fleet requirement sets. */
+    public static final String SERVICE_PACKAGE_VIEW = "catalog:service_package:view";
+
     /**
      * Re-publish catalog facts to seed or repair a downstream replica.
      *

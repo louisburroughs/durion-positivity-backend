@@ -20,4 +20,15 @@ public interface ServiceLaborStandardRepository extends JpaRepository<ServiceLab
     @NonNull
     List<ServiceLaborStandardEntity> findByServiceIdAndSourceCodeAndSupersededAtIsNull(
             @NonNull UUID serviceId, @NonNull String sourceCode);
+
+    /**
+     * Every active row across every service, for the cross-source conflict sweep (#1569 R2).
+     *
+     * <p>A full scan is honest at reference-catalog volume and is what the curation report needs
+     * — a conflict is by definition a comparison between rows the everyday per-service reads
+     * never fetch together. The Phase 2 scale pass moves this behind a windowed query when a
+     * licensed feed makes the table large; it is called by an admin report, not the quote path.
+     */
+    @NonNull
+    List<ServiceLaborStandardEntity> findBySupersededAtIsNullOrderByServiceIdAsc();
 }

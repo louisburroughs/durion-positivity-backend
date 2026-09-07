@@ -948,13 +948,16 @@ public enum PermissionCode {
     // ── Pricing labor rates (#1575 Tier 0) ─────────────────────────────────────
     PRICING__LABOR_RATE__MANAGE(510, "pricing:labor_rate:manage"),
     PRICING__LABOR_RATE__VIEW(511, "pricing:labor_rate:view"),
-    PRICING__LABOR_RATE__QUOTE(512, "pricing:labor_rate:quote");
+    PRICING__LABOR_RATE__QUOTE(512, "pricing:labor_rate:quote"),
+    // ── Catalog service packages (#1575 Tier 0) ────────────────────────────────
+    CATALOG__SERVICE_PACKAGE__MANAGE(513, "catalog:service_package:manage"),
+    CATALOG__SERVICE_PACKAGE__VIEW(514, "catalog:service_package:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 77;
+    public static final int CATALOG_VERSION = 78;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
