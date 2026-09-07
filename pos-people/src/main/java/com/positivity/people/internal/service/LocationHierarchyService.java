@@ -9,6 +9,7 @@ import com.positivity.people.internal.entity.ExtLocationParentReplica;
 import com.positivity.people.internal.entity.ExtLocationReplica;
 import com.positivity.people.internal.repository.ExtLocationParentReplicaRepository;
 import com.positivity.people.internal.repository.ExtLocationReplicaRepository;
+import com.positivity.security.common.LocationAncestorResolver;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -30,7 +31,14 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>{@link #ancestorsOf} answers the two inclusive-of-self ancestor sets a scope check
  *       intersects with the caller's assigned nodes (issue #1870). An unknown location answers
  *       {@link AncestorSets#EMPTY}, which the check treats as deny — fail closed happens there,
- *       not at ingestion.</li>
+ *       not at ingestion. This is the module's {@link LocationAncestorResolver} bean: the
+ *       service implements the SPI directly rather than being wrapped by a bean in
+ *       {@code internal.config}, because {@code internal.service} already depends on
+ *       {@code internal.config} and the reverse edge would be a package cycle.</li>
+ *   <li>{@link #descendantsOf} is the downward mirror for the <em>narrowing</em> case (#1871): an
+ *       optional-location list endpoint called without a location restricts its result to the
+ *       caller's reach, which is the assigned nodes plus every replicated descendant on the
+ *       dimension the permission is scoped on.</li>
  *   <li>{@link #recomputeAncestors} rebuilds the sets for a location <em>and every replicated
  *       descendant</em> after its edges change. Re-parenting a mid-level node invalidates the
  *       sets of everything beneath it, and a parent whose fact arrives after its children's must
@@ -43,7 +51,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class LocationHierarchyService {
+public class LocationHierarchyService implements LocationAncestorResolver {
 
     private final ExtLocationReplicaRepository extLocationReplicaRepository;
     private final ExtLocationParentReplicaRepository extLocationParentReplicaRepository;
@@ -55,12 +63,53 @@ public class LocationHierarchyService {
      * @return both dimensions' sets; {@link AncestorSets#EMPTY} when the replica does not hold
      *     the location
      */
+    @Override
     @Transactional(readOnly = true)
     public @NonNull AncestorSets ancestorsOf(@NonNull UUID locationId) {
         return extLocationReplicaRepository
                 .findById(locationId)
                 .map(row -> new AncestorSets(row.getFinancialAncestorIds(), row.getOtherAncestorIds()))
                 .orElse(AncestorSets.EMPTY);
+    }
+
+    /**
+     * The replicated locations beneath {@code locationId} on one dimension, inclusive of the
+     * location itself — exactly the set of {@code L} for which {@code locationId ∈ ancestors(L,
+     * dimension)}, so an unfiltered list narrowed to this set shows the same rows a filter on any
+     * one of them would be allowed to show.
+     *
+     * <p>Only edges whose {@code parent_type} the dimension traverses are followed: a
+     * {@code FINANCIAL}-only edge never widens an {@code OTHER} reach, and vice versa. Every
+     * descendant reached is replicated by construction — an edge is stored from the child's own
+     * fact — and the start node is included only when the replica holds it, mirroring
+     * {@link #ancestorsOf}: a node the replica does not know reaches nothing.
+     *
+     * <p>Bounded like the ancestor walk: a visited set terminates a cycle and
+     * {@link LocationAncestry#MAX_DEPTH} caps a pathological graph, in which case the walk logs and
+     * returns what it reached — erring toward showing less, never more.
+     *
+     * @param locationId the node to expand
+     * @param dimension the hierarchy dimension whose edges are followed downward
+     * @return the inclusive descendant set, in deterministic breadth-first order; empty when the
+     *     replica does not hold {@code locationId}
+     */
+    @Transactional(readOnly = true)
+    public @NonNull Set<UUID> descendantsOf(@NonNull UUID locationId, @NonNull Dimension dimension) {
+        if (!extLocationReplicaRepository.existsById(locationId)) {
+            return Set.of();
+        }
+        Closure subtree = LocationAncestry.descendants(locationId, parent -> childrenOf(parent, dimension));
+        if (subtree.truncated()) {
+            log.warn(
+                    "Descendant walk from locationId={} on {} hit MAX_DEPTH={}; reach beyond the cap is not included",
+                    locationId,
+                    dimension,
+                    LocationAncestry.MAX_DEPTH);
+        }
+        Set<UUID> reach = new LinkedHashSet<>();
+        reach.add(locationId);
+        reach.addAll(subtree.ids());
+        return reach;
     }
 
     /**
@@ -116,6 +165,13 @@ public class LocationHierarchyService {
 
     private List<UUID> childrenOf(UUID parentId) {
         return extLocationParentReplicaRepository.findByParentId(parentId).stream()
+                .map(ExtLocationParentReplica::getChildId)
+                .toList();
+    }
+
+    private List<UUID> childrenOf(UUID parentId, Dimension dimension) {
+        return extLocationParentReplicaRepository.findByParentId(parentId).stream()
+                .filter(edge -> dimension.traverses(edge.getParentType()))
                 .map(ExtLocationParentReplica::getChildId)
                 .toList();
     }

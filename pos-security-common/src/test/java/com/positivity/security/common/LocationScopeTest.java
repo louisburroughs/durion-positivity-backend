@@ -9,6 +9,8 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
+import com.positivity.domainevents.location.LocationAncestry.Dimension;
+import com.positivity.security.common.LocationScope.Reach;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -328,6 +330,89 @@ class LocationScopeTest {
             assertThat(scope.nodes()).contains(Set.of(SHOP));
             assertThatThrownBy(() -> scope.otherScoped().add("x")).isInstanceOf(UnsupportedOperationException.class);
             assertThat(scope.toString()).contains("claimsPresent=true").doesNotContain(SHOP.toString());
+        }
+    }
+
+    @Nested
+    @DisplayName("reach(P) — the narrowing accessor for an optional location filter")
+    class ReachRows {
+
+        @Test
+        @DisplayName("claims absent → empty: a pre-rollout caller is not narrowed")
+        void claimsAbsentIsEmpty() {
+            assertThat(LocationScope.unscoped().reach(WIP_VIEW)).isEmpty();
+            LocationScope flagged =
+                    LocationScope.of(Set.of(WIP_VIEW), Set.of(), Optional.of(Set.of(SHOP)), false, RESOLVER);
+            assertThat(flagged.reach(WIP_VIEW)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("P in neither bitset → empty: a global grant is not narrowed")
+        void globalPermissionIsEmpty() {
+            LocationScope scope = scope(Set.of(JE_POST), Set.of(WIP_VIEW), SHOP);
+
+            assertThat(scope.reach(GLOBAL_PERMISSION)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("P scoped on one dimension → that dimension and the assigned nodes")
+        void scopedOnOneDimension() {
+            LocationScope scope = scope(Set.of(JE_POST), Set.of(WIP_VIEW), REGION, SHOP);
+
+            assertThat(scope.reach(WIP_VIEW)).hasValueSatisfying(reach -> {
+                assertThat(reach.dimensions()).containsExactly(Dimension.OTHER);
+                assertThat(reach.nodes()).containsExactlyInAnyOrder(REGION, SHOP);
+            });
+            assertThat(scope.reach(JE_POST)).hasValueSatisfying(reach -> {
+                assertThat(reach.dimensions()).containsExactly(Dimension.FINANCIAL);
+                assertThat(reach.nodes()).containsExactlyInAnyOrder(REGION, SHOP);
+            });
+        }
+
+        @Test
+        @DisplayName("P scoped on both dimensions → both, so either rollup counts")
+        void scopedOnBothDimensions() {
+            LocationScope scope = scope(Set.of(WIP_VIEW), Set.of(WIP_VIEW), LEDGER);
+
+            assertThat(scope.reach(WIP_VIEW)).hasValueSatisfying(reach -> {
+                assertThat(reach.dimensions()).containsExactlyInAnyOrder(Dimension.FINANCIAL, Dimension.OTHER);
+                assertThat(reach.nodes()).containsExactly(LEDGER);
+            });
+        }
+
+        @Test
+        @DisplayName("nodes absent → present with no nodes, so a caller narrows to nothing rather than to everything")
+        void nodesAbsentIsPresentAndEmpty() {
+            LocationScope scope = LocationScope.of(Set.of(), Set.of(WIP_VIEW), Optional.empty(), true, RESOLVER);
+
+            assertThat(scope.reach(WIP_VIEW)).hasValueSatisfying(reach -> {
+                assertThat(reach.dimensions()).containsExactly(Dimension.OTHER);
+                assertThat(reach.nodes()).isEmpty();
+            });
+        }
+
+        @Test
+        @DisplayName("the PERM_ prefix is tolerated, and the resolver is never consulted")
+        void prefixToleratedAndNoResolverNeeded() {
+            LocationScope scope = LocationScope.of(Set.of(), Set.of(WIP_VIEW), Optional.of(Set.of(SHOP)), true, null);
+
+            assertThat(scope.reach(GatewaySecurityConstants.PERMISSION_PREFIX + WIP_VIEW))
+                    .hasValueSatisfying(reach -> assertThat(reach.nodes()).containsExactly(SHOP));
+        }
+
+        @Test
+        @DisplayName("Reach is immutable and rejects an empty dimension set")
+        void reachValueSemantics() {
+            Set<Dimension> dims = java.util.EnumSet.of(Dimension.OTHER);
+            Set<UUID> nodes = new java.util.HashSet<>(Set.of(SHOP));
+            Reach reach = new Reach(dims, nodes);
+            dims.clear();
+            nodes.clear();
+
+            assertThat(reach.dimensions()).containsExactly(Dimension.OTHER);
+            assertThat(reach.nodes()).containsExactly(SHOP);
+            assertThatThrownBy(() -> reach.nodes().add(REGION)).isInstanceOf(UnsupportedOperationException.class);
+            assertThatThrownBy(() -> new Reach(Set.of(), Set.of(SHOP))).isInstanceOf(IllegalArgumentException.class);
         }
     }
 }

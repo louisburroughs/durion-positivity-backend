@@ -1,7 +1,9 @@
 package com.positivity.security.common;
 
 import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
+import com.positivity.domainevents.location.LocationAncestry.Dimension;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -45,6 +47,15 @@ import org.slf4j.LoggerFactory;
  * resolver is the module's own replica; there is no per-request call to pos-location. When the
  * module provides no {@link LocationAncestorResolver} bean, every scoped permission is denied and
  * a warning is logged once — absence of wiring must never read as unrestricted reach.
+ *
+ * <h2>Narrowing rather than gating</h2>
+ *
+ * <p>{@link #covers} and {@link #require} answer for one named location. A list endpoint whose
+ * location parameter is <em>optional</em> has a second shape: when the caller names no location,
+ * the result set is narrowed to the caller's reach instead of denied. {@link #reach(String)}
+ * exposes what such an endpoint needs — the dimension(s) the permission is scoped on and the
+ * assigned nodes — and leaves the descendant expansion to the module's own replica, which is
+ * where the hierarchy lives. It is read-only: the decision table above is unchanged.
  *
  * <p>Immutable and safe to share; one instance lives in the authentication details for the
  * duration of a request.
@@ -135,6 +146,72 @@ public final class LocationScope {
      */
     public @NonNull Optional<Set<UUID>> nodes() {
         return Optional.ofNullable(nodes);
+    }
+
+    /**
+     * What a location-scoped permission reaches, for an endpoint that narrows an unfiltered list
+     * to the caller's locations rather than gating one named location (ADR-0061 §2–§3).
+     *
+     * <p>The reach is {@code nodes} plus every replicated descendant of each node on each of
+     * {@code dimensions} — equivalently, every replicated location whose inclusive ancestor set on
+     * one of those dimensions intersects {@code nodes}. The expansion is the module's, over its own
+     * replica; this record only carries the inputs.
+     *
+     * @param dimensions the dimension(s) the permission is scoped on; never empty, and both when
+     *     the permission was granted by a {@code FINANCIAL}-scoped role and an {@code OTHER}-scoped
+     *     role, in which case either reach counts
+     * @param nodes the caller's assigned nodes; <em>empty</em> when the {@code loc_scope} claim was
+     *     absent, so a caller expanding it reaches nothing and fails closed rather than open
+     */
+    public record Reach(
+            @NonNull Set<Dimension> dimensions, @NonNull Set<UUID> nodes) {
+
+        public Reach {
+            if (dimensions.isEmpty()) {
+                throw new IllegalArgumentException("A Reach must be scoped on at least one dimension");
+            }
+            dimensions = Collections.unmodifiableSet(EnumSet.copyOf(dimensions));
+            nodes = Collections.unmodifiableSet(new LinkedHashSet<>(nodes));
+        }
+    }
+
+    /**
+     * The caller's reach for a permission, when that permission is location-scoped for them.
+     *
+     * <table>
+     *   <caption>{@link #reach(String)}</caption>
+     *   <tr><th>state</th><th>result</th></tr>
+     *   <tr><td>claims absent (pre-rollout token)</td><td>empty — the grant is unrestricted</td></tr>
+     *   <tr><td>{@code P} in neither bitset</td><td>empty — the grant is global</td></tr>
+     *   <tr><td>{@code P} in one bitset, nodes present</td><td>that dimension and the nodes</td></tr>
+     *   <tr><td>{@code P} in both bitsets, nodes present</td><td>both dimensions and the nodes</td></tr>
+     *   <tr><td>{@code P} in a bitset, nodes absent</td><td>present, with <em>no</em> nodes — fail closed</td></tr>
+     * </table>
+     *
+     * <p>An empty result means "do not narrow"; a present result with no nodes means "narrow to
+     * nothing". Callers must not collapse the two.
+     *
+     * @param permission the permission being exercised, with or without the {@code PERM_} prefix
+     * @return the reach to narrow to, or empty when the permission needs no narrowing
+     */
+    public @NonNull Optional<Reach> reach(@NonNull String permission) {
+        if (!claimsPresent) {
+            return Optional.empty();
+        }
+        String plain = plainPermission(permission);
+        boolean financial = financialScoped.contains(plain);
+        boolean other = otherScoped.contains(plain);
+        if (!financial && !other) {
+            return Optional.empty();
+        }
+        Set<Dimension> dimensions = EnumSet.noneOf(Dimension.class);
+        if (financial) {
+            dimensions.add(Dimension.FINANCIAL);
+        }
+        if (other) {
+            dimensions.add(Dimension.OTHER);
+        }
+        return Optional.of(new Reach(dimensions, nodes == null ? Set.of() : nodes));
     }
 
     /**

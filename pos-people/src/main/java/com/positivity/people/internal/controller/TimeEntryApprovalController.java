@@ -67,14 +67,25 @@ public class TimeEntryApprovalController {
                     Required inputs: none are mandatory. status, workDate, employeeId and locationId each narrow \
                     the result and are unfiltered when omitted; workDate is a calendar day resolved in timeZone, \
                     which defaults to UTC; page defaults to 0 and size to 20 with a maximum of 100.
+                    Location scope: when locationId is given it must lie within the caller's location reach, or \
+                    the request is refused with 403 LOCATION_SCOPE_DENIED. When locationId is omitted and the \
+                    caller's people:timeEntry:view permission is location-scoped, the page is narrowed to the \
+                    caller's reach — their assigned locations and every location beneath them — rather than \
+                    refused; a caller with no reach receives an empty page. A caller whose permission is not \
+                    location-scoped sees every location.
                     Emits a PEOPLE_TIME_ENTRY_LIST audit event but changes no state.
-                    Returns 200 with the page envelope, and 400 when timeZone is not a known zone id or the \
-                    paging parameters are out of range.
+                    Returns 200 with the page envelope, 400 when timeZone is not a known zone id or the paging \
+                    parameters are out of range, and 403 LOCATION_SCOPE_DENIED when locationId is outside the \
+                    caller's location reach.
                     """)
     @ApiResponse(responseCode = "200", description = "Time entries returned (possibly empty)")
     @ApiResponse(
             responseCode = "400",
             description = "Invalid filter or paging parameter",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "LOCATION_SCOPE_DENIED: locationId is outside the caller's location reach",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "PEOPLE_TIME_ENTRY_LIST", apiVersion = "1")
     @GetMapping
@@ -96,7 +107,12 @@ public class TimeEntryApprovalController {
                     @RequestParam(required = false)
                     String timeZone,
             @Parameter(description = "Keep only this person's entries") @RequestParam(required = false) UUID employeeId,
-            @Parameter(description = "Keep only entries clocked at this location") @RequestParam(required = false)
+            @Parameter(
+                            description = "Keep only entries clocked at this location; it must lie within the caller's "
+                                    + "location reach (403 LOCATION_SCOPE_DENIED otherwise). When omitted, a caller "
+                                    + "whose view permission is location-scoped sees only entries within their reach; "
+                                    + "an unscoped caller sees every location")
+                    @RequestParam(required = false)
                     UUID locationId,
             @Parameter(description = "Zero-based page index") @PositiveOrZero @RequestParam(defaultValue = "0")
                     int page,

@@ -1,5 +1,6 @@
 package com.positivity.people.internal.service;
 
+import com.positivity.domainevents.location.LocationAncestry.Dimension;
 import com.positivity.people.internal.dto.PagedResponse;
 import com.positivity.people.internal.dto.TimeEntryDecisionResult;
 import com.positivity.people.internal.dto.TimeEntrySummary;
@@ -10,6 +11,9 @@ import com.positivity.people.internal.exception.NotFoundException;
 import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
+import com.positivity.people.internal.security.PeoplePermissions;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.LocationScope.Reach;
 import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.Instant;
@@ -17,9 +21,12 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +51,25 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>
  * Security context and header-based permissions are evaluated to authorize state
  * modifications before committing changes to the repository.
+ *
+ * <h2>Location scope on the approvals queue (ADR-0061 §3, #1871)</h2>
+ *
+ * {@code @PreAuthorize} on the controller answers "may this caller view time entries"; the
+ * caller's {@link LocationScope} answers "…where". {@link #listTimeEntries} takes {@code
+ * locationId} as an optional filter, so it has two shapes rather than one:
+ *
+ * <ul>
+ * <li><b>Named location — gate.</b> The caller must cover it, or the request is a 403
+ * {@code LOCATION_SCOPE_DENIED}.</li>
+ * <li><b>No location — narrow.</b> A caller whose view permission is location-scoped is not
+ * denied; the result is restricted to their reach, which is the assigned nodes plus every
+ * replicated descendant on the dimension(s) the permission is scoped on. An empty reach —
+ * nodes absent from the token, or nothing replicated at or beneath them — answers an empty page
+ * rather than an unrestricted one.</li>
+ * </ul>
+ *
+ * A caller whose permission is global, or whose token predates the scope claims, sees the
+ * unfiltered queue exactly as before.
  */
 @RequiredArgsConstructor
 @Service
@@ -65,6 +91,8 @@ public class TimeEntryServiceImpl implements TimeEntryService {
     private final TimeEntryRepository repository;
 
     private final TimeEntryAuditRepository auditRepository;
+
+    private final LocationHierarchyService locationHierarchyService;
 
     /**
      * Bounds used when the caller supplies no day filter. The window is always compared rather
@@ -97,12 +125,49 @@ public class TimeEntryServiceImpl implements TimeEntryService {
                 : workDate.plusDays(1).atStartOfDay(resolvedZone).toInstant();
 
         // The ordering lives in the query, so the page request carries no sort of its own.
-        Page<TimeEntry> found = repository.findForApprovalQueue(
-                status, employeeId, locationId, windowStart, windowEnd, PageRequest.of(page, size));
+        PageRequest pageRequest = PageRequest.of(page, size);
+        LocationScope scope = SecurityContextHelper.locationScope();
+        Page<TimeEntry> found;
+        if (locationId != null) {
+            // Gate: a named location must be within the caller's reach, or this is a 403.
+            scope.require(PeoplePermissions.TIMEENTRY_VIEW, locationId);
+            found = repository.findForApprovalQueue(
+                    status, employeeId, locationId, windowStart, windowEnd, pageRequest);
+        } else {
+            Optional<Reach> reach = scope.reach(PeoplePermissions.TIMEENTRY_VIEW);
+            if (reach.isEmpty()) {
+                // Global or pre-rollout: the unfiltered queue, unchanged.
+                found = repository.findForApprovalQueue(status, employeeId, null, windowStart, windowEnd, pageRequest);
+            } else {
+                // Narrow: the caller sees their reach and nothing else. An empty reach is an empty
+                // page, never an unrestricted one — and never an `IN ()` handed to the database.
+                Set<UUID> reachable = reachableLocations(reach.get());
+                if (reachable.isEmpty()) {
+                    return new PagedResponse<>(List.of(), page, size, 0, 0);
+                }
+                found = repository.findForApprovalQueueWithinLocations(
+                        status, employeeId, reachable, windowStart, windowEnd, pageRequest);
+            }
+        }
 
         List<TimeEntrySummary> items =
                 found.getContent().stream().map(e -> toSummary(e, resolvedZone)).toList();
         return new PagedResponse<>(items, page, size, found.getTotalElements(), found.getTotalPages());
+    }
+
+    /**
+     * Expands a reach once per request: the union of the inclusive descendant set of every
+     * assigned node on every dimension the permission is scoped on. A permission scoped on both
+     * dimensions is satisfied by either rollup, so both are unioned (ADR-0061 §2).
+     */
+    private Set<UUID> reachableLocations(Reach reach) {
+        Set<UUID> reachable = new LinkedHashSet<>();
+        for (UUID node : reach.nodes()) {
+            for (Dimension dimension : reach.dimensions()) {
+                reachable.addAll(locationHierarchyService.descendantsOf(node, dimension));
+            }
+        }
+        return reachable;
     }
 
     @Override

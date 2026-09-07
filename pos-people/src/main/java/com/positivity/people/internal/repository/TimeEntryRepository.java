@@ -3,6 +3,7 @@ package com.positivity.people.internal.repository;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.enums.TimeEntryStatus;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -75,6 +76,40 @@ public interface TimeEntryRepository extends JpaRepository<TimeEntry, UUID> {
             @Param("status") TimeEntryStatus status,
             @Param("personId") UUID personId,
             @Param("locationId") UUID locationId,
+            @Param("windowStartInclusive") Instant windowStartInclusive,
+            @Param("windowEndExclusive") Instant windowEndExclusive,
+            Pageable pageable);
+
+    /**
+     * {@link #findForApprovalQueue} narrowed to a set of locations rather than one: the shape a
+     * location-scoped caller gets when they name no location (ADR-0061 §3, #1871). The set is
+     * the caller's reach — assigned nodes plus replicated descendants — and is never empty here;
+     * the service answers an empty reach with an empty page without querying, because an
+     * {@code IN ()} has no portable meaning.
+     */
+    @NonNull
+    @Query(value = """
+                        SELECT t
+                        FROM TimeEntry t
+                        WHERE (:status IS NULL OR t.status = :status)
+                          AND (:personId IS NULL OR t.personId = :personId)
+                          AND t.locationId IN :locationIds
+                          AND t.attendanceStartAt >= :windowStartInclusive
+                          AND t.attendanceStartAt < :windowEndExclusive
+                        ORDER BY t.submittedAt ASC NULLS LAST, t.timeEntryId ASC
+                        """, countQuery = """
+                        SELECT COUNT(t)
+                        FROM TimeEntry t
+                        WHERE (:status IS NULL OR t.status = :status)
+                          AND (:personId IS NULL OR t.personId = :personId)
+                          AND t.locationId IN :locationIds
+                          AND t.attendanceStartAt >= :windowStartInclusive
+                          AND t.attendanceStartAt < :windowEndExclusive
+                        """)
+    Page<TimeEntry> findForApprovalQueueWithinLocations(
+            @Param("status") TimeEntryStatus status,
+            @Param("personId") UUID personId,
+            @Param("locationIds") Collection<UUID> locationIds,
             @Param("windowStartInclusive") Instant windowStartInclusive,
             @Param("windowEndExclusive") Instant windowEndExclusive,
             Pageable pageable);

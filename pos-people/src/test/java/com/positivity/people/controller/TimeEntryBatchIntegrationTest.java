@@ -10,6 +10,7 @@ import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.repository.TimeEntryAuditRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
+import com.positivity.people.internal.service.LocationHierarchyService;
 import com.positivity.people.internal.service.TimeEntryService;
 import com.positivity.people.internal.service.TimeEntryServiceImpl;
 import com.positivity.security.common.GatewaySecurityConstants;
@@ -50,7 +51,8 @@ class TimeEntryBatchIntegrationTest {
 
         entryRepository = mock(TimeEntryRepository.class);
         auditRepository = mock(TimeEntryAuditRepository.class);
-        timeEntryService = new TimeEntryServiceImpl(TEST_CLOCK, entryRepository, auditRepository);
+        timeEntryService = new TimeEntryServiceImpl(
+                TEST_CLOCK, entryRepository, auditRepository, mock(LocationHierarchyService.class));
         controller = new TimeEntryApprovalController(timeEntryService);
     }
 
