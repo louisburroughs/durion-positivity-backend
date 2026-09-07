@@ -144,6 +144,16 @@ public interface JwtService {
     UUID getPersonIdFromToken(@NonNull String token);
 
     /**
+     * Extracts the {@code jti} claim from a signed access or refresh token issued by this service.
+     *
+     * @param token the JWT token string
+     * @return the JWT ID, or {@code null} if the token carries none
+     * @throws io.jsonwebtoken.JwtException if the token does not verify or has expired
+     */
+    @Nullable
+    String getJtiFromToken(@NonNull String token);
+
+    /**
      * Extracts the set of roles from the given JWT token.
      *
      * @param token the JWT token string

@@ -159,6 +159,46 @@ assignments are open-ended, are unaffected. Refresh tokens keep their own lifeti
 `refreshAccessToken` re-enters `generateTokenPair`, the clamp is re-evaluated on every refresh
 rather than inherited.
 
+#### Revocation on assignment change
+
+The second ADR-0061 §4 mechanism (#1874). `PeopleEventsListener` compares each
+`people.staffing-assignment.updated` fact with the replica row it is about to overwrite, and when
+the change **narrows** the person's reach it revokes that person's live tokens through
+`PersonTokenRevocationService` — the same `TokenRevocationManager` + `jwt_token` path
+`revokeAllTokensForUser` uses. Widening never revokes; the next token simply picks it up.
+
+A fact narrows reach only if the assignment was contributing today (`ACTIVE`, effective on the
+issuer-clock date by the same predicate as `findActiveEffectiveOn`) and:
+
+- `status` leaves `ACTIVE` (`ENDED`); or
+- `locationId` changes — the old node is no longer covered; or
+- `effectiveFrom` moves after today (or is dropped; the projection never matches a null); or
+- `effectiveTo` is set where it was open-ended, or moves earlier than it was.
+
+A brand-new assignment, a reactivation, a later or removed `effectiveTo`, an earlier
+`effectiveFrom` or a `primary` flip does not revoke. Neither does a stale fact (older
+`aggregateVersion`) or a replayed `eventId` (`processed_events`).
+
+Revocation is per person: every `users` row with that `person_id` is looked up, and every
+`jwt_token` row of those subjects whose access token is unexpired has its access **and** refresh
+JTI written to Redis (`revokeAllTokensForUser` precedent — the refresh token shares the row) and
+the row deleted. The affected sessions must log in again. Rows whose access token has already
+expired are left alone: there is nothing live to revoke, and their refresh re-enters
+`generateTokenPair`, which re-reads the projection. Re-revoking an already-revoked JTI is a
+no-op overwrite in Redis, and a second pass finds no row.
+
+**Redis unavailable: fail-open, loudly.** If Redis is disabled, unreachable, or the write fails
+after retries, the `jwt_token` rows are still deleted, `security.token-revocation.redis-unavailable`
+is incremented by the number of JTIs that missed Redis, a WARN names the person and the count,
+and the event completes normally. Fail-closed was rejected because it would refuse every token
+platform-wide for the length of a Redis outage, while the `exp` clamp above already bounds the
+stale window to the end of the assignment's effective date — fail-open costs at most that
+window. Residual risk to know: on this module's bearer path `validateToken` also checks the
+`jwt_token` row, so a DB-marked revocation holds even with Redis down; but the API gateway
+verifies signature, issuer, audience and expiry only and consults neither store, so a revoked
+token keeps passing the gateway until `exp` — Redis up or down. Closing that is a gateway
+change, not a security-service one.
+
 ### Assistant baseline
 
 Every role in the baseline seed receives four conversational entrypoints:

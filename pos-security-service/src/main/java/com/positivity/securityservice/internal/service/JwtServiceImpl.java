@@ -548,6 +548,11 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
+    public @Nullable String getJtiFromToken(@NonNull String token) {
+        return getClaims(token).getId();
+    }
+
+    @Override
     public Set<String> getFinancialLocationScopedPermissionsFromToken(@NonNull String token) {
         return decodeScopedPermissions(getClaims(token), LOC_FIN_BITS);
     }

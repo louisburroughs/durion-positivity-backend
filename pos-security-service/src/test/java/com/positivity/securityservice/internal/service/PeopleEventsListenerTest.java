@@ -5,6 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
@@ -38,6 +40,7 @@ class PeopleEventsListenerTest {
     private final ProcessedEventRepository processedEventRepository = mock(ProcessedEventRepository.class);
     private final ExtStaffingAssignmentReplicaRepository replicaRepository =
             mock(ExtStaffingAssignmentReplicaRepository.class);
+    private final PersonTokenRevocationService revocationService = mock(PersonTokenRevocationService.class);
 
     private PeopleEventsListener listener;
 
@@ -48,6 +51,7 @@ class PeopleEventsListenerTest {
                 new ObjectMapper(),
                 processedEventRepository,
                 replicaRepository,
+                revocationService,
                 mock(ObjectProvider.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(replicaRepository.findById(any())).thenReturn(Optional.empty());
@@ -60,11 +64,22 @@ class PeopleEventsListenerTest {
             boolean primary,
             String status,
             String effectiveTo) {
+        return assignmentEvent(eventId, aggregateVersion, locationId, primary, status, "2026-01-01", effectiveTo);
+    }
+
+    private static String assignmentEvent(
+            String eventId,
+            long aggregateVersion,
+            UUID locationId,
+            boolean primary,
+            String status,
+            String effectiveFrom,
+            String effectiveTo) {
         return """
                 {"eventId":"%s","eventType":"%s","aggregateVersion":%d,
                  "payload":{"assignmentId":"%s","employeeId":"%s","personId":"%s","locationId":"%s",
                             "role":"TECHNICIAN","primary":%s,"status":"%s",
-                            "effectiveFrom":"2026-01-01","effectiveTo":%s}}
+                            "effectiveFrom":"%s","effectiveTo":%s}}
                 """.formatted(
                         eventId,
                         StaffingAssignmentUpdatedV1.EVENT_TYPE,
@@ -75,7 +90,22 @@ class PeopleEventsListenerTest {
                         locationId,
                         primary,
                         status,
+                        effectiveFrom,
                         effectiveTo == null ? "null" : "\"" + effectiveTo + "\"");
+    }
+
+    private static ExtStaffingAssignmentReplica activeRow(UUID locationId, LocalDate effectiveTo, long version) {
+        return ExtStaffingAssignmentReplica.builder()
+                .assignmentId(ASSIGNMENT_ID)
+                .personId(PERSON_ID)
+                .locationId(locationId)
+                .primary(true)
+                .status("ACTIVE")
+                .effectiveFrom(LocalDate.of(2026, 1, 1))
+                .effectiveTo(effectiveTo)
+                .aggregateVersion(version)
+                .updatedAt(Instant.EPOCH)
+                .build();
     }
 
     private ExtStaffingAssignmentReplica savedReplica() {
@@ -106,6 +136,8 @@ class PeopleEventsListenerTest {
         verify(processedEventRepository).save(processed.capture());
         assertThat(processed.getValue().getEventId()).isEqualTo("00000000-0000-7000-8000-000000000e01");
         assertThat(processed.getValue().getOwner()).isEqualTo("people");
+        // Brand-new ACTIVE assignment widens; the next token picks it up (#1874).
+        verifyNoInteractions(revocationService);
     }
 
     @Test
@@ -143,6 +175,8 @@ class PeopleEventsListenerTest {
         assertThat(row.getEffectiveTo()).isEqualTo(LocalDate.of(2026, 9, 6));
         verify(replicaRepository, never()).deleteById(any());
         verify(replicaRepository, never()).delete(any());
+        // No prior row: nothing was ever issued from this assignment, so nothing to revoke.
+        verifyNoInteractions(revocationService);
     }
 
     @Test
@@ -157,6 +191,7 @@ class PeopleEventsListenerTest {
         verify(replicaRepository, never()).findById(any());
         verify(replicaRepository, never()).save(any());
         verify(processedEventRepository, never()).save(any());
+        verifyNoInteractions(revocationService);
     }
 
     @Test
@@ -245,5 +280,81 @@ class PeopleEventsListenerTest {
 
         verify(replicaRepository, never()).save(any());
         verify(processedEventRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("ACTIVE -> ENDED revokes the person's live tokens (and only that person's) after the upsert")
+    void endedRevokesLiveTokensOfThatPerson() {
+        when(replicaRepository.findById(ASSIGNMENT_ID)).thenReturn(Optional.of(activeRow(SHOP_ID, null, 100L)));
+        when(revocationService.revokeLiveTokens(PERSON_ID)).thenReturn(2);
+
+        listener.onPeopleEvent(
+                assignmentEvent("00000000-0000-7000-8000-000000000e10", 200L, SHOP_ID, true, "ENDED", "2026-09-06"));
+
+        assertThat(savedReplica().getStatus()).isEqualTo(ExtStaffingAssignmentReplica.STATUS_ENDED);
+        verify(revocationService).revokeLiveTokens(PERSON_ID);
+        verifyNoMoreInteractions(revocationService);
+        verify(processedEventRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("effectiveTo moved earlier revokes")
+    void earlierEffectiveToRevokes() {
+        when(replicaRepository.findById(ASSIGNMENT_ID))
+                .thenReturn(Optional.of(activeRow(SHOP_ID, LocalDate.of(2026, 12, 31), 100L)));
+
+        listener.onPeopleEvent(
+                assignmentEvent("00000000-0000-7000-8000-000000000e11", 200L, SHOP_ID, true, "ACTIVE", "2026-09-30"));
+
+        verify(revocationService).revokeLiveTokens(PERSON_ID);
+    }
+
+    @Test
+    @DisplayName("locationId change revokes (the old node is no longer covered)")
+    void locationChangeRevokes() {
+        when(replicaRepository.findById(ASSIGNMENT_ID)).thenReturn(Optional.of(activeRow(SHOP_ID, null, 100L)));
+
+        listener.onPeopleEvent(
+                assignmentEvent("00000000-0000-7000-8000-000000000e12", 200L, REGION_ID, true, "ACTIVE", null));
+
+        assertThat(savedReplica().getLocationId()).isEqualTo(REGION_ID);
+        verify(revocationService).revokeLiveTokens(PERSON_ID);
+    }
+
+    @Test
+    @DisplayName("effectiveFrom moved after today revokes")
+    void effectiveFromMovedLaterRevokes() {
+        when(replicaRepository.findById(ASSIGNMENT_ID)).thenReturn(Optional.of(activeRow(SHOP_ID, null, 100L)));
+
+        listener.onPeopleEvent(assignmentEvent(
+                "00000000-0000-7000-8000-000000000e13", 200L, SHOP_ID, true, "ACTIVE", "2026-09-08", null));
+
+        verify(revocationService).revokeLiveTokens(PERSON_ID);
+    }
+
+    @Test
+    @DisplayName("Later or removed effectiveTo widens: no revocation")
+    void laterEffectiveToDoesNotRevoke() {
+        when(replicaRepository.findById(ASSIGNMENT_ID))
+                .thenReturn(Optional.of(activeRow(SHOP_ID, LocalDate.of(2026, 9, 30), 100L)));
+
+        listener.onPeopleEvent(
+                assignmentEvent("00000000-0000-7000-8000-000000000e14", 200L, SHOP_ID, true, "ACTIVE", "2026-12-31"));
+        listener.onPeopleEvent(
+                assignmentEvent("00000000-0000-7000-8000-000000000e15", 300L, SHOP_ID, true, "ACTIVE", null));
+
+        verifyNoInteractions(revocationService);
+    }
+
+    @Test
+    @DisplayName("A stale (older aggregateVersion) ENDED fact neither overwrites nor revokes")
+    void staleEndedFactDoesNotRevoke() {
+        when(replicaRepository.findById(ASSIGNMENT_ID)).thenReturn(Optional.of(activeRow(SHOP_ID, null, 500L)));
+
+        listener.onPeopleEvent(
+                assignmentEvent("00000000-0000-7000-8000-000000000e16", 499L, SHOP_ID, true, "ENDED", "2026-09-06"));
+
+        verify(replicaRepository, never()).save(any());
+        verifyNoInteractions(revocationService);
     }
 }

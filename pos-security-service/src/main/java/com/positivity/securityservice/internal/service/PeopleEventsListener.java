@@ -9,6 +9,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.ObjectProvider;
@@ -29,7 +30,9 @@ import tools.jackson.databind.ObjectMapper;
  * {@code assignmentId}, guarded by the envelope's {@code aggregateVersion} (last-writer-wins; an
  * older fact never overwrites a newer row). {@code status = ENDED} marks the row ended and keeps
  * it — effective dating drives the token exp clamp (ADR-0061 §4). The assigned {@code locationId}
- * is stored verbatim, never expanded into descendants (ADR-0061 §2).
+ * is stored verbatim, never expanded into descendants (ADR-0061 §2). A fact that narrows the
+ * person's reach (see {@link StaffingAssignmentReachChange}) also revokes their live tokens via
+ * {@link PersonTokenRevocationService} (ADR-0061 §4, #1874).
  *
  * <p>Other event types on the topic (e.g. {@code people.employee.updated}) are ignored but still
  * recorded in {@code processed_events}: the owner's manifest counts every fact in the window, so
@@ -50,6 +53,7 @@ public class PeopleEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtStaffingAssignmentReplicaRepository extStaffingAssignmentReplicaRepository;
+    private final PersonTokenRevocationService personTokenRevocationService;
     private final Counter payloadRejectedCounter;
 
     public PeopleEventsListener(
@@ -57,11 +61,13 @@ public class PeopleEventsListener {
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtStaffingAssignmentReplicaRepository extStaffingAssignmentReplicaRepository,
+            PersonTokenRevocationService personTokenRevocationService,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.extStaffingAssignmentReplicaRepository = extStaffingAssignmentReplicaRepository;
+        this.personTokenRevocationService = personTokenRevocationService;
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -155,5 +161,17 @@ public class PeopleEventsListener {
                 payload.personId(),
                 payload.locationId(),
                 payload.status());
+        // ADR-0061 §4 second mechanism (#1874): a narrowing change revokes the person's live
+        // tokens after the projection is updated, so a re-login sees the new reach. Widening never
+        // revokes. Redis-unavailable is fail-open inside the revocation service.
+        LocalDate today = LocalDate.ofInstant(Instant.now(clock), clock.getZone());
+        if (StaffingAssignmentReachChange.narrows(existing, payload, today)) {
+            int revoked = personTokenRevocationService.revokeLiveTokens(payload.personId());
+            log.info(
+                    "Staffing assignment narrowed reach; revoked live tokens personId={} assignmentId={} tokens={}",
+                    payload.personId(),
+                    payload.assignmentId(),
+                    revoked);
+        }
     }
 }

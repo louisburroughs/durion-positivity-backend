@@ -326,4 +326,17 @@ class TokenRevocationManagerTest {
 
         assertThat(mgr.clearAllRevoked()).isEqualTo(2L);
     }
+
+    @Test
+    @DisplayName(
+            "revokeToken on an already-revoked jti is an idempotent overwrite: no error, both calls succeed (#1874)")
+    void revokeToken_alreadyRevoked_isIdempotent() {
+        TokenRevocationManager manager = managerWithRedis();
+
+        assertThat(manager.revokeToken("dup-jti", 600L)).isTrue();
+        assertThat(manager.revokeToken("dup-jti", 300L)).isTrue();
+
+        verify(valueOps).set("jwt:revoked:dup-jti", true, 600L, TimeUnit.SECONDS);
+        verify(valueOps).set("jwt:revoked:dup-jti", true, 300L, TimeUnit.SECONDS);
+    }
 }
