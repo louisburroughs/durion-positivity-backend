@@ -142,6 +142,55 @@ annotations:
   summary: "High p95 latency in durion-positivity-backend"
 ```
 
+### Host Metrics on Alpha (CloudWatch Agent)
+
+Everything above is *in-container* telemetry, scraped by the Prometheus/Grafana stack that runs on
+the alpha box. None of it sees the box itself. EC2 publishes CPU and network from the hypervisor,
+but disk and memory live inside the instance and need an agent there, so for a long time nothing
+watched them at all.
+
+That gap caused #1862. The root disk filled with stale deploy images, deploys began failing on
+`no space left on device`, and — because a full root filesystem also stops the SSM agent writing its
+output — there was no remote shell left to diagnose it with. Nothing alarmed beforehand.
+
+**What is collected**, defined in `deployment/alpha/cloudwatch-agent-config.json`, namespace
+`CWAgent`, at 60s:
+
+| Metric | Why |
+| --- | --- |
+| `disk_used_percent`, `disk_free` on `/` | Docker's data root lives here; this is the #1862 signal |
+| `mem_used_percent` | Diagnosis. No alarm, to keep the noise down |
+
+Custom metrics are billed per metric per month, so the set is deliberately small.
+
+**Alarms** (region `us-east-1`, both notifying the `durion-alpha-alerts` SNS topic):
+
+| Alarm | Fires | Meaning |
+| --- | --- | --- |
+| `alpha-root-disk-low` | `disk_free` < 40 GiB for 15 min | Lead time. Still above the deploy's 25 GiB reclaim floor, so nothing is broken yet. Missing data counts as breaching, so a dead agent also alerts |
+| `alpha-root-disk-critical` | `disk_free` < 15 GiB for 10 min | Below the reclaim floor: every deploy is now pruning to make room, and one more accumulation cycle reaches the #1862 wedge |
+
+The 40 GiB threshold is chosen against `DOCKER_MIN_FREE_GIB` in `deploy-backend.sh` (default 25). If
+you change one, revisit the other, or the warning stops arriving before the deploy starts pruning.
+
+**Installing or re-configuring the agent:**
+
+```bash
+# On the box, after any edit to cloudwatch-agent-config.json. Idempotent.
+bash /opt/durion/alpha/scripts/install-cloudwatch-agent.sh
+```
+
+The instance role (`EC2-SSM-Role`) needs `CloudWatchAgentServerPolicy`. Without it the agent starts,
+reports `"status": "running"`, and silently publishes nothing — verify with the metric, never with
+the agent's own status:
+
+```bash
+aws cloudwatch get-metric-statistics --region us-east-1 --namespace CWAgent \
+  --metric-name disk_free --dimensions Name=InstanceId,Value=<instance-id> \
+  --start-time "$(date -u -d '20 min ago' +%FT%TZ)" --end-time "$(date -u +%FT%TZ)" \
+  --period 300 --statistics Average
+```
+
 ### Dashboard Access
 
 | Dashboard  | URL                      | Credentials |
