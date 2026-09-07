@@ -3,6 +3,7 @@ package com.positivity.catalog.internal.service;
 import com.positivity.catalog.internal.dto.ServiceLaborStandardRequestDto;
 import com.positivity.catalog.internal.dto.ServiceLaborStandardResponseDto;
 import com.positivity.catalog.internal.entity.ServiceLaborStandardEntity;
+import com.positivity.catalog.internal.enums.LaborStandardOwnerScope;
 import com.positivity.catalog.internal.enums.LaborTimeType;
 import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
 import com.positivity.catalog.internal.exception.CatalogNotFoundException;
@@ -106,6 +107,7 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
         entity.setTimeType(parsedTimeType(request.getTimeType()));
         entity.setOverlapGroup(trimToNull(request.getOverlapGroup()));
         entity.setIncludedOpCodes(validatedIncludedOpCodes(request.getIncludedOpCodes()));
+        applyOwnership(entity, request);
         entity.setSourceCode(DURION_SOURCE);
         // For a hand-authored row the vintage is the moment of authoring; imported rows will carry
         // their feed's revision instead.
@@ -130,6 +132,40 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
         } catch (IllegalArgumentException e) {
             throw new CatalogValidationException(
                     "timeType must be one of " + java.util.Arrays.toString(LaborTimeType.values()) + ": " + timeType);
+        }
+    }
+
+    /**
+     * Ownership is a paired field: a {@code SHOP} row without a location resolves for nobody and
+     * a {@code PLATFORM} row with one lies about its reach, so both halves are rejected here
+     * rather than left to the V21 CHECK, which would surface as a 500 rather than a 422.
+     *
+     * <p>A shop row stays {@code DURION}-sourced like every other hand-authored row (the source
+     * code is set by the caller of this method, never by the request): a shop cannot forge a
+     * vendor's provenance, and a number a shop chose is not a number MOTOR published.
+     */
+    private void applyOwnership(ServiceLaborStandardEntity entity, ServiceLaborStandardRequestDto request) {
+        LaborStandardOwnerScope scope = parsedOwnerScope(request.getOwnerScope());
+        if (scope == LaborStandardOwnerScope.SHOP && request.getOwnerLocationId() == null) {
+            throw new CatalogValidationException("ownerLocationId is required when ownerScope is SHOP");
+        }
+        if (scope == LaborStandardOwnerScope.PLATFORM && request.getOwnerLocationId() != null) {
+            throw new CatalogValidationException(
+                    "ownerLocationId must be omitted when ownerScope is PLATFORM; a platform row has no owning location");
+        }
+        entity.setOwnerScope(scope);
+        entity.setOwnerLocationId(request.getOwnerLocationId());
+    }
+
+    private LaborStandardOwnerScope parsedOwnerScope(String ownerScope) {
+        if (ownerScope == null || ownerScope.isBlank()) {
+            return LaborStandardOwnerScope.PLATFORM;
+        }
+        try {
+            return LaborStandardOwnerScope.valueOf(ownerScope.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new CatalogValidationException("ownerScope must be one of "
+                    + java.util.Arrays.toString(LaborStandardOwnerScope.values()) + ": " + ownerScope);
         }
     }
 
@@ -158,6 +194,7 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
         laborStandardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(serviceId).stream()
                 .filter(row -> !row.getId().equals(beingSupersededId))
                 .filter(row -> row.getTimeType() == candidate.getTimeType()
+                        && Objects.equals(row.getOwnerLocationId(), candidate.getOwnerLocationId())
                         && Objects.equals(row.getVehicleYear(), candidate.getVehicleYear())
                         && Objects.equals(row.getMake(), candidate.getMake())
                         && Objects.equals(row.getModel(), candidate.getModel())
@@ -165,9 +202,10 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
                         && Objects.equals(row.getEngineCode(), candidate.getEngineCode()))
                 .findFirst()
                 .ifPresent(row -> {
-                    throw new CatalogBusinessRuleException("An active " + row.getTimeType()
-                            + " labor standard already exists for this vehicle key (" + row.getId()
-                            + "); supersede it instead of adding a duplicate");
+                    throw new CatalogBusinessRuleException("An active " + row.getTimeType() + " "
+                            + row.getOwnerScope()
+                            + "-owned labor standard already exists for this vehicle key ("
+                            + row.getId() + "); supersede it instead of adding a duplicate");
                 });
     }
 
@@ -181,6 +219,8 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
         dto.setSubmodel(entity.getSubmodel());
         dto.setEngineCode(entity.getEngineCode());
         dto.setLaborHours(entity.getLaborHours());
+        dto.setOwnerScope(entity.getOwnerScope().name());
+        dto.setOwnerLocationId(entity.getOwnerLocationId());
         dto.setTimeType(entity.getTimeType().name());
         dto.setOverlapGroup(entity.getOverlapGroup());
         dto.setIncludedOpCodes(entity.getIncludedOpCodes());

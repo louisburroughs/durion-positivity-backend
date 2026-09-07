@@ -5333,6 +5333,10 @@ components:
           maxLength: 64
           minLength: 0
           type: string
+        locationId:
+          description: Location quoting the work; its own authored times win. Null = platform only.
+          format: uuid
+          type: string
         make:
           description: Vehicle make; null = unknown.
           example: Honda
@@ -5396,6 +5400,10 @@ components:
           type: string
         overlapGroup:
           description: Shared-setup group; lines sharing it must not be summed naively.
+          type: string
+        ownerScope:
+          description: SHOP when the quoting location's own authored time answered, else PLATFORM.
+          example: PLATFORM
           type: string
         sourceCode:
           description: Provenance source.
@@ -6987,6 +6995,17 @@ components:
           maxLength: 64
           minLength: 0
           type: string
+        ownerLocationId:
+          description: Owning location; required when ownerScope is SHOP, rejected otherwise
+          format: uuid
+          type: string
+        ownerScope:
+          description: 'Who owns this time: PLATFORM (every location resolves it) or SHOP (one location''s own number, which outranks platform rows for that location); defaults to PLATFORM'
+          enum:
+          - PLATFORM
+          - SHOP
+          example: SHOP
+          type: string
         publishedAt:
           description: Date the time was published or decided; omitted means undated
           example: '2026-09-01'
@@ -7048,6 +7067,14 @@ components:
         overlapGroup:
           description: Overlap group shared with other operations
           type: string
+        ownerLocationId:
+          description: Owning location when ownerScope is SHOP; null for PLATFORM
+          format: uuid
+          type: string
+        ownerScope:
+          description: PLATFORM (every location resolves it) or SHOP (one location's own number)
+          example: PLATFORM
+          type: string
         publishedAt:
           description: Date the source published the time
           format: date
@@ -7080,6 +7107,7 @@ components:
       - createdAt
       - id
       - laborHours
+      - ownerScope
       - serviceId
       - sourceCode
       - sourceRevision

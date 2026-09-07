@@ -24,6 +24,8 @@ import org.jspecify.annotations.Nullable;
  * @param engineCode engine code; null = unknown
  * @param preferredTimeType {@code RETAIL_FLAT_RATE | OEM_WARRANTY | MANUFACTURER_INSTALL |
  *     DURION_STANDARD}; null = retail-first default ordering
+ * @param locationId the location quoting the work. Its own authored times outrank published
+ *     ones; another location's never answer. Null quotes as the platform.
  */
 @Schema(
         name = "LaborTimeQuoteRequest",
@@ -53,4 +55,7 @@ public record LaborTimeQuoteRequest(
                 example = "RETAIL_FLAT_RATE",
                 allowableValues = {"RETAIL_FLAT_RATE", "OEM_WARRANTY", "MANUFACTURER_INSTALL", "DURION_STANDARD"})
         @Nullable
-        String preferredTimeType) {}
+        String preferredTimeType,
+
+        @Schema(description = "Location quoting the work; its own authored times win. Null = platform only.") @Nullable
+        UUID locationId) {}

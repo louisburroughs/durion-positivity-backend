@@ -18,6 +18,8 @@ import org.jspecify.annotations.Nullable;
  * @param matchGrade how confidently the vehicle matched; present only when RESOLVED
  * @param overlapGroup shared-setup group for overlap-aware summation
  * @param includedOpCodes Durion operation codes whose time is included in this one
+ * @param ownerScope {@code SHOP} when a location's own authored time answered, {@code PLATFORM}
+ *     otherwise; present only when RESOLVED
  */
 public record LaborTimeResolution(
         @NonNull Status status,
@@ -27,7 +29,8 @@ public record LaborTimeResolution(
         @Nullable String sourceRevision,
         @Nullable MatchGrade matchGrade,
         @Nullable String overlapGroup,
-        @NonNull List<String> includedOpCodes) {
+        @NonNull List<String> includedOpCodes,
+        @Nullable String ownerScope) {
 
     /** Typed resolution outcomes (sourcing plan §6.1 response contract). */
     public enum Status {
@@ -52,6 +55,6 @@ public record LaborTimeResolution(
     }
 
     public static LaborTimeResolution miss(@NonNull Status status) {
-        return new LaborTimeResolution(status, null, null, null, null, null, null, List.of());
+        return new LaborTimeResolution(status, null, null, null, null, null, null, List.of(), null);
     }
 }

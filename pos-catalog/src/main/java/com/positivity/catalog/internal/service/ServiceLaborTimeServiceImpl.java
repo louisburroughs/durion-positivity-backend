@@ -34,8 +34,8 @@ public class ServiceLaborTimeServiceImpl implements ServiceLaborTimeService {
                 trimToNull(request.model()),
                 trimToNull(request.submodel()),
                 trimToNull(request.engineCode()));
-        LaborTimeResolution resolution =
-                resolutionService.resolve(request.serviceId(), vehicle, parsedPreference(request.preferredTimeType()));
+        LaborTimeResolution resolution = resolutionService.resolve(
+                request.serviceId(), vehicle, parsedPreference(request.preferredTimeType()), request.locationId());
         return new LaborTimeQuoteResponse(
                 LaborTimeQuoteResponse.Status.valueOf(resolution.status().name()),
                 resolution.laborHours(),
@@ -47,7 +47,8 @@ public class ServiceLaborTimeServiceImpl implements ServiceLaborTimeService {
                         : LaborTimeQuoteResponse.MatchGrade.valueOf(
                                 resolution.matchGrade().name()),
                 resolution.overlapGroup(),
-                resolution.includedOpCodes());
+                resolution.includedOpCodes(),
+                resolution.ownerScope());
     }
 
     private static LaborTimeType parsedPreference(String preferredTimeType) {

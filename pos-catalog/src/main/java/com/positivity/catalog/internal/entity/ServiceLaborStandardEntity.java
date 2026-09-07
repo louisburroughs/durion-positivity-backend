@@ -1,5 +1,6 @@
 package com.positivity.catalog.internal.entity;
 
+import com.positivity.catalog.internal.enums.LaborStandardOwnerScope;
 import com.positivity.catalog.internal.enums.LaborTimeType;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
@@ -76,6 +77,17 @@ public class ServiceLaborStandardEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "time_type", nullable = false)
     private LaborTimeType timeType;
+
+    // ── Ownership (Tier 0: a shop's own number beats a published one) ──────────────────
+
+    /** {@code PLATFORM} for guide and platform-authored rows; {@code SHOP} for a shop's own. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "owner_scope", nullable = false)
+    private LaborStandardOwnerScope ownerScope = LaborStandardOwnerScope.PLATFORM;
+
+    /** Required when {@link #ownerScope} is {@code SHOP}, null otherwise (V21 CHECK). */
+    @Column(name = "owner_location_id")
+    private UUID ownerLocationId;
 
     // ── Relationships that make workorder summation honest ────────────────────────────
 
