@@ -718,12 +718,14 @@ class LocationServiceTest {
     }
 
     @Test
-    void addParent_selfParent_throwsIllegalArgumentException() {
+    void addParent_selfParent_throwsCycleDetectedConflict() {
         UUID same = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         assertThatThrownBy(() -> locationService.addParent(same, same, "HOME_OFFICE"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("cannot be its own parent");
+                .isInstanceOfSatisfying(ResponseStatusException.class, ex -> {
+                    assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(ex.getReason()).isEqualTo("CYCLE_DETECTED");
+                });
     }
 
     @Test
@@ -747,9 +749,11 @@ class LocationServiceTest {
                 .thenReturn(false);
         when(locationParentRepository.existsByChild_IdAndParent_Id(childId, parentId))
                 .thenReturn(false);
-        when(locationParentRepository.existsByChild_IdAndParent_Id(parentId, childId))
+        when(locationParentRepository.findByChild_IdAndParentType(parentId, ParentType.HOME_OFFICE))
+                .thenReturn(Optional.empty());
+        when(locationParentRepository.existsByChild_IdAndParent_IdAndParentType(
+                        parentId, childId, ParentType.HOME_OFFICE))
                 .thenReturn(false);
-        when(locationParentRepository.isDescendant(childId, parentId)).thenReturn(false);
         when(locationParentRepository.saveAndFlush(any(LocationParent.class))).thenReturn(savedRelationship);
 
         var result = locationService.addParent(childId, parentId, "HOME_OFFICE");
