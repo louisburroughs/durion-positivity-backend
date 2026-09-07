@@ -13,22 +13,24 @@ what pos-security-service actually issues:
   * Baseline claims mirror JwtServiceImpl.generateTokenPair: iss, aud, sub, jti,
     iat, exp, uid, username, roles, perm_bits, perm_ver, personId.
 
-The adopted claim (ADR-0061) is two claims, both constant-size:
+The adopted claim (ADR-0061) is two claims:
 
   * ``loc_bits`` -- the subset of ``perm_bits`` granted only by LOCATION-scoped
     roles. Same bit indexes, same codec, same ``perm_ver``, so no catalog
     version bump.
-  * ``loc_scope`` -- the single location UUID the caller occupies, from its
-    primary employee_location_assignment in pos-people. Omitted when
-    ``loc_bits`` is empty.
+  * ``loc_scope`` -- discriminated: ``"ALL"``, or the location nodes the caller
+    is assigned to. A node may be a shop, or a District/Region/HQ node, in which
+    case it covers every descendant (evaluated at check time against the
+    replicated ancestor set, not expanded into the token).
 
-``location_scope`` is a property of the ROLE (ALL | LOCATION). A location-scoped
-employee occupies exactly one location; reach is never an enumerated set. Two
-claims rather than one because a user may hold both a LOCATION-scoped and an
-ALL-scoped role, and the ALL role's grants must not widen the LOCATION role's.
+``location_scope`` is a property of the ROLE (ALL | LOCATION). Two claims rather
+than one because a user may hold both a LOCATION-scoped and an ALL-scoped role,
+and the ALL role's grants must not widen the LOCATION role's.
 
-The set-valued encodings are retained below purely as recorded rationale for
-why reach is single-valued. They are not implemented.
+Hierarchy is the compression: a Region manager holds ONE node id, not the shops
+beneath it, so assigned-node counts stay small and the claim stays small. The
+location-bitset alternative is measured at the bottom and deliberately NOT
+adopted -- see the note there.
 
 Run:  python3 scripts/measure-scope-claim-size.py
 """
@@ -107,9 +109,10 @@ PERM_PROFILES = [
 
 
 def adopted():
-    """ADR-0061 section 2: loc_bits (scoped permission subset) + loc_scope (one uuid).
+    """ADR-0061 section 2: loc_bits (scoped permission subset) + loc_scope (nodes).
 
-    Three cases per profile:
+    Three cases per profile, all with a single assigned node (the expected shape
+    once hierarchy carries the middle tier):
       unscoped   -- every role is ALL-scoped; neither claim is emitted
       half       -- a realistic mix: half the permissions come from LOCATION roles
       all scoped -- every permission is location-limited (worst case for loc_bits)
@@ -124,12 +127,12 @@ def adopted():
 
         half = dict(base)
         half["loc_bits"] = perm_bits(max(1, n // 2))
-        half["loc_scope"] = str(uuid.uuid4())
+        half["loc_scope"] = [str(uuid.uuid4())]
         s_half = jws_size(half)
 
         full = dict(base)
         full["loc_bits"] = perm_bits(n)
-        full["loc_scope"] = str(uuid.uuid4())
+        full["loc_scope"] = [str(uuid.uuid4())]
         s_full = jws_size(full)
 
         worst = max(worst, s_full)
@@ -138,16 +141,26 @@ def adopted():
     budget = MAX_HTTP_HEADER_SIZE - BEARER_OVERHEAD
     print(f"\nWorst case {worst} B against a {budget} B header budget "
           f"({worst / budget:.2%}).")
-    print("Both claims are constant-size: loc_bits is bounded by the catalog (86 chars)")
-    print("and loc_scope is one uuid, so token size never varies with how many")
-    print("locations exist. No cardinality cap, no size-driven fallback.")
+    print("loc_bits is bounded by the catalog (86 chars). loc_scope grows only with")
+    print("the number of ASSIGNED NODES, which hierarchy keeps at 1-2 in the normal")
+    print("case -- a Region manager holds the Region node, not its shops.\n")
+
+    print("Cost of additional assigned nodes (ADMIN-like profile, all scoped):")
+    b = base_payload(387)
+    b["loc_bits"] = perm_bits(387)
+    for nodes in (1, 2, 4, 8, 16):
+        p = dict(b)
+        p["loc_scope"] = [str(uuid.uuid4()) for _ in range(nodes)]
+        print(f"  {nodes:>2} node(s): {jws_size(p):>5} B")
+    print("\nA cap of ~8 assigned nodes is an assertion that the hierarchy was modelled")
+    print("correctly, not a size limit -- 16 nodes still costs under 1.5 KB.")
 
 
 def rejected():
-    """Recorded rationale only -- what a set-valued claim would have cost."""
-    print("\n\n=== Rejected: set-valued reach (NOT implemented) ===\n")
-    print("Retained as the record of why reach is single-valued. If an employee")
-    print("could be scoped to N locations, the claim would have cost:\n")
+    """Recorded rationale -- encodings considered and not adopted."""
+    print("\n\n=== Not adopted: expanding the hierarchy into the token ===\n")
+    print("If a Region assignment were expanded at issuance into its member shops")
+    print("instead of evaluated at check time, the claim would have cost:\n")
 
     counts = [1, 5, 25, 100, 500]
     base = base_payload(387)  # ADMIN-like
@@ -183,6 +196,34 @@ def rejected():
     print("\n'!' exceeds max-http-header-size. The per-location bitset map is also the")
     print("only shape that would have forced PermissionCode / GatewayPermissionCatalog /")
     print("PermissionBitsetCodec / CATALOG_VERSION lockstep across 1,086 @PreAuthorize sites.")
+    location_bitset()
+
+
+def location_bitset():
+    """Why locations are NOT encoded as a bitset the way permissions are."""
+    print("\n\n=== Not adopted: location bitset (indexed like PermissionCode) ===\n")
+    print("Assumes an append-only location index assigned by pos-location and")
+    print("replicated to every service. Claim payload only, Base64URL chars.\n")
+    print(f"{'deployment':<14}{'covers':>8}{'bitset':>10}{'id list':>10}{'winner':>11}")
+    for total, cover in [(50, 1), (500, 1), (500, 3), (500, 25),
+                         (10000, 1), (10000, 25), (10000, 2000)]:
+        idxs = sorted({int(i * (total - 1) / max(1, cover)) for i in range(cover)} | {total - 1})
+        bs = len(b64url(java_bitset_bytes(idxs)))
+        il = len(b64url(b"".join(uuid.uuid4().bytes for _ in range(cover))))
+        print(f"{total:<14}{cover:>8}{bs:>10}{il:>10}{('bitset' if bs < il else 'id list'):>11}")
+
+    print("\nThe bitset costs maxIndex/6 chars REGARDLESS of how many locations are")
+    print("covered, so it couples every user's token size to the total number of")
+    print("locations on the platform: opening the 5,000th shop makes a single-shop")
+    print("technician's token ~834 chars heavier. An id list costs ~22 chars per")
+    print("node and scales with that user's actual assignment instead.")
+    print("\nHierarchy already keeps assigned-node counts at 1-2, which is exactly the")
+    print("region where the id list wins. The bitset would also need an append-only,")
+    print("replicated location-index registry -- a permanent distributed invariant --")
+    print("whereas PermissionCode gets away with a bitset because it is a compile-time")
+    print("enum with CATALOG_VERSION lockstep. Deferred behind the loc_scope")
+    print("discriminator: adoptable later without a version bump if cardinality ever")
+    print("justifies it.")
 
 
 def main():

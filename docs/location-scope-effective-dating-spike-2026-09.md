@@ -29,19 +29,21 @@ Three findings changed the shape of the answer:
    change events. `role_assignments.scope_type` is unenforced, unseeded and unexercised.
    The correct answer to "which model owns scope" is the people one.
 
-3. **The claim does not have to touch `perm_bits` at all, and is constant-size.** The issue
-   frames the cost around `PermissionCode` / `GatewayPermissionCatalog` /
+3. **The claim does not have to touch `perm_bits` at all, and hierarchy keeps it small.** The
+   issue frames the cost around `PermissionCode` / `GatewayPermissionCatalog` /
    `PermissionBitsetCodec` / `CATALOG_VERSION` lockstep. That cost is only incurred by
    encodings that put location *inside* the permission bitset. Two additive claims —
    `loc_bits` (which permissions are location-limited, reusing the same bit indexes) and
-   `loc_scope` (the one location the caller occupies) — leave the bitset semantics, the
-   catalog and the catalog version untouched. Worst case **+202 bytes**, 1.31% of the header
-   budget, and it never grows.
+   `loc_scope` (the location nodes assigned) — leave the bitset semantics, the catalog and the
+   catalog version untouched. Because a node covers its descendants and is evaluated at check
+   time, a Region manager carries **one** node id whether the region has 3 shops or 300.
+   Worst normal case **+204 bytes**, 1.31% of the header budget.
 
 **Recommendation:** retire the pos-security-service scope model; put `location_scope`
-(`ALL` | `LOCATION`) on the role; source the caller's single location from pos-people; carry
-both as additive claims; enforce in the owning service. Clamp token lifetime to assignment
-expiry and revoke on assignment change.
+(`ALL` | `LOCATION`) on the role; assign scope to a location node that covers its descendants,
+sourced from pos-people and evaluated against a replicated ancestor set; carry it as additive
+claims; enforce in the owning service. Clamp token lifetime to assignment expiry and revoke on
+assignment change.
 
 ---
 
@@ -166,24 +168,30 @@ already effective-dated, with the join key already in the token.
 
 ## 3. Claim shape and measured token size
 
-Two platform rules constrain the design, and together they collapse most of the space Q3
-anticipates:
+Three platform rules constrain the design:
 
 1. **`location_scope` is a property of the role** (`ALL` | `LOCATION`), not of the assignment
    and not of the employee.
-2. **A location-scoped employee occupies exactly one location.** Reach is never an enumerated
-   set.
+2. **Scope is assigned to a location *node*, and covers that node and every descendant.** A
+   role assigned at HQ or Region level can call location-scoped APIs targeting any child
+   location beneath it.
+3. **An employee may be assigned more than one node**, for coverage that does not fit a single
+   subtree — but hierarchy is expected to carry the normal case, so counts stay small.
 
 Rule 1 is what #1373 was reaching for. INVENTORY_MANAGER and INVENTORY_CONTROLLER hold
-identical grants on purpose; the difference between them is that one role is `LOCATION`-scoped
-and the other is `ALL`. Putting the discriminator on the role expresses that directly.
+identical grants on purpose; the roles differ by *reach*, not by *grants*. One column on `roles`
+expresses that once; `*_all_locations` twins would express it up to 357 times.
+
+Rule 2 is what supplies the middle management tier. Without it, reach is one shop or everything,
+and a Region manager over some-but-not-all shops has no representation.
 
 ### Ownership split
 
 | Question | Owner |
 | --- | --- |
 | Is this role location-scoped? | pos-security-service — new `roles.location_scope` |
-| Which single location does this employee occupy? | pos-people — primary `employee_location_assignment` |
+| Which node(s) is this employee assigned to? | pos-people — `employee_location_assignment` |
+| What is beneath a node? | pos-location — the tree, replicated as an ancestor set (below) |
 
 This preserves §2's conclusion: pos-people still owns user→location. Only the scope
 discriminator sits with the roles, where roles already live.
@@ -197,7 +205,7 @@ latter must not silently widen the former:
 | --- | --- |
 | `perm_bits` | **unchanged** — every permission the caller holds |
 | `loc_bits` | the subset of `perm_bits` granted *only* by `LOCATION`-scoped roles |
-| `loc_scope` | the single location UUID the caller occupies; omitted when `loc_bits` is empty |
+| `loc_scope` | discriminated: `"ALL"`, or the list of assigned node ids; omitted when `loc_bits` is empty |
 
 `loc_bits` reuses `PermissionBitsetCodec` and the same bit indexes as `perm_bits`, so it is
 covered by the existing `perm_ver` and **requires no `CATALOG_VERSION` bump**.
@@ -205,20 +213,46 @@ covered by the existing `perm_ver` and **requires no `CATALOG_VERSION` bump**.
 **Enforcement rule.** At an endpoint checking permission `P` for location `L`:
 
 ```
-if P ∉ loc_bits        → allow (the grant is global)
-else if L == loc_scope → allow
-else                   → deny
+if P ∉ loc_bits            → allow (the grant is global)
+else if loc_scope == ALL   → allow
+else if loc_scope ∩ ancestors(L) ≠ ∅  → allow      // L is an assigned node, or beneath one
+else                       → deny
 ```
+
+`ancestors(L)` is the materialised ancestor set of `L` **inclusive of `L` itself**, so a node
+assigned directly matches without a special case.
 
 **Union semantics.** A permission granted by both a `LOCATION` role and an `ALL` role is
 global — its bit is *not* set in `loc_bits`. The broader grant wins, which is standard RBAC
 union behaviour and keeps the claim consistent with how `perm_bits` already composes.
 
-**Fail closed.** A caller holding `LOCATION`-scoped roles but with no resolvable primary
-location gets `loc_bits` set and `loc_scope` absent, which denies. Absence must never widen to
-unrestricted reach. `V3__backfill_primary_location_assignments.sql` records that employees
-with several active assignments and no primary exist and are "genuinely ambiguous" — that
-population is exactly this case.
+**Fail closed.** A caller holding `LOCATION`-scoped roles with no resolvable assigned node gets
+`loc_bits` set and `loc_scope` absent, which denies. Absence must never widen to unrestricted
+reach. `V3__backfill_primary_location_assignments.sql` records that employees with several
+active assignments and no primary exist and are "genuinely ambiguous" — that population is
+exactly this case.
+
+**Runtime access only.** Assignment at a parent node confers the right to *call* location-scoped
+APIs against descendants. It confers no administrative right to grant scope to others; scoped
+delegation is a separate concern on the role-assignment surface and is out of scope here.
+
+### Hierarchy is evaluated at check time, not expanded at issuance
+
+The token carries the **assigned node**, never its expansion. `ExtLocationReplica` gains a
+materialised ancestor set per location (ordered root→self, inclusive), fed by the existing
+`LocationEventsListener` from pos-location's tree. `covers` becomes a set intersection — no
+traversal, no extra service hop.
+
+Two consequences, both deliberate:
+
+- **Token stays small.** A Region manager holds one node id whether the region has 3 shops or
+  300. Expansion at issuance would put the shop list in the token and reintroduce the bloat
+  this design avoids (measured in `scripts/measure-scope-claim-size.py`).
+- **Hierarchy edits take effect immediately.** Moving a shop under a different Region changes
+  who can see it on the next request, with no token re-issue. This is the right behaviour — it
+  is an org-chart change — but it makes hierarchy edits *security-relevant operations* that need
+  tight permissions and an audit trail. pos-location must also guarantee the tree is acyclic,
+  or ancestor materialisation does not terminate.
 
 ### Measured sizes
 
@@ -227,39 +261,63 @@ population is exactly this case.
 full bitset is 64 bytes → **86** Base64URL characters. Baseline access token ≈ **650 bytes**.
 
 Measured with `scripts/measure-scope-claim-size.py`, which reproduces
-`PermissionBitsetCodec.encode` exactly (Java `BitSet.toByteArray()` little-endian bit order
-within bytes, Base64URL unpadded) and builds real JWS compact serialisations with the claim
-set from `JwtServiceImpl.generateTokenPair`:
+`PermissionBitsetCodec.encode` exactly and builds real JWS compact serialisations with the
+claim set from `JwtServiceImpl.generateTokenPair`. One assigned node:
 
 | Permission profile | unscoped | half scoped | all scoped | worst delta |
 | --- | ---: | ---: | ---: | ---: |
-| DISPATCHER-like (11) | 643 | 823 | 833 | +190 |
-| SHOP_MANAGER-like (17) | 648 | 835 | 844 | +196 |
-| CONTROLLER-like (52) | 651 | 848 | 849 | +198 |
-| ADMIN-like (387) | 653 | 855 | 855 | +202 |
-| whole catalog (510) | 653 | 855 | 855 | +202 |
+| DISPATCHER-like (11) | 643 | 825 | 836 | +193 |
+| SHOP_MANAGER-like (17) | 648 | 837 | 847 | +199 |
+| CONTROLLER-like (52) | 651 | 851 | 852 | +201 |
+| ADMIN-like (387) | 653 | 857 | 857 | +204 |
+| whole catalog (510) | 653 | 857 | 857 | +204 |
 
-**Worst case 855 B against a 65 514 B header budget — 1.31%.** Both claims are constant-size:
-`loc_bits` is bounded by the catalog at 86 characters and `loc_scope` is one UUID. Token size
-never varies with how many locations exist.
+Cost of additional assigned nodes (ADMIN-like, all scoped): 1 → 857 B, 2 → 909 B, 4 → 1 013 B,
+8 → 1 221 B, 16 → 1 637 B.
 
-### What single-valued reach removes from the design
+**Worst normal case 857 B against a 65 514 B header budget — 1.31%.** `loc_bits` is bounded by
+the catalog at 86 characters; `loc_scope` grows only with assigned-node count, which hierarchy
+keeps at 1–2.
 
-Q3 asks for a worst-case measurement on the assumption that "a user scoped to many locations
-is the bad case". That case does not exist. Consequently:
+A cap of ~8 assigned nodes is worth having as an **assertion that the hierarchy was modelled
+correctly**, not as a size limit — 16 nodes still costs under 1.5 KB. Exceeding it should
+surface as a configuration error, not degrade to a runtime lookup.
 
-- **No cardinality cap** — nothing to configure or tune.
-- **No `DEFERRED` state**, and therefore no per-request fallback to
-  `GET /v1/roles/check-permission`. Nothing in this design calls it, so `check-permission`
-  has no remaining role at all — see §5.
-- **No packed or compact location encoding.** One UUID is 36 characters as a plain string
-  versus 22 packed; 14 bytes does not justify an opaque claim.
-- **The per-location bitset map is moot**, and with it the entire `PermissionCode` /
-  `GatewayPermissionCatalog` / `PermissionBitsetCodec` / `CATALOG_VERSION` lockstep cost.
+### Why locations are not encoded as a bitset
 
-`scripts/measure-scope-claim-size.py` retains the set-valued measurements as recorded
-rationale — a set-valued claim would have cost 1 385 B at 25 locations, and the per-location
-bitset map would have breached `max-http-header-size` at 500 — but they are not implemented.
+Encoding locations the way `PermissionCode` encodes permissions — an index per location, carried
+as a bitset — was considered and rejected. Measured claim payload, Base64URL characters:
+
+| Deployment | Covers | Bitset | Id list |
+| ---: | ---: | ---: | ---: |
+| 500 | 1 | 84 | **22** |
+| 500 | 3 | 84 | **64** |
+| 500 | 25 | **84** | 534 |
+| 10 000 | 1 | 1 667 | **22** |
+| 10 000 | 25 | 1 667 | **534** |
+| 10 000 | 2 000 | **1 667** | 42 667 |
+
+The bitset costs `maxIndex/6` characters **regardless of how many locations are covered**, so it
+couples every user's token size to the total number of locations on the platform: opening the
+5 000th shop makes a single-shop technician's token ~834 characters heavier. An id list costs
+~22 characters per node and scales with that user's actual assignment instead.
+
+Hierarchy already keeps assigned-node counts at 1–2, which is precisely the region where the id
+list wins. The two mechanisms are alternative compressions of the same problem, and hierarchy is
+the better one here.
+
+There is also a structural cost the `perm_bits` analogy hides. `PermissionCode` can be a bitset
+because it is a compile-time enum with `CATALOG_VERSION` locked between pos-security-service and
+pos-api-gateway — permissions change at deploy time. Locations are runtime business data, so a
+location bitset needs an append-only index assigned by pos-location, replicated everywhere and
+never reused: a permanent distributed invariant, in exchange for compression hierarchy already
+provides.
+
+**It is deferred, not refused.** `loc_scope` is discriminated, so a bitset encoding can be added
+later without a `CATALOG_VERSION` bump if measured assigned-node cardinality ever justifies it.
+(Mitigation worth recording: a service never needs to decode the whole bitset — it resolves the
+one inbound `locationId` to its index and tests that bit — so the registry burden is on issuance
+and replication, not on the check.)
 
 ### Q7 — the cost framing does not apply
 
@@ -272,8 +330,8 @@ This design incurs none of it:
 
 - `perm_bits` semantics unchanged, and `loc_bits` reuses the same indexes → **no
   `CATALOG_VERSION` bump** (also an explicit non-goal).
-- `PermissionBitsetCodec` is reused as-is; `PermissionCode` and `GatewayPermissionCatalog`
-  are untouched.
+- `PermissionBitsetCodec` reused as-is; `PermissionCode` and `GatewayPermissionCatalog`
+  untouched.
 - Existing `@PreAuthorize` annotations keep working unchanged; they answer "may this caller
   do X", which stays true. Scope answers "…here", a separate check applied only at the 77
   endpoints that take a `locationId`.
@@ -288,8 +346,8 @@ per-module adoption, each step independently deployable.
 357 of the 445 parseable permission codes belong to location-touching domains. Encoding scope
 as `*_all_locations` twins implies up to that many new codes against a 510-code catalog — more
 than doubling it — and per §1a still would not enforce the narrow case. It is also strictly
-worse than `roles.location_scope`, which expresses the same distinction once per role instead
-of once per permission. Not recommended.
+worse than `roles.location_scope`, which expresses the same distinction once per role, and it
+cannot express hierarchy at all.
 
 ## 4. Effective dating (Q5, Q6)
 
@@ -328,30 +386,36 @@ Recommended, in preference order — all three, they compose:
 2. **Add `location_scope` (`ALL` | `LOCATION`) to the role.** This is where the distinction
    belongs: #1373's identical-grant role pair differs by reach, not by grants, and one column
    on `roles` expresses that once instead of once per permission code.
-3. **Make pos-people the source of the caller's single location** — the primary
-   `employee_location_assignment`, joined via the `personId` claim the token already carries.
-4. **Carry two additive claims**, `loc_bits` and `loc_scope` (§3). No `CATALOG_VERSION` bump,
-   no change to `perm_bits` semantics, constant size.
-5. **Enforce in the owning service** at the 77 endpoints, starting with the demand cases:
+3. **Make pos-people the source of the caller's assigned node(s)** — `employee_location_assignment`,
+   joined via the `personId` claim the token already carries.
+4. **Scope assigned at a node covers that node and every descendant**, evaluated at check time
+   against a materialised ancestor set replicated onto `ExtLocationReplica` — never expanded
+   into the token. This is what supplies the middle management tier, and it is what keeps the
+   claim small.
+5. **Carry two additive claims**, `loc_bits` and `loc_scope` (§3). No `CATALOG_VERSION` bump,
+   no change to `perm_bits` semantics. `loc_scope` is discriminated so a denser encoding can be
+   adopted later without a version bump.
+6. **Enforce in the owning service** at the 77 endpoints, starting with the demand cases:
    workorder WIP, inventory adjustment approval, people time-entry approval. The gateway
    stays a coarse gate; it has no domain knowledge of which parameter is a location.
-6. **Clamp `exp` to assignment expiry** and revoke on assignment change (§4).
-7. **Retire `GET /v1/roles/check-permission`.** With reach single-valued there is no
-   `DEFERRED` case and no fallback, so nothing in this design calls it — and nothing outside
-   pos-security-service calls it today either. It should be removed rather than left as a
-   third way to ask an authorization question.
+7. **Clamp `exp` to assignment expiry** and revoke on assignment change (§4).
+8. **Retire `GET /v1/roles/check-permission`.** Because hierarchy keeps assigned-node counts
+   at 1–2, the claim always fits and there is no `DEFERRED` case or size-driven fallback, so
+   nothing in this design calls it — and nothing outside pos-security-service calls it today
+   either. It should be removed rather than left as a third way to ask an authorization
+   question.
 
 ### What this does not decide
 
 - Whether `is_primary` should imply a default location for endpoints that currently require
   an explicit `locationId`. UX question, deliberately out of scope.
-- **Location hierarchy — now load-bearing, not optional.** With reach limited to one location,
-  there is no middle tier: a caller is confined to a single shop or is `ALL`. A manager over
-  three of ten shops has no representation unless "covers L" means "covers L or a descendant
-  of L" and they are pointed at a parent node. `LocationController.getDescendants` /
-  `getAllChildren` show the tree exists. Either transitive semantics supply the middle tier or
-  the model deliberately has none (defensible if the business is shop staff vs. head office).
-  This must be decided before enforcement rolls out widely — #1876.
+- **Scoped administration.** Assignment at a parent node confers the right to *call*
+  location-scoped APIs against descendants. Whether it should also confer the right to *grant*
+  scope within that subtree is a separate concern, on the role-assignment surface rather than
+  the 77 endpoints, and is where privilege escalation would live. Not addressed here.
+- **Node granularity for irregular coverage.** Multi-node assignment covers a set that does not
+  fit one subtree. Whether such cases should instead get a dedicated group node in the tree —
+  keeping assignment at one node — is a modelling question for #1876.
 
 ---
 
@@ -359,21 +423,22 @@ Recommended, in preference order — all three, they compose:
 
 | Issue | Work | Size | Depends on |
 | --- | --- | --- | --- |
-| [#1867](https://github.com/louisburroughs/durion-positivity-backend/issues/1867) | Consume staffing-assignment events in pos-security-service; maintain `person_id → primary location_id` projection | M | — |
-| [#1868](https://github.com/louisburroughs/durion-positivity-backend/issues/1868) | Add `roles.location_scope`; issue additive `loc_bits` + `loc_scope` claims; no `CATALOG_VERSION` bump | M | #1867 |
+| [#1867](https://github.com/louisburroughs/durion-positivity-backend/issues/1867) | Consume staffing-assignment events in pos-security-service; maintain `person_id → assigned node ids` projection | M | — |
+| [#1868](https://github.com/louisburroughs/durion-positivity-backend/issues/1868) | Add `roles.location_scope`; issue additive `loc_bits` + discriminated `loc_scope` claims; no `CATALOG_VERSION` bump | M | #1867 |
 | [#1869](https://github.com/louisburroughs/durion-positivity-backend/issues/1869) | Gateway passthrough of `loc_bits` / `loc_scope`; strip inbound copies | S | #1868 |
-| [#1870](https://github.com/louisburroughs/durion-positivity-backend/issues/1870) | Shared `LocationScope.covers(locationId)` helper in `pos-security-common` | S | #1869 |
+| [#1870](https://github.com/louisburroughs/durion-positivity-backend/issues/1870) | Shared `LocationScope.covers(permission, locationId)` helper in `pos-security-common`, ancestor-set aware | S | #1869, #1877 |
 | [#1871](https://github.com/louisburroughs/durion-positivity-backend/issues/1871) | Enforce at the demand cases: workorder WIP, inventory adjustment approval, people time-entry approval | M | #1870 |
 | [#1872](https://github.com/louisburroughs/durion-positivity-backend/issues/1872) | Roll enforcement across the remaining location-parameterised endpoints | L | #1871, #1876 |
 | [#1873](https://github.com/louisburroughs/durion-positivity-backend/issues/1873) | Clamp access-token `exp` to earliest contributing assignment expiry | S | ships with #1868 |
 | [#1874](https://github.com/louisburroughs/durion-positivity-backend/issues/1874) | Revoke live tokens on staffing-assignment change; decide Redis-unavailable policy | M | #1867, #1873 |
 | [#1875](https://github.com/louisburroughs/durion-positivity-backend/issues/1875) | Remove `role_assignments.scope_type`, `role_assignment_scope_locations` and `GET /v1/roles/check-permission` | M | #1872 |
-| [#1876](https://github.com/louisburroughs/durion-positivity-backend/issues/1876) | Decide location-hierarchy semantics for "covers" — **prerequisite**, supplies the middle tier | S | — |
+| [#1876](https://github.com/louisburroughs/durion-positivity-backend/issues/1876) | Decide node granularity for irregular coverage: multi-node assignment vs. group nodes | S | — |
+| [#1877](https://github.com/louisburroughs/durion-positivity-backend/issues/1877) | Materialise a location ancestor set onto `ExtLocationReplica` via location events | M | — |
 
-All ten are sub-issues of #1375. Sizes: S ≤ 1 day, M 2–4 days, L 1–2 weeks.
+All eleven are sub-issues of #1375. Sizes: S ≤ 1 day, M 2–4 days, L 1–2 weeks.
 
-#1876 is a prerequisite rather than a tail-end cleanup: with reach limited to one location it
-is what decides whether a middle management tier can exist at all.
+#1877 is on the critical path: without a replicated ancestor set there is no way to evaluate
+"L is beneath an assigned node" at check time, and hierarchy is what supplies the middle tier.
 
 ---
 
