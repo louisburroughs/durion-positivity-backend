@@ -161,6 +161,16 @@ Any service may therefore return these in addition to its module codes below.
 | `NOT_ACCEPTABLE` / `PAYLOAD_TOO_LARGE` / `UNSUPPORTED_MEDIA_TYPE` / `REQUEST_REJECTED` | 406/413/415/other 4xx | Framework-rejected request |
 | `INTERNAL_ERROR` | 500 | Unhandled exception, or a not-null violation on a server-populated audit column; stack trace logged at ERROR against the `correlationId` |
 
+### Platform codes from pos-security-common
+
+Emitted by `LocationScopeDeniedExceptionHandler`, auto-configured for every servlet module on the
+`pos-security-common` classpath and ordered ahead of module advices so the code is never collapsed into a
+module's plain `FORBIDDEN` (ADR-0061 §3, #1870).
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `LOCATION_SCOPE_DENIED` | 403 | Caller holds the permission but not for the requested location: the permission is location-scoped on the caller's token and the requested `locationId` lies under none of the caller's assigned nodes (or the caller has no assigned node, or the location is unknown to the module's replica). Distinct from `FORBIDDEN` — the fix is a different location or a wider assignment, not a different role. The body never echoes the requested id |
+
 ---
 
 ## Common Error Codes by Module

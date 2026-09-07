@@ -33,6 +33,17 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Location-scope ancestor-set contract (ADR-0061 §2, #1870): LocationScope intersects the
+             caller's assigned nodes with LocationAncestry.AncestorSets, the shape every module's
+             location replica already materialises (#1878). Reused rather than copied so the two
+             halves of the check share one Dimension. pos-domain-events is a leaf library
+             (jspecify + pos-shared-dtos) and does not depend on this module, so no cycle. -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-domain-events</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Spring Security -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

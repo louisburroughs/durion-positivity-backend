@@ -65,6 +65,30 @@ public final class GatewaySecurityConstants {
     public static final String HEADER_PERM_VER = "X-Perm-Ver";
 
     /**
+     * Header carrying the permissions that are location-scoped along the {@code FINANCIAL}
+     * hierarchy dimension (ADR-0061 §2–§3, #1869/#1870). Same encoding and same bit indexes as
+     * {@link #HEADER_PERM_BITS}, covered by the same {@link #HEADER_PERM_VER}. Forwarded by the
+     * gateway verbatim from the {@code loc_fin_bits} claim, even when empty; absent only for
+     * tokens issued before the claim existed.
+     */
+    public static final String HEADER_LOC_FIN_BITS = "X-Loc-Fin-Bits";
+
+    /**
+     * Header carrying the permissions that are location-scoped along the {@code OTHER}
+     * hierarchy dimension. See {@link #HEADER_LOC_FIN_BITS}.
+     */
+    public static final String HEADER_LOC_OTH_BITS = "X-Loc-Oth-Bits";
+
+    /**
+     * Header carrying the caller's assigned location nodes: the Base64URL (no padding) of the
+     * compact JSON of the {@code loc_scope} claim, {@code {"v":1,"nodes":["<uuid>",...]}}. The
+     * gateway omits it whenever the claim is absent, and the issuer omits the claim both when no
+     * permission is scoped and — fail closed — when a scoped permission exists but the caller has
+     * no assigned node. A service must therefore never default an absent header to "everywhere".
+     */
+    public static final String HEADER_LOC_SCOPE = "X-Loc-Scope";
+
+    /**
      * Header containing the authenticated username/subject.
      * Injected by pos-api-gateway after JWT validation.
      */
@@ -99,6 +123,12 @@ public final class GatewaySecurityConstants {
 
     /** Authentication details map key for stable user identifier. */
     public static final String DETAIL_USER_ID = "userId";
+
+    /**
+     * Authentication details map key for the caller's {@link LocationScope}, decoded from the
+     * three {@code X-Loc-*} headers. Read through {@link SecurityContextHelper#locationScope()}.
+     */
+    public static final String DETAIL_LOCATION_SCOPE = "locationScope";
 
     /**
      * Authentication details map key for username/display principal.

@@ -10,10 +10,13 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.BitSet;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import javax.crypto.SecretKey;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -1778,5 +1781,326 @@ class SecurityGatewayConfigTest {
         filter.filter(exchange, chain).block();
 
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    // ── #1869 — ADR-0061 §3 location-scope passthrough ──────────────────────
+
+    /**
+     * The gateway forwards the three additive scope claims as headers and makes no scope
+     * decision. What these tests pin: inbound copies are stripped; a token with none of the
+     * claims produces none of the headers; "bits present, scope absent" reaches the service
+     * exactly like that; and strict mode rejects a mismatch on each new header.
+     */
+    @Nested
+    @DisplayName("#1869 location-scope passthrough")
+    class LocationScopePassthroughTests {
+
+        private static final String NODE_A = "0192b3c4-0000-7000-8000-00000000000a";
+        private static final String NODE_B = "0192b3c4-0000-7000-8000-00000000000b";
+
+        /** Builds a signed token; each scope argument may be null to leave its claim off. */
+        private String buildScopedToken(String locFinBits, String locOthBits, Object locScope) {
+            var builder = Jwts.builder()
+                    .id(UUID.randomUUID().toString())
+                    .subject("alice")
+                    .issuer(TEST_ISSUER)
+                    .audience()
+                    .add(TEST_AUDIENCE)
+                    .and()
+                    .claim("uid", "u1")
+                    .claim("perm_bits", encodePermBits(116))
+                    .claim("perm_ver", GatewayPermissionCatalog.CATALOG_VERSION)
+                    .expiration(new Date(System.currentTimeMillis() + 3_600_000))
+                    .signWith(TEST_KEY);
+            if (locFinBits != null) {
+                builder = builder.claim("loc_fin_bits", locFinBits);
+            }
+            if (locOthBits != null) {
+                builder = builder.claim("loc_oth_bits", locOthBits);
+            }
+            if (locScope != null) {
+                builder = builder.claim("loc_scope", locScope);
+            }
+            return builder.compact();
+        }
+
+        /** The issuer's shape: {@code {"v":1,"nodes":[...]}}, insertion-ordered. */
+        private static Map<String, Object> scopeClaim(String... nodes) {
+            Map<String, Object> claim = new LinkedHashMap<>();
+            claim.put("v", 1);
+            claim.put("nodes", List.of(nodes));
+            return claim;
+        }
+
+        private static String expectedScopeHeader(String... nodes) {
+            String json = "{\"v\":1,\"nodes\":["
+                    + String.join(
+                            ",",
+                            Arrays.stream(nodes).map(node -> "\"" + node + "\"").toList()) + "]}";
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+        }
+
+        private static String decodeScopeHeader(String header) {
+            return new String(Base64.getUrlDecoder().decode(header), StandardCharsets.UTF_8);
+        }
+
+        private static GlobalFilter filter(GatewayAuthProperties props) {
+            return new SecurityGatewayConfig(TEST_SECRET, false, Set.of("HS256"), props, new SimpleMeterRegistry())
+                    .authFilter();
+        }
+
+        private static MockServerWebExchange exchange(
+                String token, Consumer<MockServerHttpRequest.BaseBuilder<?>> headers) {
+            MockServerHttpRequest.BaseBuilder<?> builder = MockServerHttpRequest.get("/people/v1/employees")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+            headers.accept(builder);
+            return MockServerWebExchange.from(builder.build());
+        }
+
+        private static HttpHeaders forward(GlobalFilter filter, MockServerWebExchange exchange) {
+            AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
+            GatewayFilterChain chain = ex -> {
+                downstreamHeaders.set(ex.getRequest().getHeaders());
+                return Mono.empty();
+            };
+            filter.filter(exchange, chain).block();
+            assertThat(exchange.getResponse().getStatusCode()).isNull();
+            assertThat(downstreamHeaders.get()).isNotNull();
+            return downstreamHeaders.get();
+        }
+
+        @Test
+        @DisplayName("all three claims present → three headers, X-Loc-Scope is Base64URL of the compact JSON")
+        void allClaims_forwardedAsThreeHeaders() {
+            String fin = encodePermBits(0);
+            String oth = encodePermBits(116);
+            String token = buildScopedToken(fin, oth, scopeClaim(NODE_A, NODE_B));
+
+            HttpHeaders headers = forward(filter(new GatewayAuthProperties()), exchange(token, b -> {}));
+
+            assertThat(headers.getFirst("X-Loc-Fin-Bits")).isEqualTo(fin);
+            assertThat(headers.getFirst("X-Loc-Oth-Bits")).isEqualTo(oth);
+            String scope = headers.getFirst("X-Loc-Scope");
+            assertThat(scope).isEqualTo(expectedScopeHeader(NODE_A, NODE_B));
+            assertThat(decodeScopeHeader(scope))
+                    .isEqualTo("{\"v\":1,\"nodes\":[\"" + NODE_A + "\",\"" + NODE_B + "\"]}");
+            // The identity headers are untouched by the addition.
+            assertThat(headers.getFirst("X-User")).isEqualTo("alice");
+            assertThat(headers.getFirst("X-Perm-Ver"))
+                    .isEqualTo(String.valueOf(GatewayPermissionCatalog.CATALOG_VERSION));
+        }
+
+        @Test
+        @DisplayName(
+                "bits present, loc_scope absent → both bits headers set, X-Loc-Scope absent (fail-closed signal preserved)")
+        void bitsPresentScopeAbsent_forwardsBitsOnly() {
+            String fin = encodePermBits(0);
+            String token = buildScopedToken(fin, "", null);
+
+            HttpHeaders headers = forward(filter(new GatewayAuthProperties()), exchange(token, b -> {}));
+
+            assertThat(headers.getFirst("X-Loc-Fin-Bits")).isEqualTo(fin);
+            assertThat(headers.containsHeader("X-Loc-Oth-Bits")).isTrue();
+            assertThat(headers.getFirst("X-Loc-Oth-Bits")).isEmpty();
+            assertThat(headers.containsHeader("X-Loc-Scope")).isFalse();
+        }
+
+        @Test
+        @DisplayName("empty bitsets are forwarded as present-but-empty headers, not dropped")
+        void emptyBitsets_forwardedAsEmptyHeaders() {
+            String token = buildScopedToken("", "", null);
+
+            HttpHeaders headers = forward(filter(new GatewayAuthProperties()), exchange(token, b -> {}));
+
+            assertThat(headers.containsHeader("X-Loc-Fin-Bits")).isTrue();
+            assertThat(headers.containsHeader("X-Loc-Oth-Bits")).isTrue();
+            assertThat(headers.getFirst("X-Loc-Fin-Bits")).isEmpty();
+            assertThat(headers.getFirst("X-Loc-Oth-Bits")).isEmpty();
+            assertThat(headers.containsHeader("X-Loc-Scope")).isFalse();
+        }
+
+        @Test
+        @DisplayName("a token with none of the claims (pre-rollout) passes through with none of the headers")
+        void noClaims_noHeaders() {
+            String token = buildScopedToken(null, null, null);
+
+            HttpHeaders headers = forward(filter(new GatewayAuthProperties()), exchange(token, b -> {}));
+
+            assertThat(headers.containsHeader("X-Loc-Fin-Bits")).isFalse();
+            assertThat(headers.containsHeader("X-Loc-Oth-Bits")).isFalse();
+            assertThat(headers.containsHeader("X-Loc-Scope")).isFalse();
+            assertThat(headers.getFirst("X-Perm-Bits")).isNotBlank();
+        }
+
+        @Test
+        @DisplayName("legacy authorities token carries no scope headers")
+        void legacyToken_noHeaders() {
+            String token = buildLegacyAuthoritiesToken("alice", "u1", "ROLE_USER");
+
+            HttpHeaders headers = forward(filter(new GatewayAuthProperties()), exchange(token, b -> {}));
+
+            assertThat(headers.containsHeader("X-Loc-Fin-Bits")).isFalse();
+            assertThat(headers.containsHeader("X-Loc-Oth-Bits")).isFalse();
+            assertThat(headers.containsHeader("X-Loc-Scope")).isFalse();
+        }
+
+        @Test
+        @DisplayName("spoofed inbound scope headers are stripped when the token has no scope claims")
+        void spoofedHeaders_strippedWhenTokenHasNoClaims() {
+            String token = buildScopedToken(null, null, null);
+            SimpleMeterRegistry registry = new SimpleMeterRegistry();
+            GlobalFilter filter = new SecurityGatewayConfig(
+                            TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), registry)
+                    .authFilter();
+
+            HttpHeaders headers = forward(
+                    filter,
+                    exchange(
+                            token,
+                            b -> b.header("X-Loc-Fin-Bits", encodePermBits(0))
+                                    .header("X-Loc-Oth-Bits", encodePermBits(1))
+                                    .header("X-Loc-Scope", expectedScopeHeader(NODE_A))));
+
+            // None of the spoofed values may reach the service: a forged X-Loc-Scope would widen a
+            // fail-closed token, and forged bitsets would mislabel a global grant as scoped.
+            assertThat(headers.containsHeader("X-Loc-Fin-Bits")).isFalse();
+            assertThat(headers.containsHeader("X-Loc-Oth-Bits")).isFalse();
+            assertThat(headers.containsHeader("X-Loc-Scope")).isFalse();
+            assertThat(registry.counter("auth.header.strip.count").count()).isEqualTo(1.0);
+        }
+
+        @Test
+        @DisplayName("spoofed inbound scope headers are replaced by the token-derived values")
+        void spoofedHeaders_replacedByTokenValues() {
+            String fin = encodePermBits(0);
+            String token = buildScopedToken(fin, "", scopeClaim(NODE_A));
+
+            HttpHeaders headers = forward(
+                    filter(new GatewayAuthProperties()),
+                    exchange(
+                            token,
+                            b -> b.header("X-Loc-Fin-Bits", encodePermBits(5))
+                                    .header("X-Loc-Oth-Bits", encodePermBits(6))
+                                    .header("X-Loc-Scope", expectedScopeHeader(NODE_B))));
+
+            assertThat(headers.get("X-Loc-Fin-Bits")).containsExactly(fin);
+            assertThat(headers.get("X-Loc-Oth-Bits")).containsExactly("");
+            assertThat(headers.get("X-Loc-Scope")).containsExactly(expectedScopeHeader(NODE_A));
+        }
+
+        @Test
+        @DisplayName("strict mode: inbound X-Loc-Fin-Bits conflicting with the token → 401")
+        void strictMode_finBitsMismatch_returns401() {
+            String token = buildScopedToken(encodePermBits(0), "", scopeClaim(NODE_A));
+            GatewayAuthProperties props = new GatewayAuthProperties();
+            props.setRejectHeaderTokenMismatch(true);
+
+            var exchange = exchange(token, b -> b.header("X-Loc-Fin-Bits", encodePermBits(7)));
+            filter(props).filter(exchange, ignored -> Mono.empty()).block();
+
+            assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+
+        @Test
+        @DisplayName("strict mode: inbound X-Loc-Oth-Bits conflicting with the token → 401")
+        void strictMode_othBitsMismatch_returns401() {
+            String token = buildScopedToken("", encodePermBits(0), scopeClaim(NODE_A));
+            GatewayAuthProperties props = new GatewayAuthProperties();
+            props.setRejectHeaderTokenMismatch(true);
+
+            var exchange = exchange(token, b -> b.header("X-Loc-Oth-Bits", encodePermBits(7)));
+            filter(props).filter(exchange, ignored -> Mono.empty()).block();
+
+            assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+
+        @Test
+        @DisplayName("strict mode: inbound X-Loc-Scope conflicting with the token → 401")
+        void strictMode_scopeMismatch_returns401() {
+            String token = buildScopedToken(encodePermBits(0), "", scopeClaim(NODE_A));
+            GatewayAuthProperties props = new GatewayAuthProperties();
+            props.setRejectHeaderTokenMismatch(true);
+
+            var exchange = exchange(token, b -> b.header("X-Loc-Scope", expectedScopeHeader(NODE_B)));
+            filter(props).filter(exchange, ignored -> Mono.empty()).block();
+
+            assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+
+        @Test
+        @DisplayName(
+                "strict mode: inbound X-Loc-Scope on a token whose loc_scope is absent → 401 (cannot widen fail-closed)")
+        void strictMode_scopeHeaderOnScopelessToken_returns401() {
+            String token = buildScopedToken(encodePermBits(0), "", null);
+            GatewayAuthProperties props = new GatewayAuthProperties();
+            props.setRejectHeaderTokenMismatch(true);
+
+            var exchange = exchange(token, b -> b.header("X-Loc-Scope", expectedScopeHeader(NODE_A)));
+            filter(props).filter(exchange, ignored -> Mono.empty()).block();
+
+            assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+
+        @Test
+        @DisplayName("strict mode: inbound headers matching the token are forwarded")
+        void strictMode_matchingHeaders_forwarded() {
+            String fin = encodePermBits(0);
+            String token = buildScopedToken(fin, "", scopeClaim(NODE_A));
+            GatewayAuthProperties props = new GatewayAuthProperties();
+            props.setRejectHeaderTokenMismatch(true);
+
+            HttpHeaders headers = forward(
+                    filter(props),
+                    exchange(
+                            token,
+                            b -> b.header("X-Loc-Fin-Bits", fin).header("X-Loc-Scope", expectedScopeHeader(NODE_A))));
+
+            assertThat(headers.getFirst("X-Loc-Fin-Bits")).isEqualTo(fin);
+            assertThat(headers.getFirst("X-Loc-Scope")).isEqualTo(expectedScopeHeader(NODE_A));
+        }
+
+        @Test
+        @DisplayName(
+                "loc_scope that is not a JSON object (e.g. the string \"ALL\") is an issuer defect → 401, nothing synthesised")
+        void malformedScopeClaim_returns401() {
+            String token = buildScopedToken(encodePermBits(0), "", "ALL");
+            SimpleMeterRegistry registry = new SimpleMeterRegistry();
+            GlobalFilter filter = new SecurityGatewayConfig(
+                            TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), registry)
+                    .authFilter();
+
+            var exchange = exchange(token, b -> {});
+            filter.filter(exchange, ignored -> Mono.empty()).block();
+
+            assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(registry.counter("auth.perm.decode.failure", "reason", "malformed_loc_claim")
+                            .count())
+                    .isEqualTo(1.0);
+        }
+
+        @Test
+        @DisplayName("a non-string loc bitset claim is an issuer defect → 401")
+        void malformedBitsClaim_returns401() {
+            String token = Jwts.builder()
+                    .subject("alice")
+                    .issuer(TEST_ISSUER)
+                    .audience()
+                    .add(TEST_AUDIENCE)
+                    .and()
+                    .claim("uid", "u1")
+                    .claim("perm_bits", encodePermBits(116))
+                    .claim("perm_ver", GatewayPermissionCatalog.CATALOG_VERSION)
+                    .claim("loc_fin_bits", 42)
+                    .expiration(new Date(System.currentTimeMillis() + 3_600_000))
+                    .signWith(TEST_KEY)
+                    .compact();
+
+            var exchange = exchange(token, b -> {});
+            filter(new GatewayAuthProperties())
+                    .filter(exchange, ignored -> Mono.empty())
+                    .block();
+
+            assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
     }
 }

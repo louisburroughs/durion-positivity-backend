@@ -1,5 +1,6 @@
 package com.positivity.gateway.config;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
@@ -20,11 +21,13 @@ import java.util.BitSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import javax.crypto.SecretKey;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +37,7 @@ import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.util.StringUtils;
@@ -52,9 +56,17 @@ public class SecurityGatewayConfig {
     private static final String HEADER_X_ROLES = "X-Roles";
     private static final String HEADER_X_USER = "X-User";
     private static final String HEADER_X_USER_ID = "X-User-Id";
+    // ADR-0061 §3 location-scope passthrough (#1869). Derived from the validated token only;
+    // the gateway forwards them and makes no scope decision.
+    private static final String HEADER_X_LOC_FIN_BITS = "X-Loc-Fin-Bits";
+    private static final String HEADER_X_LOC_OTH_BITS = "X-Loc-Oth-Bits";
+    private static final String HEADER_X_LOC_SCOPE = "X-Loc-Scope";
     private static final String JWT_HEADER_ALG = "alg";
     private static final String CLAIM_PERMISSION_VERSION = "perm_ver";
     private static final String CLAIM_ROLES = "roles";
+    private static final String CLAIM_LOC_FIN_BITS = "loc_fin_bits";
+    private static final String CLAIM_LOC_OTH_BITS = "loc_oth_bits";
+    private static final String CLAIM_LOC_SCOPE = "loc_scope";
     private static final String LOG_JWT_AUTH_REJECTED = "JWT auth rejected path={} reason={} jti={}";
     private static final String METRIC_AUTH_HEADER_STRIP_COUNT = "auth.header.strip.count";
     private static final String METRIC_AUTH_LEGACY_DECODE_COUNT = "auth.legacy.decode.count";
@@ -189,7 +201,10 @@ public class SecurityGatewayConfig {
                 incomingRequest.getHeaders().getFirst(HEADER_X_USER),
                 incomingRequest.getHeaders().getFirst(HEADER_X_USER_ID),
                 incomingRequest.getHeaders().getFirst(HEADER_X_AUTHORITIES),
-                incomingRequest.getHeaders().getFirst(HEADER_X_PERM_BITS));
+                incomingRequest.getHeaders().getFirst(HEADER_X_PERM_BITS),
+                incomingRequest.getHeaders().getFirst(HEADER_X_LOC_FIN_BITS),
+                incomingRequest.getHeaders().getFirst(HEADER_X_LOC_OTH_BITS),
+                incomingRequest.getHeaders().getFirst(HEADER_X_LOC_SCOPE));
 
         ServerHttpRequest strippedRequest = incomingRequest
                 .mutate()
@@ -201,6 +216,9 @@ public class SecurityGatewayConfig {
                         headers.remove(HEADER_X_PERM_BITS);
                         headers.remove(HEADER_X_PERM_VER);
                         headers.remove(HEADER_X_ROLES);
+                        headers.remove(HEADER_X_LOC_FIN_BITS);
+                        headers.remove(HEADER_X_LOC_OTH_BITS);
+                        headers.remove(HEADER_X_LOC_SCOPE);
                         incrementCounter(METRIC_AUTH_HEADER_STRIP_COUNT);
                     }
                 })
@@ -258,6 +276,7 @@ public class SecurityGatewayConfig {
                     "", // no perm_bits for legacy tokens
                     legacyAuthoritiesHeader.get(), // CSV from legacy authorities claim
                     rolesHeader,
+                    LocationScopeHeaders.ABSENT, // legacy tokens predate the scope claims
                     jti));
         }
 
@@ -279,6 +298,11 @@ public class SecurityGatewayConfig {
             return Optional.empty();
         }
 
+        Optional<LocationScopeHeaders> locationScopeHeaders = resolveLocationScopeHeaders(claims, context, jti);
+        if (locationScopeHeaders.isEmpty()) {
+            return Optional.empty();
+        }
+
         String permBits = claims.get("perm_bits", String.class);
         return Optional.of(new AuthenticatedIdentity(
                 subject,
@@ -286,7 +310,68 @@ public class SecurityGatewayConfig {
                 permBits != null ? permBits : "",
                 "", // no legacy CSV for new tokens
                 rolesHeader,
+                locationScopeHeaders.get(),
                 jti));
+    }
+
+    /**
+     * Derives the three location-scope headers from the validated token (ADR-0061 §2–§3, #1869).
+     *
+     * <p>{@code loc_fin_bits} / {@code loc_oth_bits} are forwarded verbatim — they are already
+     * Base64URL bitsets over the same indexes as {@code perm_bits} — and are forwarded even when
+     * empty, because "bitsets present" is itself a signal. {@code loc_scope} is a JSON object; it
+     * is forwarded as the Base64URL of its compact JSON so the header is safe and lossless, and it
+     * is <b>omitted</b> whenever the claim is absent: "bits present, scope absent" is the issuer's
+     * fail-closed signal and must reach the service unchanged. Nothing is ever synthesised.
+     *
+     * <p>A token carrying none of the claims (pre-rollout) yields {@link LocationScopeHeaders#ABSENT}.
+     * A claim of the wrong JSON type is an issuer defect and rejects the token, the same way a
+     * malformed {@code perm_bits} does; the gateway does not otherwise inspect the values.
+     */
+    private Optional<LocationScopeHeaders> resolveLocationScopeHeaders(
+            Claims claims, AuthRequestContext context, String jti) {
+        Optional<String> finBits = stringClaim(claims, CLAIM_LOC_FIN_BITS);
+        Optional<String> othBits = stringClaim(claims, CLAIM_LOC_OTH_BITS);
+        Object rawScope = claims.get(CLAIM_LOC_SCOPE);
+
+        boolean finMalformed = claims.get(CLAIM_LOC_FIN_BITS) != null && finBits.isEmpty();
+        boolean othMalformed = claims.get(CLAIM_LOC_OTH_BITS) != null && othBits.isEmpty();
+        boolean scopeMalformed = rawScope != null && !(rawScope instanceof Map<?, ?>);
+        if (finMalformed || othMalformed || scopeMalformed) {
+            rejectAuthentication(
+                    context,
+                    METRIC_AUTH_PERMISSION_DECODE_FAILURE,
+                    REJECTION_REASON_TAG,
+                    "malformed_loc_claim",
+                    "malformed_loc_claim",
+                    jti);
+            return Optional.empty();
+        }
+
+        String scopeHeader = null;
+        if (rawScope != null) {
+            try {
+                String compactJson = OBJECT_MAPPER.writeValueAsString(rawScope);
+                scopeHeader = Base64.getUrlEncoder()
+                        .withoutPadding()
+                        .encodeToString(compactJson.getBytes(StandardCharsets.UTF_8));
+            } catch (JsonProcessingException ex) {
+                rejectAuthentication(
+                        context,
+                        METRIC_AUTH_PERMISSION_DECODE_FAILURE,
+                        REJECTION_REASON_TAG,
+                        "malformed_loc_claim",
+                        "malformed_loc_scope",
+                        jti);
+                return Optional.empty();
+            }
+        }
+        return Optional.of(new LocationScopeHeaders(finBits.orElse(null), othBits.orElse(null), scopeHeader));
+    }
+
+    private static Optional<String> stringClaim(Claims claims, String name) {
+        Object value = claims.get(name);
+        return value instanceof String text ? Optional.of(text) : Optional.empty();
     }
 
     private Optional<String> resolveLegacyAuthoritiesHeader(Claims claims, AuthRequestContext context, String jti) {
@@ -386,7 +471,16 @@ public class SecurityGatewayConfig {
                     || headerMismatch(context.inboundHeaders().userId(), identity.userId())
                     || authoritiesHeaderMismatch(
                             context.inboundHeaders().authorities(), identity.legacyAuthoritiesHeader())
-                    || headerMismatch(context.inboundHeaders().permBits(), identity.permBitsHeader());
+                    || headerMismatch(context.inboundHeaders().permBits(), identity.permBitsHeader())
+                    || headerMismatch(
+                            context.inboundHeaders().locFinBits(),
+                            identity.locationScope().finBits())
+                    || headerMismatch(
+                            context.inboundHeaders().locOthBits(),
+                            identity.locationScope().othBits())
+                    || headerMismatch(
+                            context.inboundHeaders().locScope(),
+                            identity.locationScope().scope());
             if (mismatch) {
                 return rejectAuthentication(
                         context,
@@ -419,18 +513,34 @@ public class SecurityGatewayConfig {
                     } else {
                         headers.remove(HEADER_X_ROLES);
                     }
+                    // Present-but-empty bitsets are forwarded as empty headers on purpose; an
+                    // absent claim removes the header so no inbound copy can survive.
+                    setOrRemove(
+                            headers,
+                            HEADER_X_LOC_FIN_BITS,
+                            identity.locationScope().finBits());
+                    setOrRemove(
+                            headers,
+                            HEADER_X_LOC_OTH_BITS,
+                            identity.locationScope().othBits());
+                    setOrRemove(
+                            headers,
+                            HEADER_X_LOC_SCOPE,
+                            identity.locationScope().scope());
                 })
                 .build();
 
         if (LOG.isDebugEnabled()) {
             LOG.debug(
-                    "Forwarding authenticated request path={} user={} userId={} roles={} permBits={} legacyAuthorities={}",
+                    "Forwarding authenticated request path={} user={} userId={} roles={} permBits={} legacyAuthorities={} locBits={} locScope={}",
                     context.path(),
                     identity.subject(),
                     identity.userId(),
                     countCsvEntries(identity.rolesHeader()),
                     StringUtils.hasText(identity.permBitsHeader()) ? "present" : "absent",
-                    countCsvEntries(identity.legacyAuthoritiesHeader()));
+                    countCsvEntries(identity.legacyAuthoritiesHeader()),
+                    identity.locationScope().finBits() != null ? "present" : "absent",
+                    identity.locationScope().scope() != null ? "present" : "absent");
         }
 
         return chain.filter(
@@ -624,6 +734,14 @@ public class SecurityGatewayConfig {
         meterRegistry.counter(counterName, tagKey, tagValue).increment();
     }
 
+    private static void setOrRemove(HttpHeaders headers, String name, @Nullable String value) {
+        if (value == null) {
+            headers.remove(name);
+        } else {
+            headers.set(name, value);
+        }
+    }
+
     private static boolean headerMismatch(String inboundValue, String expectedValue) {
         if (!StringUtils.hasText(inboundValue)) {
             return false;
@@ -634,7 +752,29 @@ public class SecurityGatewayConfig {
         return !inboundValue.equals(expectedValue);
     }
 
-    private record InboundIdentityHeaders(String user, String userId, String authorities, String permBits) {}
+    private record InboundIdentityHeaders(
+            String user,
+            String userId,
+            String authorities,
+            String permBits,
+            String locFinBits,
+            String locOthBits,
+            String locScope) {}
+
+    /**
+     * The downstream location-scope headers derived from one token. {@code null} means the claim
+     * was absent and the header must not be set; an empty string is a present, empty bitset.
+     *
+     * @param finBits verbatim {@code loc_fin_bits}
+     * @param othBits verbatim {@code loc_oth_bits}
+     * @param scope Base64URL of the compact JSON of {@code loc_scope}
+     */
+    private record LocationScopeHeaders(
+            @Nullable String finBits,
+            @Nullable String othBits,
+            @Nullable String scope) {
+        static final LocationScopeHeaders ABSENT = new LocationScopeHeaders(null, null, null);
+    }
 
     private record AuthRequestContext(
             ServerWebExchange exchange,
@@ -648,5 +788,6 @@ public class SecurityGatewayConfig {
             String permBitsHeader,
             String legacyAuthoritiesHeader,
             String rolesHeader,
+            LocationScopeHeaders locationScope,
             String jti) {}
 }

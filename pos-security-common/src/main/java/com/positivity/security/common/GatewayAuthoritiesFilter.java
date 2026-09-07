@@ -16,8 +16,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
@@ -70,6 +72,23 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
+    /** The only {@code loc_scope} shape this filter reads; anything else is treated as absent. */
+    private static final int LOC_SCOPE_VERSION = 1;
+
+    private final @Nullable LocationAncestorResolver locationAncestorResolver;
+
+    /** A filter for a module that provides no {@link LocationAncestorResolver}: scoped permissions deny. */
+    public GatewayAuthoritiesFilter() {
+        this(null);
+    }
+
+    /**
+     * @param locationAncestorResolver the module's ancestor-set resolver, or {@code null} when the
+     *     module provides none (every location-scoped permission is then denied, ADR-0061 §3)
+     */
+    public GatewayAuthoritiesFilter(@Nullable LocationAncestorResolver locationAncestorResolver) {
+        this.locationAncestorResolver = locationAncestorResolver;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -104,6 +123,16 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
                 return;
             }
 
+            // The scope bitsets share perm_bits' indexes and X-Perm-Ver, which the perm-bits path
+            // above has already validated; a legacy X-Authorities request predates the claims.
+            LocationScope locationScope = hasPermBits ? locationScopeFromHeaders(request) : LocationScope.unscoped();
+            if (locationScope == null) {
+                // A scope bitset that does not decode is as untrusted as a perm bitset that does not.
+                SecurityContextHolder.clearContext();
+                filterChain.doFilter(request, response);
+                return;
+            }
+
             String username = userHeader != null ? userHeader : GatewaySecurityConstants.ANONYMOUS_USER;
             Optional<UUID> userId = resolveUserIdFromToken(authorizationHeader, username);
 
@@ -112,6 +141,7 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
             Map<String, Object> details = new HashMap<>();
             details.put(GatewaySecurityConstants.DETAIL_USERNAME, username);
             userId.ifPresent(id -> details.put(GatewaySecurityConstants.DETAIL_USER_ID, id));
+            details.put(GatewaySecurityConstants.DETAIL_LOCATION_SCOPE, locationScope);
             authentication.setDetails(Map.copyOf(details));
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -237,8 +267,7 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
 
         BitSet bits;
         try {
-            byte[] bytes = Base64.getUrlDecoder().decode(permBitsHeader);
-            bits = BitSet.valueOf(bytes);
+            bits = decodeBitSet(permBitsHeader);
         } catch (IllegalArgumentException e) {
             loggr.warn("Malformed X-Perm-Bits header: {}; clearing auth context", e.getMessage());
             return null;
@@ -252,6 +281,99 @@ public class GatewayAuthoritiesFilter extends OncePerRequestFilter {
                 .distinct()
                 .map(SimpleGrantedAuthority::new)
                 .toList();
+    }
+
+    /** The one Base64URL-to-{@link BitSet} path, shared by {@code X-Perm-Bits} and the scope bitsets. */
+    private static BitSet decodeBitSet(String base64Url) {
+        return BitSet.valueOf(Base64.getUrlDecoder().decode(base64Url));
+    }
+
+    /**
+     * Builds the caller's {@link LocationScope} from the three {@code X-Loc-*} headers (#1870).
+     *
+     * <p>Both bitsets absent means the token predates the claims: the scope is
+     * {@link LocationScope#unscoped()}. A bitset that fails to decode returns {@code null} so the
+     * caller fails closed, exactly as for {@code X-Perm-Bits}. A missing or malformed
+     * {@code X-Loc-Scope} is treated as absent, which denies every scoped permission — the
+     * fail-closed direction, and the shape the issuer deliberately sends for a caller with no
+     * assigned node.
+     */
+    // null return = decode failure (fail closed), mirroring authoritiesFromPermBits.
+    @SuppressWarnings("java:S1168")
+    private @Nullable LocationScope locationScopeFromHeaders(HttpServletRequest request) {
+        String finHeader = request.getHeader(GatewaySecurityConstants.HEADER_LOC_FIN_BITS);
+        String othHeader = request.getHeader(GatewaySecurityConstants.HEADER_LOC_OTH_BITS);
+        if (finHeader == null && othHeader == null) {
+            return LocationScope.unscoped();
+        }
+
+        Set<String> financialScoped;
+        Set<String> otherScoped;
+        try {
+            financialScoped = scopedPermissions(finHeader);
+            otherScoped = scopedPermissions(othHeader);
+        } catch (IllegalArgumentException e) {
+            loggr.warn("Malformed location-scope bitset header: {}; clearing auth context", e.getMessage());
+            return null;
+        }
+
+        Optional<Set<UUID>> nodes =
+                decodeLocationScopeHeader(request.getHeader(GatewaySecurityConstants.HEADER_LOC_SCOPE));
+        return LocationScope.of(financialScoped, otherScoped, nodes, true, locationAncestorResolver);
+    }
+
+    /** Plain permission names for the set bits; an absent or empty header is an empty set. */
+    private static Set<String> scopedPermissions(@Nullable String bitsHeader) {
+        if (!StringUtils.hasText(bitsHeader)) {
+            return Set.of();
+        }
+        Set<String> permissions = new LinkedHashSet<>();
+        for (String authority : DownstreamPermissionCatalog.authoritiesFromBitSet(decodeBitSet(bitsHeader))) {
+            permissions.add(
+                    authority.startsWith(GatewaySecurityConstants.PERMISSION_PREFIX)
+                            ? authority.substring(GatewaySecurityConstants.PERMISSION_PREFIX.length())
+                            : authority);
+        }
+        return permissions;
+    }
+
+    /**
+     * Decodes {@code X-Loc-Scope}: Base64URL of {@code {"v":1,"nodes":["<uuid>",...]}}. Anything
+     * that does not match — wrong version, missing or non-array {@code nodes}, a node that is not
+     * a UUID, bad Base64, bad JSON — is logged and treated as absent.
+     */
+    private static Optional<Set<UUID>> decodeLocationScopeHeader(@Nullable String header) {
+        if (header == null) {
+            return Optional.empty();
+        }
+        try {
+            JsonNode root = objectMapper.readTree(Base64.getUrlDecoder().decode(header));
+            if (root == null || !root.isObject()) {
+                throw new IllegalArgumentException("loc_scope is not a JSON object");
+            }
+            JsonNode version = root.get("v");
+            if (version == null || !version.isInt() || version.intValue() != LOC_SCOPE_VERSION) {
+                throw new IllegalArgumentException("unsupported loc_scope version " + version);
+            }
+            JsonNode nodesNode = root.get("nodes");
+            if (nodesNode == null || !nodesNode.isArray()) {
+                throw new IllegalArgumentException("loc_scope nodes is not an array");
+            }
+            Set<UUID> nodes = new LinkedHashSet<>();
+            for (JsonNode node : nodesNode) {
+                if (!node.isTextual()) {
+                    throw new IllegalArgumentException("loc_scope node is not a string");
+                }
+                nodes.add(UUID.fromString(node.asText()));
+            }
+            return Optional.of(nodes);
+        } catch (IOException | IllegalArgumentException e) {
+            loggr.warn(
+                    "Malformed {} header treated as absent (scoped permissions will be denied): {}",
+                    GatewaySecurityConstants.HEADER_LOC_SCOPE,
+                    e.getMessage());
+            return Optional.empty();
+        }
     }
 
     private Stream<String> csvValues(String headerValue) {

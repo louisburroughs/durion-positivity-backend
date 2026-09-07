@@ -3,6 +3,7 @@ package com.positivity.security.common;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.List;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -81,8 +82,11 @@ public class GatewaySecurityConfig {
      * @return the gateway authorities filter
      */
     @Bean
-    public GatewayAuthoritiesFilter gatewayAuthoritiesFilter() {
-        return new GatewayAuthoritiesFilter();
+    public GatewayAuthoritiesFilter gatewayAuthoritiesFilter(
+            ObjectProvider<LocationAncestorResolver> locationAncestorResolver) {
+        // Absent in modules that have not adopted location scope (#1870): the filter still builds a
+        // LocationScope, and every scoped permission it is asked about is denied, never allowed.
+        return new GatewayAuthoritiesFilter(locationAncestorResolver.getIfAvailable());
     }
 
     @Bean

@@ -346,4 +346,78 @@ class SecurityContextHelperTest {
             assertThat(SecurityContextHelper.hasRole("USER")).isFalse();
         }
     }
+
+    @Nested
+    @DisplayName("location scope (#1870)")
+    class LocationScopeAccess {
+
+        @Test
+        @DisplayName("the scope the filter put into the details is returned as-is")
+        void detailsScopeIsReturned() {
+            LocationScope scope = LocationScope.of(
+                    java.util.Set.of(), java.util.Set.of("crm:party:view"), java.util.Optional.empty(), true, null);
+            authenticate(
+                    "jsmith",
+                    Map.of(
+                            GatewaySecurityConstants.DETAIL_USERNAME,
+                            "jsmith",
+                            GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
+                            scope),
+                    "crm:party:view");
+
+            assertThat(SecurityContextHelper.locationScope()).isSameAs(scope);
+        }
+
+        @Test
+        @DisplayName("a details map without the entry is the 'claims absent' row: permissive")
+        void missingEntryIsUnscoped() {
+            authenticate("jsmith", details("jsmith", USER_ID), "crm:party:view");
+
+            LocationScope scope = SecurityContextHelper.locationScope();
+
+            assertThat(scope.claimsPresent()).isFalse();
+            assertThat(scope.covers("crm:party:view", UUID.randomUUID())).isTrue();
+        }
+
+        @Test
+        @DisplayName("an authentication with no details map at all is permissive rather than an error")
+        void missingDetailsMapIsUnscoped() {
+            // Unlike the identity accessors, scope has a defined meaning for "no gateway details":
+            // it is the pre-rollout shape, and treating it as an error would break every
+            // details-less test authentication in the 15 adopting modules.
+            authenticate("jsmith", null, "crm:party:view");
+
+            assertThat(SecurityContextHelper.locationScope().claimsPresent()).isFalse();
+        }
+
+        @Test
+        @DisplayName("an entry of the wrong type is ignored, not coerced")
+        void wrongTypeEntryIsUnscoped() {
+            authenticate("jsmith", Map.of(GatewaySecurityConstants.DETAIL_LOCATION_SCOPE, "ALL"), "crm:party:view");
+
+            assertThat(SecurityContextHelper.locationScope().claimsPresent()).isFalse();
+        }
+
+        @Test
+        @DisplayName("no authentication at all is still an error, like every other accessor")
+        void noAuthenticationThrows() {
+            assertThatThrownBy(SecurityContextHelper::locationScope)
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("no Authentication");
+        }
+
+        @Test
+        @DisplayName("the anonymous principal is rejected")
+        void anonymousThrows() {
+            var anonymous = new AnonymousAuthenticationToken(
+                    "key",
+                    GatewaySecurityConstants.ANONYMOUS_USER,
+                    List.of(new SimpleGrantedAuthority("ROLE_ANONYMOUS")));
+            SecurityContextHolder.getContext().setAuthentication(anonymous);
+
+            assertThatThrownBy(SecurityContextHelper::locationScope)
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Anonymous");
+        }
+    }
 }
