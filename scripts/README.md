@@ -29,6 +29,7 @@ Utility scripts for development, operations, testing, and deployment.
 | [`check-deploy-service-drift.sh`](#check-deploy-service-driftsh) | Deployment | Verify every deployable service is registered in all five deploy lists |
 | [`tests/deploy-backend-config-only-selftest.sh`](#testsdeploy-backend-config-only-selftestsh) | Deployment | Drive `deploy-backend.sh --config-only`'s image pre-flight against a stubbed Docker |
 | [`tests/deploy-backend-disk-reclaim-selftest.sh`](#testsdeploy-backend-disk-reclaim-selftestsh) | Deployment | Drive `deploy-backend.sh`'s pre-pull disk reclaim against a stubbed Docker and `df` |
+| [`tests/install-cloudwatch-agent-selftest.sh`](#testsinstall-cloudwatch-agent-selftestsh) | Deployment | Drive the alpha CloudWatch agent installer against a stubbed `dnf`, `systemctl` and agent control |
 | [`generate-kafka-topics.py`](#generate-kafka-topicspy) | Kafka | Derive the `kafka-topic-init` topic map from the topics services configure and consume |
 | [`check-kafka-topic-drift.sh`](#check-kafka-topic-driftsh) | Kafka | Verify `kafka-topic-init` provisions every topic the code uses |
 | [`generate-permissions.sh`](#generate-permissionssh) | Permissions | Regenerate `permissions.yaml` files from `@PreAuthorize` annotations |
@@ -482,6 +483,43 @@ bash scripts/tests/deploy-backend-disk-reclaim-selftest.sh
   Ordering is the point of the fix, so `assert_call_site` pins it against the script text: called
   exactly once, after the guards that promise the host is untouched, before `COMPOSE_ARGS` is built
   and so before any pull in either mode.
+
+---
+
+### `tests/install-cloudwatch-agent-selftest.sh`
+
+Drives `deployment/alpha/install-cloudwatch-agent.sh` against a stubbed `dnf`, `rpm`, `systemctl`
+and `amazon-cloudwatch-agent-ctl`.
+
+The installer is the only thing standing between the alpha box and a repeat of #1862, where the
+root disk filled with nothing watching it. Its contract is that every condition which would leave
+the box unwatched fails the run — and those are exactly the paths a successful hand-run never
+touches.
+
+Cases:
+
+- happy path — config installed, agent started, exit 0
+- agent already installed — `dnf install` never called
+- config file missing, and config not valid JSON — exit 1, and for bad JSON the live config is
+  verified *untouched*, since `fetch-config` replaces the running configuration
+- `fetch-config` fails — exit 1, saying what state the agent is left in
+- agent reports stopped, reports no configuration, or is not enabled at boot — exit 1 each
+- agent control binary missing after install — exit 1
+- not run as root — exit 1 (skipped when the suite itself is root)
+
+**Usage:**
+```bash
+bash scripts/tests/install-cloudwatch-agent-selftest.sh
+```
+
+**Notes:**
+- `EUID` is readonly in bash, so root cannot be faked. Every case but `not-root` runs through a copy
+  with only that guard removed, and `AGENT_DIR` is redirected into a temp dir so the suite never
+  writes to `/opt/aws`. The redirect is asserted, so a rename of that variable fails loudly rather
+  than silently writing to the real path.
+- The installer deliberately does **not** verify metrics are reaching CloudWatch: that needs
+  `cloudwatch:GetMetricStatistics`, which the instance role does not carry. See
+  `docs/OPERATIONS_RUNBOOK.md` for the operator-side check.
 
 ---
 

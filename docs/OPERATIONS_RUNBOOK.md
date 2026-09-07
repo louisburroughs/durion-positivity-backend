@@ -144,52 +144,139 @@ annotations:
 
 ### Host Metrics on Alpha (CloudWatch Agent)
 
-Everything above is *in-container* telemetry, scraped by the Prometheus/Grafana stack that runs on
-the alpha box. None of it sees the box itself. EC2 publishes CPU and network from the hypervisor,
-but disk and memory live inside the instance and need an agent there, so for a long time nothing
-watched them at all.
+Everything above is telemetry from inside the containers, scraped by the Prometheus stack that runs
+on the alpha box. cAdvisor does expose some host-level filesystem and machine metrics there, but two
+things make it the wrong place to rely on for this: **no Alertmanager is deployed** — the Prometheus
+alert examples above notify nobody — and a stack that lives on the box cannot tell you the box is
+in trouble. That is why host alerting goes through CloudWatch and SNS instead.
 
 That gap caused #1862. The root disk filled with stale deploy images, deploys began failing on
 `no space left on device`, and — because a full root filesystem also stops the SSM agent writing its
-output — there was no remote shell left to diagnose it with. Nothing alarmed beforehand.
+output — there was no remote shell left to diagnose it with. Nothing alarmed beforehand: EC2
+publishes CPU and network from the hypervisor, but disk and memory live inside the instance and need
+an agent there, and none was installed.
 
-**What is collected**, defined in `deployment/alpha/cloudwatch-agent-config.json`, namespace
-`CWAgent`, at 60s:
+**What is collected**, from `deployment/alpha/cloudwatch-agent-config.json`, namespace `CWAgent`,
+at 60s:
 
 | Metric | Why |
 | --- | --- |
 | `disk_used_percent`, `disk_free` on `/` | Docker's data root lives here; this is the #1862 signal |
 | `mem_used_percent` | Diagnosis. No alarm, to keep the noise down |
 
-Custom metrics are billed per metric per month, so the set is deliberately small.
+`aggregation_dimensions` publishes an `InstanceId`-only rollup *in addition to* the base
+`(InstanceId, path, fstype)` series, so disk bills as four custom metrics and memory as two. Small,
+but not the two it looks like.
 
-**Alarms** (region `us-east-1`, both notifying the `durion-alpha-alerts` SNS topic):
+**Alarms** (`us-east-1`, both notifying the `durion-alpha-alerts` SNS topic):
 
-| Alarm | Fires | Meaning |
-| --- | --- | --- |
-| `alpha-root-disk-low` | `disk_free` < 40 GiB for 15 min | Lead time. Still above the deploy's 25 GiB reclaim floor, so nothing is broken yet. Missing data counts as breaching, so a dead agent also alerts |
-| `alpha-root-disk-critical` | `disk_free` < 15 GiB for 10 min | Below the reclaim floor: every deploy is now pruning to make room, and one more accumulation cycle reaches the #1862 wedge |
+| Alarm | Fires | Missing data | Meaning |
+| --- | --- | --- | --- |
+| `alpha-root-disk-low` | `disk_free` < 40 GiB for 15 min | **breaching** | Lead time. Still above the deploy's 25 GiB reclaim floor, so nothing is broken yet |
+| `alpha-root-disk-critical` | `disk_free` < 15 GiB for 10 min | missing | Below the reclaim floor: every deploy is pruning to make room, one cycle from the #1862 wedge |
 
-The 40 GiB threshold is chosen against `DOCKER_MIN_FREE_GIB` in `deploy-backend.sh` (default 25). If
-you change one, revisit the other, or the warning stops arriving before the deploy starts pruning.
+Only the warning treats missing data as breaching, and that is deliberate: it is the alarm that
+catches a dead agent, at a 15-minute window that tolerates a reboot. The critical alarm stays silent
+on missing data so a reboot does not page twice for one event. The consequence is worth knowing —
+**if the agent dies, the warning is what tells you, not the critical.**
 
-**Installing or re-configuring the agent:**
+Thresholds are in bytes, not percent, because the question is whether the next deploy's ~14 GB of
+images fit, and that does not scale with volume size — the resize from 100 to 200 GiB halved every
+percentage without changing the risk.
+
+Two couplings to respect:
+
+- The 40 GiB threshold is set against `DOCKER_MIN_FREE_GIB` in `deploy-backend.sh` (default 25) so
+  the warning arrives *before* the deploy has to prune at all. Change one, revisit the other.
+- The alarm watches `/`, while the deploy's reclaim measures `docker info --format
+  '{{.DockerRootDir}}'`. Same filesystem today. If Docker's data root ever moves to its own volume,
+  the alarm keeps reporting a healthy `/` while the Docker filesystem fills, and the `resources`
+  list in the agent config must move with it. Adding a second mount point there also turns the
+  alarmed rollup into an average across filesystems, which would mask a full root disk — pin a
+  `path` dimension on the alarms if that day comes.
+
+**When an alarm fires:**
 
 ```bash
-# On the box, after any edit to cloudwatch-agent-config.json. Idempotent.
-bash /opt/durion/alpha/scripts/install-cloudwatch-agent.sh
+docker system df                      # how much is reclaimable, and in what
+docker images --format '{{.Tag}}' | grep '^sha-' | sort | uniq -c | sort -rn
+docker image prune -af                # what deploy-backend.sh does for itself below the floor
 ```
 
-The instance role (`EC2-SSM-Role`) needs `CloudWatchAgentServerPolicy`. Without it the agent starts,
-reports `"status": "running"`, and silently publishes nothing — verify with the metric, never with
-the agent's own status:
+If stale `sha-` tags are piling up, the deploy's own reclaim is not keeping pace — check
+`DOCKER_PRUNE_INTERVAL_HOURS` and the tail of the last deploy log. If the disk is already full, note
+that SSM will return exit 1 with **empty** output for every command: expand the volume and reboot so
+cloud-init's `growpart` extends the filesystem, because a bigger volume alone changes nothing the OS
+can see. Full history in #1862.
+
+**Applying a config change:** edit `deployment/alpha/cloudwatch-agent-config.json` and merge. The
+`sync-alpha-config` workflow ships it to the box and runs the installer, which fails the workflow
+if the agent does not come back running, configured and enabled.
+
+To run it by hand on the box:
+
+```bash
+sudo bash /opt/durion/alpha/scripts/install-cloudwatch-agent.sh
+```
+
+**Verifying it is actually publishing.** The installer checks the agent is running, configured and
+enabled at boot, but it cannot confirm metrics arrive: that needs `cloudwatch:GetMetricStatistics`,
+which the instance role does not carry. An agent whose role is missing `CloudWatchAgentServerPolicy`
+passes every check and publishes nothing, so verify with the metric, from an operator shell:
 
 ```bash
 aws cloudwatch get-metric-statistics --region us-east-1 --namespace CWAgent \
   --metric-name disk_free --dimensions Name=InstanceId,Value=<instance-id> \
-  --start-time "$(date -u -d '20 min ago' +%FT%TZ)" --end-time "$(date -u +%FT%TZ)" \
+  --start-time "$(python3 -c 'import datetime;print((datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(minutes=20)).strftime("%Y-%m-%dT%H:%M:%SZ"))')" \
+  --end-time "$(python3 -c 'import datetime;print(datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))')" \
   --period 300 --statistics Average
 ```
+
+Also confirm the topic has a **confirmed** subscription. An SNS topic with none, or with one still
+`PendingConfirmation`, reproduces "nothing alarmed" exactly:
+
+```bash
+aws sns list-subscriptions-by-topic --region us-east-1 \
+  --topic-arn arn:aws:sns:us-east-1:288757602241:durion-alpha-alerts \
+  --query 'Subscriptions[].[Endpoint,SubscriptionArn]' --output text
+```
+
+#### Rebuilding the alpha host
+
+This repo has no infrastructure-as-code, so the AWS side of the above is **not** recreated by any
+pipeline. A rebuilt instance publishes no host metrics, and the two alarms stay pinned to the old
+instance id — where the warning alarm, treating missing data as breaching, fires forever against a
+dead box while the new one goes unwatched. Run this after any rebuild, with `INSTANCE` set to the
+new id:
+
+```bash
+INSTANCE=i-xxxxxxxxxxxxxxxxx
+TOPIC=arn:aws:sns:us-east-1:288757602241:durion-alpha-alerts
+
+# 1. The agent needs PutMetricData; AmazonSSMManagedInstanceCore does not grant it.
+aws iam attach-role-policy --role-name EC2-SSM-Role \
+  --policy-arn arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+
+# 2. Ship and install the agent (or push any change to deployment/alpha/ to run the sync workflow).
+aws ssm send-command --region us-east-1 --instance-ids "$INSTANCE" \
+  --document-name AWS-RunShellScript \
+  --parameters 'commands=["bash /opt/durion/alpha/scripts/install-cloudwatch-agent.sh"]'
+
+# 3. Repoint both alarms at the new instance.
+aws cloudwatch put-metric-alarm --region us-east-1 --alarm-name alpha-root-disk-low \
+  --namespace CWAgent --metric-name disk_free --dimensions Name=InstanceId,Value="$INSTANCE" \
+  --statistic Minimum --period 300 --evaluation-periods 3 --datapoints-to-alarm 3 \
+  --threshold 42949672960 --comparison-operator LessThanThreshold \
+  --treat-missing-data breaching --alarm-actions "$TOPIC" --ok-actions "$TOPIC"
+
+aws cloudwatch put-metric-alarm --region us-east-1 --alarm-name alpha-root-disk-critical \
+  --namespace CWAgent --metric-name disk_free --dimensions Name=InstanceId,Value="$INSTANCE" \
+  --statistic Minimum --period 300 --evaluation-periods 2 --datapoints-to-alarm 2 \
+  --threshold 16106127360 --comparison-operator LessThanThreshold \
+  --treat-missing-data missing --alarm-actions "$TOPIC" --ok-actions "$TOPIC"
+```
+
+Then verify with the two commands above before considering the rebuild done.
 
 ### Dashboard Access
 

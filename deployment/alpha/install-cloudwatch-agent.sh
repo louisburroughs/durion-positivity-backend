@@ -3,54 +3,77 @@ set -euo pipefail
 
 # Install and configure the CloudWatch agent on the alpha host (#1862 follow-up).
 #
-# Alpha filled its root disk and wedged: every deploy failed on `no space left on device`, and
-# because a full root filesystem also stops the SSM agent from writing its output, there was no
-# remote shell left to diagnose it with. Nothing alarmed, because no host metrics were published
-# at all — EC2 publishes CPU and network from the hypervisor but never disk or memory, which need
-# an agent inside the instance.
+# Alpha filled its root disk and wedged: every deploy failed on "no space left on device", and
+# because a full root filesystem also stops the SSM agent writing its output, there was no remote
+# shell left to diagnose it with. Nothing alarmed, because no host metrics were published at all —
+# EC2 publishes CPU and network from the hypervisor, but disk and memory live inside the instance
+# and need an agent there.
 #
-# This publishes the two that would have caught it, and nothing else: disk on / (where Docker's
-# data root lives) and memory. Every metric is billed monthly, so the set stays deliberately small.
+# This publishes the two that would have caught it and nothing else: disk on / (where Docker's data
+# root lives) and memory.
 #
-# Idempotent: safe to re-run to pick up a changed config. Run it after any edit to
-# cloudwatch-agent-config.json.
+# Idempotent. The sync-alpha-config workflow runs it on every push that touches the config, so a
+# committed edit reaches the box instead of sitting inert in git.
 #
-# Usage (on the box):
-#   bash /opt/durion/alpha/scripts/install-cloudwatch-agent.sh [config-path]
+# Usage (on the box, as root):
+#   sudo bash /opt/durion/alpha/scripts/install-cloudwatch-agent.sh [config-path]
 #
-# Prerequisite, granted once and not by this script: the instance role needs
-# CloudWatchAgentServerPolicy. Without it the agent starts, looks healthy, and silently publishes
-# nothing — which is the failure mode this whole exercise exists to remove, so the check below
-# treats a missing metric as an error rather than letting it pass quietly.
+# What this script can and cannot prove. It verifies the agent is installed, configured, running,
+# and enabled at boot. It CANNOT verify metrics are reaching CloudWatch: that needs
+# cloudwatch:GetMetricStatistics, which the instance role deliberately does not carry (the agent
+# only needs PutMetricData). So an agent whose role lacks CloudWatchAgentServerPolicy will pass
+# every check here and still publish nothing. Confirm from an operator shell with the
+# get-metric-statistics call in docs/OPERATIONS_RUNBOOK.md, never from this script's exit code.
 
 CONFIG_SRC="${1:-/opt/durion/alpha/cloudwatch-agent-config.json}"
-AGENT_CTL=/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
-CONFIG_DEST=/opt/aws/amazon-cloudwatch-agent/etc/durion-alpha.json
+AGENT_DIR=/opt/aws/amazon-cloudwatch-agent
+AGENT_CTL="${AGENT_DIR}/bin/amazon-cloudwatch-agent-ctl"
+CONFIG_DEST="${AGENT_DIR}/etc/durion-alpha.json"
+SERVICE=amazon-cloudwatch-agent
 
-if [[ ! -f "${CONFIG_SRC}" ]]; then
-  echo "Config not found: ${CONFIG_SRC}" >&2
-  exit 1
-fi
+die() { echo "$*" >&2; exit 1; }
 
-if ! rpm -q amazon-cloudwatch-agent >/dev/null 2>&1; then
-  echo "Installing amazon-cloudwatch-agent from the Amazon Linux repos."
-  # AL2023 ships the agent, so no S3 download and no signature dance.
-  dnf install -y amazon-cloudwatch-agent
+[[ "${EUID}" -eq 0 ]] || die "Must run as root: dnf, ${AGENT_DIR} and systemctl all need it."
+[[ -f "${CONFIG_SRC}" ]] || die "Config not found: ${CONFIG_SRC}"
+
+# Validate before touching the live config. fetch-config replaces the running configuration and
+# restarts the agent, so a malformed file caught here is a no-op, while the same file caught there
+# leaves the agent stopped with its previous config already gone.
+python3 -m json.tool "${CONFIG_SRC}" > /dev/null \
+  || die "Config is not valid JSON: ${CONFIG_SRC}"
+
+if ! rpm -q "${SERVICE}" > /dev/null 2>&1; then
+  echo "Installing ${SERVICE} from the Amazon Linux repos."
+  # AL2023 ships the agent, so no S3 download and no signature handling.
+  dnf install -y "${SERVICE}"
 else
-  echo "amazon-cloudwatch-agent already installed: $(rpm -q amazon-cloudwatch-agent)"
+  echo "${SERVICE} already installed: $(rpm -q "${SERVICE}")"
 fi
 
-install -m 0644 "${CONFIG_SRC}" "${CONFIG_DEST}"
+# A package layout change would otherwise surface as a bare "No such file or directory".
+[[ -x "${AGENT_CTL}" ]] || die "Agent control binary missing after install: ${AGENT_CTL}"
 
-# -s starts the agent (and restarts it if already running, picking up the new config).
-"${AGENT_CTL}" -a fetch-config -m ec2 -s -c "file:${CONFIG_DEST}"
+install -D -m 0644 "${CONFIG_SRC}" "${CONFIG_DEST}"
 
-systemctl enable amazon-cloudwatch-agent >/dev/null 2>&1 || true
+# -s starts the agent, and restarts it if already running so a changed config takes effect.
+"${AGENT_CTL}" -a fetch-config -m ec2 -s -c "file:${CONFIG_DEST}" \
+  || die "fetch-config failed. The agent may be stopped or running the previous config; re-run once ${CONFIG_SRC} is valid."
+
+systemctl enable "${SERVICE}" > /dev/null 2>&1 || true
+
+# Assert rather than print. The point of this script is that the box is being watched, so every
+# condition that would leave it unwatched has to fail the run.
+STATUS_JSON="$("${AGENT_CTL}" -a status)"
+echo "${STATUS_JSON}"
+
+grep -q '"status": *"running"' <<< "${STATUS_JSON}" \
+  || die "Agent is not running after fetch-config."
+grep -q '"configstatus": *"configured"' <<< "${STATUS_JSON}" \
+  || die "Agent is running but reports no configuration."
+systemctl is-enabled --quiet "${SERVICE}" \
+  || die "Agent is running but not enabled at boot; it would not survive a reboot."
 
 echo
-echo "Agent status:"
-"${AGENT_CTL}" -a status
-
-echo
-echo "Configured metrics: disk used_percent and free on /, plus mem_used_percent, at 60s."
-echo "They take a few minutes to appear in the CWAgent namespace."
+echo "Agent running, configured, and enabled at boot."
+echo "Publishing disk used_percent and free on /, plus mem_used_percent, at 60s to the CWAgent namespace."
+echo "Metrics take a few minutes to appear. Verify from an operator shell — this script cannot."
