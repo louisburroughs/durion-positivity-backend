@@ -285,20 +285,20 @@ Recommended, in preference order — all three, they compose:
 
 ## 6. Follow-up issues
 
-Sized S (≤ 1 day), M (2–4 days), L (1–2 weeks).
+| Issue | Work | Size | Depends on |
+| --- | --- | --- | --- |
+| [#1867](https://github.com/louisburroughs/durion-positivity-backend/issues/1867) | Consume staffing-assignment events in pos-security-service; maintain `person_id → location_id[]` projection | M | — |
+| [#1868](https://github.com/louisburroughs/durion-positivity-backend/issues/1868) | Issue additive `loc_scope` claim with cardinality cap and `GLOBAL`/`DEFERRED` discriminators; no `CATALOG_VERSION` bump | M | #1867 |
+| [#1869](https://github.com/louisburroughs/durion-positivity-backend/issues/1869) | Gateway passthrough of `loc_scope` as `X-Loc-Scope`; strip inbound copies | S | #1868 |
+| [#1870](https://github.com/louisburroughs/durion-positivity-backend/issues/1870) | Shared `LocationScope.covers(locationId)` helper in `pos-security-common` | S | #1869 |
+| [#1871](https://github.com/louisburroughs/durion-positivity-backend/issues/1871) | Enforce at the demand cases: workorder WIP, inventory adjustment approval, people time-entry approval | M | #1870 |
+| [#1872](https://github.com/louisburroughs/durion-positivity-backend/issues/1872) | Roll enforcement across the remaining location-parameterised endpoints | L | #1871, #1876 |
+| [#1873](https://github.com/louisburroughs/durion-positivity-backend/issues/1873) | Clamp access-token `exp` to earliest contributing assignment expiry | S | ships with #1868 |
+| [#1874](https://github.com/louisburroughs/durion-positivity-backend/issues/1874) | Revoke live tokens on staffing-assignment change; decide Redis-unavailable policy | M | #1867, #1873 |
+| [#1875](https://github.com/louisburroughs/durion-positivity-backend/issues/1875) | Remove `role_assignments.scope_type` and `role_assignment_scope_locations` | M | #1872 |
+| [#1876](https://github.com/louisburroughs/durion-positivity-backend/issues/1876) | Decide location-hierarchy semantics for "covers" | S | — |
 
-| # | Work | Size |
-| --- | --- | --- |
-| 1 | Consume staffing-assignment events in pos-security-service; maintain `person_id → location_id[]` projection | M |
-| 2 | Issue additive `loc_scope` claim with cardinality cap and `GLOBAL`/`DEFERRED` discriminators; no `CATALOG_VERSION` bump | M |
-| 3 | Gateway passthrough of `loc_scope` as `X-Loc-Scope`; strip inbound copies alongside the existing identity headers | S |
-| 4 | Shared scope-check helper in `pos-security-common` (`LocationScope.covers(locationId)`) so 77 endpoints do not each invent one | S |
-| 5 | Enforce at the demand cases: workorder WIP, inventory adjustment approval, people time-entry approval | M |
-| 6 | Roll enforcement across remaining location-parameterised endpoints, module by module | L |
-| 7 | Clamp access-token `exp` to earliest contributing assignment expiry | S |
-| 8 | Revoke live tokens on staffing-assignment change; decide Redis-unavailable fail-open vs fail-closed | M |
-| 9 | Remove `role_assignments.scope_type` and `role_assignment_scope_locations`; update `RoleAssignment.coversLocation`, `userHasPermission`, README | M |
-| 10 | Decide location-hierarchy semantics for "covers" | S |
+All ten are sub-issues of #1375. Sizes: S ≤ 1 day, M 2–4 days, L 1–2 weeks.
 
 ---
 
