@@ -20,8 +20,12 @@ tags:
   name: Pricing Snapshots
 - description: Promotion offer lifecycle operations
   name: Promotion Offers
+- description: Bulk import hourly labor rates
+  name: Labor Rate Bulk Ingest API
 - description: Price normalization and standardization operations
   name: Price Normalization
+- description: Bulk import labor-matrix adjustment steps
+  name: Labor Rate Adjustment Bulk Ingest API
 - description: Price restriction evaluation and override operations
   name: Price Restrictions
 - description: CRUD operations for price restriction rules
@@ -31,6 +35,70 @@ tags:
 - description: Contextual price quote operations
   name: Price Quotes
 paths:
+  /v1/labor-rate-adjustments/bulk-ingest:
+    post:
+      description: 'Imports a batch of labor-matrix adjustment steps in one call, storing each whose scope, code and start instant are not already taken, with a per-row verdict.
+
+        Use this tool to load a whole matrix at once, where the steps'' sequences relative to each other are the point; do not use createLaborRateAdjustment, which stores one step at a time and cannot show that ordering.
+
+        Preconditions: a row whose location, category, adjustmentCode and effectiveFrom are already held is answered with the stored step unchanged, because a step that has priced an invoice is never rewritten.
+
+        Required inputs: jobId (UUID), locationId (UUID) and a non-empty records array; per record, adjustmentCode, adjustmentType, adjustmentValue, sequence and effectiveFrom, with the step''s own locationId, operationCategory, description and effectiveTo optional.
+
+        Emits a PRICE_LABOR_RATE_ADJUSTMENT_BULK_INGEST event; percentage steps compound in sequence order, so a batch that renumbers them changes what the matrix charges.
+
+        Returns 200 even when rows fail, so callers must inspect successCount, failureCount and the per-row results rather than the HTTP status.
+
+        A row pricing refused carries errorCode LABOR_RATE_ADJUSTMENT_INGEST_FAILED and the reason; a row lost to a server-side fault carries INTERNAL_ERROR and a correlationId to quote.
+
+        '
+      operationId: bulkIngestLaborRateAdjustments
+      requestBody:
+        content:
+          application/json:
+            examples:
+              A surcharge and a contract discount:
+                description: A surcharge and a contract discount
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  records:
+                  - adjustmentCode: CORROSION
+                    adjustmentType: PERCENT
+                    adjustmentValue: '15.0000'
+                    effectiveFrom: '2026-01-01T00:00:00Z'
+                    sequence: '10'
+                  - adjustmentCode: FLEET_CONTRACT
+                    adjustmentType: PERCENT
+                    adjustmentValue: '-10.0000'
+                    effectiveFrom: '2026-01-01T00:00:00Z'
+                    sequence: '90'
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestLaborRateAdjustmentBulkIngestRecord'
+        description: Batch of labor-matrix adjustment steps to store for one ingest job.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; per-row verdicts are in the body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Invalid request payload
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - pricing:labor_rate:manage
+      summary: Bulk Import Labor Matrix Adjustments
+      tags:
+      - Labor Rate Adjustment Bulk Ingest API
+      x-required-permissions:
+      - pricing:labor_rate:manage
   /v1/labor-rates:
     get:
       description: 'Lists every stored labor rate, newest effective window first, including windows that have closed.
@@ -256,6 +324,68 @@ paths:
       summary: Create A Labor Matrix Step
       tags:
       - Labor Rates
+      x-required-permissions:
+      - pricing:labor_rate:manage
+  /v1/labor-rates/bulk-ingest:
+    post:
+      description: 'Imports a batch of hourly labor rates in one call, storing each whose scope and start instant are not already taken, with a per-row success or failure verdict.
+
+        Use this tool to load a rate card across several locations and categories; do not use createLaborRate, which stores one rate at a time and reports its errors as HTTP statuses rather than row results.
+
+        Preconditions: a row whose location, category and effectiveFrom are already held is answered with the stored row unchanged, because a rate that has priced an invoice is never rewritten.
+
+        Required inputs: jobId (UUID), locationId (UUID) and a non-empty records array; per record, currency, hourlyRate and effectiveFrom, with the rate''s own locationId, operationCategory and effectiveTo optional.
+
+        Emits a PRICE_LABOR_RATE_BULK_INGEST event; a changed rate is a new row in a new window rather than an edit of the old one.
+
+        Returns 200 even when rows fail, so callers must inspect successCount, failureCount and the per-row results rather than the HTTP status.
+
+        A row pricing refused carries errorCode LABOR_RATE_INGEST_FAILED and the reason; a row lost to a server-side fault carries INTERNAL_ERROR and a correlationId to quote.
+
+        '
+      operationId: bulkIngestLaborRates
+      requestBody:
+        content:
+          application/json:
+            examples:
+              A platform default and a shop rate:
+                description: A platform default and a shop rate
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  records:
+                  - currency: USD
+                    effectiveFrom: '2026-01-01T00:00:00Z'
+                    hourlyRate: '125.0000'
+                  - currency: USD
+                    effectiveFrom: '2026-01-01T00:00:00Z'
+                    hourlyRate: '105.0000'
+                    locationId: 0198f2a1-0000-7000-8000-00000000000a
+                    operationCategory: TIRE_SERVICE
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestLaborRateBulkIngestRecord'
+        description: Batch of labor rates to store for one ingest job.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; per-row verdicts are in the body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Invalid request payload
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - pricing:labor_rate:manage
+      summary: Bulk Import Labor Rates
+      tags:
+      - Labor Rate Bulk Ingest API
       x-required-permissions:
       - pricing:labor_rate:manage
   /v1/labor-rates/quote:
@@ -1697,6 +1827,62 @@ components:
       - locationId
       - records
       type: object
+    BulkIngestRequestLaborRateAdjustmentBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/LaborRateAdjustmentBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
+    BulkIngestRequestLaborRateBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/LaborRateBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
     BulkIngestResponse:
       description: 'Summary outcome of a bulk ingest job: per-record results plus aggregate counts'
       properties:
@@ -2053,6 +2239,65 @@ components:
       - field
       - message
       type: object
+    LaborRateAdjustmentBulkIngestRecord:
+      description: Single labor-matrix adjustment record within a bulk ingest payload
+      properties:
+        adjustmentCode:
+          description: Code a caller opts into to apply the step
+          example: CORROSION
+          minLength: 1
+          type: string
+        adjustmentType:
+          description: Whether the value is a percentage of the running rate or a flat amount
+          enum:
+          - PERCENT
+          - FIXED
+          example: PERCENT
+          minLength: 1
+          type: string
+        adjustmentValue:
+          description: The percentage or amount; negative for a discount
+          example: '15.0000'
+          minLength: 1
+          type: string
+        description:
+          description: What condition the step prices
+          example: Seized or corroded fasteners requiring heat, penetrant or extraction
+          type: string
+        effectiveFrom:
+          description: Instant the step takes effect, ISO-8601; part of the key the row is recognised by
+          example: '2026-01-01T00:00:00Z'
+          minLength: 1
+          type: string
+        effectiveTo:
+          description: Instant the step stops applying, ISO-8601; blank leaves the window open
+          example: '2027-01-01T00:00:00Z'
+          type: string
+        locationId:
+          description: Location the step belongs to; blank is the platform default. A file that names the site by its location code has the loader resolve it before posting
+          example: 0198f2a1-0000-7000-8000-00000000000a
+          type: string
+        operationCategory:
+          description: Category the step applies to; blank applies it to every category
+          enum:
+          - REPAIR
+          - DIAGNOSTIC
+          - MAINTENANCE
+          - TIRE_SERVICE
+          example: TIRE_SERVICE
+          type: string
+        sequence:
+          description: Order the step compounds in; percentage steps do not commute, so this is part of what the matrix means rather than a display preference
+          example: '10'
+          minLength: 1
+          type: string
+      required:
+      - adjustmentCode
+      - adjustmentType
+      - adjustmentValue
+      - effectiveFrom
+      - sequence
+      type: object
     LaborRateAdjustmentRequest:
       description: 'One step of a shop''s labor matrix: a percentage or flat adjustment a quote opts into by naming its code. Steps apply in sequence order because percentages compound.'
       properties:
@@ -2156,6 +2401,47 @@ components:
           example: 10
           format: int32
           type: integer
+      type: object
+    LaborRateBulkIngestRecord:
+      description: Single labor-rate record within a bulk ingest payload
+      properties:
+        currency:
+          description: ISO-4217 currency code
+          example: USD
+          maxLength: 3
+          minLength: 3
+          type: string
+        effectiveFrom:
+          description: Instant the rate takes effect, ISO-8601; part of the key the row is recognised by
+          example: '2026-01-01T00:00:00Z'
+          minLength: 1
+          type: string
+        effectiveTo:
+          description: Instant the rate stops applying, ISO-8601; blank leaves the window open
+          example: '2027-01-01T00:00:00Z'
+          type: string
+        hourlyRate:
+          description: Hourly rate charged for labor in this scope
+          example: '125.0000'
+          minLength: 1
+          type: string
+        locationId:
+          description: Location the rate belongs to; blank is the platform default that answers for every location which has authored none of its own. A file that names the site by its location code has the loader resolve it before the batch is posted
+          example: 0198f2a1-0000-7000-8000-00000000000a
+          type: string
+        operationCategory:
+          description: Category the rate applies to; blank is the scope's every-category rate
+          enum:
+          - REPAIR
+          - DIAGNOSTIC
+          - MAINTENANCE
+          - TIRE_SERVICE
+          example: TIRE_SERVICE
+          type: string
+      required:
+      - currency
+      - effectiveFrom
+      - hourlyRate
       type: object
     LaborRateQuoteRequest:
       description: Whose labor rate, for what class of work, at what moment, and which labor-matrix steps apply. Null scope fields widen to the platform default.

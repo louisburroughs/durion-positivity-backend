@@ -45,6 +45,27 @@ public final class LoaderValues {
         }
     }
 
+    /** Requires a decimal number — for the numeric columns a row cannot do without. */
+    public static void requireDecimal(@Nullable String value, String field, @NonNull List<String> errors) {
+        if (isBlank(value)) {
+            errors.add(field + " is required");
+            return;
+        }
+        requireDecimalOrBlank(value, field, errors);
+    }
+
+    /** Requires a decimal number, or nothing at all — for optional numeric columns. */
+    public static void requireDecimalOrBlank(@Nullable String value, String field, @NonNull List<String> errors) {
+        if (isBlank(value)) {
+            return;
+        }
+        try {
+            new java.math.BigDecimal(value.trim());
+        } catch (NumberFormatException _) {
+            errors.add(field + " must be a decimal number");
+        }
+    }
+
     /** Requires an integer, or nothing at all — for optional numeric columns. */
     public static void requireIntegerOrBlank(@Nullable String value, String field, @NonNull List<String> errors) {
         if (isBlank(value)) {

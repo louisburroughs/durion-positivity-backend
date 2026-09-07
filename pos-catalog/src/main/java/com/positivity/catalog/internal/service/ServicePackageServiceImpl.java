@@ -65,6 +65,69 @@ public class ServicePackageServiceImpl implements ServicePackageService {
 
         ServicePackageEntity entity = new ServicePackageEntity();
         entity.setPackageCode(packageCode);
+        applyFields(entity, request);
+        return toResponse(packageRepository.save(entity), List.of());
+    }
+
+    @Override
+    @NonNull
+    @Transactional
+    public ServicePackageResponseDto upsert(@NonNull ServicePackageRequestDto request) {
+        String packageCode = LaborTimeValidation.validatedOperationCodeShape(request.getPackageCode(), "packageCode");
+        if (packageCode == null) {
+            throw new CatalogValidationException("packageCode is required");
+        }
+        ServicePackageEntity entity = packageRepository
+                .findByPackageCode(packageCode)
+                .orElseGet(() -> {
+                    ServicePackageEntity created = new ServicePackageEntity();
+                    created.setPackageCode(packageCode);
+                    return created;
+                });
+        applyFields(entity, request);
+        ServicePackageEntity saved = packageRepository.save(entity);
+        return toResponse(
+                saved,
+                saved.getId() == null ? List.of() : memberRepository.findByPackageIdOrderBySequenceAsc(saved.getId()));
+    }
+
+    @Override
+    @NonNull
+    @Transactional
+    public ServicePackageResponseDto upsertMember(
+            @NonNull String packageCode,
+            @NonNull String operationCode,
+            @NonNull ServicePackageMemberRequestDto request) {
+        ServicePackageEntity servicePackage = packageRepository
+                .findByPackageCode(LaborTimeValidation.validatedOperationCodeShape(packageCode, "packageCode"))
+                .orElseThrow(() -> new CatalogNotFoundException("No service package with code " + packageCode));
+        ServiceEntity service = serviceRepository
+                .findByOperationCode(LaborTimeValidation.validatedOperationCodeShape(operationCode, "operationCode"))
+                .orElseThrow(() -> new CatalogNotFoundException("No service with operation code " + operationCode));
+
+        UUID packageId = servicePackage.getId();
+        List<ServicePackageMemberEntity> existing = memberRepository.findByPackageIdOrderBySequenceAsc(packageId);
+        ServicePackageMemberEntity member = existing.stream()
+                .filter(row -> service.getId().equals(row.getServiceId()))
+                .findFirst()
+                .orElseGet(() -> {
+                    ServicePackageMemberEntity created = new ServicePackageMemberEntity();
+                    created.setPackageId(packageId);
+                    created.setServiceId(service.getId());
+                    created.setSequence(nextSequence(existing));
+                    return created;
+                });
+        if (request.getSequence() != null) {
+            member.setSequence(request.getSequence());
+        }
+        member.setQuantity(positiveQuantity(request.getQuantity()));
+        member.setRequired(request.getRequired() == null || request.getRequired());
+        memberRepository.save(member);
+        return get(packageId);
+    }
+
+    /** The mutable half of a package, shared by create and upsert so the two cannot drift apart. */
+    private void applyFields(ServicePackageEntity entity, ServicePackageRequestDto request) {
         entity.setName(requiredText(request.getName(), "name"));
         entity.setDescription(trimToNull(request.getDescription()));
         applyOwnership(entity, request);
@@ -74,7 +137,6 @@ public class ServicePackageServiceImpl implements ServicePackageService {
         entity.setActive(request.getActive() == null || request.getActive());
         entity.setEffectiveFrom(request.getEffectiveFrom());
         entity.setEffectiveTo(validatedWindow(request));
-        return toResponse(packageRepository.save(entity), List.of());
     }
 
     @Override

@@ -33,4 +33,17 @@ public interface LaborRateRepository extends JpaRepository<LaborRate, UUID> {
 
     @NonNull
     List<LaborRate> findAllByOrderByEffectiveFromDesc();
+
+    /**
+     * Every rate whose window opens at this exact instant, whatever its scope.
+     *
+     * <p>Read by the ingest path to recognise a row it has already loaded. The scope half of the
+     * key ({@code location_id}, {@code operation_category}) is compared in Java rather than in the
+     * query because both halves are nullable and {@code ux_labor_rate_scope_start} is
+     * NULLS NOT DISTINCT — SQL equality is not, so a JPQL predicate would have to spell out four
+     * null cases to say what {@code Objects.equals} says once. The candidate set is a handful of
+     * rows: a start instant is a deliberate, shared boundary, not a per-row timestamp.
+     */
+    @NonNull
+    List<LaborRate> findByEffectiveFrom(@Param("effectiveFrom") Instant effectiveFrom);
 }

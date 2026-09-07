@@ -196,7 +196,16 @@ class BatchConfigurationWriterTest {
                 rolePermissionLoaderStrategy,
                 securityUserLoaderStrategy,
                 userPersonLinkLoaderStrategy,
-                mechanicSkillLoaderStrategy);
+                mechanicSkillLoaderStrategy,
+                // The Tier 0 strategies are read by the reader and processor beans, never by a
+                // writer bean, so these tests hand them nothing rather than mocking six objects
+                // that would go untouched.
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     // --- catalogBulkIngestWriter ---

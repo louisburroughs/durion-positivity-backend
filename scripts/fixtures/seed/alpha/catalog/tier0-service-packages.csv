@@ -1,0 +1,6 @@
+packageCode,name,description,ownerScope,ownerLocationCode,fleetCustomerName,packageLaborHours,active,effectiveFrom,effectiveTo
+TIRE-INSTALL-PKG-4,Four Tire Installation Package,"Mount and balance four tires, reset TPMS sensors and torque to specification. Priced as one job because the wheels come off once.",PLATFORM,,,1.6,true,,
+TIRE-INSTALL-PKG-4-PREMIUM,Four Tire Installation Package - Road Force,The four-tire installation with road force variation balancing and nitrogen inflation in place of the standard balance.,PLATFORM,,,2.1,true,,
+SEASONAL-CHANGEOVER,Seasonal Tire Changeover,"Swap to the customer's stored seasonal set: rotate on, balance, reset TPMS, record tread depths on the set coming off.",PLATFORM,,,1.4,true,,
+FLEET-PM-A-PKG,Fleet PM - A Service Package,"The A-interval preventive maintenance sold as one job, with the tread-depth audit the fleet log expects.",PLATFORM,,,1.7,true,,
+FLEET-REQ-TARHEEL,Tarheel Logistics - Standing Requirements,"Contracted requirements for every Tarheel Logistics unit that enters a bay, regardless of the reason for the visit.",PLATFORM,,Tarheel Logistics Group LLC,2.3,true,,

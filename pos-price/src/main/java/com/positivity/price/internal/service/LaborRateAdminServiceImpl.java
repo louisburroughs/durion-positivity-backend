@@ -16,6 +16,8 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -57,6 +59,19 @@ public class LaborRateAdminServiceImpl implements LaborRateAdminService {
 
     @Override
     @NonNull
+    @Transactional
+    public LaborRateResponse upsertRate(@NonNull LaborRateRequest request) {
+        ServiceOperationCategory category = parsedCategory(request.getOperationCategory());
+        Instant effectiveFrom = required(request.getEffectiveFrom(), "effectiveFrom");
+        Optional<LaborRate> existing = rateRepository.findByEffectiveFrom(effectiveFrom).stream()
+                .filter(row -> Objects.equals(row.getLocationId(), request.getLocationId())
+                        && row.getOperationCategory() == category)
+                .findFirst();
+        return existing.map(LaborRateAdminServiceImpl::toResponse).orElseGet(() -> createRate(request));
+    }
+
+    @Override
+    @NonNull
     @Transactional(readOnly = true)
     public List<LaborRateResponse> listRates() {
         return rateRepository.findAllByOrderByEffectiveFromDesc().stream()
@@ -79,6 +94,21 @@ public class LaborRateAdminServiceImpl implements LaborRateAdminService {
         step.setEffectiveFrom(required(request.getEffectiveFrom(), "effectiveFrom"));
         step.setEffectiveTo(validatedWindow(request.getEffectiveFrom(), request.getEffectiveTo()));
         return toResponse(adjustmentRepository.save(step));
+    }
+
+    @Override
+    @NonNull
+    @Transactional
+    public LaborRateAdjustmentResponse upsertAdjustment(@NonNull LaborRateAdjustmentRequest request) {
+        ServiceOperationCategory category = parsedCategory(request.getOperationCategory());
+        String adjustmentCode = requiredCode(request.getAdjustmentCode());
+        Instant effectiveFrom = required(request.getEffectiveFrom(), "effectiveFrom");
+        Optional<LaborRateAdjustment> existing =
+                adjustmentRepository.findByAdjustmentCodeAndEffectiveFrom(adjustmentCode, effectiveFrom).stream()
+                        .filter(row -> Objects.equals(row.getLocationId(), request.getLocationId())
+                                && row.getOperationCategory() == category)
+                        .findFirst();
+        return existing.map(LaborRateAdminServiceImpl::toResponse).orElseGet(() -> createAdjustment(request));
     }
 
     @Override

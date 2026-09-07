@@ -35,4 +35,14 @@ public interface LaborRateAdjustmentRepository extends JpaRepository<LaborRateAd
 
     @NonNull
     List<LaborRateAdjustment> findAllByOrderBySequenceAscAdjustmentCodeAsc();
+
+    /**
+     * Every step with this code whose window opens at this exact instant, whatever its scope.
+     * Read by the ingest path to recognise a row it has already loaded; the nullable scope half of
+     * {@code ux_lra_scope_code_start} is compared in Java, for the reason given on
+     * {@code LaborRateRepository.findByEffectiveFrom}.
+     */
+    @NonNull
+    List<LaborRateAdjustment> findByAdjustmentCodeAndEffectiveFrom(
+            @Param("adjustmentCode") String adjustmentCode, @Param("effectiveFrom") Instant effectiveFrom);
 }

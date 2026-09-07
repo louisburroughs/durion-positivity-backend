@@ -238,6 +238,19 @@ public final class CatalogPermissions {
      */
     public static final String LABOR_STANDARD_IMPORT = "catalog:labor_standard:import";
 
+    // ── Service operations ──────────────────────────────────────────────────────────────
+
+    /**
+     * Bulk import service operations through the seed pipeline
+     * (docs/DATA_SEED_STRATEGY.md §3 Tier 2).
+     *
+     * <p>A code of its own rather than the retired {@code hasRole('CATALOG_EDIT')} the single-item
+     * endpoints still carry: this is the authority to create and update operations a batch at a
+     * time, held by the loader's service account, and it should be grantable without also handing
+     * out whatever else that dead role is one day revived to mean.
+     */
+    public static final String SERVICE_INGEST = "catalog:service:ingest";
+
     // ── Service packages (#1575 Tier 0) ─────────────────────────────────────────────────
 
     /** Define service packages and fleet requirement sets, and compose their members. */

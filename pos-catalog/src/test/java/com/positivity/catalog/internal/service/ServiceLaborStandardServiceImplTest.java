@@ -7,8 +7,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.catalog.internal.dto.ServiceLaborStandardImportRequestDto;
 import com.positivity.catalog.internal.dto.ServiceLaborStandardRequestDto;
 import com.positivity.catalog.internal.dto.ServiceLaborStandardResponseDto;
+import com.positivity.catalog.internal.entity.ServiceEntity;
 import com.positivity.catalog.internal.entity.ServiceLaborStandardEntity;
 import com.positivity.catalog.internal.enums.LaborStandardOwnerScope;
 import com.positivity.catalog.internal.enums.LaborTimeType;
@@ -451,6 +453,130 @@ class ServiceLaborStandardServiceImplTest {
             assertThatThrownBy(() -> service.supersede(SERVICE_ID, STANDARD_ID, request()))
                     .isInstanceOf(CatalogBusinessRuleException.class)
                     .hasMessageContaining("MOCKGUIDE");
+        }
+    }
+
+    @Nested
+    @DisplayName("importStandard")
+    class ImportStandard {
+
+        private static final String OPERATION_CODE = "FLEET-PM-A-SERVICE";
+
+        @BeforeEach
+        void serviceResolvesByCode() {
+            ServiceEntity service = new ServiceEntity();
+            service.setId(SERVICE_ID);
+            service.setOperationCode(OPERATION_CODE);
+            when(serviceRepository.findByOperationCode(OPERATION_CODE)).thenReturn(Optional.of(service));
+        }
+
+        /** Keyed to the same vehicle as {@code activeDurionRow()}, so a collision is reachable. */
+        private ServiceLaborStandardImportRequestDto importRequest(String revision, String hours) {
+            ServiceLaborStandardImportRequestDto request = new ServiceLaborStandardImportRequestDto();
+            request.setOperationCode(OPERATION_CODE);
+            request.setMake("Honda");
+            request.setModel("Civic");
+            request.setVehicleYear("2019-2023");
+            request.setSourceCode("DURION");
+            request.setSourceRevision(revision);
+            request.setLaborHours(hours);
+            request.setTimeType("DURION_STANDARD");
+            request.setPublishedAt("2026-09-01");
+            return request;
+        }
+
+        @Test
+        @DisplayName("keeps the source and revision the caller stated, unlike hand authoring")
+        void carriesTheSubmittedProvenance() {
+            ServiceLaborStandardResponseDto created =
+                    service.importStandard(OPERATION_CODE, importRequest("tier0-fake-2026-09", "1.4"));
+
+            assertThat(created.getSourceCode()).isEqualTo("DURION");
+            assertThat(created.getSourceRevision()).isEqualTo("tier0-fake-2026-09");
+            assertThat(created.getLaborHours()).isEqualByComparingTo("1.4");
+            assertThat(created.getOwnerScope()).isEqualTo("PLATFORM");
+        }
+
+        @Test
+        @DisplayName("re-running the same revision is a no-op, so a pack can be loaded twice")
+        void sameRevisionIsSkipped() {
+            ServiceLaborStandardEntity active = activeDurionRow();
+            active.setSourceRevision("tier0-fake-2026-09");
+            active.setLaborHours(new BigDecimal("1.4"));
+            when(laborStandardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(SERVICE_ID))
+                    .thenReturn(List.of(active));
+
+            ServiceLaborStandardResponseDto applied =
+                    service.importStandard(OPERATION_CODE, importRequest("tier0-fake-2026-09", "1.4"));
+
+            assertThat(applied.getId()).isEqualTo(STANDARD_ID);
+            assertThat(active.getSupersededAt()).isNull();
+            verify(laborStandardRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a new revision supersedes the active row and inserts the replacement")
+        void newRevisionSupersedes() {
+            ServiceLaborStandardEntity active = activeDurionRow();
+            active.setSourceRevision("tier0-fake-2026-09");
+            active.setLaborHours(new BigDecimal("1.4"));
+            when(laborStandardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(SERVICE_ID))
+                    .thenReturn(List.of(active));
+
+            ServiceLaborStandardResponseDto applied =
+                    service.importStandard(OPERATION_CODE, importRequest("tier0-real-2026-10", "1.6"));
+
+            assertThat(active.getSupersededAt()).isEqualTo(Instant.parse("2026-09-01T12:00:00Z"));
+            assertThat(applied.getSourceRevision()).isEqualTo("tier0-real-2026-10");
+            assertThat(applied.getLaborHours()).isEqualByComparingTo("1.6");
+            ArgumentCaptor<ServiceLaborStandardEntity> saved =
+                    ArgumentCaptor.forClass(ServiceLaborStandardEntity.class);
+            verify(laborStandardRepository).save(saved.capture());
+            assertThat(saved.getValue().getSupersededAt()).isNull();
+        }
+
+        @Test
+        @DisplayName("an operation code the catalog does not know is a 404, not a silent insert")
+        void unknownOperationCodeRejected() {
+            when(serviceRepository.findByOperationCode("NO-SUCH-OP")).thenReturn(Optional.empty());
+            ServiceLaborStandardImportRequestDto request = importRequest("tier0-fake-2026-09", "1.4");
+            request.setOperationCode("NO-SUCH-OP");
+
+            assertThatThrownBy(() -> service.importStandard("NO-SUCH-OP", request))
+                    .isInstanceOf(CatalogNotFoundException.class)
+                    .hasMessageContaining("NO-SUCH-OP");
+        }
+
+        @Test
+        @DisplayName("a SHOP row with no location is refused, as it resolves for nobody")
+        void shopRowNeedsALocation() {
+            ServiceLaborStandardImportRequestDto request = importRequest("tier0-fake-2026-09", "1.4");
+            request.setOwnerScope("SHOP");
+
+            assertThatThrownBy(() -> service.importStandard(OPERATION_CODE, request))
+                    .isInstanceOf(CatalogValidationException.class)
+                    .hasMessageContaining("ownerLocationId is required");
+        }
+
+        @Test
+        @DisplayName("text that will not parse names its own field, so the row fails and the batch goes on")
+        void unparseableHoursNameTheField() {
+            ServiceLaborStandardImportRequestDto request = importRequest("tier0-fake-2026-09", "one and a half");
+
+            assertThatThrownBy(() -> service.importStandard(OPERATION_CODE, request))
+                    .isInstanceOf(CatalogValidationException.class)
+                    .hasMessageContaining("laborHours");
+        }
+
+        @Test
+        @DisplayName("includedOpCodes arrives as one comma-separated column and lands as a list")
+        void includedOpCodesAreSplit() {
+            ServiceLaborStandardImportRequestDto request = importRequest("tier0-fake-2026-09", "1.3");
+            request.setIncludedOpCodes("WHEEL-BALANCE-SET-4, TPMS-SENSOR-SERVICE");
+
+            ServiceLaborStandardResponseDto created = service.importStandard(OPERATION_CODE, request);
+
+            assertThat(created.getIncludedOpCodes()).containsExactly("WHEEL-BALANCE-SET-4", "TPMS-SENSOR-SERVICE");
         }
     }
 }

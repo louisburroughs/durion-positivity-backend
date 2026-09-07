@@ -349,4 +349,133 @@ class ServicePackageServiceImplTest {
             verify(memberRepository, never()).findByPackageIdOrderBySequenceAsc(any());
         }
     }
+
+    @Nested
+    @DisplayName("bulk ingest upserts (docs/DATA_SEED_STRATEGY.md §3 Tier 2)")
+    class BulkIngestUpserts {
+
+        @Test
+        @DisplayName("upsert creates a package the code does not name yet")
+        void upsertCreates() {
+            ServicePackageResponseDto response = service.upsert(request());
+
+            assertThat(response.getPackageCode()).isEqualTo("TIRE-INSTALL-PKG-4");
+            assertThat(response.getPackageLaborHours()).isEqualByComparingTo("1.6");
+        }
+
+        @Test
+        @DisplayName("upsert updates the package the code already names, instead of refusing it")
+        void upsertUpdatesInPlace() {
+            ServicePackageEntity existing = existingPackage();
+            when(packageRepository.findByPackageCode("TIRE-INSTALL-PKG-4")).thenReturn(Optional.of(existing));
+            ServicePackageRequestDto request = request();
+            request.setPackageLaborHours(new BigDecimal("1.9"));
+            request.setName("Four Tire Installation Package - Revised");
+
+            ServicePackageResponseDto response = service.upsert(request);
+
+            assertThat(response.getId()).isEqualTo(PACKAGE_ID);
+            assertThat(response.getName()).isEqualTo("Four Tire Installation Package - Revised");
+            assertThat(response.getPackageLaborHours()).isEqualByComparingTo("1.9");
+        }
+
+        @Test
+        @DisplayName("upsert leaves membership alone, so re-loading the package pack cannot empty a package")
+        void upsertDoesNotTouchMembers() {
+            when(packageRepository.findByPackageCode("TIRE-INSTALL-PKG-4")).thenReturn(Optional.of(existingPackage()));
+            ServicePackageMemberEntity member = new ServicePackageMemberEntity();
+            member.setId(UUID.fromString("0198f2a1-1111-7000-8000-00000000000e"));
+            member.setPackageId(PACKAGE_ID);
+            member.setServiceId(SERVICE_ID);
+            member.setSequence(10);
+            member.setQuantity(BigDecimal.ONE);
+            member.setRequired(true);
+            when(memberRepository.findByPackageIdOrderBySequenceAsc(PACKAGE_ID)).thenReturn(List.of(member));
+
+            ServicePackageResponseDto response = service.upsert(request());
+
+            assertThat(response.getMembers()).hasSize(1);
+            verify(memberRepository, never()).delete(any());
+        }
+
+        @Test
+        @DisplayName("upsertMember adds a membership named by codes on both sides")
+        void upsertMemberAdds() {
+            when(packageRepository.findByPackageCode("TIRE-INSTALL-PKG-4")).thenReturn(Optional.of(existingPackage()));
+            when(serviceRepository.findByOperationCode("WHEEL-BALANCE-SET-4")).thenReturn(Optional.of(memberService()));
+
+            service.upsertMember("TIRE-INSTALL-PKG-4", "WHEEL-BALANCE-SET-4", memberRequest(20, "1.00", true));
+
+            ArgumentCaptor<ServicePackageMemberEntity> saved =
+                    ArgumentCaptor.forClass(ServicePackageMemberEntity.class);
+            verify(memberRepository).save(saved.capture());
+            assertThat(saved.getValue().getPackageId()).isEqualTo(PACKAGE_ID);
+            assertThat(saved.getValue().getServiceId()).isEqualTo(SERVICE_ID);
+            assertThat(saved.getValue().getSequence()).isEqualTo(20);
+            assertThat(saved.getValue().isRequired()).isTrue();
+        }
+
+        @Test
+        @DisplayName("upsertMember restates an existing membership rather than refusing it as a duplicate")
+        void upsertMemberUpdatesExisting() {
+            when(packageRepository.findByPackageCode("TIRE-INSTALL-PKG-4")).thenReturn(Optional.of(existingPackage()));
+            when(serviceRepository.findByOperationCode("WHEEL-BALANCE-SET-4")).thenReturn(Optional.of(memberService()));
+            ServicePackageMemberEntity existing = new ServicePackageMemberEntity();
+            existing.setId(UUID.fromString("0198f2a1-1111-7000-8000-00000000000e"));
+            existing.setPackageId(PACKAGE_ID);
+            existing.setServiceId(SERVICE_ID);
+            existing.setSequence(10);
+            existing.setQuantity(BigDecimal.ONE);
+            existing.setRequired(true);
+            when(memberRepository.findByPackageIdOrderBySequenceAsc(PACKAGE_ID)).thenReturn(List.of(existing));
+
+            service.upsertMember("TIRE-INSTALL-PKG-4", "WHEEL-BALANCE-SET-4", memberRequest(50, "2.00", false));
+
+            ArgumentCaptor<ServicePackageMemberEntity> saved =
+                    ArgumentCaptor.forClass(ServicePackageMemberEntity.class);
+            verify(memberRepository).save(saved.capture());
+            assertThat(saved.getValue().getId()).isEqualTo(existing.getId());
+            assertThat(saved.getValue().getSequence()).isEqualTo(50);
+            assertThat(saved.getValue().getQuantity()).isEqualByComparingTo("2.00");
+            assertThat(saved.getValue().isRequired()).isFalse();
+        }
+
+        @Test
+        @DisplayName("an operation code the catalog does not know fails its own row")
+        void unknownOperationCodeRejected() {
+            when(packageRepository.findByPackageCode("TIRE-INSTALL-PKG-4")).thenReturn(Optional.of(existingPackage()));
+            when(serviceRepository.findByOperationCode("NO-SUCH-OP")).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() ->
+                            service.upsertMember("TIRE-INSTALL-PKG-4", "NO-SUCH-OP", memberRequest(10, "1.00", true)))
+                    .isInstanceOf(CatalogNotFoundException.class)
+                    .hasMessageContaining("NO-SUCH-OP");
+        }
+
+        @Test
+        @DisplayName("a package code no package holds fails its own row")
+        void unknownPackageCodeRejected() {
+            when(packageRepository.findByPackageCode("NO-SUCH-PKG")).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() ->
+                            service.upsertMember("NO-SUCH-PKG", "WHEEL-BALANCE-SET-4", memberRequest(10, "1.00", true)))
+                    .isInstanceOf(CatalogNotFoundException.class)
+                    .hasMessageContaining("NO-SUCH-PKG");
+        }
+
+        private ServiceEntity memberService() {
+            ServiceEntity entity = new ServiceEntity();
+            entity.setId(SERVICE_ID);
+            entity.setOperationCode("WHEEL-BALANCE-SET-4");
+            return entity;
+        }
+
+        private ServicePackageMemberRequestDto memberRequest(int sequence, String quantity, boolean required) {
+            ServicePackageMemberRequestDto request = new ServicePackageMemberRequestDto();
+            request.setSequence(sequence);
+            request.setQuantity(new BigDecimal(quantity));
+            request.setRequired(required);
+            return request;
+        }
+    }
 }

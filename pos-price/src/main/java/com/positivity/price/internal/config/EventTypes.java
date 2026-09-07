@@ -27,6 +27,14 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.write("PRICE_BULK_INGEST", "Bulk import base price records")
                         .build(),
+                // Bulk-ingest paths for the labor rates that used to be Flyway seed
+                // (docs/DATA_SEED_STRATEGY.md §3 Tier 2). Approval-grade, like the other pack
+                // loads: one call writes a whole rate card.
+                EventTypeRegistration.approval("PRICE_LABOR_RATE_BULK_INGEST", "Bulk import hourly labor rates")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "PRICE_LABOR_RATE_ADJUSTMENT_BULK_INGEST", "Bulk import labor-matrix adjustment steps")
+                        .build(),
 
                 // PriceRestrictionsController - 2 events
                 EventTypeRegistration.search(

@@ -154,10 +154,15 @@ value that is only ever a suggestion until a human accepts it.
 
 ### D6 — Fake data is labelled as fake
 
-Every Tier 0 seeded row carries `source_revision = 'tier0-fake-2026-09'` (labor standards) or
-the equivalent marker column, and lives in a repeatable `R__` seed. One `DELETE ... WHERE
-source_revision = 'tier0-fake-2026-09'` removes the whole fake set. Seeds are additive and
-idempotent (`ON CONFLICT DO NOTHING`), matching `R__seed_reference_catalog_6_labor_guide.sql`.
+Every Tier 0 row carries `source_revision = 'tier0-fake-2026-09'` (labor standards) or the
+equivalent marker column. One `DELETE ... WHERE source_revision = 'tier0-fake-2026-09'` removes
+the whole fake set.
+
+> **Changed in the build (§9):** the data ships as fixture packs loaded through bulk-ingest
+> endpoints, not as `R__` seeds — a Flyway `INSERT INTO service` bypasses the fact publisher and
+> would have starved this build's own `ext_catalog_service` replica. The marker column and the
+> one-statement removal are unchanged; idempotency is upsert-by-natural-key rather than
+> `ON CONFLICT DO NOTHING`.
 
 ### D7 — The labor rate belongs to pos-price
 
@@ -279,8 +284,10 @@ the rate is what it is.
 **Events:** `PRICE_LABOR_RATE_CREATE` / `_ADJUSTMENT_CREATE` (`write`), `_QUOTE` (`fastRead`),
 `_LIST` (`fastRead`) in pos-price `EventTypes`.
 
-**Fake data:** `R__seed_reference_price_labor_rates.sql` — a platform default rate, two
-location rates, and a matrix (corrosion +15%, after-hours +25%, fleet contract −10%).
+**Fake data:** a platform default rate, two location rates, and a matrix (corrosion +15%,
+after-hours +25%, fleet contract −10%). Shipped as `scripts/fixtures/seed/alpha/price/`
+`labor-rates.csv` and `labor-rate-adjustments.csv` rather than the `R__seed_reference_price_labor_rates.sql`
+this section originally named — see §9.
 
 ---
 
@@ -508,10 +515,55 @@ a shop may own a package. The *operation taxonomy* stays global in both cases.
 | 510–512 | `pricing:labor_rate:manage` / `:view` / `:quote` | 77 |
 | 513–514 | `catalog:service_package:manage` / `:view` | 78 |
 | 515 | `workorder:labor_intelligence:view` | 79 |
+| 516 | `catalog:service:ingest` | 80 |
 
 `workorder:labor_intelligence:view` is deliberately its own permission rather than the shared
 `workorder:analytics:view`: it exposes individual technician productivity, and folding that into
 a general analytics grant would hand it to everyone holding the first.
+
+### The fake data is a fixture pack, not a Flyway seed
+
+The spec put the invented Tier 0 data in three `R__seed_*.sql` files. That was wrong under
+`docs/DATA_SEED_STRATEGY.md` §2, and wrong in a way that broke this build's own feature: an
+`INSERT INTO service` bypasses `CatalogFactPublisher`, so `catalog.service.updated` never fires
+and pos-workorder's `ext_catalog_service` replica — added in this same change — stays cold against
+exactly the fourteen operations the seed added. The degraded-mode estimate prefill would have been
+blind to Tier 0 and to nothing else.
+
+So the three files were replaced by six fixture packs and six new bulk-ingest endpoints, per §3
+Tier 2:
+
+| Pack | Endpoint | Loader domain |
+|---|---|---|
+| `catalog/tier0-services.csv` | `POST /v1/catalog/services/bulk-ingest` | `CATALOG_SERVICE` |
+| `catalog/tier0-labor-standards.csv` | `POST /v1/catalog/labor-standards/bulk-ingest` | `SERVICE_LABOR_STANDARD` |
+| `catalog/tier0-service-packages.csv` | `POST /v1/service-packages/bulk-ingest` | `SERVICE_PACKAGE` |
+| `catalog/tier0-service-package-members.csv` | `POST /v1/service-package-members/bulk-ingest` | `SERVICE_PACKAGE_MEMBER` |
+| `price/labor-rates.csv` | `POST /v1/labor-rates/bulk-ingest` | `LABOR_RATE` |
+| `price/labor-rate-adjustments.csv` | `POST /v1/labor-rate-adjustments/bulk-ingest` | `LABOR_RATE_ADJUSTMENT` |
+
+Three things changed in the data as a result, all improvements the SQL could not have made:
+
+- **The shop ids are real sites.** The seed's `0198f2a1-…000a` / `…000b` were placeholders that
+  matched no location, so the shop-scoped rates could never have answered for anything. The rate
+  files name `CLT-MAIN-001` and `CLT-SOUTH-001` and the loader resolves them at load time.
+- **The fleet is a real account.** `FLEET-REQ-MERIDIAN` pointed at a party id that existed in no
+  service; it is now `FLEET-REQ-TARHEEL`, resolved by name against **Tarheel Logistics Group LLC**,
+  a commercial account the customer pack actually creates. A named fleet that resolves to nothing
+  fails its row rather than loading as an ordinary offering.
+- **Re-running converges.** Each endpoint upserts on its natural key (§5.3): operation code,
+  package code, `(package, operation)`, and for a labor standard the vehicle key plus source and
+  revision — same revision is a no-op, a new revision supersedes. The rate endpoints are
+  idempotent without editing, because a rate that has priced an invoice is never rewritten.
+
+D6's removal handle survives the move: every standard still carries
+`source_revision = 'tier0-fake-2026-09'`, and `AlphaFixtureTier0PacksTest` fails the build if a row
+drifts off it.
+
+Only the source-precedence rows stayed in Flyway, as
+`R__seed_reference_catalog_7_labor_time_source_policy.sql`. They pass all three §2 tests: the
+ranking is a platform decision identical in every environment, `labor_time_source_policy` is read
+only by pos-catalog's own resolution and published on no topic, and no API authors policy rows.
 
 ### Still open after this build
 
@@ -521,3 +573,6 @@ a general analytics grant would hand it to everyone holding the first.
 - Tier 2 licensing, and everything in §6.
 - SDK regeneration: run `API Artifacts Sync` for the three changed specs (`pos-catalog`,
   `pos-price`, `pos-workorder`) so both SDKs and the frontend tarballs pick up the new surface.
+- The alpha reseed itself (§5.4 of the seed strategy): the packs are written and tested against
+  their own files, but nothing has run them against a live alpha yet, so the replica-count check
+  that proves the facts really fired is still owed.

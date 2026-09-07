@@ -32,6 +32,21 @@ public interface CatalogService {
 
     CatalogItemResponseDto addCatalogItem(String type, CatalogItemRequestDto request);
 
+    /**
+     * Creates or updates a service addressed by its Durion operation code, returning the row as it
+     * now stands.
+     *
+     * <p>The bulk-ingest path needs a natural key rather than an id: a fixture file names an
+     * operation by the code it is known by, and the ids are minted by whichever environment loads
+     * it (docs/DATA_SEED_STRATEGY.md §5.3). Re-running a pack therefore converges on the same
+     * rows instead of failing on the operation-code uniqueness rule.
+     *
+     * <p>Goes through the same publish as {@link #addCatalogItem}, so an ingested service
+     * announces itself on the fact topic exactly as a hand-created one does — which is the whole
+     * reason this data stopped being a Flyway seed.
+     */
+    CatalogItemResponseDto upsertServiceByOperationCode(CatalogItemRequestDto request);
+
     Optional<CatalogItemResponseDto> updateCatalogItem(String type, UUID catalogId, CatalogItemRequestDto request);
 
     boolean deleteCatalogItem(String type, UUID catalogId);

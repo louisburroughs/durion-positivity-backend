@@ -261,11 +261,60 @@ product landed uncategorized.
   (there is no manufacturer table; the seed's ids were synthetic and are dropped).
 - `upc` and `description` are blank (the seed never had UPCs; description defaults
   to the name server-side); `price` is blank (pricing is a separate seed).
-- Categories/subcategories (`R__seed_reference_catalog.sql`), services (file 3 — no
-  ingest path; `facts/replay` exists), pricing (file 4: `item_cost`,
-  `product_msrp`), and `product_uom` (file 5) are **not converted** and their seed
-  files stay. The products file itself stays until the alpha reseed is verified
-  (§5.4).
+- Categories/subcategories (`R__seed_reference_catalog.sql`), the 50 general services
+  (file 3 — still no ingest path for those rows; `facts/replay` exists), pricing
+  (file 4: `item_cost`, `product_msrp`), and `product_uom` (file 5) are **not
+  converted** and their seed files stay. The products file itself stays until the
+  alpha reseed is verified (§5.4).
+
+### `catalog/` Tier 0 — from `pos-catalog R__seed_reference_catalog_7/8` (#1575 Tier 0)
+
+| File | Rows | Target |
+|---|---|---|
+| `tier0-services.csv` | 14 Durion-owned operations (tire service, Michelin procedures, fleet requirements) | `POST /v1/catalog/services/bulk-ingest` (`CATALOG_SERVICE`) |
+| `tier0-labor-standards.csv` | 21 vehicle-keyed labor standards | `POST /v1/catalog/labor-standards/bulk-ingest` (`SERVICE_LABOR_STANDARD`) |
+| `tier0-service-packages.csv` | 4 packages and 1 fleet requirement set | `POST /v1/service-packages/bulk-ingest` (`SERVICE_PACKAGE`) |
+| `tier0-service-package-members.csv` | 21 memberships | `POST /v1/service-package-members/bulk-ingest` (`SERVICE_PACKAGE_MEMBER`) |
+
+**Every number in these four files is invented.** Nothing here is, or is derived from,
+MOTOR / Mitchell 1 / ALLDATA / OEM warranty data; the shapes are real and the hours are
+placeholders that make the pipeline demonstrable before any licensing spend. Every labor
+standard carries `sourceRevision = tier0-fake-2026-09`, so the whole fake set is
+identifiable and removable in one statement:
+
+```sql
+DELETE FROM service_labor_standard WHERE source_revision = 'tier0-fake-2026-09';
+```
+
+**Why these are packs and not a Flyway seed.** An `INSERT INTO service` bypasses
+`CatalogFactPublisher`, so `catalog.service.updated` never fires and every
+`ext_catalog_service` replica — pos-workorder's estimate prefill among them — stays cold
+against exactly the operations the seed added. The ingest endpoint publishes the fact per
+row, which is the point of Tier 2 (§2 rule (b)).
+
+**Run order within the packs.** Operations first: the standards, the packages and the
+members all name operations by `operationCode`, and a code the catalog has not heard of
+fails its own row. Packages before members, for the same reason.
+
+**Keyed by code, resolved at load time.**
+
+- `operationCode` and `packageCode` are the natural keys, identical in every environment,
+  so re-running a pack converges instead of failing on uniqueness.
+- A labor standard already active on the same vehicle key under the same `sourceCode` and
+  `sourceRevision` is applied as a no-op; a changed one supersedes the active row and
+  inserts the replacement, leaving the old row readable for audit.
+- `ownerLocationCode` (blank in every row today — all of Tier 0 is platform-scoped)
+  resolves to the site id, so a shop-scoped row would not need a hard-coded UUID.
+- `fleetCustomerName` on `FLEET-REQ-TARHEEL` resolves against the live party directory,
+  which is why the requirement set names **Tarheel Logistics Group LLC** — a commercial
+  account this repo's `customer/commercial-customers.csv` actually creates. The seed's
+  placeholder fleet party id pointed at nothing, so the requirement set could never have
+  matched a real fleet's query. A named fleet that resolves to nothing fails its row
+  rather than loading as an ordinary offering.
+
+**Deltas:** the packages' `effectiveFrom`/`effectiveTo` are blank (the seed had none), and
+`submodel`/`engineCode` are blank on every standard for the reason the spec gives — no
+upstream source states them yet.
 
 ### `price/` — from `pos-catalog R__seed_reference_catalog_4_pricing.sql`
 
@@ -291,6 +340,29 @@ fails the build rather than a reseed.
 
 **Not converted:** `item_cost` from the same seed file. Cost is not a base price — it belongs
 to the costing/valuation path, which has no ingest endpoint — so the seed file stays for it.
+
+#### `price/` Tier 0 — from `pos-price R__seed_reference_price_labor_rates.sql` (#1575 Tier 0)
+
+| File | Rows | Target |
+|---|---|---|
+| `labor-rates.csv` | 5 hourly rates across all four scopes | `POST /v1/labor-rates/bulk-ingest` (`LABOR_RATE`) |
+| `labor-rate-adjustments.csv` | 6 matrix steps | `POST /v1/labor-rate-adjustments/bulk-ingest` (`LABOR_RATE_ADJUSTMENT`) |
+
+**Every rate and percentage here is invented**, not any shop's real pricing. What the set
+demonstrates: the widening ladder — a platform default, a platform `TIRE_SERVICE` rate, one
+location's own default and that location's own tire rate, so all four scopes are reachable;
+and a matrix whose order matters — `CORROSION` (+15%) then `AFTER_HOURS` (+25%) then
+`FLEET_CONTRACT` (−10%) compound in sequence, so reordering them changes the answer.
+
+**Keyed by location code, not location id.** `CLT-MAIN-001` and `CLT-SOUTH-001` replace the
+seed's placeholder shop UUIDs, so the shop-scoped rates attach to sites the location pack
+actually creates. A blank `locationCode` is the platform default rather than a failed lookup;
+only a code that was given and matched nothing fails its row.
+
+**Idempotent, not editing.** A row whose location, category and `effectiveFrom` are already
+held is answered with the stored row unchanged — a rate that has priced an invoice is never
+rewritten, so a changed rate is a new row in a new window (`docs/DATA_SEED_STRATEGY.md` §5.3
+without contradicting the append-only rule the rate table is built on).
 
 ### `vehicle-fitment/` — deliberately absent
 

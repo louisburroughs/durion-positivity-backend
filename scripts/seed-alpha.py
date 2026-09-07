@@ -34,7 +34,9 @@ crm:party:create, for the putaway-rules pack catalog:product:view plus
 inventory:putaway_rule:view/inventory:putaway_rule:manage, and for the on-hand
 pack inventory:adjustment:create and inventory:adjustment:approve, and for the
 cycle-count-plans pack
-inventory:cycle_count:view and inventory:cycle_count:initiate).
+inventory:cycle_count:view and inventory:cycle_count:initiate, for the Tier 0 catalog packs
+catalog:service:ingest, catalog:labor_standard:import and catalog:service_package:manage, and
+for the labor-rate packs pricing:labor_rate:manage).
 """
 
 import argparse
@@ -75,7 +77,16 @@ PACK_FILES = [
     ("customer/commercial-customers.csv", "COMMERCIAL_CUSTOMER"),
     ("vehicle/vehicles.csv", "VEHICLE"),
     ("catalog/products.csv", "CATALOG_PRODUCT"),
+    # Tier 0 service data (#1575). Operations first: the labor standards, the packages and the
+    # package members all name operations by their operation code, and a code the catalog has not
+    # heard of fails its row. Packages before members for the same reason.
+    ("catalog/tier0-services.csv", "CATALOG_SERVICE"),
+    ("catalog/tier0-labor-standards.csv", "SERVICE_LABOR_STANDARD"),
+    ("catalog/tier0-service-packages.csv", "SERVICE_PACKAGE"),
+    ("catalog/tier0-service-package-members.csv", "SERVICE_PACKAGE_MEMBER"),
     ("price/base-prices.csv", "BASE_PRICE"),
+    ("price/labor-rates.csv", "LABOR_RATE"),
+    ("price/labor-rate-adjustments.csv", "LABOR_RATE_ADJUSTMENT"),
     ("inventory/putaway-rules.csv", "PUTAWAY_RULE"),
     ("inventory/on-hand.csv", "INVENTORY_STOCK_COUNT"),
     ("inventory/cycle-count-plans.csv", "CYCLE_COUNT_PLAN"),

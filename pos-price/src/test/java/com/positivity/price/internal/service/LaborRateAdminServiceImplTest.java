@@ -10,11 +10,16 @@ import static org.mockito.Mockito.when;
 import com.positivity.price.internal.dto.LaborRateAdjustmentRequest;
 import com.positivity.price.internal.dto.LaborRateRequest;
 import com.positivity.price.internal.dto.LaborRateResponse;
+import com.positivity.price.internal.entity.LaborRate;
+import com.positivity.price.internal.entity.LaborRateAdjustment;
+import com.positivity.price.internal.enums.LaborRateAdjustmentType;
+import com.positivity.price.internal.enums.ServiceOperationCategory;
 import com.positivity.price.internal.exception.LaborRateValidationException;
 import com.positivity.price.internal.repository.LaborRateAdjustmentRepository;
 import com.positivity.price.internal.repository.LaborRateRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -186,6 +191,100 @@ class LaborRateAdminServiceImplTest {
                     .isInstanceOf(LaborRateValidationException.class)
                     .hasMessageContaining("adjustmentType");
             verify(adjustmentRepository, never()).save(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("bulk ingest upserts (docs/DATA_SEED_STRATEGY.md §3 Tier 2)")
+    class BulkIngestUpserts {
+
+        @BeforeEach
+        void nothingStoredYet() {
+            when(rateRepository.findByEffectiveFrom(any())).thenReturn(List.of());
+            when(adjustmentRepository.findByAdjustmentCodeAndEffectiveFrom(any(), any()))
+                    .thenReturn(List.of());
+        }
+
+        @Test
+        @DisplayName("stores a rate whose scope and start instant nobody holds")
+        void storesANewRate() {
+            LaborRateResponse response = service.upsertRate(rateRequest());
+
+            assertThat(response.getHourlyRate()).isEqualByComparingTo("105.00");
+            verify(rateRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("re-running the pack answers with the stored rate, never rewriting a rate that priced an invoice")
+        void existingScopeAndStartIsANoOp() {
+            LaborRate stored = new LaborRate();
+            stored.setId(UUID.fromString("0198f2a1-0000-7000-8000-0000000000c1"));
+            stored.setLocationId(SHOP_A);
+            stored.setOperationCategory(ServiceOperationCategory.TIRE_SERVICE);
+            stored.setCurrency("USD");
+            stored.setHourlyRate(new BigDecimal("99.00"));
+            stored.setEffectiveFrom(FROM);
+            when(rateRepository.findByEffectiveFrom(FROM)).thenReturn(List.of(stored));
+
+            LaborRateResponse response = service.upsertRate(rateRequest());
+
+            assertThat(response.getId()).isEqualTo(stored.getId());
+            assertThat(response.getHourlyRate())
+                    .as("the stored rate is returned as it stands, not overwritten with the submitted one")
+                    .isEqualByComparingTo("99.00");
+            verify(rateRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("the platform default and a shop rate are different scopes at the same instant")
+        void nullScopeIsItsOwnKey() {
+            LaborRate platformDefault = new LaborRate();
+            platformDefault.setId(UUID.fromString("0198f2a1-0000-7000-8000-0000000000c2"));
+            platformDefault.setLocationId(null);
+            platformDefault.setOperationCategory(null);
+            platformDefault.setCurrency("USD");
+            platformDefault.setHourlyRate(new BigDecimal("125.00"));
+            platformDefault.setEffectiveFrom(FROM);
+            when(rateRepository.findByEffectiveFrom(FROM)).thenReturn(List.of(platformDefault));
+
+            service.upsertRate(rateRequest());
+
+            verify(rateRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("a step already held under its code, scope and start instant is a no-op")
+        void existingStepIsANoOp() {
+            LaborRateAdjustment stored = new LaborRateAdjustment();
+            stored.setId(UUID.fromString("0198f2a1-0000-7000-8000-0000000000c3"));
+            stored.setLocationId(null);
+            stored.setOperationCategory(null);
+            stored.setAdjustmentCode("CORROSION");
+            stored.setAdjustmentType(LaborRateAdjustmentType.PERCENT);
+            stored.setAdjustmentValue(new BigDecimal("15.0000"));
+            stored.setSequence(10);
+            stored.setEffectiveFrom(FROM);
+            when(adjustmentRepository.findByAdjustmentCodeAndEffectiveFrom("CORROSION", FROM))
+                    .thenReturn(List.of(stored));
+            LaborRateAdjustmentRequest request = stepRequest();
+            request.setLocationId(null);
+            request.setOperationCategory(null);
+
+            assertThat(service.upsertAdjustment(request).getId()).isEqualTo(stored.getId());
+            verify(adjustmentRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("the code is uppercased before the lookup, so a lower-case file still matches")
+        void codeIsNormalisedBeforeTheLookup() {
+            LaborRateAdjustmentRequest request = stepRequest();
+            request.setLocationId(null);
+            request.setOperationCategory(null);
+            request.setAdjustmentCode("corrosion");
+
+            service.upsertAdjustment(request);
+
+            verify(adjustmentRepository).findByAdjustmentCodeAndEffectiveFrom("CORROSION", FROM);
         }
     }
 }

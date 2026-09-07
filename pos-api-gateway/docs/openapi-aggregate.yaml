@@ -281,10 +281,14 @@ paths:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1labor-guide-imports~1incomplete
   /v1/catalog/labor-guide-imports/unmapped:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1labor-guide-imports~1unmapped
+  /v1/catalog/labor-standards/bulk-ingest:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1labor-standards~1bulk-ingest
   /v1/catalog/labor-standards/conflicts:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1labor-standards~1conflicts
   /v1/catalog/labor-times/resolve:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1labor-times~1resolve
+  /v1/catalog/services/bulk-ingest:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1services~1bulk-ingest
   /v1/catalog/supplier-article-codes/replay:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1supplier-article-codes~1replay
   /v1/catalog/supplier-prices/history:
@@ -387,8 +391,12 @@ paths:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1{productId}~1uoms
   /v1/products/{productId}/uoms/{uomId}:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1{productId}~1uoms~1{uomId}
+  /v1/service-package-members/bulk-ingest:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1service-package-members~1bulk-ingest
   /v1/service-packages:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1service-packages
+  /v1/service-packages/bulk-ingest:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1service-packages~1bulk-ingest
   /v1/service-packages/{packageId}:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1service-packages~1{packageId}
   /v1/service-packages/{packageId}/members:
@@ -1159,10 +1167,14 @@ paths:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1{personId}~1primary-location
   /v1/people/{personId}/staffing/assignments:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1{personId}~1staffing~1assignments
+  /v1/labor-rate-adjustments/bulk-ingest:
+    $ref: ../../pos-price/openapi.yaml#/paths/~1v1~1labor-rate-adjustments~1bulk-ingest
   /v1/labor-rates:
     $ref: ../../pos-price/openapi.yaml#/paths/~1v1~1labor-rates
   /v1/labor-rates/adjustments:
     $ref: ../../pos-price/openapi.yaml#/paths/~1v1~1labor-rates~1adjustments
+  /v1/labor-rates/bulk-ingest:
+    $ref: ../../pos-price/openapi.yaml#/paths/~1v1~1labor-rates~1bulk-ingest
   /v1/labor-rates/quote:
     $ref: ../../pos-price/openapi.yaml#/paths/~1v1~1labor-rates~1quote
   /v1/price/bulk-ingest:
