@@ -148,12 +148,14 @@ by `LocationEventsListener`, gives some services a locally resolvable, event-con
 | Module | Location replica | Endpoints (of 77) |
 | --- | --- | ---: |
 | pos-people, pos-invoice, pos-workorder | `ExtLocationReplica` | 18 |
-| pos-inventory | `ExtStorageLocationReplica` — **storage bins/shelves, not the site tree** | 24 |
+| pos-inventory | `LocationRefEntity` (`location_ref`) with direct parent edges in `ext_location_parent`, plus a separate intra-site `ExtStorageLocationReplica` | 24 |
 | the other 11 modules | none | 35 |
 
-pos-inventory is the largest consumer of location-scoped endpoints and does **not** replicate
-the location tree; its replica models intra-site storage (`storage_location_id`, `site_id`,
-`parent_storage_location_id`), a different hierarchy entirely.
+**Correction (2026-09-07, from implementation):** an earlier revision said pos-inventory
+replicated only storage bins. It also consumes `LocationUpdatedV1` into a site-level
+`location_ref` and already stores the direct parent edges — the same shape as pos-people. So 42
+of the 77 endpoints sit in modules with a site replica, not 18, and #1878's ancestor-set work
+extends to pos-inventory as an addendum rather than requiring a new replica there.
 
 And **no location replica carries materialised ancestor sets.** (An earlier revision said none
 carried a parent link at all; that overstated it — pos-people has stored the direct parent edges
