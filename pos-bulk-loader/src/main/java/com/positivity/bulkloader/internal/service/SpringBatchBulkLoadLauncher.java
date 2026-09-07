@@ -115,6 +115,12 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
                     case SECURITY_USER -> "securityUserBulkLoadJob";
                     case USER_PERSON_LINK -> "userPersonLinkBulkLoadJob";
                     case MECHANIC_SKILL -> "mechanicSkillBulkLoadJob";
+                    case CATALOG_SERVICE -> "catalogServiceBulkLoadJob";
+                    case SERVICE_LABOR_STANDARD -> "serviceLaborStandardBulkLoadJob";
+                    case SERVICE_PACKAGE -> "servicePackageBulkLoadJob";
+                    case SERVICE_PACKAGE_MEMBER -> "servicePackageMemberBulkLoadJob";
+                    case LABOR_RATE -> "laborRateBulkLoadJob";
+                    case LABOR_RATE_ADJUSTMENT -> "laborRateAdjustmentBulkLoadJob";
                 };
 
         Job job = jobsByName.get(beanName);

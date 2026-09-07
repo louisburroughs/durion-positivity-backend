@@ -1,0 +1,7 @@
+locationCode,operationCategory,adjustmentCode,description,adjustmentType,adjustmentValue,sequence,effectiveFrom,effectiveTo
+,,CORROSION,"Seized or corroded fasteners requiring heat, penetrant or extraction",PERCENT,15.0000,10,2026-01-01T00:00:00Z,
+CLT-MAIN-001,TIRE_SERVICE,COMMERCIAL_ASSEMBLY,Commercial wheel and tyre assemblies requiring cage inflation and two-person handling,PERCENT,30.0000,15,2026-01-01T00:00:00Z,
+,,RESTRICTED_ACCESS,Component access obstructed by aftermarket equipment or a prior repair,PERCENT,20.0000,20,2026-01-01T00:00:00Z,
+,,AFTER_HOURS,Work performed outside posted service hours,PERCENT,25.0000,30,2026-01-01T00:00:00Z,
+,,MOBILE_CALLOUT,Flat call-out charge for work performed at the customer site,FIXED,35.0000,40,2026-01-01T00:00:00Z,
+,,FLEET_CONTRACT,Negotiated fleet contract discount,PERCENT,-10.0000,90,2026-01-01T00:00:00Z,

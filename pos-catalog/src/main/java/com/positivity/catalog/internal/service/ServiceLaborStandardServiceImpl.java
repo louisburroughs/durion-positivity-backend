@@ -1,19 +1,27 @@
 package com.positivity.catalog.internal.service;
 
+import com.positivity.catalog.internal.dto.ServiceLaborStandardImportRequestDto;
 import com.positivity.catalog.internal.dto.ServiceLaborStandardRequestDto;
 import com.positivity.catalog.internal.dto.ServiceLaborStandardResponseDto;
+import com.positivity.catalog.internal.entity.ServiceEntity;
 import com.positivity.catalog.internal.entity.ServiceLaborStandardEntity;
+import com.positivity.catalog.internal.enums.LaborStandardOwnerScope;
 import com.positivity.catalog.internal.enums.LaborTimeType;
 import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
 import com.positivity.catalog.internal.exception.CatalogNotFoundException;
 import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.catalog.internal.repository.ServiceLaborStandardRepository;
 import com.positivity.catalog.internal.repository.ServiceRepository;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
@@ -45,6 +53,36 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
         ServiceLaborStandardEntity entity = validatedEntity(serviceId, request);
         rejectDuplicateActiveRow(serviceId, entity, null);
         return toResponse(laborStandardRepository.save(entity));
+    }
+
+    @Override
+    @NonNull
+    @Transactional
+    public ServiceLaborStandardResponseDto importStandard(
+            @NonNull String operationCode, @NonNull ServiceLaborStandardImportRequestDto request) {
+        UUID serviceId = serviceRepository
+                .findByOperationCode(LaborTimeValidation.validatedOperationCodeShape(operationCode, "operationCode"))
+                .map(ServiceEntity::getId)
+                .orElseThrow(() -> new CatalogNotFoundException("No service with operation code " + operationCode));
+
+        ServiceLaborStandardEntity candidate = importedEntity(serviceId, request);
+        Optional<ServiceLaborStandardEntity> active = findActiveOnKey(serviceId, candidate);
+        if (active.isPresent()) {
+            ServiceLaborStandardEntity existing = active.get();
+            if (existing.getSourceCode().equals(candidate.getSourceCode())
+                    && existing.getSourceRevision().equals(candidate.getSourceRevision())) {
+                // Same source, same revision, same key: this exact line has already been applied.
+                // Re-running the pack must converge, not pile up supersession noise on rows that
+                // never changed.
+                return toResponse(existing);
+            }
+            existing.setSupersededAt(Instant.now(clock));
+            // Flushed for the same reason supersede() flushes: Hibernate orders inserts ahead of
+            // updates within a flush, and the active-key unique index would otherwise see the old
+            // row still active when the replacement lands on its key.
+            laborStandardRepository.saveAndFlush(existing);
+        }
+        return toResponse(laborStandardRepository.save(candidate));
     }
 
     @Override
@@ -106,6 +144,7 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
         entity.setTimeType(parsedTimeType(request.getTimeType()));
         entity.setOverlapGroup(trimToNull(request.getOverlapGroup()));
         entity.setIncludedOpCodes(validatedIncludedOpCodes(request.getIncludedOpCodes()));
+        applyOwnership(entity, request);
         entity.setSourceCode(DURION_SOURCE);
         // For a hand-authored row the vintage is the moment of authoring; imported rows will carry
         // their feed's revision instead.
@@ -129,7 +168,41 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
             return LaborTimeType.valueOf(timeType.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             throw new CatalogValidationException(
-                    "timeType must be one of " + java.util.Arrays.toString(LaborTimeType.values()) + ": " + timeType);
+                    "timeType must be one of " + Arrays.toString(LaborTimeType.values()) + ": " + timeType);
+        }
+    }
+
+    /**
+     * Ownership is a paired field: a {@code SHOP} row without a location resolves for nobody and
+     * a {@code PLATFORM} row with one lies about its reach, so both halves are rejected here
+     * rather than left to the V21 CHECK, which would surface as a 500 rather than a 422.
+     *
+     * <p>A shop row stays {@code DURION}-sourced like every other hand-authored row (the source
+     * code is set by the caller of this method, never by the request): a shop cannot forge a
+     * vendor's provenance, and a number a shop chose is not a number MOTOR published.
+     */
+    private void applyOwnership(ServiceLaborStandardEntity entity, ServiceLaborStandardRequestDto request) {
+        LaborStandardOwnerScope scope = parsedOwnerScope(request.getOwnerScope());
+        if (scope == LaborStandardOwnerScope.SHOP && request.getOwnerLocationId() == null) {
+            throw new CatalogValidationException("ownerLocationId is required when ownerScope is SHOP");
+        }
+        if (scope == LaborStandardOwnerScope.PLATFORM && request.getOwnerLocationId() != null) {
+            throw new CatalogValidationException(
+                    "ownerLocationId must be omitted when ownerScope is PLATFORM; a platform row has no owning location");
+        }
+        entity.setOwnerScope(scope);
+        entity.setOwnerLocationId(request.getOwnerLocationId());
+    }
+
+    private LaborStandardOwnerScope parsedOwnerScope(String ownerScope) {
+        if (ownerScope == null || ownerScope.isBlank()) {
+            return LaborStandardOwnerScope.PLATFORM;
+        }
+        try {
+            return LaborStandardOwnerScope.valueOf(ownerScope.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new CatalogValidationException("ownerScope must be one of "
+                    + Arrays.toString(LaborStandardOwnerScope.values()) + ": " + ownerScope);
         }
     }
 
@@ -158,6 +231,7 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
         laborStandardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(serviceId).stream()
                 .filter(row -> !row.getId().equals(beingSupersededId))
                 .filter(row -> row.getTimeType() == candidate.getTimeType()
+                        && Objects.equals(row.getOwnerLocationId(), candidate.getOwnerLocationId())
                         && Objects.equals(row.getVehicleYear(), candidate.getVehicleYear())
                         && Objects.equals(row.getMake(), candidate.getMake())
                         && Objects.equals(row.getModel(), candidate.getModel())
@@ -165,9 +239,10 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
                         && Objects.equals(row.getEngineCode(), candidate.getEngineCode()))
                 .findFirst()
                 .ifPresent(row -> {
-                    throw new CatalogBusinessRuleException("An active " + row.getTimeType()
-                            + " labor standard already exists for this vehicle key (" + row.getId()
-                            + "); supersede it instead of adding a duplicate");
+                    throw new CatalogBusinessRuleException("An active " + row.getTimeType() + " "
+                            + row.getOwnerScope()
+                            + "-owned labor standard already exists for this vehicle key ("
+                            + row.getId() + "); supersede it instead of adding a duplicate");
                 });
     }
 
@@ -181,6 +256,8 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
         dto.setSubmodel(entity.getSubmodel());
         dto.setEngineCode(entity.getEngineCode());
         dto.setLaborHours(entity.getLaborHours());
+        dto.setOwnerScope(entity.getOwnerScope().name());
+        dto.setOwnerLocationId(entity.getOwnerLocationId());
         dto.setTimeType(entity.getTimeType().name());
         dto.setOverlapGroup(entity.getOverlapGroup());
         dto.setIncludedOpCodes(entity.getIncludedOpCodes());
@@ -190,6 +267,124 @@ public class ServiceLaborStandardServiceImpl implements ServiceLaborStandardServ
         dto.setSupersededAt(entity.getSupersededAt());
         dto.setCreatedAt(entity.getCreatedAt());
         return dto;
+    }
+
+    /**
+     * The active row this candidate would collide with, if any — the same key
+     * {@link #rejectDuplicateActiveRow} refuses a duplicate on, read rather than rejected.
+     *
+     * <p>Authoring refuses a collision because a second hand-authored row on one key is a
+     * mistake; an import means to replace what it collides with, so it needs the row itself.
+     */
+    private Optional<ServiceLaborStandardEntity> findActiveOnKey(UUID serviceId, ServiceLaborStandardEntity candidate) {
+        return laborStandardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(serviceId).stream()
+                .filter(row -> row.getTimeType() == candidate.getTimeType()
+                        && Objects.equals(row.getOwnerLocationId(), candidate.getOwnerLocationId())
+                        && Objects.equals(row.getVehicleYear(), candidate.getVehicleYear())
+                        && Objects.equals(row.getMake(), candidate.getMake())
+                        && Objects.equals(row.getModel(), candidate.getModel())
+                        && Objects.equals(row.getSubmodel(), candidate.getSubmodel())
+                        && Objects.equals(row.getEngineCode(), candidate.getEngineCode()))
+                .findFirst();
+    }
+
+    /**
+     * The imported row as an entity. Text in, typed out: the loader posts what its file said, so
+     * every parse failure here is this row's failure and names the field that could not be read.
+     */
+    private ServiceLaborStandardEntity importedEntity(UUID serviceId, ServiceLaborStandardImportRequestDto request) {
+        ServiceLaborStandardEntity entity = new ServiceLaborStandardEntity();
+        entity.setServiceId(serviceId);
+        entity.setVehicleYear(trimToNull(request.getVehicleYear()));
+        entity.setMake(trimToNull(request.getMake()));
+        entity.setModel(trimToNull(request.getModel()));
+        entity.setSubmodel(trimToNull(request.getSubmodel()));
+        entity.setEngineCode(trimToNull(request.getEngineCode()));
+        entity.setLaborHours(
+                LaborTimeValidation.validatedTenthsHours(parsedHours(request.getLaborHours()), "laborHours"));
+        entity.setTimeType(parsedTimeType(request.getTimeType()));
+        entity.setOverlapGroup(trimToNull(request.getOverlapGroup()));
+        entity.setIncludedOpCodes(validatedIncludedOpCodes(splitCodes(request.getIncludedOpCodes())));
+        applyImportedOwnership(entity, request);
+        entity.setSourceCode(requireText(request.getSourceCode(), "sourceCode"));
+        entity.setSourceRevision(requireText(request.getSourceRevision(), "sourceRevision"));
+        entity.setPublishedAt(parsedPublishedAt(request.getPublishedAt()));
+        return entity;
+    }
+
+    /**
+     * The same paired ownership rule {@link #applyOwnership} enforces, reading the location from
+     * text. Kept separate rather than made generic over the two request shapes: they share three
+     * fields out of a dozen, and a shared supertype for that would couple the authoring contract
+     * to the import one.
+     */
+    private void applyImportedOwnership(
+            ServiceLaborStandardEntity entity, ServiceLaborStandardImportRequestDto request) {
+        LaborStandardOwnerScope scope = parsedOwnerScope(request.getOwnerScope());
+        UUID ownerLocationId = parsedOwnerLocationId(request.getOwnerLocationId());
+        if (scope == LaborStandardOwnerScope.SHOP && ownerLocationId == null) {
+            throw new CatalogValidationException("ownerLocationId is required when ownerScope is SHOP");
+        }
+        if (scope == LaborStandardOwnerScope.PLATFORM && ownerLocationId != null) {
+            throw new CatalogValidationException(
+                    "ownerLocationId must be omitted when ownerScope is PLATFORM; a platform row has no owning location");
+        }
+        entity.setOwnerScope(scope);
+        entity.setOwnerLocationId(ownerLocationId);
+    }
+
+    private static BigDecimal parsedHours(String laborHours) {
+        String trimmed = trimToNull(laborHours);
+        if (trimmed == null) {
+            throw new CatalogValidationException("laborHours is required");
+        }
+        try {
+            return new BigDecimal(trimmed);
+        } catch (NumberFormatException e) {
+            throw new CatalogValidationException("laborHours must be a decimal number: " + laborHours);
+        }
+    }
+
+    private static UUID parsedOwnerLocationId(String ownerLocationId) {
+        String trimmed = trimToNull(ownerLocationId);
+        if (trimmed == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(trimmed);
+        } catch (IllegalArgumentException e) {
+            throw new CatalogValidationException("ownerLocationId must be a UUID: " + ownerLocationId);
+        }
+    }
+
+    private static LocalDate parsedPublishedAt(String publishedAt) {
+        String trimmed = trimToNull(publishedAt);
+        if (trimmed == null) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(trimmed);
+        } catch (DateTimeParseException e) {
+            throw new CatalogValidationException("publishedAt must be an ISO-8601 date: " + publishedAt);
+        }
+    }
+
+    private static List<String> splitCodes(String includedOpCodes) {
+        String trimmed = trimToNull(includedOpCodes);
+        return trimmed == null
+                ? null
+                : Arrays.stream(trimmed.split(","))
+                        .map(String::trim)
+                        .filter(code -> !code.isEmpty())
+                        .toList();
+    }
+
+    private static String requireText(String value, String field) {
+        String trimmed = trimToNull(value);
+        if (trimmed == null) {
+            throw new CatalogValidationException(field + " is required");
+        }
+        return trimmed;
     }
 
     private static String trimToNull(String value) {

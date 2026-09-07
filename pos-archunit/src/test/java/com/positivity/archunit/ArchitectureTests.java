@@ -387,9 +387,15 @@ class ArchitectureTests {
      * grant maps in {@link DomainWallsTest} — an entry without a justification is how a grant
      * list quietly stops meaning anything.
      *
-     * <p>The platform holds two granted types: {@code SupplierStockService} (ADR-0044 amendment
-     * 2026-08-10) and {@code ServiceLaborTimeService} (#1569, ADR-0044 amendment 2026-09-02,
-     * ADR-0058 §5). Adding an entry here requires an ADR amendment.
+     * <p>The platform holds three granted types: {@code SupplierStockService} (ADR-0044 amendment
+     * 2026-08-10), {@code ServiceLaborTimeService} (#1569, ADR-0044 amendment 2026-09-02,
+     * ADR-0058 §5) and {@code ShopLaborRateService} (#1575 Tier 0, ADR-0044 amendment
+     * 2026-09-07). Adding an entry here requires an ADR amendment.
+     *
+     * <p>The last two are deliberately a pair: pos-catalog answers how long an operation takes,
+     * pos-price answers what an hour of it costs, and pos-workorder multiplies them. Splitting
+     * the labor line across two grants rather than one keeps each half replaceable and keeps the
+     * sell price in pos-price where ADR-0054 puts it.
      */
     private static final Map<String, String> GRANTED_GRANT_SURFACE_TYPES = Map.of(
             "com.positivity.supplier.service.SupplierStockService",
@@ -398,7 +404,11 @@ class ArchitectureTests {
             "com.positivity.catalog.service.ServiceLaborTimeService",
             "ADR-0044 amendment 2026-09-02 (#1569, ADR-0058 §5): vehicle-specific labor-time"
                     + " resolution at quote time; sole approved caller is pos-workorder's"
-                    + " CatalogLaborTimeClientImpl");
+                    + " CatalogLaborTimeClientImpl",
+            "com.positivity.price.service.ShopLaborRateService",
+            "ADR-0044 amendment 2026-09-07 (#1575 Tier 0): shop labor-rate resolution at quote"
+                    + " time, the price half of the labor line; sole approved caller is"
+                    + " pos-workorder's PriceLaborRateClientImpl");
 
     /** Package roots a granted grant-surface type may depend on besides its own grant surface. */
     private static final List<String> GRANT_SURFACE_ALLOWED_SHARED_ROOTS = List.of(

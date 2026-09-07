@@ -319,6 +319,7 @@ class EstimateServiceImplTest {
                 "taxCode",
                 LOCAL_VEHICLE_ID,
                 null,
+                null,
                 null);
 
         EstimateItemResponse result = estimateService.addEstimateItem(estimate.getId(), request, "testuser");

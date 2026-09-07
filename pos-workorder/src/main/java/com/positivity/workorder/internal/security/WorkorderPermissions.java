@@ -111,6 +111,18 @@ public final class WorkorderPermissions {
     /** View labor entries. */
     public static final String LABOR_VIEW = "workorder:labor:view";
 
+    /**
+     * Read the labor-intelligence rollup: a shop's median actual time per operation against the
+     * guide baseline, with technician medians.
+     *
+     * <p>Separate from {@link #ANALYTICS_VIEW}, which the other workorder analytics endpoints
+     * share, because this one exposes individual technician productivity. Seeing how a shop
+     * performs against book time and seeing how one named person performs are different powers,
+     * and folding the second into a general analytics grant would hand it to everyone who has
+     * the first.
+     */
+    public static final String LABOR_INTELLIGENCE_VIEW = "workorder:labor_intelligence:view";
+
     /** Override operationalContext. */
     public static final String OPERATIONALCONTEXT_OVERRIDE = "workorder:operationalContext:override";
 

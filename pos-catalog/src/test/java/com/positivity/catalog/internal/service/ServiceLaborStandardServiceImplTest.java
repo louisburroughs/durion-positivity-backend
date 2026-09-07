@@ -7,9 +7,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.catalog.internal.dto.ServiceLaborStandardImportRequestDto;
 import com.positivity.catalog.internal.dto.ServiceLaborStandardRequestDto;
 import com.positivity.catalog.internal.dto.ServiceLaborStandardResponseDto;
+import com.positivity.catalog.internal.entity.ServiceEntity;
 import com.positivity.catalog.internal.entity.ServiceLaborStandardEntity;
+import com.positivity.catalog.internal.enums.LaborStandardOwnerScope;
 import com.positivity.catalog.internal.enums.LaborTimeType;
 import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
 import com.positivity.catalog.internal.exception.CatalogNotFoundException;
@@ -89,6 +92,119 @@ class ServiceLaborStandardServiceImplTest {
         row.setSourceCode("DURION");
         row.setSourceRevision("2026-08-01T00:00:00Z");
         return row;
+    }
+
+    @Nested
+    @DisplayName("shop ownership (#1575 Tier 0)")
+    class ShopOwnership {
+
+        private static final UUID SHOP_A = UUID.fromString("0198f2a1-0000-7000-8000-00000000000a");
+        private static final UUID SHOP_B = UUID.fromString("0198f2a1-0000-7000-8000-00000000000b");
+
+        @Test
+        @DisplayName("defaults to PLATFORM with no owning location when the request says nothing")
+        void defaultsToPlatform() {
+            ServiceLaborStandardResponseDto response = service.create(SERVICE_ID, request());
+
+            assertThat(response.getOwnerScope()).isEqualTo("PLATFORM");
+            assertThat(response.getOwnerLocationId()).isNull();
+        }
+
+        @Test
+        @DisplayName("a SHOP row records its owning location and stays DURION-sourced")
+        void shopRowRecordsItsOwner() {
+            ServiceLaborStandardRequestDto shopRequest = request();
+            shopRequest.setOwnerScope("SHOP");
+            shopRequest.setOwnerLocationId(SHOP_A);
+
+            ServiceLaborStandardResponseDto response = service.create(SERVICE_ID, shopRequest);
+
+            assertThat(response.getOwnerScope()).isEqualTo("SHOP");
+            assertThat(response.getOwnerLocationId()).isEqualTo(SHOP_A);
+            assertThat(response.getSourceCode()).isEqualTo("DURION");
+        }
+
+        @Test
+        @DisplayName("SHOP without a location is refused — such a row would resolve for nobody")
+        void shopWithoutLocationRejected() {
+            ServiceLaborStandardRequestDto bad = request();
+            bad.setOwnerScope("SHOP");
+
+            assertThatThrownBy(() -> service.create(SERVICE_ID, bad))
+                    .isInstanceOf(CatalogValidationException.class)
+                    .hasMessageContaining("ownerLocationId is required");
+            verify(laborStandardRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("PLATFORM with a location is refused — the row would lie about its reach")
+        void platformWithLocationRejected() {
+            ServiceLaborStandardRequestDto bad = request();
+            bad.setOwnerLocationId(SHOP_A);
+
+            assertThatThrownBy(() -> service.create(SERVICE_ID, bad))
+                    .isInstanceOf(CatalogValidationException.class)
+                    .hasMessageContaining("must be omitted");
+        }
+
+        @Test
+        @DisplayName("an unknown ownerScope is a validation error, not a silent PLATFORM default")
+        void unknownScopeRejected() {
+            ServiceLaborStandardRequestDto bad = request();
+            bad.setOwnerScope("REGION");
+
+            assertThatThrownBy(() -> service.create(SERVICE_ID, bad))
+                    .isInstanceOf(CatalogValidationException.class)
+                    .hasMessageContaining("ownerScope");
+        }
+
+        @Test
+        @DisplayName("two shops may hold their own time for the same vehicle key — that is not a duplicate")
+        void differentShopsCoexistOnTheSameKey() {
+            ServiceLaborStandardEntity shopBRow = activeDurionRow();
+            shopBRow.setOwnerScope(LaborStandardOwnerScope.SHOP);
+            shopBRow.setOwnerLocationId(SHOP_B);
+            when(laborStandardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(SERVICE_ID))
+                    .thenReturn(List.of(shopBRow));
+
+            ServiceLaborStandardRequestDto shopARequest = request();
+            shopARequest.setOwnerScope("SHOP");
+            shopARequest.setOwnerLocationId(SHOP_A);
+
+            assertThat(service.create(SERVICE_ID, shopARequest).getOwnerLocationId())
+                    .isEqualTo(SHOP_A);
+        }
+
+        @Test
+        @DisplayName("but one shop may not hold two active times for the same vehicle key")
+        void sameShopDuplicateRejected() {
+            ServiceLaborStandardEntity shopARow = activeDurionRow();
+            shopARow.setOwnerScope(LaborStandardOwnerScope.SHOP);
+            shopARow.setOwnerLocationId(SHOP_A);
+            when(laborStandardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(SERVICE_ID))
+                    .thenReturn(List.of(shopARow));
+
+            ServiceLaborStandardRequestDto shopARequest = request();
+            shopARequest.setOwnerScope("SHOP");
+            shopARequest.setOwnerLocationId(SHOP_A);
+
+            assertThatThrownBy(() -> service.create(SERVICE_ID, shopARequest))
+                    .isInstanceOf(CatalogBusinessRuleException.class)
+                    .hasMessageContaining("supersede");
+        }
+
+        @Test
+        @DisplayName("a shop row does not collide with the platform row on the same vehicle key")
+        void shopRowDoesNotCollideWithPlatformRow() {
+            when(laborStandardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(SERVICE_ID))
+                    .thenReturn(List.of(activeDurionRow()));
+
+            ServiceLaborStandardRequestDto shopRequest = request();
+            shopRequest.setOwnerScope("SHOP");
+            shopRequest.setOwnerLocationId(SHOP_A);
+
+            assertThat(service.create(SERVICE_ID, shopRequest).getOwnerScope()).isEqualTo("SHOP");
+        }
     }
 
     @Nested
@@ -337,6 +453,130 @@ class ServiceLaborStandardServiceImplTest {
             assertThatThrownBy(() -> service.supersede(SERVICE_ID, STANDARD_ID, request()))
                     .isInstanceOf(CatalogBusinessRuleException.class)
                     .hasMessageContaining("MOCKGUIDE");
+        }
+    }
+
+    @Nested
+    @DisplayName("importStandard")
+    class ImportStandard {
+
+        private static final String OPERATION_CODE = "FLEET-PM-A-SERVICE";
+
+        @BeforeEach
+        void serviceResolvesByCode() {
+            ServiceEntity service = new ServiceEntity();
+            service.setId(SERVICE_ID);
+            service.setOperationCode(OPERATION_CODE);
+            when(serviceRepository.findByOperationCode(OPERATION_CODE)).thenReturn(Optional.of(service));
+        }
+
+        /** Keyed to the same vehicle as {@code activeDurionRow()}, so a collision is reachable. */
+        private ServiceLaborStandardImportRequestDto importRequest(String revision, String hours) {
+            ServiceLaborStandardImportRequestDto request = new ServiceLaborStandardImportRequestDto();
+            request.setOperationCode(OPERATION_CODE);
+            request.setMake("Honda");
+            request.setModel("Civic");
+            request.setVehicleYear("2019-2023");
+            request.setSourceCode("DURION");
+            request.setSourceRevision(revision);
+            request.setLaborHours(hours);
+            request.setTimeType("DURION_STANDARD");
+            request.setPublishedAt("2026-09-01");
+            return request;
+        }
+
+        @Test
+        @DisplayName("keeps the source and revision the caller stated, unlike hand authoring")
+        void carriesTheSubmittedProvenance() {
+            ServiceLaborStandardResponseDto created =
+                    service.importStandard(OPERATION_CODE, importRequest("tier0-fake-2026-09", "1.4"));
+
+            assertThat(created.getSourceCode()).isEqualTo("DURION");
+            assertThat(created.getSourceRevision()).isEqualTo("tier0-fake-2026-09");
+            assertThat(created.getLaborHours()).isEqualByComparingTo("1.4");
+            assertThat(created.getOwnerScope()).isEqualTo("PLATFORM");
+        }
+
+        @Test
+        @DisplayName("re-running the same revision is a no-op, so a pack can be loaded twice")
+        void sameRevisionIsSkipped() {
+            ServiceLaborStandardEntity active = activeDurionRow();
+            active.setSourceRevision("tier0-fake-2026-09");
+            active.setLaborHours(new BigDecimal("1.4"));
+            when(laborStandardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(SERVICE_ID))
+                    .thenReturn(List.of(active));
+
+            ServiceLaborStandardResponseDto applied =
+                    service.importStandard(OPERATION_CODE, importRequest("tier0-fake-2026-09", "1.4"));
+
+            assertThat(applied.getId()).isEqualTo(STANDARD_ID);
+            assertThat(active.getSupersededAt()).isNull();
+            verify(laborStandardRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a new revision supersedes the active row and inserts the replacement")
+        void newRevisionSupersedes() {
+            ServiceLaborStandardEntity active = activeDurionRow();
+            active.setSourceRevision("tier0-fake-2026-09");
+            active.setLaborHours(new BigDecimal("1.4"));
+            when(laborStandardRepository.findByServiceIdAndSupersededAtIsNullOrderByCreatedAtAsc(SERVICE_ID))
+                    .thenReturn(List.of(active));
+
+            ServiceLaborStandardResponseDto applied =
+                    service.importStandard(OPERATION_CODE, importRequest("tier0-real-2026-10", "1.6"));
+
+            assertThat(active.getSupersededAt()).isEqualTo(Instant.parse("2026-09-01T12:00:00Z"));
+            assertThat(applied.getSourceRevision()).isEqualTo("tier0-real-2026-10");
+            assertThat(applied.getLaborHours()).isEqualByComparingTo("1.6");
+            ArgumentCaptor<ServiceLaborStandardEntity> saved =
+                    ArgumentCaptor.forClass(ServiceLaborStandardEntity.class);
+            verify(laborStandardRepository).save(saved.capture());
+            assertThat(saved.getValue().getSupersededAt()).isNull();
+        }
+
+        @Test
+        @DisplayName("an operation code the catalog does not know is a 404, not a silent insert")
+        void unknownOperationCodeRejected() {
+            when(serviceRepository.findByOperationCode("NO-SUCH-OP")).thenReturn(Optional.empty());
+            ServiceLaborStandardImportRequestDto request = importRequest("tier0-fake-2026-09", "1.4");
+            request.setOperationCode("NO-SUCH-OP");
+
+            assertThatThrownBy(() -> service.importStandard("NO-SUCH-OP", request))
+                    .isInstanceOf(CatalogNotFoundException.class)
+                    .hasMessageContaining("NO-SUCH-OP");
+        }
+
+        @Test
+        @DisplayName("a SHOP row with no location is refused, as it resolves for nobody")
+        void shopRowNeedsALocation() {
+            ServiceLaborStandardImportRequestDto request = importRequest("tier0-fake-2026-09", "1.4");
+            request.setOwnerScope("SHOP");
+
+            assertThatThrownBy(() -> service.importStandard(OPERATION_CODE, request))
+                    .isInstanceOf(CatalogValidationException.class)
+                    .hasMessageContaining("ownerLocationId is required");
+        }
+
+        @Test
+        @DisplayName("text that will not parse names its own field, so the row fails and the batch goes on")
+        void unparseableHoursNameTheField() {
+            ServiceLaborStandardImportRequestDto request = importRequest("tier0-fake-2026-09", "one and a half");
+
+            assertThatThrownBy(() -> service.importStandard(OPERATION_CODE, request))
+                    .isInstanceOf(CatalogValidationException.class)
+                    .hasMessageContaining("laborHours");
+        }
+
+        @Test
+        @DisplayName("includedOpCodes arrives as one comma-separated column and lands as a list")
+        void includedOpCodesAreSplit() {
+            ServiceLaborStandardImportRequestDto request = importRequest("tier0-fake-2026-09", "1.3");
+            request.setIncludedOpCodes("WHEEL-BALANCE-SET-4, TPMS-SENSOR-SERVICE");
+
+            ServiceLaborStandardResponseDto created = service.importStandard(OPERATION_CODE, request);
+
+            assertThat(created.getIncludedOpCodes()).containsExactly("WHEEL-BALANCE-SET-4", "TPMS-SENSOR-SERVICE");
         }
     }
 }

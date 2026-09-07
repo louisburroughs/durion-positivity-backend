@@ -62,6 +62,12 @@ public final class DomainRecordFields {
         types.put(DomainType.SECURITY_USER, SecurityUserLoaderRecord.class);
         types.put(DomainType.USER_PERSON_LINK, UserPersonLinkLoaderRecord.class);
         types.put(DomainType.MECHANIC_SKILL, MechanicSkillLoaderRecord.class);
+        types.put(DomainType.CATALOG_SERVICE, CatalogServiceLoaderRecord.class);
+        types.put(DomainType.SERVICE_LABOR_STANDARD, ServiceLaborStandardLoaderRecord.class);
+        types.put(DomainType.SERVICE_PACKAGE, ServicePackageLoaderRecord.class);
+        types.put(DomainType.SERVICE_PACKAGE_MEMBER, ServicePackageMemberLoaderRecord.class);
+        types.put(DomainType.LABOR_RATE, LaborRateLoaderRecord.class);
+        types.put(DomainType.LABOR_RATE_ADJUSTMENT, LaborRateAdjustmentLoaderRecord.class);
         return types;
     }
 

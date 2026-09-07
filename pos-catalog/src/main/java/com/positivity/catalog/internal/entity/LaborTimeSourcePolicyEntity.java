@@ -1,6 +1,7 @@
 package com.positivity.catalog.internal.entity;
 
 import com.positivity.catalog.internal.enums.LaborTimeType;
+import com.positivity.catalog.internal.enums.OperationCategory;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -18,9 +19,9 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
- * Data-driven resolution precedence per (time type, source) — lower wins (#1569, sourcing plan
- * §3.4). Policy is data, not code: Phase 3's "tire ops prefer manufacturer install" is a row
- * edit here, not a release.
+ * Data-driven resolution precedence per (time type, source, operation category) — lower wins
+ * (#1569, sourcing plan §3.4). Policy is data, not code: "tire ops prefer manufacturer install"
+ * is a row edit here, not a release.
  */
 @Data
 @Entity
@@ -40,6 +41,15 @@ public class LaborTimeSourcePolicyEntity {
 
     @Column(name = "source_code", nullable = false)
     private String sourceCode;
+
+    /**
+     * Null applies the row to every operation category — the meaning every row carried before
+     * V22 added the column. A row naming a category applies only to it, and beats a
+     * category-less row there (#1569 residual R1).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "operation_category")
+    private OperationCategory operationCategory;
 
     @Column(name = "precedence", nullable = false)
     private int precedence;

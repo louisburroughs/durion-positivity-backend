@@ -170,6 +170,25 @@ public final class CatalogEventTypes {
                         .build(),
                 EventTypeRegistration.write("CATALOG_BULK_INGEST", "Bulk ingest catalog products")
                         .build(),
+                // Bulk-ingest paths for the data that used to be Flyway seed
+                // (docs/DATA_SEED_STRATEGY.md §3 Tier 2). Approval-grade budgets, like the fact
+                // replays and the labor-guide import: one call legitimately writes a whole pack,
+                // so a write threshold would alert on every healthy load.
+                EventTypeRegistration.approval(
+                                "CATALOG_SERVICE_BULK_INGEST",
+                                "Bulk ingest service operations, publishing a service fact per row")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "CATALOG_LABOR_STANDARD_BULK_INGEST",
+                                "Bulk ingest vehicle-keyed labor standards with their source provenance")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "CATALOG_SERVICE_PACKAGE_BULK_INGEST", "Bulk ingest service packages by package code")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "CATALOG_SERVICE_PACKAGE_MEMBER_BULK_INGEST",
+                                "Bulk ingest service package membership by package and operation code")
+                        .build(),
                 // Labor standards — vehicle-keyed estimated service times (#1569)
                 EventTypeRegistration.write(
                                 "CATALOG_LABOR_STANDARD_CREATE", "Author a DURION-source labor standard for a service")
@@ -180,6 +199,33 @@ public final class CatalogEventTypes {
                         .build(),
                 EventTypeRegistration.search(
                                 "CATALOG_LABOR_STANDARD_LIST", "List a service's labor standards with provenance")
+                        .build(),
+                // search, not fastRead: the conflict sweep compares every active row against every
+                // other for its operation, which is deliberately not a quote-path shape. It is an
+                // admin curation report and its budget should say so.
+                EventTypeRegistration.search(
+                                "CATALOG_LABOR_STANDARD_CONFLICTS",
+                                "List labor standards where two sources publish disagreeing times")
+                        .build(),
+                // Service packages and fleet requirement sets (#1575 Tier 0)
+                EventTypeRegistration.write(
+                                "CATALOG_SERVICE_PACKAGE_CREATE",
+                                "Create a service package or a fleet account's requirement set")
+                        .build(),
+                EventTypeRegistration.write(
+                                "CATALOG_SERVICE_PACKAGE_MEMBER_ADD", "Add a service operation to a package")
+                        .build(),
+                EventTypeRegistration.write(
+                                "CATALOG_SERVICE_PACKAGE_MEMBER_REMOVE", "Remove a service operation from a package")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "CATALOG_SERVICE_PACKAGE_GET", "Read one service package with its members")
+                        .build(),
+                // search, not fastRead: this reads a location's packages and then every member of
+                // each in a batch, which is a listing shape rather than a keyed lookup.
+                EventTypeRegistration.search(
+                                "CATALOG_SERVICE_PACKAGE_LIST",
+                                "List the service packages a location may sell, or a fleet's requirement set")
                         .build(),
                 // Labor-guide ingestion + resolution (#1569 Phase 1). The import gets an
                 // approval-grade budget for the same reason the fact replays do: one call

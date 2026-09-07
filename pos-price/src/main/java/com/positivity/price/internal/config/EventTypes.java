@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the price module.
-     * Total: 14 event types.
+     * Total: 19 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -26,6 +26,14 @@ public final class EventTypes {
                                 "Normalize and standardize pricing data across the system")
                         .build(),
                 EventTypeRegistration.write("PRICE_BULK_INGEST", "Bulk import base price records")
+                        .build(),
+                // Bulk-ingest paths for the labor rates that used to be Flyway seed
+                // (docs/DATA_SEED_STRATEGY.md §3 Tier 2). Approval-grade, like the other pack
+                // loads: one call writes a whole rate card.
+                EventTypeRegistration.approval("PRICE_LABOR_RATE_BULK_INGEST", "Bulk import hourly labor rates")
+                        .build(),
+                EventTypeRegistration.approval(
+                                "PRICE_LABOR_RATE_ADJUSTMENT_BULK_INGEST", "Bulk import labor-matrix adjustment steps")
                         .build(),
 
                 // PriceRestrictionsController - 2 events
@@ -75,6 +83,30 @@ public final class EventTypes {
                         .apiVersion("1")
                         .build(),
                 EventTypeRegistration.search("PROMOTION_RULE_EVALUATE", "Evaluate eligibility for promotion")
+                        .apiVersion("1")
+                        .build(),
+
+                // LaborRateController / LaborRateQuoteController - 5 events (#1575 Tier 0)
+                EventTypeRegistration.write(
+                                "PRICE_LABOR_RATE_CREATE", "Create an hourly labor rate for a scope and window")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead("PRICE_LABOR_RATE_LIST", "List stored labor rates")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.write(
+                                "PRICE_LABOR_RATE_ADJUSTMENT_CREATE", "Create a labor-matrix adjustment step")
+                        .apiVersion("1")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "PRICE_LABOR_RATE_ADJUSTMENT_LIST", "List stored labor-matrix adjustment steps")
+                        .apiVersion("1")
+                        .build(),
+                // fastRead, not search: this sits on the quote path, one indexed lookup plus at most
+                // a handful of matrix rows, and a slow answer here stalls a writer mid-estimate.
+                EventTypeRegistration.fastRead(
+                                "PRICE_LABOR_RATE_QUOTE",
+                                "Resolve the labor rate applicable to one job, with the matrix applied")
                         .apiVersion("1")
                         .build());
     }

@@ -20,7 +20,9 @@ public class OpenWorkorderCustomerRow {
     private UUID customerId;
 
     @Nullable
-    @Schema(description = "Customer display name, resolved server-side; null when the party replica has no record")
+    @Schema(
+            description = "Customer display name, resolved server-side; null when the party replica has no record",
+            nullable = true)
     private String customerName;
 
     @Schema(description = "Open work orders this customer currently holds")

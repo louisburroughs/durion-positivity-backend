@@ -41,6 +41,7 @@ public class LaborTimeDefaultingService {
      *     replica fallback
      * @param overlapGroup shared-setup group for overlap-aware summation
      * @param includedOpCodes comma-joined Durion codes included in this time; null when none
+     * @param ownerScope {@code SHOP} when the location's own authored time answered
      */
     public record GuideDefault(
             @NonNull BigDecimal hours,
@@ -48,21 +49,25 @@ public class LaborTimeDefaultingService {
             @Nullable String sourceRevision,
             @Nullable String matchGrade,
             @Nullable String overlapGroup,
-            @Nullable String includedOpCodes) {}
+            @Nullable String includedOpCodes,
+            @Nullable String ownerScope) {}
 
     /**
      * @param serviceId the catalog service on the LABOR line
      * @param customerId the estimate's customer, for vehicle resolution; null skips to a
      *     vehicle-less (widened) lookup
      * @param vehicleId the estimate's vehicle; null likewise widens
+     * @param locationId the location quoting the work. Passing it is what lets a shop's own
+     *     authored time answer ahead of a published one (#1575 Tier 0); null quotes as the
+     *     platform.
      */
     @NonNull
     public Optional<GuideDefault> lookupGuideTime(
-            @NonNull UUID serviceId, @Nullable UUID customerId, @Nullable UUID vehicleId) {
+            @NonNull UUID serviceId, @Nullable UUID customerId, @Nullable UUID vehicleId, @Nullable UUID locationId) {
         VehicleReferenceService.VehicleReference vehicle = vehicleReferenceService.resolve(customerId, vehicleId);
 
-        Optional<CatalogLaborTimeClient.GuideTime> resolved =
-                catalogLaborTimeClient.resolveLaborTime(serviceId, vehicle.year(), vehicle.make(), vehicle.model());
+        Optional<CatalogLaborTimeClient.GuideTime> resolved = catalogLaborTimeClient.resolveLaborTime(
+                serviceId, vehicle.year(), vehicle.make(), vehicle.model(), locationId);
         if (resolved.isPresent()) {
             CatalogLaborTimeClient.GuideTime time = resolved.get();
             return Optional.of(new GuideDefault(
@@ -71,7 +76,8 @@ public class LaborTimeDefaultingService {
                     time.sourceRevision(),
                     time.matchGrade(),
                     time.overlapGroup(),
-                    joinCodes(time.includedOpCodes())));
+                    joinCodes(time.includedOpCodes()),
+                    time.ownerScope()));
         }
 
         // Edge unreachable or a typed miss: the replica's vehicle-agnostic default is the
@@ -82,7 +88,7 @@ public class LaborTimeDefaultingService {
                 .filter(ExtCatalogServiceReplica::isActive)
                 .map(ExtCatalogServiceReplica::getDefaultLaborHours)
                 .filter(hours -> hours != null && hours.signum() > 0)
-                .map(hours -> new GuideDefault(hours, "DURION", "replica-default", "DEFAULT_HOURS", null, null));
+                .map(hours -> new GuideDefault(hours, "DURION", "replica-default", "DEFAULT_HOURS", null, null, null));
     }
 
     @Nullable

@@ -20,11 +20,17 @@ public interface CatalogLaborTimeClient {
      * @param vehicleYear year or range; null = unknown, widens the match
      * @param make vehicle make; null = unknown
      * @param model vehicle model; null = unknown
+     * @param locationId the location quoting the work. Its own authored times outrank published
+     *     ones (#1575 Tier 0); null quotes as the platform and sees platform times only.
      * @return the resolved guide time, or empty on any miss or failure
      */
     @NonNull
     Optional<GuideTime> resolveLaborTime(
-            @NonNull UUID serviceId, @Nullable String vehicleYear, @Nullable String make, @Nullable String model);
+            @NonNull UUID serviceId,
+            @Nullable String vehicleYear,
+            @Nullable String make,
+            @Nullable String model,
+            @Nullable UUID locationId);
 
     /**
      * A resolved guide time with the provenance the estimate snapshot records.
@@ -36,6 +42,8 @@ public interface CatalogLaborTimeClient {
      * @param matchGrade vehicle-match confidence as the edge reported it
      * @param overlapGroup shared-setup group for overlap-aware summation
      * @param includedOpCodes Durion operation codes already included in this time
+     * @param ownerScope {@code SHOP} when the quoting location's own authored time answered,
+     *     {@code PLATFORM} otherwise
      */
     record GuideTime(
             @NonNull BigDecimal laborHours,
@@ -44,5 +52,6 @@ public interface CatalogLaborTimeClient {
             @Nullable String sourceRevision,
             @Nullable String matchGrade,
             @Nullable String overlapGroup,
-            @NonNull List<String> includedOpCodes) {}
+            @NonNull List<String> includedOpCodes,
+            @Nullable String ownerScope) {}
 }

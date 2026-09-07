@@ -6,6 +6,7 @@ import com.positivity.price.internal.exception.BasePriceUnavailableException;
 import com.positivity.price.internal.exception.BasePriceWindowConflictException;
 import com.positivity.price.internal.exception.DuplicatePromoCodeException;
 import com.positivity.price.internal.exception.EligibilityRuleNotFoundException;
+import com.positivity.price.internal.exception.LaborRateValidationException;
 import com.positivity.price.internal.exception.PromotionCodeNotFoundException;
 import com.positivity.price.internal.exception.PromotionMultipleNotAllowedException;
 import com.positivity.price.internal.exception.PromotionNotApplicableException;
@@ -109,6 +110,10 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleRestrictionRuleNotFound", (HandlerInvocation)
                             request -> handler.handleRestrictionRuleNotFound(
                                     new RestrictionRuleNotFoundException("Restriction rule not found"), request)),
+                    Named.of("handleLaborRateValidation", (HandlerInvocation)
+                            request -> handler.handleLaborRateValidation(
+                                    new LaborRateValidationException("hourlyRate must be greater than zero: 0"),
+                                    request)),
                     Named.of("handleValidationError", (HandlerInvocation)
                             request -> handler.handleValidationError(validationException, request)));
         }

@@ -45,14 +45,18 @@ public class CatalogLaborTimeClientImpl implements CatalogLaborTimeClient {
     @Override
     @NonNull
     public Optional<GuideTime> resolveLaborTime(
-            @NonNull UUID serviceId, @Nullable String vehicleYear, @Nullable String make, @Nullable String model) {
+            @NonNull UUID serviceId,
+            @Nullable String vehicleYear,
+            @Nullable String make,
+            @Nullable String model,
+            @Nullable UUID locationId) {
         try {
             ResolveResponse response = restClient
                     .post()
                     .uri("/v1/catalog/labor-times/resolve")
                     .header("X-User", "pos-workorder")
                     .header("X-Authorities", "catalog:labor_time:resolve")
-                    .body(new ResolveRequest(serviceId, vehicleYear, make, model, null, null, null))
+                    .body(new ResolveRequest(serviceId, vehicleYear, make, model, null, null, null, locationId))
                     .retrieve()
                     .body(ResolveResponse.class);
             if (response == null || !"RESOLVED".equals(response.status()) || response.laborHours() == null) {
@@ -65,7 +69,8 @@ public class CatalogLaborTimeClientImpl implements CatalogLaborTimeClient {
                     response.sourceRevision(),
                     response.matchGrade(),
                     response.overlapGroup(),
-                    response.includedOpCodes() == null ? List.of() : response.includedOpCodes()));
+                    response.includedOpCodes() == null ? List.of() : response.includedOpCodes(),
+                    response.ownerScope()));
         } catch (RuntimeException e) {
             log.warn("Labor-time resolution unavailable for service {}: {}", serviceId, e.getMessage());
             return Optional.empty();
@@ -73,6 +78,10 @@ public class CatalogLaborTimeClientImpl implements CatalogLaborTimeClient {
     }
 
     // Wire records for the catalog.service.model contract (LaborTimeQuoteRequest/Response).
+    // submodel, engineCode and preferredTimeType are sent null and stay null for now: the CRM
+    // vehicle record carries year/make/model only (see VehicleReferenceService), and no workorder
+    // or estimate flags warranty work, so there is nothing to source either from. Wiring them
+    // would mean inventing values, which widens nothing and risks a wrong EXACT-graded answer.
     record ResolveRequest(
             UUID serviceId,
             String vehicleYear,
@@ -80,7 +89,8 @@ public class CatalogLaborTimeClientImpl implements CatalogLaborTimeClient {
             String model,
             String submodel,
             String engineCode,
-            String preferredTimeType) {}
+            String preferredTimeType,
+            UUID locationId) {}
 
     record ResolveResponse(
             String status,
@@ -90,5 +100,6 @@ public class CatalogLaborTimeClientImpl implements CatalogLaborTimeClient {
             String sourceRevision,
             String matchGrade,
             String overlapGroup,
-            List<String> includedOpCodes) {}
+            List<String> includedOpCodes,
+            String ownerScope) {}
 }

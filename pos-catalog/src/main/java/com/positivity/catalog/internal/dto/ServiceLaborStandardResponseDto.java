@@ -21,23 +21,35 @@ public class ServiceLaborStandardResponseDto {
     @Schema(description = "Owning service identifier", requiredMode = REQUIRED)
     private UUID serviceId;
 
-    @Schema(description = "Model year or year range; null = any", requiredMode = NOT_REQUIRED)
+    @Schema(description = "Model year or year range; null = any", requiredMode = NOT_REQUIRED, nullable = true)
     private String vehicleYear;
 
-    @Schema(description = "Vehicle make; null = any", requiredMode = NOT_REQUIRED)
+    @Schema(description = "Vehicle make; null = any", requiredMode = NOT_REQUIRED, nullable = true)
     private String make;
 
-    @Schema(description = "Vehicle model; null = any", requiredMode = NOT_REQUIRED)
+    @Schema(description = "Vehicle model; null = any", requiredMode = NOT_REQUIRED, nullable = true)
     private String model;
 
-    @Schema(description = "Vehicle submodel or trim; null = any", requiredMode = NOT_REQUIRED)
+    @Schema(description = "Vehicle submodel or trim; null = any", requiredMode = NOT_REQUIRED, nullable = true)
     private String submodel;
 
-    @Schema(description = "Engine code; null = any", requiredMode = NOT_REQUIRED)
+    @Schema(description = "Engine code; null = any", requiredMode = NOT_REQUIRED, nullable = true)
     private String engineCode;
 
     @Schema(description = "Labor hours, decimal hours in tenths", example = "1.5", requiredMode = REQUIRED)
     private BigDecimal laborHours;
+
+    @Schema(
+            description = "PLATFORM (every location resolves it) or SHOP (one location's own number)",
+            example = "PLATFORM",
+            requiredMode = REQUIRED)
+    private String ownerScope;
+
+    @Schema(
+            description = "Owning location when ownerScope is SHOP; null for PLATFORM",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
+    private UUID ownerLocationId;
 
     @Schema(description = "Kind of published time", example = "DURION_STANDARD", requiredMode = REQUIRED)
     private String timeType;
@@ -57,7 +69,10 @@ public class ServiceLaborStandardResponseDto {
     @Schema(description = "Date the source published the time", requiredMode = NOT_REQUIRED)
     private LocalDate publishedAt;
 
-    @Schema(description = "When a newer row replaced this one; null while active", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "When a newer row replaced this one; null while active",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private Instant supersededAt;
 
     @Schema(description = "Row creation instant", requiredMode = REQUIRED)

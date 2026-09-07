@@ -11,6 +11,15 @@ vendor checksum recorded for audit rather than recomputed; overlap arithmetic v1
 (default 0.5) per §12 Q6; `CATALOG_LABOR_GUIDE_IMPORT` registered at the `approval`
 threshold rather than the `write` sketched in §4.4 — an import rewrites priced reference
 data wholesale, so it warrants the strictest preset (rationale in `CatalogEventTypes`).
+**Tier 0 build (2026-09-07, #1575):** while Phase 2 stays gated on procurement, the Tier 0
+track from `docs/SPEC-tier-0-durion-owned-service-data.md` landed the Durion-owned half:
+shop-scoped labor standards, category-aware source precedence (Phase 3 item 2), the Tier 0
+tire/Michelin/fleet operation set with invented times, cross-source conflict surfacing (Phase 3
+item 3, reframed as *overlapping* keys — see that spec §9 for why the same-key form cannot
+fire), service packages and fleet requirement sets, shop labor rates and the labor matrix in
+pos-price behind a second ADR-0044 grant, rate-driven pricing of LABOR estimate lines, and the
+Phase 4 labor-intelligence rollup. Phase 3 item 4 (warranty vs retail on the resolve request)
+remains unwired for want of a warranty flag on the workorder.
 Next: Phase 2 (licensed aggregator) is gated on procurement per
 §5.4; the §9 fitment mirror track is untouched.
 **Owner module:** pos-catalog (system of record per decision recorded on

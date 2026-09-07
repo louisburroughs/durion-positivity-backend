@@ -24,24 +24,36 @@ tags:
   name: Supplier Prices
 - description: Per-product unit-of-measure conversion set (purchase/pack UoMs with factor to base UoM)
   name: Product UoM API
+- description: Named sets of service operations sold together, and fleet accounts' requirement sets (a package scoped to one fleet party).
+  name: Service Packages
 - description: Vendor-supplied MKCAT marketing content — names, copy per language, artwork — attached to catalog products by matching, not by identifier. Read, plus a review action for the matches a person has to decide.
   name: Tread Design Enrichment
+- description: Bulk import service operations
+  name: Catalog Service Bulk Ingest API
 - description: Bulk import catalog products
   name: Catalog Bulk Ingest API
 - description: Replay of vendor-specific article-code facts derived from PRICAT imports, for seeding or repairing consumer replicas such as pos-order's purchase-order transmission.
   name: Supplier Article Codes
+- description: Bulk import service package membership
+  name: Service Package Member Bulk Ingest API
 - description: API for products, lifecycle, and pricing
   name: Products API
 - description: 'Scoped service-to-service edge: resolve the applicable estimated labor time for a service operation on a specific vehicle, with provenance and typed degradation.'
   name: Labor Time Resolution
+- description: Bulk import vehicle-keyed labor standards
+  name: Labor Standard Bulk Ingest API
 - description: Manage MSRP values with effective dates
   name: Product MSRP API
+- description: 'Curation report: pairs of active labor standards from different sources that would answer for the same vehicle and time type but disagree.'
+  name: Labor Standard Conflicts
 - description: API for managing catalogs
   name: Catalog API
 - description: Manage price books, pricing rules, and resolution
   name: Price Book API
 - description: API for managing catalog items by type
   name: Catalog Items API
+- description: Bulk import service packages
+  name: Service Package Bulk Ingest API
 paths:
   /v1/catalog-items/service/{serviceId}/labor-standards:
     get:
@@ -728,6 +740,132 @@ paths:
       - Labor Guide Imports
       x-required-permissions:
       - catalog:labor_standard:view
+  /v1/catalog/labor-standards/bulk-ingest:
+    post:
+      description: 'Applies a batch of vehicle-keyed labor standards, each addressed by its service''s operation code and carrying the source and revision that published it, with a per-row verdict.
+
+        Use this tool to load a labor-time pack from a source that pushes its times; do not use it for a STORE-licensed feed the platform pulls, which arrives through runLaborGuideImport instead.
+
+        Preconditions: every row''s operationCode must already name a service, and a row whose vehicle key is already held by an active row of the same source and revision is applied as a no-op.
+
+        Required inputs: jobId (UUID), locationId (UUID) and a non-empty records array; per record, operationCode, sourceCode, sourceRevision and laborHours, with the vehicle key, timeType, overlapGroup, includedOpCodes, ownership and publishedAt optional.
+
+        Emits a CATALOG_LABOR_STANDARD_BULK_INGEST event; a row that changes an active standard supersedes it and inserts the replacement, leaving the old row readable for audit.
+
+        Returns 200 even when rows fail, so callers must inspect successCount, failureCount and the per-row results rather than the HTTP status.
+
+        A row the catalog refused carries errorCode LABOR_STANDARD_INGEST_FAILED and the reason; a row lost to a server-side fault carries INTERNAL_ERROR and a correlationId to quote.
+
+        '
+      operationId: bulkIngestLaborStandards
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Wildcard and vehicle-keyed rows:
+                description: Wildcard and vehicle-keyed rows
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  records:
+                  - laborHours: '1.4'
+                    operationCode: FLEET-PM-A-SERVICE
+                    ownerScope: PLATFORM
+                    sourceCode: DURION
+                    sourceRevision: tier0-fake-2026-09
+                    timeType: DURION_STANDARD
+                  - laborHours: '2.0'
+                    make: Ford
+                    model: F-350
+                    operationCode: FLEET-PM-A-SERVICE
+                    sourceCode: DURION
+                    sourceRevision: tier0-fake-2026-09
+                    timeType: DURION_STANDARD
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestServiceLaborStandardImportRequestDto'
+        description: Batch of labor standards to apply for one ingest job.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; per-row verdicts are in the body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Invalid request payload
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:labor_standard:import
+      summary: Bulk Import Labor Standards
+      tags:
+      - Labor Standard Bulk Ingest API
+      x-required-permissions:
+      - catalog:labor_standard:import
+  /v1/catalog/labor-standards/conflicts:
+    get:
+      description: 'Lists pairs of active labor standards from different sources that would both answer for the same vehicle and the same time type, but publish times differing by more than the threshold, widest disagreement first.
+
+        Use this tool to find where a curation decision is owed — which operations two guides price differently, and by how much; do not use it to find the time a job will actually be quoted at, which is resolveLaborTime, because resolution still picks one of these deterministically by precedence.
+
+        Preconditions: none. Rows count as answering for the same vehicle when their keys OVERLAP, not only when they are identical: a manufacturer''s wildcard time and an aggregator''s time for one year/make/model both answer for that vehicle, which is the disagreement that goes unnoticed today. Time types are never compared across each other — warranty time is meant to differ from retail time.
+
+        Required inputs: none; thresholdHours is optional and defaults to 0.3.
+
+        Emits a CATALOG_LABOR_STANDARD_CONFLICTS event; no state changes.
+
+        Returns 200 with the conflicting pairs, and an empty list when every source agrees within the threshold.
+
+        '
+      operationId: listLaborStandardConflicts
+      parameters:
+      - description: Report a pair only when the two times differ by more than this many hours. Book time is published in tenths, so anything below 0.1 is noise.
+        example: 0.3
+        in: query
+        name: thresholdHours
+        required: false
+        schema:
+          minimum: 0.0
+          type: number
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LaborStandardConflictDto'
+                type: array
+          description: The conflicting pairs, widest disagreement first.
+        '401':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LaborStandardConflictDto'
+                type: array
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LaborStandardConflictDto'
+                type: array
+          description: Insufficient permissions.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:labor_standard:view
+      summary: List Labor Standards Where Sources Disagree
+      tags:
+      - Labor Standard Conflicts
+      x-required-permissions:
+      - catalog:labor_standard:view
   /v1/catalog/labor-times/resolve:
     post:
       description: 'Answers the one applicable estimated labor time for a catalog service operation on the described
@@ -786,6 +924,69 @@ paths:
       - Labor Time Resolution
       x-required-permissions:
       - catalog:labor_time:resolve
+  /v1/catalog/services/bulk-ingest:
+    post:
+      description: 'Imports a batch of service operations in one call, creating or updating each by its Durion operation code and publishing a catalog service fact per row, with a per-row success or failure verdict.
+
+        Use this tool to load a pack of operations, such as the Tier 0 tire, Michelin and fleet operations; do not use addCatalogItem, which registers one service at a time and reports its errors as HTTP statuses rather than row results.
+
+        Preconditions: each row''s operationCode must be uppercase alphanumeric segments joined by single dashes, and a code already in the catalog updates that service in place instead of failing the row.
+
+        Required inputs: jobId (UUID), locationId (UUID) and a non-empty records array; per record, operationCode and name, with shortDescription, longDescription, operationCategory and defaultLaborHours optional.
+
+        Emits a CATALOG_SERVICE_BULK_INGEST event, and each successful row publishes the service fact that hydrates every ext_catalog_service replica.
+
+        Returns 200 even when rows fail, so callers must inspect successCount, failureCount and the per-row results rather than the HTTP status.
+
+        A row the catalog refused carries errorCode CATALOG_SERVICE_INGEST_FAILED and the reason; a row lost to a server-side fault carries INTERNAL_ERROR and a correlationId to quote.
+
+        '
+      operationId: bulkIngestCatalogServices
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Two-operation batch:
+                description: Two-operation batch
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  records:
+                  - defaultLaborHours: '0.6'
+                    name: TPMS Service Kit - Set of 4
+                    operationCategory: TIRE_SERVICE
+                    operationCode: TPMS-SENSOR-SERVICE
+                    shortDescription: Rebuild and reset four TPMS sensors
+                  - defaultLaborHours: '0.3'
+                    name: Lug Torque Re-check
+                    operationCategory: TIRE_SERVICE
+                    operationCode: LUG-TORQUE-RECHECK
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestCatalogServiceBulkIngestRecord'
+        description: Batch of service operations to create or update for one ingest job.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; per-row verdicts are in the body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Invalid request payload
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:service:ingest
+      summary: Bulk Import Service Operations
+      tags:
+      - Catalog Service Bulk Ingest API
+      x-required-permissions:
+      - catalog:service:ingest
   /v1/catalog/supplier-article-codes/replay:
     post:
       description: 'Re-publishes catalog.supplier-article-code.updated facts for one bounded page of vendor-article-code rows so that event-fed replicas in other modules can be seeded or repaired, returning what it emitted and a cursor for the next page.
@@ -4516,6 +4717,473 @@ paths:
       - Product UoM API
       x-required-permissions:
       - catalog:product_uom:edit
+  /v1/service-package-members/bulk-ingest:
+    post:
+      description: 'Applies a batch of package memberships, naming the package by its code and the member by its Durion operation code, with a per-row success or failure verdict.
+
+        Use this tool after bulkIngestServicePackages has loaded the packages themselves; do not use addServicePackageMember, which takes ids rather than codes and refuses an operation the package already carries instead of restating its sequence and quantity.
+
+        Preconditions: both the packageCode and the operationCode must already exist, or that row fails while the rest of the batch proceeds.
+
+        Required inputs: jobId (UUID), locationId (UUID) and a non-empty records array; per record, packageCode and operationCode, with sequence, quantity and required optional.
+
+        Emits a CATALOG_SERVICE_PACKAGE_MEMBER_BULK_INGEST event; a membership that already exists has its sequence, quantity and required flag replaced rather than being duplicated.
+
+        Returns 200 even when rows fail, so callers must inspect successCount, failureCount and the per-row results rather than the HTTP status.
+
+        A row the catalog refused carries errorCode SERVICE_PACKAGE_MEMBER_INGEST_FAILED and the reason; a row lost to a server-side fault carries INTERNAL_ERROR and a correlationId to quote.
+
+        '
+      operationId: bulkIngestServicePackageMembers
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Two members of one package:
+                description: Two members of one package
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  records:
+                  - operationCode: TIRE-INSTALL-SET-4
+                    packageCode: TIRE-INSTALL-PKG-4
+                    quantity: '1.00'
+                    required: 'true'
+                    sequence: '10'
+                  - operationCode: NITROGEN-FILL-SET-4
+                    packageCode: TIRE-INSTALL-PKG-4
+                    quantity: '1.00'
+                    required: 'false'
+                    sequence: '50'
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestServicePackageMemberBulkIngestRecord'
+        description: Batch of package memberships to apply for one ingest job.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; per-row verdicts are in the body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Invalid request payload
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:service_package:manage
+      summary: Bulk Import Service Package Membership
+      tags:
+      - Service Package Member Bulk Ingest API
+      x-required-permissions:
+      - catalog:service_package:manage
+  /v1/service-packages:
+    get:
+      description: 'Lists the active packages a location may sell — its own plus every platform package, its own first — each with its member operations in presentation order.
+
+        Use this tool to show what can be added to a job as a unit, or with fleetPartyId to show what one fleet account requires on every visit; do not use it to look up a single package you already have the id for, which is getServicePackage.
+
+        Preconditions: none. Fleet requirement sets are excluded from a general listing because they belong to one account and are not on offer — naming a fleetPartyId includes them, as does includeFleetPackages.
+
+        Required inputs: none; locationId, fleetPartyId and includeFleetPackages are optional. Omitting locationId lists platform packages only, which is the right answer for a caller quoting as the platform.
+
+        Emits a CATALOG_SERVICE_PACKAGE_LIST event; no state changes.
+
+        Returns 200 with the packages, and an empty list when none match.
+
+        '
+      operationId: listServicePackages
+      parameters:
+      - description: Location whose packages to include alongside platform ones
+        in: query
+        name: locationId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Narrow to one fleet account's requirement set
+        in: query
+        name: fleetPartyId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Include fleet requirement sets in a general listing; defaults to false
+        in: query
+        name: includeFleetPackages
+        required: false
+        schema:
+          default: false
+          type: boolean
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ServicePackageResponseDto'
+                type: array
+          description: The matching packages with their members.
+        '401':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ServicePackageResponseDto'
+                type: array
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ServicePackageResponseDto'
+                type: array
+          description: Insufficient permissions.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:service_package:view
+      summary: List Service Packages
+      tags:
+      - Service Packages
+      x-required-permissions:
+      - catalog:service_package:view
+    post:
+      description: 'Creates a named set of operations sold together — a four-tyre install with the balance and TPMS reset, a fleet PM interval, a seasonal changeover — or, with fleetPartyId set, one fleet account''s requirement set.
+
+        Use this tool to define what a shop offers as a unit; do not use it to add work to a workorder, which is addEstimateItem.
+
+        Preconditions: packageCode must be unique platform-wide. packageLaborHours is AUTHORED, not derived from the members — the overlap arithmetic that turns member times into a total lives in the workorder, and a shop prices a package as a number it chose.
+
+        Required inputs: packageCode and name; ownerScope, ownerLocationId, fleetPartyId, packageLaborHours, active and the effective window are optional.
+
+        Emits a CATALOG_SERVICE_PACKAGE_CREATE event. The package is created empty; add operations with addServicePackageMember.
+
+        Returns 201 with the stored package, 409 when the code is taken, and 422 when a field is not storable as described.
+
+        '
+      operationId: createServicePackage
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Four tire installation package:
+                description: Four tire installation package
+                value:
+                  name: Four Tire Installation Package
+                  packageCode: TIRE-INSTALL-PKG-4
+                  packageLaborHours: 1.6
+            schema:
+              $ref: '#/components/schemas/ServicePackageRequestDto'
+        description: The package's identity, display name, ownership and authored hours. Set fleetPartyId to make it one account's requirement set.
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Service package created.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Insufficient permissions.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: A package already exists with that code.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: The package cannot be stored as described.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:service_package:manage
+      summary: Create A Service Package
+      tags:
+      - Service Packages
+      x-required-permissions:
+      - catalog:service_package:manage
+  /v1/service-packages/bulk-ingest:
+    post:
+      description: 'Imports a batch of service packages in one call, creating or updating each by its package code, with a per-row success or failure verdict.
+
+        Use this tool to load a pack of packages and fleet requirement sets; do not use createServicePackage, which authors one package at a time and refuses a code that already exists rather than updating it.
+
+        Preconditions: each row''s packageCode must be uppercase alphanumeric segments joined by single dashes, and a SHOP-scoped row must name its owning location while a PLATFORM one must not.
+
+        Required inputs: jobId (UUID), locationId (UUID) and a non-empty records array; per record, packageCode, name and packageLaborHours, with description, ownership, fleetPartyId, active and the effective window optional.
+
+        Emits a CATALOG_SERVICE_PACKAGE_BULK_INGEST event; membership is untouched here, so a package''s members survive a re-load and arrive through bulkIngestServicePackageMembers.
+
+        Returns 200 even when rows fail, so callers must inspect successCount, failureCount and the per-row results rather than the HTTP status.
+
+        A row the catalog refused carries errorCode SERVICE_PACKAGE_INGEST_FAILED and the reason; a row lost to a server-side fault carries INTERNAL_ERROR and a correlationId to quote.
+
+        '
+      operationId: bulkIngestServicePackages
+      requestBody:
+        content:
+          application/json:
+            examples:
+              An offering and a requirement set:
+                description: An offering and a requirement set
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
+                  records:
+                  - active: 'true'
+                    name: Four Tire Installation Package
+                    ownerScope: PLATFORM
+                    packageCode: TIRE-INSTALL-PKG-4
+                    packageLaborHours: '1.6'
+                  - fleetPartyId: 0198f2a1-0000-7000-8000-0000000000f1
+                    name: Tarheel Logistics - Standing Requirements
+                    ownerScope: PLATFORM
+                    packageCode: FLEET-REQ-TARHEEL
+                    packageLaborHours: '2.3'
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestServicePackageBulkIngestRecord'
+        description: Batch of service packages to create or update for one ingest job.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; per-row verdicts are in the body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Invalid request payload
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:service_package:manage
+      summary: Bulk Import Service Packages
+      tags:
+      - Service Package Bulk Ingest API
+      x-required-permissions:
+      - catalog:service_package:manage
+  /v1/service-packages/{packageId}:
+    get:
+      description: 'Returns one package with its member operations in presentation order, including inactive packages.
+
+        Use this tool when you already hold the package id; do not use it to discover what a location sells, which is listServicePackages.
+
+        Preconditions: the package must exist.
+
+        Required inputs: packageId.
+
+        Emits a CATALOG_SERVICE_PACKAGE_GET event; no state changes.
+
+        Returns 200 with the package, and 404 when no package has that id.
+
+        '
+      operationId: getServicePackage
+      parameters:
+      - in: path
+        name: packageId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: The package with its members.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Insufficient permissions.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: No package has that id.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:service_package:view
+      summary: Get A Service Package
+      tags:
+      - Service Packages
+      x-required-permissions:
+      - catalog:service_package:view
+  /v1/service-packages/{packageId}/members:
+    post:
+      description: 'Adds one catalog service operation to a package, required by default.
+
+        Use this tool to compose a package; required=false marks an operation the package offers as an upsell rather than includes by definition — which is what separates a fleet requirement from a suggestion.
+
+        Preconditions: the package and the service must both exist, and the service must not already be a member. Wanting two of an operation is a quantity, not a second membership.
+
+        Required inputs: serviceId; sequence, quantity and required are optional, and an omitted sequence appends to the end.
+
+        Emits a CATALOG_SERVICE_PACKAGE_MEMBER_ADD event.
+
+        Returns 200 with the whole package including its updated member list, 404 when the package or service does not exist, and 409 when the service is already a member.
+
+        '
+      operationId: addServicePackageMember
+      parameters:
+      - in: path
+        name: packageId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              An included balance:
+                description: An included balance
+                value:
+                  quantity: 1
+                  required: true
+                  sequence: 20
+                  serviceId: 99407ab3-901d-a7b6-816e-00bfb282ad4c
+            schema:
+              $ref: '#/components/schemas/ServicePackageMemberRequestDto'
+        description: The operation to add, and whether the package includes it by definition or merely offers it.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: The package with its updated members.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Insufficient permissions.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: The package or the service does not exist.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: That service is already a member.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:service_package:manage
+      summary: Add An Operation To A Package
+      tags:
+      - Service Packages
+      x-required-permissions:
+      - catalog:service_package:manage
+  /v1/service-packages/{packageId}/members/{memberId}:
+    delete:
+      description: 'Removes one operation''s membership of a package.
+
+        Use this tool to correct a package''s composition; do not use it to change how much of an operation a package includes, which is a quantity on the membership rather than a removal. Removing a member does not affect any workorder already quoted from the package, which snapshots its own lines.
+
+        Preconditions: the membership must exist and belong to the named package.
+
+        Required inputs: packageId and memberId.
+
+        Emits a CATALOG_SERVICE_PACKAGE_MEMBER_REMOVE event.
+
+        Returns 200 with the whole package including its updated member list, and 404 when the membership does not exist in that package.
+
+        '
+      operationId: removeServicePackageMember
+      parameters:
+      - in: path
+        name: packageId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: memberId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: The package with its updated members.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: Insufficient permissions.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePackageResponseDto'
+          description: That membership does not exist in that package.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:service_package:manage
+      summary: Remove An Operation From A Package
+      tags:
+      - Service Packages
+      x-required-permissions:
+      - catalog:service_package:manage
 components:
   schemas:
     ApiError:
@@ -4626,6 +5294,118 @@ components:
           description: The records to ingest (at least one); shape depends on the target domain
           items:
             $ref: '#/components/schemas/CatalogBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
+    BulkIngestRequestCatalogServiceBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/CatalogServiceBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
+    BulkIngestRequestServiceLaborStandardImportRequestDto:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/ServiceLaborStandardImportRequestDto'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
+    BulkIngestRequestServicePackageBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/ServicePackageBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
+    BulkIngestRequestServicePackageMemberBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/ServicePackageMemberBulkIngestRecord'
           minItems: 1
           type: array
       required:
@@ -4959,6 +5739,44 @@ components:
       required:
       - data
       - limit
+      type: object
+    CatalogServiceBulkIngestRecord:
+      description: Single service-operation record within a bulk ingest payload
+      properties:
+        defaultLaborHours:
+          description: Vehicle-agnostic fallback labor hours, decimal hours in tenths
+          example: '0.6'
+          type: string
+        longDescription:
+          description: Full description of what the operation covers
+          example: Replace TPMS service kits on all four sensors, test transmission, relearn positions.
+          type: string
+        name:
+          description: Operation name shown to a writer
+          example: TPMS Service Kit - Set of 4
+          minLength: 1
+          type: string
+        operationCategory:
+          description: Operation category
+          enum:
+          - REPAIR
+          - DIAGNOSTIC
+          - MAINTENANCE
+          - TIRE_SERVICE
+          example: TIRE_SERVICE
+          type: string
+        operationCode:
+          description: Durion operation code; the natural key the row is upserted on
+          example: TPMS-SENSOR-SERVICE
+          minLength: 1
+          type: string
+        shortDescription:
+          description: One-line summary of the operation
+          example: Rebuild and reset four TPMS sensors
+          type: string
+      required:
+      - name
+      - operationCode
       type: object
     CategoryDto:
       description: Product category
@@ -5324,6 +6142,54 @@ components:
       - providerOpCode
       - sourceCode
       type: object
+    LaborStandardConflictDto:
+      description: 'Two active labor standards from different sources that would answer for the same vehicle and time type, disagreeing by more than the requested threshold. Curation material: the platform still resolves one of them by precedence, this says the choice is contested.'
+      properties:
+        differenceHours:
+          description: Absolute difference between the two published times
+          example: 0.3
+          type: number
+        laborHours:
+          description: Hours the first row publishes
+          example: 1.1
+          type: number
+        operationCode:
+          description: Durion operation code, when the service carries one
+          example: TIRE-INSTALL-SET-4
+          type: string
+        otherLaborHours:
+          description: Hours the second row publishes
+          example: 1.4
+          type: number
+        otherSourceCode:
+          description: Source of the second row
+          example: MOCKGUIDE
+          type: string
+        otherStandardId:
+          description: Identifier of the second row
+          format: uuid
+          type: string
+        serviceId:
+          description: Service whose operation the two rows describe
+          format: uuid
+          type: string
+        sourceCode:
+          description: Source of the first row
+          example: MICHELIN
+          type: string
+        standardId:
+          description: Identifier of the first row
+          format: uuid
+          type: string
+        timeType:
+          description: Time class both rows publish
+          example: MANUFACTURER_INSTALL
+          type: string
+        vehicleKey:
+          description: The narrower row's vehicle key, rendered for reading
+          example: 2019|Honda|Civic|*|*
+          type: string
+      type: object
     LaborTimeQuoteRequest:
       description: Which service operation is being quoted, on which vehicle (null fields widen the match), and which time class the workorder wants (null = retail-first).
       properties:
@@ -5332,6 +6198,10 @@ components:
           example: K20C2
           maxLength: 64
           minLength: 0
+          type: string
+        locationId:
+          description: Location quoting the work; its own authored times win. Null = platform only.
+          format: uuid
           type: string
         make:
           description: Vehicle make; null = unknown.
@@ -5396,6 +6266,10 @@ components:
           type: string
         overlapGroup:
           description: Shared-setup group; lines sharing it must not be summed naively.
+          type: string
+        ownerScope:
+          description: SHOP when the quoting location's own authored time answered, else PLATFORM.
+          example: PLATFORM
           type: string
         sourceCode:
           description: Provenance source.
@@ -6949,6 +7823,82 @@ components:
           format: date-time
           type: string
       type: object
+    ServiceLaborStandardImportRequestDto:
+      description: Single labor-standard record within a bulk ingest payload, with its source provenance
+      properties:
+        engineCode:
+          description: Engine code; blank matches every engine
+          example: 6.7L-PSD
+          type: string
+        includedOpCodes:
+          description: Comma-separated operation codes this time already includes, which therefore contribute nothing when billed alongside it
+          example: WHEEL-BALANCE-SET-4,TPMS-SENSOR-SERVICE
+          type: string
+        laborHours:
+          description: Labor time in decimal hours, in tenths
+          example: '1.6'
+          minLength: 1
+          type: string
+        make:
+          description: Vehicle make; blank matches every make
+          example: Ford
+          type: string
+        model:
+          description: Vehicle model; blank matches every model
+          example: F-350
+          type: string
+        operationCode:
+          description: Durion operation code of the service the standard belongs to
+          example: TIRE-INSTALL-LT-SET-4
+          minLength: 1
+          type: string
+        overlapGroup:
+          description: Overlap group; operations sharing one bill their shared setup once
+          example: WHEEL-OFF
+          type: string
+        ownerLocationId:
+          description: Owning location, required for a SHOP row and rejected on a PLATFORM one
+          example: 0198f2a1-0000-7000-8000-00000000000a
+          type: string
+        ownerScope:
+          description: Whether the row is the platform's answer or one shop's own
+          enum:
+          - PLATFORM
+          - SHOP
+          example: PLATFORM
+          type: string
+        publishedAt:
+          description: Date the source published this time
+          example: '2026-09-01'
+          type: string
+        sourceCode:
+          description: Source that published this time; part of the row's provenance
+          example: DURION
+          minLength: 1
+          type: string
+        sourceRevision:
+          description: The source's revision this row came from; a row already active under the same key and revision is a no-op, and a new revision supersedes it
+          example: tier0-fake-2026-09
+          minLength: 1
+          type: string
+        submodel:
+          description: Vehicle submodel; blank matches every submodel
+          example: XLT
+          type: string
+        timeType:
+          description: Kind of time this row states
+          example: DURION_STANDARD
+          type: string
+        vehicleYear:
+          description: Model year the time applies to; blank matches every year
+          example: '2019'
+          type: string
+      required:
+      - laborHours
+      - operationCode
+      - sourceCode
+      - sourceRevision
+      type: object
     ServiceLaborStandardRequestDto:
       description: 'A hand-authored (DURION-source) labor standard for a service operation. Vehicle-key fields left null are wildcards: the time applies to any vehicle the more specific fields do not narrow.'
       properties:
@@ -6986,6 +7936,17 @@ components:
           example: WHEEL-OFF
           maxLength: 64
           minLength: 0
+          type: string
+        ownerLocationId:
+          description: Owning location; required when ownerScope is SHOP, rejected otherwise
+          format: uuid
+          type: string
+        ownerScope:
+          description: 'Who owns this time: PLATFORM (every location resolves it) or SHOP (one location''s own number, which outranks platform rows for that location); defaults to PLATFORM'
+          enum:
+          - PLATFORM
+          - SHOP
+          example: SHOP
           type: string
         publishedAt:
           description: Date the time was published or decided; omitted means undated
@@ -7025,7 +7986,9 @@ components:
           type: string
         engineCode:
           description: Engine code; null = any
-          type: string
+          type:
+          - string
+          - 'null'
         id:
           description: Labor standard identifier
           format: uuid
@@ -7041,12 +8004,26 @@ components:
           type: number
         make:
           description: Vehicle make; null = any
-          type: string
+          type:
+          - string
+          - 'null'
         model:
           description: Vehicle model; null = any
-          type: string
+          type:
+          - string
+          - 'null'
         overlapGroup:
           description: Overlap group shared with other operations
+          type: string
+        ownerLocationId:
+          description: Owning location when ownerScope is SHOP; null for PLATFORM
+          format: uuid
+          type:
+          - string
+          - 'null'
+        ownerScope:
+          description: PLATFORM (every location resolves it) or SHOP (one location's own number)
+          example: PLATFORM
           type: string
         publishedAt:
           description: Date the source published the time
@@ -7064,26 +8041,277 @@ components:
           type: string
         submodel:
           description: Vehicle submodel or trim; null = any
-          type: string
+          type:
+          - string
+          - 'null'
         supersededAt:
           description: When a newer row replaced this one; null while active
           format: date-time
-          type: string
+          type:
+          - string
+          - 'null'
         timeType:
           description: Kind of published time
           example: DURION_STANDARD
           type: string
         vehicleYear:
           description: Model year or year range; null = any
-          type: string
+          type:
+          - string
+          - 'null'
       required:
       - createdAt
       - id
       - laborHours
+      - ownerScope
       - serviceId
       - sourceCode
       - sourceRevision
       - timeType
+      type: object
+    ServicePackageBulkIngestRecord:
+      description: Single service-package record within a bulk ingest payload
+      properties:
+        active:
+          description: Whether the package is sellable
+          example: 'true'
+          type: string
+        description:
+          description: What the package covers and why it is priced as one job
+          example: Mount and balance four tires, reset TPMS and torque to specification.
+          type: string
+        effectiveFrom:
+          description: First date the package may be sold
+          example: '2026-01-01'
+          type: string
+        effectiveTo:
+          description: Last date the package may be sold
+          example: '2026-12-31'
+          type: string
+        fleetPartyId:
+          description: Fleet account this is a standing requirement set for; blank makes it an offering. A file that names the fleet rather than its id has the loader resolve it against the party directory before the batch is posted
+          example: 0198f2a1-0000-7000-8000-0000000000f1
+          type: string
+        name:
+          description: Package name shown to a writer
+          example: Four Tire Installation Package
+          minLength: 1
+          type: string
+        ownerLocationId:
+          description: Owning location, required for a SHOP package and rejected on a PLATFORM one
+          example: 0198f2a1-0000-7000-8000-00000000000a
+          type: string
+        ownerScope:
+          description: Whether the package is the platform's or one shop's own
+          enum:
+          - PLATFORM
+          - SHOP
+          example: PLATFORM
+          type: string
+        packageCode:
+          description: Package code; the natural key the row is upserted on
+          example: TIRE-INSTALL-PKG-4
+          minLength: 1
+          type: string
+        packageLaborHours:
+          description: Authored labor hours for the package, in tenths
+          example: '1.6'
+          minLength: 1
+          type: string
+      required:
+      - name
+      - packageCode
+      - packageLaborHours
+      type: object
+    ServicePackageMemberBulkIngestRecord:
+      description: Single package-membership record within a bulk ingest payload
+      properties:
+        operationCode:
+          description: Durion operation code of the member service
+          example: WHEEL-BALANCE-SET-4
+          minLength: 1
+          type: string
+        packageCode:
+          description: Code of the package the operation belongs to
+          example: TIRE-INSTALL-PKG-4
+          minLength: 1
+          type: string
+        quantity:
+          description: How many times the operation is performed
+          example: '1.00'
+          type: string
+        required:
+          description: Whether the member is part of the package or an offered add-on; defaults to true
+          example: 'true'
+          type: string
+        sequence:
+          description: Position in the package; blank appends after the current last member
+          example: '20'
+          type: string
+      required:
+      - operationCode
+      - packageCode
+      type: object
+    ServicePackageMemberRequestDto:
+      description: One operation's membership of a package.
+      properties:
+        quantity:
+          description: How many of this operation the package includes; defaults to 1
+          example: 1
+          type: number
+        required:
+          description: True = included by definition (what makes a fleet requirement a requirement); false = an upsell the package offers. Defaults to true.
+          type: boolean
+        sequence:
+          description: Presentation and work order within the package; defaults to the end
+          format: int32
+          type: integer
+        serviceId:
+          description: Catalog service this membership names
+          format: uuid
+          type: string
+      required:
+      - serviceId
+      type: object
+    ServicePackageMemberResponseDto:
+      description: One operation's membership of a package.
+      properties:
+        id:
+          description: Membership identifier
+          format: uuid
+          type: string
+        operationCode:
+          description: Durion operation code, when the service carries one
+          example: WHEEL-BALANCE-SET-4
+          type: string
+        quantity:
+          description: How many of this operation the package includes
+          example: 1.0
+          type: number
+        required:
+          description: True = included by definition; false = an upsell the package offers
+          type: boolean
+        sequence:
+          description: Presentation and work order within the package
+          format: int32
+          type: integer
+        serviceId:
+          description: Catalog service this membership names
+          format: uuid
+          type: string
+        serviceName:
+          description: Service name
+          type: string
+      type: object
+    ServicePackageRequestDto:
+      description: A named set of operations sold together. With fleetPartyId set it is that account's requirement set rather than a general offering.
+      properties:
+        active:
+          description: Whether the package is currently offered; defaults to true
+          type: boolean
+        description:
+          description: What the package covers
+          type: string
+        effectiveFrom:
+          description: First day the package is offered
+          format: date
+          type: string
+        effectiveTo:
+          description: Last day the package is offered
+          format: date
+          type: string
+        fleetPartyId:
+          description: Fleet account this package is the requirement set for; omit for a general offering
+          format: uuid
+          type: string
+        name:
+          description: Display name
+          example: Four Tire Installation Package
+          maxLength: 255
+          minLength: 0
+          type: string
+        ownerLocationId:
+          description: Owning location; required when ownerScope is SHOP, rejected otherwise
+          format: uuid
+          type: string
+        ownerScope:
+          description: PLATFORM (every location sells it) or SHOP (one location's own); defaults to PLATFORM
+          enum:
+          - PLATFORM
+          - SHOP
+          example: PLATFORM
+          type: string
+        packageCode:
+          description: Stable package identity, unique platform-wide
+          example: TIRE-INSTALL-PKG-4
+          maxLength: 64
+          minLength: 0
+          type: string
+        packageLaborHours:
+          description: 'Authored labor hours for the package as sold, decimal hours in tenths. Not derived from the members: a shop prices a package as a number it chose.'
+          example: 1.2
+          type: number
+      required:
+      - name
+      - packageCode
+      type: object
+    ServicePackageResponseDto:
+      description: A service package with its members in presentation order.
+      properties:
+        active:
+          description: Whether the package is currently offered
+          type: boolean
+        createdAt:
+          description: When the package was created
+          format: date-time
+          type: string
+        description:
+          description: What the package covers
+          type: string
+        effectiveFrom:
+          description: First day the package is offered
+          format: date
+          type: string
+        effectiveTo:
+          description: Last day the package is offered
+          format: date
+          type: string
+        fleetPartyId:
+          description: Fleet account this is the requirement set for; null for a general offering
+          format: uuid
+          type:
+          - string
+          - 'null'
+        id:
+          description: Package identifier
+          format: uuid
+          type: string
+        members:
+          description: Member operations, in presentation order
+          items:
+            $ref: '#/components/schemas/ServicePackageMemberResponseDto'
+          type: array
+        name:
+          description: Display name
+          type: string
+        ownerLocationId:
+          description: Owning location when ownerScope is SHOP; null for PLATFORM
+          format: uuid
+          type:
+          - string
+          - 'null'
+        ownerScope:
+          description: PLATFORM or SHOP
+          example: PLATFORM
+          type: string
+        packageCode:
+          description: Stable package identity
+          example: TIRE-INSTALL-PKG-4
+          type: string
+        packageLaborHours:
+          description: Authored labor hours for the package as sold
+          example: 1.2
+          type: number
       type: object
     SortObject:
       properties:

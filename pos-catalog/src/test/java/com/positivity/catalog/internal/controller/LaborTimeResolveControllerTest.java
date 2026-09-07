@@ -62,7 +62,8 @@ class LaborTimeResolveControllerTest {
                         "2026-09-01",
                         LaborTimeQuoteResponse.MatchGrade.EXACT,
                         "WHEEL-OFF",
-                        List.of("BRAKE-PAD-FRONT")));
+                        List.of("BRAKE-PAD-FRONT"),
+                        "PLATFORM"));
 
         mockMvc.perform(post(RESOLVE).contentType(MediaType.APPLICATION_JSON).content("""
                                 {"serviceId":"56b14899-cb6c-7628-0763-4c603ec0a325",

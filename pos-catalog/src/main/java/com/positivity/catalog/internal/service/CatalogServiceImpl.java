@@ -147,6 +147,20 @@ public class CatalogServiceImpl implements CatalogService {
 
     @Override
     @Transactional
+    public CatalogItemResponseDto upsertServiceByOperationCode(CatalogItemRequestDto request) {
+        String operationCode =
+                LaborTimeValidation.validatedOperationCodeShape(request.getOperationCode(), "operationCode");
+        if (operationCode == null) {
+            throw new CatalogValidationException("operationCode is required to ingest a service");
+        }
+        ServiceEntity target =
+                serviceRepository.findByOperationCode(operationCode).orElseGet(ServiceEntity::new);
+        copyOntoServiceEntity(request, target);
+        return toCatalogItemResponse(SERVICE, saveService(target));
+    }
+
+    @Override
+    @Transactional
     public Optional<CatalogItemResponseDto> updateCatalogItem(
             String type, UUID catalogId, CatalogItemRequestDto request) {
         return switch (normalizeType(type)) {

@@ -8,6 +8,8 @@ import com.positivity.bulkloader.internal.domain.BayLoaderRecord;
 import com.positivity.bulkloader.internal.domain.BayLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CatalogLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CatalogProductRecord;
+import com.positivity.bulkloader.internal.domain.CatalogServiceLoaderRecord;
+import com.positivity.bulkloader.internal.domain.CatalogServiceLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CommercialCustomerLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.CommercialCustomerRecord;
 import com.positivity.bulkloader.internal.domain.CustomerLoaderStrategy;
@@ -16,6 +18,10 @@ import com.positivity.bulkloader.internal.domain.CycleCountPlanLoaderRecord;
 import com.positivity.bulkloader.internal.domain.CycleCountPlanLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.InventoryStockCountLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.InventoryStockCountRecord;
+import com.positivity.bulkloader.internal.domain.LaborRateAdjustmentLoaderRecord;
+import com.positivity.bulkloader.internal.domain.LaborRateAdjustmentLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.LaborRateLoaderRecord;
+import com.positivity.bulkloader.internal.domain.LaborRateLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationRecord;
 import com.positivity.bulkloader.internal.domain.MechanicSkillLoaderRecord;
@@ -33,6 +39,12 @@ import com.positivity.bulkloader.internal.domain.RolePermissionLoaderRecord;
 import com.positivity.bulkloader.internal.domain.RolePermissionLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.SecurityUserLoaderRecord;
 import com.positivity.bulkloader.internal.domain.SecurityUserLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.ServiceLaborStandardLoaderRecord;
+import com.positivity.bulkloader.internal.domain.ServiceLaborStandardLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.ServicePackageLoaderRecord;
+import com.positivity.bulkloader.internal.domain.ServicePackageLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.ServicePackageMemberLoaderRecord;
+import com.positivity.bulkloader.internal.domain.ServicePackageMemberLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.StaffingAssignmentLoaderRecord;
 import com.positivity.bulkloader.internal.domain.StaffingAssignmentLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.StorageLocationLoaderRecord;
@@ -100,6 +112,12 @@ public class BatchConfiguration {
     private final SecurityUserLoaderStrategy securityUserLoaderStrategy;
     private final UserPersonLinkLoaderStrategy userPersonLinkLoaderStrategy;
     private final MechanicSkillLoaderStrategy mechanicSkillLoaderStrategy;
+    private final CatalogServiceLoaderStrategy catalogServiceLoaderStrategy;
+    private final ServiceLaborStandardLoaderStrategy serviceLaborStandardLoaderStrategy;
+    private final ServicePackageLoaderStrategy servicePackageLoaderStrategy;
+    private final ServicePackageMemberLoaderStrategy servicePackageMemberLoaderStrategy;
+    private final LaborRateLoaderStrategy laborRateLoaderStrategy;
+    private final LaborRateAdjustmentLoaderStrategy laborRateAdjustmentLoaderStrategy;
 
     // Eureka service ids resolved through the load-balanced builder (#641); the ingest
     // writers address sibling services by discovery instead of host:port base URLs.
@@ -1231,6 +1249,343 @@ public class BatchConfiguration {
                         "shop:schedule:edit"),
                 new JobParams(jobIdParam, locationIdParam, operatorId),
                 this::mapMechanicSkillPayloads);
+    }
+
+    @Bean
+    public Job catalogServiceBulkLoadJob(Step catalogServiceBulkLoadStep) {
+        return jobFactory.job("catalogServiceBulkLoadJob", catalogServiceBulkLoadStep);
+    }
+
+    @Bean
+    public Step catalogServiceBulkLoadStep(
+            ItemStreamReader<CatalogServiceLoaderRecord> catalogServiceReader,
+            ItemProcessor<CatalogServiceLoaderRecord, NumberedRecord<CatalogServiceLoaderRecord>>
+                    catalogServiceItemProcessor,
+            ItemWriter<NumberedRecord<CatalogServiceLoaderRecord>> catalogServiceBulkIngestWriter) {
+        return jobFactory.step(
+                "catalogServiceBulkLoadStep",
+                catalogServiceReader,
+                catalogServiceItemProcessor,
+                catalogServiceBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<CatalogServiceLoaderRecord> catalogServiceReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(catalogServiceLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<CatalogServiceLoaderRecord, NumberedRecord<CatalogServiceLoaderRecord>>
+            catalogServiceItemProcessor(
+                    @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+                    @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+                    @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                catalogServiceLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<CatalogServiceLoaderRecord>> catalogServiceBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "catalogServiceBulkIngestWriter",
+                        DomainType.CATALOG_SERVICE,
+                        catalogServiceId,
+                        "/v1/catalog/services/bulk-ingest",
+                        "catalog:service:ingest"),
+                new JobParams(jobIdParam, locationIdParam, operatorId));
+    }
+
+    @Bean
+    public Job serviceLaborStandardBulkLoadJob(Step serviceLaborStandardBulkLoadStep) {
+        return jobFactory.job("serviceLaborStandardBulkLoadJob", serviceLaborStandardBulkLoadStep);
+    }
+
+    @Bean
+    public Step serviceLaborStandardBulkLoadStep(
+            ItemStreamReader<ServiceLaborStandardLoaderRecord> serviceLaborStandardReader,
+            ItemProcessor<ServiceLaborStandardLoaderRecord, NumberedRecord<ServiceLaborStandardLoaderRecord>>
+                    serviceLaborStandardItemProcessor,
+            ItemWriter<NumberedRecord<ServiceLaborStandardLoaderRecord>> serviceLaborStandardBulkIngestWriter) {
+        return jobFactory.step(
+                "serviceLaborStandardBulkLoadStep",
+                serviceLaborStandardReader,
+                serviceLaborStandardItemProcessor,
+                serviceLaborStandardBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<ServiceLaborStandardLoaderRecord> serviceLaborStandardReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(serviceLaborStandardLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<ServiceLaborStandardLoaderRecord, NumberedRecord<ServiceLaborStandardLoaderRecord>>
+            serviceLaborStandardItemProcessor(
+                    @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+                    @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+                    @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                serviceLaborStandardLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<ServiceLaborStandardLoaderRecord>> serviceLaborStandardBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "serviceLaborStandardBulkIngestWriter",
+                        DomainType.SERVICE_LABOR_STANDARD,
+                        catalogServiceId,
+                        "/v1/catalog/labor-standards/bulk-ingest",
+                        "catalog:labor_standard:import"),
+                new JobParams(jobIdParam, locationIdParam, operatorId));
+    }
+
+    @Bean
+    public Job servicePackageBulkLoadJob(Step servicePackageBulkLoadStep) {
+        return jobFactory.job("servicePackageBulkLoadJob", servicePackageBulkLoadStep);
+    }
+
+    @Bean
+    public Step servicePackageBulkLoadStep(
+            ItemStreamReader<ServicePackageLoaderRecord> servicePackageReader,
+            ItemProcessor<ServicePackageLoaderRecord, NumberedRecord<ServicePackageLoaderRecord>>
+                    servicePackageItemProcessor,
+            ItemWriter<NumberedRecord<ServicePackageLoaderRecord>> servicePackageBulkIngestWriter) {
+        return jobFactory.step(
+                "servicePackageBulkLoadStep",
+                servicePackageReader,
+                servicePackageItemProcessor,
+                servicePackageBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<ServicePackageLoaderRecord> servicePackageReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(servicePackageLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<ServicePackageLoaderRecord, NumberedRecord<ServicePackageLoaderRecord>>
+            servicePackageItemProcessor(
+                    @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+                    @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+                    @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                servicePackageLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<ServicePackageLoaderRecord>> servicePackageBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "servicePackageBulkIngestWriter",
+                        DomainType.SERVICE_PACKAGE,
+                        catalogServiceId,
+                        "/v1/service-packages/bulk-ingest",
+                        "catalog:service_package:manage"),
+                new JobParams(jobIdParam, locationIdParam, operatorId));
+    }
+
+    @Bean
+    public Job servicePackageMemberBulkLoadJob(Step servicePackageMemberBulkLoadStep) {
+        return jobFactory.job("servicePackageMemberBulkLoadJob", servicePackageMemberBulkLoadStep);
+    }
+
+    @Bean
+    public Step servicePackageMemberBulkLoadStep(
+            ItemStreamReader<ServicePackageMemberLoaderRecord> servicePackageMemberReader,
+            ItemProcessor<ServicePackageMemberLoaderRecord, NumberedRecord<ServicePackageMemberLoaderRecord>>
+                    servicePackageMemberItemProcessor,
+            ItemWriter<NumberedRecord<ServicePackageMemberLoaderRecord>> servicePackageMemberBulkIngestWriter) {
+        return jobFactory.step(
+                "servicePackageMemberBulkLoadStep",
+                servicePackageMemberReader,
+                servicePackageMemberItemProcessor,
+                servicePackageMemberBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<ServicePackageMemberLoaderRecord> servicePackageMemberReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(servicePackageMemberLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<ServicePackageMemberLoaderRecord, NumberedRecord<ServicePackageMemberLoaderRecord>>
+            servicePackageMemberItemProcessor(
+                    @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+                    @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+                    @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                servicePackageMemberLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<ServicePackageMemberLoaderRecord>> servicePackageMemberBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "servicePackageMemberBulkIngestWriter",
+                        DomainType.SERVICE_PACKAGE_MEMBER,
+                        catalogServiceId,
+                        "/v1/service-package-members/bulk-ingest",
+                        "catalog:service_package:manage"),
+                new JobParams(jobIdParam, locationIdParam, operatorId));
+    }
+
+    @Bean
+    public Job laborRateBulkLoadJob(Step laborRateBulkLoadStep) {
+        return jobFactory.job("laborRateBulkLoadJob", laborRateBulkLoadStep);
+    }
+
+    @Bean
+    public Step laborRateBulkLoadStep(
+            ItemStreamReader<LaborRateLoaderRecord> laborRateReader,
+            ItemProcessor<LaborRateLoaderRecord, NumberedRecord<LaborRateLoaderRecord>> laborRateItemProcessor,
+            ItemWriter<NumberedRecord<LaborRateLoaderRecord>> laborRateBulkIngestWriter) {
+        return jobFactory.step(
+                "laborRateBulkLoadStep", laborRateReader, laborRateItemProcessor, laborRateBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<LaborRateLoaderRecord> laborRateReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(laborRateLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<LaborRateLoaderRecord, NumberedRecord<LaborRateLoaderRecord>> laborRateItemProcessor(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                laborRateLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<LaborRateLoaderRecord>> laborRateBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "laborRateBulkIngestWriter",
+                        DomainType.LABOR_RATE,
+                        priceServiceId,
+                        "/v1/labor-rates/bulk-ingest",
+                        "pricing:labor_rate:manage"),
+                new JobParams(jobIdParam, locationIdParam, operatorId));
+    }
+
+    @Bean
+    public Job laborRateAdjustmentBulkLoadJob(Step laborRateAdjustmentBulkLoadStep) {
+        return jobFactory.job("laborRateAdjustmentBulkLoadJob", laborRateAdjustmentBulkLoadStep);
+    }
+
+    @Bean
+    public Step laborRateAdjustmentBulkLoadStep(
+            ItemStreamReader<LaborRateAdjustmentLoaderRecord> laborRateAdjustmentReader,
+            ItemProcessor<LaborRateAdjustmentLoaderRecord, NumberedRecord<LaborRateAdjustmentLoaderRecord>>
+                    laborRateAdjustmentItemProcessor,
+            ItemWriter<NumberedRecord<LaborRateAdjustmentLoaderRecord>> laborRateAdjustmentBulkIngestWriter) {
+        return jobFactory.step(
+                "laborRateAdjustmentBulkLoadStep",
+                laborRateAdjustmentReader,
+                laborRateAdjustmentItemProcessor,
+                laborRateAdjustmentBulkIngestWriter);
+    }
+
+    @Bean
+    @StepScope
+    public ItemStreamReader<LaborRateAdjustmentLoaderRecord> laborRateAdjustmentReader(
+            @Value("#{jobParameters['storagePath']}") String storagePath,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
+        return jobFactory.reader(laborRateAdjustmentLoaderStrategy, storagePath, jobIdParam);
+    }
+
+    @Bean
+    @StepScope
+    public ItemProcessor<LaborRateAdjustmentLoaderRecord, NumberedRecord<LaborRateAdjustmentLoaderRecord>>
+            laborRateAdjustmentItemProcessor(
+                    @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+                    @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+                    @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
+        return jobFactory.processor(
+                laborRateAdjustmentLoaderStrategy,
+                jobFactory.parseJobId(jobIdParam),
+                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
+    }
+
+    @Bean
+    @StepScope
+    public ItemWriter<NumberedRecord<LaborRateAdjustmentLoaderRecord>> laborRateAdjustmentBulkIngestWriter(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
+            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
+            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
+            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
+        return writerFactory.create(
+                restClientBuilder,
+                new Target(
+                        "laborRateAdjustmentBulkIngestWriter",
+                        DomainType.LABOR_RATE_ADJUSTMENT,
+                        priceServiceId,
+                        "/v1/labor-rate-adjustments/bulk-ingest",
+                        "pricing:labor_rate:manage"),
+                new JobParams(jobIdParam, locationIdParam, operatorId));
     }
 
     private List<LocationWriterPayload> mapLocationPayloads(List<? extends LocationRecord> items) {

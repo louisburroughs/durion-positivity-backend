@@ -559,6 +559,17 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    /**
+     * #1575 Tier 0: the labor-intelligence rollup. search, not fastRead — it aggregates every
+     * finished, clocked service line in the module, which is deliberately not a request-path
+     * shape, and its budget should say so.
+     */
+    public static final EventTypeRegistration WORKORDER_LABOR_INTELLIGENCE_LIST = EventTypeRegistration.search(
+                    "WORKORDER_LABOR_INTELLIGENCE_LIST",
+                    "Retrieve the shop's median actual time per operation against the guide baseline")
+            .apiVersion("1")
+            .build();
+
     // ==================== ALL EVENT TYPES ====================
 
     /** All event types for registration at startup */
@@ -666,5 +677,6 @@ public final class EventTypes {
             WORKORDER_STATUS_TRANSITIONS_VIEW,
             WORKORDER_ANALYTICS_REOPENED_VIEW,
             WORKORDER_ANALYTICS_TECHNICIAN_LABOR_VIEW,
+            WORKORDER_LABOR_INTELLIGENCE_LIST,
             WORKORDER_ANALYTICS_OPEN_BY_CUSTOMER_VIEW);
 }

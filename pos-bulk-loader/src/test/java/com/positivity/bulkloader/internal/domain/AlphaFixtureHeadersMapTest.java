@@ -69,7 +69,19 @@ class AlphaFixtureHeadersMapTest {
                 Arguments.of("security/users.csv", DomainType.SECURITY_USER, Set.<String>of()),
                 Arguments.of("security/user-person-links.csv", DomainType.USER_PERSON_LINK, Set.<String>of()),
                 Arguments.of("shop-manager/mechanic-skills.csv", DomainType.MECHANIC_SKILL, Set.<String>of()),
-                Arguments.of("price/base-prices.csv", DomainType.BASE_PRICE, Set.<String>of()));
+                Arguments.of("price/base-prices.csv", DomainType.BASE_PRICE, Set.<String>of()),
+                // Tier 0 packs (#1575). Every column is named by its record; the resolvable keys
+                // (ownerLocationCode, fleetCustomerName, locationCode) are record fields too, so
+                // nothing is dropped here on purpose.
+                Arguments.of("catalog/tier0-services.csv", DomainType.CATALOG_SERVICE, Set.<String>of()),
+                Arguments.of("catalog/tier0-labor-standards.csv", DomainType.SERVICE_LABOR_STANDARD, Set.<String>of()),
+                Arguments.of("catalog/tier0-service-packages.csv", DomainType.SERVICE_PACKAGE, Set.<String>of()),
+                Arguments.of(
+                        "catalog/tier0-service-package-members.csv",
+                        DomainType.SERVICE_PACKAGE_MEMBER,
+                        Set.<String>of()),
+                Arguments.of("price/labor-rates.csv", DomainType.LABOR_RATE, Set.<String>of()),
+                Arguments.of("price/labor-rate-adjustments.csv", DomainType.LABOR_RATE_ADJUSTMENT, Set.<String>of()));
     }
 
     @ParameterizedTest(name = "{0} -> {1}")

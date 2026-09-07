@@ -593,4 +593,59 @@ class CatalogServiceImplItemsTest {
             verify(catalogRepository, never()).deleteById(any(UUID.class));
         }
     }
+
+    @Nested
+    @DisplayName("upsertServiceByOperationCode (docs/DATA_SEED_STRATEGY.md §3 Tier 2)")
+    class UpsertServiceByOperationCode {
+
+        private CatalogItemRequestDto serviceRequest() {
+            CatalogItemRequestDto request = new CatalogItemRequestDto();
+            request.setOperationCode("TPMS-SENSOR-SERVICE");
+            request.setName("TPMS Service Kit - Set of 4");
+            request.setShortDescription("Rebuild and reset four TPMS sensors");
+            request.setOperationCategory("TIRE_SERVICE");
+            request.setDefaultLaborHours(new java.math.BigDecimal("0.6"));
+            return request;
+        }
+
+        @Test
+        @DisplayName("creates the operation and publishes the service fact, which a Flyway seed never did")
+        void createsAndPublishes() {
+            when(serviceRepository.findByOperationCode("TPMS-SENSOR-SERVICE")).thenReturn(Optional.empty());
+
+            CatalogItemResponseDto response = service.upsertServiceByOperationCode(serviceRequest());
+
+            assertThat(response.getOperationCode()).isEqualTo("TPMS-SENSOR-SERVICE");
+            assertThat(response.getDefaultLaborHours()).isEqualByComparingTo("0.6");
+            verify(catalogFactPublisher).publishServiceUpdated(any(ServiceEntity.class));
+        }
+
+        @Test
+        @DisplayName("a code the catalog already holds updates that row rather than colliding with it")
+        void updatesTheRowTheCodeNames() {
+            ServiceEntity existing = serviceEntity();
+            existing.setOperationCode("TPMS-SENSOR-SERVICE");
+            when(serviceRepository.findByOperationCode("TPMS-SENSOR-SERVICE")).thenReturn(Optional.of(existing));
+
+            CatalogItemResponseDto response = service.upsertServiceByOperationCode(serviceRequest());
+
+            assertThat(response.getId()).isEqualTo(SERVICE_ID);
+            assertThat(response.getName()).isEqualTo("TPMS Service Kit - Set of 4");
+            ArgumentCaptor<ServiceEntity> saved = ArgumentCaptor.forClass(ServiceEntity.class);
+            verify(serviceRepository).saveAndFlush(saved.capture());
+            assertThat(saved.getValue().getId()).isEqualTo(SERVICE_ID);
+        }
+
+        @Test
+        @DisplayName("a row with no operation code is refused — the code is the only key an upsert has")
+        void operationCodeIsRequired() {
+            CatalogItemRequestDto request = serviceRequest();
+            request.setOperationCode("   ");
+
+            assertThatThrownBy(() -> service.upsertServiceByOperationCode(request))
+                    .isInstanceOf(CatalogValidationException.class)
+                    .hasMessageContaining("operationCode");
+            verifyNoInteractions(catalogFactPublisher);
+        }
+    }
 }
