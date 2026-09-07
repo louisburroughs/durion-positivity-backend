@@ -7972,13 +7972,17 @@ components:
       description: 'What a shop''s own finished work says about one operation: median actual against the guide baseline it was quoted at, and a suggested standard once the sample is deep enough. Advisory only — promotion is a deliberate catalog write.'
       properties:
         fastestTechnicianMedianHours:
-          description: The best qualifying technician median.
+          description: The best qualifying technician median; null when no technician qualifies.
           example: 0.3
-          type: number
+          type:
+          - number
+          - 'null'
         locationId:
-          description: Shop these lines were worked at.
+          description: Shop these lines were worked at; null when the lines name no location.
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         meanActualHours:
           description: The mean, so a skewed sample is visible.
           example: 0.5
@@ -7992,9 +7996,11 @@ components:
           example: 0.5
           type: number
         operationCode:
-          description: Durion operation code, when the local replica knows it.
+          description: Durion operation code, when the local replica knows it; null when the local catalog replica has no record of the service.
           example: TIRE-ROTATION
-          type: string
+          type:
+          - string
+          - 'null'
         sampleCount:
           description: Finished service lines behind these numbers.
           example: 14
@@ -8007,7 +8013,9 @@ components:
         suggestedStandardHours:
           description: Candidate standard hours; null until the sample is deep enough.
           example: 0.4
-          type: number
+          type:
+          - number
+          - 'null'
         technicianSampleCount:
           description: Technicians with enough sole-worked lines to have their own median.
           example: 2
