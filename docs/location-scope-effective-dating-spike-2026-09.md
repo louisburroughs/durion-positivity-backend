@@ -155,9 +155,12 @@ pos-inventory is the largest consumer of location-scoped endpoints and does **no
 the location tree; its replica models intra-site storage (`storage_location_id`, `site_id`,
 `parent_storage_location_id`), a different hierarchy entirely.
 
-And **no location replica carries a parent link.** All three hold `locationId`, `name`,
-`active`, `aggregateVersion` and address fields — nothing hierarchical. So hierarchy resolution
-is new replication work in every module, not an extension of something already present (#1878).
+And **no location replica carries materialised ancestor sets.** (An earlier revision said none
+carried a parent link at all; that overstated it — pos-people has stored the direct parent edges
+in `ext_location_parent` since its V12, though pos-invoice and pos-workorder did not, and none
+computed a transitive closure.) The direct edges are already on the wire — `LocationFactPublisher`
+emits `LocationUpdatedV1.parents` on every location fact — so #1878 is consumer-side work:
+store the edges where missing and materialise the two closures in every module.
 
 ### 2b. Cost of each ownership model
 
