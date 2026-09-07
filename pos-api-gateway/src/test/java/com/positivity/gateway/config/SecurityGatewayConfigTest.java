@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 78")
+    @DisplayName("CATALOG_VERSION is 79")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(78);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(79);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 514")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 515")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1415,8 +1415,11 @@ class SecurityGatewayConfigTest {
         // catalog v78 (#1575 Tier 0): service packages and fleet requirement sets (bits 513-514)
         assertThat(GatewayPermissionCatalog.authorityForBit(513)).isEqualTo("PERM_catalog:service_package:manage");
         assertThat(GatewayPermissionCatalog.authorityForBit(514)).isEqualTo("PERM_catalog:service_package:view");
+        // catalog v79 (#1575 Tier 0): the labor-intelligence rollup, separate from the general
+        // analytics grant because it exposes individual technician productivity (bit 515)
+        assertThat(GatewayPermissionCatalog.authorityForBit(515)).isEqualTo("PERM_workorder:labor_intelligence:view");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(515)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(516)).isNull();
     }
 
     @Test

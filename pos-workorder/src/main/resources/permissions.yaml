@@ -70,6 +70,8 @@ permissions:
     description: "Start/record labor for a technician other than the authenticated actor (Manager only)"
   - name: "workorder:labor:view"
     description: "View labor entries"
+  - name: "workorder:labor_intelligence:view"
+    description: "Read the labor-intelligence rollup, including technician medians"
   - name: "workorder:operationalContext:override"
     description: "Override operationalContext"
   - name: "workorder:note:add"

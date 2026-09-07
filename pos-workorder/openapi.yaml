@@ -10,20 +10,14 @@ servers:
 - description: Generated server url
   url: http://localhost:8086
 tags:
-- description: Workorder detail with role-based visibility
-  name: Workorder Detail
 - description: Endpoints for capturing mobile travel segments
   name: Travel Segment API
+- description: 'What a shop''s own finished work says about each operation: median actual time against the guide baseline it was quoted at, with technician medians and a suggested standard once the sample is deep enough.'
+  name: Labor Intelligence
 - description: Workorder search and retrieval
   name: Workorder Search
-- description: Notes about the customer recorded while a workorder is worked
-  name: Workorder Note API
-- description: Create estimates from shop appointments
-  name: Estimates from Appointments
 - description: Endpoints for managing technician work sessions and break segments
   name: Work Session API
-- description: Endpoints for tracking labor performed on workorders
-  name: Workorder Labor API
 - description: Browser-facing pick list and pick task endpoints for workorder fulfillment
   name: Workorder Pick Facade
 - description: Estimate search and retrieval
@@ -38,6 +32,22 @@ tags:
   name: Workorder Analytics
 - description: Endpoints for managing approval configurations by location and customer
   name: Approval Configuration API
+- description: Operations for product substitute links and workorder substitute suggestions
+  name: Substitute Link API
+- description: Endpoints for assigning technicians to workorders
+  name: Technician Assignment API
+- description: Endpoints for estimate management and approval workflow
+  name: Estimate API
+- description: Endpoints for Work-In-Progress status visibility
+  name: WIP Dashboard
+- description: Workorder detail with role-based visibility
+  name: Workorder Detail
+- description: Notes about the customer recorded while a workorder is worked
+  name: Workorder Note API
+- description: Create estimates from shop appointments
+  name: Estimates from Appointments
+- description: Endpoints for tracking labor performed on workorders
+  name: Workorder Labor API
 - description: Endpoints for timer operations, labor entry creation, and job time totals
   name: Workexec Time Tracking API
 - description: Workorder execution context operations
@@ -46,18 +56,10 @@ tags:
   name: Workorder Part Adjustments
 - description: Browser-facing picked items and consume endpoints for workorder fulfillment
   name: Workorder Picked Items
-- description: Operations for product substitute links and workorder substitute suggestions
-  name: Substitute Link API
-- description: Endpoints for assigning technicians to workorders
-  name: Technician Assignment API
 - description: Endpoints for managing additional work requests and approvals
   name: Change Request API
 - description: Fleet payment authorization for a workorder
   name: Workorder Fleet Authorization
-- description: Endpoints for estimate management and approval workflow
-  name: Estimate API
-- description: Endpoints for Work-In-Progress status visibility
-  name: WIP Dashboard
 paths:
   /v1/workexec:
     get:
@@ -2772,6 +2774,76 @@ paths:
       - Estimate API
       x-required-permissions:
       - workorder:estimate:view
+  /v1/workorders/labor-intelligence/operations:
+    get:
+      description: 'Aggregates finished, clocked service lines per operation and shop into the shop''s median and mean actual time, the median guide baseline those lines were quoted against, the variance between them, and — once the sample is deep enough — a suggested standard, widest variance first.
+
+        Use this tool to find where a shop consistently beats or misses book time, and to source a candidate Durion labor standard; do not use it to price or schedule a specific job, which is resolveLaborTime. Nothing here is applied automatically: promoting a suggestion means authoring it as a labor standard in pos-catalog, deliberately.
+
+        Preconditions: only lines carrying a guide baseline count, since an actual with nothing to compare it against would move the variance without changing any real estimate. Shops are reported separately, never pooled. A technician''s median counts only lines that technician worked alone — a split line says nothing about either one''s speed. Results are NOT grouped by vehicle class: pos-workorder holds VIN, plate and odometer but no make or model.
+
+        Required inputs: none; operationCode, locationId and minSamples are optional. minSamples may raise the suggestion threshold but never lower it below the configured floor.
+
+        Emits a WORKORDER_LABOR_INTELLIGENCE_LIST event; no state changes.
+
+        Returns 200 with one row per operation and shop, and an empty list when no finished line yet carries both a baseline and clocked time.
+
+        '
+      operationId: listLaborIntelligence
+      parameters:
+      - description: Narrow to one Durion operation code
+        example: TIRE-ROTATION
+        in: query
+        name: operationCode
+        required: false
+        schema:
+          type: string
+      - description: Narrow to one shop; omitted reports every shop separately
+        in: query
+        name: locationId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Raise the suggestion threshold above the configured floor
+        example: 10
+        in: query
+        name: minSamples
+        required: false
+        schema:
+          format: int32
+          minimum: 1
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LaborIntelligenceRow'
+                type: array
+          description: One row per operation and shop, widest variance first.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Insufficient permissions.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - workorder:labor_intelligence:view
+      summary: List What Finished Work Says About Each Operation
+      tags:
+      - Labor Intelligence
+      x-required-permissions:
+      - workorder:labor_intelligence:view
   /v1/workorders/numbers:resolve:
     post:
       description: 'Batch-resolves workorder ids to their human-readable workorder numbers for sibling services that store only the id.
@@ -7895,6 +7967,60 @@ components:
       required:
       - quantity
       - workorderPartId
+      type: object
+    LaborIntelligenceRow:
+      description: 'What a shop''s own finished work says about one operation: median actual against the guide baseline it was quoted at, and a suggested standard once the sample is deep enough. Advisory only — promotion is a deliberate catalog write.'
+      properties:
+        fastestTechnicianMedianHours:
+          description: The best qualifying technician median.
+          example: 0.3
+          type: number
+        locationId:
+          description: Shop these lines were worked at.
+          format: uuid
+          type: string
+        meanActualHours:
+          description: The mean, so a skewed sample is visible.
+          example: 0.5
+          type: number
+        medianActualHours:
+          description: The shop's median clocked time.
+          example: 0.4
+          type: number
+        medianGuideHours:
+          description: Median guide baseline those lines were quoted at.
+          example: 0.5
+          type: number
+        operationCode:
+          description: Durion operation code, when the local replica knows it.
+          example: TIRE-ROTATION
+          type: string
+        sampleCount:
+          description: Finished service lines behind these numbers.
+          example: 14
+          format: int32
+          type: integer
+        serviceId:
+          description: Catalog service the finished lines named.
+          format: uuid
+          type: string
+        suggestedStandardHours:
+          description: Candidate standard hours; null until the sample is deep enough.
+          example: 0.4
+          type: number
+        technicianSampleCount:
+          description: Technicians with enough sole-worked lines to have their own median.
+          example: 2
+          format: int32
+          type: integer
+        varianceHours:
+          description: medianActual minus medianGuide; positive means the shop runs long.
+          example: -0.1
+          type: number
+        variancePct:
+          description: The variance as a percentage of the guide baseline.
+          example: -20.0
+          type: number
       type: object
     LaborQuantity:
       description: Labor quantity and unit of measure

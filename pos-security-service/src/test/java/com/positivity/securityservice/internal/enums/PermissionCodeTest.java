@@ -32,12 +32,12 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
-    // 515 / 78: catalog v78 added the catalog service-package permissions (#1575 Tier 0) at bits
-    // 513-514, on top of v77's pricing labor-rate permissions at 510-512.
+    // 516 / 79: catalog v79 added workorder:labor_intelligence:view (#1575 Tier 0) at bit 515,
+    // on top of v78's catalog service packages (513-514) and v77's pricing labor rates (510-512).
     // Both numbers move together by design: the version bump is what tells a running gateway
     // its cached catalog is stale.
-    private static final int EXPECTED_PERMISSION_COUNT = 515;
-    private static final int EXPECTED_CATALOG_VERSION = 78;
+    private static final int EXPECTED_PERMISSION_COUNT = 516;
+    private static final int EXPECTED_CATALOG_VERSION = 79;
 
     // -------------------------------------------------------------------------
     // AC-1: Catalog size — EXPECTED_PERMISSION_COUNT entries
