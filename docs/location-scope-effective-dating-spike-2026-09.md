@@ -138,11 +138,25 @@ needs: `findActiveByPersonIdAndDate(personId, date)` and
 
 Q4 asks whether anything validates `role_assignment_scope_locations.location_id` against
 pos-location. Nothing does, and the #1375 comment is right that a scope claim needing
-resolvable ids inherits a bootstrapping problem **in pos-security-service**. But that
-problem is an artefact of choosing the wrong owner: `ExtLocationReplica`, fed from location
-events by `LocationEventsListener`, already gives pos-people, pos-inventory, pos-invoice and
-pos-workorder a locally resolvable, event-consistent view of locations. Location ids are a
-solved problem everywhere except the service that was assumed to own scope.
+resolvable ids inherits a bootstrapping problem **in pos-security-service**. That problem is
+partly an artefact of choosing the wrong owner: `ExtLocationReplica`, fed from location events
+by `LocationEventsListener`, gives some services a locally resolvable, event-consistent view.
+
+**But the coverage is thinner than it first appears**, and this bears directly on §3:
+
+| Module | Location replica | Endpoints (of 77) |
+| --- | --- | ---: |
+| pos-people, pos-invoice, pos-workorder | `ExtLocationReplica` | 18 |
+| pos-inventory | `ExtStorageLocationReplica` — **storage bins/shelves, not the site tree** | 24 |
+| the other 11 modules | none | 35 |
+
+pos-inventory is the largest consumer of location-scoped endpoints and does **not** replicate
+the location tree; its replica models intra-site storage (`storage_location_id`, `site_id`,
+`parent_storage_location_id`), a different hierarchy entirely.
+
+And **no location replica carries a parent link.** All three hold `locationId`, `name`,
+`active`, `aggregateVersion` and address fields — nothing hierarchical. So hierarchy resolution
+is new replication work in every module, not an extension of something already present (#1878).
 
 ### 2b. Cost of each ownership model
 
@@ -235,6 +249,32 @@ exactly this case.
 **Runtime access only.** Assignment at a parent node confers the right to *call* location-scoped
 APIs against descendants. It confers no administrative right to grant scope to others; scoped
 delegation is a separate concern on the role-assignment surface and is out of scope here.
+
+### The hierarchy is multi-dimensional — scope must name its dimension
+
+`pos-location` does not model one tree. `Location` holds `Set<LocationParent> parents`, and
+`LocationParent` is unique on **`(child_id, parent_type)`** — so a location has at most one
+parent *per dimension*, giving several overlapping trees rather than one tree or a free DAG.
+
+`ParentType` has seven values: `HOME_OFFICE`, `HEADQUARTERS`, `REGION`, `DISTRICT`, `PHYSICAL`,
+`ORGANIZATIONAL`, `FINANCIAL`. Both traversal APIs take one —
+`LocationServiceImpl.getAllChildrenDto(parentId, parentType)` and
+`getDescendantsDto(locationId, parentType)` — and `getDescendantsDto` **defaults to
+`PHYSICAL`** when none is supplied.
+
+**"Covers descendants" is therefore ambiguous until a dimension is named**, and the default is
+almost certainly the wrong one for authorization. Rolling up a `FINANCIAL` parent would grant
+reach along a reporting line; `PHYSICAL` would grant it along a building's geography. Neither
+is what "a Region manager can act on their shops" means.
+
+This is an open decision (§5) and it must be settled before enforcement is written, because
+choosing wrongly silently over- or under-grants at all 77 endpoints. Traversing *all* seven
+dimensions is not a safe default — it is the union of every rollup the business has, which is
+the broadest possible reading.
+
+There is also no cycle guard at the `Location` level. `StorageLocationServiceImpl` has
+`wouldCreateCycle` / `existsCycleForParent`; `LocationServiceImpl` has no equivalent, so
+ancestor materialisation cannot currently assume termination.
 
 ### Hierarchy is evaluated at check time, not expanded at issuance
 
@@ -391,7 +431,8 @@ Recommended, in preference order — all three, they compose:
 4. **Scope assigned at a node covers that node and every descendant**, evaluated at check time
    against a materialised ancestor set replicated onto `ExtLocationReplica` — never expanded
    into the token. This is what supplies the middle management tier, and it is what keeps the
-   claim small.
+   claim small. **Which `ParentType` dimension(s) authorization traverses is an open decision**
+   and blocks enforcement — see §3 and #1878.
 5. **Carry two additive claims**, `loc_bits` and `loc_scope` (§3). No `CATALOG_VERSION` bump,
    no change to `perm_bits` semantics. `loc_scope` is discriminated so a denser encoding can be
    adopted later without a version bump.
@@ -414,8 +455,10 @@ Recommended, in preference order — all three, they compose:
   scope within that subtree is a separate concern, on the role-assignment surface rather than
   the 77 endpoints, and is where privilege escalation would live. Not addressed here.
 - **Node granularity for irregular coverage.** Multi-node assignment covers a set that does not
-  fit one subtree. Whether such cases should instead get a dedicated group node in the tree —
-  keeping assignment at one node — is a modelling question for #1876.
+  fit one subtree. Whether such cases should instead get a dedicated group node — keeping
+  assignment at one node — is a modelling question for #1876. Note the multi-dimensional model
+  already offers a third option: a second `LocationParent` row on a different `parent_type`.
+- **Which `ParentType` dimension(s) authorization traverses.** Blocks enforcement; see §3.
 
 ---
 
@@ -426,18 +469,18 @@ Recommended, in preference order — all three, they compose:
 | [#1867](https://github.com/louisburroughs/durion-positivity-backend/issues/1867) | Consume staffing-assignment events in pos-security-service; maintain `person_id → assigned node ids` projection | M | — |
 | [#1868](https://github.com/louisburroughs/durion-positivity-backend/issues/1868) | Add `roles.location_scope`; issue additive `loc_bits` + discriminated `loc_scope` claims; no `CATALOG_VERSION` bump | M | #1867 |
 | [#1869](https://github.com/louisburroughs/durion-positivity-backend/issues/1869) | Gateway passthrough of `loc_bits` / `loc_scope`; strip inbound copies | S | #1868 |
-| [#1870](https://github.com/louisburroughs/durion-positivity-backend/issues/1870) | Shared `LocationScope.covers(permission, locationId)` helper in `pos-security-common`, ancestor-set aware | S | #1869, #1877 |
+| [#1870](https://github.com/louisburroughs/durion-positivity-backend/issues/1870) | Shared `LocationScope.covers(permission, locationId)` helper in `pos-security-common`, ancestor-set aware | S | #1869, #1878 |
 | [#1871](https://github.com/louisburroughs/durion-positivity-backend/issues/1871) | Enforce at the demand cases: workorder WIP, inventory adjustment approval, people time-entry approval | M | #1870 |
 | [#1872](https://github.com/louisburroughs/durion-positivity-backend/issues/1872) | Roll enforcement across the remaining location-parameterised endpoints | L | #1871, #1876 |
 | [#1873](https://github.com/louisburroughs/durion-positivity-backend/issues/1873) | Clamp access-token `exp` to earliest contributing assignment expiry | S | ships with #1868 |
 | [#1874](https://github.com/louisburroughs/durion-positivity-backend/issues/1874) | Revoke live tokens on staffing-assignment change; decide Redis-unavailable policy | M | #1867, #1873 |
 | [#1875](https://github.com/louisburroughs/durion-positivity-backend/issues/1875) | Remove `role_assignments.scope_type`, `role_assignment_scope_locations` and `GET /v1/roles/check-permission` | M | #1872 |
 | [#1876](https://github.com/louisburroughs/durion-positivity-backend/issues/1876) | Decide node granularity for irregular coverage: multi-node assignment vs. group nodes | S | — |
-| [#1877](https://github.com/louisburroughs/durion-positivity-backend/issues/1877) | Materialise a location ancestor set onto `ExtLocationReplica` via location events | M | — |
+| [#1878](https://github.com/louisburroughs/durion-positivity-backend/issues/1878) | Materialise a location ancestor set onto `ExtLocationReplica` via location events | M | — |
 
 All eleven are sub-issues of #1375. Sizes: S ≤ 1 day, M 2–4 days, L 1–2 weeks.
 
-#1877 is on the critical path: without a replicated ancestor set there is no way to evaluate
+#1878 is on the critical path: without a replicated ancestor set there is no way to evaluate
 "L is beneath an assigned node" at check time, and hierarchy is what supplies the middle tier.
 
 ---
