@@ -515,9 +515,11 @@ Recommended, in preference order — all three, they compose:
 | [#1874](https://github.com/louisburroughs/durion-positivity-backend/issues/1874) | Revoke live tokens on staffing-assignment change; decide Redis-unavailable policy | M | #1867, #1873 |
 | [#1875](https://github.com/louisburroughs/durion-positivity-backend/issues/1875) | Remove `role_assignments.scope_type`, `role_assignment_scope_locations` and `GET /v1/roles/check-permission` | M | #1872 |
 | [#1876](https://github.com/louisburroughs/durion-positivity-backend/issues/1876) | Decide node granularity for irregular coverage: multi-node assignment vs. group nodes | S | — |
-| [#1878](https://github.com/louisburroughs/durion-positivity-backend/issues/1878) | Materialise `FINANCIAL` and `OTHER` ancestor sets onto the location replicas | L | — |
+| [#1878](https://github.com/louisburroughs/durion-positivity-backend/issues/1878) | Materialise `FINANCIAL` and `OTHER` ancestor sets onto the location replicas (incl. pos-inventory addendum) | L | — |
+| [#1883](https://github.com/louisburroughs/durion-positivity-backend/issues/1883) | Gateway does not honour token revocation — revoked tokens pass until `exp` (surfaced by #1874) | M | #1874 |
 
-All eleven are sub-issues of #1375. Sizes: S ≤ 1 day, M 2–4 days, L 1–2 weeks.
+All twelve are sub-issues of #1375. Sizes: S ≤ 1 day, M 2–4 days, L 1–2 weeks. #1876 was
+decided by ADR-0061 amendment (multi-node assignment, no group nodes) and closed.
 
 #1878 is on the critical path: without a replicated ancestor set there is no way to evaluate
 "L is beneath an assigned node" at check time, and hierarchy is what supplies the middle tier.
