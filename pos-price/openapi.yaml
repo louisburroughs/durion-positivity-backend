@@ -98,8 +98,18 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              A location's tire-service rate:
+                description: A location's tire-service rate
+                value:
+                  currency: USD
+                  effectiveFrom: '2026-01-01T00:00:00Z'
+                  hourlyRate: 105.0
+                  locationId: 0198f2a1-0000-7000-8000-00000000000a
+                  operationCategory: TIRE_SERVICE
             schema:
               $ref: '#/components/schemas/LaborRateRequest'
+        description: The rate, its currency, the scope it applies to (omit locationId or operationCategory to widen it) and the window it takes effect in.
         required: true
       responses:
         '201':
@@ -201,8 +211,19 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Corroded fasteners, +15%:
+                description: Corroded fasteners, +15%
+                value:
+                  adjustmentCode: CORROSION
+                  adjustmentType: PERCENT
+                  adjustmentValue: 15.0
+                  description: Seized or corroded fasteners
+                  effectiveFrom: '2026-01-01T00:00:00Z'
+                  sequence: 10
             schema:
               $ref: '#/components/schemas/LaborRateAdjustmentRequest'
+        description: The step's opt-in code, how it changes the running rate, and where it sits in the matrix — sequence matters, because percentage steps compound.
         required: true
       responses:
         '201':

@@ -1011,11 +1011,11 @@ paths:
     get:
       description: 'Returns one row per customer who currently holds at least one open work order, with the customer''s display name and their open count, ordered by count descending, plus the totals before the limit was applied.
 
-        Use this tool to answer questions about open work across the whole book — which customers have work in progress, how many customers have open jobs, or the work-order half of a cross-domain question such as customers with both an open job and an unpaid invoice. It returns COUNTS, not the work orders themselves: use searchWorkorders (status=OPEN, optionally customerId) when the answer needs the individual work orders, and getWorkorder for one work order''s detail.
+        Use this tool to answer questions about open work across the whole book — which customers have work in progress, how many customers have open jobs, or the work-order half of a cross-domain question such as customers with both an open job and an unpaid invoice; it returns COUNTS, so do not use it when the answer needs the individual work orders, which is searchWorkorders (status=OPEN, optionally customerId), or getWorkorder for one work order''s detail.
 
-        Open means the six non-terminal statuses APPROVED, ASSIGNED, WORK_IN_PROGRESS, AWAITING_PARTS, AWAITING_APPROVAL and READY_FOR_PICKUP — the same set searchWorkorders accepts under its OPEN alias. DRAFT is deliberately excluded: a draft has not been approved into work. The workorder count endpoint (GET /v1/workorders/count?openOnly=true) counts DRAFT as open, so the two deliberately disagree; this one matches what a status=OPEN search returns.
+        Open means the six non-terminal statuses APPROVED, ASSIGNED, WORK_IN_PROGRESS, AWAITING_PARTS, AWAITING_APPROVAL and READY_FOR_PICKUP — the same set searchWorkorders accepts under its OPEN alias — while DRAFT is deliberately excluded, because a draft has not been approved into work; the workorder count endpoint (GET /v1/workorders/count?openOnly=true) counts DRAFT as open, so the two deliberately disagree, and this one matches what a status=OPEN search returns.
 
-        Preconditions: none. Required inputs: none; limit is optional (default 100, hard-capped at 500).
+        Preconditions: none; required inputs: none, and limit is optional (default 100, hard-capped at 500).
 
         Emits a WORKORDER_ANALYTICS_OPEN_BY_CUSTOMER_VIEW audit event; no state changes.
 
@@ -2778,11 +2778,11 @@ paths:
     get:
       description: 'Aggregates finished, clocked service lines per operation and shop into the shop''s median and mean actual time, the median guide baseline those lines were quoted against, the variance between them, and — once the sample is deep enough — a suggested standard, widest variance first.
 
-        Use this tool to find where a shop consistently beats or misses book time, and to source a candidate Durion labor standard; do not use it to price or schedule a specific job, which is resolveLaborTime. Nothing here is applied automatically: promoting a suggestion means authoring it as a labor standard in pos-catalog, deliberately.
+        Use this tool to find where a shop consistently beats or misses book time and to source a candidate Durion labor standard; do not use it to price or schedule a specific job, which is resolveLaborTime, and note that nothing here is applied automatically — promoting a suggestion means authoring it as a labor standard in pos-catalog, deliberately.
 
-        Preconditions: only lines carrying a guide baseline count, since an actual with nothing to compare it against would move the variance without changing any real estimate. Shops are reported separately, never pooled. A technician''s median counts only lines that technician worked alone — a split line says nothing about either one''s speed. Results are NOT grouped by vehicle class: pos-workorder holds VIN, plate and odometer but no make or model.
+        Preconditions: only lines carrying a guide baseline count, since an actual with nothing to compare it against would move the variance without changing any real estimate; shops are reported separately, never pooled; a technician''s median counts only lines that technician worked alone, because a split line says nothing about either one''s speed; and results are not grouped by vehicle class, since pos-workorder holds VIN, plate and odometer but no make or model.
 
-        Required inputs: none; operationCode, locationId and minSamples are optional. minSamples may raise the suggestion threshold but never lower it below the configured floor.
+        Required inputs: none — operationCode, locationId and minSamples are all optional, and minSamples may raise the suggestion threshold but never lower it below the configured floor.
 
         Emits a WORKORDER_LABOR_INTELLIGENCE_LIST event; no state changes.
 

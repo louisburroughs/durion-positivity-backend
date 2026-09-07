@@ -8,6 +8,9 @@ import com.positivity.price.internal.dto.LaborRateResponse;
 import com.positivity.price.internal.security.PricingPermissions;
 import com.positivity.price.internal.service.LaborRateAdminService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -60,7 +63,27 @@ public class LaborRateController {
             scopes = {PricingPermissions.LABOR_RATE_MANAGE})
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + PricingPermissions.LABOR_RATE_MANAGE + "')")
     @PostMapping
-    public ResponseEntity<LaborRateResponse> createLaborRate(@Valid @RequestBody LaborRateRequest request) {
+    public ResponseEntity<LaborRateResponse> createLaborRate(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The rate, its currency, the scope it applies to (omit locationId or"
+                                    + " operationCategory to widen it) and the window it takes effect in.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = LaborRateRequest.class),
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "A location's tire-service rate",
+                                                            value = """
+                                                            {"locationId":"0198f2a1-0000-7000-8000-00000000000a",
+                                                             "operationCategory":"TIRE_SERVICE",
+                                                             "currency":"USD","hourlyRate":105.00,
+                                                             "effectiveFrom":"2026-01-01T00:00:00Z"}
+                                                            """)))
+                    @Valid
+                    @RequestBody
+                    LaborRateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(laborRateAdminService.createRate(request));
     }
 
@@ -111,7 +134,24 @@ public class LaborRateController {
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + PricingPermissions.LABOR_RATE_MANAGE + "')")
     @PostMapping("/adjustments")
     public ResponseEntity<LaborRateAdjustmentResponse> createLaborRateAdjustment(
-            @Valid @RequestBody LaborRateAdjustmentRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The step's opt-in code, how it changes the running rate, and where it"
+                                    + " sits in the matrix — sequence matters, because percentage steps compound.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = LaborRateAdjustmentRequest.class),
+                                            examples = @ExampleObject(name = "Corroded fasteners, +15%", value = """
+                                                            {"adjustmentCode":"CORROSION",
+                                                             "description":"Seized or corroded fasteners",
+                                                             "adjustmentType":"PERCENT","adjustmentValue":15.0,
+                                                             "sequence":10,
+                                                             "effectiveFrom":"2026-01-01T00:00:00Z"}
+                                                            """)))
+                    @Valid
+                    @RequestBody
+                    LaborRateAdjustmentRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(laborRateAdminService.createAdjustment(request));
     }
 

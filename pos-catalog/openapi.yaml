@@ -4669,8 +4669,16 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              Four tire installation package:
+                description: Four tire installation package
+                value:
+                  name: Four Tire Installation Package
+                  packageCode: TIRE-INSTALL-PKG-4
+                  packageLaborHours: 1.6
             schema:
               $ref: '#/components/schemas/ServicePackageRequestDto'
+        description: The package's identity, display name, ownership and authored hours. Set fleetPartyId to make it one account's requirement set.
         required: true
       responses:
         '201':
@@ -4716,7 +4724,7 @@ paths:
     get:
       description: 'Returns one package with its member operations in presentation order, including inactive packages.
 
-        Use this tool when you already hold the package id; use listServicePackages to discover what a location sells.
+        Use this tool when you already hold the package id; do not use it to discover what a location sells, which is listServicePackages.
 
         Preconditions: the package must exist.
 
@@ -4795,8 +4803,17 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              An included balance:
+                description: An included balance
+                value:
+                  quantity: 1
+                  required: true
+                  sequence: 20
+                  serviceId: 99407ab3-901d-a7b6-816e-00bfb282ad4c
             schema:
               $ref: '#/components/schemas/ServicePackageMemberRequestDto'
+        description: The operation to add, and whether the package includes it by definition or merely offers it.
         required: true
       responses:
         '200':
@@ -4842,7 +4859,7 @@ paths:
     delete:
       description: 'Removes one operation''s membership of a package.
 
-        Use this tool to correct a package''s composition; removing a member does not affect any workorder already quoted from the package, which snapshots its own lines.
+        Use this tool to correct a package''s composition; do not use it to change how much of an operation a package includes, which is a quantity on the membership rather than a removal. Removing a member does not affect any workorder already quoted from the package, which snapshots its own lines.
 
         Preconditions: the membership must exist and belong to the named package.
 

@@ -56,17 +56,17 @@ public class LaborIntelligenceController {
             Aggregates finished, clocked service lines per operation and shop into the shop's median and mean \
             actual time, the median guide baseline those lines were quoted against, the variance between them, \
             and — once the sample is deep enough — a suggested standard, widest variance first.
-            Use this tool to find where a shop consistently beats or misses book time, and to source a \
-            candidate Durion labor standard; do not use it to price or schedule a specific job, which is \
-            resolveLaborTime. Nothing here is applied automatically: promoting a suggestion means authoring it \
-            as a labor standard in pos-catalog, deliberately.
+            Use this tool to find where a shop consistently beats or misses book time and to source a candidate \
+            Durion labor standard; do not use it to price or schedule a specific job, which is resolveLaborTime, \
+            and note that nothing here is applied automatically — promoting a suggestion means authoring it as \
+            a labor standard in pos-catalog, deliberately.
             Preconditions: only lines carrying a guide baseline count, since an actual with nothing to compare \
-            it against would move the variance without changing any real estimate. Shops are reported \
-            separately, never pooled. A technician's median counts only lines that technician worked alone — a \
-            split line says nothing about either one's speed. Results are NOT grouped by vehicle class: \
-            pos-workorder holds VIN, plate and odometer but no make or model.
-            Required inputs: none; operationCode, locationId and minSamples are optional. minSamples may raise \
-            the suggestion threshold but never lower it below the configured floor.
+            it against would move the variance without changing any real estimate; shops are reported \
+            separately, never pooled; a technician's median counts only lines that technician worked alone, \
+            because a split line says nothing about either one's speed; and results are not grouped by vehicle \
+            class, since pos-workorder holds VIN, plate and odometer but no make or model.
+            Required inputs: none — operationCode, locationId and minSamples are all optional, and minSamples \
+            may raise the suggestion threshold but never lower it below the configured floor.
             Emits a WORKORDER_LABOR_INTELLIGENCE_LIST event; no state changes.
             Returns 200 with one row per operation and shop, and an empty list when no finished line yet \
             carries both a baseline and clocked time.

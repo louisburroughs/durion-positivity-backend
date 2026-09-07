@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -74,7 +75,25 @@ public class ServicePackageController {
     @ApiResponse(responseCode = "409", description = "A package already exists with that code.")
     @ApiResponse(responseCode = "422", description = "The package cannot be stored as described.")
     public ResponseEntity<ServicePackageResponseDto> createServicePackage(
-            @Valid @RequestBody ServicePackageRequestDto request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The package's identity, display name, ownership and authored hours."
+                                    + " Set fleetPartyId to make it one account's requirement set.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = ServicePackageRequestDto.class),
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Four tire installation package",
+                                                            value = """
+                                                            {"packageCode":"TIRE-INSTALL-PKG-4",
+                                                             "name":"Four Tire Installation Package",
+                                                             "packageLaborHours":1.6}
+                                                            """)))
+                    @Valid
+                    @RequestBody
+                    ServicePackageRequestDto request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(servicePackageService.create(request));
     }
 
@@ -128,8 +147,8 @@ public class ServicePackageController {
     @EmitEvent(id = "CATALOG_SERVICE_PACKAGE_GET", apiVersion = "1")
     @Operation(operationId = "getServicePackage", summary = "Get A Service Package", description = """
             Returns one package with its member operations in presentation order, including inactive packages.
-            Use this tool when you already hold the package id; use listServicePackages to discover what a \
-            location sells.
+            Use this tool when you already hold the package id; do not use it to discover what a location \
+            sells, which is listServicePackages.
             Preconditions: the package must exist.
             Required inputs: packageId.
             Emits a CATALOG_SERVICE_PACKAGE_GET event; no state changes.
@@ -168,7 +187,22 @@ public class ServicePackageController {
     @ApiResponse(responseCode = "404", description = "The package or the service does not exist.")
     @ApiResponse(responseCode = "409", description = "That service is already a member.")
     public ResponseEntity<ServicePackageResponseDto> addServicePackageMember(
-            @PathVariable UUID packageId, @Valid @RequestBody ServicePackageMemberRequestDto request) {
+            @PathVariable UUID packageId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The operation to add, and whether the package includes it by"
+                                    + " definition or merely offers it.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = ServicePackageMemberRequestDto.class),
+                                            examples = @ExampleObject(name = "An included balance", value = """
+                                                            {"serviceId":"99407ab3-901d-a7b6-816e-00bfb282ad4c",
+                                                             "sequence":20,"quantity":1,"required":true}
+                                                            """)))
+                    @Valid
+                    @RequestBody
+                    ServicePackageMemberRequestDto request) {
         return ResponseEntity.ok(servicePackageService.addMember(packageId, request));
     }
 
@@ -183,8 +217,10 @@ public class ServicePackageController {
             summary = "Remove An Operation From A Package",
             description = """
             Removes one operation's membership of a package.
-            Use this tool to correct a package's composition; removing a member does not affect any workorder \
-            already quoted from the package, which snapshots its own lines.
+            Use this tool to correct a package's composition; do not use it to change how much of an \
+            operation a package includes, which is a quantity on the membership rather than a removal. \
+            Removing a member does not affect any workorder already quoted from the package, which \
+            snapshots its own lines.
             Preconditions: the membership must exist and belong to the named package.
             Required inputs: packageId and memberId.
             Emits a CATALOG_SERVICE_PACKAGE_MEMBER_REMOVE event.
