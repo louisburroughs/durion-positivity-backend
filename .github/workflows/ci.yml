@@ -199,6 +199,12 @@ jobs:
         # The self-test drives the reclaim against a stubbed Docker and df.
         run: bash scripts/tests/deploy-backend-disk-reclaim-selftest.sh
 
+      - name: Verify the CloudWatch agent installer
+        # The installer is the only thing standing between alpha and a repeat of #1862, and its
+        # contract is that every condition leaving the box unwatched fails the run. Those paths
+        # are never exercised by a successful hand-run, so they are driven against stubs here.
+        run: bash scripts/tests/install-cloudwatch-agent-selftest.sh
+
       - name: Enforce Kafka topic provisioning coverage
         # kafka-topic-init is the authoritative topic provisioner on alpha, so a
         # topic missing from it lands on broker defaults — which for a DLQ means
