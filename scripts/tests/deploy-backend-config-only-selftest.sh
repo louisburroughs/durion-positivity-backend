@@ -122,6 +122,11 @@ ENVFILE
 }
 
 # run_case <name> <missing images> <existing containers>; sets OUT / RC.
+#
+# DOCKER_MIN_FREE_GIB is pinned to 0 so the pre-pull reclaim (#1862) stays out of these cases.
+# Left at its shipped default it measures the CI runner's real disk with an unstubbed `df`, so
+# whether the reclaim branch runs at all would be decided by how full the runner happened to be.
+# FORCE_RECLAIM_FLOOR lets one case opt back in deliberately.
 run_case() {
   local root="${WORK}/alpha"
   make_alpha_root "${root}"
@@ -133,6 +138,7 @@ run_case() {
     MISSING_IMAGES="$2" \
     EXISTING_CONTAINERS="$3" \
     ALPHA_ROOT="${root}" \
+    DOCKER_MIN_FREE_GIB="${FORCE_RECLAIM_FLOOR:-0}" \
     bash "${SCRIPT}" --config-only 2>&1
   )"
   RC=$?
@@ -209,6 +215,15 @@ assert "exits 1" "$([[ ${RC} -eq 1 ]] && echo pass)"
 assert "names the undeployable service" "$(grep -qE '^ +pos-order$' <<< "${OUT}" && echo pass)"
 assert "says nothing changed" "$(grep -q 'Nothing has been changed on this host' <<< "${OUT}" && echo pass)"
 assert "started no service" "$(! grep -q '^UP:' <<< "${OUT}" && echo pass)"
+end_case
+
+echo "case 4: the pre-pull reclaim runs on the config-only path"
+FORCE_RECLAIM_FLOOR=999999 run_case "reclaim" "" ""
+assert "exits 0 with the reclaim in the way" "$([[ ${RC} -eq 0 ]] && echo pass)"
+assert "pruned images" "$(grep -q '^docker image prune -af$' "${WORK}/compose.log" && echo pass)"
+# service_has_container reads stopped containers to tell a retagged-out-from-under-a-live-service
+# break from a never-deployed-here skip, so this path must never have them pruned away.
+assert "never pruned containers" "$(! grep -qE '^docker (system|container) prune' "${WORK}/compose.log" && echo pass)"
 end_case
 
 echo

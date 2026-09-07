@@ -38,11 +38,16 @@ public record LaborIntelligenceRow(
         @Schema(description = "Catalog service the finished lines named.") @NonNull
         UUID serviceId,
 
-        @Schema(description = "Durion operation code, when the local replica knows it.", example = "TIRE-ROTATION")
+        @Schema(
+                description = "Durion operation code, when the local replica knows it; null when the"
+                        + " local catalog replica has no record of the service.",
+                example = "TIRE-ROTATION",
+                nullable = true)
         @Nullable
         String operationCode,
 
-        @Schema(description = "Shop these lines were worked at.") @Nullable
+        @Schema(description = "Shop these lines were worked at; null when the lines name no location.", nullable = true)
+        @Nullable
         UUID locationId,
 
         @Schema(description = "Finished service lines behind these numbers.", example = "14")
@@ -64,12 +69,19 @@ public record LaborIntelligenceRow(
         @Schema(description = "The variance as a percentage of the guide baseline.", example = "-20.0") @NonNull
         BigDecimal variancePct,
 
-        @Schema(description = "Candidate standard hours; null until the sample is deep enough.", example = "0.4")
+        @Schema(
+                description = "Candidate standard hours; null until the sample is deep enough.",
+                example = "0.4",
+                nullable = true)
         @Nullable
         BigDecimal suggestedStandardHours,
 
         @Schema(description = "Technicians with enough sole-worked lines to have their own median.", example = "2")
         int technicianSampleCount,
 
-        @Schema(description = "The best qualifying technician median.", example = "0.3") @Nullable
+        @Schema(
+                description = "The best qualifying technician median; null when no technician qualifies.",
+                example = "0.3",
+                nullable = true)
+        @Nullable
         BigDecimal fastestTechnicianMedianHours) {}

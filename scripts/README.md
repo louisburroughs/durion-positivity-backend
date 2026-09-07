@@ -28,6 +28,8 @@ Utility scripts for development, operations, testing, and deployment.
 | [`check-openapi-inventory-drift.sh`](#check-openapi-inventory-driftsh) | API | Verify every spec-producing module is registered in `module-inventory.yaml` |
 | [`check-deploy-service-drift.sh`](#check-deploy-service-driftsh) | Deployment | Verify every deployable service is registered in all five deploy lists |
 | [`tests/deploy-backend-config-only-selftest.sh`](#testsdeploy-backend-config-only-selftestsh) | Deployment | Drive `deploy-backend.sh --config-only`'s image pre-flight against a stubbed Docker |
+| [`tests/deploy-backend-disk-reclaim-selftest.sh`](#testsdeploy-backend-disk-reclaim-selftestsh) | Deployment | Drive `deploy-backend.sh`'s pre-pull disk reclaim against a stubbed Docker and `df` |
+| [`tests/install-cloudwatch-agent-selftest.sh`](#testsinstall-cloudwatch-agent-selftestsh) | Deployment | Drive the alpha CloudWatch agent installer against a stubbed `dnf`, `systemctl` and agent control |
 | [`generate-kafka-topics.py`](#generate-kafka-topicspy) | Kafka | Derive the `kafka-topic-init` topic map from the topics services configure and consume |
 | [`check-kafka-topic-drift.sh`](#check-kafka-topic-driftsh) | Kafka | Verify `kafka-topic-init` provisions every topic the code uses |
 | [`generate-permissions.sh`](#generate-permissionssh) | Permissions | Regenerate `permissions.yaml` files from `@PreAuthorize` annotations |
@@ -425,6 +427,101 @@ bash scripts/tests/deploy-backend-config-only-selftest.sh
   Placeholder status is not durable — the stale-entry checks are what notice when it stops being true.
 - The module <-> compose-service mapping is read from each service's `build.context`, so
   `pos-service-discovery` running as the compose service `eureka-server` needs no special case.
+
+---
+
+### `tests/deploy-backend-disk-reclaim-selftest.sh`
+
+Drives `deploy-backend.sh`'s `reclaim_disk_before_pull` against a stubbed `docker` and `df`.
+
+A deploy pulls roughly thirty images at a fresh `sha-` tag, and `run_periodic_docker_prune` is the
+last line of the script — so it never runs on a deploy that failed. Once the box filled up mid-pull,
+that turned a single failure into a permanent one: every later deploy died at the same pull, and the
+cleanup that would have freed the space was unreachable without a human on the host (#1862).
+`reclaim_disk_before_pull` checks headroom before pulling instead, which is what keeps that deadlock
+from forming.
+
+Cases:
+
+- free space at or above `DOCKER_MIN_FREE_GIB` — no prune
+- free space below it — prune runs and stamps the prune state file
+- the prune itself fails — warned, returns 0 so the deploy continues, state file left unstamped
+- `DOCKER_MIN_FREE_GIB=0` — reclaim disabled
+- `DOCKER_MIN_FREE_GIB` not an integer — skipped with a message
+- `df` cannot read the Docker data root — skipped, and the deploy is **not** aborted
+- the shipped `DOCKER_MIN_FREE_GIB` default, above and below the floor
+- `docker info` failing with the daemon down — the data root falls back to a usable path
+- a non-default Docker data root — that path is the one measured and reported
+- `df` failing only after the prune — warned, never a line that scans as success
+- a prune that frees too little — warned rather than reported as success
+- the shipped `ALPHA_ROOT` and prune-state-file defaults, with nothing injected
+- an unwritable prune state file — warned, returns 0
+- the call site's position in `deploy-backend.sh`, asserted statically
+
+**Usage:**
+```bash
+bash scripts/tests/deploy-backend-disk-reclaim-selftest.sh
+```
+
+**Notes:**
+- `deploy-backend.sh` runs a deploy top-to-bottom and cannot be sourced whole, so the self-test
+  slices the three reclaim functions out of it. The slice asserts all three are present, so renaming
+  or reordering them fails the test loudly instead of leaving it asserting nothing.
+- The `df` stub reads `FREE_KIB`; leaving it unset makes `df` fail, which is the unreadable case.
+  It also rejects a malformed path the way real `df` does, so a caller that builds a bad data root
+  is caught rather than silently measured.
+- Each case runs under `set -euo pipefail`, because that is what `deploy-backend.sh` runs under and
+  shell options do not cross a new `bash`. Without them the harness cannot observe the failure that
+  matters: a bare assignment from a failing pipeline aborting the deploy.
+- The reclaim uses `docker image prune -af`, not the `docker system prune -af` the periodic prune
+  runs. `system prune` removes stopped containers first, and `service_has_container` reads those to
+  tell "this image was retagged out from under a live service, stop the sync" from "this service was
+  never deployed here, skip it". Nothing is given up: on alpha when this wedged, containers held
+  4.238 MB with 0 B reclaimable against 61.42 GB reclaimable in images. Every case asserts no
+  container prune ever runs.
+- The functions are driven in isolation, so nothing in them observes whether they are *called*.
+  Ordering is the point of the fix, so `assert_call_site` pins it against the script text: called
+  exactly once, after the guards that promise the host is untouched, before `COMPOSE_ARGS` is built
+  and so before any pull in either mode.
+
+---
+
+### `tests/install-cloudwatch-agent-selftest.sh`
+
+Drives `deployment/alpha/install-cloudwatch-agent.sh` against a stubbed `dnf`, `rpm`, `systemctl`
+and `amazon-cloudwatch-agent-ctl`.
+
+The installer is the only thing standing between the alpha box and a repeat of #1862, where the
+root disk filled with nothing watching it. Its contract is that every condition which would leave
+the box unwatched fails the run — and those are exactly the paths a successful hand-run never
+touches.
+
+Cases:
+
+- happy path — config installed, agent started, exit 0
+- agent already installed — `dnf install` never called
+- config file missing, and config not valid JSON — exit 1, and for bad JSON the live config is
+  verified *untouched*, since `fetch-config` replaces the running configuration
+- `fetch-config` fails — exit 1, saying what state the agent is left in
+- agent reports stopped, reports no configuration, or is not enabled at boot — exit 1 each
+- agent control binary missing after install — exit 1
+- not run as root — exit 1 (skipped when the suite itself is root)
+
+**Usage:**
+```bash
+bash scripts/tests/install-cloudwatch-agent-selftest.sh
+```
+
+**Notes:**
+- The installer honours `AGENT_DIR_OVERRIDE`, a documented test seam, so the suite never writes to
+  `/opt/aws`. `EUID` is readonly in bash, so root cannot be faked: every case but `not-root` runs
+  through a temp copy with only that guard neutralised.
+- **Both** substitutions are asserted, and each is mutation-checked. Renaming the seam or
+  reformatting the guard line aborts the suite with a FATAL naming the cause, rather than silently
+  writing to the real path or producing eight confusing message-mismatch failures.
+- The installer deliberately does **not** verify metrics are reaching CloudWatch: that needs
+  `cloudwatch:GetMetricStatistics`, which the instance role does not carry. See
+  `docs/OPERATIONS_RUNBOOK.md` for the operator-side check.
 
 ---
 

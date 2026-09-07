@@ -22,6 +22,8 @@ on:
       - docker-compose.yml
       - deployment/alpha/docker-compose.prod.yml
       - deployment/alpha/deploy-backend.sh
+      - deployment/alpha/cloudwatch-agent-config.json
+      - deployment/alpha/install-cloudwatch-agent.sh
       - postgres/init-databases.sql
       - observability/**
   workflow_dispatch:
@@ -60,6 +62,10 @@ jobs:
           aws s3 cp docker-compose.yml s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml
           aws s3 cp deployment/alpha/docker-compose.prod.yml s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml
           aws s3 cp deployment/alpha/deploy-backend.sh s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/deploy-backend.sh
+          # Host-level monitoring (#1862). The CloudWatch agent runs on the box, not in a
+          # container, so it is shipped here rather than in the observability tree.
+          aws s3 cp deployment/alpha/cloudwatch-agent-config.json s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/cloudwatch-agent-config.json
+          aws s3 cp deployment/alpha/install-cloudwatch-agent.sh s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/install-cloudwatch-agent.sh
           aws s3 cp postgres/init-databases.sql s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-databases.sql
           # Same single-object packaging as build-push-ecr (#863): the host pull only
           # needs s3:GetObject (EC2-SSM-Role lacks s3:ListBucket).
@@ -77,7 +83,7 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters '{"commands":["mkdir -p /opt/durion/alpha/backend/postgres /opt/durion/alpha/scripts","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml /opt/durion/alpha/backend/docker-compose.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml /opt/durion/alpha/docker-compose.prod.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/deploy-backend.sh /opt/durion/alpha/scripts/deploy-backend.sh","chmod +x /opt/durion/alpha/scripts/deploy-backend.sh","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-databases.sql /opt/durion/alpha/backend/postgres/init-databases.sql","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/observability.tgz /opt/durion/alpha/backend/observability.tgz","rm -rf /opt/durion/alpha/backend/observability","tar xzf /opt/durion/alpha/backend/observability.tgz -C /opt/durion/alpha/backend/","rm -f /opt/durion/alpha/backend/observability.tgz"]}' \
+            --parameters '{"commands":["mkdir -p /opt/durion/alpha/backend/postgres /opt/durion/alpha/scripts","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/docker-compose.yml /opt/durion/alpha/backend/docker-compose.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/docker-compose.prod.yml /opt/durion/alpha/docker-compose.prod.yml","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/deploy-backend.sh /opt/durion/alpha/scripts/deploy-backend.sh","chmod +x /opt/durion/alpha/scripts/deploy-backend.sh","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/cloudwatch-agent-config.json /opt/durion/alpha/cloudwatch-agent-config.json","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/scripts/install-cloudwatch-agent.sh /opt/durion/alpha/scripts/install-cloudwatch-agent.sh","chmod +x /opt/durion/alpha/scripts/install-cloudwatch-agent.sh","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/postgres/init-databases.sql /opt/durion/alpha/backend/postgres/init-databases.sql","aws s3 cp s3://${{ vars.ALPHA_DEPLOY_BUCKET }}/alpha/backend/observability.tgz /opt/durion/alpha/backend/observability.tgz","rm -rf /opt/durion/alpha/backend/observability","tar xzf /opt/durion/alpha/backend/observability.tgz -C /opt/durion/alpha/backend/","rm -f /opt/durion/alpha/backend/observability.tgz"]}' \
             --query "Command.CommandId" --output text)
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
@@ -113,5 +119,44 @@ jobs:
           # report a successful sync — only a terminal Success counts.
           if [[ "$STATUS" != "Success" ]]; then
             echo "SSM command finished with status ${STATUS}" >&2
+            exit 1
+          fi
+
+      - name: Apply CloudWatch agent config on alpha host
+        # Shipping the config without applying it is the failure #1457 exists to prevent: the
+        # committed file and the box silently diverge. It fails loudly on purpose — an agent that
+        # is not publishing is the blindness #1862 was about.
+        #
+        # Deliberately LAST. Host monitoring must never be able to block delivery of a merged
+        # compose change: a transient dnf mirror failure here would otherwise abort the run before
+        # the containers were recreated, leaving the merged config pulled onto the box but never
+        # applied — the exact silently-inert-config failure #1457 exists to prevent, for a reason
+        # that has nothing to do with compose. Running it after means a failure still fails the
+        # workflow, but only once the config it was blocking is already live.
+        #
+        # `fetch-config -s` restarts the agent even when the config is byte-identical, so a sync
+        # that changed nothing here still costs one 60s datapoint inside a 300s alarm period.
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters '{"commands":["bash /opt/durion/alpha/scripts/install-cloudwatch-agent.sh"]}' \
+            --timeout-seconds 2700 \
+            --query "Command.CommandId" --output text)
+          STATUS=Pending
+          for i in $(seq 1 180); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+              --query "Status" --output text 2>/dev/null || echo Pending)
+            [[ "$STATUS" == "Success" || "$STATUS" == "Failed" || "$STATUS" == "TimedOut" || "$STATUS" == "Cancelled" ]] && break
+            sleep 15
+          done
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+            --query "[StandardOutputContent,StandardErrorContent]" --output text
+          if [[ "$STATUS" != "Success" ]]; then
+            echo "CloudWatch agent config failed to apply: ${STATUS}" >&2
             exit 1
           fi
