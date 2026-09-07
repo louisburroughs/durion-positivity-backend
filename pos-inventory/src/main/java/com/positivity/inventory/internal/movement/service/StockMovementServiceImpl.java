@@ -15,9 +15,11 @@ import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRep
 import com.positivity.inventory.internal.repository.InventoryAdjustmentRequestRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.Quantities;
 import com.positivity.inventory.internal.service.QuantityScaleGuard;
+import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -170,6 +172,12 @@ public class StockMovementServiceImpl implements StockMovementService {
                 .findById(adjustmentRequestId)
                 .orElseThrow(
                         () -> new IllegalArgumentException("Adjustment request not found: " + adjustmentRequestId));
+
+        // ADR-0061 §3 (#1871): the location is on the entity, so the scope check lives here rather
+        // than in the controller. It runs after the existence check (a denial must not leak
+        // whether the id exists) and before any state change, so a denied approval posts nothing.
+        SecurityContextHelper.locationScope()
+                .require(InventoryPermissionRegistry.ADJUSTMENT_APPROVE, adjustmentRequest.getLocationId());
 
         if (adjustmentRequest.getStatus() != AdjustmentRequestStatus.PENDING) {
             throw new IllegalStateException("Adjustment request is not pending approval: " + adjustmentRequestId);

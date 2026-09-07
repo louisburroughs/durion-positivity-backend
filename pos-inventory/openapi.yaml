@@ -111,7 +111,7 @@ paths:
 
         Emits an INVENTORY_ADJUSTMENT_REQUEST_CREATE event; no ledger entry is written and availability is unchanged until approval.
 
-        Returns 201 with the PENDING request, and 400 when productSku, locationId, quantity or reasonCode is missing.
+        Returns 201 with the PENDING request, 400 when productSku, locationId, quantity or reasonCode is missing, and 403 with LOCATION_SCOPE_DENIED when the caller holds inventory:adjustment:create but the token scopes it to locations that do not cover locationId (ADR-0061).
 
         '
       operationId: createAdjustmentRequest
@@ -149,7 +149,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: User lacks required create permission
+          description: FORBIDDEN when the caller lacks inventory:adjustment:create; LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations that do not cover the request's locationId (ADR-0061)
       security:
       - bearerAuth:
         - inventory:adjustment:create
@@ -170,7 +170,7 @@ paths:
 
         Emits an INVENTORY_ADJUSTMENT_REQUEST_APPROVE event; the request is stamped APPROVED with approver and timestamp, and the ledger posting updates the stock summary that availability reads.
 
-        Returns 400 when the adjustment request id is unknown (the lookup failure maps to a validation error rather than 404), and 409 when the request is no longer PENDING.
+        Returns 400 when the adjustment request id is unknown (the lookup failure maps to a validation error rather than 404), 403 with LOCATION_SCOPE_DENIED when the caller holds inventory:adjustment:approve but the token scopes it to locations that do not cover the request''s locationId (ADR-0061; nothing is posted), and 409 when the request is no longer PENDING.
 
         '
       operationId: approveAdjustmentRequest
@@ -195,7 +195,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: User lacks required approval permission
+          description: FORBIDDEN when the caller lacks inventory:adjustment:approve; LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations that do not cover the adjustment request's locationId (ADR-0061); no ledger entry is posted and the request stays PENDING
         '404':
           content:
             application/json:

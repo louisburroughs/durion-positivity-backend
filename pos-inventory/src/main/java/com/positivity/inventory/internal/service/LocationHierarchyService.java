@@ -9,6 +9,7 @@ import com.positivity.inventory.internal.entity.ExtLocationParentReplica;
 import com.positivity.inventory.internal.entity.LocationRefEntity;
 import com.positivity.inventory.internal.repository.ExtLocationParentReplicaRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;
+import com.positivity.security.common.LocationAncestorResolver;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -40,11 +41,18 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>The closure itself is the shared, pure {@link LocationAncestry}; this class only supplies
  * the adjacency from {@link ExtLocationParentReplica} rows (replicated since V5) and writes the
  * result back.
+ *
+ * <p>It is also this module's one {@link LocationAncestorResolver} bean (ADR-0061 §3, #1871):
+ * {@code pos-security-common} hands it to each request's {@code LocationScope}, which is what
+ * makes an {@code INVENTORY_MANAGER} (scope {@code LOCATION}) distinguishable at runtime from an
+ * {@code INVENTORY_CONTROLLER} (scope {@code ALL}) holding the same grants. Implemented here
+ * rather than as a separate {@code internal.config} bean because {@code internal.service} already
+ * depends on {@code internal.config}, and the reverse edge would close a package cycle.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class LocationHierarchyService {
+public class LocationHierarchyService implements LocationAncestorResolver {
 
     private final LocationRefRepository locationRefRepository;
     private final ExtLocationParentReplicaRepository extLocationParentReplicaRepository;
@@ -57,6 +65,7 @@ public class LocationHierarchyService {
      * @return both dimensions' sets; {@link AncestorSets#EMPTY} when the replica does not hold
      *     the location
      */
+    @Override
     @Transactional(readOnly = true)
     public @NonNull AncestorSets ancestorsOf(@NonNull UUID locationId) {
         return locationRefRepository

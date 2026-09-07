@@ -127,8 +127,10 @@ public class StockMovementController {
                     negative removes it) and reasonCode; unitOfMeasure is optional.
                     Emits an INVENTORY_ADJUSTMENT_REQUEST_CREATE event; no ledger entry is written and \
                     availability is unchanged until approval.
-                    Returns 201 with the PENDING request, and 400 when productSku, locationId, quantity or \
-                    reasonCode is missing.
+                    Returns 201 with the PENDING request, 400 when productSku, locationId, quantity or \
+                    reasonCode is missing, and 403 with LOCATION_SCOPE_DENIED when the caller holds \
+                    inventory:adjustment:create but the token scopes it to locations that do not cover \
+                    locationId (ADR-0061).
                     """,
             tags = {"Stock Movements"})
     @ApiResponses(
@@ -149,7 +151,9 @@ public class StockMovementController {
                                         schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
-                        description = "User lacks required create permission",
+                        description = "FORBIDDEN when the caller lacks inventory:adjustment:create;"
+                                + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                                + " locations that do not cover the request's locationId (ADR-0061)",
                         content =
                                 @Content(
                                         mediaType = "application/json",
@@ -177,6 +181,11 @@ public class StockMovementController {
                 .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
         log.info("POST /v1/inventory/adjustments productSku={} actor={}", request.getProductSku(), actorUserId);
 
+        // ADR-0061 §3 (#1871): @PreAuthorize answered "may this caller create adjustments"; this
+        // answers "...at this location". The body is validated by then, so locationId is non-null.
+        SecurityContextHelper.locationScope()
+                .require(InventoryPermissionRegistry.ADJUSTMENT_CREATE, request.getLocationId());
+
         AdjustmentRequestResponse response = stockMovementService.createAdjustmentRequest(request, actorUserId);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -203,7 +212,10 @@ public class StockMovementController {
                     approver and timestamp, and the ledger posting updates the stock summary that availability \
                     reads.
                     Returns 400 when the adjustment request id is unknown (the lookup failure maps to a validation \
-                    error rather than 404), and 409 when the request is no longer PENDING.
+                    error rather than 404), 403 with LOCATION_SCOPE_DENIED when the caller holds \
+                    inventory:adjustment:approve but the token scopes it to locations that do not cover the \
+                    request's locationId (ADR-0061; nothing is posted), and 409 when the request is no longer \
+                    PENDING.
                     """,
             tags = {"Stock Movements"})
     @ApiResponses(
@@ -218,7 +230,10 @@ public class StockMovementController {
                                         schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
-                        description = "User lacks required approval permission",
+                        description = "FORBIDDEN when the caller lacks inventory:adjustment:approve;"
+                                + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                                + " locations that do not cover the adjustment request's locationId"
+                                + " (ADR-0061); no ledger entry is posted and the request stays PENDING",
                         content =
                                 @Content(
                                         mediaType = "application/json",
