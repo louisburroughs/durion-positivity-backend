@@ -281,6 +281,8 @@ paths:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1labor-guide-imports~1incomplete
   /v1/catalog/labor-guide-imports/unmapped:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1labor-guide-imports~1unmapped
+  /v1/catalog/labor-standards/conflicts:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1labor-standards~1conflicts
   /v1/catalog/labor-times/resolve:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1catalog~1labor-times~1resolve
   /v1/catalog/supplier-article-codes/replay:
@@ -385,6 +387,14 @@ paths:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1{productId}~1uoms
   /v1/products/{productId}/uoms/{uomId}:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1{productId}~1uoms~1{uomId}
+  /v1/service-packages:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1service-packages
+  /v1/service-packages/{packageId}:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1service-packages~1{packageId}
+  /v1/service-packages/{packageId}/members:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1service-packages~1{packageId}~1members
+  /v1/service-packages/{packageId}/members/{memberId}:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1service-packages~1{packageId}~1members~1{memberId}
   /v1/crm:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm
   /v1/crm/accounts/parties:
@@ -1149,6 +1159,12 @@ paths:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1{personId}~1primary-location
   /v1/people/{personId}/staffing/assignments:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1{personId}~1staffing~1assignments
+  /v1/labor-rates:
+    $ref: ../../pos-price/openapi.yaml#/paths/~1v1~1labor-rates
+  /v1/labor-rates/adjustments:
+    $ref: ../../pos-price/openapi.yaml#/paths/~1v1~1labor-rates~1adjustments
+  /v1/labor-rates/quote:
+    $ref: ../../pos-price/openapi.yaml#/paths/~1v1~1labor-rates~1quote
   /v1/price/bulk-ingest:
     $ref: ../../pos-price/openapi.yaml#/paths/~1v1~1price~1bulk-ingest
   /v1/price/normalize:
@@ -1539,6 +1555,8 @@ paths:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workexec~1wip~1{workorderId}
   /v1/workorders:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders
+  /v1/workorders/analytics/open-by-customer:
+    $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1analytics~1open-by-customer
   /v1/workorders/analytics/reopened:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1analytics~1reopened
   /v1/workorders/analytics/technician-labor:
@@ -1589,6 +1607,8 @@ paths:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1estimates~1{estimateId}~1submit-for-approval
   /v1/workorders/estimates/{estimateId}/summary:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1estimates~1{estimateId}~1summary
+  /v1/workorders/labor-intelligence/operations:
+    $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1labor-intelligence~1operations
   /v1/workorders/numbers:resolve:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1numbers:resolve
   /v1/workorders/search:

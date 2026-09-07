@@ -1,9 +1,9 @@
-generatedAt: "2026-09-06T22:50:21.511336+00:00"
+generatedAt: "2026-09-07T02:09:10.573749+00:00"
 root: "."
 summary:
   manifestCount: 23
-  permissionCount: 474
-  uniquePermissionCount: 474
+  permissionCount: 480
+  uniquePermissionCount: 480
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -138,7 +138,7 @@ manifests:
     domain: "catalog"
     serviceName: "pos-catalog"
     version: "1.0"
-    permissionCount: 44
+    permissionCount: 46
     permissions:
       - name: "catalog:catalog_grouping:delete"
         description: "Delete a catalog grouping"
@@ -196,6 +196,10 @@ manifests:
         description: "Add, update, and delete a product's alternate units of measure"
       - name: "catalog:product_uom:view"
         description: "View a product's alternate units of measure"
+      - name: "catalog:service_package:manage"
+        description: "Define service packages and fleet requirement sets, and compose their members"
+      - name: "catalog:service_package:view"
+        description: "List and read service packages and fleet requirement sets"
       - name: "catalog:service_type:create"
         description: "Create service types"
       - name: "catalog:service_type:edit"
@@ -746,10 +750,16 @@ manifests:
     domain: "pricing"
     serviceName: "pos-price"
     version: "1.0"
-    permissionCount: 18
+    permissionCount: 21
     permissions:
       - name: "pricing:base_price:create"
         description: "Create or update product base price (MSRP) records"
+      - name: "pricing:labor_rate:manage"
+        description: "Author shop labor rates and labor-matrix steps"
+      - name: "pricing:labor_rate:quote"
+        description: "Resolve the labor rate applicable to one job (service-to-service edge)"
+      - name: "pricing:labor_rate:view"
+        description: "View stored labor rates and labor-matrix steps"
       - name: "pricing:normalization:edit"
         description: "Edit price normalization rules"
       - name: "pricing:normalization:view"
@@ -1002,7 +1012,7 @@ manifests:
     domain: "workorder"
     serviceName: "pos-workorder"
     version: "1.0"
-    permissionCount: 56
+    permissionCount: 57
     permissions:
       - name: "workorder:analytics:view"
         description: "View cross-workorder analytics (status-transition history, reopened-workorder and technician-labor summaries)"
@@ -1070,6 +1080,8 @@ manifests:
         description: "Start/record labor for a technician other than the authenticated actor (Manager only)"
       - name: "workorder:labor:view"
         description: "View labor entries"
+      - name: "workorder:labor_intelligence:view"
+        description: "Read the labor-intelligence rollup, including technician medians"
       - name: "workorder:operationalContext:override"
         description: "Override operationalContext"
       - name: "workorder:note:add"
@@ -1635,6 +1647,18 @@ permissions:
     source: "pos-catalog/src/main/resources/permissions.yaml"
   - name: "catalog:product_uom:view"
     description: "View a product's alternate units of measure"
+    domain: "catalog"
+    serviceName: "pos-catalog"
+    module: "pos-catalog"
+    source: "pos-catalog/src/main/resources/permissions.yaml"
+  - name: "catalog:service_package:manage"
+    description: "Define service packages and fleet requirement sets, and compose their members"
+    domain: "catalog"
+    serviceName: "pos-catalog"
+    module: "pos-catalog"
+    source: "pos-catalog/src/main/resources/permissions.yaml"
+  - name: "catalog:service_package:view"
+    description: "List and read service packages and fleet requirement sets"
     domain: "catalog"
     serviceName: "pos-catalog"
     module: "pos-catalog"
@@ -3037,6 +3061,24 @@ permissions:
     serviceName: "pos-price"
     module: "pos-price"
     source: "pos-price/src/main/resources/permissions.yaml"
+  - name: "pricing:labor_rate:manage"
+    description: "Author shop labor rates and labor-matrix steps"
+    domain: "pricing"
+    serviceName: "pos-price"
+    module: "pos-price"
+    source: "pos-price/src/main/resources/permissions.yaml"
+  - name: "pricing:labor_rate:quote"
+    description: "Resolve the labor rate applicable to one job (service-to-service edge)"
+    domain: "pricing"
+    serviceName: "pos-price"
+    module: "pos-price"
+    source: "pos-price/src/main/resources/permissions.yaml"
+  - name: "pricing:labor_rate:view"
+    description: "View stored labor rates and labor-matrix steps"
+    domain: "pricing"
+    serviceName: "pos-price"
+    module: "pos-price"
+    source: "pos-price/src/main/resources/permissions.yaml"
   - name: "pricing:normalization:edit"
     description: "Edit price normalization rules"
     domain: "pricing"
@@ -3837,6 +3879,12 @@ permissions:
     source: "pos-workorder/src/main/resources/permissions.yaml"
   - name: "workorder:labor:view"
     description: "View labor entries"
+    domain: "workorder"
+    serviceName: "pos-workorder"
+    module: "pos-workorder"
+    source: "pos-workorder/src/main/resources/permissions.yaml"
+  - name: "workorder:labor_intelligence:view"
+    description: "Read the labor-intelligence rollup, including technician medians"
     domain: "workorder"
     serviceName: "pos-workorder"
     module: "pos-workorder"
