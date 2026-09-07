@@ -10,8 +10,12 @@ servers:
 - description: Generated server url
   url: http://localhost:8086
 tags:
+- description: Shop hourly labor rates and the labor matrix — the price half of a labor line, paired with pos-catalog's estimated service time.
+  name: Labor Rates
 - description: Bulk import base price records
   name: Price Bulk Ingest API
+- description: 'Scoped service-to-service edge: resolve the hourly labor rate in force for a location and operation category, with the shop labor matrix itemised.'
+  name: Labor Rate Resolution
 - description: Read operations for immutable pricing snapshots
   name: Pricing Snapshots
 - description: Promotion offer lifecycle operations
@@ -27,6 +31,259 @@ tags:
 - description: Contextual price quote operations
   name: Price Quotes
 paths:
+  /v1/labor-rates:
+    get:
+      description: 'Lists every stored labor rate, newest effective window first, including windows that have closed.
+
+        Use this tool to see what a location charges and when each rate took effect; do not use it to price a specific job, which is resolveLaborRate — this returns the whole table, not the one applicable rate.
+
+        Preconditions: none beyond authorization.
+
+        Required inputs: none.
+
+        Emits a PRICE_LABOR_RATE_LIST event; no state changes.
+
+        Returns 200 with the rates, and an empty list when none are stored.
+
+        '
+      operationId: listLaborRates
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LaborRateResponse'
+                type: array
+          description: The stored labor rates.
+        '401':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LaborRateResponse'
+                type: array
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LaborRateResponse'
+                type: array
+          description: Insufficient permissions.
+      security:
+      - bearerAuth:
+        - pricing:labor_rate:view
+      summary: List Labor Rates
+      tags:
+      - Labor Rates
+      x-required-permissions:
+      - pricing:labor_rate:view
+    post:
+      description: 'Stores an hourly labor rate for a scope and a time window: a location and an operation category, either of which may be omitted to widen the rate to every location or every category.
+
+        Use this tool to set what an hour of shop labor costs; do not use it to set how long an operation takes, which is the pos-catalog labor standard.
+
+        Preconditions: none beyond authorization. Rates are never edited in place — correcting one means closing its window and creating a new rate, so an invoice quoted at the old rate stays explainable.
+
+        Required inputs: currency, hourlyRate greater than zero, and effectiveFrom; locationId, operationCategory and effectiveTo are optional.
+
+        Emits a PRICE_LABOR_RATE_CREATE event.
+
+        Returns 201 with the stored rate, 422 when a field is not storable as asked, and 409 when a rate already opens the same scope at the same instant.
+
+        '
+      operationId: createLaborRate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LaborRateRequest'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborRateResponse'
+          description: Labor rate created.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborRateResponse'
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborRateResponse'
+          description: Insufficient permissions.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborRateResponse'
+          description: The rate cannot be stored as described.
+      security:
+      - bearerAuth:
+        - pricing:labor_rate:manage
+      summary: Create A Labor Rate
+      tags:
+      - Labor Rates
+      x-required-permissions:
+      - pricing:labor_rate:manage
+  /v1/labor-rates/adjustments:
+    get:
+      description: 'Lists every stored labor-matrix step in application order, including windows that have closed.
+
+        Use this tool to see which conditions a shop prices and by how much; do not use it to find which steps apply to one job, which is resolveLaborRate — that applies the caller''s opted-in codes and returns the resulting rate.
+
+        Preconditions: none beyond authorization.
+
+        Required inputs: none.
+
+        Emits a PRICE_LABOR_RATE_ADJUSTMENT_LIST event; no state changes.
+
+        Returns 200 with the steps, and an empty list when none are stored.
+
+        '
+      operationId: listLaborRateAdjustments
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LaborRateAdjustmentResponse'
+                type: array
+          description: The stored labor matrix steps.
+        '401':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LaborRateAdjustmentResponse'
+                type: array
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LaborRateAdjustmentResponse'
+                type: array
+          description: Insufficient permissions.
+      security:
+      - bearerAuth:
+        - pricing:labor_rate:view
+      summary: List Labor Matrix Steps
+      tags:
+      - Labor Rates
+      x-required-permissions:
+      - pricing:labor_rate:view
+    post:
+      description: 'Stores one step of a shop''s labor matrix: a percentage or flat adjustment that a quote opts into by naming its code, for conditions a guide time assumes away such as corrosion, restricted access, after-hours work or a fleet contract.
+
+        Use this tool to configure what a shop charges beyond its base rate; do not use it to change the base rate itself, which is createLaborRate.
+
+        Preconditions: none beyond authorization. Steps apply in sequence order and percentage steps compound, so the sequence changes the resulting rate and is part of the configuration, not a display hint.
+
+        Required inputs: adjustmentCode, adjustmentType (PERCENT or FIXED), adjustmentValue, sequence and effectiveFrom; locationId, operationCategory, description and effectiveTo are optional.
+
+        Emits a PRICE_LABOR_RATE_ADJUSTMENT_CREATE event.
+
+        Returns 201 with the stored step, 422 when a field is not storable as asked, and 409 when the same code already opens the same scope at the same instant.
+
+        '
+      operationId: createLaborRateAdjustment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LaborRateAdjustmentRequest'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborRateAdjustmentResponse'
+          description: Labor matrix step created.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborRateAdjustmentResponse'
+          description: Authentication required.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborRateAdjustmentResponse'
+          description: Insufficient permissions.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborRateAdjustmentResponse'
+          description: The step cannot be stored as described.
+      security:
+      - bearerAuth:
+        - pricing:labor_rate:manage
+      summary: Create A Labor Matrix Step
+      tags:
+      - Labor Rates
+      x-required-permissions:
+      - pricing:labor_rate:manage
+  /v1/labor-rates/quote:
+    post:
+      description: 'Answers the one hourly labor rate in force for a location and operation category at a moment, then applies the labor-matrix steps the caller opted into and itemises each one with the rate it produced.
+
+        Use this tool from the approved pos-workorder client to price a LABOR estimate line, paired with the catalog labor time that says how many hours; do not use it to browse what rates exist, which is listLaborRates.
+
+        Preconditions: none. Scope narrows from the location''s rate for the category through the location default and the platform category rate to the platform default; an unknown category or an adjustment code with no in-force step widens or is skipped rather than failing.
+
+        Required inputs: a body, which may be empty — every field is optional, and omitting locationId resolves the platform default rate.
+
+        Emits a PRICE_LABOR_RATE_QUOTE event; no state changes.
+
+        Returns 200 always for a well-formed request — no rate in force is the typed NO_RATE_AVAILABLE status, never an error, and callers degrade to a blank price.
+
+        '
+      operationId: resolveLaborRate
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Tire work at a location, corroded fasteners:
+                description: Tire work at a location, corroded fasteners
+                value:
+                  adjustmentCodes:
+                  - CORROSION
+                  locationId: 0198f2a1-0000-7000-8000-00000000000a
+                  operationCategory: TIRE_SERVICE
+            schema:
+              $ref: '#/components/schemas/LaborRateQuoteRequest'
+        description: Whose rate, for what class of work, at what moment, and which matrix steps the writer agreed apply.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaborRateQuoteResponse'
+          description: The resolved rate with its matrix derivation, or a typed miss.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - pricing:labor_rate:quote
+      summary: Resolve The Labor Rate For A Job
+      tags:
+      - Labor Rate Resolution
+      x-required-permissions:
+      - pricing:labor_rate:quote
   /v1/price/bulk-ingest:
     post:
       description: 'Bulk-imports base price (MSRP) records, appending an effective-dated price window per product and currency.
@@ -1305,6 +1562,25 @@ components:
       - status
       - timestamp
       type: object
+    AppliedLaborRateAdjustment:
+      properties:
+        code:
+          description: Step code.
+          example: CORROSION
+          type: string
+        resultingRate:
+          description: Running rate after this step.
+          example: 143.75
+          type: number
+        type:
+          description: PERCENT or FIXED.
+          example: PERCENT
+          type: string
+        value:
+          description: Configured value.
+          example: 15.0
+          type: number
+      type: object
     ApplyPromotionRequest:
       description: Request payload for applying a promotion code to an estimate context
       properties:
@@ -1755,6 +2031,257 @@ components:
       required:
       - field
       - message
+      type: object
+    LaborRateAdjustmentRequest:
+      description: 'One step of a shop''s labor matrix: a percentage or flat adjustment a quote opts into by naming its code. Steps apply in sequence order because percentages compound.'
+      properties:
+        adjustmentCode:
+          description: Code a quote names to opt this step in
+          example: CORROSION
+          maxLength: 64
+          minLength: 0
+          type: string
+        adjustmentType:
+          description: PERCENT compounds on the running rate; FIXED adds to it
+          enum:
+          - PERCENT
+          - FIXED
+          example: PERCENT
+          type: string
+        adjustmentValue:
+          description: Configured value; negative discounts
+          example: 15.0
+          type: number
+        description:
+          description: What the step is for
+          example: Seized or corroded fasteners
+          maxLength: 255
+          minLength: 0
+          type: string
+        effectiveFrom:
+          description: Start of the effective window, inclusive
+          format: date-time
+          type: string
+        effectiveTo:
+          description: End of the effective window, exclusive; omit for open-ended
+          format: date-time
+          type: string
+        locationId:
+          description: Location this step belongs to; omit for the platform default matrix
+          format: uuid
+          type: string
+        operationCategory:
+          description: Operation category this step applies to; omit to apply to every category
+          enum:
+          - REPAIR
+          - DIAGNOSTIC
+          - MAINTENANCE
+          - TIRE_SERVICE
+          example: REPAIR
+          maxLength: 32
+          minLength: 0
+          type: string
+        sequence:
+          description: Application order within the matrix
+          example: 10
+          format: int32
+          type: integer
+      required:
+      - adjustmentCode
+      - adjustmentType
+      - adjustmentValue
+      - effectiveFrom
+      - sequence
+      type: object
+    LaborRateAdjustmentResponse:
+      description: A stored labor-matrix step.
+      properties:
+        adjustmentCode:
+          description: Code a quote names to opt this step in
+          example: CORROSION
+          type: string
+        adjustmentType:
+          description: PERCENT or FIXED
+          example: PERCENT
+          type: string
+        adjustmentValue:
+          description: Configured value
+          example: 15.0
+          type: number
+        description:
+          description: What the step is for
+          type: string
+        effectiveFrom:
+          description: Start of the effective window, inclusive
+          format: date-time
+          type: string
+        effectiveTo:
+          description: End of the effective window, exclusive; null = open-ended
+          format: date-time
+          type: string
+        id:
+          description: Step identifier
+          format: uuid
+          type: string
+        locationId:
+          description: Location; null = platform default matrix
+          format: uuid
+          type: string
+        operationCategory:
+          description: Operation category; null = every category
+          type: string
+        sequence:
+          description: Application order within the matrix
+          example: 10
+          format: int32
+          type: integer
+      type: object
+    LaborRateQuoteRequest:
+      description: Whose labor rate, for what class of work, at what moment, and which labor-matrix steps apply. Null scope fields widen to the platform default.
+      properties:
+        adjustmentCodes:
+          description: Labor-matrix step codes the writer opted into; unknown codes are ignored.
+          example:
+          - CORROSION
+          items:
+            type: string
+          type: array
+        at:
+          description: Moment to price at; null = now.
+          format: date-time
+          type: string
+        locationId:
+          description: Location quoting the work; null = platform default rate.
+          format: uuid
+          type: string
+        operationCategory:
+          description: Operation category; null = the category-agnostic rate.
+          enum:
+          - REPAIR
+          - DIAGNOSTIC
+          - MAINTENANCE
+          - TIRE_SERVICE
+          example: TIRE_SERVICE
+          maxLength: 32
+          minLength: 0
+          type: string
+      type: object
+    LaborRateQuoteResponse:
+      description: The resolved hourly labor rate with its matrix derivation, or a typed miss. Callers must degrade on non-RESOLVED statuses — render the line without a price — never fail their flow.
+      properties:
+        baseHourlyRate:
+          description: Rate before the matrix; only when RESOLVED.
+          example: 125.0
+          type: number
+        currency:
+          description: ISO currency of both amounts.
+          example: USD
+          type: string
+        effectiveFrom:
+          description: Start of the answering row's effective window.
+          format: date-time
+          type: string
+        hourlyRate:
+          description: Rate after the matrix; only when RESOLVED.
+          example: 142.5
+          type: number
+        rateId:
+          description: Identifier of the rate row that answered.
+          format: uuid
+          type: string
+        scope:
+          description: How specific the answering rate row was.
+          enum:
+          - LOCATION_CATEGORY
+          - LOCATION_DEFAULT
+          - PLATFORM_CATEGORY
+          - PLATFORM_DEFAULT
+          example: LOCATION_CATEGORY
+          type: string
+        status:
+          description: Whether a rate was found, and if not, why not.
+          enum:
+          - RESOLVED
+          - NO_RATE_AVAILABLE
+          type: string
+        steps:
+          description: Matrix steps applied, in order.
+          items:
+            $ref: '#/components/schemas/AppliedLaborRateAdjustment'
+          type: array
+      type: object
+    LaborRateRequest:
+      description: An hourly labor rate for a scope and a time window. A null locationId is the platform default; a null operationCategory applies to every category.
+      properties:
+        currency:
+          description: ISO 4217 currency
+          example: USD
+          maxLength: 3
+          minLength: 3
+          type: string
+        effectiveFrom:
+          description: Start of the effective window, inclusive
+          format: date-time
+          type: string
+        effectiveTo:
+          description: End of the effective window, exclusive; omit for open-ended
+          format: date-time
+          type: string
+        hourlyRate:
+          description: Hourly rate, greater than zero
+          example: 125.0
+          minimum: 0.0
+          type: number
+        locationId:
+          description: Location this rate belongs to; omit for the platform default
+          format: uuid
+          type: string
+        operationCategory:
+          description: Operation category this rate applies to; omit to apply to every category
+          enum:
+          - REPAIR
+          - DIAGNOSTIC
+          - MAINTENANCE
+          - TIRE_SERVICE
+          example: TIRE_SERVICE
+          maxLength: 32
+          minLength: 0
+          type: string
+      required:
+      - currency
+      - effectiveFrom
+      - hourlyRate
+      type: object
+    LaborRateResponse:
+      description: A stored hourly labor rate.
+      properties:
+        currency:
+          description: ISO 4217 currency
+          example: USD
+          type: string
+        effectiveFrom:
+          description: Start of the effective window, inclusive
+          format: date-time
+          type: string
+        effectiveTo:
+          description: End of the effective window, exclusive; null = open-ended
+          format: date-time
+          type: string
+        hourlyRate:
+          description: Hourly rate
+          example: 125.0
+          type: number
+        id:
+          description: Rate identifier
+          format: uuid
+          type: string
+        locationId:
+          description: Location; null = platform default
+          format: uuid
+          type: string
+        operationCategory:
+          description: Operation category; null = every category
+          type: string
       type: object
     LineItemContext:
       description: Single estimate line item used for promotion and pricing calculations

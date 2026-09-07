@@ -1142,13 +1142,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 76")
+    @DisplayName("CATALOG_VERSION is 77")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(76);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(77);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 506")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 512")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1407,8 +1407,13 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(508)).isEqualTo("PERM_catalog:tread_design:resolve");
         // catalog v76 (#1851): invoice revenue reconciliation in pos-accounting (bit 509)
         assertThat(GatewayPermissionCatalog.authorityForBit(509)).isEqualTo("PERM_accounting:gl:reconcile");
+        // catalog v77 (#1575 Tier 0): shop labor rates in pos-price — authoring, viewing, and the
+        // scoped resolve edge that prices a labor line (bits 510-512)
+        assertThat(GatewayPermissionCatalog.authorityForBit(510)).isEqualTo("PERM_pricing:labor_rate:manage");
+        assertThat(GatewayPermissionCatalog.authorityForBit(511)).isEqualTo("PERM_pricing:labor_rate:view");
+        assertThat(GatewayPermissionCatalog.authorityForBit(512)).isEqualTo("PERM_pricing:labor_rate:quote");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(510)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(513)).isNull();
     }
 
     @Test

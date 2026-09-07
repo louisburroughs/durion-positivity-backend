@@ -64,6 +64,23 @@ public final class PricingPermissions {
     /** Edit price normalization rules. */
     public static final String NORMALIZATION_EDIT = "pricing:normalization:edit";
 
+    // ── Labor rates (#1575 Tier 0) ──────────────────────────────────────────────────────
+
+    /** Author shop labor rates and the labor matrix. */
+    public static final String LABOR_RATE_MANAGE = "pricing:labor_rate:manage";
+
+    /** View stored labor rates and matrix steps. */
+    public static final String LABOR_RATE_VIEW = "pricing:labor_rate:view";
+
+    /**
+     * Resolve the rate applicable to one job, through the scoped service-to-service edge.
+     *
+     * <p>Separate from {@link #LABOR_RATE_VIEW}: listing what a shop charges and pricing a
+     * specific job are different powers, and the edge's holder is a service account, not a
+     * person browsing the rate table.
+     */
+    public static final String LABOR_RATE_QUOTE = "pricing:labor_rate:quote";
+
     private PricingPermissions() {
         // Utility class - prevent instantiation
     }
