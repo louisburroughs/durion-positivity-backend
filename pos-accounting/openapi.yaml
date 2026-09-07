@@ -10,36 +10,20 @@ servers:
 - description: Generated server url
   url: http://localhost:8086
 tags:
-- description: Audit trail operations for tracking accounting exceptions and overrides
-  name: Audit Trail
-- description: Manage timekeeping and generic data export jobs.
-  name: Accounting Exports
-- description: Manage payment applications to invoices (AR)
-  name: Payment Applications
 - description: Manage posting rule sets and their lifecycle.
   name: Posting Rules
-- description: Apply payments and query invoice status.
-  name: Invoice Payments
-- description: Manage mapping keys for GL mapping taxonomy
-  name: Mapping Keys
 - description: Read-only cross-invoice collections and payment-lag analytics (Wave 2)
   name: Accounting Analytics
-- description: Manage posting categories for GL mapping taxonomy
-  name: Posting Categories
 - description: Manage credit memos for AR corrections
   name: Credit Memos
 - description: Endpoints for creating and resolving GL mappings
   name: GL Mapping API
 - description: Manage journal entries including posting and reversal.
   name: Journal Entries
-- description: Manage chart of accounts including lifecycle actions.
-  name: GL Accounts
-- description: 'Manual CSV bank reconciliation: import a statement, match lines to posted GL entries, record adjustments, and finalize when balanced.'
-  name: Bank Reconciliation
+- description: General ledger reconciliation
+  name: Accounting GL
 - description: Period-close-aligned freeze of the Sales-Tax Liability report
   name: Financial Reporting for Tax Liability
-- description: 'Accounting period lifecycle: list periods, close a period, reopen a closed period, and manage the org-level hard-lock date.'
-  name: Accounting Periods
 - description: 'Processor settlement reconciliation review: list settlement lines, manually match an unmatched line to a receivable payment, and write off small unmatched lines.'
   name: Settlement Reconciliation
 - description: Vendor search and lookup endpoints for name-to-vendorId resolution (typeahead support)
@@ -50,14 +34,32 @@ tags:
   name: Location Cost Reporting
 - description: Accounts Payable vendor payment operations
   name: AP Payments
-- description: Income Statement and Balance Sheet generation with drilldown
-  name: Financial Reporting
 - description: Endpoints for vendor bill creation, matching, retrieval, and exception resolution
   name: Vendor Bill API
-- description: Manage default GL account mappings for event types without explicit posting rules
-  name: Default GL Mappings
 - description: Ingest and manage accounting events for journal processing.
   name: Accounting Events
+- description: Audit trail operations for tracking accounting exceptions and overrides
+  name: Audit Trail
+- description: Manage timekeeping and generic data export jobs.
+  name: Accounting Exports
+- description: Manage payment applications to invoices (AR)
+  name: Payment Applications
+- description: Apply payments and query invoice status.
+  name: Invoice Payments
+- description: Manage mapping keys for GL mapping taxonomy
+  name: Mapping Keys
+- description: Manage posting categories for GL mapping taxonomy
+  name: Posting Categories
+- description: Manage chart of accounts including lifecycle actions.
+  name: GL Accounts
+- description: 'Manual CSV bank reconciliation: import a statement, match lines to posted GL entries, record adjustments, and finalize when balanced.'
+  name: Bank Reconciliation
+- description: 'Accounting period lifecycle: list periods, close a period, reopen a closed period, and manage the org-level hard-lock date.'
+  name: Accounting Periods
+- description: Income Statement and Balance Sheet generation with drilldown
+  name: Financial Reporting
+- description: Manage default GL account mappings for event types without explicit posting rules
+  name: Default GL Mappings
 paths:
   /v1/accounting/analytics/collections:
     get:
@@ -3206,7 +3208,7 @@ paths:
       - accounting:coa:deactivate
   /v1/accounting/invoice-revenue/reconcile:
     post:
-      description: "Posts revenue to the general ledger for every finalized invoice in the accounting replica that has no open revenue posting yet, using the same entries the live invoice event path creates (Dr Accounts Receivable / Cr Service Revenue / Cr Sales Tax Payable, dated at the invoice's finalization).
+      description: 'Posts revenue to the general ledger for every finalized invoice in the accounting replica that has no open revenue posting yet, using the same entries the live invoice event path creates (Dr Accounts Receivable / Cr Service Revenue / Cr Sales Tax Payable, dated at the invoice''s finalization).
 
         Use this tool to backfill invoices finalized before revenue posting existed, after a consumer outage, or when the income statement disagrees with invoice totals; do not use retryAccountingEvent, which re-runs a single failed ingestion event, or an outbox replay, which cannot reach invoices that never produced an event.
 
@@ -3216,7 +3218,7 @@ paths:
 
         Emits an ACCOUNTING_INVOICE_REVENUE_RECONCILE event and returns 200 with per-invoice outcomes (POSTED, WOULD_POST, ALREADY_POSTED, SKIPPED with reason, FAILED with error) and totals.
 
-        "
+        '
       operationId: reconcileInvoiceRevenue
       requestBody:
         content:
@@ -3224,10 +3226,10 @@ paths:
             examples:
               Dry run for July-August 2026:
                 description: Dry run for July-August 2026
-                value: |
-                  {"finalizedFrom":"2026-07-01T00:00:00Z",
-                   "finalizedTo":"2026-09-01T00:00:00Z",
-                   "dryRun":true}
+                value:
+                  dryRun: true
+                  finalizedFrom: '2026-07-01T00:00:00Z'
+                  finalizedTo: '2026-09-01T00:00:00Z'
             schema:
               $ref: '#/components/schemas/InvoiceRevenueReconcileRequest'
         description: Optional bounds; an empty or absent body reconciles everything, live.
@@ -11101,32 +11103,6 @@ components:
       - quantity
       - unitPrice
       type: object
-    InvoiceRevenueReconcileOutcome:
-      description: Outcome for one invoice
-      properties:
-        detail:
-          description: Reason for a skip or the failure message; the journal entry id when posted
-          type: string
-        finalizedAt:
-          format: date-time
-          type: string
-        invoiceId:
-          format: uuid
-          type: string
-        invoiceNumber:
-          type: string
-        kind:
-          description: POSTED, WOULD_POST, ALREADY_POSTED, SKIPPED or FAILED
-          enum:
-          - POSTED
-          - WOULD_POST
-          - ALREADY_POSTED
-          - SKIPPED
-          - FAILED
-          type: string
-        total:
-          type: number
-      type: object
     InvoiceRevenueReconcileRequest:
       description: Bounds for an invoice revenue reconciliation run; all fields optional
       properties:
@@ -11136,12 +11112,12 @@ components:
           type: boolean
         finalizedFrom:
           description: Only invoices finalized at or after this instant
-          example: 2026-07-01T00:00:00Z
+          example: '2026-07-01T00:00:00Z'
           format: date-time
           type: string
         finalizedTo:
           description: Only invoices finalized before this instant
-          example: 2026-09-01T00:00:00Z
+          example: '2026-09-01T00:00:00Z'
           format: date-time
           type: string
         invoiceIds:
@@ -11175,7 +11151,7 @@ components:
         outcomes:
           description: One entry per candidate, in the order examined
           items:
-            $ref: '#/components/schemas/InvoiceRevenueReconcileOutcome'
+            $ref: '#/components/schemas/Outcome'
           type: array
         posted:
           description: Postings created (or, on a dry run, that would be created)
@@ -11923,6 +11899,32 @@ components:
       - ruleSetName
       - ruleVersionId
       - versionNumber
+      type: object
+    Outcome:
+      description: Outcome for one invoice
+      properties:
+        detail:
+          description: Reason for a skip or the failure message; the journal entry id when posted
+          type: string
+        finalizedAt:
+          format: date-time
+          type: string
+        invoiceId:
+          format: uuid
+          type: string
+        invoiceNumber:
+          type: string
+        kind:
+          description: POSTED, WOULD_POST, ALREADY_POSTED, SKIPPED or FAILED
+          enum:
+          - POSTED
+          - WOULD_POST
+          - ALREADY_POSTED
+          - SKIPPED
+          - FAILED
+          type: string
+        total:
+          type: number
       type: object
     PageAccountingEventResponse:
       properties:

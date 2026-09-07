@@ -1237,6 +1237,12 @@ components:
           - SECURITY_USER
           - USER_PERSON_LINK
           - MECHANIC_SKILL
+          - CATALOG_SERVICE
+          - SERVICE_LABOR_STANDARD
+          - SERVICE_PACKAGE
+          - SERVICE_PACKAGE_MEMBER
+          - LABOR_RATE
+          - LABOR_RATE_ADJUSTMENT
           example: CATALOG_PRODUCT
           type: string
         fileName:
@@ -1289,6 +1295,12 @@ components:
           - SECURITY_USER
           - USER_PERSON_LINK
           - MECHANIC_SKILL
+          - CATALOG_SERVICE
+          - SERVICE_LABOR_STANDARD
+          - SERVICE_PACKAGE
+          - SERVICE_PACKAGE_MEMBER
+          - LABOR_RATE
+          - LABOR_RATE_ADJUSTMENT
           example: CATALOG_PRODUCT
           type: string
         failureCount:
@@ -1468,6 +1480,12 @@ components:
           - SECURITY_USER
           - USER_PERSON_LINK
           - MECHANIC_SKILL
+          - CATALOG_SERVICE
+          - SERVICE_LABOR_STANDARD
+          - SERVICE_PACKAGE
+          - SERVICE_PACKAGE_MEMBER
+          - LABOR_RATE
+          - LABOR_RATE_ADJUSTMENT
           example: CATALOG_PRODUCT
           type: string
         llmFallbackUsed:
