@@ -815,13 +815,13 @@ paths:
 
         Use this tool for the WIP status board; do not use getDispatchDashboard, which aggregates mechanics, bays, and conflicts for one date, and use getWipDetail for a single workorder''s status history.
 
-        Preconditions: multiLocation=true requires the caller to hold workorder:wip:view_all_locations; otherwise results are scoped to the given location.
+        Preconditions: multiLocation=true requires the caller to hold workorder:wip:view_all_locations; otherwise results are scoped to the given location, and a caller whose workorder:wip:view grant is location-scoped must have that location within reach (ADR-0061).
 
         Required inputs: locationId (UUID as a string) as a query parameter — ignored when multiLocation is true; multiLocation defaults to false and page size defaults to 25.
 
         Emits a WORKORDER_WIP_LIST audit event; no workorder state changes — this is a read-only projection.
 
-        Returns 400 when locationId does not parse as a UUID, and 403 when multiLocation is requested without workorder:wip:view_all_locations.
+        Returns 400 when locationId does not parse as a UUID, 403 FORBIDDEN when multiLocation is requested without workorder:wip:view_all_locations, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId.
 
         '
       operationId: listWipWorkorders
@@ -869,7 +869,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PageWorkorderStatusView'
-          description: OK
+          description: Page of active WIP workorders
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: locationId does not parse as a UUID
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks workorder:wip:view_all_locations for multiLocation=true (ApiError.code FORBIDDEN), or Caller holds workorder:wip:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - workorder:wip:view
@@ -884,13 +896,13 @@ paths:
 
         Use this tool when drilling into a single workorder from the WIP board; use listWipWorkorders instead for the paginated board itself.
 
-        Preconditions: the workorder must exist; it does not need to be in an active WIP status to be viewed.
+        Preconditions: the workorder must exist; it does not need to be in an active WIP status to be viewed. A caller whose workorder:wip:view grant is location-scoped must have the workorder''s location within reach (ADR-0061).
 
         Required inputs: workorderId (UUID) as a path parameter.
 
         Emits a WORKORDER_WIP_VIEW audit event; no workorder state changes — this is a read-only projection.
 
-        Returns 404 when no workorder exists for the id.
+        Returns 404 when no workorder exists for the id, and 403 LOCATION_SCOPE_DENIED when the workorder exists but its location is outside the caller''s scope.
 
         '
       operationId: getWipDetail
@@ -909,6 +921,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkorderStatusDetail'
           description: WIP detail retrieved successfully
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds workorder:wip:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:

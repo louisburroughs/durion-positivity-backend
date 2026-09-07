@@ -5,6 +5,7 @@ import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.domainevents.location.LocationAncestry.Closure;
 import com.positivity.domainevents.location.LocationAncestry.Dimension;
 import com.positivity.domainevents.location.LocationUpdatedV1;
+import com.positivity.security.common.LocationAncestorResolver;
 import com.positivity.workorder.internal.entity.ExtLocationParentReplica;
 import com.positivity.workorder.internal.entity.ExtLocationReplica;
 import com.positivity.workorder.internal.repository.ExtLocationParentReplicaRepository;
@@ -39,11 +40,19 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>The closure itself is the shared, pure {@link LocationAncestry}; this class only supplies
  * the adjacency from {@link ExtLocationParentReplica} rows and writes the result back.
+ *
+ * <p>It is also this module's {@link LocationAncestorResolver} (ADR-0061 §3, #1871): the one bean
+ * {@code pos-security-common}'s {@code LocationScope.covers} needs to evaluate a location-scoped
+ * permission here. Without a resolver every scoped permission is denied by design, so this
+ * implementation is the switch that turns location-scope enforcement on for pos-workorder's
+ * controllers. It lives on the service rather than in a {@code config} bean because
+ * {@code internal.config} is already a dependency of the service slice and the reverse edge
+ * would be a package cycle.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class LocationHierarchyService {
+public class LocationHierarchyService implements LocationAncestorResolver {
 
     private final ExtLocationReplicaRepository extLocationReplicaRepository;
     private final ExtLocationParentReplicaRepository extLocationParentReplicaRepository;
@@ -55,6 +64,7 @@ public class LocationHierarchyService {
      * @return both dimensions' sets; {@link AncestorSets#EMPTY} when the replica does not hold
      *     the location
      */
+    @Override
     @Transactional(readOnly = true)
     public @NonNull AncestorSets ancestorsOf(@NonNull UUID locationId) {
         return extLocationReplicaRepository
