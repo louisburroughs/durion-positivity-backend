@@ -53,7 +53,9 @@ Two workflows deliver changes to the alpha EC2 box; which one runs depends on wh
   pulls them onto the box over SSM, and runs `deploy-backend.sh <sha>` (full deploy:
   retag + pull + `--force-recreate`).
 - **Config-only changes** to `deployment/alpha/docker-compose.prod.yml`,
-  `deployment/alpha/deploy-backend.sh`, `postgres/init-databases.sql`, or `observability/**` —
+  `deployment/alpha/deploy-backend.sh`, `deployment/alpha/cloudwatch-agent-config.json`,
+  `deployment/alpha/install-cloudwatch-agent.sh`, `postgres/init-databases.sql`, or
+  `observability/**` —
   `sync-alpha-config.yml` (auto on merge to `main` touching those paths, or manual dispatch).
   Uploads the committed files, pulls them onto the box, and runs
   `deploy-backend.sh --config-only`, which **recreates** exactly the containers whose merged
@@ -164,9 +166,10 @@ at 60s:
 | `disk_used_percent`, `disk_free` on `/` | Docker's data root lives here; this is the #1862 signal |
 | `mem_used_percent` | Diagnosis. No alarm, to keep the noise down |
 
-`aggregation_dimensions` publishes an `InstanceId`-only rollup *in addition to* the base
-`(InstanceId, path, fstype)` series, so disk bills as four custom metrics and memory as two. Small,
-but not the two it looks like.
+`aggregation_dimensions` publishes an `InstanceId`-only rollup *in addition to* the base series, so
+disk bills as four custom metrics: two measurements across `(InstanceId, path, fstype)` and
+`(InstanceId)`. Memory bills as one, not two — `append_dimensions` already makes its base dimension
+set exactly `(InstanceId)`, so the rollup is the same series. Five in total.
 
 **Alarms** (`us-east-1`, both notifying the `durion-alpha-alerts` SNS topic):
 
@@ -184,7 +187,13 @@ Thresholds are in bytes, not percent, because the question is whether the next d
 images fit, and that does not scale with volume size — the resize from 100 to 200 GiB halved every
 percentage without changing the risk.
 
-Two couplings to respect:
+Three couplings to respect:
+
+- Both alarms match on `InstanceId` alone, and that series exists **only** because of
+  `aggregation_dimensions: [["InstanceId"]]`. `drop_device: true` leaves the base disk series at
+  `(InstanceId, path, fstype)`, which the alarms would not match. Remove or narrow that key and
+  `alpha-root-disk-critical` goes to INSUFFICIENT_DATA while `alpha-root-disk-low` alarms forever,
+  with no change to the alarms themselves.
 
 - The 40 GiB threshold is set against `DOCKER_MIN_FREE_GIB` in `deploy-backend.sh` (default 25) so
   the warning arrives *before* the deploy has to prune at all. Change one, revisit the other.
@@ -210,8 +219,15 @@ cloud-init's `growpart` extends the filesystem, because a bigger volume alone ch
 can see. Full history in #1862.
 
 **Applying a config change:** edit `deployment/alpha/cloudwatch-agent-config.json` and merge. The
-`sync-alpha-config` workflow ships it to the box and runs the installer, which fails the workflow
-if the agent does not come back running, configured and enabled.
+`sync-alpha-config` workflow ships it to the box and runs the installer, which fails the workflow if
+the agent does not come back running, configured and enabled. That step runs **last**, after the
+containers are recreated, so a monitoring failure can never block delivery of a merged compose
+change.
+
+The installer validates the config is well-formed JSON before applying it, but that is a syntax
+check only: a typo'd measurement name is well-formed and gets rejected later by the agent itself.
+Note also that applying restarts the agent even when the file is unchanged, costing one 60s
+datapoint inside a 300s alarm period.
 
 To run it by hand on the box:
 
@@ -246,23 +262,41 @@ aws sns list-subscriptions-by-topic --region us-east-1 \
 This repo has no infrastructure-as-code, so the AWS side of the above is **not** recreated by any
 pipeline. A rebuilt instance publishes no host metrics, and the two alarms stay pinned to the old
 instance id — where the warning alarm, treating missing data as breaching, fires forever against a
-dead box while the new one goes unwatched. Run this after any rebuild, with `INSTANCE` set to the
-new id:
+dead box while the new one goes unwatched.
+
+Order matters here. Repointing the alarms first would leave you with alarms watching a host that has
+no agent on it, which is worse than the gap it replaced.
 
 ```bash
 INSTANCE=i-xxxxxxxxxxxxxxxxx
+BUCKET=<ALPHA_DEPLOY_BUCKET>
 TOPIC=arn:aws:sns:us-east-1:288757602241:durion-alpha-alerts
 
-# 1. The agent needs PutMetricData; AmazonSSMManagedInstanceCore does not grant it.
+# 0. Point the repo at the new box FIRST. Every workflow below sends to this variable, so until it
+#    is updated `sync-alpha-config` and the deploy both still talk to the dead instance.
+gh variable set ALPHA_EC2_INSTANCE_ID --body "$INSTANCE"
+#    Confirm the new instance carries the EC2-SSM-Role instance profile, or SSM cannot reach it:
+aws ec2 describe-instances --region us-east-1 --instance-ids "$INSTANCE" \
+  --query 'Reservations[0].Instances[0].IamInstanceProfile.Arn' --output text
+
+# 1. The agent needs PutMetricData; AmazonSSMManagedInstanceCore does not grant it. Idempotent.
 aws iam attach-role-policy --role-name EC2-SSM-Role \
   --policy-arn arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
 
-# 2. Ship and install the agent (or push any change to deployment/alpha/ to run the sync workflow).
-aws ssm send-command --region us-east-1 --instance-ids "$INSTANCE" \
-  --document-name AWS-RunShellScript \
-  --parameters 'commands=["bash /opt/durion/alpha/scripts/install-cloudwatch-agent.sh"]'
+# 2. Bootstrap the installer from S3. A fresh box has nothing under /opt/durion, so this cannot
+#    assume the on-box path — sync-alpha-config is what puts it there, and it has not run yet.
+CMD=$(aws ssm send-command --region us-east-1 --instance-ids "$INSTANCE" \
+  --document-name AWS-RunShellScript --timeout-seconds 2700 \
+  --parameters "{\"commands\":[\"mkdir -p /opt/durion/alpha/scripts\",\"aws s3 cp s3://${BUCKET}/alpha/cloudwatch-agent-config.json /opt/durion/alpha/cloudwatch-agent-config.json\",\"aws s3 cp s3://${BUCKET}/alpha/scripts/install-cloudwatch-agent.sh /opt/durion/alpha/scripts/install-cloudwatch-agent.sh\",\"bash /opt/durion/alpha/scripts/install-cloudwatch-agent.sh\"]}" \
+  --query Command.CommandId --output text)
 
-# 3. Repoint both alarms at the new instance.
+#    Read the result. The installer's whole value is that it dies loudly on each condition that
+#    would leave the box unwatched, and send-command discards every one of those signals.
+sleep 60
+aws ssm get-command-invocation --region us-east-1 --command-id "$CMD" --instance-id "$INSTANCE" \
+  --query '[Status,StandardOutputContent,StandardErrorContent]' --output text
+
+# 3. Only once step 2 reports Success, repoint both alarms at the new instance.
 aws cloudwatch put-metric-alarm --region us-east-1 --alarm-name alpha-root-disk-low \
   --namespace CWAgent --metric-name disk_free --dimensions Name=InstanceId,Value="$INSTANCE" \
   --statistic Minimum --period 300 --evaluation-periods 3 --datapoints-to-alarm 3 \
@@ -276,7 +310,14 @@ aws cloudwatch put-metric-alarm --region us-east-1 --alarm-name alpha-root-disk-
   --treat-missing-data missing --alarm-actions "$TOPIC" --ok-actions "$TOPIC"
 ```
 
-Then verify with the two commands above before considering the rebuild done.
+Then verify with the `get-metric-statistics` and `list-subscriptions-by-topic` commands above before
+considering the rebuild done. Step 0 needs `gh` authenticated against this repo with variable-write
+access, and step 1 needs `iam:AttachRolePolicy`; if you hold neither, they are the two things to
+hand to someone who does.
+
+Note that `build-push-ecr.yml` does **not** ship the agent files — only `sync-alpha-config.yml`
+does. A rebuilt box that receives nothing but code deploys therefore stays unwatched until either
+this checklist is run or something under `deployment/alpha/` is merged.
 
 ### Dashboard Access
 

@@ -89,36 +89,6 @@ jobs:
             --command-id "$COMMAND_ID" \
             --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}"
 
-      - name: Apply CloudWatch agent config on alpha host
-        # Shipping the config without applying it is the failure #1457 exists to prevent: the
-        # committed file and the box silently diverge. The installer is idempotent, so this is a
-        # no-op beyond a config reload when nothing changed. It fails loudly on purpose — an
-        # agent that is not publishing is the blindness #1862 was about.
-        run: |
-          COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
-            --document-name "AWS-RunShellScript" \
-            --parameters '{"commands":["bash /opt/durion/alpha/scripts/install-cloudwatch-agent.sh"]}' \
-            --timeout-seconds 600 \
-            --query "Command.CommandId" --output text)
-          STATUS=Pending
-          for i in $(seq 1 40); do
-            STATUS=$(aws ssm get-command-invocation \
-              --command-id "$COMMAND_ID" \
-              --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
-              --query "Status" --output text 2>/dev/null || echo Pending)
-            [[ "$STATUS" == "Success" || "$STATUS" == "Failed" || "$STATUS" == "TimedOut" || "$STATUS" == "Cancelled" ]] && break
-            sleep 10
-          done
-          aws ssm get-command-invocation \
-            --command-id "$COMMAND_ID" \
-            --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
-            --query "[StandardOutputContent,StandardErrorContent]" --output text
-          if [[ "$STATUS" != "Success" ]]; then
-            echo "CloudWatch agent config failed to apply: ${STATUS}" >&2
-            exit 1
-          fi
-
       - name: Apply config on alpha host (recreate changed containers)
         run: |
           COMMAND_ID=$(aws ssm send-command \
@@ -149,5 +119,44 @@ jobs:
           # report a successful sync — only a terminal Success counts.
           if [[ "$STATUS" != "Success" ]]; then
             echo "SSM command finished with status ${STATUS}" >&2
+            exit 1
+          fi
+
+      - name: Apply CloudWatch agent config on alpha host
+        # Shipping the config without applying it is the failure #1457 exists to prevent: the
+        # committed file and the box silently diverge. It fails loudly on purpose — an agent that
+        # is not publishing is the blindness #1862 was about.
+        #
+        # Deliberately LAST. Host monitoring must never be able to block delivery of a merged
+        # compose change: a transient dnf mirror failure here would otherwise abort the run before
+        # the containers were recreated, leaving the merged config pulled onto the box but never
+        # applied — the exact silently-inert-config failure #1457 exists to prevent, for a reason
+        # that has nothing to do with compose. Running it after means a failure still fails the
+        # workflow, but only once the config it was blocking is already live.
+        #
+        # `fetch-config -s` restarts the agent even when the config is byte-identical, so a sync
+        # that changed nothing here still costs one 60s datapoint inside a 300s alarm period.
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters '{"commands":["bash /opt/durion/alpha/scripts/install-cloudwatch-agent.sh"]}' \
+            --timeout-seconds 2700 \
+            --query "Command.CommandId" --output text)
+          STATUS=Pending
+          for i in $(seq 1 180); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+              --query "Status" --output text 2>/dev/null || echo Pending)
+            [[ "$STATUS" == "Success" || "$STATUS" == "Failed" || "$STATUS" == "TimedOut" || "$STATUS" == "Cancelled" ]] && break
+            sleep 15
+          done
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
+            --query "[StandardOutputContent,StandardErrorContent]" --output text
+          if [[ "$STATUS" != "Success" ]]; then
+            echo "CloudWatch agent config failed to apply: ${STATUS}" >&2
             exit 1
           fi

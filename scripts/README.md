@@ -513,10 +513,12 @@ bash scripts/tests/install-cloudwatch-agent-selftest.sh
 ```
 
 **Notes:**
-- `EUID` is readonly in bash, so root cannot be faked. Every case but `not-root` runs through a copy
-  with only that guard removed, and `AGENT_DIR` is redirected into a temp dir so the suite never
-  writes to `/opt/aws`. The redirect is asserted, so a rename of that variable fails loudly rather
-  than silently writing to the real path.
+- The installer honours `AGENT_DIR_OVERRIDE`, a documented test seam, so the suite never writes to
+  `/opt/aws`. `EUID` is readonly in bash, so root cannot be faked: every case but `not-root` runs
+  through a temp copy with only that guard neutralised.
+- **Both** substitutions are asserted, and each is mutation-checked. Renaming the seam or
+  reformatting the guard line aborts the suite with a FATAL naming the cause, rather than silently
+  writing to the real path or producing eight confusing message-mismatch failures.
 - The installer deliberately does **not** verify metrics are reaching CloudWatch: that needs
   `cloudwatch:GetMetricStatistics`, which the instance role does not carry. See
   `docs/OPERATIONS_RUNBOOK.md` for the operator-side check.

@@ -92,10 +92,17 @@ run_case() {
   if [[ "${name}" != "not-root" ]]; then
     script="${WORK}/${name}.sh"
     sed 's|^\[\[ "${EUID}" -eq 0 \]\].*|: # root guard skipped by the self-test|' "${SCRIPT}" > "${script}"
+    # Assert the substitution landed. If the guard line is ever reformatted the sed silently does
+    # nothing, and every rc=1 case still "passes" its exit check while failing on message text —
+    # eight confusing failures instead of one clear one, and none at all under a root shell.
+    grep -q '^: # root guard skipped by the self-test$' "${script}" || {
+      echo "FATAL: could not neutralise the root guard in ${SCRIPT}; the shim no longer matches." >&2
+      exit 1
+    }
   fi
 
   local rc=0
-  env PATH="${WORK}/bin:/usr/bin:/bin" \
+  env PATH="${WORK}/bin:${PATH}" \
       LOG="${log}" \
       AGENT_DIR_OVERRIDE="${WORK}/agent" \
       "$@" \
@@ -131,22 +138,17 @@ assert_log() {
   fi
 }
 
-# The script hard-codes /opt/aws/..., which a self-test must not write to. Redirect those paths at
-# the copy level so the real file stays the thing under test.
-prepare_script() {
-  local tmp="${WORK}/under-test.sh"
-  sed "s|^AGENT_DIR=/opt/aws/amazon-cloudwatch-agent$|AGENT_DIR=${WORK}/agent|" "${SCRIPT}" > "${tmp}"
-  if ! grep -q "^AGENT_DIR=${WORK}/agent$" "${tmp}"; then
-    echo "FATAL: could not redirect AGENT_DIR in ${SCRIPT} — the self-test would write to /opt/aws." >&2
+# The installer honours AGENT_DIR_OVERRIDE so this suite never writes to /opt/aws. Assert the seam
+# exists: if it is renamed, fail loudly here rather than dnf-installing on a developer's machine.
+assert_test_seam() {
+  grep -q 'AGENT_DIR="\${AGENT_DIR_OVERRIDE:-/opt/aws/amazon-cloudwatch-agent}"' "${SCRIPT}" || {
+    echo "FATAL: ${SCRIPT} no longer honours AGENT_DIR_OVERRIDE — this suite would write to /opt/aws." >&2
     exit 1
-  fi
-  cp "${tmp}" "${SCRIPT}.selftest"
+  }
 }
 
+assert_test_seam
 make_stubs
-prepare_script
-SCRIPT="${SCRIPT}.selftest"
-trap 'rm -rf "${WORK}" "${SCRIPT}"' EXIT
 
 run_case happy 0 && {
   assert_out happy "enabled at boot"

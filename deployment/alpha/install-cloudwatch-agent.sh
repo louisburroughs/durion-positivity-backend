@@ -26,7 +26,9 @@ set -euo pipefail
 # get-metric-statistics call in docs/OPERATIONS_RUNBOOK.md, never from this script's exit code.
 
 CONFIG_SRC="${1:-/opt/durion/alpha/cloudwatch-agent-config.json}"
-AGENT_DIR=/opt/aws/amazon-cloudwatch-agent
+# Overridable so the self-test can drive this without writing to /opt/aws. Nothing in production
+# sets it; the default is the only path the box ever uses.
+AGENT_DIR="${AGENT_DIR_OVERRIDE:-/opt/aws/amazon-cloudwatch-agent}"
 AGENT_CTL="${AGENT_DIR}/bin/amazon-cloudwatch-agent-ctl"
 CONFIG_DEST="${AGENT_DIR}/etc/durion-alpha.json"
 SERVICE=amazon-cloudwatch-agent
@@ -38,7 +40,9 @@ die() { echo "$*" >&2; exit 1; }
 
 # Validate before touching the live config. fetch-config replaces the running configuration and
 # restarts the agent, so a malformed file caught here is a no-op, while the same file caught there
-# leaves the agent stopped with its previous config already gone.
+# leaves the agent stopped with its previous config already gone. This is a SYNTAX check only: a
+# well-formed file with a typo'd measurement name still gets past it and is rejected by
+# fetch-config below, which is why that call has its own error path.
 python3 -m json.tool "${CONFIG_SRC}" > /dev/null \
   || die "Config is not valid JSON: ${CONFIG_SRC}"
 
@@ -53,7 +57,8 @@ fi
 # A package layout change would otherwise surface as a bare "No such file or directory".
 [[ -x "${AGENT_CTL}" ]] || die "Agent control binary missing after install: ${AGENT_CTL}"
 
-install -D -m 0644 "${CONFIG_SRC}" "${CONFIG_DEST}"
+install -D -m 0644 "${CONFIG_SRC}" "${CONFIG_DEST}" \
+  || die "Could not write ${CONFIG_DEST}."
 
 # -s starts the agent, and restarts it if already running so a changed config takes effect.
 "${AGENT_CTL}" -a fetch-config -m ec2 -s -c "file:${CONFIG_DEST}" \
@@ -63,7 +68,7 @@ systemctl enable "${SERVICE}" > /dev/null 2>&1 || true
 
 # Assert rather than print. The point of this script is that the box is being watched, so every
 # condition that would leave it unwatched has to fail the run.
-STATUS_JSON="$("${AGENT_CTL}" -a status)"
+STATUS_JSON="$("${AGENT_CTL}" -a status)" || die "Could not read agent status."
 echo "${STATUS_JSON}"
 
 grep -q '"status": *"running"' <<< "${STATUS_JSON}" \
