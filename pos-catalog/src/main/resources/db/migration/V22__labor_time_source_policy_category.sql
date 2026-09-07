@@ -23,7 +23,10 @@ ALTER TABLE labor_time_source_policy ADD CONSTRAINT ck_ltsp_operation_category
     CHECK (operation_category IS NULL
            OR operation_category IN ('REPAIR', 'DIAGNOSTIC', 'MAINTENANCE', 'TIRE_SERVICE'));
 
+-- NULLS NOT DISTINCT (PG15+) rather than a COALESCE expression index, so the key stays a plain
+-- column list that ON CONFLICT (time_type, source_code, operation_category) can infer — the
+-- repeatable policy seeds upsert on exactly that triple.
 ALTER TABLE labor_time_source_policy DROP CONSTRAINT labor_time_source_policy_time_type_source_code_key;
 
-CREATE UNIQUE INDEX ux_ltsp_key ON labor_time_source_policy (
-    time_type, source_code, COALESCE(operation_category, ''));
+ALTER TABLE labor_time_source_policy ADD CONSTRAINT ux_ltsp_key
+    UNIQUE NULLS NOT DISTINCT (time_type, source_code, operation_category);
