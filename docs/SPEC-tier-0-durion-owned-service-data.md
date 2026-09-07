@@ -4,7 +4,9 @@
 Tier 0, and the [#1569](https://github.com/louisburroughs/durion-positivity-backend/issues/1569)
 scope it unblocks.**
 
-**Status:** SPECIFIED — build follows this document.
+**Status:** IMPLEMENTED — T0-1 … T0-5 and R1 … R4 are built and merged to
+`claude/tier-0-spec-implementation-o5j539`. Deliberate deviations from the spec as written are
+recorded in §9; T0-2's tire-fitment and Michelin-content exclusions (§6) stand unchanged.
 **Date:** 2026-09-07
 **Owner modules:** pos-catalog (primary), pos-price, pos-workorder
 **Pins:** ADR-0058 (labor-time sourcing architecture), ADR-0059 (naming/taxonomy),
@@ -455,3 +457,67 @@ threshold is met.
 | Plan Phase 4 | Labor intelligence | T0-5 |
 | #1569 "adjacent" | Labor rate in pos-price | T0-3 / R4 |
 | #1569 "adjacent" | Shop labor matrix | T0-3 |
+
+---
+
+## 9. What the build changed about this specification
+
+Recorded rather than quietly amended, because each was a decision the code forced.
+
+### R2 could not be built as specified
+
+The spec (and the sourcing plan before it) described a conflict as *same operation, same vehicle,
+different sources*. That comparison cannot fire: `ux_sls_active_key` covers
+`(service, time_type, owner, vehicle key)` with **no source column**, so two STORE sources cannot
+hold the same time type at the same vehicle key at all — the second import's insert collides.
+An endpoint built to the letter of the spec would have returned empty forever.
+
+What sources actually do is publish at different levels of specificity — a tyre manufacturer
+states one wildcard time while an aggregator states a time per year/make/model — and *those*
+disagree invisibly. So the implemented rule is **overlapping** vehicle keys: every field one row
+states, the other either states identically or leaves wild. Time types are never compared across
+each other; warranty time is meant to differ from retail.
+
+### R3 shipped only its location half
+
+`locationId` now reaches the resolve edge, which is what lets Tier 0's shop-owned times answer.
+Submodel, engine code and `preferredTimeType` are still sent null, and the client says so at the
+call site: the CRM vehicle record carries year/make/model and nothing finer, and no workorder or
+estimate flags warranty work. Sending invented values would widen nothing and risk a wrongly
+`EXACT`-graded answer.
+
+**Consequence:** the `EXACT` match grade remains unreachable from the estimate path, and a
+warranty workorder still cannot ask for `OEM_WARRANTY`. Both need a real upstream source first —
+vehicle trim/engine on the CRM record, and a warranty flag on the workorder.
+
+### T0-5 groups by shop and technician, not vehicle class
+
+For the same reason: `ExtVehicleReplica` carries VIN, plate, unit number and odometer, and no
+make or model. This turns out to match #1575's own Tier 4 sketch, which names industry book time,
+shop median and technician median — not a vehicle-class median.
+
+### D2's narrowing is visible in T0-4 as well
+
+Service packages carry the same `owner_scope` / `owner_location_id` pairing as labor standards, so
+a shop may own a package. The *operation taxonomy* stays global in both cases.
+
+### Permission bits actually used
+
+| Bit | Permission | Catalog version |
+|---|---|---|
+| 510–512 | `pricing:labor_rate:manage` / `:view` / `:quote` | 77 |
+| 513–514 | `catalog:service_package:manage` / `:view` | 78 |
+| 515 | `workorder:labor_intelligence:view` | 79 |
+
+`workorder:labor_intelligence:view` is deliberately its own permission rather than the shared
+`workorder:analytics:view`: it exposes individual technician productivity, and folding that into
+a general analytics grant would hand it to everyone holding the first.
+
+### Still open after this build
+
+- The Phase 2 active-key gap (`ux_sls_active_key` has no `source_code`) — R2's report is fuller
+  than the data can currently exercise, and becomes fully operative when that key widens.
+- `EXACT` match grades and warranty time preference from the estimate path (above).
+- Tier 2 licensing, and everything in §6.
+- SDK regeneration: run `API Artifacts Sync` for the three changed specs (`pos-catalog`,
+  `pos-price`, `pos-workorder`) so both SDKs and the frontend tarballs pick up the new surface.
