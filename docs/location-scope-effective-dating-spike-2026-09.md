@@ -392,7 +392,7 @@ encodings that redefine what a permission bit means.
 
 This design incurs none of it:
 
-- `perm_bits` semantics unchanged, and `loc_bits` reuses the same indexes → **no
+- `perm_bits` semantics unchanged, and both scope bitsets reuse the same indexes → **no
   `CATALOG_VERSION` bump** (also an explicit non-goal).
 - `PermissionBitsetCodec` reused as-is; `PermissionCode` and `GatewayPermissionCatalog`
   untouched.
@@ -493,8 +493,8 @@ Recommended, in preference order — all three, they compose:
 | Issue | Work | Size | Depends on |
 | --- | --- | --- | --- |
 | [#1867](https://github.com/louisburroughs/durion-positivity-backend/issues/1867) | Consume staffing-assignment events in pos-security-service; maintain `person_id → assigned node ids` projection | M | — |
-| [#1868](https://github.com/louisburroughs/durion-positivity-backend/issues/1868) | Add `roles.location_scope`; issue additive `loc_bits` + discriminated `loc_scope` claims; no `CATALOG_VERSION` bump | M | #1867 |
-| [#1869](https://github.com/louisburroughs/durion-positivity-backend/issues/1869) | Gateway passthrough of `loc_bits` / `loc_scope`; strip inbound copies | S | #1868 |
+| [#1868](https://github.com/louisburroughs/durion-positivity-backend/issues/1868) | Add `roles.location_scope` + `location_hierarchy`; issue additive `loc_fin_bits` / `loc_oth_bits` + discriminated `loc_scope`; no `CATALOG_VERSION` bump | M | #1867 |
+| [#1869](https://github.com/louisburroughs/durion-positivity-backend/issues/1869) | Gateway passthrough of the scope bitsets and `loc_scope`; strip inbound copies | S | #1868 |
 | [#1870](https://github.com/louisburroughs/durion-positivity-backend/issues/1870) | Shared `LocationScope.covers(permission, locationId)` helper in `pos-security-common`, ancestor-set aware | S | #1869, #1878 |
 | [#1871](https://github.com/louisburroughs/durion-positivity-backend/issues/1871) | Enforce at the demand cases: workorder WIP, inventory adjustment approval, people time-entry approval | M | #1870 |
 | [#1872](https://github.com/louisburroughs/durion-positivity-backend/issues/1872) | Roll enforcement across the remaining location-parameterised endpoints | L | #1871, #1876 |
