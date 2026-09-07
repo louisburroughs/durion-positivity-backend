@@ -7,10 +7,12 @@ import com.positivity.domainevents.location.LocationUpdatedV1;
 import com.positivity.domainevents.location.MobileUnitDeletedV1;
 import com.positivity.domainevents.location.MobileUnitUpdatedV1;
 import com.positivity.workorder.internal.entity.ExtBayReplica;
+import com.positivity.workorder.internal.entity.ExtLocationParentReplica;
 import com.positivity.workorder.internal.entity.ExtLocationReplica;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.ProcessedEvent;
 import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtLocationParentReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.workorder.internal.repository.ProcessedEventRepository;
@@ -18,6 +20,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -59,6 +62,13 @@ import tools.jackson.databind.ObjectMapper;
  * record's compact constructor as a {@link DatabindException}, and a payload that binds but carries
  * no site scope is refused by {@link #requireSiteScope}. Both are counted on
  * {@code replica.payload.rejected} and logged at ERROR.
+ *
+ * <p>Each location fact also refreshes the materialised location-scope ancestor sets
+ * (ADR-0061 §2, #1878): the child's typed parent edges are replaced from the fact, then
+ * {@link LocationHierarchyService#recomputeAncestors} rebuilds the sets for the location and every
+ * replicated descendant — so a re-parented node propagates, and a parent arriving after its
+ * children pushes its ancestry down to them. Ingestion never fails closed on a parent the replica
+ * has not seen yet; the scope check does.
  */
 @Slf4j
 @Component
@@ -71,6 +81,8 @@ public class LocationEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtLocationReplicaRepository extLocationReplicaRepository;
+    private final ExtLocationParentReplicaRepository extLocationParentReplicaRepository;
+    private final LocationHierarchyService locationHierarchyService;
     private final ExtBayReplicaRepository extBayReplicaRepository;
     private final ExtMobileUnitReplicaRepository extMobileUnitReplicaRepository;
     private final Counter payloadRejectedCounter;
@@ -80,6 +92,8 @@ public class LocationEventsListener {
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             ExtLocationReplicaRepository extLocationReplicaRepository,
+            ExtLocationParentReplicaRepository extLocationParentReplicaRepository,
+            LocationHierarchyService locationHierarchyService,
             ExtBayReplicaRepository extBayReplicaRepository,
             ExtMobileUnitReplicaRepository extMobileUnitReplicaRepository,
             ObjectProvider<MeterRegistry> meterRegistry) {
@@ -87,6 +101,8 @@ public class LocationEventsListener {
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.extLocationReplicaRepository = extLocationReplicaRepository;
+        this.extLocationParentReplicaRepository = extLocationParentReplicaRepository;
+        this.locationHierarchyService = locationHierarchyService;
         this.extBayReplicaRepository = extBayReplicaRepository;
         this.extMobileUnitReplicaRepository = extMobileUnitReplicaRepository;
         MeterRegistry registry = meterRegistry.getIfAvailable();
@@ -172,12 +188,29 @@ public class LocationEventsListener {
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
+
+        // The fact carries the child's full typed parent-edge set — replace, don't merge.
+        // A null list means the producer predates the field; leave existing edges untouched.
+        // (Same contract as pos-inventory's and pos-people's ext_location_parent replicas.)
+        List<LocationUpdatedV1.ParentRef> parents = payload.parents();
+        if (parents != null) {
+            extLocationParentReplicaRepository.deleteByChildId(payload.locationId());
+            parents.forEach(edge -> extLocationParentReplicaRepository.save(ExtLocationParentReplica.builder()
+                    .childId(payload.locationId())
+                    .parentId(edge.parentId())
+                    .parentType(edge.parentType())
+                    .build()));
+        }
+        // Edges (or the row itself) may have changed: rebuild the scope ancestor sets for this
+        // location and everything replicated beneath it (ADR-0061 §2, #1878).
+        locationHierarchyService.recomputeAncestors(payload.locationId());
         log.info("Updated ext_location locationId={} version={}", payload.locationId(), aggregateVersion);
     }
 
     private void applyLocationDeleted(JsonNode envelope) {
         LocationDeletedV1 payload = objectMapper.treeToValue(envelope.path("payload"), LocationDeletedV1.class);
         extLocationReplicaRepository.deleteById(payload.locationId());
+        extLocationParentReplicaRepository.deleteByChildId(payload.locationId());
         log.info("Deleted ext_location locationId={}", payload.locationId());
     }
 

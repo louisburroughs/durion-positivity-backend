@@ -1,6 +1,6 @@
-package com.positivity.people.internal.repository;
+package com.positivity.workorder.internal.repository;
 
-import com.positivity.people.internal.entity.ExtLocationParentReplica;
+import com.positivity.workorder.internal.entity.ExtLocationParentReplica;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;

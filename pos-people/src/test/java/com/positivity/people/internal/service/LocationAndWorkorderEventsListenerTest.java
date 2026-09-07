@@ -78,6 +78,9 @@ class LocationAndWorkorderEventsListenerTest {
     @Mock
     private ExtJobTimeReplicaRepository extJobTimeReplicaRepository;
 
+    @Mock
+    private LocationHierarchyService locationHierarchyService;
+
     private LocationEventsListener locationListener;
     private WorkorderEventsListener workorderListener;
 
@@ -89,6 +92,7 @@ class LocationAndWorkorderEventsListenerTest {
                 processedEventRepository,
                 extLocationReplicaRepository,
                 extLocationParentReplicaRepository,
+                locationHierarchyService,
                 org.mockito.Mockito.mock(ObjectProvider.class));
         workorderListener = new WorkorderEventsListener(
                 clock,
@@ -153,11 +157,13 @@ class LocationAndWorkorderEventsListenerTest {
 
             locationListener.onLocationEvent(locationUpdated("evt-1", 4, true));
             verify(extLocationReplicaRepository, never()).save(any());
+            verify(locationHierarchyService, never()).recomputeAncestors(any());
 
             // Equal versions re-apply: the producer's version is an emission-timestamp hint, and
             // the payload is a full snapshot, so re-applying is cheaper than risking a lost update.
             locationListener.onLocationEvent(locationUpdated("evt-2", 5, true));
             verify(extLocationReplicaRepository).save(any());
+            verify(locationHierarchyService).recomputeAncestors(LOCATION_ID);
         }
 
         @Test
@@ -187,6 +193,12 @@ class LocationAndWorkorderEventsListenerTest {
             assertThat(captor.getValue().getChildId()).isEqualTo(LOCATION_ID);
             assertThat(captor.getValue().getParentId()).isEqualTo(parentId);
             assertThat(captor.getValue().getParentType()).isEqualTo("PHYSICAL");
+            // Edges changed, so the scope ancestor sets of this node and its subtree are rebuilt
+            // after the edge replacement (ADR-0061 §2, #1878).
+            org.mockito.InOrder inOrder =
+                    org.mockito.Mockito.inOrder(extLocationParentReplicaRepository, locationHierarchyService);
+            inOrder.verify(extLocationParentReplicaRepository).save(any());
+            inOrder.verify(locationHierarchyService).recomputeAncestors(LOCATION_ID);
         }
 
         @Test

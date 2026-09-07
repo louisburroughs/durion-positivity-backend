@@ -1,6 +1,6 @@
-package com.positivity.people.internal.repository;
+package com.positivity.invoice.internal.repository;
 
-import com.positivity.people.internal.entity.ExtLocationParentReplica;
+import com.positivity.invoice.internal.entity.ExtLocationParentReplica;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
