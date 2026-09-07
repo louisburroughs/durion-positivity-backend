@@ -28,6 +28,7 @@ Utility scripts for development, operations, testing, and deployment.
 | [`check-openapi-inventory-drift.sh`](#check-openapi-inventory-driftsh) | API | Verify every spec-producing module is registered in `module-inventory.yaml` |
 | [`check-deploy-service-drift.sh`](#check-deploy-service-driftsh) | Deployment | Verify every deployable service is registered in all five deploy lists |
 | [`tests/deploy-backend-config-only-selftest.sh`](#testsdeploy-backend-config-only-selftestsh) | Deployment | Drive `deploy-backend.sh --config-only`'s image pre-flight against a stubbed Docker |
+| [`tests/deploy-backend-disk-reclaim-selftest.sh`](#testsdeploy-backend-disk-reclaim-selftestsh) | Deployment | Drive `deploy-backend.sh`'s pre-pull disk reclaim against a stubbed Docker and `df` |
 | [`generate-kafka-topics.py`](#generate-kafka-topicspy) | Kafka | Derive the `kafka-topic-init` topic map from the topics services configure and consume |
 | [`check-kafka-topic-drift.sh`](#check-kafka-topic-driftsh) | Kafka | Verify `kafka-topic-init` provisions every topic the code uses |
 | [`generate-permissions.sh`](#generate-permissionssh) | Permissions | Regenerate `permissions.yaml` files from `@PreAuthorize` annotations |
@@ -420,6 +421,39 @@ bash scripts/tests/deploy-backend-config-only-selftest.sh
 **Notes:**
 - The stub reads `MISSING_IMAGES` and `EXISTING_CONTAINERS` (space-separated service names); it never
   parses the compose files, which only have to exist.
+
+---
+
+### `tests/deploy-backend-disk-reclaim-selftest.sh`
+
+Drives `deploy-backend.sh`'s `reclaim_disk_before_pull` against a stubbed `docker` and `df`.
+
+A deploy pulls roughly thirty images at a fresh `sha-` tag, and `run_periodic_docker_prune` is the
+last line of the script — so it never runs on a deploy that failed. Once the box filled up mid-pull,
+that turned a single failure into a permanent one: every later deploy died at the same pull, and the
+cleanup that would have freed the space was unreachable without a human on the host (#1862).
+`reclaim_disk_before_pull` checks headroom before pulling instead, which is what keeps that deadlock
+from forming.
+
+Cases:
+
+- free space at or above `DOCKER_MIN_FREE_GIB` — no prune
+- free space below it — prune runs and stamps the prune state file
+- the prune itself fails — warned, returns 0 so the deploy continues, state file left unstamped
+- `DOCKER_MIN_FREE_GIB=0` — reclaim disabled
+- `DOCKER_MIN_FREE_GIB` not an integer — skipped with a message
+- `df` cannot read the Docker data root — skipped, never a blind prune
+
+**Usage:**
+```bash
+bash scripts/tests/deploy-backend-disk-reclaim-selftest.sh
+```
+
+**Notes:**
+- `deploy-backend.sh` runs a deploy top-to-bottom and cannot be sourced whole, so the self-test
+  slices the three reclaim functions out of it. The slice asserts all three are present, so renaming
+  or reordering them fails the test loudly instead of leaving it asserting nothing.
+- The `df` stub reads `FREE_KIB`; leaving it unset makes `df` fail, which is the unreadable case.
 - Run it after any change to the `--config-only` branch of `deploy-backend.sh`.
 - Built-but-undeployed modules carry an `ALLOWLIST` entry in the script with a status and a reason.
   Placeholder status is not durable — the stale-entry checks are what notice when it stops being true.

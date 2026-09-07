@@ -28,6 +28,10 @@ ENV_FILE="${ENV_FILE:-${ALPHA_ROOT}/.env}"
 PROD_OVERRIDE="${PROD_OVERRIDE:-${ALPHA_ROOT}/docker-compose.prod.yml}"
 DOCKER_PRUNE_INTERVAL_HOURS="${DOCKER_PRUNE_INTERVAL_HOURS:-24}"
 DOCKER_PRUNE_STATE_FILE="${DOCKER_PRUNE_STATE_FILE:-${ALPHA_ROOT}/.last-docker-prune-at}"
+# Free space the box must have before it pulls a deploy's images (#1862). A deploy pulls
+# ~30 images at a fresh sha tag, so a box that only reclaims on the way out eventually
+# fills mid-pull. Set to 0 to disable the pre-pull reclaim.
+DOCKER_MIN_FREE_GIB="${DOCKER_MIN_FREE_GIB:-25}"
 
 env_single_quote() {
   printf "'%s'" "${1//\'/\'\"\'\"\'}"
@@ -257,6 +261,64 @@ run_periodic_docker_prune() {
   fi
 
   echo "Warning: docker system prune failed; deployment succeeded but cleanup did not." >&2
+  return 0
+}
+
+docker_data_root() {
+  docker info --format '{{.DockerRootDir}}' 2>/dev/null || echo /var/lib/docker
+}
+
+# Free space in whole GiB on the filesystem holding $1, or empty if df cannot read it.
+# -P keeps df to one line per filesystem however long the device name is.
+free_gib_for_path() {
+  df -P -k "$1" 2>/dev/null | awk 'NR == 2 { printf "%d", $4 / 1048576 }'
+}
+
+# Reclaim disk BEFORE pulling, not only after a green deploy.
+#
+# run_periodic_docker_prune is the last line of this script, so it never runs on a deploy
+# that failed. Once the disk is full enough that `compose pull` dies with "no space left on
+# device", every later deploy dies at the same point and the cleanup that would fix it is
+# permanently out of reach — the box cannot recover without a human on the host (#1862).
+# Checking headroom up front is what keeps that deadlock from forming.
+reclaim_disk_before_pull() {
+  if ! [[ "${DOCKER_MIN_FREE_GIB}" =~ ^[0-9]+$ ]]; then
+    echo "Skipping pre-pull reclaim: DOCKER_MIN_FREE_GIB must be an integer, got '${DOCKER_MIN_FREE_GIB}'." >&2
+    return 0
+  fi
+
+  if [[ "${DOCKER_MIN_FREE_GIB}" -le 0 ]]; then
+    return 0
+  fi
+
+  local root free
+  root="$(docker_data_root)"
+  free="$(free_gib_for_path "${root}")"
+
+  if [[ -z "${free}" ]]; then
+    echo "Skipping pre-pull reclaim: could not read free space for '${root}'." >&2
+    return 0
+  fi
+
+  if [[ "${free}" -ge "${DOCKER_MIN_FREE_GIB}" ]]; then
+    echo "Pre-pull disk check: ${free}GiB free on ${root} (floor ${DOCKER_MIN_FREE_GIB}GiB)."
+    return 0
+  fi
+
+  echo "Pre-pull disk check: ${free}GiB free on ${root}, under the ${DOCKER_MIN_FREE_GIB}GiB floor. Reclaiming."
+  docker system df || true
+
+  # Images backing a running container are never removed, so the stack in service now
+  # survives this; -a without --volumes leaves every named volume, and so every database,
+  # untouched. Everything it does delete is a previous tag that ECR can serve again.
+  if docker system prune -af; then
+    date +%s > "${DOCKER_PRUNE_STATE_FILE}"
+    free="$(free_gib_for_path "${root}")"
+    echo "Reclaimed: ${free}GiB free on ${root}."
+  else
+    echo "Warning: pre-pull docker system prune failed; continuing with ${free}GiB free." >&2
+  fi
+
   return 0
 }
 
@@ -587,6 +649,8 @@ if [[ "${MODE}" == "config-only" ]]; then
   docker compose "${COMPOSE_ARGS[@]}" ps
   exit 0
 fi
+
+reclaim_disk_before_pull
 
 DESIRED_POSTGRES_IMAGE="$(
   docker compose "${COMPOSE_ARGS[@]}" config \

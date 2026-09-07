@@ -192,6 +192,13 @@ jobs:
         # the real script against a stubbed Docker (#1646).
         run: bash scripts/tests/deploy-backend-config-only-selftest.sh
 
+      - name: Verify the deploy's pre-pull disk reclaim
+        # The periodic prune is the last line of deploy-backend.sh, so it never runs on a
+        # deploy that failed. When alpha filled up mid-pull that turned one failure into a
+        # permanent one, with the cleanup that would have fixed it out of reach (#1862).
+        # The self-test drives the reclaim against a stubbed Docker and df.
+        run: bash scripts/tests/deploy-backend-disk-reclaim-selftest.sh
+
       - name: Enforce Kafka topic provisioning coverage
         # kafka-topic-init is the authoritative topic provisioner on alpha, so a
         # topic missing from it lands on broker defaults — which for a DLQ means
