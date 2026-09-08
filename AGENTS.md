@@ -27,6 +27,9 @@
   (`gate` | `narrow` | `unscoped`, with a reason) in `<module>/location-scope.yaml` beside its
   `@PreAuthorize` permission (ADR-0061); `scripts/audit-rbac.py --check` fails CI on a missing, stale
   or invalid entry. See `docs/OPERATIONS_RUNBOOK.md` → "Location-scope decisions".
+- The permission alternates a `LocationScope` / `LocationScopeService` / `LocationScopeGuard` call
+  passes must be ones the endpoint reaching it requires — a scope check against a permission the
+  caller need not hold does nothing (#1890, gated as `location_scope_alternates`).
 - Keep ArchUnit rules green.
 
 ## Where to Look
