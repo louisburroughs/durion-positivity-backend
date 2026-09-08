@@ -7,12 +7,16 @@ import com.positivity.inventory.internal.entity.InventoryLedgerEntry;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.inventory.internal.service.LocationScopeService;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -30,9 +34,13 @@ public class InventoryLedgerServiceImpl implements InventoryLedgerService {
     private static final int DEFAULT_PAGE_SIZE = 50;
 
     private final InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
+    private final LocationScopeService locationScopeService;
 
-    public InventoryLedgerServiceImpl(@NonNull InventoryLedgerEntryRepository inventoryLedgerEntryRepository) {
+    public InventoryLedgerServiceImpl(
+            @NonNull InventoryLedgerEntryRepository inventoryLedgerEntryRepository,
+            @NonNull LocationScopeService locationScopeService) {
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
+        this.locationScopeService = locationScopeService;
     }
 
     @Override
@@ -40,7 +48,19 @@ public class InventoryLedgerServiceImpl implements InventoryLedgerService {
     public @NonNull LedgerPage<InventoryLedgerEntryDto> listLedgerEntries(@NonNull InventoryLedgerFilterParams params) {
         int pageSize = params.getPageSize() > 0 ? params.getPageSize() : DEFAULT_PAGE_SIZE;
 
+        // ADR-0061 §3 (#1872): a named location is gated; none narrows a scoped caller to their reach.
+        Optional<Set<UUID>> reach =
+                locationScopeService.narrowTo(params.getLocationId(), InventoryPermissionRegistry.LEDGER_VIEW);
+        if (reach.isPresent() && reach.get().isEmpty()) {
+            return LedgerPage.<InventoryLedgerEntryDto>builder()
+                    .entries(List.of())
+                    .nextPageToken(null)
+                    .build();
+        }
         Specification<InventoryLedgerEntry> specification = buildSpecification(params);
+        if (reach.isPresent()) {
+            specification = specification.and(LocationScopeService.withinLocations("locationId", reach.get()));
+        }
         List<InventoryLedgerEntry> entries = inventoryLedgerEntryRepository
                 .findAll(specification, PageRequest.of(0, pageSize + 1, Sort.by(Sort.Direction.ASC, "ledgerEntryId")))
                 .getContent();
@@ -69,6 +89,9 @@ public class InventoryLedgerServiceImpl implements InventoryLedgerService {
         InventoryLedgerEntry entry = inventoryLedgerEntryRepository
                 .findById(entryId)
                 .orElseThrow(() -> new ResourceNotFoundException("InventoryLedgerEntry", entryId.toString()));
+        // ADR-0061 §3 (#1872): the list is narrowed by location, so the by-id read is gated on the
+        // loaded entry's location — after the 404, so ids cannot be probed.
+        locationScopeService.require(entry.getLocationId(), InventoryPermissionRegistry.LEDGER_VIEW);
         return toDto(entry);
     }
 

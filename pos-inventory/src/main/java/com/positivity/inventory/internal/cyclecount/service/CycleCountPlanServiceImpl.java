@@ -11,10 +11,13 @@ import com.positivity.inventory.internal.exception.InventoryValidationException;
 import com.positivity.inventory.internal.repository.CycleCountPlanRepository;
 import com.positivity.inventory.internal.repository.CycleCountScheduleRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.inventory.internal.service.LocationScopeService;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -44,6 +47,7 @@ public class CycleCountPlanServiceImpl implements CycleCountPlanService {
     private final CycleCountScheduleRepository cycleCountScheduleRepository;
     private final LocationRefRepository locationRefRepository;
     private final Clock clock;
+    private final LocationScopeService locationScopeService;
 
     @Override
     @Transactional
@@ -144,10 +148,13 @@ public class CycleCountPlanServiceImpl implements CycleCountPlanService {
     @Override
     @Transactional(readOnly = true)
     public @NonNull CycleCountPlanResponse getPlan(@NonNull UUID planId) {
-        return cycleCountPlanRepository
+        CycleCountPlan plan = cycleCountPlanRepository
                 .findById(planId)
-                .map(this::toResponse)
                 .orElseThrow(() -> new CycleCountPlanNotFoundException(planId));
+        // ADR-0061 §3 (#1872): the list is narrowed by location, so the by-id read is gated on the
+        // loaded plan's location — after the 404, so ids cannot be probed.
+        locationScopeService.require(plan.getLocationId(), InventoryPermissionRegistry.CYCLE_COUNT_VIEW);
+        return toResponse(plan);
     }
 
     @Override
@@ -155,9 +162,21 @@ public class CycleCountPlanServiceImpl implements CycleCountPlanService {
     public @NonNull List<CycleCountPlanResponse> listPlans(
             UUID locationId, CycleCountPlanStatus status, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        List<CycleCountPlan> plans = cycleCountPlanRepository
-                .findByOptionalFilters(locationId, status, pageable)
-                .getContent();
+        // ADR-0061 §3 (#1872): a named location is gated; none narrows a scoped caller to their reach.
+        Optional<Set<UUID>> reach =
+                locationScopeService.narrowTo(locationId, InventoryPermissionRegistry.CYCLE_COUNT_VIEW);
+        List<CycleCountPlan> plans;
+        if (reach.isEmpty()) {
+            plans = cycleCountPlanRepository
+                    .findByOptionalFilters(locationId, status, pageable)
+                    .getContent();
+        } else if (reach.get().isEmpty()) {
+            return List.of();
+        } else {
+            plans = cycleCountPlanRepository
+                    .findByOptionalFiltersWithinLocations(reach.get(), status, pageable)
+                    .getContent();
+        }
         Map<UUID, String> locationNames = batchLocationNames(plans);
         return plans.stream()
                 .map(plan -> toResponse(plan, locationNames.get(plan.getLocationId())))

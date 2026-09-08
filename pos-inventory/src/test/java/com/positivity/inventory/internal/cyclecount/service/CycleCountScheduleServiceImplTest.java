@@ -4,8 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.inventory.internal.dto.cyclecount.plan.CycleCountPlanResponse;
@@ -17,18 +20,25 @@ import com.positivity.inventory.internal.entity.CycleCountSchedule;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.CycleCountPlanRepository;
 import com.positivity.inventory.internal.repository.CycleCountScheduleRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.inventory.internal.service.LocationScopeService;
+import com.positivity.security.common.LocationScopeDeniedException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 /**
  * Unit tests for CycleCountScheduleServiceImpl (odoo-parity I1, issue #1031):
@@ -57,11 +67,15 @@ class CycleCountScheduleServiceImplTest {
     @Mock
     private CycleCountPlanService planService;
 
+    @Mock
+    private LocationScopeService locationScopeService;
+
     private CycleCountScheduleServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new CycleCountScheduleServiceImpl(scheduleRepository, planRepository, planService, FIXED_CLOCK);
+        service = new CycleCountScheduleServiceImpl(
+                scheduleRepository, planRepository, planService, FIXED_CLOCK, locationScopeService);
     }
 
     private CycleCountSchedule schedule(boolean autoCreate, LocalDate nextDueDate) {
@@ -338,5 +352,60 @@ class CycleCountScheduleServiceImplTest {
         assertThat(result.getPlansCreated()).isZero();
         assertThat(due.getNextDueDate()).isEqualTo(TODAY.minusDays(10));
         verify(planService, never()).createScheduledPlan(any(), any(), any(), any(), any());
+    }
+
+    // ─── ADR-0061 §3 (#1872): location scope on the read side ────────────────
+
+    @Test
+    void listSchedules_scopedNoFilter_queriesWithinReach() {
+        when(locationScopeService.narrowTo(isNull(), eq(InventoryPermissionRegistry.CYCLE_COUNT_VIEW)))
+                .thenReturn(Optional.of(Set.of(LOCATION_ID)));
+        when(scheduleRepository.findByOptionalFiltersWithinLocations(
+                        eq(Set.of(LOCATION_ID)), isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(schedule(false, TODAY))));
+
+        List<CycleCountScheduleResponse> response = service.listSchedules(null, null, false, 0, 50);
+
+        assertThat(response)
+                .extracting(CycleCountScheduleResponse::getScheduleId)
+                .containsExactly(SCHEDULE_ID);
+        verify(scheduleRepository, never()).findByOptionalFilters(any(), any(), any(), any());
+    }
+
+    @Test
+    void listSchedules_scopedEmptyReach_returnsEmptyWithoutQuery() {
+        when(locationScopeService.narrowTo(isNull(), eq(InventoryPermissionRegistry.CYCLE_COUNT_VIEW)))
+                .thenReturn(Optional.of(Set.of()));
+
+        assertThat(service.listSchedules(null, null, false, 0, 50)).isEmpty();
+        verifyNoInteractions(scheduleRepository);
+    }
+
+    @Test
+    void listSchedules_filter_isGatedThenQueriedAsBefore() {
+        when(scheduleRepository.findByOptionalFilters(eq(LOCATION_ID), isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        service.listSchedules(LOCATION_ID, null, false, 0, 50);
+
+        verify(locationScopeService).narrowTo(LOCATION_ID, InventoryPermissionRegistry.CYCLE_COUNT_VIEW);
+    }
+
+    @Test
+    void getSchedule_gatesOnScheduleLocationAfterLoad() {
+        when(scheduleRepository.findById(SCHEDULE_ID)).thenReturn(Optional.of(schedule(false, TODAY)));
+        doThrow(new LocationScopeDeniedException(InventoryPermissionRegistry.CYCLE_COUNT_VIEW, LOCATION_ID.toString()))
+                .when(locationScopeService)
+                .require(LOCATION_ID, InventoryPermissionRegistry.CYCLE_COUNT_VIEW);
+
+        assertThatThrownBy(() -> service.getSchedule(SCHEDULE_ID)).isInstanceOf(LocationScopeDeniedException.class);
+    }
+
+    @Test
+    void getSchedule_unknownId_notFoundBeforeScope() {
+        when(scheduleRepository.findById(SCHEDULE_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getSchedule(SCHEDULE_ID)).isInstanceOf(ResourceNotFoundException.class);
+        verifyNoInteractions(locationScopeService);
     }
 }

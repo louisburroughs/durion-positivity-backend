@@ -27,6 +27,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
@@ -35,6 +36,9 @@ import org.springframework.test.context.ActiveProfiles;
  * mixed-vendor rejection, and the B2 pack-UoM expression on converted PO lines.
  */
 @SpringBootTest
+// get/list read the caller's location scope (ADR-0061 §3, #1872); an authenticated caller without
+// scope claims is the unscoped, pre-rollout shape this test exercises.
+@WithMockUser(username = "test-user", authorities = "inventory:on_hand:view")
 @ActiveProfiles("test")
 @DisplayName("Purchase suggestion lifecycle and conversion (F4)")
 class PurchaseSuggestionLifecycleTest {

@@ -9,6 +9,7 @@ import com.positivity.inventory.internal.enums.ScrapReasonCode;
 import com.positivity.inventory.internal.enums.ScrapStatus;
 import com.positivity.inventory.internal.scrap.service.ScrapService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -104,7 +105,9 @@ public class ScrapController {
                             schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "Missing inventory:scrap:create, or override requested without inventory:adjustment:override",
+            description = "Missing inventory:scrap:create, or override requested without inventory:adjustment:override;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds inventory:scrap:create but the token scopes it"
+                    + " to locations that do not cover the request's locationId (ADR-0061)",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -138,6 +141,10 @@ public class ScrapController {
                     @RequestBody
                     CreateScrapRequest request) {
         log.info("Received request to scrap {} of {}", request.getQuantity(), request.getStockItemId());
+        // ADR-0061 §3 (#1872): @PreAuthorize answered "may this caller scrap"; this answers "...at
+        // this location". The body is validated by then, so locationId is non-null.
+        SecurityContextHelper.locationScope()
+                .require(InventoryPermissionRegistry.SCRAP_CREATE, request.getLocationId());
         return ResponseEntity.status(HttpStatus.CREATED).body(scrapService.createScrap(request));
     }
 
@@ -315,6 +322,15 @@ public class ScrapController {
             tags = {"Scraps"})
     @ApiResponse(responseCode = "200", description = "Scrap found")
     @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller lacks both inventory:scrap:view and inventory:scrap:approve;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the scrap's locationId on any alternate held (ADR-0061)",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "404",
             description = "Scrap not found",
             content =
@@ -366,6 +382,16 @@ public class ScrapController {
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             array = @ArraySchema(schema = @Schema(implementation = ScrapResponse.class))))
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller lacks both inventory:scrap:view and inventory:scrap:approve;"
+                    + " LOCATION_SCOPE_DENIED when the token scopes every alternate held to locations that do"
+                    + " not cover the requested locationId filter (ADR-0061); without a filter the result is"
+                    + " narrowed to the caller's reach instead",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<ScrapResponse>> listScraps(
             @Parameter(description = "Filter by scrap reason") @RequestParam(required = false)
                     ScrapReasonCode reasonCode,

@@ -20,9 +20,11 @@ import com.positivity.inventory.internal.repository.InventoryStockSummaryReposit
 import com.positivity.inventory.internal.repository.NormalizedAvailabilityRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentTaskRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.ForecastQuantityService;
 import com.positivity.inventory.internal.service.ForecastSiteResolver;
 import com.positivity.inventory.internal.service.LeadTimeResolver;
+import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.PurchaseSuggestionCreationService;
 import com.positivity.inventory.internal.service.Quantities;
 import com.positivity.inventory.internal.service.StockoutDeadlineCalculator;
@@ -36,6 +38,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -67,6 +70,7 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
     private final PurchaseSuggestionCreationService purchaseSuggestionCreationService;
     private final ReplenishmentSourcingService replenishmentSourcingService;
     private final Clock clock;
+    private final LocationScopeService locationScopeService;
 
     @Override
     @Transactional(readOnly = true)
@@ -80,9 +84,19 @@ public class ReplenishmentServiceImpl implements ReplenishmentService {
     @Transactional(readOnly = true)
     public @NonNull Page<ReplenishmentPolicyResponse> getReplenishmentPolicies(
             @Nullable UUID locationId, @NonNull Pageable pageable) {
-        List<ReplenishmentPolicy> policies = locationId == null
-                ? replenishmentPolicyRepository.findAll()
-                : replenishmentPolicyRepository.findByLocationId(locationId);
+        // ADR-0061 §3 (#1872): a named location is gated; none narrows a scoped caller to their reach.
+        Optional<Set<UUID>> reach =
+                locationScopeService.narrowTo(locationId, InventoryPermissionRegistry.INVENTORY_VIEW);
+        List<ReplenishmentPolicy> policies;
+        if (locationId != null) {
+            policies = replenishmentPolicyRepository.findByLocationId(locationId);
+        } else if (reach.isEmpty()) {
+            policies = replenishmentPolicyRepository.findAll();
+        } else if (reach.get().isEmpty()) {
+            policies = List.of();
+        } else {
+            policies = replenishmentPolicyRepository.findWithinLocations(reach.get());
+        }
 
         List<ReplenishmentPolicyResponse> mapped =
                 policies.stream().map(this::toPolicyResponse).toList();

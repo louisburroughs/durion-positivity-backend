@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -31,7 +33,9 @@ import com.positivity.inventory.internal.exception.ScrapInsufficientStockExcepti
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.ScrapRecordRepository;
 import com.positivity.inventory.internal.scrap.service.ScrapServiceImpl;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.security.common.LocationScopeDeniedException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -39,6 +43,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,6 +54,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -84,6 +91,9 @@ class ScrapServiceImplTest {
     @Mock
     private CostingMethodResolver methodResolver;
 
+    @Mock
+    private LocationScopeService locationScopeService;
+
     private final Clock fixedClock = Clock.fixed(Instant.parse("2026-07-23T00:00:00Z"), ZoneOffset.UTC);
 
     private ScrapServiceImpl service;
@@ -98,7 +108,8 @@ class ScrapServiceImplTest {
                 inventoryFactPublisher,
                 replenishmentService,
                 fixedClock,
-                methodResolver);
+                methodResolver,
+                locationScopeService);
         setUpAuthenticatedActor("inventory:scrap:create");
         // odoo-parity J3: the fact labels costSource with the resolved costing method whenever the
         // engine stamped a cost. Default AVERAGE; STANDARD-specific tests override this.
@@ -473,5 +484,48 @@ class ScrapServiceImplTest {
                 ACTOR));
         authentication.setAuthenticated(true);
         SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+
+    // ─── ADR-0061 §3 (#1872): location scope on the read side ────────────────
+
+    @Test
+    @DisplayName("listScraps without a location filter narrows a scoped caller to their reach")
+    @SuppressWarnings("unchecked")
+    void listScraps_scopedNoFilter_narrowsToReach() {
+        when(locationScopeService.narrowTo(
+                        isNull(),
+                        eq(InventoryPermissionRegistry.SCRAP_VIEW),
+                        eq(InventoryPermissionRegistry.SCRAP_APPROVE)))
+                .thenReturn(Optional.of(Set.of(LOCATION_ID)));
+        when(scrapRepository.findAll(any(Specification.class), any(Sort.class))).thenReturn(List.of(pendingScrap()));
+
+        assertThat(service.listScraps(null, null, null, null, null)).hasSize(1);
+        verify(scrapRepository).findAll(any(Specification.class), any(Sort.class));
+    }
+
+    @Test
+    @DisplayName("listScraps with an empty reach answers an empty list without querying")
+    void listScraps_scopedEmptyReach_returnsEmptyWithoutQuery() {
+        when(locationScopeService.narrowTo(
+                        isNull(),
+                        eq(InventoryPermissionRegistry.SCRAP_VIEW),
+                        eq(InventoryPermissionRegistry.SCRAP_APPROVE)))
+                .thenReturn(Optional.of(Set.of()));
+
+        assertThat(service.listScraps(null, null, null, null, null)).isEmpty();
+        verifyNoInteractions(scrapRepository);
+    }
+
+    @Test
+    @DisplayName("getScrap gates on the loaded record's location with both view alternates, after the 404")
+    void getScrap_gatesOnRecordLocationAfterLoad() {
+        ScrapRecord scrap = pendingScrap();
+        when(scrapRepository.findById(scrap.getScrapId())).thenReturn(Optional.of(scrap));
+        doThrow(new LocationScopeDeniedException(InventoryPermissionRegistry.SCRAP_VIEW, LOCATION_ID.toString()))
+                .when(locationScopeService)
+                .require(
+                        LOCATION_ID, InventoryPermissionRegistry.SCRAP_VIEW, InventoryPermissionRegistry.SCRAP_APPROVE);
+
+        assertThatThrownBy(() -> service.getScrap(scrap.getScrapId())).isInstanceOf(LocationScopeDeniedException.class);
     }
 }

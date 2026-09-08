@@ -297,6 +297,44 @@ public interface InventoryLedgerEntryRepository
     // plus the ordered on-hand-affecting entry stream a SKU's costing strategy is
     // replayed over to reconstruct the running unit cost at that instant.
 
+    /**
+     * Per-SKU on-hand across the caller's reach as of an instant (ADR-0061 §3, #1872): entries at
+     * a reachable site or at a storage location replicated under one, non-zero keys only. Never
+     * called with an empty set.
+     */
+    @Query("""
+                        SELECT e.stockItemId AS stockItemId, COALESCE(SUM(e.changeInQuantity), 0) AS onHandQuantity
+                        FROM InventoryLedgerEntry e
+                        WHERE e.eventType IN :eventTypes
+                          AND e.timestamp <= :asOf
+                          AND (e.locationId IN :locationIds
+                               OR e.locationId IN (SELECT b.storageLocationId FROM ExtStorageLocationReplica b
+                                                   WHERE b.siteId IN :locationIds))
+                        GROUP BY e.stockItemId
+                        HAVING COALESCE(SUM(e.changeInQuantity), 0) <> 0
+                        """)
+    List<LocationOnHand> sumOnHandBySkuWithinLocationsAsOf(
+            @Param("locationIds") Collection<UUID> locationIds,
+            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes,
+            @Param("asOf") java.time.Instant asOf);
+
+    /** On-hand of one stock item across the caller's reach as of an instant; see above. */
+    @Query("""
+                        SELECT COALESCE(SUM(e.changeInQuantity), 0)
+                        FROM InventoryLedgerEntry e
+                        WHERE e.stockItemId = :stockItemId
+                          AND e.eventType IN :eventTypes
+                          AND e.timestamp <= :asOf
+                          AND (e.locationId IN :locationIds
+                               OR e.locationId IN (SELECT b.storageLocationId FROM ExtStorageLocationReplica b
+                                                   WHERE b.siteId IN :locationIds))
+                        """)
+    BigDecimal calculateOnHandForStockItemWithinLocationsAsOf(
+            @Param("stockItemId") String stockItemId,
+            @Param("locationIds") Collection<UUID> locationIds,
+            @Param("eventTypes") Collection<InventoryLedgerEventType> eventTypes,
+            @Param("asOf") java.time.Instant asOf);
+
     /** Per-SKU on-hand across all sites as of an instant (timestamp inclusive), non-zero keys only. */
     @Query("""
                         SELECT e.stockItemId AS stockItemId, COALESCE(SUM(e.changeInQuantity), 0) AS onHandQuantity

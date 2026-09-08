@@ -16,10 +16,12 @@ import com.positivity.inventory.internal.repository.BackorderRecordRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.BackorderResolutionTrigger;
 import com.positivity.inventory.internal.service.BaseUnitOfMeasureResolver;
 import com.positivity.inventory.internal.service.InventoryFactPublisher;
 import com.positivity.inventory.internal.service.LedgerPostingService;
+import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.Quantities;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
@@ -31,6 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
@@ -91,6 +94,7 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
     private final InventoryFactPublisher inventoryFactPublisher;
     private final Clock clock;
     private final BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
+    private final LocationScopeService locationScopeService;
 
     @Override
     public @NonNull BackorderResponse createBackorder(
@@ -270,9 +274,13 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
     @Override
     @Transactional(readOnly = true)
     public @NonNull BackorderResponse getBackorder(@NonNull UUID backorderId) {
-        return toResponse(backorderRepository
+        BackorderRecord backorder = backorderRepository
                 .findById(backorderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Backorder", backorderId.toString())));
+                .orElseThrow(() -> new ResourceNotFoundException("Backorder", backorderId.toString()));
+        // ADR-0061 §3 (#1872): the list is narrowed by location, so the by-id read is gated on the
+        // loaded record's site — after the 404, so ids cannot be probed.
+        locationScopeService.require(backorder.getLocationId(), InventoryPermissionRegistry.SHORTAGE_VIEW);
+        return toResponse(backorder);
     }
 
     @Override
@@ -290,8 +298,16 @@ public class BackorderServiceImpl implements BackorderService, BackorderResoluti
         if (sku != null && !sku.isBlank()) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("sku"), sku));
         }
+        // ADR-0061 §3 (#1872): a named site is gated; no site narrows a scoped caller to their reach.
+        Optional<Set<UUID>> reach =
+                locationScopeService.narrowTo(locationId, InventoryPermissionRegistry.SHORTAGE_VIEW);
         if (locationId != null) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("locationId"), locationId));
+        } else if (reach.isPresent()) {
+            if (reach.get().isEmpty()) {
+                return List.of();
+            }
+            spec = spec.and(LocationScopeService.withinLocations("locationId", reach.get()));
         }
         if (workorderLineId != null) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("workorderLineId"), workorderLineId));

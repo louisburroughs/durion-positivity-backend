@@ -3,6 +3,11 @@ package com.positivity.inventory.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.inventory.internal.dto.InventoryLedgerEntryDto;
@@ -13,12 +18,15 @@ import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.ledger.service.InventoryLedgerServiceImpl;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.security.common.LocationScopeDeniedException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -37,11 +45,14 @@ class InventoryLedgerServiceImplTest {
     @Mock
     private InventoryLedgerEntryRepository inventoryLedgerEntryRepository;
 
+    @Mock
+    private LocationScopeService locationScopeService;
+
     private InventoryLedgerServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new InventoryLedgerServiceImpl(inventoryLedgerEntryRepository);
+        service = new InventoryLedgerServiceImpl(inventoryLedgerEntryRepository, locationScopeService);
     }
 
     // -------------------------------------------------------------------------
@@ -268,6 +279,74 @@ class InventoryLedgerServiceImplTest {
 
             assertThat(page.getEntries()).isEmpty();
             assertThat(page.getNextPageToken()).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("ADR-0061 §3 (#1872): location scope")
+    class LocationScope {
+
+        private final UUID site = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
+
+        @Test
+        @DisplayName("no location filter: a scoped caller's page is restricted to their reach")
+        void scopedNoFilter_narrowsToReach() {
+            when(locationScopeService.narrowTo(isNull(), eq(InventoryPermissionRegistry.LEDGER_VIEW)))
+                    .thenReturn(Optional.of(Set.of(site)));
+            stubFindAll(buildEntries(2));
+
+            LedgerPage<InventoryLedgerEntryDto> page = service.listLedgerEntries(new InventoryLedgerFilterParams());
+
+            assertThat(page.getEntries()).hasSize(2);
+        }
+
+        @Test
+        @DisplayName("empty reach: an empty page with no next token, and no query")
+        void scopedEmptyReach_emptyPageWithoutQuery() {
+            when(locationScopeService.narrowTo(isNull(), eq(InventoryPermissionRegistry.LEDGER_VIEW)))
+                    .thenReturn(Optional.of(Set.of()));
+
+            LedgerPage<InventoryLedgerEntryDto> page = service.listLedgerEntries(new InventoryLedgerFilterParams());
+
+            assertThat(page.getEntries()).isEmpty();
+            assertThat(page.getNextPageToken()).isNull();
+            verifyNoInteractions(inventoryLedgerEntryRepository);
+        }
+
+        @Test
+        @DisplayName("location filter: gated, then queried as before")
+        void filter_isGatedThenQueried() {
+            InventoryLedgerFilterParams params = new InventoryLedgerFilterParams();
+            params.setLocationId(site);
+            stubFindAll(List.of());
+
+            service.listLedgerEntries(params);
+
+            verify(locationScopeService).narrowTo(site, InventoryPermissionRegistry.LEDGER_VIEW);
+        }
+
+        @Test
+        @DisplayName("getLedgerEntry gates on the loaded entry's location, after the 404")
+        void getLedgerEntry_gatesAfterLoad() {
+            UUID id = UUID.randomUUID();
+            InventoryLedgerEntry entry = buildEntry(id);
+            entry.setLocationId(site);
+            when(inventoryLedgerEntryRepository.findById(id)).thenReturn(Optional.of(entry));
+            doThrow(new LocationScopeDeniedException(InventoryPermissionRegistry.LEDGER_VIEW, site.toString()))
+                    .when(locationScopeService)
+                    .require(site, InventoryPermissionRegistry.LEDGER_VIEW);
+
+            assertThatThrownBy(() -> service.getLedgerEntry(id)).isInstanceOf(LocationScopeDeniedException.class);
+        }
+
+        @Test
+        @DisplayName("getLedgerEntry: unknown id is 404 before any scope check")
+        void getLedgerEntry_unknownBeforeScope() {
+            UUID id = UUID.randomUUID();
+            when(inventoryLedgerEntryRepository.findById(id)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.getLedgerEntry(id)).isInstanceOf(ResourceNotFoundException.class);
+            verifyNoInteractions(locationScopeService);
         }
     }
 }

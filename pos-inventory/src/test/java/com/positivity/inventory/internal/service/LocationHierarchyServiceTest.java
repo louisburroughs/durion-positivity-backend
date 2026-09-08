@@ -3,9 +3,11 @@ package com.positivity.inventory.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
+import com.positivity.domainevents.location.LocationAncestry.Dimension;
 import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
 import com.positivity.inventory.internal.entity.ExtLocationParentReplica;
+import com.positivity.inventory.internal.entity.ExtStorageLocationReplica;
 import com.positivity.inventory.internal.repository.ExtLocationParentReplicaRepository;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;
@@ -82,7 +84,8 @@ class LocationHierarchyServiceTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
-        service = new LocationHierarchyService(locationRefRepository, extLocationParentReplicaRepository);
+        service = new LocationHierarchyService(
+                locationRefRepository, extLocationParentReplicaRepository, extStorageLocationReplicaRepository);
         listener = new LocationEventsListener(
                 Clock.fixed(Instant.parse("2026-09-07T12:00:00Z"), ZoneOffset.UTC),
                 new ObjectMapper(),
@@ -238,6 +241,68 @@ class LocationHierarchyServiceTest {
         assertThat(persisted(SHOP).other()).containsExactlyInAnyOrder(SHOP, REGION);
         assertThat(locationRefRepository.findByLocationId(SHOP).orElseThrow().getName())
                 .isEqualTo("Renamed");
+    }
+
+    @Test
+    @DisplayName("a replicated storage location answers its site's sets plus itself (#1872)")
+    void storageLocationAnswersItsSiteAncestors() {
+        locationFact(REGION, 1);
+        locationFact(SHOP, 1, edge(REGION, "PHYSICAL"), edge(FIN_ROOT, "FINANCIAL"));
+        UUID bin = id("b0");
+        extStorageLocationReplicaRepository.save(ExtStorageLocationReplica.builder()
+                .storageLocationId(bin)
+                .siteId(SHOP)
+                .name("Rack A")
+                .type("BIN")
+                .status("ACTIVE")
+                .aggregateVersion(1L)
+                .build());
+
+        AncestorSets sets = persisted(bin);
+
+        assertThat(sets.other()).containsExactlyInAnyOrder(bin, SHOP, REGION);
+        assertThat(sets.financial()).containsExactlyInAnyOrder(bin, SHOP, FIN_ROOT);
+    }
+
+    @Test
+    @DisplayName("a storage location whose site is not replicated answers empty sets (deny)")
+    void storageLocationWithUnknownSiteIsEmpty() {
+        UUID bin = id("b1");
+        extStorageLocationReplicaRepository.save(ExtStorageLocationReplica.builder()
+                .storageLocationId(bin)
+                .siteId(id("98"))
+                .name("Orphan rack")
+                .type("BIN")
+                .status("ACTIVE")
+                .aggregateVersion(1L)
+                .build());
+
+        assertThat(persisted(bin)).isEqualTo(AncestorSets.EMPTY);
+    }
+
+    @Test
+    @DisplayName("descendantsOf: OTHER follows only OTHER edges downward, inclusive of the start node (#1872)")
+    void descendantsOnOtherDimension() {
+        locationFact(HQ, 1);
+        locationFact(REGION, 1, edge(HQ, "HEADQUARTERS"));
+        locationFact(DISTRICT, 1, edge(REGION, "REGION"));
+        locationFact(SHOP, 1, edge(DISTRICT, "DISTRICT"), edge(FIN_ROOT, "FINANCIAL"));
+        locationFact(FIN_ROOT, 1);
+        locationFact(FIN_MID, 1, edge(FIN_ROOT, "FINANCIAL"));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(service.descendantsOf(REGION, Dimension.OTHER)).containsExactlyInAnyOrder(REGION, DISTRICT, SHOP);
+        assertThat(service.descendantsOf(FIN_ROOT, Dimension.OTHER)).containsExactly(FIN_ROOT);
+        assertThat(service.descendantsOf(FIN_ROOT, Dimension.FINANCIAL))
+                .containsExactlyInAnyOrder(FIN_ROOT, FIN_MID, SHOP);
+        assertThat(service.descendantsOf(SHOP, Dimension.OTHER)).containsExactly(SHOP);
+    }
+
+    @Test
+    @DisplayName("descendantsOf: a node the replica does not hold reaches nothing, not even itself")
+    void descendantsOfUnknownIsEmpty() {
+        assertThat(service.descendantsOf(id("97"), Dimension.OTHER)).isEmpty();
     }
 
     @Test

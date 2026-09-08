@@ -8,9 +8,13 @@ import com.positivity.inventory.internal.entity.CycleCountSchedule;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.CycleCountPlanRepository;
 import com.positivity.inventory.internal.repository.CycleCountScheduleRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.inventory.internal.service.LocationScopeService;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +58,7 @@ public class CycleCountScheduleServiceImpl implements CycleCountScheduleService 
     private final CycleCountPlanRepository planRepository;
     private final CycleCountPlanService planService;
     private final Clock clock;
+    private final LocationScopeService locationScopeService;
 
     @Override
     @Transactional
@@ -85,7 +90,11 @@ public class CycleCountScheduleServiceImpl implements CycleCountScheduleService 
     @Override
     @Transactional(readOnly = true)
     public @NonNull CycleCountScheduleResponse getSchedule(@NonNull UUID scheduleId) {
-        return toResponse(require(scheduleId));
+        CycleCountSchedule schedule = require(scheduleId);
+        // ADR-0061 §3 (#1872): the list is narrowed by location, so the by-id read is gated on the
+        // loaded schedule's location — after the 404, so ids cannot be probed.
+        locationScopeService.require(schedule.getLocationId(), InventoryPermissionRegistry.CYCLE_COUNT_VIEW);
+        return toResponse(schedule);
     }
 
     @Override
@@ -94,12 +103,22 @@ public class CycleCountScheduleServiceImpl implements CycleCountScheduleService 
             UUID locationId, Boolean active, boolean dueOnly, int page, int size) {
         LocalDate dueOnOrBefore = dueOnly ? LocalDate.now(clock) : null;
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return scheduleRepository
-                .findByOptionalFilters(locationId, active, dueOnOrBefore, pageable)
-                .getContent()
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        // ADR-0061 §3 (#1872): a named location is gated; none narrows a scoped caller to their reach.
+        Optional<Set<UUID>> reach =
+                locationScopeService.narrowTo(locationId, InventoryPermissionRegistry.CYCLE_COUNT_VIEW);
+        List<CycleCountSchedule> schedules;
+        if (reach.isEmpty()) {
+            schedules = scheduleRepository
+                    .findByOptionalFilters(locationId, active, dueOnOrBefore, pageable)
+                    .getContent();
+        } else if (reach.get().isEmpty()) {
+            return List.of();
+        } else {
+            schedules = scheduleRepository
+                    .findByOptionalFiltersWithinLocations(reach.get(), active, dueOnOrBefore, pageable)
+                    .getContent();
+        }
+        return schedules.stream().map(this::toResponse).toList();
     }
 
     @Override

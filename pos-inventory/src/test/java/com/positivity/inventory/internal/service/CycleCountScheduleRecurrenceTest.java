@@ -20,6 +20,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
@@ -29,6 +30,9 @@ import org.springframework.test.context.ActiveProfiles;
  * schedules, and the completion restamp loop.
  */
 @SpringBootTest
+// listSchedules reads the caller's location scope (ADR-0061 §3, #1872); an authenticated caller
+// without scope claims is the unscoped, pre-rollout shape this test exercises.
+@WithMockUser(username = "test-user", authorities = "inventory:cycle_count:view")
 @ActiveProfiles("test")
 @DisplayName("Cycle count schedule recurrence")
 class CycleCountScheduleRecurrenceTest {

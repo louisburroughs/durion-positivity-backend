@@ -10,6 +10,8 @@ import com.positivity.inventory.internal.dto.replenishment.SnoozeReplenishmentPo
 import com.positivity.inventory.internal.dto.replenishment.UpdateReplenishmentPolicyRequest;
 import com.positivity.inventory.internal.replenishment.service.ReplenishmentService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -103,6 +105,13 @@ public class ReplenishmentController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(description = "Page of replenishment policies")))
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller lacks inventory:on_hand:view;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the requested locationId filter (ADR-0061);"
+                    + " without a filter the result is narrowed to the caller's reach instead",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Page<ReplenishmentPolicyResponse>> getReplenishmentPolicies(
             @io.swagger.v3.oas.annotations.Parameter(description = "Location identifier")
                     @RequestParam(required = false)
@@ -145,6 +154,12 @@ public class ReplenishmentController {
                             mediaType = "application/json",
                             schema = @Schema(implementation = ReplenishmentPolicyResponse.class)))
     @ApiResponse(responseCode = "400", description = "Validation failure")
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller lacks inventory:replenishment:manage;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the request's locationId (ADR-0061)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ReplenishmentPolicyResponse> createReplenishmentPolicy(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Min/max thresholds and tuning fields for one SKU at one location.",
@@ -162,6 +177,10 @@ public class ReplenishmentController {
                     @Valid
                     @RequestBody
                     CreateReplenishmentPolicyRequest request) {
+        // ADR-0061 §3 (#1872): @PreAuthorize answered "may this caller manage replenishment"; this
+        // answers "...at this location". The body is validated by then, so locationId is non-null.
+        SecurityContextHelper.locationScope()
+                .require(InventoryPermissionRegistry.REPLENISHMENT_MANAGE, request.getLocationId());
         return ResponseEntity.status(HttpStatus.CREATED).body(replenishmentService.createReplenishmentPolicy(request));
     }
 

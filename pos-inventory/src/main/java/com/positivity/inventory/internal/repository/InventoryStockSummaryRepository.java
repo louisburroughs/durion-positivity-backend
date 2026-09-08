@@ -263,6 +263,35 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
                         """)
     BigDecimal sumOnHandForSku(@Param("stockItemId") String stockItemId);
 
+    /**
+     * Per-SKU on-hand across the caller's reach (ADR-0061 §3, #1872): lot-agnostic rows at a
+     * reachable site or at a storage location replicated under one, non-zero keys only. Never
+     * called with an empty set.
+     */
+    @Query("""
+                        SELECT s.stockItemId AS stockItemId, COALESCE(SUM(s.onHand), 0) AS onHand
+                        FROM InventoryStockSummary s
+                        WHERE s.lotId IS NULL
+                          AND (s.locationId IN :locationIds
+                               OR s.locationId IN (SELECT b.storageLocationId FROM ExtStorageLocationReplica b
+                                                   WHERE b.siteId IN :locationIds))
+                        GROUP BY s.stockItemId
+                        HAVING COALESCE(SUM(s.onHand), 0) <> 0
+                        """)
+    List<SkuOnHand> sumOnHandBySkuWithinLocations(@Param("locationIds") Collection<UUID> locationIds);
+
+    /** On-hand of one SKU summed across the caller's reach (lot-agnostic rows); see above. */
+    @Query("""
+                        SELECT COALESCE(SUM(s.onHand), 0)
+                        FROM InventoryStockSummary s
+                        WHERE s.stockItemId = :stockItemId AND s.lotId IS NULL
+                          AND (s.locationId IN :locationIds
+                               OR s.locationId IN (SELECT b.storageLocationId FROM ExtStorageLocationReplica b
+                                                   WHERE b.siteId IN :locationIds))
+                        """)
+    BigDecimal sumOnHandForSkuWithinLocations(
+            @Param("stockItemId") String stockItemId, @Param("locationIds") Collection<UUID> locationIds);
+
     interface SkuOnHand {
         String getStockItemId();
 

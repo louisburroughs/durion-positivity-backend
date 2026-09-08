@@ -1,0 +1,134 @@
+# Location-scope decisions for pos-inventory (ADR-0061, #1872).
+# Every operation that takes a caller-supplied locationId must appear here;
+# scripts/audit-rbac.py --check fails on a missing or stale entry.
+#
+# gate   = require(permission, locationId): outside the caller's reach is 403 LOCATION_SCOPE_DENIED.
+# narrow = locationId is an optional filter: named -> gated; absent -> a scoped caller sees only
+#          their reach (sites plus the storage locations replicated under them); empty reach -> empty.
+# Storage-location (bin) ids resolve to their site's ancestors through ext_storage_location, so a
+# caller who covers a site covers every bin in it.
+decisions:
+  - operation: StockMovementController.createAdjustmentRequest
+    shape: gate
+    permission: inventory:adjustment:create
+    reason: locationId names the site the adjustment is raised at; denied outside the caller's reach (#1871).
+  - operation: StockMovementController.approveAdjustmentRequest
+    shape: gate
+    permission: inventory:adjustment:approve
+    reason: Sibling of create; gated in the service on the persisted request's locationId after the not-found check (#1871).
+  - operation: BackorderController.listBackorders
+    shape: narrow
+    permission: inventory:shortage:view
+    reason: locationId is an optional site filter; a scoped caller with no filter sees backorders within their reach only.
+  - operation: BackorderController.getBackorder
+    shape: gate
+    permission: inventory:shortage:view
+    reason: By-id sibling of the narrowed list; gated on the loaded backorder's locationId after the 404 so ids cannot be probed.
+  - operation: CycleCountPlanController.createPlan
+    shape: gate
+    permission: inventory:cycle_count:initiate
+    reason: The required body locationId names the site the count plan is created for.
+  - operation: CycleCountPlanController.listPlans
+    shape: narrow
+    permission: inventory:cycle_count:view
+    reason: locationId is an optional filter; a scoped caller with no filter sees plans within their reach only.
+  - operation: CycleCountPlanController.getPlan
+    shape: gate
+    permission: inventory:cycle_count:view
+    reason: By-id sibling of the narrowed list; gated on the loaded plan's locationId after the 404.
+  - operation: CycleCountScheduleController.createSchedule
+    shape: gate
+    permission: inventory:cycle_count:initiate
+    reason: The required body locationId names the site the recurring schedule counts.
+  - operation: CycleCountScheduleController.listSchedules
+    shape: narrow
+    permission: inventory:cycle_count:view
+    reason: locationId is an optional filter; a scoped caller with no filter sees schedules within their reach only.
+  - operation: CycleCountScheduleController.getSchedule
+    shape: gate
+    permission: inventory:cycle_count:view
+    reason: By-id sibling of the narrowed list; gated on the loaded schedule's locationId after the 404.
+  - operation: InventoryAvailabilityController.queryLeadTime
+    shape: gate
+    permission: inventory:availability:read
+    reason: locationId and storageLocationId are optional but each one named narrows the lookup to that site or bin and is gated; with neither there is no location to check and nothing to narrow (the lead time is a per-product feed lookup, not a location-keyed list).
+  - operation: InventoryLedgerController.listLedgerEntries
+    shape: narrow
+    permission: inventory:ledger:view
+    reason: locationId is an optional filter; a scoped caller with no filter pages over ledger entries within their reach only.
+  - operation: InventoryLedgerController.getLedgerEntry
+    shape: gate
+    permission: inventory:ledger:view
+    reason: By-id sibling of the narrowed list; gated on the loaded entry's locationId after the 404 (an entry with no location denies a scoped caller).
+  - operation: InventoryLocationDeactivationController.deactivate
+    shape: gate
+    permission: inventory:location:admin
+    reason: The path locationId is the storage location being retired and destinationLocationId (when given) receives its stock; both are gated.
+  - operation: InventoryReferenceDataController.listStorageLocations
+    shape: narrow
+    permission: inventory:location:view
+    reason: locationId is an optional filter and is gated when named; the placeholder serves an empty page to everyone, which already satisfies narrowing.
+  - operation: InventoryReferenceDataController.listLocationZones
+    shape: narrow
+    permission: inventory:location:view
+    reason: locationId is an optional filter and is gated when named; the placeholder serves an empty page to everyone, which already satisfies narrowing.
+  - operation: LocationInventoryInquiryController.getLocationInventory
+    shape: gate
+    permission: inventory:on_hand:view
+    reason: The path locationId is the location whose on-hand is read.
+  - operation: LocationInventoryInquiryController.listLocationInventoryItems
+    shape: gate
+    permission: inventory:on_hand:view
+    reason: The path locationId is the location whose contents are listed.
+  - operation: LocationInventoryRollupController.getLocationInventoryRollup
+    shape: gate
+    permission: inventory:on_hand:view
+    reason: The path locationId is the root of the rollup; everything aggregated sits beneath it, so covering the root covers the report.
+  - operation: PurchaseSuggestionController.listPurchaseSuggestions
+    shape: narrow
+    permission: inventory:on_hand:view
+    reason: locationId is an optional destination filter; a scoped caller with no filter sees suggestions within their reach only.
+  - operation: PurchaseSuggestionController.getPurchaseSuggestion
+    shape: gate
+    permission: inventory:on_hand:view
+    reason: By-id sibling of the narrowed list; gated on the loaded suggestion's locationId after the 404.
+  - operation: PutawayController.getAvailableTasks
+    shape: narrow
+    permission: inventory:putaway:view
+    reason: storageLocationId (winning) or locationId is an optional source filter and is gated when named; a scoped caller with no filter sees unassigned tasks sourced within their reach only.
+  - operation: ReplenishmentController.getReplenishmentPolicies
+    shape: narrow
+    permission: inventory:on_hand:view
+    reason: locationId is an optional filter; a scoped caller with no filter sees policies within their reach only.
+  - operation: ReplenishmentController.createReplenishmentPolicy
+    shape: gate
+    permission: inventory:replenishment:manage
+    reason: The required body locationId names the site (or pick face) the policy governs.
+  - operation: ReturnController.submitToStock
+    shape: gate
+    permission: inventory:return:write
+    reason: Every line's required locationId names the location stock is returned to; each distinct one is gated before anything is accepted.
+  - operation: ScrapController.createScrap
+    shape: gate
+    permission: inventory:scrap:create
+    reason: The required body locationId names the site stock is scrapped from.
+  - operation: ScrapController.listScraps
+    shape: narrow
+    permission: inventory:scrap:view
+    reason: locationId is an optional filter; the endpoint accepts inventory:scrap:view or inventory:scrap:approve, so a named filter is denied only when no held alternate covers it and an unfiltered list is narrowed only when every held alternate is scoped.
+  - operation: ScrapController.getScrap
+    shape: gate
+    permission: inventory:scrap:view
+    reason: By-id sibling of the narrowed list; gated on the loaded scrap's locationId after the 404 with either held alternate (view or approve).
+  - operation: ShortageController.listShortageOptions
+    shape: gate
+    permission: inventory:shortage:view
+    reason: locationId is optional but when named it drives the site-specific options and is gated; without one no location is consulted and there is nothing to narrow.
+  - operation: ShortageController.resolveShortage
+    shape: gate
+    permission: inventory:shortage:resolve
+    reason: The body's locationId (destination) and sourceLocationId (TRANSFER_IN source) are both acted on; each one named is gated.
+  - operation: ValuationController.getValuation
+    shape: narrow
+    permission: inventory:valuation:view
+    reason: locationId is an optional site filter; a scoped caller with no filter gets the report summed over their reach only (the as-of SKU cap still applies to that unfiltered shape).

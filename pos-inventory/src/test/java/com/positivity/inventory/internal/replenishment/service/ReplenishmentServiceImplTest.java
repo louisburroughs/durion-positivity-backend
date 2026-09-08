@@ -19,9 +19,11 @@ import com.positivity.inventory.internal.enums.ReplenishmentTriggerType;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentPolicyRepository;
 import com.positivity.inventory.internal.repository.ReplenishmentTaskRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.ForecastQuantityService;
 import com.positivity.inventory.internal.service.ForecastSiteResolver;
 import com.positivity.inventory.internal.service.LeadTimeResolver;
+import com.positivity.inventory.internal.service.LocationScopeService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
@@ -29,6 +31,8 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -64,6 +68,9 @@ class ReplenishmentServiceImplTest {
 
     @Mock
     private ReplenishmentPolicyRepository replenishmentPolicyRepository;
+
+    @Mock
+    private LocationScopeService locationScopeService;
 
     @Mock
     private InventoryStockSummaryRepository stockSummaryRepository;
@@ -210,6 +217,49 @@ class ReplenishmentServiceImplTest {
 
         // Then
         assertTrue(responses.isEmpty());
+    }
+
+    @Test
+    void getReplenishmentPolicies_scopedNoFilter_queriesWithinReach() {
+        // ADR-0061 §3 (#1872)
+        ReplenishmentPolicy policy = ReplenishmentPolicy.builder()
+                .policyId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .locationId(LOC_01)
+                .itemSKU("SKU789")
+                .minimumQuantity(5)
+                .maximumQuantity(20)
+                .createdAt(Instant.now(TEST_CLOCK))
+                .build();
+        when(locationScopeService.narrowTo(null, InventoryPermissionRegistry.INVENTORY_VIEW))
+                .thenReturn(Optional.of(Set.of(LOC_01)));
+        when(replenishmentPolicyRepository.findWithinLocations(Set.of(LOC_01))).thenReturn(List.of(policy));
+
+        Page<ReplenishmentPolicyResponse> responses =
+                replenishmentService.getReplenishmentPolicies(null, Pageable.unpaged());
+
+        assertEquals(1, responses.getTotalElements());
+        Mockito.verify(replenishmentPolicyRepository, Mockito.never()).findAll();
+    }
+
+    @Test
+    void getReplenishmentPolicies_scopedEmptyReach_isEmptyWithoutQuery() {
+        when(locationScopeService.narrowTo(null, InventoryPermissionRegistry.INVENTORY_VIEW))
+                .thenReturn(Optional.of(Set.of()));
+
+        Page<ReplenishmentPolicyResponse> responses =
+                replenishmentService.getReplenishmentPolicies(null, Pageable.unpaged());
+
+        assertTrue(responses.isEmpty());
+        Mockito.verifyNoInteractions(replenishmentPolicyRepository);
+    }
+
+    @Test
+    void getReplenishmentPolicies_namedLocation_isGatedThenQueriedAsBefore() {
+        when(replenishmentPolicyRepository.findByLocationId(LOC_01)).thenReturn(List.of());
+
+        replenishmentService.getReplenishmentPolicies(LOC_01, Pageable.unpaged());
+
+        Mockito.verify(locationScopeService).narrowTo(LOC_01, InventoryPermissionRegistry.INVENTORY_VIEW);
     }
 
     @Test
