@@ -35,7 +35,9 @@ import org.junit.jupiter.api.Test;
  * gated like EventsFacadeTool — the resolver it fronts makes no downstream call and enforces no
  * permission of its own) → {@code V44} (#1660: promotes E4 to InvoiceFacadeTool.getInvoicingLag,
  * gated {@code invoice:analytics:view} — the group V42 already derived for getRevenueByCustomer on
- * the same class).
+ * the same class) → {@code V48} (#1898: re-derives HrFacadeTool after pos-people moved the employee
+ * profile read onto {@code people:employee_pii:view}; permission-net-neutral for who reaches the
+ * tool, since searchEmployees still qualifies on {@code people:employee:view}).
  *
  * <p><b>V40 changed the unit of the assertion.</b> Rows now carry a {@code permission_group} and a
  * tool is offered iff the caller holds ALL codes of AT LEAST ONE group, so a flat union no longer
@@ -68,6 +70,9 @@ class FacadeToolPermissionSeedTest {
     private static final String CATALOG_PRODUCT_VIEW = "catalog:product:view";
     private static final String WORKORDER_VIEW = "workorder:workorder:view";
     private static final String PEOPLE_EMPLOYEE_VIEW = "people:employee:view";
+    // #1898 (V48): the employee profile read moved off people:employee:view, which twelve roles
+    // hold, onto a permission scoped to the contact block it is the only read to return.
+    private static final String PEOPLE_EMPLOYEE_PII_VIEW = "people:employee_pii:view";
     private static final String AVAILABILITY_READ = "inventory:availability:read";
     private static final String SECURITY_PERMISSION_VIEW = "security:permission:view";
     // W2.3 facade promotion (#1601, V42): one new analytics method each on InvoiceFacadeTool,
@@ -137,7 +142,10 @@ class FacadeToolPermissionSeedTest {
             Map.entry(
                     "HrFacadeTool",
                     Map.of(
-                            "getEmployee", Set.of(PEOPLE_EMPLOYEE_VIEW),
+                            // #1898 (V48): getEmployee fronts the one endpoint returning
+                            // EmployeeProfileDto.contactInfo, so it follows that endpoint's guard;
+                            // searchEmployees returns no contact block and stays where it was.
+                            "getEmployee", Set.of(PEOPLE_EMPLOYEE_PII_VIEW),
                             "getEmployeeSchedule", Set.of("people:availability:view"),
                             "searchEmployees", Set.of(PEOPLE_EMPLOYEE_VIEW))),
             Map.entry(
@@ -219,7 +227,7 @@ class FacadeToolPermissionSeedTest {
                             "getAuditLog", Set.of("security:audit:view"))));
 
     @Test
-    @DisplayName("net facade seed (V18..V41) equals the #1606 per-method group table")
+    @DisplayName("net facade seed (V18..V48) equals the #1606 per-method group table")
     void netSeedMatchesGroupTable() throws IOException {
         Map<String, Map<String, Set<String>>> groups = netGroupGrants();
 
@@ -467,7 +475,8 @@ class FacadeToolPermissionSeedTest {
                 "V43__date_window_facade_tool.sql",
                 "V44__invoicing_lag_facade_tool.sql",
                 "V46__glossary_facade_tool.sql",
-                "V47__open_workorders_by_customer_facade_tool.sql")) {
+                "V47__open_workorders_by_customer_facade_tool.sql",
+                "V48__hr_facade_employee_pii_permission.sql")) {
             String sql = read(migration);
             parseFullDeletes(sql).forEach(groups::remove);
             parseGroupSeed(sql).forEach((tool, seeded) -> {
