@@ -3,9 +3,14 @@ package com.positivity.peoplecontact.internal.exception;
 /**
  * A downstream {@code pos-security-service} rejection that no caller-supplied value could have
  * caused — evidence of a request-shape/contract drift between this client and
- * pos-security-service (for example a renamed {@code scopeType} enum, or {@code GET /v1/users}
- * starting to require a parameter it does not send today), not a bad request from whoever
- * called into this module.
+ * pos-security-service (for example {@code GET /v1/users} starting to require the username
+ * filter this client does not send today, or its response ceasing to be a plain user list), not
+ * a bad request from whoever called into this module.
+ *
+ * <p>The drift this type exists to catch is real and has happened: ADR-0061 deleted the
+ * {@code scopeType} scope from role assignments (issue #1875) while this client kept sending
+ * it, and because Spring drops unknown query parameters and Jackson ignores unknown body
+ * fields, that drift produced no 400 at all — it degraded silently instead.
  *
  * <p>Deliberately NOT mapped by {@code PeopleExceptionHandler}: unlike {@link
  * PeopleContactValidationException} — reserved for failures a caller's own input could actually

@@ -1101,13 +1101,15 @@ paths:
       x-required-permissions:
       - people-contact:role:view
     post:
-      description: 'Assigns a role to a person by delegating to pos-security through the person''s linked user account, optionally scoped to one location and bounded by a date window.
+      description: 'Assigns a role to a person by delegating to pos-security through the person''s linked user account, bounded by an optional effective date window.
 
         Use this tool to grant access; do not use revokePersonRoleAssignment, which ends an assignment that already exists.
 
         Preconditions: the person must have an active user-person link resolving to a pos-security user, and the roleCode must exist in pos-security.
 
-        Required inputs: personUuid (UUID) as a path parameter and roleCode in the body; locationId (UUID) scopes the role to one location when supplied, and optional startDate/endDate bound the assignment, with endDate required to be on or after startDate.
+        Required inputs: personUuid (UUID) as a path parameter and roleCode in the body; optional startDate/endDate (ISO date-time) bound the assignment, with endDate required to be on or after startDate.
+
+        The assignment takes no location. Per ADR-0061 it is an effective-dated user-to-role link and nothing more: the person''s location reach is the assigned role''s own location scope combined with that person''s pos-people staffing assignment, resolved at token issuance rather than chosen here.
 
         Emits a PEOPLE_CONTACT_ACCESS_ASSIGNMENT_CREATE event; the assignment record itself is created and owned by pos-security.
 
@@ -1126,16 +1128,15 @@ paths:
         content:
           application/json:
             examples:
-              Location-scoped technician role:
-                description: Location-scoped technician role
+              Technician role for a fixed term:
+                description: Technician role for a fixed term
                 value:
                   endDate: '2026-12-31T23:59:59'
-                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
                   roleCode: TECHNICIAN
                   startDate: '2026-09-01T00:00:00'
             schema:
               $ref: '#/components/schemas/PersonRoleAssignmentRequest'
-        description: Role code plus optional location scope and effective date window.
+        description: Role code plus an optional effective date window.
         required: true
       responses:
         '201':
@@ -1223,13 +1224,15 @@ paths:
       - people-contact:role:revoke
   /v1/people/{personUuid}/access/roles:
     get:
-      description: 'Lists the role catalog a person could be assigned, combining LOCATION-scoped and GLOBAL-scoped roles fetched live from pos-security.
+      description: 'Lists the role catalog a person could be assigned, fetched live from pos-security.
 
         Use this tool to populate a role picker before calling assignRoleToPerson; do not use listRoleAssignments, which returns the roles the person already holds.
 
         Preconditions: the person record must exist; the roles themselves are owned by pos-security, and no user-person link is needed for this listing.
 
         Required inputs: personUuid (UUID) as a path parameter; there is no request body and no filtering.
+
+        Each role appears exactly once, identified by a code that is also its name, and the listing is not partitioned by location scope: per ADR-0061 a role''s location scope is resolved at token issuance from the role and the person''s pos-people staffing assignment, not chosen when the role is picked.
 
         Emits a PEOPLE_CONTACT_ACCESS_ROLES_LIST audit event; no state changes.
 
@@ -1482,11 +1485,6 @@ components:
           example: '2026-12-31T23:59:59'
           format: date-time
           type: string
-        locationId:
-          description: Location identifier the role is scoped to
-          example: 01960011-0000-7000-8000-000000000010
-          format: uuid
-          type: string
         roleCode:
           description: Stable role code to assign
           example: TECHNICIAN
@@ -1626,26 +1624,27 @@ components:
     RoleDto:
       description: Role definition as exposed by the security service
       properties:
-        active:
-          description: Whether the role is active
-          example: true
-          type: boolean
         code:
-          description: Stable role code
+          description: Stable role code, identical to the name
           example: TECHNICIAN
           type: string
         description:
           description: Description of the role
           example: Performs service work on vehicles
           type: string
+        id:
+          description: Role identifier
+          example: 01960011-0000-7000-8000-000000000020
+          format: uuid
+          type: string
         name:
-          description: Human-readable role name
-          example: Technician
+          description: Role name, which is also its stable code
+          example: TECHNICIAN
           type: string
-        scopeType:
-          description: Scope at which the role applies
-          example: LOCATION
-          type: string
+      required:
+      - code
+      - id
+      - name
       type: object
     UserPersonLinkResponse:
       description: Response describing a link between a user account and a person record
@@ -1694,23 +1693,18 @@ components:
           example: true
           type: boolean
         endDate:
-          description: Date the assignment ends
-          example: '2026-12-31'
-          format: date
-          type: string
-        locationId:
-          description: Location identifier the role is scoped to
-          example: 01960011-0000-7000-8000-000000000010
-          format: uuid
+          description: Exclusive end of the effective window
+          example: '2026-12-31T23:59:59'
+          format: date-time
           type: string
         roleCode:
           description: Stable role code
           example: TECHNICIAN
           type: string
         startDate:
-          description: Date the assignment becomes effective
-          example: '2026-01-01'
-          format: date
+          description: Inclusive start of the effective window
+          example: '2026-01-01T00:00:00'
+          format: date-time
           type: string
         userId:
           description: User identifier

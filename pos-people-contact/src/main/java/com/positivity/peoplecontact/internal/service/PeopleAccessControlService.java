@@ -17,11 +17,7 @@ public interface PeopleAccessControlService {
 
     @NonNull
     UserRoleDto assignRoleToPerson(
-            @NonNull UUID personUuid,
-            @NonNull String roleCode,
-            UUID locationId,
-            LocalDateTime startDate,
-            LocalDateTime endDate);
+            @NonNull UUID personUuid, @NonNull String roleCode, LocalDateTime startDate, LocalDateTime endDate);
 
     void revokeRoleFromPerson(@NonNull UUID personUuid, @NonNull String roleCode, LocalDateTime endDate);
 }

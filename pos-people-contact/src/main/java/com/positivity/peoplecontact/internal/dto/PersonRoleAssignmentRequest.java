@@ -3,12 +3,22 @@ package com.positivity.peoplecontact.internal.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDateTime;
-import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Body of {@code POST /v1/people/{personUuid}/access/assignments}.
+ *
+ * <p>There is no {@code locationId}. Under ADR-0061 a role assignment is an effective-dated
+ * user-to-role link and carries no location of its own: a person's location reach is the
+ * assigned role's {@code location_scope} combined with that person's pos-people staffing
+ * assignment, resolved at token issuance. The field was forwarded to pos-security-service as a
+ * {@code scopeType}/{@code scopeLocationIds} scope that issue #1875 deleted there, so supplying
+ * it never changed the resulting grant; it is gone from the published contract rather than kept
+ * as an input this module knowingly disregards.
+ */
 @Data
 @Builder
 @NoArgsConstructor
@@ -22,12 +32,6 @@ public class PersonRoleAssignmentRequest {
             example = "TECHNICIAN",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String roleCode;
-
-    @Schema(
-            description = "Location identifier the role is scoped to",
-            example = "01960011-0000-7000-8000-000000000010",
-            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-    private UUID locationId;
 
     @Schema(
             description = "Date and time the assignment becomes effective",

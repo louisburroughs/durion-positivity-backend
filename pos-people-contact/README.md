@@ -35,3 +35,26 @@ Identity, contact, and user-link authority service for the Durion Positivity pla
   directory search has no employment filters.
 - Consumers needing person reference data maintain `ext_people_contact_person` replicas
   fed from `people-contact.events.v1` (Phases 3.2–3.4: #875, #876, #877).
+
+## Role assignments (ADR-0061)
+
+`PersonAccessController` proxies `/v1/people/{personUuid}/access/{roles,assignments}` to
+pos-security-service through `internal/client/SecurityServiceClient`, resolving the person to a
+security user via their active user-person link.
+
+- **An assignment carries no location.** Per ADR-0061 it is an effective-dated user → role link
+  and nothing more. A person's location reach is the assigned role's own `location_scope`
+  combined with that person's pos-people staffing assignment, resolved at token issuance — it is
+  not chosen when the role is granted. `assignRoleToPerson` therefore takes no `locationId`, and
+  the assignment returned by `listRoleAssignments`/`assignRoleToPerson` reports none. Issue #1875
+  deleted the corresponding `scopeType`/`scopeLocationIds` fields from pos-security-service.
+- **A role's name is its code.** pos-security-service has no separate role-code field;
+  `GET /v1/roles/by-name/{name}` resolves an assignment by exactly the value
+  `listAssignableRoles` returns as both `name` and `code`.
+- **The role catalog is unfiltered.** `GET /v1/roles` takes no parameters, so
+  `listAssignableRoles` issues one call and lists each role once.
+- **Effective dates are date-times.** Both the inbound `startDate`/`endDate` and the downstream
+  `effectiveStartDate`/`effectiveEndDate` are `LocalDateTime`; a date-only value is rejected
+  downstream rather than coerced to midnight. The window is start-inclusive and end-exclusive.
+- Location-scope enforcement on `createAssignment` itself is deferred to #1885; see
+  `location-scope.yaml`.

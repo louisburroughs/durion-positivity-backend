@@ -4,13 +4,22 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
-import java.util.Set;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * This module's role-code-shaped input to {@link
+ * com.positivity.peoplecontact.internal.client.SecurityServiceClient#assignRole}, which resolves
+ * the code to a role id before posting a {@link RoleAssignmentRequest}.
+ *
+ * <p>Under ADR-0061 an assignment carries no location: the {@code locationId}/{@code
+ * locationIds} this DTO used to hold were folded into a {@code scopeType}/{@code
+ * scopeLocationIds} body that pos-security-service no longer reads (issue #1875), so they
+ * changed nothing about the resulting grant.
+ */
 @Data
 @Builder
 @NoArgsConstructor
@@ -26,18 +35,6 @@ public class UserRoleAssignmentRequest {
 
     @Schema(description = "Stable role code to assign", example = "TECHNICIAN", requiredMode = NOT_REQUIRED)
     private String roleCode;
-
-    @Schema(
-            description = "Location identifiers the role is scoped to",
-            example = "[\"01960011-0000-7000-8000-000000000010\"]",
-            requiredMode = NOT_REQUIRED)
-    private Set<UUID> locationIds;
-
-    @Schema(
-            description = "Single location identifier the role is scoped to",
-            example = "01960011-0000-7000-8000-000000000010",
-            requiredMode = NOT_REQUIRED)
-    private UUID locationId;
 
     @Schema(
             description = "Date and time the assignment becomes effective",

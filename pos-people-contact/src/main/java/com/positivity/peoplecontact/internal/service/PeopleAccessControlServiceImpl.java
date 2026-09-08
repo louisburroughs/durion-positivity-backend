@@ -9,7 +9,6 @@ import com.positivity.peoplecontact.internal.exception.PersonNotFoundException;
 import com.positivity.peoplecontact.internal.repository.PersonRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -19,10 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class PeopleAccessControlServiceImpl implements PeopleAccessControlService {
-
-    private static final String LOCATION_SCOPE = "LOCATION";
-
-    private static final String GLOBAL_SCOPE = "GLOBAL";
 
     private final UserPersonTranslationService userPersonTranslationService;
 
@@ -48,10 +43,10 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
             throw new PersonNotFoundException(personUuid);
         }
 
-        List<RoleDto> allRoles = new ArrayList<>();
-        allRoles.addAll(securityServiceClient.getAvailableRoles(LOCATION_SCOPE));
-        allRoles.addAll(securityServiceClient.getAvailableRoles(GLOBAL_SCOPE));
-        return allRoles;
+        // One call, one listing. pos-security-service's GET /v1/roles takes no filters, so the
+        // previous LOCATION-then-GLOBAL pair fetched the same unfiltered catalog twice and
+        // concatenated it, offering every role to the caller twice over.
+        return securityServiceClient.getAvailableRoles();
     }
 
     @Override
@@ -66,17 +61,12 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
     @Override
     @NonNull
     public UserRoleDto assignRoleToPerson(
-            @NonNull UUID personUuid,
-            @NonNull String roleCode,
-            UUID locationId,
-            LocalDateTime startDate,
-            LocalDateTime endDate) {
+            @NonNull UUID personUuid, @NonNull String roleCode, LocalDateTime startDate, LocalDateTime endDate) {
         validateDateWindow(startDate, endDate);
         UUID userId = resolveUserId(personUuid);
         UserRoleAssignmentRequest request = UserRoleAssignmentRequest.builder()
                 .userId(userId)
                 .roleCode(roleCode)
-                .locationId(locationId)
                 .startDate(startDate)
                 .endDate(endDate)
                 .build();

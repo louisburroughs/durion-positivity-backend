@@ -1,15 +1,19 @@
 package com.positivity.peoplecontact.internal.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.peoplecontact.internal.client.SecurityServiceClient;
 import com.positivity.peoplecontact.internal.client.dto.RoleDto;
 import com.positivity.peoplecontact.internal.client.dto.User;
+import com.positivity.peoplecontact.internal.client.dto.UserRoleAssignmentRequest;
 import com.positivity.peoplecontact.internal.client.dto.UserRoleDto;
 import com.positivity.peoplecontact.internal.exception.PeopleContactValidationException;
 import com.positivity.peoplecontact.internal.exception.PersonNotFoundException;
@@ -21,6 +25,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class PeopleAccessControlServiceTest {
 
@@ -39,8 +44,6 @@ class PeopleAccessControlServiceTest {
 
     private String testUsername;
 
-    private UUID testLocationId;
-
     @BeforeEach
     void setUp() {
         securityServiceClient = mock(SecurityServiceClient.class);
@@ -53,7 +56,6 @@ class PeopleAccessControlServiceTest {
         testPersonId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         testUserId = UUID.fromString("00000000-0000-0000-0000-000000000002");
         testUsername = "some.user";
-        testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000003");
     }
 
     private User userWithId() {
@@ -63,19 +65,25 @@ class PeopleAccessControlServiceTest {
         return user;
     }
 
+    /**
+     * {@code GET /v1/roles} takes no scope filter, so the old LOCATION-then-GLOBAL pair fetched
+     * the same unfiltered catalog twice and concatenated it: a role picker showed every role
+     * twice, and picking either copy assigned the same role.
+     */
     @Test
-    void getAvailableRolesForPerson_combinesLocationAndGlobalRoles() {
-        RoleDto locationRole =
-                RoleDto.builder().code("MANAGER").scopeType("LOCATION").build();
-        RoleDto globalRole = RoleDto.builder().code("ADMIN").scopeType("GLOBAL").build();
+    void getAvailableRolesForPerson_listsTheCatalogOnceFromASingleCall() {
+        RoleDto manager = RoleDto.builder().name("MANAGER").build();
+        RoleDto admin = RoleDto.builder().name("ADMIN").build();
 
         when(personRepository.existsById(testPersonId)).thenReturn(true);
-        when(securityServiceClient.getAvailableRoles("LOCATION")).thenReturn(List.of(locationRole));
-        when(securityServiceClient.getAvailableRoles("GLOBAL")).thenReturn(List.of(globalRole));
+        when(securityServiceClient.getAvailableRoles()).thenReturn(List.of(manager, admin));
 
         List<RoleDto> result = peopleAccessControlService.getAvailableRolesForPerson(testPersonId);
 
-        assertEquals(2, result.size());
+        assertEquals(
+                List.of("MANAGER", "ADMIN"),
+                result.stream().map(RoleDto::getCode).toList());
+        verify(securityServiceClient, times(1)).getAvailableRoles();
         verify(personRepository).existsById(testPersonId);
     }
 
@@ -86,6 +94,7 @@ class PeopleAccessControlServiceTest {
         assertThrows(
                 PersonNotFoundException.class,
                 () -> peopleAccessControlService.getAvailableRolesForPerson(testPersonId));
+        verify(securityServiceClient, never()).getAvailableRoles();
     }
 
     @Test
@@ -104,18 +113,26 @@ class PeopleAccessControlServiceTest {
     }
 
     @Test
-    void assignRoleToPerson_translatesPersonAndCreatesAssignment() {
+    void assignRoleToPerson_translatesPersonAndForwardsAnUnscopedEffectiveWindow() {
         UserRoleDto created = UserRoleDto.builder().roleCode("MANAGER").build();
+        LocalDateTime startDate = LocalDateTime.parse("2026-02-16T10:00:00");
 
         when(userPersonTranslationService.getUsernameForPerson(testPersonId)).thenReturn(Optional.of(testUsername));
         when(securityServiceClient.getUserByUsername(testUsername)).thenReturn(Optional.of(userWithId()));
         when(securityServiceClient.assignRole(any())).thenReturn(created);
 
-        UserRoleDto result = peopleAccessControlService.assignRoleToPerson(
-                testPersonId, "MANAGER", testLocationId, LocalDateTime.parse("2026-02-16T10:00:00"), null);
+        UserRoleDto result = peopleAccessControlService.assignRoleToPerson(testPersonId, "MANAGER", startDate, null);
 
         assertEquals("MANAGER", result.getRoleCode());
-        verify(securityServiceClient).assignRole(any());
+        ArgumentCaptor<UserRoleAssignmentRequest> captor = ArgumentCaptor.forClass(UserRoleAssignmentRequest.class);
+        verify(securityServiceClient).assignRole(captor.capture());
+        UserRoleAssignmentRequest forwarded = captor.getValue();
+        assertEquals(testUserId, forwarded.getUserId());
+        assertEquals("MANAGER", forwarded.getRoleCode());
+        // The person is translated to a security user and given an effective window; ADR-0061
+        // leaves nothing else on an assignment, and the time of day survives untruncated.
+        assertEquals(startDate, forwarded.getStartDate());
+        assertNull(forwarded.getEndDate());
     }
 
     @Test
@@ -146,8 +163,7 @@ class PeopleAccessControlServiceTest {
 
         PeopleContactValidationException exception = assertThrows(
                 PeopleContactValidationException.class,
-                () -> peopleAccessControlService.assignRoleToPerson(
-                        testPersonId, "MANAGER", testLocationId, startDate, endDate));
+                () -> peopleAccessControlService.assignRoleToPerson(testPersonId, "MANAGER", startDate, endDate));
 
         assertEquals("endDate must be greater than or equal to startDate", exception.getMessage());
     }

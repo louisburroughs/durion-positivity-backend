@@ -4,4 +4,4 @@
 decisions:
   - operation: PersonAccessController.createAssignment
     shape: unscoped
-    reason: Deferred: intended gate on the assignment's locationId, but pos-people-contact has no location replica; tracked in #1885
+    reason: "Deferred: the request no longer carries a locationId (ADR-0061 leaves an assignment a plain user-to-role link), and pos-people-contact has no location replica to gate the acting user against; tracked in #1885"
