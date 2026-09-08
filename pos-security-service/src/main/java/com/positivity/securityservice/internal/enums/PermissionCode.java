@@ -957,13 +957,23 @@ public enum PermissionCode {
 
     // Bulk import of service operations through the seed pipeline
     // (docs/DATA_SEED_STRATEGY.md §3 Tier 2)
-    CATALOG__SERVICE__INGEST(516, "catalog:service:ingest");
+    CATALOG__SERVICE__INGEST(516, "catalog:service:ingest"),
+    // ── People self-service (#1895) ────────────────────────────────────────────
+    // The caller's own identity and placement: their person record, their active
+    // staffing assignments, their primary location. Seeded to the operational
+    // staff roles, because a person reading their own row is not a privilege any
+    // of them can sensibly be denied — but a permission rather than a bare
+    // isAuthenticated() check, so the customer-facing roles stay out and the
+    // grant remains visible to scripts/audit-rbac.py. CUSTOMER and
+    // SELF_SERVICE_CUSTOMER are ungranted by design; SYSTEM_ADMINISTRATOR is
+    // ungranted because V31's keep list must equal its seeded grants (#1898).
+    PEOPLE__SELF__VIEW(517, "people:self:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 80;
+    public static final int CATALOG_VERSION = 81;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

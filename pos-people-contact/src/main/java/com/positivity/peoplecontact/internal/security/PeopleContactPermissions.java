@@ -50,6 +50,20 @@ public final class PeopleContactPermissions {
     /** Write user-person links. */
     public static final String USERLINK_WRITE = "people-contact:userLink:write";
 
+    // ── Permissions owned by other domains ──────────────────────────────────────────────
+    //
+    // Declared here so this module's call sites are constants like every other, but the names
+    // belong elsewhere. Their definition, bit assignment and description live with their owner —
+    // this is a reference, not a claim of ownership.
+
+    /**
+     * Owned by the people domain (pos-people's {@code permissions.yaml}). One permission spans
+     * both modules because it answers one question — may this caller read their own row — and
+     * ADR-0044 §6 splits that row across the two: identity here, employment there. Two
+     * permissions would have to be granted and revoked in lockstep forever.
+     */
+    public static final String PEOPLE_SELF_VIEW = "people:self:view";
+
     private PeopleContactPermissions() {
         // Utility class - prevent instantiation
     }

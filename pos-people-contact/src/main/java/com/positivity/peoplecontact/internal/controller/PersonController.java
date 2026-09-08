@@ -49,8 +49,8 @@ public class PersonController {
                     identity snapshot with emails, work phone numbers and username.
                     Use this tool when the caller needs their own person record without knowing a person id; do \
                     not use getPersonById, which requires a known person UUID and can read any person.
-                    Preconditions: an active user-person link must exist for the authenticated username, and the \
-                    linked person record must still exist.
+                    Preconditions: the people:self:view permission, and an active user-person link must \
+                    exist for the authenticated username with the linked person record still present.
                     Required inputs: none; identity comes entirely from the authenticated security context.
                     No events are emitted and no state changes; this is a read-only projection.
                     Returns 404 when the caller has no user-person link or the linked person no longer exists, \
@@ -64,8 +64,8 @@ public class PersonController {
     @GetMapping("/me")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"people-contact:person:view"})
-    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.PERSON_VIEW + "')")
+            scopes = {"people:self:view"})
+    @PreAuthorize("hasAuthority('" + PeopleContactPermissions.PEOPLE_SELF_VIEW + "')")
     public Person getCurrentPerson() {
         UUID personId = userPersonTranslationService.getPersonUuidForCurrentUser();
         return personService
