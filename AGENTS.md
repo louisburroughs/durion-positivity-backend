@@ -23,6 +23,10 @@
 - Keep controllers thin; business logic belongs in service layer.
 - Prefer the API gateway and event-driven boundaries over direct cross-service coupling.
 - Use `@EmitEvent` on state-changing endpoints and register event types at startup.
+- Every endpoint that takes a caller-supplied `locationId` needs a recorded location-scope decision
+  (`gate` | `narrow` | `unscoped`, with a reason) in `<module>/location-scope.yaml` beside its
+  `@PreAuthorize` permission (ADR-0061); `scripts/audit-rbac.py --check` fails CI on a missing, stale
+  or invalid entry. See `docs/OPERATIONS_RUNBOOK.md` → "Location-scope decisions".
 - Keep ArchUnit rules green.
 
 ## Where to Look

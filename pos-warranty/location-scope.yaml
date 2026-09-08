@@ -1,0 +1,7 @@
+# Location-scope decisions for pos-warranty (ADR-0061, #1872).
+# Every operation that takes a caller-supplied locationId must appear here;
+# scripts/audit-rbac.py --check fails on a missing or stale entry.
+decisions:
+  - operation: ClaimController.searchClaims
+    shape: unscoped
+    reason: Deferred: intended narrow (optional filter), but pos-warranty has no location replica; tracked in #1885

@@ -1,0 +1,10 @@
+# Location-scope decisions for pos-customer (ADR-0061, #1872).
+# Every operation that takes a caller-supplied locationId must appear here;
+# scripts/audit-rbac.py --check fails on a missing or stale entry.
+decisions:
+  - operation: CommercialBulkIngestController.bulkIngest
+    shape: unscoped
+    reason: Bulk load guarded by the domain import/create authority; the location is a payload default applied to imported rows, not an access boundary, and the roles holding it are seeded location_scope ALL (ADR-0061, #1872)
+  - operation: CustomerBulkIngestController.bulkIngest
+    shape: unscoped
+    reason: Bulk load guarded by the domain import/create authority; the location is a payload default applied to imported rows, not an access boundary, and the roles holding it are seeded location_scope ALL (ADR-0061, #1872)

@@ -1,0 +1,34 @@
+# Location-scope decisions for pos-catalog (ADR-0061, #1872).
+# Every operation that takes a caller-supplied locationId must appear here;
+# scripts/audit-rbac.py --check fails on a missing or stale entry.
+decisions:
+  - operation: CatalogBulkIngestController.bulkIngest
+    shape: unscoped
+    reason: Bulk load guarded by the domain import/create authority; the location is a payload default applied to imported rows, not an access boundary, and the roles holding it are seeded location_scope ALL (ADR-0061, #1872)
+  - operation: CatalogServiceBulkIngestController.bulkIngest
+    shape: unscoped
+    reason: Bulk load guarded by the domain import/create authority; the location is a payload default applied to imported rows, not an access boundary, and the roles holding it are seeded location_scope ALL (ADR-0061, #1872)
+  - operation: ServiceLaborStandardBulkIngestController.bulkIngest
+    shape: unscoped
+    reason: Bulk load guarded by the domain import/create authority; the location is a payload default applied to imported rows, not an access boundary, and the roles holding it are seeded location_scope ALL (ADR-0061, #1872)
+  - operation: ServicePackageBulkIngestController.bulkIngest
+    shape: unscoped
+    reason: Bulk load guarded by the domain import/create authority; the location is a payload default applied to imported rows, not an access boundary, and the roles holding it are seeded location_scope ALL (ADR-0061, #1872)
+  - operation: ServicePackageMemberBulkIngestController.bulkIngest
+    shape: unscoped
+    reason: Bulk load guarded by the domain import/create authority; the location is a payload default applied to imported rows, not an access boundary, and the roles holding it are seeded location_scope ALL (ADR-0061, #1872)
+  - operation: PriceBookController.resolvePrice
+    shape: unscoped
+    reason: Catalog read; locationId selects the price book to resolve against and the response carries no location-private data (ADR-0061, #1872)
+  - operation: ProductController.getEffectiveLocationPrice
+    shape: unscoped
+    reason: Catalog read; locationId selects the price book to resolve against and the response carries no location-private data (ADR-0061, #1872)
+  - operation: ProductController.getProductDetailView
+    shape: unscoped
+    reason: Catalog read; locationId selects the price book to resolve against and the response carries no location-private data (ADR-0061, #1872)
+  - operation: ServicePackageController.listServicePackages
+    shape: unscoped
+    reason: Catalog read; locationId selects which location's packages to list beside the platform ones and the response carries no location-private data (ADR-0061, #1872)
+  - operation: ProductController.createLocationPriceOverride
+    shape: unscoped
+    reason: Deferred: intended gate on the override's locationId, but pos-catalog has no location replica; tracked in #1885
