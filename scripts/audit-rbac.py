@@ -105,6 +105,11 @@ if "--baseline" in argv:
                  "--baseline scripts/rbac-audit-baseline.json")
     baseline_path = argv[idx + 1]
     del argv[idx:idx + 2]
+unknown = [a for a in argv if a.startswith("--")]
+if unknown:
+    sys.exit(f"error: unknown option {unknown[0]!r} (accepted: --check, --baseline PATH; "
+             "one positional output path). Refusing to write a report file named "
+             f"{unknown[0]!r}.")
 output_path = argv[0] if argv else None
 
 root = pathlib.Path(".")
@@ -363,8 +368,14 @@ for f in sorted(java_files):
     mod, cls, body = f.parts[0], f.stem, file_bodies[f]
     for m in re.finditer(r'\n\s+public\s+[^;{]*?\b(\w+)\s*\(', body):
         controller_methods[mod].add(f"{cls}.{m.group(1)}")
-    for m in re.finditer(r'@(Get|Post|Put|Patch|Delete)Mapping', body):
-        md = re.search(r'\n\s+public\s+[^;{]*?\b(\w+)\s*\(', body[m.start():m.start() + 4000])
+    mappings = list(re.finditer(r'@(Get|Post|Put|Patch|Delete)Mapping', body))
+    for idx, m in enumerate(mappings):
+        # The method belongs to the mapping annotation immediately above it, so
+        # scan up to the next mapping (or end of file), not a fixed window: an
+        # operation with long @ApiResponses documentation between the mapping
+        # and its signature would otherwise silently drop out of the inventory.
+        end = mappings[idx + 1].start() if idx + 1 < len(mappings) else len(body)
+        md = re.search(r'\n\s+public\s+[^;{]*?\b(\w+)\s*\(', body[m.start():end])
         if not md:
             continue
         ptext = params_of(body, m.start() + md.end() - 1)
