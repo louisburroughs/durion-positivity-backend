@@ -1145,13 +1145,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 80")
+    @DisplayName("CATALOG_VERSION is 81")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(80);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(81);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 516")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 517")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1425,8 +1425,12 @@ class SecurityGatewayConfigTest {
         // its own grant rather than the retired CATALOG_EDIT role the single-item endpoints use
         // (bit 516)
         assertThat(GatewayPermissionCatalog.authorityForBit(516)).isEqualTo("PERM_catalog:service:ingest");
+        // catalog v81 (#1893): re-emitting party facts to seed or repair a downstream replica, its
+        // own grant rather than crm:party:view because it writes to the fact stream every
+        // downstream module consumes (bit 517)
+        assertThat(GatewayPermissionCatalog.authorityForBit(517)).isEqualTo("PERM_crm:fact:replay");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(517)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(518)).isNull();
     }
 
     @Test

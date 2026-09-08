@@ -957,13 +957,15 @@ public enum PermissionCode {
 
     // Bulk import of service operations through the seed pipeline
     // (docs/DATA_SEED_STRATEGY.md §3 Tier 2)
-    CATALOG__SERVICE__INGEST(516, "catalog:service:ingest");
+    CATALOG__SERVICE__INGEST(516, "catalog:service:ingest"),
+    // ── Crm (new) ──────────────────────────────────────────────────────────────
+    CRM__FACT__REPLAY(517, "crm:fact:replay");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 80;
+    public static final int CATALOG_VERSION = 81;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

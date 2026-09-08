@@ -276,14 +276,14 @@ class JwtServiceImplLocationScopeTest {
     }
 
     @Test
-    @DisplayName("CATALOG_VERSION is not bumped by the scope claims: pinned at 80, and perm_ver still equals it")
+    @DisplayName("CATALOG_VERSION is not bumped by the scope claims: pinned at 81, and perm_ver still equals it")
     void catalogVersion_unchanged() {
         grants(grant("TECHNICIAN", LocationScope.LOCATION, LocationHierarchy.OTHER, JE_VIEW));
         nodes(NODE_A);
 
         String token = issue(PERSON_ID);
 
-        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(80);
+        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(81);
         Claims claims = claims(token);
         assertThat(claims.get(JwtService.PERM_VER, Integer.class)).isEqualTo(PermissionCode.CATALOG_VERSION);
         // Both scope bitsets decode under that same version: same codec, same bit indexes.
