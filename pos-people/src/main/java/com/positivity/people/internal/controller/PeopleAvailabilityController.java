@@ -117,10 +117,8 @@ public class PeopleAvailabilityController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/me/primary-location")
     @EmitEvent(id = "PEOPLE_PRIMARY_LOCATION_GET", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
-            name = "bearerAuth",
-            scopes = {"people:availability:view"})
-    @PreAuthorize("hasAuthority('" + PeoplePermissions.AVAILABILITY_VIEW + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PrimaryLocationResponse> getCurrentUserPrimaryLocation() {
         PrimaryLocationResolution resolution = peopleAvailabilityService.resolveCurrentUserPrimaryLocation();
         log.info(
@@ -141,8 +139,9 @@ public class PeopleAvailabilityController {
                     Lists the authenticated caller's staffing assignments that are active today, primary first.
                     Use this tool to populate a location switcher for the current user; use getMyPrimaryLocation \
                     instead when only the single primary location is needed.
-                    Preconditions: the caller must be linked to a person in the user-link replica; the link data is \
-                    event-fed and can lag the link authority.
+                    Preconditions: none beyond authentication, but the caller must be linked to a person in the \
+                    user-link replica to have any assignment to list; the link data is event-fed and can lag the \
+                    link authority.
                     Required inputs: none; identity comes from the bearer token and there are no parameters.
                     Emits a PEOPLE_ME_LOCATIONS_LIST audit event but changes no state; this is a read-only \
                     projection.
@@ -156,10 +155,8 @@ public class PeopleAvailabilityController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/me/locations")
     @EmitEvent(id = "PEOPLE_ME_LOCATIONS_LIST", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
-            name = "bearerAuth",
-            scopes = {"people:availability:view"})
-    @PreAuthorize("hasAuthority('" + PeoplePermissions.AVAILABILITY_VIEW + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+    @PreAuthorize("isAuthenticated()")
     public List<StaffingAssignmentResponse> getCurrentUserLocations() {
         return staffingAssignmentService.findActiveByPersonId(
                 userPersonTranslationService.getPersonUuidForCurrentUser());

@@ -300,7 +300,7 @@ paths:
 
         Use this tool when the caller needs their own person record without knowing a person id; do not use getPersonById, which requires a known person UUID and can read any person.
 
-        Preconditions: an active user-person link must exist for the authenticated username, and the linked person record must still exist.
+        Preconditions: none beyond authentication, but an active user-person link must exist for the authenticated username and the linked person record must still exist.
 
         Required inputs: none; identity comes entirely from the authenticated security context.
 
@@ -324,13 +324,12 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: No person linked to the current user.
       security:
-      - bearerAuth:
-        - people-contact:person:view
+      - bearerAuth: []
       summary: Get Current User's Person Record
       tags:
       - People API
       x-required-permissions:
-      - people-contact:person:view
+      - AUTHENTICATED
   /v1/people/resolve:
     post:
       description: 'Finds the best-matching existing person using weighted scoring (email 60, phone 25, lastName 10, firstName 5) and creates a new person when no candidate reaches the threshold.
