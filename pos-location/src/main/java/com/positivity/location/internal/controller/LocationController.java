@@ -46,7 +46,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 @Slf4j
 @Tag(name = "Location API", description = "Operations related to locations and their relationships")
@@ -329,11 +328,12 @@ public class LocationController {
                     @Valid
                     @RequestBody
                     LocationRequestDTO location) {
-        // Existence first, then scope (ADR-0061 §3): a missing location keeps its 404 for every
-        // caller, and a scoped caller only sees a 403 for a location that is real but out of reach.
-        if (locationService.getLocationByIdDto(locationId).isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
+        // Scope first, then the service's own 404 (ADR-0061 §3). Ordering 403 ahead of 404 leaks
+        // nothing that location scope was protecting: reads of the location tree are deliberately
+        // unscoped in this module, so a caller holding location:read establishes whether an id
+        // exists through getLocationById regardless of reach. Existence is gated by that read
+        // permission, never by scope. Bays and site defaults gate the same way, and an existence
+        // pre-check would cost a second read of every location on every update.
         SecurityContextHelper.locationScope().require(LocationPermissions.WRITE, locationId);
         return locationService
                 .updateLocation(locationId, location)
@@ -386,10 +386,8 @@ public class LocationController {
                                                             value = "{\"status\":\"INACTIVE\"}")))
                     @RequestBody
                     LocationPatchRequest patch) {
-        // Existence first (the same 404 ProblemDetail the service answers), then scope (ADR-0061 §3).
-        if (locationService.getLocationByIdDto(locationId).isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        }
+        // Scope first, then the service's own 404 (ADR-0061 §3); see updateLocation for why 403
+        // ahead of 404 reveals nothing in a module whose tree reads are unscoped.
         SecurityContextHelper.locationScope().require(LocationPermissions.WRITE, locationId);
         return ResponseEntity.ok(locationService.patchLocation(locationId, patch));
     }

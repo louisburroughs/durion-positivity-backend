@@ -5,11 +5,11 @@ decisions:
   - operation: LocationController.updateLocation
     shape: gate
     permission: location:write
-    reason: locationId names the location being replaced; a missing location keeps its 404 first, then a scoped caller is denied outside reach.
+    reason: locationId names the location being replaced; the scope check runs first and a location outside the caller's reach is denied, while a location within reach that does not exist keeps its 404 from the service.
   - operation: LocationController.patchLocation
     shape: gate
     permission: location:write
-    reason: locationId names the location being patched; a missing location keeps its 404 first, then a scoped caller is denied outside reach.
+    reason: locationId names the location being patched; the scope check runs first and a location outside the caller's reach is denied, while a location within reach that does not exist keeps its 404 from the service.
   - operation: LocationController.deleteLocation
     shape: gate
     permission: location:write
