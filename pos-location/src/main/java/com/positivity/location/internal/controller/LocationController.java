@@ -329,10 +329,11 @@ public class LocationController {
                     @RequestBody
                     LocationRequestDTO location) {
         // Scope first, then the service's own 404 (ADR-0061 §3). Ordering 403 ahead of 404 leaks
-        // nothing here: reads of the location tree are deliberately unscoped in this module, so any
-        // caller can already establish whether an id exists through getLocationById. Bays and site
-        // defaults gate the same way, and an existence pre-check would cost a second read of every
-        // location on every update.
+        // nothing that location scope was protecting: reads of the location tree are deliberately
+        // unscoped in this module, so a caller holding location:read establishes whether an id
+        // exists through getLocationById regardless of reach. Existence is gated by that read
+        // permission, never by scope. Bays and site defaults gate the same way, and an existence
+        // pre-check would cost a second read of every location on every update.
         SecurityContextHelper.locationScope().require(LocationPermissions.WRITE, locationId);
         return locationService
                 .updateLocation(locationId, location)

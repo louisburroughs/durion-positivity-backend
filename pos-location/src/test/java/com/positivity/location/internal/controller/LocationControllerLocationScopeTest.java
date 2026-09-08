@@ -167,6 +167,11 @@ class LocationControllerLocationScopeTest {
         @DisplayName("a location inside the caller's reach that does not exist still answers 404")
         void missingLocationInReachIs404() throws Exception {
             missing(SITE_IN_REACH);
+            // Mockito already answers Optional.empty() for an unstubbed Optional method, so this
+            // is redundant; it is spelled out because the 404 otherwise depends on a default that
+            // is easy to misread as a null.
+            when(locationService.updateLocation(eq(SITE_IN_REACH), any(LocationRequestDTO.class)))
+                    .thenReturn(Optional.empty());
             as(scopedOn(LocationPermissions.WRITE));
 
             mockMvc.perform(put(URL, SITE_IN_REACH)
