@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,7 +54,7 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
     @NonNull
     @Transactional(readOnly = true)
     public List<UserRoleDto> getPersonRoleAssignments(
-            @NonNull UUID personUuid, boolean includeHistory, LocalDateTime endDate) {
+            @NonNull UUID personUuid, boolean includeHistory, @Nullable LocalDateTime endDate) {
         UUID userId = resolveUserId(personUuid);
         return securityServiceClient.getUserRoleAssignments(userId, includeHistory, endDate);
     }
@@ -61,7 +62,10 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
     @Override
     @NonNull
     public UserRoleDto assignRoleToPerson(
-            @NonNull UUID personUuid, @NonNull String roleCode, LocalDateTime startDate, LocalDateTime endDate) {
+            @NonNull UUID personUuid,
+            @NonNull String roleCode,
+            @Nullable LocalDateTime startDate,
+            @Nullable LocalDateTime endDate) {
         validateDateWindow(startDate, endDate);
         UUID userId = resolveUserId(personUuid);
         UserRoleAssignmentRequest request = UserRoleAssignmentRequest.builder()
@@ -74,7 +78,8 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
     }
 
     @Override
-    public void revokeRoleFromPerson(@NonNull UUID personUuid, @NonNull String roleCode, LocalDateTime endDate) {
+    public void revokeRoleFromPerson(
+            @NonNull UUID personUuid, @NonNull String roleCode, @Nullable LocalDateTime endDate) {
         UUID userId = resolveUserId(personUuid);
         securityServiceClient.revokeRole(userId, roleCode, endDate);
     }
@@ -90,7 +95,7 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
                 .orElseThrow(() -> new EntityNotFoundException("No security user found for username: " + username));
     }
 
-    private void validateDateWindow(LocalDateTime startDate, LocalDateTime endDate) {
+    private void validateDateWindow(@Nullable LocalDateTime startDate, @Nullable LocalDateTime endDate) {
         if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
             throw new PeopleContactValidationException("endDate must be greater than or equal to startDate");
         }
