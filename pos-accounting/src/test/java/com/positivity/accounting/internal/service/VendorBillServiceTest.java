@@ -480,6 +480,52 @@ class VendorBillServiceTest {
         }
 
         @Test
+        @DisplayName("Issue #1892: the row carries billNumber and vendorName, not only the identifiers")
+        void mapsHumanReadableDisplayValues() {
+            VendorBill bill = buildBill(
+                    testBillId,
+                    VendorBillStatus.APPROVED,
+                    new BigDecimal("500.00"),
+                    LocalDateTime.of(2026, 6, 5, 0, 0));
+            bill.setDueDate(LocalDateTime.of(2026, 6, 10, 0, 0));
+            when(billRepository.findByDueDateBetween(any(), any(), any()))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(bill)));
+
+            com.positivity.accounting.internal.dto.VendorBillListRow row = vendorBillService
+                    .listByDueDateWindow(dueFrom, dueTo, null, org.springframework.data.domain.PageRequest.of(0, 20))
+                    .getContent()
+                    .get(0);
+
+            assertThat(row.getBillNumber()).isEqualTo("BILL-001");
+            assertThat(row.getVendorName()).isEqualTo("Test Vendor");
+            // The identifiers stay in the payload: the frontend routes and follows up on them.
+            assertThat(row.getBillId()).isEqualTo(testBillId);
+            assertThat(row.getVendorId()).isEqualTo(testVendorId);
+        }
+
+        @Test
+        @DisplayName("Issue #1892: an unnamed vendor leaves vendorName null rather than substituting the UUID")
+        void unnamedVendorLeavesDisplayNameNull() {
+            VendorBill bill = buildBill(
+                    testBillId,
+                    VendorBillStatus.APPROVED,
+                    new BigDecimal("500.00"),
+                    LocalDateTime.of(2026, 6, 5, 0, 0));
+            bill.setDueDate(LocalDateTime.of(2026, 6, 10, 0, 0));
+            bill.setVendorName(null);
+            when(billRepository.findByDueDateBetween(any(), any(), any()))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(bill)));
+
+            com.positivity.accounting.internal.dto.VendorBillListRow row = vendorBillService
+                    .listByDueDateWindow(dueFrom, dueTo, null, org.springframework.data.domain.PageRequest.of(0, 20))
+                    .getContent()
+                    .get(0);
+
+            assertThat(row.getVendorName()).isNull();
+            assertThat(row.getBillNumber()).isEqualTo("BILL-001");
+        }
+
+        @Test
         @DisplayName("With a status filter, delegates to findByDueDateBetweenAndStatus")
         void statusFilterDelegatesToFilteredQuery() {
             when(billRepository.findByDueDateBetweenAndStatus(any(), any(), any(), any()))

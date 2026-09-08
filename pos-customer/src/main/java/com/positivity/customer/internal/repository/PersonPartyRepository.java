@@ -1,10 +1,12 @@
 package com.positivity.customer.internal.repository;
 
 import com.positivity.customer.internal.entity.PersonParty;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -42,4 +44,22 @@ public interface PersonPartyRepository extends JpaRepository<PersonParty, UUID> 
      */
     @Query("SELECT p FROM PersonParty p WHERE :vin MEMBER OF p.vehicleVins")
     List<PersonParty> findByVehicleVin(@Param("vin") @NonNull String vin);
+
+    /**
+     * A page of parties for fact replay (issue #1893), ordered by id so a cursor can resume where
+     * the previous page stopped.
+     *
+     * <p>Cursor rather than offset paging on purpose: a replay of a large customer base runs over
+     * several requests, and offsets shift under concurrent party writes — a party created
+     * mid-replay would silently displace another out of the window and leave a replica short of
+     * exactly the fact the replay was meant to deliver.
+     */
+    @Query("""
+      SELECT p FROM PersonParty p
+      WHERE (:afterId IS NULL OR p.partyId > :afterId)
+        AND (:updatedSince IS NULL OR p.updatedAt >= :updatedSince)
+      ORDER BY p.partyId ASC
+      """)
+    List<PersonParty> findForReplay(
+            @Param("afterId") UUID afterId, @Param("updatedSince") Instant updatedSince, Pageable pageable);
 }

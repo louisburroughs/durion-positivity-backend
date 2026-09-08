@@ -47,6 +47,10 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.search("CUSTOMER_PARTY_RESOLVE", "Batch-resolve party ids to display names")
                         .build(),
+                EventTypeRegistration.write(
+                                "CUSTOMER_PARTY_FACT_REPLAY",
+                                "Re-emit party facts to seed or repair a downstream replica")
+                        .build(),
                 EventTypeRegistration.approval(
                                 "CUSTOMER_PARTY_MERGE", "Merge multiple parties into a single party record")
                         .build(),

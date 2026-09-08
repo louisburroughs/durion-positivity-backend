@@ -405,6 +405,8 @@ paths:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1service-packages~1{packageId}~1members~1{memberId}
   /v1/crm:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm
+  /v1/crm/accounts/facts/replay:
+    $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1accounts~1facts~1replay
   /v1/crm/accounts/parties:
     $ref: ../../pos-customer/openapi.yaml#/paths/~1v1~1crm~1accounts~1parties
   /v1/crm/accounts/parties/duplicate-check:

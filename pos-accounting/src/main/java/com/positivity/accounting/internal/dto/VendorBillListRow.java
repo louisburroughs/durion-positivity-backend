@@ -46,6 +46,26 @@ public class VendorBillListRow {
 
     @Nullable
     @Schema(
+            description = "Vendor display name, so the list can name the vendor instead of showing the raw "
+                    + "vendorId UUID (issue #1892). Null when the bill carries no vendor name; render nothing "
+                    + "rather than falling back to the UUID.",
+            example = "Evergreen Parts Supply",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
+    @JsonProperty("vendorName")
+    private String vendorName;
+
+    @Schema(
+            description =
+                    "The vendor's own bill/invoice number, shown in place of the raw billId UUID " + "(issue #1892).",
+            example = "INV-2026-001234",
+            requiredMode = REQUIRED)
+    @NotNull
+    @JsonProperty("billNumber")
+    private String billNumber;
+
+    @Nullable
+    @Schema(
             description =
                     "Bill due date; bills matched by this endpoint always have a due date in the requested" + " window",
             example = "2026-02-14T00:00:00",

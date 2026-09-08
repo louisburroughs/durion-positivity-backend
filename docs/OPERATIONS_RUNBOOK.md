@@ -809,6 +809,52 @@ Seeding a brand-new replica: create the consumer's `ext_*` tables (Flyway), star
 then call replay with `since` at the epoch (omit the parameter). Consumers skip anything already
 processed.
 
+#### pos-customer: seeding a party-identity replica
+
+pos-customer publishes party identity as `customer.party.updated`. Seeding a replica of it is one
+paged, resumable call — pass the previous response's `nextAfterId` until it comes back
+`complete: true` — which **refuses with 409** when `pos.customer.kafka.enabled` is off, rather than
+reporting a page of facts nobody received.
+
+```bash
+# Parties (customer.party.updated) — #1893
+curl -X POST "https://<gateway>/customer/v1/crm/accounts/facts/replay?limit=500" \
+  -H "Authorization: Bearer $TOKEN" -H "X-API-Version: 1"
+```
+
+The replay covers both concrete party types (commercial and person) under a single cursor, so the
+`nextAfterId` from one page is the only thing the next page needs.
+
+**The generic outbox replay does NOT seed this.** `customer.outbox.replay-requested` re-queues rows
+that already exist in `event_outbox`, within `pos.customer.outbox.replay.max-lookback` (30 days by
+default). A party nobody has edited since the consumer's replica was created has no outbox row to
+re-queue, so its identity has never been published at all and no replay can reach it. That is a
+different failure from drift, and it needs the rebuild-from-state replay above — the same
+distinction as pos-location's capability columns under "Issue #1514" below.
+
+Consumers of `customer.events.v1` party facts, and what a cold replica costs them:
+
+| Consumer | Replica | If not seeded |
+|---|---|---|
+| `pos-accounting` | `ext_customer_party` | `customerDisplayName` / `customerReference` are null on every credit-memo response, so the Credit Memo screens have no customer to show (#1893) |
+| `pos-invoice`, `pos-workorder`, `pos-shop-manager` | `ext_customer_party` | The party UUID resolves to no name, so screens and documents fall back to a placeholder |
+
+Verify on the consumer side, not just the producer — an empty replica is the whole symptom:
+
+```sql
+-- pos-accounting. Zero rows here is why credit memos show no customer name.
+SELECT count(*) FROM ext_customer_party;
+```
+
+A deletion cannot be replayed — a deleted party is gone, so its tombstone exists only in the live
+stream. A freshly seeded replica therefore holds what pos-customer currently has, which is what
+display resolution needs; it will not learn about parties removed before the seed.
+
+**Seeded environments need this run explicitly.** Fixture packs that write rows straight into
+`commercial_party` / `person_party` bypass `CustomerFactPublisher` entirely, so no fact is ever
+emitted for a seeded party and every downstream replica stays empty however long the environment
+runs. Run the replay above after seeding, then re-check the consumer count.
+
 #### pos-catalog: seeding a catalog replica
 
 pos-catalog publishes products and services as separate facts, so seeding a catalog replica is two
