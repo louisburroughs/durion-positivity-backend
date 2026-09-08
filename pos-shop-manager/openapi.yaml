@@ -43,7 +43,9 @@ paths:
 
         Emits a SHOPMGR_APPOINTMENT_CREATE event and persists customer and vehicle snapshots on the appointment, which is created in SCHEDULED status.
 
-        Returns 400 when the slot is already booked, the idempotency key was reused with a different request, or sourceId is missing for a supplied sourceType; 404 when the customer or vehicle is unknown; 409 when the vehicle does not belong to the customer; and 422 when the source estimate or work order is not eligible for scheduling.
+        A caller whose appointments:create or shop:schedule:edit grant is location-scoped must have locationId within reach (ADR-0061).
+
+        Returns 400 when the slot is already booked, the idempotency key was reused with a different request, or sourceId is missing for a supplied sourceType; 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId; 404 when the customer or vehicle is unknown; 409 when the vehicle does not belong to the customer; and 422 when the source estimate or work order is not eligible for scheduling.
 
         '
       operationId: createAppointment
@@ -95,6 +97,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Validation or conflict error — requested slot is unavailable, duplicate source appointment, or request fields are invalid.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds appointments:create or shop:schedule:edit but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:
@@ -141,7 +149,9 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 400 when appointmentId is not a valid UUID, and 404 when no appointment exists for the supplied id.
+        A caller whose appointments:view or shop:schedule:view grant is location-scoped must have the appointment''s location within reach (ADR-0061).
+
+        Returns 400 when appointmentId is not a valid UUID, 404 when no appointment exists for the supplied id, and 403 LOCATION_SCOPE_DENIED when the appointment exists but its location is outside the caller''s scope.
 
         '
       operationId: getAppointmentById
@@ -173,6 +183,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: appointmentId is not a valid UUID.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds appointments:view or shop:schedule:view but its location scope does not cover the appointment's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:
@@ -326,7 +342,9 @@ paths:
 
         Emits a SHOPMGR_APPOINTMENT_CANCEL event; a downstream workorder cancellation notification is additionally published only when the appointment carries a workorderLinkRef.
 
-        Returns 404 when the appointment does not exist, and 409 when the appointment is not in SCHEDULED status.
+        A caller whose appointments:cancel grant is location-scoped must have the appointment''s location within reach (ADR-0061).
+
+        Returns 404 when the appointment does not exist, 403 LOCATION_SCOPE_DENIED when it exists but its location is outside the caller''s scope, and 409 when the appointment is not in SCHEDULED status.
 
         '
       operationId: cancelAppointment
@@ -357,6 +375,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/AppointmentResponse'
           description: Appointment cancelled successfully.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds appointments:cancel but its location scope does not cover the appointment's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:
@@ -462,7 +486,9 @@ paths:
 
         Emits a SHOPMGR_APPOINTMENT_RESCHEDULE event; a downstream workorder reschedule notification is additionally published only when the appointment carries a workorderLinkRef.
 
-        Returns 400 when the time window is invalid or notes are missing for reason OTHER, 404 when the appointment does not exist, and 409 when the appointment status does not permit rescheduling.
+        A caller whose appointments:reschedule grant is location-scoped must have the appointment''s location within reach (ADR-0061).
+
+        Returns 400 when the time window is invalid or notes are missing for reason OTHER, 404 when the appointment does not exist, 403 LOCATION_SCOPE_DENIED when it exists but its location is outside the caller''s scope, and 409 when the appointment status does not permit rescheduling.
 
         '
       operationId: rescheduleAppointment
@@ -502,6 +528,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Validation error — invalid times, missing mandatory fields, or blank notes required for OTHER reason.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds appointments:reschedule but its location scope does not cover the appointment's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:
@@ -534,7 +566,9 @@ paths:
 
         Emits a SHOPMGR_SCHEDULE_VIEW audit event; no state changes occur, and when the overlay is requested availabilityOverlayStatus reports AVAILABLE or UNAVAILABLE with an HR_SYSTEM_UNAVAILABLE warning when the staffing replica has no data for the location.
 
-        Returns 404 when the location is unknown or the resourceId filter matches no lane on that date.
+        A caller whose shop:schedule:view grant is location-scoped must have locationId within reach (ADR-0061).
+
+        Returns 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId, and 404 when the location is unknown or the resourceId filter matches no lane on that date.
 
         '
       operationId: viewSchedule
@@ -603,8 +637,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ScheduleViewResponse'
-          description: Not authorized for this location
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds shop:schedule:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:
@@ -631,7 +665,9 @@ paths:
 
         Emits a SHOPMGR_SHOP_DASHBOARD_VIEW audit event; no state changes occur, openWorkorders is capped at 200 rows with openWorkordersTruncated set when the cap is hit, and a unit holding no work is returned with a null assignment rather than omitted.
 
-        Returns 400 when locationId or date is malformed, 403 when the caller lacks shop:dashboard:view, and 404 when no shop exists for the location id.
+        A caller whose shop:dashboard:view grant is location-scoped must have locationId within reach (ADR-0061).
+
+        Returns 400 when locationId or date is malformed, 403 FORBIDDEN when the caller lacks shop:dashboard:view, 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId, and 404 when no shop exists for the location id.
 
         '
       operationId: getShopDashboard
@@ -670,7 +706,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks the shop dashboard view permission.
+          description: Caller lacks the shop dashboard view permission (ApiError.code FORBIDDEN), or Caller holds shop:dashboard:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:
@@ -890,7 +926,9 @@ paths:
 
         Emits a SHOPMGR_LOCATION_TECHNICIAN_LIST audit event; no state changes occur, and the enrichment trails the People/HR authority by the event-propagation delay.
 
-        Returns 404 when no shop exists for the location id, 403 when the caller lacks shop:technician:view, and an empty page rather than an error when no technician matches the filters.
+        A caller whose shop:technician:view grant is location-scoped must have locationId within reach (ADR-0061).
+
+        Returns 404 when no shop exists for the location id, 403 FORBIDDEN when the caller lacks shop:technician:view, 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId, and an empty page rather than an error when no technician matches the filters.
 
         '
       operationId: listLocationTechnicians
@@ -952,7 +990,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Caller lacks technician roster permission.
+          description: Caller lacks technician roster permission (ApiError.code FORBIDDEN), or Caller holds shop:technician:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:
@@ -979,7 +1017,9 @@ paths:
 
         Emits a SHOPMGR_TECHNICIAN_PERSON_GET audit event; no state changes occur, and when the replica row has not yet arrived the response carries only the person id with name and contact fields null.
 
-        Returns 404 when no technician links the person to the location.
+        A caller whose shop:technician:view grant is location-scoped must have locationId within reach (ADR-0061).
+
+        Returns 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId, and 404 when no technician links the person to the location.
 
         '
       operationId: getTechnicianPerson
@@ -1007,6 +1047,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/PersonDTO'
           description: Technician person details returned.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds shop:technician:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:

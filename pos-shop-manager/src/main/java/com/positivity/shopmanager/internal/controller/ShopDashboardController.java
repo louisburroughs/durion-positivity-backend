@@ -1,6 +1,7 @@
 package com.positivity.shopmanager.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shopmanager.internal.dto.ShopDashboardResponse;
 import com.positivity.shopmanager.internal.security.ShopPermissions;
@@ -30,6 +31,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ShopDashboardController {
 
+    private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds shop:dashboard:view but its location scope does not cover the requested location"
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+
     private final ShopDashboardService shopDashboardService;
 
     @Operation(operationId = "getShopDashboard", summary = "Get the shop dashboard for a location", description = """
@@ -47,8 +52,11 @@ public class ShopDashboardController {
                     Emits a SHOPMGR_SHOP_DASHBOARD_VIEW audit event; no state changes occur, openWorkorders is \
                     capped at 200 rows with openWorkordersTruncated set when the cap is hit, and a unit holding no \
                     work is returned with a null assignment rather than omitted.
-                    Returns 400 when locationId or date is malformed, 403 when the caller lacks \
-                    shop:dashboard:view, and 404 when no shop exists for the location id.
+                    A caller whose shop:dashboard:view grant is location-scoped must have locationId within \
+                    reach (ADR-0061).
+                    Returns 400 when locationId or date is malformed, 403 FORBIDDEN when the caller lacks \
+                    shop:dashboard:view, 403 LOCATION_SCOPE_DENIED when the caller's location scope does not \
+                    cover locationId, and 404 when no shop exists for the location id.
                     """)
     @ApiResponse(responseCode = "200", description = "Shop dashboard returned.")
     @ApiResponse(
@@ -57,7 +65,8 @@ public class ShopDashboardController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "Caller lacks the shop dashboard view permission.",
+            description = "Caller lacks the shop dashboard view permission (ApiError.code FORBIDDEN), or "
+                    + LOCATION_SCOPE_DENIED_DESCRIPTION,
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
@@ -91,6 +100,9 @@ public class ShopDashboardController {
                     @RequestParam(required = false)
                     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                     LocalDate date) {
+        // locationId names the board being read; a scoped caller must have it in reach
+        // (ADR-0061 §3, #1872). Spring has already rejected a malformed id with a 400.
+        SecurityContextHelper.locationScope().require(ShopPermissions.DASHBOARD_VIEW, locationId);
         return ResponseEntity.ok(shopDashboardService.getDashboard(locationId, date));
     }
 }

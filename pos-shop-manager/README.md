@@ -106,6 +106,7 @@ but the event consumer writes them, and no synchronous call crosses a domain wal
 | `ext_people_contact_person` | `people-contact.events.v1` | `PeopleContactEventsListener` |
 | `ext_workorder` | `workorder.events.v1` | `WorkorderEventsListener` |
 | `ext_bay`, `ext_mobile_unit` | `location.events.v1` | `LocationEventsListener` |
+| `ext_location`, `ext_location_parent` | `location.events.v1` | `LocationEventsListener` |
 
 **Bay/mobile-unit topology is event-sourced, not read live.** A synchronous `RestClient` into
 pos-location would work today but is a domain→domain call that ADR-0044 R1 forbids, and no standing
@@ -141,6 +142,50 @@ still cover everything that fails before commit.
 
 The dashboard is a read model over an at-least-once feed with retry and backoff: it is not expected
 to reflect an assignment change with zero latency, and its OpenAPI description says so.
+
+## Location scope (ADR-0061, #1872)
+
+Every location-parameterised endpoint gates the caller's **location scope** on top of its
+`@PreAuthorize` permission: the permission answers "may this caller do X", and
+`SecurityContextHelper.locationScope().require(permission, locationId)` answers "…at this
+location". A caller whose grant is location-scoped can no longer read or book at another shop by
+changing the `locationId`. Tokens without the `loc_*` claims (pre-rollout) are unaffected. The
+decisions are recorded in `location-scope.yaml` beside `openapi.yaml`, which CI checks:
+
+| Operation | Shape | Permission | Notes |
+| --- | --- | --- | --- |
+| `AppointmentsController.createAppointment` | gate | `appointments:create` / `shop:schedule:edit` | body `locationId`; `hasAnyAuthority`, so denied only when **no held** alternate covers |
+| `AppointmentsController.getAppointment` | gate | `appointments:view` / `shop:schedule:view` | sibling: gated on the stored appointment's location **after** the 404, so ids cannot be probed and the create gate cannot be bypassed |
+| `AppointmentsController.rescheduleAppointment` | gate | `appointments:reschedule` | sibling: gated on the stored appointment's location after the 404 |
+| `AppointmentsController.cancelAppointment` | gate | `appointments:cancel` | sibling: gated on the stored appointment's location after the 404 |
+| `ScheduleController.viewSchedule` | gate | `shop:schedule:view` | query `locationId` |
+| `ShopDashboardController.getShopDashboard` | gate | `shop:dashboard:view` | query `locationId` |
+| `TechnicianController.listLocationTechnicians` | gate | `shop:technician:view` | path `locationId` |
+| `TechnicianController.getTechnicianPerson` | gate | `shop:technician:view` | path `locationId` |
+
+No endpoint here *narrows*: every `locationId` names the resource being acted on, none is an
+optional list filter. A denial renders `403` with `ApiError.code = LOCATION_SCOPE_DENIED` (see
+`docs/ERROR_ENVELOPE.md`); a malformed id is still `400` for every caller because Spring parses
+the UUID before the gate runs. The `hasAnyAuthority` endpoints go through
+`LocationScopeGuard.requireAny`, which consults only the alternates the caller actually holds.
+
+The check runs in-process against the `ext_location` replica — never a per-request call to
+pos-location. `ext_location` carries the two materialised, inclusive-of-self ancestor sets
+(`financial_ancestor_ids` along the `FINANCIAL` parent chain; `other_ancestor_ids` along the union
+of the seven non-financial parent types), and `ext_location_parent` holds the typed edges each
+`location.location.updated` fact carries. `LocationEventsListener` replaces the child's edges from
+the fact and `LocationHierarchyService.recomputeAncestors` rebuilds the sets for the location and
+every replicated descendant, so a re-parent propagates and a parent arriving after its children
+pushes its ancestry down. `LocationHierarchyService` is also the module's
+`LocationAncestorResolver` bean; a location the replica does not hold answers empty sets, which a
+scoped caller cannot cover (fail closed) — ingestion never fails on an unknown parent, only the
+check does. The table starts empty until the owner replays (`POST .../facts/replay` on
+pos-location); until then scoped callers are denied everywhere while unscoped tokens behave as
+before.
+
+`shop.id` **is** the pos-location location id by convention — every service resolves a request's
+`locationId` through `ShopRepository` — but `shop` is this module's own scheduling configuration,
+not a replica, carries no hierarchy, and is not consulted by the scope check.
 
 ## Configuration
 

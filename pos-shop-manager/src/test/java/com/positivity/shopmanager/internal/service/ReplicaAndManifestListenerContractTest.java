@@ -28,6 +28,8 @@ import com.positivity.shopmanager.internal.entity.ExtWorkorderReplica;
 import com.positivity.shopmanager.internal.entity.ProcessedEvent;
 import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtCustomerPartyReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtLocationParentReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
@@ -118,6 +120,15 @@ class ReplicaAndManifestListenerContractTest {
 
     @Mock
     private ExtMobileUnitReplicaRepository mobileUnitRepository;
+
+    @Mock
+    private ExtLocationReplicaRepository extLocationRepository;
+
+    @Mock
+    private ExtLocationParentReplicaRepository extLocationParentRepository;
+
+    @Mock
+    private LocationHierarchyService locationHierarchyService;
 
     @Mock
     private org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
@@ -263,6 +274,9 @@ class ReplicaAndManifestListenerContractTest {
                                 processedEventRepository,
                                 bayRepository,
                                 mobileUnitRepository,
+                                extLocationRepository,
+                                extLocationParentRepository,
+                                locationHierarchyService,
                                 org.mockito.Mockito.mock(ObjectProvider.class))::onLocationEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(bayRepository)
@@ -280,6 +294,9 @@ class ReplicaAndManifestListenerContractTest {
                 processedEventRepository,
                 bayRepository,
                 mobileUnitRepository,
+                extLocationRepository,
+                extLocationParentRepository,
+                locationHierarchyService,
                 org.mockito.Mockito.mock(ObjectProvider.class))::onLocationEvent;
     }
 
