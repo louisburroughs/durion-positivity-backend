@@ -35,6 +35,20 @@ import org.springframework.stereotype.Service;
  * only when none of the alternates they hold covers the location, and an unfiltered list is
  * narrowed only when every held alternate is scoped (one global grant means the whole list, as
  * before).
+ *
+ * <h2>A caller who holds none of the alternates</h2>
+ *
+ * <p>Both decisions are read off the scope attached to a permission the caller <em>holds</em>, so
+ * when they hold none of the alternates there is no caller scope to read and neither decision
+ * applies: {@link #require} passes and {@link #reachOf} returns "no narrowing". That cannot weaken
+ * a gated endpoint, because every HTTP path into these methods sits behind a {@code @PreAuthorize}
+ * naming the same alternates — passing it guarantees at least one is held, so an empty held list is
+ * unreachable from a request. It is reachable only with no HTTP caller at all: the internal system
+ * actors that share these read paths (the {@code beforeCommit} snapshot reads in
+ * {@link InventoryFactPublisher}, schedulers) run with whatever authentication the triggering
+ * command had and carry no location claims of their own. Denying them is not enforcement — the
+ * denial happens inside the command's transaction and takes the business write down with it
+ * (#1887 regression) — so this class refuses to manufacture one.
  */
 @Service
 @RequiredArgsConstructor
@@ -54,23 +68,31 @@ public class LocationScopeService {
      * global caller passes, exactly as {@link LocationScope#covers(String, String)} decides for an
      * unparseable id.
      *
+     * <p>A caller holding none of the alternates has no scope to check and is not denied here (see
+     * the class javadoc): behind {@code @PreAuthorize} that state cannot arise, and off the HTTP
+     * path there is no caller whose reach could be exceeded.
+     *
      * @param locationId the location the request acts on, or {@code null} when the resource has
      *     none
      * @param permissions the permission alternates the endpoint's {@code @PreAuthorize} accepts;
      *     at least one
-     * @throws LocationScopeDeniedException when no held alternate covers the location
+     * @throws LocationScopeDeniedException when the caller holds an alternate and no held alternate
+     *     covers the location
      */
     public void require(@Nullable UUID locationId, @NonNull String... permissions) {
         requireAtLeastOne(permissions);
         LocationScope scope = SecurityContextHelper.locationScope();
         String location = locationId == null ? "" : locationId.toString();
         List<String> held = held(permissions);
+        if (held.isEmpty()) {
+            return;
+        }
         for (String permission : held) {
             if (scope.covers(permission, location)) {
                 return;
             }
         }
-        throw new LocationScopeDeniedException(held.isEmpty() ? permissions[0] : held.get(0), location);
+        throw new LocationScopeDeniedException(held.get(0), location);
     }
 
     /**
@@ -102,6 +124,10 @@ public class LocationScopeService {
     /**
      * The caller's reach for an unfiltered list: see {@link #narrowTo} for the three outcomes.
      *
+     * <p>A caller holding none of the alternates is not narrowed, the same way {@link #require}
+     * does not deny them (see the class javadoc): behind {@code @PreAuthorize} that state cannot
+     * arise, and off the HTTP path there is no caller whose reach the list should be cut to.
+     *
      * @param permissions the permission alternates the endpoint's {@code @PreAuthorize} accepts
      * @return the site-level set to restrict the query to, or empty when no restriction applies
      */
@@ -110,8 +136,7 @@ public class LocationScopeService {
         LocationScope scope = SecurityContextHelper.locationScope();
         List<String> held = held(permissions);
         if (held.isEmpty()) {
-            // Cannot happen behind @PreAuthorize; if it does, reach nothing rather than everything.
-            return Optional.of(Set.of());
+            return Optional.empty();
         }
         Set<UUID> reachable = new LinkedHashSet<>();
         for (String permission : held) {

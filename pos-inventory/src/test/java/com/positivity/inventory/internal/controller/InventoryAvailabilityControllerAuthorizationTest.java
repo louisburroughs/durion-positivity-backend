@@ -15,6 +15,7 @@ import com.positivity.inventory.internal.dto.LeadTimeView;
 import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
 import com.positivity.inventory.internal.service.InventoryAvailabilityService;
 import com.positivity.inventory.internal.service.InventoryLeadTimeService;
+import com.positivity.inventory.internal.service.LocationScopeService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -70,6 +71,14 @@ class InventoryAvailabilityControllerAuthorizationTest {
     @MockitoBean
     InventoryLeadTimeService inventoryLeadTimeService;
 
+    /**
+     * Since #1887 the availability reads resolve the caller's location scope here rather than in
+     * the service. A mock's {@code narrowTo} answers {@link java.util.Optional#empty()} — no
+     * narrowing — which is the shape every caller in this class has (no {@code X-Loc-*} claims).
+     */
+    @MockitoBean
+    LocationScopeService locationScopeService;
+
     @org.junit.jupiter.api.BeforeEach
     void stubClock() {
         // The module exception advice timestamps every ApiError from the injected Clock.
@@ -77,7 +86,7 @@ class InventoryAvailabilityControllerAuthorizationTest {
     }
 
     private void stubAvailability() {
-        when(availabilityService.queryAvailability(anyString(), any(), any(), any(), any()))
+        when(availabilityService.queryAvailabilityWithinReach(anyString(), any(), any(), any(), any(), any()))
                 .thenReturn(AvailabilityView.builder()
                         .productSku(SKU)
                         .locationId(LOCATION_ID)
@@ -109,7 +118,8 @@ class InventoryAvailabilityControllerAuthorizationTest {
                         .param("productSku", SKU)
                         .header("X-Authorities", ON_HAND_VIEW + "," + ON_HAND_SEARCH))
                 .andExpect(status().isForbidden());
-        verify(availabilityService, never()).queryAvailability(anyString(), any(), any(), any(), any());
+        verify(availabilityService, never())
+                .queryAvailabilityWithinReach(anyString(), any(), any(), any(), any(), any());
     }
 
     @Test

@@ -89,9 +89,19 @@ The reach is expanded over this module's own replica (`LocationHierarchyService.
 on `location_ref` + `ext_location_parent`); there is no per-request call to pos-location. A
 storage-location (bin) id resolves to its site's ancestors through `ext_storage_location`, and a
 narrowed query admits a bin through its `site_id`, so covering a site covers every bin in it.
-`LocationScopeService` is the single service-side entry point (`require`, `narrowTo`,
-`withinLocations`); endpoints guarded by `hasAnyAuthority(a, b)` deny only when no held alternate
-covers the location and narrow only when every held alternate is scoped.
+`LocationScopeService` is the single entry point (`require`, `narrowTo`, `withinLocations`);
+endpoints guarded by `hasAnyAuthority(a, b)` deny only when no held alternate covers the location
+and narrow only when every held alternate is scoped. A caller who holds *none* of the alternates
+has no scope to read, so neither decision applies — `@PreAuthorize` guarantees a held alternate on
+every HTTP path, so that state only arises with no caller at all.
+
+Most decisions sit in the service, on the loaded record's location. `getAvailabilityBySku` and
+`listAvailabilityBySku` decide in the controller instead (#1887): their service read is the same
+one the outbox snapshot in `InventoryFactPublisher` takes at `beforeCommit`, which has no caller,
+so the controller resolves the reach and passes it to
+`InventoryAvailabilityService.queryAvailabilityWithinReach`. A scope decision on a shared read
+path denied that internal actor inside the writing command's transaction and turned a completed
+write into a `500`.
 
 ## Lot Tracking — Inbound Capture (odoo-parity E1)
 

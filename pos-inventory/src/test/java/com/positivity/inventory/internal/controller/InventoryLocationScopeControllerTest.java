@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -14,6 +15,7 @@ import com.positivity.inventory.config.TestSecurityConfig;
 import com.positivity.inventory.internal.cyclecount.service.CycleCountPlanService;
 import com.positivity.inventory.internal.cyclecount.service.CycleCountScheduleService;
 import com.positivity.inventory.internal.cyclecount.service.CycleCountTaskGenerationService;
+import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.location.service.InventoryLocationService;
 import com.positivity.inventory.internal.receiving.service.AsnService;
 import com.positivity.inventory.internal.receiving.service.ReturnService;
@@ -25,7 +27,9 @@ import com.positivity.inventory.internal.scrap.service.ScrapService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.InventoryAvailabilityService;
 import com.positivity.inventory.internal.service.InventoryLeadTimeService;
+import com.positivity.inventory.internal.service.LocationHierarchyService;
 import com.positivity.inventory.internal.service.LocationInventoryInquiryService;
+import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.security.common.LocationAncestorResolver;
 import com.positivity.security.common.LocationScope;
@@ -48,7 +52,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -67,7 +73,10 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
  *
  * <p>Service-side gates (the narrowed lists and their by-id siblings) are proven in the service
  * unit tests; {@link ServiceDenial} shows their denial reaches the client through the same
- * {@code LOCATION_SCOPE_DENIED} envelope rather than the module's generic {@code FORBIDDEN}.
+ * {@code LOCATION_SCOPE_DENIED} envelope rather than the module's generic {@code FORBIDDEN}. The
+ * availability reads are in the table rather than in {@link ServiceDenial} since #1887: their
+ * decision moved out of the shared service read — which internal system actors take too — up to
+ * the controller, where a caller exists.
  * {@link LocationScopeAutoConfiguration} is imported because a {@code @WebMvcTest} slice does not
  * load library auto-configuration on its own.
  */
@@ -85,7 +94,11 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
     BackorderController.class,
     AsnController.class
 })
-@Import({TestSecurityConfig.class, LocationScopeAutoConfiguration.class})
+@Import({
+    TestSecurityConfig.class,
+    LocationScopeAutoConfiguration.class,
+    InventoryLocationScopeControllerTest.LocationScopeServiceConfig.class
+})
 @ActiveProfiles("test")
 @DisplayName("pos-inventory location-scope gates (#1872)")
 @SuppressWarnings({"java:S6813", "java:S1192"})
@@ -151,6 +164,27 @@ class InventoryLocationScopeControllerTest {
                         loc -> json(post("/v1/inventory/cycleCountSchedules"), """
                                 {"locationId":"%s","frequencyDays":30,"nextDueDate":"2099-01-15"}
                                 """.formatted(loc))),
+                new GateCase(
+                        "InventoryAvailabilityController.queryAvailabilityBySku (locationId)",
+                        InventoryPermissionRegistry.AVAILABILITY_READ,
+                        200,
+                        loc -> get("/v1/inventory/availability/by-sku")
+                                .param("productSku", "SKU-1")
+                                .param("locationId", loc.toString())),
+                new GateCase(
+                        "InventoryAvailabilityController.queryAvailabilityBySku (storageLocationId)",
+                        InventoryPermissionRegistry.AVAILABILITY_READ,
+                        200,
+                        loc -> get("/v1/inventory/availability/by-sku")
+                                .param("productSku", "SKU-1")
+                                .param("storageLocationId", loc.toString())),
+                new GateCase(
+                        "InventoryAvailabilityController.queryAvailabilityBySkuList (locationId)",
+                        InventoryPermissionRegistry.AVAILABILITY_READ,
+                        200,
+                        loc -> get("/v1/inventory/availability")
+                                .param("sku", "SKU-1")
+                                .param("locationId", loc.toString())),
                 new GateCase(
                         "InventoryAvailabilityController.queryLeadTime (locationId)",
                         InventoryPermissionRegistry.AVAILABILITY_READ,
@@ -246,6 +280,20 @@ class InventoryLocationScopeControllerTest {
         return builder.contentType(MediaType.APPLICATION_JSON).content(body);
     }
 
+    /**
+     * The real gate/narrow helper, so the availability cases prove the decision rather than a
+     * stub of it. Its hierarchy collaborator is a plain mock rather than a {@code @MockitoBean}:
+     * {@link LocationHierarchyService} is also the module's {@code LocationAncestorResolver}, and
+     * these tests supply their own {@link #RESOLVER} through the token's scope.
+     */
+    @TestConfiguration
+    static class LocationScopeServiceConfig {
+        @Bean
+        LocationScopeService locationScopeService() {
+            return new LocationScopeService(mock(LocationHierarchyService.class));
+        }
+    }
+
     @Autowired
     MockMvc mockMvc;
 
@@ -298,6 +346,9 @@ class InventoryLocationScopeControllerTest {
     void stubClock() {
         when(clock.instant()).thenReturn(Instant.parse("2026-09-07T00:00:00Z"));
         when(clock.getZone()).thenReturn(ZoneOffset.UTC);
+        // The list form wraps the view in List.of, which rejects a null from the mock.
+        when(inventoryAvailabilityService.queryAvailabilityWithinReach(any(), any(), any(), any(), any(), any()))
+                .thenReturn(AvailabilityView.builder().productSku("SKU-1").build());
     }
 
     private void verifyNoServiceCalled() {
@@ -416,27 +467,6 @@ class InventoryLocationScopeControllerTest {
                     .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE))
                     .andExpect(jsonPath("$.message")
                             .value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(SHOP.toString()))));
-        }
-
-        @Test
-        @DisplayName("queryAvailabilityBySku: a denied locationId renders the same envelope")
-        void availabilityDenial() throws Exception {
-            when(inventoryAvailabilityService.queryAvailability(any(), any(), any(), any(), any()))
-                    .thenThrow(new LocationScopeDeniedException(
-                            InventoryPermissionRegistry.AVAILABILITY_READ, SHOP.toString()));
-
-            mockMvc.perform(get("/v1/inventory/availability/by-sku")
-                            .param("productSku", "SKU-1")
-                            .param("locationId", SHOP.toString())
-                            .with(caller(scopedTo(InventoryPermissionRegistry.AVAILABILITY_READ, OTHER_SITE))))
-                    .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE));
-            mockMvc.perform(get("/v1/inventory/availability")
-                            .param("sku", "SKU-1")
-                            .param("locationId", SHOP.toString())
-                            .with(caller(scopedTo(InventoryPermissionRegistry.AVAILABILITY_READ, OTHER_SITE))))
-                    .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE));
         }
 
         @Test

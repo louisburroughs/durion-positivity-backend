@@ -11,7 +11,6 @@ import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;
-import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -56,7 +55,6 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
     private final QuantityScaleGuard quantityScaleGuard;
     private final LocationRefRepository locationRefRepository;
     private final Clock clock;
-    private final LocationScopeService locationScopeService;
 
     public InventoryAvailabilityServiceImpl(
             InventoryStockSummaryRepository stockSummaryRepository,
@@ -66,9 +64,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
             ForecastSiteResolver forecastSiteResolver,
             QuantityScaleGuard quantityScaleGuard,
             LocationRefRepository locationRefRepository,
-            Clock clock,
-            LocationScopeService locationScopeService) {
-        this.locationScopeService = locationScopeService;
+            Clock clock) {
         this.stockSummaryRepository = stockSummaryRepository;
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
         this.forecastQuantityService = forecastQuantityService;
@@ -202,17 +198,31 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
             @Nullable UUID storageLocationId,
             @Nullable InventorySourceType sourceType,
             @Nullable Instant horizon) {
+        // Scope-free by construction: this is the read every internal system actor shares
+        // (InventoryFactPublisher's beforeCommit snapshot), and a caller-scope decision on a path
+        // with no caller can only misfire (#1887). Browser-facing reads come in through
+        // queryAvailabilityWithinReach with the reach their controller already resolved.
+        return queryAvailabilityWithinReach(productSku, locationId, storageLocationId, sourceType, horizon, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AvailabilityView queryAvailabilityWithinReach(
+            @NonNull String productSku,
+            @Nullable UUID locationId,
+            @Nullable UUID storageLocationId,
+            @Nullable InventorySourceType sourceType,
+            @Nullable Instant horizon,
+            @Nullable Set<UUID> reach) {
         List<InventoryStockSummary> productRows = stockSummaryRepository.findByStockItemId(productSku);
         if (productRows.isEmpty()) {
             throw new ProductNotFoundException(productSku);
         }
 
         UUID scopeLocationId = storageLocationId != null ? storageLocationId : locationId;
-        // ADR-0061 §3 (#1872): the location the view is keyed on is gated when named; without one
-        // a scoped caller's SKU-wide aggregate is narrowed to the rows within their reach.
-        Set<UUID> reach = locationScopeService
-                .narrowTo(scopeLocationId, InventoryPermissionRegistry.AVAILABILITY_READ)
-                .orElse(null);
+        // ADR-0061 §3 (#1872): a named location is the caller's own restriction and was gated
+        // where the caller exists; without one, a scoped caller's SKU-wide aggregate is summed
+        // over the rows within the reach that layer resolved.
         if (scopeLocationId == null && reach != null) {
             return narrowedAvailability(productSku, productRows, reach, horizon);
         }
