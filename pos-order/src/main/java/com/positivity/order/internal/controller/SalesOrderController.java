@@ -19,6 +19,7 @@ import com.positivity.order.internal.service.model.CreateCartResult;
 import com.positivity.order.internal.service.model.OrderDiscountCommand;
 import com.positivity.order.internal.service.model.SalesOrderLineSummary;
 import com.positivity.order.internal.service.model.SalesOrderSummary;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -29,6 +30,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -56,6 +58,14 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Sales Orders", description = "Sales order cart management")
 public class SalesOrderController {
 
+    private static final String CREATE_LOCATION_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds order:order:create but its location scope does not cover the cart's location"
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+
+    private static final String VIEW_LOCATION_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds order:order:view but its location scope does not cover the order's location"
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+
     private final SalesOrderService salesOrderService;
 
     @Operation(
@@ -69,15 +79,17 @@ public class SalesOrderController {
                     to a cart that already exists.
                     Preconditions: the terminal must not have a register session in CLOSING, the customer and \
                     vehicle must exist in CRM when supplied, and a location must be resolvable from the request or \
-                    the open session.
+                    the open session. A caller whose order:order:create grant is location-scoped must have the \
+                    resolved location within reach (ADR-0061).
                     Required inputs: clerkId and terminalId; customerId and vehicleId are optional UUID strings, \
                     depositSourceType (ESTIMATE, WORKORDER or ORDER) and depositSourceId must be supplied together, \
                     and the optional Idempotency-Key header makes creation replay-safe.
                     Emits an ORDER_CART_CREATE event and records the initial DRAFT status-history row.
                     Returns 201 on creation, 200 when a replayed Idempotency-Key returns the original cart, 400 \
                     when locationId cannot be resolved or depositSourceType/depositSourceId is only half supplied, \
-                    409 when the key was previously used with a different payload, and 422 when the customer or \
-                    vehicle cannot be validated or the terminal's register session is being closed.
+                    403 LOCATION_SCOPE_DENIED when the caller's location scope does not cover the resolved \
+                    location, 409 when the key was previously used with a different payload, and 422 when the \
+                    customer or vehicle cannot be validated or the terminal's register session is being closed.
                     """,
             tags = {"Sales Orders"})
     @ApiResponse(responseCode = "201", description = "Cart created.")
@@ -89,7 +101,8 @@ public class SalesOrderController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "Insufficient permissions.",
+            description = "Insufficient permissions (ApiError.code FORBIDDEN), or "
+                    + CREATE_LOCATION_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
@@ -293,16 +306,35 @@ public class SalesOrderController {
                     payment balances.
                     Use this tool when the order id is already known; use listCarts instead to search by clerk, \
                     terminal or status.
-                    Preconditions: the order must exist.
+                    Preconditions: the order must exist. A caller whose order:order:view grant is location-scoped \
+                    must have the order's location within reach (ADR-0061).
                     Required inputs: orderId (UUID) as a path parameter; there is no request body and no filtering.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 when no sales order exists for the supplied id.
+                    Returns 404 when no sales order exists for the supplied id, and 403 LOCATION_SCOPE_DENIED when \
+                    the order exists but its location is outside the caller's scope.
                     """,
             tags = {"Sales Orders"})
+    @ApiResponse(responseCode = "200", description = "Sales order found.")
+    @ApiResponse(
+            responseCode = "403",
+            description = VIEW_LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "No sales order exists for the supplied id.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/carts/{orderId}")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_VIEW + "')")
     public ResponseEntity<SalesOrderResponse> getOrder(@PathVariable UUID orderId) {
-        return ResponseEntity.ok(toResponse(salesOrderService.getOrder(orderId)));
+        // Existence first (404 from the service), then scope (ADR-0061 §3, #1872): a 403 for an id
+        // that does not exist would let a caller probe which order ids are real. This is the
+        // resource-addressed sibling of createCart's gate — without it a scoped caller could read
+        // another shop's cart by id. An order without a location answers "" which a scoped caller
+        // cannot cover.
+        SalesOrderSummary summary = salesOrderService.getOrder(orderId);
+        SecurityContextHelper.locationScope()
+                .require(OrderPermissions.ORDER_VIEW, Objects.requireNonNullElse(summary.locationId(), ""));
+        return ResponseEntity.ok(toResponse(summary));
     }
 
     @Operation(

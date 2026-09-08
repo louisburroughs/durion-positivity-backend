@@ -22,6 +22,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * The read side of {@link TimeEntryServiceImpl} (#1573): the approvals queue and the single-entry
@@ -55,8 +58,23 @@ class TimeEntryQueryServiceTest {
 
     @BeforeEach
     void setUp() {
+        // The queue reads the caller's location scope (#1871); a token without scope claims is the
+        // unscoped, pre-rollout shape, so these tests see the unfiltered queue exactly as before.
+        TestingAuthenticationToken authentication = new TestingAuthenticationToken("supervisor", null, "ROLE_USER");
+        authentication.setAuthenticated(true);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
         repository = mock(TimeEntryRepository.class);
-        service = new TimeEntryServiceImpl(Clock.systemUTC(), repository, mock(TimeEntryAuditRepository.class));
+        service = new TimeEntryServiceImpl(
+                Clock.systemUTC(),
+                repository,
+                mock(TimeEntryAuditRepository.class),
+                mock(LocationHierarchyService.class));
+    }
+
+    @AfterEach
+    void clearAuth() {
+        SecurityContextHolder.clearContext();
     }
 
     private TimeEntry pendingEntry() {

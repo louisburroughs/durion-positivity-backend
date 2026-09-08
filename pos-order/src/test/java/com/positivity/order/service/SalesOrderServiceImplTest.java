@@ -31,17 +31,22 @@ import com.positivity.order.internal.repository.SalesOrderRepository;
 import com.positivity.order.internal.service.model.CreateCartCommand;
 import com.positivity.order.internal.service.model.SalesOrderLineSummary;
 import com.positivity.order.internal.service.model.SalesOrderSummary;
+import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Unit tests for {@link SalesOrderServiceImpl} covering all Story #21
@@ -124,8 +129,22 @@ class SalesOrderServiceImplTest {
             inventoryCommandPublisherProvider =
                     org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
 
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
     @BeforeEach
     void setUp() {
+        // createCart now consults the caller's location scope (ADR-0061 §3, #1872): install a
+        // pre-rollout, unscoped caller so the existing expectations are unchanged.
+        var caller = new UsernamePasswordAuthenticationToken("clerk-001", "n/a", java.util.List.of());
+        caller.setDetails(java.util.Map.of(
+                GatewaySecurityConstants.DETAIL_USERNAME,
+                "clerk-001",
+                GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
+                LocationScope.unscoped()));
+        SecurityContextHolder.getContext().setAuthentication(caller);
         salesOrderService = new SalesOrderServiceImpl(
                 salesOrderRepository,
                 salesOrderLineRepository,

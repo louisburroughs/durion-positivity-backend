@@ -11,8 +11,10 @@ import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
 import com.positivity.domainevents.vehicle.VehicleUpdatedV1;
 import com.positivity.order.internal.entity.ExtLocation;
+import com.positivity.order.internal.entity.ExtLocationParentReplica;
 import com.positivity.order.internal.entity.ExtProduct;
 import com.positivity.order.internal.entity.ExtVehicle;
+import com.positivity.order.internal.repository.ExtLocationParentReplicaRepository;
 import com.positivity.order.internal.repository.ExtLocationRepository;
 import com.positivity.order.internal.repository.ExtProductCodeRepository;
 import com.positivity.order.internal.repository.ExtProductRepository;
@@ -79,6 +81,12 @@ class ProductVehicleLocationReplicaTest {
 
     @Mock
     private ExtLocationRepository extLocationRepository;
+
+    @Mock
+    private ExtLocationParentReplicaRepository extLocationParentReplicaRepository;
+
+    @Mock
+    private LocationHierarchyService locationHierarchyService;
 
     @BeforeEach
     void setUp() {
@@ -238,7 +246,13 @@ class ProductVehicleLocationReplicaTest {
     class Locations {
 
         private LocationEventsListener listener() {
-            return new LocationEventsListener(clock, objectMapper, processedEventRepository, extLocationRepository);
+            return new LocationEventsListener(
+                    clock,
+                    objectMapper,
+                    processedEventRepository,
+                    extLocationRepository,
+                    extLocationParentReplicaRepository,
+                    locationHierarchyService);
         }
 
         private String envelope(long version) {
@@ -268,14 +282,71 @@ class ProductVehicleLocationReplicaTest {
         }
 
         @Test
-        @DisplayName("removes the replica when the location is deleted upstream")
+        @DisplayName("removes the replica and its parent edges when the location is deleted upstream")
         void deleteRemovesReplica() {
             listener().onLocationEvent("""
                             {"eventId":"evt-2","eventType":"%s","payload":{"locationId":"%s"}}""".formatted(LocationDeletedV1.EVENT_TYPE, LOCATION_ID));
 
             verify(extLocationRepository).deleteById(LOCATION_ID);
+            verify(extLocationParentReplicaRepository).deleteByChildId(LOCATION_ID);
             verify(extLocationRepository, never()).save(any());
             verify(processedEventRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("a fact without the parents field keeps the stored edges and still recomputes the scope sets")
+        void factWithoutParentsKeepsEdgesAndRecomputes() {
+            listener().onLocationEvent(envelope(1));
+
+            verify(extLocationParentReplicaRepository, never()).deleteByChildId(any());
+            verify(extLocationParentReplicaRepository, never()).save(any());
+            verify(locationHierarchyService).recomputeAncestors(LOCATION_ID);
+        }
+
+        @Test
+        @DisplayName("replaces the child's typed parent-edge set from the fact, then recomputes the scope sets (#1872)")
+        void parentEdgesAreReplacedWholesaleThenRecomputed() {
+            UUID parentId = UUID.fromString("00000000-0000-0000-0000-0000000000c1");
+            UUID finParentId = UUID.fromString("00000000-0000-0000-0000-0000000000c2");
+            listener().onLocationEvent("""
+                    {"eventId":"evt-4","eventType":"%s","aggregateVersion":6,
+                     "payload":{"locationId":"%s","code":"SHOP-1","name":"Main Shop","active":true,
+                       "parents":[{"parentId":"%s","parentType":"PHYSICAL"},
+                                  {"parentId":"%s","parentType":"FINANCIAL"}]}}
+                    """.formatted(LocationUpdatedV1.EVENT_TYPE, LOCATION_ID, parentId, finParentId));
+
+            verify(extLocationParentReplicaRepository).deleteByChildId(LOCATION_ID);
+            ArgumentCaptor<ExtLocationParentReplica> captor = ArgumentCaptor.forClass(ExtLocationParentReplica.class);
+            verify(extLocationParentReplicaRepository, org.mockito.Mockito.times(2))
+                    .save(captor.capture());
+            assertThat(captor.getAllValues())
+                    .extracting(ExtLocationParentReplica::getChildId)
+                    .containsOnly(LOCATION_ID);
+            assertThat(captor.getAllValues())
+                    .extracting(ExtLocationParentReplica::getParentId, ExtLocationParentReplica::getParentType)
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple(parentId, "PHYSICAL"),
+                            org.assertj.core.groups.Tuple.tuple(finParentId, "FINANCIAL"));
+            // Edges changed, so the scope ancestor sets of this node and its subtree are rebuilt
+            // after the edge replacement (ADR-0061 §2) — order matters: recompute reads the new edges.
+            org.mockito.InOrder inOrder =
+                    org.mockito.Mockito.inOrder(extLocationParentReplicaRepository, locationHierarchyService);
+            inOrder.verify(extLocationParentReplicaRepository, org.mockito.Mockito.times(2))
+                    .save(any());
+            inOrder.verify(locationHierarchyService).recomputeAncestors(LOCATION_ID);
+        }
+
+        @Test
+        @DisplayName("an empty parents list clears the stored edges (the location became a root)")
+        void emptyParentsClearsEdges() {
+            listener().onLocationEvent("""
+                    {"eventId":"evt-5","eventType":"%s","aggregateVersion":7,
+                     "payload":{"locationId":"%s","code":"SHOP-1","name":"Main Shop","active":true,"parents":[]}}
+                    """.formatted(LocationUpdatedV1.EVENT_TYPE, LOCATION_ID));
+
+            verify(extLocationParentReplicaRepository).deleteByChildId(LOCATION_ID);
+            verify(extLocationParentReplicaRepository, never()).save(any());
+            verify(locationHierarchyService).recomputeAncestors(LOCATION_ID);
         }
 
         @Test
@@ -289,6 +360,9 @@ class ProductVehicleLocationReplicaTest {
             listener().onLocationEvent(envelope(5));
 
             verify(extLocationRepository, never()).save(any());
+            // A stale snapshot touches neither the edges nor the scope sets.
+            verify(extLocationParentReplicaRepository, never()).deleteByChildId(any());
+            verify(locationHierarchyService, never()).recomputeAncestors(any());
         }
 
         @Test

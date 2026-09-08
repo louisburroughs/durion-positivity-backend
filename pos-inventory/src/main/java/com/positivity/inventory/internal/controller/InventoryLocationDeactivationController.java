@@ -5,6 +5,8 @@ import com.positivity.inventory.internal.dto.DeactivateLocationRequest;
 import com.positivity.inventory.internal.dto.DeactivateLocationResponse;
 import com.positivity.inventory.internal.location.service.InventoryLocationService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -70,6 +72,13 @@ public class InventoryLocationDeactivationController {
                             mediaType = "application/json",
                             schema = @Schema(implementation = DeactivateLocationResponse.class)))
     @ApiResponse(responseCode = "400", description = "Bad request - invalid parameters or destination required")
+    @ApiResponse(
+            responseCode = "403",
+            description =
+                    "FORBIDDEN when the caller lacks inventory:location:admin;"
+                            + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                            + " locations that do not cover the locationId being deactivated or the destinationLocationId (ADR-0061)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Location not found")
     @ApiResponse(responseCode = "409", description = "Conflict - business rule violation")
     public ResponseEntity<DeactivateLocationResponse> deactivate(
@@ -87,8 +96,15 @@ public class InventoryLocationDeactivationController {
                                                                     """)))
                     @RequestBody(required = false)
                     DeactivateLocationRequest body) {
-        DeactivateLocationResponse resp =
-                service.deactivateLocation(locationId, body != null ? body.getDestinationLocationId() : null);
+        // ADR-0061 §3 (#1872): @PreAuthorize answered "may this caller administer locations"; this
+        // answers "...this one" — and the destination, since stock is moved into it.
+        SecurityContextHelper.locationScope().require(InventoryPermissionRegistry.LOCATION_ADMIN, locationId);
+        UUID destinationLocationId = body != null ? body.getDestinationLocationId() : null;
+        if (destinationLocationId != null) {
+            SecurityContextHelper.locationScope()
+                    .require(InventoryPermissionRegistry.LOCATION_ADMIN, destinationLocationId);
+        }
+        DeactivateLocationResponse resp = service.deactivateLocation(locationId, destinationLocationId);
         return ResponseEntity.ok(resp);
     }
 }

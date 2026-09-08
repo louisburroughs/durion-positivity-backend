@@ -7,6 +7,7 @@ import com.positivity.workorder.internal.repository.LaborIntelligenceRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -73,7 +74,9 @@ public class LaborIntelligenceService {
 
     /**
      * @param operationCode narrow to one Durion operation code; null does not narrow
-     * @param locationId narrow to one shop; null reports every shop separately, never pooled
+     * @param locationIds narrow to these shops; null reports every shop separately, never pooled,
+     *     and an empty collection reports none (the caller's location reach after narrowing,
+     *     ADR-0061 §3)
      * @param minSampleOverride raise the suggestion threshold for this call; null uses the
      *     configured default. Lowering it below the default is refused — the floor exists so a
      *     caller cannot ask for a standard derived from one job.
@@ -81,7 +84,9 @@ public class LaborIntelligenceService {
     @NonNull
     @Transactional(readOnly = true)
     public List<LaborIntelligenceRow> operations(
-            @Nullable String operationCode, @Nullable UUID locationId, @Nullable Integer minSampleOverride) {
+            @Nullable String operationCode,
+            @Nullable Collection<UUID> locationIds,
+            @Nullable Integer minSampleOverride) {
         int threshold = minSampleOverride == null ? minSamples : Math.max(minSamples, minSampleOverride);
 
         Map<UUID, List<BigDecimal>> technicianHoursByService = technicianMedianInputs();
@@ -90,7 +95,7 @@ public class LaborIntelligenceService {
         for (Object[] row : laborIntelligenceRepository.findLineTotals()) {
             UUID serviceId = (UUID) row[1];
             UUID rowLocationId = (UUID) row[2];
-            if (locationId != null && !locationId.equals(rowLocationId)) {
+            if (locationIds != null && (rowLocationId == null || !locationIds.contains(rowLocationId))) {
                 continue;
             }
             groups.computeIfAbsent(new GroupKey(serviceId, rowLocationId), key -> new Group())

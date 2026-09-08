@@ -11,13 +11,16 @@ import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -53,6 +56,7 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
     private final QuantityScaleGuard quantityScaleGuard;
     private final LocationRefRepository locationRefRepository;
     private final Clock clock;
+    private final LocationScopeService locationScopeService;
 
     public InventoryAvailabilityServiceImpl(
             InventoryStockSummaryRepository stockSummaryRepository,
@@ -62,7 +66,9 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
             ForecastSiteResolver forecastSiteResolver,
             QuantityScaleGuard quantityScaleGuard,
             LocationRefRepository locationRefRepository,
-            Clock clock) {
+            Clock clock,
+            LocationScopeService locationScopeService) {
+        this.locationScopeService = locationScopeService;
         this.stockSummaryRepository = stockSummaryRepository;
         this.inventoryLedgerEntryRepository = inventoryLedgerEntryRepository;
         this.forecastQuantityService = forecastQuantityService;
@@ -202,6 +208,14 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
         }
 
         UUID scopeLocationId = storageLocationId != null ? storageLocationId : locationId;
+        // ADR-0061 §3 (#1872): the location the view is keyed on is gated when named; without one
+        // a scoped caller's SKU-wide aggregate is narrowed to the rows within their reach.
+        Set<UUID> reach = locationScopeService
+                .narrowTo(scopeLocationId, InventoryPermissionRegistry.AVAILABILITY_READ)
+                .orElse(null);
+        if (scopeLocationId == null && reach != null) {
+            return narrowedAvailability(productSku, productRows, reach, horizon);
+        }
         BigDecimal onHand;
         BigDecimal allocated;
         // Every arm routes through Quantities.nz: SonarCloud's dataflow engine models a bare
@@ -247,6 +261,55 @@ public class InventoryAvailabilityServiceImpl implements InventoryAvailabilitySe
                         "availableToPromiseQuantity",
                         onHand.subtract(allocated).subtract(expiredDeduction)))
                 .unitOfMeasure(deriveUnitOfMeasure(productSku, scopeLocationId))
+                .incomingQty(forecast.incomingQty())
+                .outgoingQty(forecast.outgoingQty())
+                .projectedAvailable(forecast.projectedAvailable())
+                .build();
+    }
+
+    /**
+     * The SKU-wide view for a location-scoped caller who named no location (ADR-0061 §3, #1872):
+     * the same aggregate as the unscoped one, but summed over the rows whose location is a
+     * reachable site or a storage location under one. Rows with no location (the NULL-location
+     * aggregate) are not attributable to any site and are left out — erring toward showing less.
+     * Supply and pick demand are forecast per reachable site and summed; expired-lot deductions
+     * are summed per admitted location. An empty reach yields an all-zero view, not a 403.
+     */
+    private AvailabilityView narrowedAvailability(
+            String productSku, List<InventoryStockSummary> productRows, Set<UUID> reach, @Nullable Instant horizon) {
+        Set<UUID> admittedLocations = new LinkedHashSet<>();
+        Set<UUID> admittedSites = new LinkedHashSet<>();
+        BigDecimal onHand = BigDecimal.ZERO;
+        BigDecimal allocated = BigDecimal.ZERO;
+        for (InventoryStockSummary row : productRows) {
+            UUID rowLocation = row.getLocationId();
+            if (rowLocation == null) {
+                continue;
+            }
+            UUID site = reach.contains(rowLocation) ? rowLocation : resolveForecastSite(rowLocation);
+            if (site == null || !reach.contains(site)) {
+                continue;
+            }
+            admittedLocations.add(rowLocation);
+            admittedSites.add(site);
+            onHand = onHand.add(Quantities.nz(row.getOnHand()));
+            allocated = allocated.add(Quantities.nz(row.getAllocated()));
+        }
+        ForecastQuantityService.ForecastQuantities forecast =
+                forecastQuantityService.forecastWithin(productSku, admittedSites, horizon, onHand);
+        BigDecimal expiredDeduction = BigDecimal.ZERO;
+        for (UUID location : admittedLocations) {
+            expiredDeduction = expiredDeduction.add(expiredLotDeduction(productSku, location));
+        }
+        return AvailabilityView.builder()
+                .productSku(productSku)
+                .onHandQuantity(reportable(productSku, ON_HAND_QUANTITY, onHand))
+                .allocatedQuantity(reportable(productSku, "allocatedQuantity", allocated))
+                .availableToPromiseQuantity(reportable(
+                        productSku,
+                        "availableToPromiseQuantity",
+                        onHand.subtract(allocated).subtract(expiredDeduction)))
+                .unitOfMeasure(deriveUnitOfMeasure(productSku, null))
                 .incomingQty(forecast.incomingQty())
                 .outgoingQty(forecast.outgoingQty())
                 .projectedAvailable(forecast.projectedAvailable())

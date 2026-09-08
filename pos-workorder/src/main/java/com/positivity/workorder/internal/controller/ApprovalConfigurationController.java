@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.ApprovalConfigurationRequest;
 import com.positivity.workorder.internal.dto.ApprovalConfigurationResponse;
@@ -34,6 +35,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/workexec")
 @RequiredArgsConstructor
 public class ApprovalConfigurationController {
+    private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds workorder:approval_config:view but its location scope does not cover the requested"
+                    + " location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+
     private final ApprovalConfigurationService approvalConfigurationService;
 
     @Operation(
@@ -102,13 +107,20 @@ public class ApprovalConfigurationController {
                     no location or customer.
                     Use this tool when deciding how an approval must be captured for a specific job; use \
                     getApprovalConfiguration instead when the configuration id is already known.
-                    Preconditions: none — both filters are optional and narrower matches win.
+                    Preconditions: both filters are optional and narrower matches win; a caller whose \
+                    workorder:approval_config:view grant is location-scoped must have a supplied locationId \
+                    within reach (ADR-0061).
                     Required inputs: locationId (UUID) and customerId (UUID) as optional query parameters.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 when no configuration matches at any specificity, in which case callers fall \
-                    back to built-in defaults.
+                    Returns 403 LOCATION_SCOPE_DENIED when the caller's location scope does not cover the \
+                    supplied locationId, and 404 when no configuration matches at any specificity, in which \
+                    case callers fall back to built-in defaults.
                     """)
     @ApiResponse(responseCode = "200", description = "Configuration found and returned.")
+    @ApiResponse(
+            responseCode = "403",
+            description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "No configuration found (default will be used).")
     @GetMapping("/approvalConfigurations/applicable")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -122,6 +134,12 @@ public class ApprovalConfigurationController {
             @Parameter(description = "Customer ID", example = "550e8400-e29b-41d4-a716-446655440010")
                     @RequestParam(required = false)
                     UUID customerId) {
+        // Gate (ADR-0061 §3, #1872): a supplied locationId names the site whose rule is resolved.
+        // Without one the resolution falls through to the global default, which belongs to no
+        // location, so there is nothing to narrow.
+        if (locationId != null) {
+            SecurityContextHelper.locationScope().require(WorkorderPermissions.APPROVAL_CONFIG_VIEW, locationId);
+        }
         return approvalConfigurationService
                 .getApplicableConfiguration(locationId, customerId)
                 .map(ResponseEntity::ok)

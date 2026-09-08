@@ -1,9 +1,14 @@
 package com.positivity.securityservice.internal.service;
 
+import com.positivity.securityservice.internal.domain.RoleGrant;
+import com.positivity.securityservice.internal.dto.RoleGrantRow;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,6 +63,54 @@ public class RoleAuthorityServiceImpl implements RoleAuthorityService {
         // what makes an ungranted user fail closed rather than inherit a default bundle.
         authorities.addAll(roleRepository.findPermissionNamesByRoleNames(roleNames));
         return authorities;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RoleGrant> resolveRoleGrants(Set<String> roles) {
+        Set<String> roleNames = normalizeRoleNames(roles);
+        if (roleNames.isEmpty()) {
+            return List.of();
+        }
+
+        // TreeMap so the result order is a function of the role names alone, not of row order.
+        Map<String, GrantAccumulator> byRole = new TreeMap<>();
+        for (RoleGrantRow row : roleRepository.findGrantRowsByRoleNames(roleNames)) {
+            String roleName = normalizeRole(row.roleName());
+            byRole.computeIfAbsent(roleName, name -> new GrantAccumulator(row))
+                    .permissionNames
+                    .add(row.permissionName());
+        }
+        return byRole.entrySet().stream()
+                .map(entry -> new RoleGrant(
+                        entry.getKey(),
+                        entry.getValue().first.locationScope(),
+                        entry.getValue().first.locationHierarchy(),
+                        entry.getValue().permissionNames))
+                .toList();
+    }
+
+    private Set<String> normalizeRoleNames(Set<String> roles) {
+        Set<String> roleNames = new HashSet<>();
+        if (roles == null) {
+            return roleNames;
+        }
+        for (String role : roles) {
+            if (role != null && !role.isBlank()) {
+                roleNames.add(normalizeRole(role));
+            }
+        }
+        return roleNames;
+    }
+
+    /** Scope and hierarchy come from the first row of a role; every row of that role agrees. */
+    private static final class GrantAccumulator {
+        private final RoleGrantRow first;
+        private final Set<String> permissionNames = new HashSet<>();
+
+        private GrantAccumulator(RoleGrantRow first) {
+            this.first = first;
+        }
     }
 
     private String normalizeRole(String role) {

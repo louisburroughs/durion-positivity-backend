@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -168,7 +169,11 @@ class WorkexecTimeTrackingServiceImplTest {
         private List<WorkexecTimeTrackingService.JobTimeTotal> totals(
                 ZoneId zone, UUID locationFilter, List<UUID> technicianFilter) {
             return service.getJobTimeTotals(
-                    LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 2), zone, locationFilter, technicianFilter);
+                    LocalDate.of(2026, 3, 1),
+                    LocalDate.of(2026, 3, 2),
+                    zone,
+                    locationFilter == null ? null : Set.of(locationFilter),
+                    technicianFilter);
         }
 
         @Test

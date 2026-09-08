@@ -12,6 +12,7 @@ import com.positivity.inventory.internal.dto.cyclecount.plan.UpdateCycleCountPla
 import com.positivity.inventory.internal.enums.CycleCountPlanStatus;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -80,7 +81,12 @@ public class CycleCountPlanController {
                             mediaType = "application/json",
                             schema = @Schema(implementation = CycleCountPlanResponse.class)))
     @ApiResponse(responseCode = "400", description = "Validation failure")
-    @ApiResponse(responseCode = "403", description = "User lacks required permission")
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller lacks inventory:cycle_count:initiate;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the request's locationId (ADR-0061)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CycleCountPlanResponse> createPlan(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Cycle count plan to create, naming the location, zones, and the future"
@@ -99,6 +105,12 @@ public class CycleCountPlanController {
                     CreateCycleCountPlanRequest request) {
         String createdBy = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException("No current user"));
+        // ADR-0061 §3 (#1872): @PreAuthorize answered "may this caller initiate counts"; this
+        // answers "...at this location". A missing locationId is the service's 400, not a gate.
+        if (request.getLocationId() != null) {
+            SecurityContextHelper.locationScope()
+                    .require(InventoryPermissionRegistry.CYCLE_COUNT_INITIATE, request.getLocationId());
+        }
         CycleCountPlanResponse response = cycleCountPlanService.createPlan(request, createdBy);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -133,7 +145,13 @@ public class CycleCountPlanController {
                     @Content(
                             mediaType = "application/json",
                             array = @ArraySchema(schema = @Schema(implementation = CycleCountPlanResponse.class))))
-    @ApiResponse(responseCode = "403", description = "User lacks required permission")
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller lacks inventory:cycle_count:view;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the requested locationId filter (ADR-0061);"
+                    + " without a filter the result is narrowed to the caller's reach instead",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<CycleCountPlanResponse>> listPlans(
             @Parameter(description = "Filter by location identifier") @RequestParam(required = false) UUID locationId,
             @Parameter(description = "Filter by plan status") @RequestParam(required = false)
@@ -169,6 +187,12 @@ public class CycleCountPlanController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = CycleCountPlanResponse.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller lacks inventory:cycle_count:view;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the plan's locationId (ADR-0061)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Cycle count plan not found")
     public ResponseEntity<CycleCountPlanResponse> getPlan(
             @Parameter(description = "Cycle count plan identifier", required = true) @PathVariable UUID planId) {

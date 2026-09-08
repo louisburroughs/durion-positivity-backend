@@ -1,7 +1,11 @@
 package com.positivity.inventory.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -20,17 +24,21 @@ import com.positivity.inventory.internal.enums.BackorderResolutionSource;
 import com.positivity.inventory.internal.enums.BackorderStatus;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.ReservationStatus;
+import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.BackorderRecordRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.ReservationRepository;
 import com.positivity.inventory.internal.reservation.service.BackorderServiceImpl;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.security.common.LocationScopeDeniedException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,6 +47,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 
 /**
  * Unit tests for {@link BackorderServiceImpl} (odoo-parity G1, issue #1046): backorder creation
@@ -74,6 +84,9 @@ class BackorderServiceImplTest {
     @Mock
     private BaseUnitOfMeasureResolver baseUnitOfMeasureResolver;
 
+    @Mock
+    private LocationScopeService locationScopeService;
+
     private final Clock fixedClock = Clock.fixed(Instant.parse("2026-07-23T00:00:00Z"), ZoneOffset.UTC);
 
     private BackorderServiceImpl service;
@@ -88,7 +101,8 @@ class BackorderServiceImplTest {
                 ledgerPostingService,
                 inventoryFactPublisher,
                 fixedClock,
-                baseUnitOfMeasureResolver);
+                baseUnitOfMeasureResolver,
+                locationScopeService);
         lenient().when(backorderRepository.save(any(BackorderRecord.class))).thenAnswer(invocation -> {
             BackorderRecord record = invocation.getArgument(0);
             if (record.getBackorderId() == null) {
@@ -312,5 +326,80 @@ class BackorderServiceImplTest {
                 .allocated(new BigDecimal("0"))
                 .atp(BigDecimal.valueOf(atp))
                 .build();
+    }
+
+    // ─── ADR-0061 §3 (#1872): location scope on the read side ────────────────
+
+    @Test
+    @DisplayName("listBackorders without a site filter narrows a scoped caller to their reach")
+    @SuppressWarnings("unchecked")
+    void listBackorders_scopedNoFilter_narrowsToReach() {
+        when(locationScopeService.narrowTo(isNull(), eq(InventoryPermissionRegistry.SHORTAGE_VIEW)))
+                .thenReturn(Optional.of(Set.of(LOCATION_ID)));
+        when(backorderRepository.findAll(any(Specification.class), any(Sort.class)))
+                .thenReturn(List.of(openBackorder(WORKORDER_LINE_A, 5, Instant.now(fixedClock))));
+
+        List<BackorderResponse> result = service.listBackorders(null, null, null, null, null);
+
+        assertThat(result).hasSize(1);
+        verify(backorderRepository).findAll(any(Specification.class), any(Sort.class));
+    }
+
+    @Test
+    @DisplayName("listBackorders with an empty reach answers an empty list without querying")
+    void listBackorders_scopedEmptyReach_returnsEmptyWithoutQuery() {
+        when(locationScopeService.narrowTo(isNull(), eq(InventoryPermissionRegistry.SHORTAGE_VIEW)))
+                .thenReturn(Optional.of(Set.of()));
+
+        assertThat(service.listBackorders(null, null, null, null, null)).isEmpty();
+        verifyNoInteractions(backorderRepository);
+    }
+
+    @Test
+    @DisplayName("listBackorders with a site filter gates the filter and queries it as before")
+    @SuppressWarnings("unchecked")
+    void listBackorders_filter_gatesThenQueries() {
+        when(backorderRepository.findAll(any(Specification.class), any(Sort.class)))
+                .thenReturn(List.of());
+
+        service.listBackorders(null, null, LOCATION_ID, null, null);
+
+        verify(locationScopeService).narrowTo(LOCATION_ID, InventoryPermissionRegistry.SHORTAGE_VIEW);
+        verify(backorderRepository).findAll(any(Specification.class), any(Sort.class));
+    }
+
+    @Test
+    @DisplayName("listBackorders propagates a denied site filter without querying")
+    void listBackorders_deniedFilter_propagates() {
+        when(locationScopeService.narrowTo(eq(LOCATION_ID), eq(InventoryPermissionRegistry.SHORTAGE_VIEW)))
+                .thenThrow(new LocationScopeDeniedException(
+                        InventoryPermissionRegistry.SHORTAGE_VIEW, LOCATION_ID.toString()));
+
+        assertThatThrownBy(() -> service.listBackorders(null, null, LOCATION_ID, null, null))
+                .isInstanceOf(LocationScopeDeniedException.class);
+        verifyNoInteractions(backorderRepository);
+    }
+
+    @Test
+    @DisplayName("getBackorder gates on the loaded record's site, after the 404")
+    void getBackorder_gatesOnRecordSiteAfterLoad() {
+        BackorderRecord record = openBackorder(WORKORDER_LINE_A, 5, Instant.now(fixedClock));
+        when(backorderRepository.findById(record.getBackorderId())).thenReturn(Optional.of(record));
+        doThrow(new LocationScopeDeniedException(InventoryPermissionRegistry.SHORTAGE_VIEW, LOCATION_ID.toString()))
+                .when(locationScopeService)
+                .require(LOCATION_ID, InventoryPermissionRegistry.SHORTAGE_VIEW);
+
+        assertThatThrownBy(() -> service.getBackorder(record.getBackorderId()))
+                .isInstanceOf(LocationScopeDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("getBackorder answers 404 before any scope check for an unknown id")
+    void getBackorder_unknownId_notFoundBeforeScope() {
+        UUID missing = UUID.randomUUID();
+        when(backorderRepository.findById(missing)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getBackorder(missing)).isInstanceOf(ResourceNotFoundException.class);
+        verifyNoInteractions(locationScopeService);
     }
 }

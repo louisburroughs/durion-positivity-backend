@@ -11,5 +11,7 @@ public interface LocationRefRepository extends JpaRepository<LocationRefEntity, 
 
     Optional<LocationRefEntity> findByLocationId(UUID locationId);
 
+    boolean existsByLocationId(UUID locationId);
+
     List<LocationRefEntity> findByLocationIdIn(Collection<UUID> locationIds);
 }

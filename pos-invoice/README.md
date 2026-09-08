@@ -68,6 +68,26 @@ Requires `pos.invoice.kafka.enabled=true`; topic and consumer group are
 `POS_INVOICE_ACCOUNTING_EVENTS_TOPIC` (`accounting.events.v1`) and
 `POS_INVOICE_ACCOUNTING_EVENTS_CONSUMER_GROUP` (`pos-invoice-accounting-events`).
 
+## Location scope (ADR-0061, #1872)
+
+`@PreAuthorize` answers "may this caller manage invoices"; the caller's `LocationScope` (decoded
+by `pos-security-common` from the gateway's `X-Loc-*` headers) answers "…at this location".
+Decisions per operation are recorded in [`location-scope.yaml`](location-scope.yaml):
+
+- `POST /v1/invoices` and `POST /v1/invoices/from-order` are **gated** in `InvoiceController` on
+  the request's `locationId` with `invoice:manage`. A caller whose grant is location-scoped is
+  denied outside its reach with `403 LOCATION_SCOPE_DENIED`; for such a caller an omitted
+  `locationId` is denied too (fail closed). Pre-rollout tokens without `loc_*` claims are unchanged.
+- `GET /v1/invoices/{invoiceId}` is gated in `InvoiceServiceImpl.loadInvoiceDetail` on the stored
+  invoice's location with `invoice:invoice:view`, after the 404, so the create gate cannot be
+  bypassed by reading an invoice back and ids cannot be probed through the 403.
+
+The check runs in-process against the `ext_location` replica: `LocationHierarchyService`
+implements `LocationAncestorResolver` over the materialised `financial_ancestor_ids` /
+`other_ancestor_ids` sets that `LocationEventsListener` recomputes from the `ext_location_parent`
+edges on every `location.location.updated` fact (V21). A location the replica does not hold is
+denied for scoped callers; pos-location is never called per request.
+
 ## Payment settlement events
 
 When `pos.invoice.kafka.enabled` is on, per-payment settlement facts are published on

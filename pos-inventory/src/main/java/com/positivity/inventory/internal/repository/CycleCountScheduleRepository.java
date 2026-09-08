@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.repository;
 
 import com.positivity.inventory.internal.entity.CycleCountSchedule;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -29,6 +30,25 @@ public interface CycleCountScheduleRepository extends JpaRepository<CycleCountSc
             """)
     Page<CycleCountSchedule> findByOptionalFilters(
             @Param("locationId") UUID locationId,
+            @Param("active") Boolean active,
+            @Param("dueOnOrBefore") LocalDate dueOnOrBefore,
+            Pageable pageable);
+
+    /**
+     * {@link #findByOptionalFilters} narrowed to the caller's reach (ADR-0061 §3, #1872):
+     * schedules at a reachable site, or at a storage location replicated under one. Never called
+     * with an empty set — an empty reach is an empty page decided before the query.
+     */
+    @Query("""
+            SELECT s FROM CycleCountSchedule s
+            WHERE (s.locationId IN :locationIds
+                   OR s.locationId IN (SELECT b.storageLocationId FROM ExtStorageLocationReplica b
+                                       WHERE b.siteId IN :locationIds))
+              AND (:active IS NULL OR s.active = :active)
+              AND (:dueOnOrBefore IS NULL OR (s.active = true AND s.nextDueDate <= :dueOnOrBefore))
+            """)
+    Page<CycleCountSchedule> findByOptionalFiltersWithinLocations(
+            @Param("locationIds") Collection<UUID> locationIds,
             @Param("active") Boolean active,
             @Param("dueOnOrBefore") LocalDate dueOnOrBefore,
             Pageable pageable);

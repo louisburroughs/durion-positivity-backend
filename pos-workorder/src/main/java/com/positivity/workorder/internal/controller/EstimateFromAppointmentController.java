@@ -1,11 +1,15 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentRequest;
 import com.positivity.workorder.internal.dto.CreateEstimateFromAppointmentResponse;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.EstimateService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -25,6 +29,10 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Estimates from Appointments", description = "Create estimates from shop appointments")
 public class EstimateFromAppointmentController {
 
+    private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds workorder:estimate:create but its location scope does not cover the requested location"
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+
     @SuppressWarnings("java:S1068")
     private final EstimateService estimateService;
 
@@ -43,21 +51,27 @@ public class EstimateFromAppointmentController {
                     Use this tool when an appointment arrives and needs an estimate started; do not use \
                     createEstimate, which builds an estimate from scratch without an appointment link or \
                     idempotency guarantee.
-                    Preconditions: the caller must hold workorder:estimate:create; the appointment id is not \
-                    verified against the scheduling service, and an estimate already linked to the appointmentId \
-                    short-circuits creation.
+                    Preconditions: the caller must hold workorder:estimate:create, and when that grant is \
+                    location-scoped the body's locationId must be within reach (ADR-0061); the appointment id \
+                    is not verified against the scheduling service, and an estimate already linked to the \
+                    appointmentId short-circuits creation.
                     Required inputs: idempotencyKey, appointmentId, customerId, vehicleId, and locationId (all \
                     UUIDs); requestedServices is an optional list of free-text service descriptions.
                     Emits a WORKORDER_ESTIMATE_CREATE_FROM_APPOINTMENT event; the call is idempotent on \
                     appointmentId, so retries never create duplicates.
-                    Returns 201 with created=true when a new estimate is persisted, and 200 with created=false \
-                    and the existing estimateId when the appointment already has one.
+                    Returns 201 with created=true when a new estimate is persisted, 200 with created=false \
+                    and the existing estimateId when the appointment already has one, and 403 \
+                    LOCATION_SCOPE_DENIED when the caller's location scope does not cover locationId.
                     """)
     @ApiResponse(responseCode = "201", description = "Estimate created")
     @ApiResponse(responseCode = "200", description = "Existing estimate returned (idempotent)")
     @ApiResponse(responseCode = "400", description = "Missing or invalid required fields")
     @ApiResponse(responseCode = "401", description = "Unauthenticated")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "403",
+            description = "Caller lacks workorder:estimate:create (ApiError.code FORBIDDEN), or "
+                    + LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CreateEstimateFromAppointmentResponse> createEstimateFromAppointment(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =
@@ -80,6 +94,9 @@ public class EstimateFromAppointmentController {
                     @Valid
                     @RequestBody
                     CreateEstimateFromAppointmentRequest request) {
+        // Gate (ADR-0061 §3, #1872): the body's locationId names the site the estimate is opened at.
+        // Bean validation has already rejected a null one, so the scope check sees a real id.
+        SecurityContextHelper.locationScope().require(WorkorderPermissions.ESTIMATE_CREATE, request.getLocationId());
         CreateEstimateFromAppointmentResponse response = estimateService.createEstimateFromAppointment(request);
         if (response.isCreated()) {
             return ResponseEntity.status(HttpStatus.CREATED).body(response);

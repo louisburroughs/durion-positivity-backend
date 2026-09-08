@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.controller;
 import com.positivity.inventory.internal.dto.rollup.LocationInventoryRollupResponse;
 import com.positivity.inventory.internal.rollup.service.LocationInventoryRollupService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -70,7 +71,9 @@ public class LocationInventoryRollupController {
     @ApiResponse(responseCode = "400", description = "Invalid parameters (unknown parentType, bad expand value)")
     @ApiResponse(
             responseCode = "403",
-            description = "User lacks required on-hand view authority",
+            description = "FORBIDDEN when the caller lacks inventory:on_hand:view;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the path locationId the rollup is rooted at (ADR-0061)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
@@ -102,6 +105,9 @@ public class LocationInventoryRollupController {
                     @RequestParam(required = false, defaultValue = "false")
                     boolean includeEmpty) {
         boolean expandTree = resolveExpand(expand);
+        // ADR-0061 §3 (#1872): the path names the root of the rollup; everything it aggregates
+        // sits beneath it, so covering the root covers the report.
+        SecurityContextHelper.locationScope().require(InventoryPermissionRegistry.INVENTORY_VIEW, locationId);
         return ResponseEntity.ok(locationInventoryRollupService.getLocationInventoryRollup(
                 locationId, parentType, sku, expandTree, depth, includeEmpty));
     }

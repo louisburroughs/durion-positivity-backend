@@ -28,6 +28,7 @@ import com.positivity.workorder.internal.exception.WorkorderRequestValidationExc
 import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.service.EstimateService;
 import com.positivity.workorder.internal.service.IdempotencyService;
+import com.positivity.workorder.internal.service.LocationHierarchyService;
 import com.positivity.workorder.internal.service.WorkorderService;
 import jakarta.persistence.EntityNotFoundException;
 import java.math.BigDecimal;
@@ -35,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -80,6 +82,9 @@ class EstimateControllerTest {
     @Mock
     private IdempotencyService idempotencyService;
 
+    @Mock
+    private LocationHierarchyService locationHierarchyService;
+
     @InjectMocks
     private EstimateController controller;
 
@@ -92,6 +97,17 @@ class EstimateControllerTest {
                 .estimateId(ESTIMATE_ID)
                 .customerId(CUSTOMER_ID)
                 .build();
+        // The location-gated reads consult the caller's scope (ADR-0061); a token without loc_*
+        // claims is unscoped, so these tests keep exercising the controller's own mapping only.
+        var caller = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                "estimate-test-user", "n/a", List.of());
+        org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .setAuthentication(caller);
+    }
+
+    @AfterEach
+    void clearCaller() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }
 
     private static EstimateResponse estimate() {
@@ -797,6 +813,7 @@ class EstimateControllerTest {
 
         @Test
         void servesThePdfAsAnAttachment() {
+            when(estimateService.getEstimateById(ESTIMATE_ID)).thenReturn(Optional.of(estimate()));
             when(estimateService.generateEstimatePdf(ESTIMATE_ID)).thenReturn(new byte[] {1, 2, 3});
 
             ResponseEntity<byte[]> response = controller.generateEstimatePdf(ESTIMATE_ID);
@@ -815,6 +832,7 @@ class EstimateControllerTest {
             assertThat(controller.generateEstimatePdf(ESTIMATE_ID).getStatusCode())
                     .isEqualTo(HttpStatus.NOT_FOUND);
 
+            when(estimateService.getEstimateById(ESTIMATE_ID)).thenReturn(Optional.of(estimate()));
             doThrow(new RuntimeException("renderer down")).when(estimateService).generateEstimatePdf(ESTIMATE_ID);
             assertThat(controller.generateEstimatePdf(ESTIMATE_ID).getStatusCode())
                     .isEqualTo(HttpStatus.BAD_GATEWAY);

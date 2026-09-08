@@ -40,6 +40,7 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
@@ -61,6 +62,7 @@ public class LocationServiceImpl implements LocationService {
     private static final String LOCATION_CODE_TAKEN = "LOCATION_CODE_TAKEN";
     private static final String DATA_INTEGRITY_VIOLATION = "DATA_INTEGRITY_VIOLATION";
     private static final String LOCATION_NOT_FOUND = "LOCATION_NOT_FOUND";
+    private static final String CYCLE_DETECTED = "CYCLE_DETECTED";
 
     /** Defensive depth cap for descendant traversal (ADR-0016 forbids cycles). */
     private static final int MAX_DESCENDANT_DEPTH = 20;
@@ -237,7 +239,8 @@ public class LocationServiceImpl implements LocationService {
     }
 
     @Transactional
-    public LocationParentResponseDTO addParent(UUID childId, UUID parentId, String parentTypeValue) {
+    public LocationParentResponseDTO addParent(
+            @NonNull UUID childId, @NonNull UUID parentId, @NonNull String parentTypeValue) {
         ParentType parentType = toParentType(parentTypeValue);
         return toLocationParentResponse(addParentInternal(childId, parentId, parentType));
     }
@@ -383,9 +386,10 @@ public class LocationServiceImpl implements LocationService {
         locationFactPublisher.locationDeleted(location);
     }
 
-    private LocationParent addParentInternal(UUID childId, UUID parentId, ParentType parentType) {
+    private LocationParent addParentInternal(
+            @NonNull UUID childId, @NonNull UUID parentId, @NonNull ParentType parentType) {
         if (childId.equals(parentId)) {
-            throw new IllegalArgumentException("A location cannot be its own parent");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, CYCLE_DETECTED);
         }
 
         // Lock both rows in deterministic order to prevent race conditions when two
@@ -409,11 +413,8 @@ public class LocationServiceImpl implements LocationService {
         if (locationParentRepository.existsByChild_IdAndParent_Id(childId, parentId)) {
             throw new IllegalStateException("Parent relationship already exists");
         }
-        if (locationParentRepository.existsByChild_IdAndParent_Id(parentId, childId)) {
-            throw new IllegalStateException("Circular relationship detected: inverse relationship already exists");
-        }
-        if (isDescendant(childId, parentId)) {
-            throw new IllegalStateException("Circular relationship detected: parent is a descendant of child");
+        if (wouldCreateCycle(childId, parentId, parentType)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, CYCLE_DETECTED);
         }
 
         LocationParent locationParent = LocationParent.builder()
@@ -423,9 +424,9 @@ public class LocationServiceImpl implements LocationService {
                 .build();
         LocationParent saved = locationParentRepository.saveAndFlush(locationParent);
 
-        // Post-persist defensive validation for edge races across nodes.
-        if (locationParentRepository.existsByChild_IdAndParent_Id(parentId, childId)) {
-            throw new IllegalStateException("Circular relationship detected after save");
+        // Post-persist defensive validation for edge races across nodes, on this dimension only.
+        if (locationParentRepository.existsByChild_IdAndParent_IdAndParentType(parentId, childId, parentType)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, CYCLE_DETECTED);
         }
         // Parent edges travel on the child's location.location.updated fact (issue #892), so
         // replica consumers see hierarchy changes without a dedicated edge event. The edge write
@@ -499,8 +500,41 @@ public class LocationServiceImpl implements LocationService {
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record ContactPoint(String contactType, String value, boolean primary) {}
 
-    private boolean isDescendant(UUID ancestorId, UUID targetDescendantId) {
-        return locationParentRepository.isDescendant(ancestorId, targetDescendantId);
+    /**
+     * Per-dimension cycle guard for the {@link LocationParent} graph (issue #1878, ADR-0061).
+     *
+     * <p>Walks {@code parentType} edges upward from the proposed parent. A child holds at most
+     * one parent per type (unique on {@code child_id, parent_type}), so the walk is a simple
+     * chain that ends at a root, or at {@code childId} (the new edge would close a cycle). Only
+     * this dimension is consulted: A→B on PHYSICAL and B→A on FINANCIAL is a legal DAG, and a
+     * cycle on one dimension says nothing about the others.
+     *
+     * <p>The visited set bounds the walk: revisiting a node means this dimension already holds a
+     * cycle, which is reported as a cycle rather than looped on (mirrors
+     * {@code StorageLocationServiceImpl#wouldCreateCycle}).
+     */
+    private boolean wouldCreateCycle(
+            @NonNull UUID childId, @NonNull UUID proposedParentId, @NonNull ParentType parentType) {
+        Set<UUID> visited = new HashSet<>();
+        UUID cursor = proposedParentId;
+        while (cursor != null) {
+            if (cursor.equals(childId)) {
+                return true;
+            }
+            if (!visited.add(cursor)) {
+                log.warn(
+                        "Pre-existing cycle on parentType {} reached from location {}; rejecting new edge",
+                        parentType,
+                        proposedParentId);
+                return true;
+            }
+            cursor = locationParentRepository
+                    .findByChild_IdAndParentType(cursor, parentType)
+                    .map(LocationParent::getParent)
+                    .map(Location::getId)
+                    .orElse(null);
+        }
+        return false;
     }
 
     private List<Location> findChildren(UUID parentId, ParentType parentType) {

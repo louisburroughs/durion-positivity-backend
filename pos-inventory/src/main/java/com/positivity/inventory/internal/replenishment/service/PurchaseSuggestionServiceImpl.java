@@ -13,7 +13,9 @@ import com.positivity.inventory.internal.exception.PurchaseSuggestionStateExcept
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.repository.ExtProductUomReplicaRepository;
 import com.positivity.inventory.internal.repository.PurchaseSuggestionRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.ForecastSiteResolver;
+import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.PurchaseOrderCommandPublisher;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
@@ -71,6 +73,7 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
     private final PurchaseOrderCommandPublisher purchaseOrderCommandPublisher;
     private final ForecastSiteResolver forecastSiteResolver;
     private final Clock clock;
+    private final LocationScopeService locationScopeService;
 
     @Override
     @Transactional(readOnly = true)
@@ -78,9 +81,20 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
             @Nullable String status, @Nullable String itemSKU, @Nullable UUID locationId, @NonNull Pageable pageable) {
         PurchaseSuggestionStatus statusFilter =
                 status != null ? PurchaseSuggestionStatus.valueOf(status.toUpperCase(Locale.ROOT)) : null;
+        // ADR-0061 §3 (#1872): a named location is gated; none narrows a scoped caller to their reach.
+        Optional<Set<UUID>> reach =
+                locationScopeService.narrowTo(locationId, InventoryPermissionRegistry.INVENTORY_VIEW);
+        List<PurchaseSuggestion> candidates;
+        if (reach.isEmpty()) {
+            candidates = purchaseSuggestionRepository.findAll();
+        } else if (reach.get().isEmpty()) {
+            candidates = List.of();
+        } else {
+            candidates = purchaseSuggestionRepository.findWithinLocations(reach.get());
+        }
         // In-memory filter + slice over the full set, mirroring the replenishment policy
         // listing — suggestion volume is per-policy-bounded, so this stays small.
-        List<PurchaseSuggestionResponse> filtered = purchaseSuggestionRepository.findAll().stream()
+        List<PurchaseSuggestionResponse> filtered = candidates.stream()
                 .filter(suggestion -> statusFilter == null || suggestion.getStatus() == statusFilter)
                 .filter(suggestion -> itemSKU == null || itemSKU.equals(suggestion.getItemSKU()))
                 .filter(suggestion -> locationId == null || locationId.equals(suggestion.getLocationId()))
@@ -99,7 +113,11 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
     @Override
     @Transactional(readOnly = true)
     public @NonNull PurchaseSuggestionResponse getPurchaseSuggestion(@NonNull UUID suggestionId) {
-        return toResponse(requireSuggestion(suggestionId));
+        PurchaseSuggestion suggestion = requireSuggestion(suggestionId);
+        // ADR-0061 §3 (#1872): the list is narrowed by location, so the by-id read is gated on the
+        // loaded suggestion's destination — after the 404, so ids cannot be probed.
+        locationScopeService.require(suggestion.getLocationId(), InventoryPermissionRegistry.INVENTORY_VIEW);
+        return toResponse(suggestion);
     }
 
     @Override

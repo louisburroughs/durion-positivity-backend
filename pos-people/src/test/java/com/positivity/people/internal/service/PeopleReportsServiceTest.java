@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -57,7 +58,15 @@ class PeopleReportsServiceTest {
                 extJobTimeReplicaRepository,
                 locationReferenceService,
                 timekeepingThresholdCache,
+                mock(LocationHierarchyService.class),
                 java.time.Clock.systemUTC());
+        // The export gate reads the caller's location scope; a pre-rollout token is unscoped.
+        LocationScopeFixtures.preRolloutCaller("test-actor");
+    }
+
+    @AfterEach
+    void clearCaller() {
+        LocationScopeFixtures.clearCaller();
     }
 
     @Test

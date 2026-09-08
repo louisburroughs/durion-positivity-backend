@@ -10,6 +10,7 @@ import com.positivity.workorder.internal.repository.ExtCatalogServiceReplicaRepo
 import com.positivity.workorder.internal.repository.LaborIntelligenceRepository;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -123,7 +124,7 @@ class LaborIntelligenceServiceTest {
             all.addAll(lines(SERVICE_ID, SHOP_B, "0.5", "1.2"));
             when(laborIntelligenceRepository.findLineTotals()).thenReturn(all);
 
-            assertThat(service.operations(null, SHOP_A, null))
+            assertThat(service.operations(null, Set.of(SHOP_A), null))
                     .singleElement()
                     .extracting(LaborIntelligenceRow::locationId)
                     .isEqualTo(SHOP_A);

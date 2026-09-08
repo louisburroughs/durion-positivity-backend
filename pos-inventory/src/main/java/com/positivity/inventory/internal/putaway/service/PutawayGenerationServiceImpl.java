@@ -12,10 +12,14 @@ import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.exception.TaskNotFoundException;
 import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
 import com.positivity.inventory.internal.repository.PutawayTaskRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.PutawayRuleMatcher;
 import com.positivity.inventory.internal.service.StagingLocationResolver;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +38,7 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
     private final PutawayDestinationResolver putawayDestinationResolver;
     private final StagingLocationResolver stagingLocationResolver;
     private final PutawayValidationService putawayValidationService;
+    private final LocationScopeService locationScopeService;
 
     @Override
     @Transactional
@@ -78,10 +83,22 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
     public @NonNull List<PutawayTaskResponse> getAvailableTasks(
             @Nullable UUID locationId, @Nullable UUID storageLocationId) {
         UUID scopedLocationId = storageLocationId != null ? storageLocationId : locationId;
-        List<PutawayTask> tasks = scopedLocationId == null
-                ? putawayTaskRepository.findByStatusIn(List.of(PutawayTaskStatus.UNASSIGNED))
-                : putawayTaskRepository.findByStatusInAndSourceLocationId(
-                        List.of(PutawayTaskStatus.UNASSIGNED), scopedLocationId);
+        // ADR-0061 §3 (#1872): the location the query is keyed on is gated when named; none
+        // narrows a scoped caller to their reach.
+        Optional<Set<UUID>> reach =
+                locationScopeService.narrowTo(scopedLocationId, InventoryPermissionRegistry.PUTAWAY_VIEW);
+        List<PutawayTask> tasks;
+        if (scopedLocationId != null) {
+            tasks = putawayTaskRepository.findByStatusInAndSourceLocationId(
+                    List.of(PutawayTaskStatus.UNASSIGNED), scopedLocationId);
+        } else if (reach.isEmpty()) {
+            tasks = putawayTaskRepository.findByStatusIn(List.of(PutawayTaskStatus.UNASSIGNED));
+        } else if (reach.get().isEmpty()) {
+            return List.of();
+        } else {
+            tasks = putawayTaskRepository.findByStatusInWithinSourceLocations(
+                    List.of(PutawayTaskStatus.UNASSIGNED), reach.get());
+        }
 
         return tasks.stream().map(this::toResponse).toList();
     }

@@ -1,0 +1,20 @@
+# Location-scope decisions for pos-order (ADR-0061, #1872).
+# Every operation that takes a caller-supplied locationId must appear here;
+# scripts/audit-rbac.py --check fails on a missing or stale entry.
+decisions:
+  - operation: RegisterSessionController.openSession
+    shape: gate
+    permission: order:session:open
+    reason: the session is opened at the request's locationId (or, when omitted, the terminal's previous session's location); RegisterSessionServiceImpl.openSession gates on the resolved location so omitting locationId cannot bypass the check, and a session resolving to no location is denied for a scoped caller (fail closed).
+  - operation: RegisterSessionController.getSession
+    shape: gate
+    permission: order:session:view
+    reason: resource-addressed sibling of openSession; the controller gates on the stored session's locationId after the 404 so the open gate cannot be bypassed by addressing a drawer at another shop and ids cannot be probed.
+  - operation: SalesOrderController.createCart
+    shape: gate
+    permission: order:order:create
+    reason: the cart is created at the request's locationId (or, when omitted, the terminal's open register session's location); SalesOrderServiceImpl.createCart gates on the resolved location after the 400 validation, and an Idempotency-Key replay is held to the same gate on the existing cart's location.
+  - operation: SalesOrderController.getOrder
+    shape: gate
+    permission: order:order:view
+    reason: resource-addressed sibling of createCart; the controller gates on the stored order's locationId after the 404 so the create gate cannot be bypassed by reading a cart at another shop by id.

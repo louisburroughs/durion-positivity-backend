@@ -230,6 +230,42 @@ Two details worth knowing:
 
 No endpoint, status semantics or transition changed — this is payload only.
 
+## Location scope (ADR-0061, #1871/#1872)
+
+Location-scoped permissions are enforced on top of `@PreAuthorize` using the caller's
+`LocationScope` (decoded from the gateway's `X-Loc-Fin-Bits`, `X-Loc-Oth-Bits` and `X-Loc-Scope`
+headers). Tokens without those claims are unscoped and behave exactly as before. Ancestor sets
+come from this module's own `ext_location` replica via `LocationHierarchyService`, which is the
+module's `LocationAncestorResolver`; there is no per-request call to pos-location. A denial is a
+403 `ApiError` with code `LOCATION_SCOPE_DENIED`. The full per-operation record CI checks is
+`location-scope.yaml` in this module's root.
+
+**Gate** — the location names the site read or acted on; outside the caller's reach is a 403:
+
+| Operation | Permission | Where |
+| --- | --- | --- |
+| `listWipWorkorders` (`multiLocation=false`) | `workorder:wip:view` | controller, after UUID validation |
+| `getWipDetail` | `workorder:wip:view` | controller, off the workorder's shop, after the 404 |
+| `getDispatchDashboard` | `workorder:dashboard:view` | controller, after UUID validation |
+| `getApplicableApprovalConfiguration` (when `locationId` supplied) | `workorder:approval_config:view` | controller; absent `locationId` resolves the location-less global default |
+| `listEstimatesByShop`, `listEstimatesByLocation` | `workorder:estimate:view` | controller |
+| `getEstimate`, `getEstimateSummary`, `generateEstimatePdf` | `workorder:estimate:view` | controller, off the loaded estimate's location, after the 404 |
+| `createEstimateFromAppointment` | `workorder:estimate:create` | controller, on the body's `locationId` |
+| `overrideOperationalContext` | `workorder:operationalContext:override` | `WorkorderServiceImpl`, after the 404 and before any write: first the workorder's current `shopId` (null fails closed), then the body's `locationId` |
+| `startWorkexecWorkSession` | `timekeeping:work_session:create` | controller, on the body's `locationId` |
+
+**Narrow** — the location is an optional filter; a supplied one is gated, and without one a scoped
+caller sees only the locations within reach (an empty reach is an empty result, never a 403 and
+never everything). Reach is expanded once per request by `LocationHierarchyService.reachableLocations`
+(inclusive descendants of each assigned node on each scoped dimension):
+
+| Operation | Permission | Where |
+| --- | --- | --- |
+| `listWipWorkorders` (`multiLocation=true`) | `workorder:wip:view_all_locations` | controller; a location-scoped holder is narrowed to that grant's reach, an unscoped holder sees every location |
+| `listEstimates` (unfiltered) | `workorder:estimate:view` | controller, passing the reach to `EstimateService.getEstimatesAtLocations` |
+| `getJobTimeTotals` | `workorder:labor:view` | controller, passing the reach to `WorkexecTimeTrackingService` |
+| `listLaborIntelligence` | `workorder:labor_intelligence:view` | controller, passing the reach to `LaborIntelligenceService`; `ROLE_ADMIN` without the permission is unrestricted |
+
 ## Configuration
 
 | Property                       | Default                    | Description                      |

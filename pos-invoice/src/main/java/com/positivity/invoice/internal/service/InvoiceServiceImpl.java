@@ -15,6 +15,8 @@ import com.positivity.invoice.internal.exception.InvalidInvoiceStateException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
+import com.positivity.invoice.internal.security.InvoicePermissions;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
@@ -129,6 +131,13 @@ public class InvoiceServiceImpl implements InvoiceService {
     public InvoiceDetailsResponse loadInvoiceDetail(@NonNull UUID invoiceId) {
         Invoice invoice =
                 invoiceRepository.findById(invoiceId).orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
+        // ADR-0061 §3 (#1872): the location is on the entity, so the scope check lives here rather
+        // than in the controller, after the existence check so a denial cannot be used to probe
+        // which invoice ids exist. An invoice without a location answers "" which a scoped caller
+        // cannot cover (fail closed); an unscoped or pre-rollout caller is unchanged.
+        UUID invoiceLocation = invoice.getLocationId();
+        SecurityContextHelper.locationScope()
+                .require(InvoicePermissions.VIEW, invoiceLocation == null ? "" : invoiceLocation.toString());
         return toDetailsResponse(invoice);
     }
 

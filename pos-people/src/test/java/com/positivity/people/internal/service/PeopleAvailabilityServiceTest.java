@@ -12,6 +12,7 @@ import com.positivity.people.internal.entity.ExtLocationReplica;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
+import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.SecurityContextHelper;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;
@@ -250,6 +251,7 @@ class PeopleAvailabilityServiceTest {
     void getPeopleAvailability_withoutLocation_fallsBackToAnyActiveAssignment() {
         try (MockedStatic<SecurityContextHelper> helperMock = Mockito.mockStatic(SecurityContextHelper.class)) {
             helperMock.when(SecurityContextHelper::getCurrentUsername).thenReturn(Optional.of(USERNAME));
+            helperMock.when(SecurityContextHelper::locationScope).thenReturn(LocationScope.unscoped());
             when(userPersonTranslationService.getPersonUuidForUser(USERNAME)).thenReturn(PERSON_ID);
             // Requester has only a non-primary assignment: availability still resolves
             // (unlike primary-location, which requires the primary flag).

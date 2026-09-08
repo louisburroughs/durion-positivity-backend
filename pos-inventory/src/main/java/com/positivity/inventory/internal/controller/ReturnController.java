@@ -2,11 +2,14 @@ package com.positivity.inventory.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.returns.ReasonCodeDto;
+import com.positivity.inventory.internal.dto.returns.ReturnLineDto;
 import com.positivity.inventory.internal.dto.returns.ReturnSubmissionResultDto;
 import com.positivity.inventory.internal.dto.returns.ReturnSubmitRequest;
 import com.positivity.inventory.internal.dto.returns.ReturnableItemDto;
 import com.positivity.inventory.internal.receiving.service.ReturnService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -149,7 +152,9 @@ public class ReturnController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "User lacks required return write authority",
+            description = "FORBIDDEN when the caller lacks inventory:return:write;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover every line's locationId (ADR-0061)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -172,6 +177,14 @@ public class ReturnController {
                     @Valid
                     @RequestBody
                     ReturnSubmitRequest request) {
+        // ADR-0061 §3 (#1872): every line names the location it returns stock to; each distinct
+        // one is gated before anything is accepted. The body is validated by then, so no
+        // locationId is null.
+        LocationScope scope = SecurityContextHelper.locationScope();
+        request.getLines().stream()
+                .map(ReturnLineDto::getLocationId)
+                .distinct()
+                .forEach(locationId -> scope.require(InventoryPermissionRegistry.RETURN_WRITE, locationId));
         ReturnSubmissionResultDto response = returnService.submitToStock(request);
         return ResponseEntity.accepted().body(response);
     }

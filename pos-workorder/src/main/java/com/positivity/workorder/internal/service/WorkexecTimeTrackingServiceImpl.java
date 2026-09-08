@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -66,7 +67,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
             @NonNull LocalDate startDate,
             @NonNull LocalDate endDate,
             @NonNull ZoneId timezone,
-            @Nullable UUID locationId,
+            @Nullable Collection<UUID> locationIds,
             @NonNull List<UUID> technicianIds) {
 
         LocalDateTime queryStartUtc = startDate.minusDays(1).atStartOfDay();
@@ -83,7 +84,7 @@ public class WorkexecTimeTrackingServiceImpl implements WorkexecTimeTrackingServ
             LocalDateTime entryEndTime = entry.getEndTime();
             boolean skip = entryEndTime == null
                     || (!technicianIds.isEmpty() && !technicianIds.contains(technicianId))
-                    || (locationId != null && (rowLocationId == null || !locationId.equals(rowLocationId)));
+                    || (locationIds != null && (rowLocationId == null || !locationIds.contains(rowLocationId)));
             LocalDate performedDate = entryEndTime == null
                     ? null
                     : entryEndTime

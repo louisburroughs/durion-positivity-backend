@@ -1,5 +1,7 @@
 package com.positivity.securityservice.internal.security.service;
 
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -54,6 +56,25 @@ public interface JwtService {
     public static final String USERNAME = "username";
     /** Claim key for optional CRM person identifier linked to this user. */
     public static final String PERSON_ID = "personId";
+    /**
+     * Claim key for the Base64URL bitset of permissions that are location-scoped along the
+     * {@code FINANCIAL} hierarchy (ADR-0061 §2). Same codec and bit indexes as {@code perm_bits},
+     * so it is covered by {@code perm_ver}. Access tokens only.
+     */
+    public static final String LOC_FIN_BITS = "loc_fin_bits";
+    /** As {@link #LOC_FIN_BITS}, along the {@code OTHER} hierarchy. */
+    public static final String LOC_OTH_BITS = "loc_oth_bits";
+    /**
+     * Claim key for the assigned location nodes: a JSON object {@code {"v":1,"nodes":[...]}}.
+     * Omitted when both scope bitsets are empty, and — fail closed — when they are not but no
+     * assigned node could be resolved (ADR-0061 §2). Never {@code "ALL"}, never a bare list.
+     */
+    public static final String LOC_SCOPE = "loc_scope";
+    /**
+     * Discriminator value of the {@link #LOC_SCOPE} object. Deliberate: a denser node encoding can
+     * be introduced under a new value without a {@code CATALOG_VERSION} bump.
+     */
+    public static final int LOC_SCOPE_VERSION = 1;
 
     /**
      * Generates a JWT token for the given username and roles, stores it in the
@@ -123,6 +144,16 @@ public interface JwtService {
     UUID getPersonIdFromToken(@NonNull String token);
 
     /**
+     * Extracts the {@code jti} claim from a signed access or refresh token issued by this service.
+     *
+     * @param token the JWT token string
+     * @return the JWT ID, or {@code null} if the token carries none
+     * @throws io.jsonwebtoken.JwtException if the token does not verify or has expired
+     */
+    @Nullable
+    String getJtiFromToken(@NonNull String token);
+
+    /**
      * Extracts the set of roles from the given JWT token.
      *
      * @param token the JWT token string
@@ -134,6 +165,40 @@ public interface JwtService {
      * Extracts the set of authorities from the given JWT token.
      */
     Set<String> getAuthoritiesFromToken(@NonNull String token);
+
+    /**
+     * Decodes the {@code loc_fin_bits} claim to permission codes (ADR-0061 §2).
+     *
+     * @return the permissions location-scoped along {@code FINANCIAL}; empty when the claim is absent
+     */
+    Set<String> getFinancialLocationScopedPermissionsFromToken(@NonNull String token);
+
+    /**
+     * Decodes the {@code loc_oth_bits} claim to permission codes (ADR-0061 §2).
+     *
+     * @return the permissions location-scoped along {@code OTHER}; empty when the claim is absent
+     */
+    Set<String> getOtherLocationScopedPermissionsFromToken(@NonNull String token);
+
+    /**
+     * Reads the {@code loc_scope} claim (ADR-0061 §2).
+     *
+     * @return the assigned nodes, or empty when the claim is absent — which a scope-checking
+     *         reader must treat as "deny", never as unrestricted reach
+     */
+    Optional<LocationScopeClaim> getLocationScopeFromToken(@NonNull String token);
+
+    /**
+     * The decoded {@code loc_scope} claim.
+     *
+     * @param version the discriminator ({@link #LOC_SCOPE_VERSION})
+     * @param nodes   the assigned location node ids, verbatim and never expanded
+     */
+    record LocationScopeClaim(int version, List<UUID> nodes) {
+        public LocationScopeClaim {
+            nodes = List.copyOf(nodes);
+        }
+    }
 
     /**
      * Deletes the given JWT token from the repository and marks it as revoked in
@@ -198,9 +263,13 @@ public interface JwtService {
      *
      * @implNote Access token claims: {@code sub}, {@code uid}, {@code username},
      *           {@code iss} ("pos-security-service"), {@code aud} ("api-gateway"),
-     *           {@code perm_bits}, {@code perm_ver}, {@code iat}, {@code exp}, {@code jti}.
-     *           Refresh token claims: {@code sub}, {@code uid}, {@code type}="refresh",
-     *           {@code iat}, {@code exp}, {@code jti}.
+     *           {@code perm_bits}, {@code perm_ver}, {@code loc_fin_bits}, {@code loc_oth_bits},
+     *           optional {@code loc_scope}, {@code iat}, {@code exp}, {@code jti}
+     *           (ADR-0061 §2). When either scope bitset is non-empty, {@code exp} is clamped to
+     *           the end of the day the earliest contributing staffing assignment ends
+     *           (ADR-0061 §4). Refresh token claims: {@code sub}, {@code uid},
+     *           {@code type}="refresh", {@code iat}, {@code exp}, {@code jti} — never the
+     *           permission or scope claims.
      *
      * @param username the subject for the tokens
      * @param userId   stable user identifier for audit lineage

@@ -1,0 +1,36 @@
+# Location-scope decisions for pos-shop-manager (ADR-0061, #1872).
+# Every operation that takes a caller-supplied locationId must appear here;
+# scripts/audit-rbac.py --check fails on a missing or stale entry.
+decisions:
+  - operation: AppointmentsController.createAppointment
+    shape: gate
+    permission: appointments:create
+    reason: locationId in the body names the site the appointment is booked at; hasAnyAuthority with shop:schedule:edit, denied only when no held alternate covers the location.
+  - operation: AppointmentsController.getAppointment
+    shape: gate
+    permission: appointments:view
+    reason: resource-addressed sibling of createAppointment; gated on the stored appointment's location after the 404 (hasAnyAuthority with shop:schedule:view) so the create gate cannot be bypassed by id.
+  - operation: AppointmentsController.rescheduleAppointment
+    shape: gate
+    permission: appointments:reschedule
+    reason: resource-addressed sibling of createAppointment; gated on the stored appointment's location after the 404 so a scoped caller cannot move work outside its reach.
+  - operation: AppointmentsController.cancelAppointment
+    shape: gate
+    permission: appointments:cancel
+    reason: resource-addressed sibling of createAppointment; gated on the stored appointment's location after the 404 so a scoped caller cannot cancel work outside its reach.
+  - operation: ScheduleController.viewSchedule
+    shape: gate
+    permission: shop:schedule:view
+    reason: locationId names the schedule board being read; denied outside the caller's reach.
+  - operation: ShopDashboardController.getShopDashboard
+    shape: gate
+    permission: shop:dashboard:view
+    reason: locationId names the shop whose dashboard is read; denied outside the caller's reach.
+  - operation: TechnicianController.listLocationTechnicians
+    shape: gate
+    permission: shop:technician:view
+    reason: the path locationId names the roster being read; denied outside the caller's reach.
+  - operation: TechnicianController.getTechnicianPerson
+    shape: gate
+    permission: shop:technician:view
+    reason: the path locationId is the boundary the technician-person lookup is addressed through; denied outside the caller's reach before the lookup runs.

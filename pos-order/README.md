@@ -41,6 +41,30 @@ Order management service for the Durion Positivity ETSMS platform. Manages sales
 - `POST /v1/orders/price-overrides/{overrideId}/approve` — approve an override
 - `POST /v1/orders/price-overrides/{overrideId}/reject` — reject an override
 
+## Location scope (ADR-0061, #1872)
+
+`@PreAuthorize` answers "may this caller do X"; the caller's `LocationScope` (decoded by
+`pos-security-common` from the gateway's `X-Loc-*` headers) answers "…at this location".
+Decisions per operation are recorded in [`location-scope.yaml`](location-scope.yaml):
+
+- `POST /v1/orders/sessions` (`order:session:open`) and `POST /v1/orders/carts`
+  (`order:order:create`) are **gated** in `RegisterSessionServiceImpl.openSession` and
+  `SalesOrderServiceImpl.createCart` on the *resolved* location — the request's `locationId`, or
+  the default taken from the terminal's previous / open session when it is omitted — so omitting
+  `locationId` cannot bypass the check. A scoped caller outside its reach gets
+  `403 LOCATION_SCOPE_DENIED`; a session that resolves to no location is denied for a scoped caller
+  (fail closed). Pre-rollout tokens without `loc_*` claims are unchanged.
+- `GET /v1/orders/sessions/{sessionId}` (`order:session:view`) and `GET /v1/orders/carts/{orderId}`
+  (`order:order:view`) are gated in the controller on the stored entity's location, after the
+  404, so the create gates cannot be bypassed by reading the resource back by id.
+
+The check runs in-process against the `ext_location` replica: `LocationHierarchyService`
+implements `LocationAncestorResolver` over the materialised `financial_ancestor_ids` /
+`other_ancestor_ids` sets that `LocationEventsListener` recomputes from the `ext_location_parent`
+edges carried as `parents` on every `location.location.updated` fact (V22; pos-location publishes
+no separate parent-added/removed fact). A location the replica does not hold is denied for scoped
+callers; pos-location is never called per request.
+
 ## Source-document import (parity story E1)
 
 Estimate and workorder lines import via `PATCH /v1/orders/carts/{orderId}/source` from the

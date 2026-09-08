@@ -1,0 +1,16 @@
+# Location-scope decisions for pos-invoice (ADR-0061, #1872).
+# Every operation that takes a caller-supplied locationId must appear here;
+# scripts/audit-rbac.py --check fails on a missing or stale entry.
+decisions:
+  - operation: InvoiceController.createInvoice
+    shape: gate
+    permission: invoice:manage
+    reason: the request's locationId names the shop the workorder invoice is raised at; gated in the controller before the service runs, and an omitted locationId is denied for a scoped caller (fail closed).
+  - operation: InvoiceController.createInvoiceFromOrder
+    shape: gate
+    permission: invoice:manage
+    reason: the request's locationId names the shop the order invoice is raised at (OrderInvoiceServiceImpl stores it verbatim, nothing is read from a replicated order), so it is gated in the controller before the service runs; an omitted locationId is denied for a scoped caller (fail closed).
+  - operation: InvoiceController.getInvoice
+    shape: gate
+    permission: invoice:invoice:view
+    reason: resource-addressed sibling of the create gates; InvoiceServiceImpl.loadInvoiceDetail gates on the stored invoice's locationId after the 404 so ids cannot be probed and the create gate cannot be bypassed by reading the invoice back.

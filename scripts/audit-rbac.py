@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""RBAC cross-reference audit (issues #1499 / #1512).
+"""RBAC cross-reference audit (issues #1499 / #1512) and location-scope
+decision check (ADR-0061, #1872).
 
-Cross-references four sources of truth about the authorization model:
+Cross-references five sources of truth about the authorization model:
 
   A. Granted   -- role -> permission grants from BOTH provisioning paths, which
                   #1613 (D8) split: the bootstrap floor still in
@@ -15,6 +16,11 @@ Cross-references four sources of truth about the authorization model:
                   authorities.contains(...), etc.)
   D. Registry  -- per-module src/main/resources/permissions.yaml manifests
   E. Catalog   -- PermissionCode enum (permanent JWT bit indexes)
+  F. Location scope -- every controller operation whose parameter list carries
+                  a caller-supplied `locationId` (the parameter-list parser from
+                  docs/location-scope-effective-dating-spike-2026-09.md section 7),
+                  cross-checked against the module's recorded decision in
+                  pos-*/location-scope.yaml (shape gate | narrow | unscoped)
 
 and reports every disagreement between them:
 
@@ -27,6 +33,17 @@ and reports every disagreement between them:
   granted_no_bit        granted but absent from PermissionCode -- same trap
   catalog_dead          bit assigned, but neither granted nor required
   unreachable_ops       contract operations none of whose alternates is granted
+  location_scope_undecided  operation takes a locationId but the module's
+                        location-scope.yaml has no entry for it (ADR-0061)
+  location_scope_stale  location-scope.yaml entry whose operation no longer
+                        exists in the module (a sibling entry for an endpoint
+                        that takes no locationId is fine as long as the
+                        Class.method exists in one of the module's controllers)
+  location_scope_invalid  shape not gate|narrow|unscoped, gate/narrow without a
+                        permission, any entry without a reason, a duplicate
+                        operation, or a file the flat-format parser cannot read
+  location_scope_summary  informational: operations found and entries per shape,
+                        per module
 
 Run from the repo root; no build, no database:
 
@@ -45,6 +62,20 @@ build; unreachable_op_count fails on any value > 0 (never baselined -- it
 should always be zero). A baselined code that no longer drifts is also a
 failure ("stale baseline") -- the baseline is meant to shrink, not just grow.
 required_unregistered and catalog_dead are informational only and never gate.
+
+--check also gates the three location-scope codes -- location_scope_undecided,
+location_scope_stale, location_scope_invalid -- with no baseline: every module
+that exposes a location-parameterised operation must record a decision for it
+in <module>/location-scope.yaml, and every recorded decision must still name a
+real operation. Flat format, one line per value, parsed with regex (no PyYAML):
+
+  decisions:
+    - operation: StockMovementController.createAdjustmentRequest
+      shape: gate                            # gate | narrow | unscoped
+      permission: inventory:adjustment:create   # required for gate / narrow
+      reason: locationId names the site the adjustment is raised at.
+
+See docs/OPERATIONS_RUNBOOK.md "Location-scope decisions (location-scope.yaml)".
 
 Known limitations (see docs/rbac-permission-role-audit-2026-08.md):
   - x-required-permissions alternates are treated as OR (mirrors
@@ -74,6 +105,11 @@ if "--baseline" in argv:
                  "--baseline scripts/rbac-audit-baseline.json")
     baseline_path = argv[idx + 1]
     del argv[idx:idx + 2]
+unknown = [a for a in argv if a.startswith("--")]
+if unknown:
+    sys.exit(f"error: unknown option {unknown[0]!r} (accepted: --check, --baseline PATH; "
+             "one positional output path). Refusing to write a report file named "
+             f"{unknown[0]!r}.")
 output_path = argv[0] if argv else None
 
 root = pathlib.Path(".")
@@ -298,6 +334,167 @@ catalog = {}  # code -> bit index
 for m in re.finditer(r'(\w+)\((\d+),\s*"(' + PERM_RE + r')"\)', pc_path.read_text()):
     catalog[m.group(3)] = int(m.group(2))
 
+# ---- F. location-scope decisions (ADR-0061, #1872) ---------------------------
+# Which operations take a caller-supplied locationId is decided by parsing each
+# mapping method's PARAMETER LIST (balanced parens after the method name), the
+# same parser as docs/location-scope-effective-dating-spike-2026-09.md section 7
+# -- grepping annotations under-reported (#1375). Bodies are comment-stripped so
+# a javadoc mentioning locationId cannot count. Note the parameter list includes
+# parameter annotations, so a @RequestBody whose example/description names
+# locationId counts too: that is how body-carried location ids (createCart,
+# openSession, createInvoice, ...) enter the inventory.
+LOCATION_SCOPE_SHAPES = ("gate", "narrow", "unscoped")
+
+
+def params_of(src, i):
+    """Return the text between the parenthesis opening at src[i] and its match."""
+    depth = 0
+    for j in range(i, len(src)):
+        if src[j] == "(":
+            depth += 1
+        elif src[j] == ")":
+            depth -= 1
+            if depth == 0:
+                return src[i + 1:j]
+    return ""
+
+
+loc_ops = collections.defaultdict(set)            # module -> {Class.method} taking locationId
+controller_methods = collections.defaultdict(set)  # module -> {Class.method} of every public
+                                                   # method in a *Controller.java (sibling check)
+for f in sorted(java_files):
+    if not f.name.endswith("Controller.java"):
+        continue
+    mod, cls, body = f.parts[0], f.stem, file_bodies[f]
+    for m in re.finditer(r'\n\s+public\s+[^;{]*?\b(\w+)\s*\(', body):
+        controller_methods[mod].add(f"{cls}.{m.group(1)}")
+    mappings = list(re.finditer(r'@(Get|Post|Put|Patch|Delete)Mapping', body))
+    for idx, m in enumerate(mappings):
+        # The method belongs to the mapping annotation immediately above it, so
+        # scan up to the next mapping (or end of file), not a fixed window: an
+        # operation with long @ApiResponses documentation between the mapping
+        # and its signature would otherwise silently drop out of the inventory.
+        end = mappings[idx + 1].start() if idx + 1 < len(mappings) else len(body)
+        md = re.search(r'\n\s+public\s+[^;{]*?\b(\w+)\s*\(', body[m.start():end])
+        if not md:
+            continue
+        ptext = params_of(body, m.start() + md.end() - 1)
+        if re.search(r'\blocationId\b', ptext):
+            loc_ops[mod].add(f"{cls}.{md.group(1)}")
+
+
+def _unquote(value):
+    """One-line scalar: strip matching quotes (a `#` inside them is content) or,
+    unquoted, a trailing ` # comment`. A YAML block-scalar indicator (`>` / `|`)
+    is returned as-is so the entry check can reject it -- the format is one
+    line per value, and a folded reason would otherwise read as the value ">"
+    with its text lines reported as malformed noise."""
+    value = value.strip()
+    m = re.match(r"""^(["'])(.*?)\1\s*(?:#.*)?$""", value)
+    if m:
+        return m.group(2).strip()
+    return re.sub(r"\s+#.*$", "", value).strip()
+
+
+def parse_location_scope(path):
+    """Regex parser for the flat decision-file format. Returns (entries, errors).
+
+    Accepted lines: comments/blank, `decisions:` (optionally `decisions: []`),
+    `- operation: X` opening an entry, and `shape:` / `permission:` / `reason:`
+    continuation lines inside an entry. Every value is one line, optionally
+    quoted. Anything else (a multi-line `>` reason, an unknown key, a
+    continuation before any `- operation:`) is reported as malformed rather than
+    silently skipped -- the file gates CI, so a decision the parser cannot see
+    must fail loudly.
+    """
+    entries, errors = [], []
+    cur, saw_decisions = None, False
+    for lineno, raw in enumerate(path.read_text().splitlines(), start=1):
+        line = raw.rstrip()
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if re.match(r"^decisions:\s*(\[\s*\]\s*)?(#.*)?$", line):
+            saw_decisions = True
+            continue
+        m = re.match(r"^\s+(-\s+)?([A-Za-z_]\w*):\s*(.*)$", line)
+        if not m or not saw_decisions:
+            errors.append(f"line {lineno}: malformed (expected `- operation:` / `shape:` / "
+                          f"`permission:` / `reason:` under `decisions:`): {line.strip()!r}")
+            cur = None
+            continue
+        dash, key, value = m.group(1), m.group(2), _unquote(m.group(3))
+        if dash:
+            if key != "operation":
+                errors.append(f"line {lineno}: entry must start with `- operation:`, got `- {key}:`")
+                cur = None
+                continue
+            cur = {"operation": value, "line": lineno}
+            entries.append(cur)
+            continue
+        if cur is None:
+            errors.append(f"line {lineno}: `{key}:` outside an entry")
+            continue
+        if key not in ("shape", "permission", "reason"):
+            errors.append(f"line {lineno}: unknown key `{key}:` (allowed: operation, shape, permission, reason)")
+            continue
+        if key in cur:
+            errors.append(f"line {lineno}: duplicate `{key}:` in entry {cur['operation']!r}")
+            continue
+        if re.fullmatch(r"[>|][+-]?\d*", value):
+            errors.append(f"line {lineno}: `{key}:` uses a block scalar ({value}); every value must be one line")
+            continue
+        cur[key] = value
+    if not saw_decisions:
+        errors.append("no `decisions:` list")
+    return entries, errors
+
+
+flag_location_undecided = []   # "<module>: Class.method"
+flag_location_stale = []       # "<module>: Class.method (line n)"
+flag_location_invalid = []     # "<module>: <problem>"
+location_scope_summary = {}    # module -> {operations, decided, gate, narrow, unscoped}
+location_modules = set(loc_ops) | {p.parent.name for p in root.glob("pos-*/location-scope.yaml")}
+for mod in sorted(location_modules):
+    ops = loc_ops.get(mod, set())
+    summary = {"operations": len(ops), "decided": 0, "gate": 0, "narrow": 0, "unscoped": 0}
+    location_scope_summary[mod] = summary
+    decision_file = root / mod / "location-scope.yaml"
+    if not decision_file.exists():
+        flag_location_undecided.extend(f"{mod}: {op}  (no {mod}/location-scope.yaml)" for op in sorted(ops))
+        continue
+    entries, errors = parse_location_scope(decision_file)
+    flag_location_invalid.extend(f"{mod}: {e}" for e in errors)
+    seen = set()
+    for e in entries:
+        op, where = e["operation"], f"{mod}: {e['operation']} (line {e['line']})"
+        problems = []
+        if not op:
+            problems.append("empty operation")
+        elif not re.fullmatch(r"\w+\.\w+", op):
+            problems.append("operation must be SimpleClassName.methodName")
+        elif op in seen:
+            problems.append("duplicate operation")
+        seen.add(op)
+        shape = e.get("shape", "")
+        if shape not in LOCATION_SCOPE_SHAPES:
+            problems.append(f"shape {shape!r} not in {'|'.join(LOCATION_SCOPE_SHAPES)}")
+        elif shape in ("gate", "narrow") and not e.get("permission"):
+            problems.append(f"shape {shape} requires a permission")
+        if not e.get("reason"):
+            problems.append("missing reason")
+        if problems:
+            flag_location_invalid.append(f"{where}: " + "; ".join(problems))
+        else:
+            summary[shape] += 1
+            if op in ops:
+                summary["decided"] += 1
+        if op and op not in ops and op not in controller_methods.get(mod, set()):
+            flag_location_stale.append(where)
+    # An invalid entry still counts as "decided" here: it is reported under
+    # location_scope_invalid, and double-reporting it as undecided would hide
+    # the real cause.
+    flag_location_undecided.extend(f"{mod}: {op}" for op in sorted(ops - seen))
+
 # ---- op-level reachability --------------------------------------------------
 # Listed perms are treated as OR-alternates (mirrors hasAnyAuthority). An op is
 # unreachable when no listed perm is granted to any role and the AUTHENTICATED
@@ -357,6 +554,10 @@ out = {
         "granted_no_bit": len(flag_granted_no_bit),
         "catalog_dead": len(flag_catalog_dead),
         "unreachable_op_count": sum(len(v) for v in unreachable_ops.values()),
+        "location_scope_operations": sum(len(v) for v in loc_ops.values()),
+        "location_scope_undecided": len(flag_location_undecided),
+        "location_scope_stale": len(flag_location_stale),
+        "location_scope_invalid": len(flag_location_invalid),
     },
     "roles": {r: len(ps) for r, ps in sorted(role_perms.items())},
     "op_missing_by_module": {m: [op_missing[m], op_counts[m]] for m in sorted(op_counts) if op_missing[m] > 0},
@@ -375,6 +576,10 @@ out = {
     "granted_no_bit": flag_granted_no_bit,
     "catalog_dead": {p: catalog[p] for p in flag_catalog_dead},
     "unreachable_ops": {m: v for m, v in sorted(unreachable_ops.items())},
+    "location_scope_undecided": flag_location_undecided,
+    "location_scope_stale": flag_location_stale,
+    "location_scope_invalid": flag_location_invalid,
+    "location_scope_summary": location_scope_summary,
 }
 
 if not check_mode:
@@ -438,16 +643,42 @@ if unreachable_op_count > 0:
         for path, method, perms in ops:
             print(f"  - {mod}: {method.upper()} {path}  requires {perms}")
 
+# Location-scope decisions (ADR-0061, #1872) are never baselined: an operation
+# that takes a locationId with no recorded decision, a decision for an operation
+# that no longer exists, or a decision the parser cannot read all fail.
+location_gated = {
+    "location_scope_undecided": (flag_location_undecided,
+                                 "operations taking a locationId with no entry in <module>/location-scope.yaml"),
+    "location_scope_stale": (flag_location_stale,
+                             "location-scope.yaml entries whose operation no longer exists in the module"),
+    "location_scope_invalid": (flag_location_invalid,
+                               "location-scope.yaml entries or files the checker cannot accept"),
+}
+for category, (items, what) in location_gated.items():
+    if items:
+        failed = True
+        print(f"\nLOCATION SCOPE -- {category} ({len(items)}, never baselined, must be 0): {what}")
+        for item in items:
+            print(f"  - {item}")
+
 print("\n-- informational only, not gated (see docs/rbac-permission-role-audit-2026-08.md §5) --")
 print(f"  required_unregistered: {len(flag_required_unregistered)}")
 print(f"  catalog_dead: {len(flag_catalog_dead)}")
+print("  location_scope_summary (operations taking a locationId / decided; gate / narrow / unscoped):")
+for mod, sm in sorted(location_scope_summary.items()):
+    print(f"    {mod}: {sm['operations']}/{sm['decided']}; "
+          f"{sm['gate']} / {sm['narrow']} / {sm['unscoped']}")
 
 if failed:
-    print(f"\nFAIL: new authorization drift and/or a stale baseline entry -- see above.")
+    print(f"\nFAIL: new authorization drift, a stale baseline entry and/or a location-scope "
+          f"decision problem -- see above.")
     print(f"Fix the drift, or add/remove a baseline entry with a reason: {baseline_path}")
-    print(f"Background: docs/rbac-permission-role-audit-2026-08.md (§7, task 7)")
+    print(f"Location-scope codes are never baselined: record the decision in <module>/location-scope.yaml "
+          f"(docs/OPERATIONS_RUNBOOK.md, \"Location-scope decisions\").")
+    print(f"Background: docs/rbac-permission-role-audit-2026-08.md (§7, task 7); ADR-0061 / #1872")
     sys.exit(1)
 
 print(f"\nOK: no new authorization drift (baseline: {sum(len(baseline.get(c, {})) for c in gated)} accepted "
-      f"exceptions across {len(gated)} categories, 0 unreachable ops).")
+      f"exceptions across {len(gated)} categories, 0 unreachable ops, "
+      f"{out['counts']['location_scope_operations']} location-scope decisions recorded).")
 sys.exit(0)

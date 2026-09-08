@@ -102,7 +102,10 @@ public class InventoryReferenceDataController {
                             schema = @Schema(description = "Page of inventory storage locations")))
     @ApiResponse(
             responseCode = "403",
-            description = "User lacks required location view authority",
+            description = "FORBIDDEN when the caller lacks inventory:location:view;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the requested locationId filter (ADR-0061);"
+                    + " without a filter the result is narrowed to the caller's reach instead",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Page<StorageLocationDto>> listStorageLocations(
             @RequestParam(required = false) UUID locationId,
@@ -139,7 +142,10 @@ public class InventoryReferenceDataController {
                             schema = @Schema(description = "Page of inventory location zones")))
     @ApiResponse(
             responseCode = "403",
-            description = "User lacks required location view authority",
+            description = "FORBIDDEN when the caller lacks inventory:location:view;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the requested locationId filter (ADR-0061);"
+                    + " without a filter the result is narrowed to the caller's reach instead",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Page<LocationZoneDto>> listLocationZones(
             @RequestParam(required = false) UUID locationId,

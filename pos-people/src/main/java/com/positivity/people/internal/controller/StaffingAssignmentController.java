@@ -42,6 +42,14 @@ public class StaffingAssignmentController {
 
     private static final String ASSIGNMENTS = "/staffing/assignments";
 
+    /**
+     * An assignment feeds a person's location-scope claims, so a caller whose
+     * {@code people:employee:edit} is location-scoped may only assign within their own reach
+     * (ADR-0061 §3, #1872).
+     */
+    private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
+            "LOCATION_SCOPE_DENIED: the assignment's location is outside the caller's location reach";
+
     private final StaffingAssignmentService staffingAssignmentService;
 
     @Operation(
@@ -57,17 +65,26 @@ public class StaffingAssignmentController {
                     the effective dates.
                     Required inputs: personId (UUID), locationId (UUID), role, isPrimary, and effectiveFrom \
                     (yyyy-MM-dd); effectiveTo is optional and open-ended when null.
+                    Location scope: an assignment feeds the person's location-scope claims, so locationId must lie \
+                    within the caller's own location reach when their people:employee:edit permission is \
+                    location-scoped, or the request is refused with 403 LOCATION_SCOPE_DENIED (checked after the \
+                    person and location are resolved, so a 404 precedes it).
                     Emits a PEOPLE_STAFFING_ASSIGNMENT_CREATE event and publishes a staffing-assignment fact; a new \
                     primary demotes and ends any overlapping existing primary, and a person's first active \
                     assignment is forced primary regardless of the flag.
                     Returns 409 when an overlapping assignment exists for the person, location, and role, 404 when \
-                    the person, employee record, or active location cannot be resolved, and 400 when the person's \
-                    employee status is not ACTIVE.
+                    the person, employee record, or active location cannot be resolved, 400 when the person's \
+                    employee status is not ACTIVE, and 403 LOCATION_SCOPE_DENIED when locationId is outside the \
+                    caller's location reach.
                     """)
     @ApiResponse(responseCode = "201", description = "Assignment created.")
     @ApiResponse(
             responseCode = "400",
             description = "Validation error.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = LOCATION_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
@@ -194,16 +211,25 @@ public class StaffingAssignmentController {
                     overlap the effective dates.
                     Required inputs: assignmentId (UUID) path parameter plus the full body (personId, locationId, \
                     role, isPrimary, effectiveFrom); this is a full replacement, not a patch.
+                    Location scope: when the caller's people:employee:edit permission is location-scoped, both the \
+                    assignment's current location and the requested locationId must lie within the caller's \
+                    reach, or the request is refused with 403 LOCATION_SCOPE_DENIED (checked after the assignment \
+                    is found, so a 404 precedes it).
                     Emits a PEOPLE_STAFFING_ASSIGNMENT_UPDATE event and publishes a staffing-assignment fact; \
                     setting isPrimary true demotes and ends any other overlapping primary assignment.
                     Returns 404 when the assignment, person, employee record, or active location cannot be resolved, \
-                    409 when another assignment overlaps for the person, location, and role, and 400 when the \
-                    person's employee status is not ACTIVE.
+                    409 when another assignment overlaps for the person, location, and role, 400 when the \
+                    person's employee status is not ACTIVE, and 403 LOCATION_SCOPE_DENIED when the current or \
+                    requested location is outside the caller's location reach.
                     """)
     @ApiResponse(responseCode = "200", description = "Assignment updated.")
     @ApiResponse(
             responseCode = "400",
             description = "Validation error.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = LOCATION_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
@@ -254,11 +280,19 @@ public class StaffingAssignmentController {
                     Preconditions: the assignment must exist; ending an already ENDED assignment is accepted and \
                     republishes the fact.
                     Required inputs: assignmentId (UUID) path parameter; there is no request body.
+                    Location scope: when the caller's people:employee:edit permission is location-scoped, the \
+                    assignment's location must lie within the caller's reach, or the request is refused with 403 \
+                    LOCATION_SCOPE_DENIED (checked after the assignment is found, so a 404 precedes it).
                     Emits a PEOPLE_STAFFING_ASSIGNMENT_END event and publishes a staffing-assignment fact; a null \
                     effectiveTo is stamped with today's date.
-                    Returns 204 on success, and 404 when no assignment exists for the supplied id.
+                    Returns 204 on success, 404 when no assignment exists for the supplied id, and 403 \
+                    LOCATION_SCOPE_DENIED when the assignment's location is outside the caller's location reach.
                     """)
     @ApiResponse(responseCode = "204", description = "Assignment ended.")
+    @ApiResponse(
+            responseCode = "403",
+            description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Assignment not found.",

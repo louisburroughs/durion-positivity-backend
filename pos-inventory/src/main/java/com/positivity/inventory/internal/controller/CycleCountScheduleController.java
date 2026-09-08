@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.dto.cyclecount.schedule.CycleCountSched
 import com.positivity.inventory.internal.dto.cyclecount.schedule.UpdateCycleCountScheduleRequest;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -76,7 +77,12 @@ public class CycleCountScheduleController {
                             mediaType = "application/json",
                             schema = @Schema(implementation = CycleCountScheduleResponse.class)))
     @ApiResponse(responseCode = "400", description = "Validation failure")
-    @ApiResponse(responseCode = "403", description = "User lacks required permission")
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller lacks inventory:cycle_count:initiate;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the request's locationId (ADR-0061)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CycleCountScheduleResponse> createSchedule(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Recurring schedule to create, with its location, cadence, first due"
@@ -101,6 +107,10 @@ public class CycleCountScheduleController {
                     CreateCycleCountScheduleRequest request) {
         String createdBy = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException("No current user"));
+        // ADR-0061 §3 (#1872): @PreAuthorize answered "may this caller initiate counts"; this
+        // answers "...at this location". The body is validated by then, so locationId is non-null.
+        SecurityContextHelper.locationScope()
+                .require(InventoryPermissionRegistry.CYCLE_COUNT_INITIATE, request.getLocationId());
         CycleCountScheduleResponse response = cycleCountScheduleService.createSchedule(request, createdBy);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -135,7 +145,13 @@ public class CycleCountScheduleController {
                     @Content(
                             mediaType = "application/json",
                             array = @ArraySchema(schema = @Schema(implementation = CycleCountScheduleResponse.class))))
-    @ApiResponse(responseCode = "403", description = "User lacks required permission")
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller lacks inventory:cycle_count:view;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the requested locationId filter (ADR-0061);"
+                    + " without a filter the result is narrowed to the caller's reach instead",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<CycleCountScheduleResponse>> listSchedules(
             @Parameter(description = "Filter by location identifier") @RequestParam(required = false) UUID locationId,
             @Parameter(description = "Filter by active flag") @RequestParam(required = false) Boolean active,
@@ -173,6 +189,12 @@ public class CycleCountScheduleController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = CycleCountScheduleResponse.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller lacks inventory:cycle_count:view;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the schedule's locationId (ADR-0061)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Cycle count schedule not found")
     public ResponseEntity<CycleCountScheduleResponse> getSchedule(
             @Parameter(description = "Cycle count schedule identifier", required = true) @PathVariable

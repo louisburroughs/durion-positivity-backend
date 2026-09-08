@@ -10,6 +10,7 @@ import com.positivity.inventory.internal.exception.InvalidParamCombinationExcept
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.InventoryAvailabilityService;
 import com.positivity.inventory.internal.service.InventoryLeadTimeService;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -168,7 +169,10 @@ public class InventoryAvailabilityController {
                                         schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
-                        description = "User lacks required read permission",
+                        description = "FORBIDDEN when the caller lacks inventory:availability:read;"
+                                + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                                + " locations that do not cover the requested locationId or storageLocationId"
+                                + " (ADR-0061); without either the view is narrowed to the caller's reach instead",
                         content =
                                 @Content(
                                         mediaType = "application/json",
@@ -254,7 +258,10 @@ public class InventoryAvailabilityController {
                                         schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
-                        description = "User lacks required read permission",
+                        description = "FORBIDDEN when the caller lacks inventory:availability:read;"
+                                + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                                + " locations that do not cover the requested locationId or storageLocationId"
+                                + " (ADR-0061); without either the view is narrowed to the caller's reach instead",
                         content =
                                 @Content(
                                         mediaType = "application/json",
@@ -352,7 +359,10 @@ public class InventoryAvailabilityController {
                                         schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
-                        description = "User lacks required read permission",
+                        description = "FORBIDDEN when the caller lacks inventory:availability:read;"
+                                + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                                + " locations that do not cover the requested locationId or storageLocationId"
+                                + " (ADR-0061)",
                         content =
                                 @Content(
                                         mediaType = "application/json",
@@ -384,6 +394,15 @@ public class InventoryAvailabilityController {
                     @RequestParam(required = false)
                     InventorySourceType sourceType) {
         validateLocationAndSourceType(locationId, sourceType);
+        // ADR-0061 §3 (#1872): either optional location narrows the lookup to a site or bin, so
+        // each one named is gated; with neither there is no location to check.
+        if (locationId != null) {
+            SecurityContextHelper.locationScope().require(InventoryPermissionRegistry.AVAILABILITY_READ, locationId);
+        }
+        if (storageLocationId != null) {
+            SecurityContextHelper.locationScope()
+                    .require(InventoryPermissionRegistry.AVAILABILITY_READ, storageLocationId);
+        }
         log.info(
                 "GET /v1/inventory/availability/lead-time productId={} locationId={} storageLocationId={} sourceType={}",
                 productId,

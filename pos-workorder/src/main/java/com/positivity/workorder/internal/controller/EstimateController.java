@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.LocationScope.Reach;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
@@ -20,6 +21,7 @@ import com.positivity.workorder.internal.exception.WorkorderRequestValidationExc
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.EstimateService;
 import com.positivity.workorder.internal.service.IdempotencyService;
+import com.positivity.workorder.internal.service.LocationHierarchyService;
 import com.positivity.workorder.internal.service.WorkorderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -32,6 +34,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
@@ -63,16 +67,22 @@ public class EstimateController {
     private static final String SYSTEM = "SYSTEM";
     private static final String IDEMPOTENCY_OPERATION_ESTIMATE_CREATE = "estimate.create";
     private static final String IDEMPOTENCY_OPERATION_ESTIMATE_PROMOTE = "estimate.promote";
+    private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds workorder:estimate:view but its location scope does not cover the estimate's location"
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
     private final EstimateService estimateService;
     private final WorkorderService workorderService;
     private final IdempotencyService idempotencyService;
+    private final LocationHierarchyService locationHierarchyService;
 
     @Operation(operationId = "listEstimates", summary = "List All Estimates", description = """
                     Returns every estimate in the system as an unpaginated list, in all statuses from DRAFT \
                     through APPROVED, DECLINED, and EXPIRED.
                     Use this tool only for small datasets or admin views; use searchEstimates instead for \
                     paginated, filtered lookup by query, customer, or vehicle.
-                    Preconditions: none beyond the caller holding workorder:estimate:view.
+                    Preconditions: none beyond the caller holding workorder:estimate:view; a caller whose grant \
+                    is location-scoped sees only estimates at locations within reach (ADR-0061), and an empty \
+                    reach is an empty list.
                     Required inputs: none — there are no filters or pagination parameters.
                     Emits a WORKORDER_ESTIMATE_LIST audit event; no estimate state changes — this is a read-only \
                     projection.
@@ -86,7 +96,18 @@ public class EstimateController {
             scopes = {"workorder:estimate:view"})
     @PreAuthorize("hasAuthority('" + WorkorderPermissions.ESTIMATE_VIEW + "')")
     public List<EstimateResponse> getAllEstimates() {
-        return estimateService.getAllEstimates();
+        // Narrow (ADR-0061 §3, #1872): there is no location filter, so a scoped caller sees their
+        // reach and nothing else — otherwise the location-gated lists below would be trivially
+        // bypassable. An unscoped caller is unchanged.
+        Optional<Reach> reach = SecurityContextHelper.locationScope().reach(WorkorderPermissions.ESTIMATE_VIEW);
+        if (reach.isEmpty()) {
+            return estimateService.getAllEstimates();
+        }
+        Set<UUID> reachable = locationHierarchyService.reachableLocations(reach.get());
+        if (reachable.isEmpty()) {
+            return List.of();
+        }
+        return estimateService.getEstimatesAtLocations(reachable);
     }
 
     @Operation(operationId = "getEstimate", summary = "Get Estimate by Id", description = """
@@ -94,12 +115,18 @@ public class EstimateController {
                     approval-related fields.
                     Use this tool when the estimate id is known; use getEstimateSummary instead for the \
                     customer-facing grouped view, or searchEstimates to find estimates by text.
-                    Preconditions: the estimate must exist.
+                    Preconditions: the estimate must exist. A caller whose workorder:estimate:view grant is \
+                    location-scoped must have the estimate's location within reach (ADR-0061).
                     Required inputs: estimateId (UUID) as a path parameter.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 when no estimate exists for the id.
+                    Returns 404 when no estimate exists for the id, and 403 LOCATION_SCOPE_DENIED when the \
+                    estimate exists but its location is outside the caller's scope.
                     """)
     @ApiResponse(responseCode = "200", description = "Estimate found and returned.")
+    @ApiResponse(
+            responseCode = "403",
+            description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Estimate not found.")
     @GetMapping("/{estimateId}")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -110,10 +137,24 @@ public class EstimateController {
             @Parameter(description = "ID of the estimate to retrieve", example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
                     UUID estimateId) {
-        return estimateService
-                .getEstimateById(estimateId)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        // Existence first (404), then scope (ADR-0061 §3, #1872): a 403 for an id that does not
+        // exist would let a caller probe which estimate ids are real. This is the by-id sibling of
+        // the location-gated lists below, so it is gated on the same permission off the loaded
+        // estimate's own location; an estimate without one answers "" which a scoped caller cannot
+        // cover.
+        Optional<EstimateResponse> estimate = estimateService.getEstimateById(estimateId);
+        if (estimate.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        SecurityContextHelper.locationScope()
+                .require(
+                        WorkorderPermissions.ESTIMATE_VIEW,
+                        locationOf(estimate.get().getLocationId()));
+        return ResponseEntity.ok(estimate.get());
+    }
+
+    private static String locationOf(UUID locationId) {
+        return locationId == null ? "" : locationId.toString();
     }
 
     @Operation(operationId = "listEstimatesByCustomer", summary = "List Estimates for a Customer", description = """
@@ -145,13 +186,20 @@ public class EstimateController {
                     Use this tool when the caller's route vocabulary says shop; it is a legacy alias of \
                     listEstimatesByLocation and returns identical results, so use listEstimatesByLocation instead in \
                     new integrations.
-                    Preconditions: none — an unknown locationId simply yields an empty list.
+                    Preconditions: an unknown locationId simply yields an empty list; a caller whose \
+                    workorder:estimate:view grant is location-scoped must have locationId within reach \
+                    (ADR-0061).
                     Required inputs: locationId (UUID) as a path parameter.
                     Emits a WORKORDER_ESTIMATE_SEARCH_BY_SHOP audit event; no estimate state changes — this is a \
                     read-only projection.
-                    Returns 200 with the estimates, possibly empty.
+                    Returns 200 with the estimates, possibly empty, and 403 LOCATION_SCOPE_DENIED when the \
+                    caller's location scope does not cover locationId.
                     """)
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
+    @ApiResponse(
+            responseCode = "403",
+            description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/shop/{locationId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH_BY_SHOP", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -161,6 +209,8 @@ public class EstimateController {
     public List<EstimateResponse> getEstimatesByShop(
             @Parameter(description = "ID of the shop", example = "550e8400-e29b-41d4-a716-446655440020") @PathVariable
                     UUID locationId) {
+        // Gate (ADR-0061 §3, #1872): the path names the shop whose estimate book is read.
+        SecurityContextHelper.locationScope().require(WorkorderPermissions.ESTIMATE_VIEW, locationId);
         return estimateService.getEstimatesByLocation(locationId);
     }
 
@@ -168,13 +218,20 @@ public class EstimateController {
                     Returns all estimates recorded against one location, unpaginated and in every status.
                     Use this tool for a location's estimate book; do not use listEstimatesByShop, which is the \
                     legacy alias of this same lookup.
-                    Preconditions: none — an unknown locationId simply yields an empty list.
+                    Preconditions: an unknown locationId simply yields an empty list; a caller whose \
+                    workorder:estimate:view grant is location-scoped must have locationId within reach \
+                    (ADR-0061).
                     Required inputs: locationId (UUID) as a path parameter.
                     Emits a WORKORDER_ESTIMATE_SEARCH_BY_LOCATION audit event; no estimate state changes — this \
                     is a read-only projection.
-                    Returns 200 with the estimates, possibly empty.
+                    Returns 200 with the estimates, possibly empty, and 403 LOCATION_SCOPE_DENIED when the \
+                    caller's location scope does not cover locationId.
                     """)
     @ApiResponse(responseCode = "200", description = "List of estimates returned successfully.")
+    @ApiResponse(
+            responseCode = "403",
+            description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/location/{locationId}")
     @EmitEvent(id = "WORKORDER_ESTIMATE_SEARCH_BY_LOCATION", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -185,6 +242,8 @@ public class EstimateController {
             @Parameter(description = "ID of the location", example = "550e8400-e29b-41d4-a716-446655440020")
                     @PathVariable
                     UUID locationId) {
+        // Gate (ADR-0061 §3, #1872): the path names the location whose estimate book is read.
+        SecurityContextHelper.locationScope().require(WorkorderPermissions.ESTIMATE_VIEW, locationId);
         return estimateService.getEstimatesByLocation(locationId);
     }
 
@@ -1012,15 +1071,22 @@ public class EstimateController {
                     labor plus the financial breakdown.
                     Use this tool for presentation to the customer; use getEstimate instead for the raw record, and \
                     generateEstimatePdf to render the same content as a PDF document.
-                    Preconditions: the estimate must exist; totals reflect the last calculateEstimateTotals run.
+                    Preconditions: the estimate must exist; totals reflect the last calculateEstimateTotals run. \
+                    A caller whose workorder:estimate:view grant is location-scoped must have the estimate's \
+                    location within reach (ADR-0061).
                     Required inputs: estimateId (UUID) as a path parameter.
                     Emits an ESTIMATE_SUMMARY_VIEW audit event; no estimate state changes — this is a read-only \
                     projection.
-                    Returns 404 when no estimate exists for the id.
+                    Returns 404 when no estimate exists for the id, and 403 LOCATION_SCOPE_DENIED when the \
+                    estimate exists but its location is outside the caller's scope.
                     """)
     @ApiResponses(
             value = {
                 @ApiResponse(responseCode = "200", description = "Summary retrieved successfully"),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(responseCode = "404", description = "Estimate not found")
             })
     @GetMapping("/{estimateId}/summary")
@@ -1033,7 +1099,11 @@ public class EstimateController {
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
                     UUID estimateId) {
+        // Existence first (404 from the service), then scope off the summary's own location, as
+        // getEstimateById does (ADR-0061 §3, #1872).
         EstimateSummaryResponse summary = estimateService.getEstimateSummary(estimateId);
+        SecurityContextHelper.locationScope()
+                .require(WorkorderPermissions.ESTIMATE_VIEW, locationOf(summary.getLocationId()));
         return ResponseEntity.ok(summary);
     }
 
@@ -1042,11 +1112,14 @@ public class EstimateController {
                     line items grouped into parts and labor, and financial totals, returned as an attachment.
                     Use this tool when a printable or emailable document is needed; use getEstimateSummary instead \
                     for the same content as JSON.
-                    Preconditions: the estimate must exist and the pos-documents service must be reachable.
+                    Preconditions: the estimate must exist and the pos-documents service must be reachable. A \
+                    caller whose workorder:estimate:view grant is location-scoped must have the estimate's \
+                    location within reach (ADR-0061).
                     Required inputs: estimateId (UUID) as a path parameter.
                     Emits an ESTIMATE_PDF_GENERATE audit event; no estimate state changes — the render is \
                     performed on demand and not stored.
-                    Returns 404 when the estimate does not exist, and 502 when the document service fails to \
+                    Returns 404 when the estimate does not exist, 403 LOCATION_SCOPE_DENIED when it exists but \
+                    its location is outside the caller's scope, and 502 when the document service fails to \
                     render the PDF.
                     """)
     @ApiResponses(
@@ -1062,6 +1135,10 @@ public class EstimateController {
                                                         type = "string",
                                                         format = "binary",
                                                         implementation = String.class))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(responseCode = "404", description = "Estimate not found"),
                 @ApiResponse(responseCode = "502", description = "Document service unavailable")
             })
@@ -1075,6 +1152,17 @@ public class EstimateController {
             @Parameter(description = "Estimate ID", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
                     @PathVariable
                     UUID estimateId) {
+        // Existence first (404), then scope off the loaded estimate's location, as getEstimateById
+        // does (ADR-0061 §3, #1872). Both sit outside the try below so a denial is never folded
+        // into the renderer's 502.
+        Optional<EstimateResponse> estimate = estimateService.getEstimateById(estimateId);
+        if (estimate.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        SecurityContextHelper.locationScope()
+                .require(
+                        WorkorderPermissions.ESTIMATE_VIEW,
+                        locationOf(estimate.get().getLocationId()));
         try {
             byte[] pdfBytes = estimateService.generateEstimatePdf(estimateId);
             return ResponseEntity.ok()

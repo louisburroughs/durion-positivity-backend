@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.service;
 
+import com.positivity.securityservice.internal.domain.LocationScopeBits;
 import com.positivity.securityservice.internal.domain.PermissionBitsetCodec;
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.entity.JwtToken;
@@ -19,12 +20,17 @@ import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -70,6 +76,7 @@ public class JwtServiceImpl implements JwtService {
     private final UserService userService;
     private final TokenRevocationManager tokenRevocationManager;
     private final UserDetailsService userDetailsService;
+    private final StaffingAssignmentProjectionService staffingAssignmentProjectionService;
 
     @Value("${security.jwt.secret}")
     private String jwtSecret;
@@ -195,9 +202,7 @@ public class JwtServiceImpl implements JwtService {
 
         String permBitsValue = claims.get(PERM_BITS, String.class);
         if (permBitsValue != null) {
-            Object permVerRaw = claims.get(PERM_VER);
-            int permVer = (permVerRaw instanceof Number n) ? n.intValue() : PermissionCode.CATALOG_VERSION;
-            return PermissionBitsetCodec.decodeToPermissions(permBitsValue, permVer).stream()
+            return PermissionBitsetCodec.decodeToPermissions(permBitsValue, permissionCatalogVersion(claims)).stream()
                     .map(PermissionCode::code)
                     .collect(Collectors.toSet());
         }
@@ -321,7 +326,6 @@ public class JwtServiceImpl implements JwtService {
         }
 
         Instant now = Instant.now(clock);
-        Instant accessExpiry = now.plusSeconds(ACCESS_TOKEN_EXPIRATION_SECONDS);
         Instant refreshExpiry = now.plusSeconds(REFRESH_TOKEN_EXPIRATION_SECONDS);
 
         String accessJti = UUIDv7Generator.generate().toString();
@@ -342,6 +346,12 @@ public class JwtServiceImpl implements JwtService {
             throw new SecurityValidationException("Roles cannot be blank");
         }
 
+        // ADR-0061 §2: the scope bitsets are composed per role, so a permission an ALL role grants
+        // stays global even when a LOCATION role grants it too. perm_bits above is untouched.
+        LocationScopeBits scopeBits = LocationScopeBits.compose(roleAuthorityService.resolveRoleGrants(roles));
+        LocationReach reach = resolveLocationReach(scopeBits, personId, now);
+        Instant accessExpiry = reach.clampedExpiry();
+
         var accessBuilder = Jwts.builder()
                 .id(accessJti)
                 .subject(username)
@@ -354,12 +364,17 @@ public class JwtServiceImpl implements JwtService {
                 .claim(ROLES, roleClaims)
                 .claim(PERM_BITS, permBits)
                 .claim(PERM_VER, PermissionCode.CATALOG_VERSION)
+                .claim(LOC_FIN_BITS, PermissionBitsetCodec.encode(scopeBits.financial()))
+                .claim(LOC_OTH_BITS, PermissionBitsetCodec.encode(scopeBits.other()))
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(accessExpiry))
                 .signWith(secretKey);
 
         if (personId != null) {
             accessBuilder = accessBuilder.claim(PERSON_ID, personId.toString());
+        }
+        if (!reach.nodes().isEmpty()) {
+            accessBuilder = accessBuilder.claim(LOC_SCOPE, locationScopeClaim(reach.nodes()));
         }
 
         String accessToken = accessBuilder.compact();
@@ -530,6 +545,126 @@ public class JwtServiceImpl implements JwtService {
             log.debug("Invalid UUID value in 'personId' claim", ex);
             return null;
         }
+    }
+
+    @Override
+    public @Nullable String getJtiFromToken(@NonNull String token) {
+        return getClaims(token).getId();
+    }
+
+    @Override
+    public Set<String> getFinancialLocationScopedPermissionsFromToken(@NonNull String token) {
+        return decodeScopedPermissions(getClaims(token), LOC_FIN_BITS);
+    }
+
+    @Override
+    public Set<String> getOtherLocationScopedPermissionsFromToken(@NonNull String token) {
+        return decodeScopedPermissions(getClaims(token), LOC_OTH_BITS);
+    }
+
+    @Override
+    public Optional<LocationScopeClaim> getLocationScopeFromToken(@NonNull String token) {
+        Object raw = getClaims(token).get(LOC_SCOPE);
+        if (raw == null) {
+            return Optional.empty();
+        }
+        // A token this service signed carries the shape this service wrote; anything else is a
+        // defect to surface, not a state to quietly read as "no scope" (which would still deny)
+        // or, worse, as unrestricted reach.
+        if (!(raw instanceof Map<?, ?> object)) {
+            throw new SecurityValidationException("Malformed loc_scope claim: expected an object");
+        }
+        Object version = object.get("v");
+        if (!(version instanceof Number number) || number.intValue() != LOC_SCOPE_VERSION) {
+            throw new SecurityValidationException(
+                    "Unsupported loc_scope version: " + version + " (expected " + LOC_SCOPE_VERSION + ")");
+        }
+        if (!(object.get("nodes") instanceof List<?> rawNodes)) {
+            throw new SecurityValidationException("Malformed loc_scope claim: nodes must be a list");
+        }
+        List<UUID> nodes = new ArrayList<>(rawNodes.size());
+        for (Object node : rawNodes) {
+            try {
+                nodes.add(UUID.fromString(String.valueOf(node)));
+            } catch (IllegalArgumentException ex) {
+                throw new SecurityValidationException("Malformed loc_scope node id: " + node, ex);
+            }
+        }
+        return Optional.of(new LocationScopeClaim(LOC_SCOPE_VERSION, nodes));
+    }
+
+    private Set<String> decodeScopedPermissions(Claims claims, String claimName) {
+        String bits = claims.get(claimName, String.class);
+        if (bits == null || bits.isBlank()) {
+            return Collections.emptySet();
+        }
+        return PermissionBitsetCodec.decodeToPermissions(bits, permissionCatalogVersion(claims)).stream()
+                .map(PermissionCode::code)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private static int permissionCatalogVersion(Claims claims) {
+        Object permVerRaw = claims.get(PERM_VER);
+        return (permVerRaw instanceof Number n) ? n.intValue() : PermissionCode.CATALOG_VERSION;
+    }
+
+    /**
+     * The assigned nodes contributing to a token and the access expiry after the effective-dating
+     * clamp (ADR-0061 §2/§4).
+     *
+     * @param nodes         assigned location node ids, verbatim; empty when the caller holds no
+     *                      location-scoped grant, has no person, or has no effective assignment
+     * @param clampedExpiry {@code min(now + ACCESS_TOKEN_EXPIRATION_SECONDS, end of the day the
+     *                      earliest contributing assignment ends)}; the unclamped value whenever
+     *                      the clamp does not apply
+     */
+    private record LocationReach(List<UUID> nodes, Instant clampedExpiry) {}
+
+    private LocationReach resolveLocationReach(LocationScopeBits scopeBits, @Nullable UUID personId, Instant now) {
+        Instant accessExpiry = now.plusSeconds(ACCESS_TOKEN_EXPIRATION_SECONDS);
+        if (scopeBits.isEmpty()) {
+            // No location-scoped grant: no projection lookup, no clamp — the common case is
+            // byte-for-byte what it was before ADR-0061, apart from two empty bitset claims.
+            return new LocationReach(List.of(), accessExpiry);
+        }
+        if (personId == null) {
+            // Internal-token path (no person). Fail closed: bitsets are emitted, loc_scope is not.
+            log.debug("Location-scoped grants with no personId; loc_scope omitted (fail closed)");
+            return new LocationReach(List.of(), accessExpiry);
+        }
+
+        ZoneId zone = clock.getZone();
+        LocalDate today = LocalDate.ofInstant(now, zone);
+        List<UUID> nodes = staffingAssignmentProjectionService.assignedLocationIds(personId, today);
+        if (nodes.isEmpty()) {
+            // ADR-0061 §2: absence must never widen to unrestricted reach, so loc_scope is omitted
+            // rather than substituted with ALL. The bitsets still say which grants are scoped.
+            log.info(
+                    "Location-scoped grants but no effective staffing assignment: personId={} asOf={};"
+                            + " loc_scope omitted (fail closed)",
+                    personId,
+                    today);
+            return new LocationReach(List.of(), accessExpiry);
+        }
+
+        // ADR-0061 §4: effective_to is an inclusive date, so the token may live to the end of that
+        // day in the issuer's zone, and no longer. A refresh re-enters here and re-evaluates.
+        Optional<LocalDate> earliestEnd = staffingAssignmentProjectionService.earliestEffectiveTo(personId, today);
+        if (earliestEnd.isPresent()) {
+            Instant endOfDay = earliestEnd.get().plusDays(1).atStartOfDay(zone).toInstant();
+            if (endOfDay.isBefore(accessExpiry)) {
+                accessExpiry = endOfDay;
+            }
+        }
+        return new LocationReach(nodes, accessExpiry);
+    }
+
+    /** {@code {"v":1,"nodes":[...]}} — insertion-ordered so the serialised token is deterministic. */
+    private static Map<String, Object> locationScopeClaim(List<UUID> nodes) {
+        Map<String, Object> claim = new LinkedHashMap<>();
+        claim.put("v", LOC_SCOPE_VERSION);
+        claim.put("nodes", nodes.stream().map(UUID::toString).toList());
+        return claim;
     }
 
     private JwtParser jwtParser() {

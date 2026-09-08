@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -27,6 +28,8 @@ import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRep
 import com.positivity.inventory.internal.repository.GoodsReceiptRepository;
 import com.positivity.inventory.internal.repository.PutawayRuleRepository;
 import com.positivity.inventory.internal.repository.PutawayTaskRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.ProximitySourcingStrategy;
 import com.positivity.inventory.internal.service.PutawayRuleMatcher;
 import com.positivity.inventory.internal.service.SkuCategoryLookup;
@@ -36,6 +39,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -77,6 +81,9 @@ class PutawayGenerationServiceImplTest {
     @Mock
     private SkuCategoryLookup skuCategoryLookup;
 
+    @Mock
+    private LocationScopeService locationScopeService;
+
     private PutawayGenerationServiceImpl service;
 
     @BeforeEach
@@ -92,7 +99,8 @@ class PutawayGenerationServiceImplTest {
                 goodsReceiptRepository,
                 destinationResolver,
                 stagingLocationResolver,
-                putawayValidationService);
+                putawayValidationService,
+                locationScopeService);
         lenient()
                 .when(skuCategoryLookup.categoryRefOfAll(org.mockito.ArgumentMatchers.anyCollection()))
                 .thenReturn(Map.of());
@@ -355,6 +363,47 @@ class PutawayGenerationServiceImplTest {
 
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).getTaskId()).isEqualTo(task.getTaskId().toString());
+    }
+
+    // ─── ADR-0061 §3 (#1872): location scope on the available-task list ──────
+
+    @Test
+    void getAvailableTasks_scopedNoFilter_queriesWithinReach() {
+        UUID site = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
+        PutawayTask task = new PutawayTask();
+        task.setTaskId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        task.setStatus(PutawayTaskStatus.UNASSIGNED);
+        when(locationScopeService.narrowTo(isNull(), eq(InventoryPermissionRegistry.PUTAWAY_VIEW)))
+                .thenReturn(Optional.of(Set.of(site)));
+        when(putawayTaskRepository.findByStatusInWithinSourceLocations(
+                        List.of(PutawayTaskStatus.UNASSIGNED), Set.of(site)))
+                .thenReturn(List.of(task));
+
+        List<PutawayTaskResponse> responses = service.getAvailableTasks(null, null);
+
+        assertThat(responses).hasSize(1);
+        verify(putawayTaskRepository, never()).findByStatusIn(anyList());
+    }
+
+    @Test
+    void getAvailableTasks_scopedEmptyReach_returnsEmptyWithoutQuery() {
+        when(locationScopeService.narrowTo(isNull(), eq(InventoryPermissionRegistry.PUTAWAY_VIEW)))
+                .thenReturn(Optional.of(Set.of()));
+
+        assertThat(service.getAvailableTasks(null, null)).isEmpty();
+        verify(putawayTaskRepository, never()).findByStatusIn(anyList());
+    }
+
+    @Test
+    void getAvailableTasks_storageLocationWins_andIsGated() {
+        UUID site = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
+        UUID bin = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
+        when(putawayTaskRepository.findByStatusInAndSourceLocationId(List.of(PutawayTaskStatus.UNASSIGNED), bin))
+                .thenReturn(List.of());
+
+        service.getAvailableTasks(site, bin);
+
+        verify(locationScopeService).narrowTo(bin, InventoryPermissionRegistry.PUTAWAY_VIEW);
     }
 
     @Test

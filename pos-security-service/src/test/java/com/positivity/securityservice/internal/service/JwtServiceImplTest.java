@@ -74,6 +74,15 @@ class JwtServiceImplTest {
     @Mock
     private UserDetailsService userDetailsService;
 
+    /**
+     * Unstubbed on purpose: Mockito answers an empty node list and {@code Optional.empty()}, and
+     * the mocked {@link RoleAuthorityServiceImpl#resolveRoleGrants} answers no grants, so every
+     * token here is the pre-ADR-0061 shape plus two empty scope bitsets. The scope behaviour
+     * itself is covered by {@code JwtServiceImplLocationScopeTest}.
+     */
+    @Mock
+    private StaffingAssignmentProjectionService staffingAssignmentProjectionService;
+
     @InjectMocks
     private JwtServiceImpl sut;
 
@@ -206,7 +215,8 @@ class JwtServiceImplTest {
                 roleAuthorityService,
                 userService,
                 tokenRevocationManager,
-                userDetailsService);
+                userDetailsService,
+                staffingAssignmentProjectionService);
         ReflectionTestUtils.setField(fresh, "jwtSecret", "");
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(fresh, "initializeSecretKey"))
@@ -223,7 +233,8 @@ class JwtServiceImplTest {
                 roleAuthorityService,
                 userService,
                 tokenRevocationManager,
-                userDetailsService);
+                userDetailsService,
+                staffingAssignmentProjectionService);
         ReflectionTestUtils.setField(fresh, "jwtSecret", "short");
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(fresh, "initializeSecretKey"))

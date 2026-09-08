@@ -1,1 +1,2 @@
 com.positivity.security.common.RequiredPermissionsOpenApiAutoConfiguration
+com.positivity.security.common.LocationScopeAutoConfiguration

@@ -10,6 +10,7 @@ import com.positivity.location.internal.dto.PersonDTO;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -42,7 +43,12 @@ public interface LocationService {
 
     LocationResponseDTO patchLocation(UUID id, LocationPatchRequest patch);
 
-    LocationParentResponseDTO addParent(UUID childId, UUID parentId, String parentTypeValue);
+    /**
+     * Adds a parent edge on one {@code parentType} dimension. Rejects with 409
+     * {@code CYCLE_DETECTED} when the edge would make the child an ancestor of itself on that
+     * dimension (self-parent included); other dimensions are not consulted (ADR-0061, #1878).
+     */
+    LocationParentResponseDTO addParent(@NonNull UUID childId, @NonNull UUID parentId, @NonNull String parentTypeValue);
 
     List<LocationParentResponseDTO> getAllParentsDto();
 

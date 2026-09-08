@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.domainevents.AggregateTouch;
+import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.workorder.internal.dto.AssignmentUpdatePayload;
@@ -43,6 +44,7 @@ import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepositor
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
+import com.positivity.workorder.internal.security.WorkorderPermissions;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.Year;
@@ -1035,6 +1037,16 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .findById(workorderId)
                 .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
+        // ADR-0061 §3 (#1872): both ends of the move are gated — the workorder's current shop
+        // (shopId, the same field the WIP detail gate reads) so a workorder cannot be pulled out of
+        // a shop outside the caller's reach, then the body's locationId, the site it is re-slotted
+        // to. Both run after the existence check (a denial must not leak whether the id exists) and
+        // before any state change, so a denied override writes nothing. A null shop or target
+        // answers "" which a scoped caller cannot cover — fail closed.
+        LocationScope scope = SecurityContextHelper.locationScope();
+        scope.require(WorkorderPermissions.OPERATIONALCONTEXT_OVERRIDE, locationOrEmpty(workorder.getShopId()));
+        scope.require(WorkorderPermissions.OPERATIONALCONTEXT_OVERRIDE, locationOrEmpty(override.getLocationId()));
+
         if (workorder.getWorkStartedAt() != null) {
             throw new IllegalStateException("Work has already started; operational context cannot be overridden");
         }
@@ -1113,6 +1125,10 @@ public class WorkorderServiceImpl implements WorkorderService {
 
     private String resolveCurrentActorUserId() {
         return SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
+    }
+
+    private static String locationOrEmpty(@Nullable UUID locationId) {
+        return locationId == null ? "" : locationId.toString();
     }
 
     private String serializeMechanicIds(List<UUID> mechanicIds) {

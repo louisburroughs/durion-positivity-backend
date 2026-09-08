@@ -55,12 +55,26 @@ public class PeopleAvailabilityController {
                     assignment, because the requester's own location becomes the filter.
                     Required inputs: none are mandatory; locationId (UUID) defaults to the requester's location and \
                     date (yyyy-MM-dd) defaults to today.
+                    Location scope: when locationId is given it must lie within the caller's location reach, or \
+                    the request is refused with 403 LOCATION_SCOPE_DENIED. When locationId is omitted the filter \
+                    is the requester's own location; if the caller's people:availability:view permission is \
+                    location-scoped and that location lies outside their reach the list is empty rather than \
+                    refused. A caller whose permission is not location-scoped is unaffected.
                     Emits a PEOPLE_AVAILABILITY_LIST audit event but changes no state; this is a read-only \
                     projection.
                     Returns 404 when locationId is omitted and the requester has no active location assignment or no \
-                    person link.
+                    person link, and 403 LOCATION_SCOPE_DENIED when locationId is outside the caller's location \
+                    reach.
                     """)
     @ApiResponse(responseCode = "200", description = "Availability data returned successfully.")
+    @ApiResponse(
+            responseCode = "403",
+            description = "LOCATION_SCOPE_DENIED: locationId is outside the caller's location reach",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "locationId omitted and the requester has no active location assignment or person link.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/availability")
     @EmitEvent(id = "PEOPLE_AVAILABILITY_LIST", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -68,7 +82,11 @@ public class PeopleAvailabilityController {
             scopes = {"people:availability:view"})
     @PreAuthorize("hasAuthority('" + PeoplePermissions.AVAILABILITY_VIEW + "')")
     public ResponseEntity<List<PeopleAvailabilityResponse>> getPeopleAvailability(
-            @Parameter(description = "Filter by location ID. Defaults to requester location when omitted.")
+            @Parameter(
+                            description = "Filter by location ID; it must lie within the caller's location reach "
+                                    + "(403 LOCATION_SCOPE_DENIED otherwise). Defaults to the requester's own "
+                                    + "location when omitted, which is narrowed to the caller's reach rather than "
+                                    + "refused.")
                     @RequestParam(required = false)
                     UUID locationId,
             @Parameter(description = "Filter by date (ISO format: yyyy-MM-dd)")

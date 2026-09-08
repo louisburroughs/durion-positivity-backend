@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 public interface PeopleAccessControlService {
 
@@ -13,15 +14,15 @@ public interface PeopleAccessControlService {
     List<RoleDto> getAvailableRolesForPerson(@NonNull UUID personUuid);
 
     @NonNull
-    List<UserRoleDto> getPersonRoleAssignments(@NonNull UUID personUuid, boolean includeHistory, LocalDateTime endDate);
+    List<UserRoleDto> getPersonRoleAssignments(
+            @NonNull UUID personUuid, boolean includeHistory, @Nullable LocalDateTime endDate);
 
     @NonNull
     UserRoleDto assignRoleToPerson(
             @NonNull UUID personUuid,
             @NonNull String roleCode,
-            UUID locationId,
-            LocalDateTime startDate,
-            LocalDateTime endDate);
+            @Nullable LocalDateTime startDate,
+            @Nullable LocalDateTime endDate);
 
-    void revokeRoleFromPerson(@NonNull UUID personUuid, @NonNull String roleCode, LocalDateTime endDate);
+    void revokeRoleFromPerson(@NonNull UUID personUuid, @NonNull String roleCode, @Nullable LocalDateTime endDate);
 }

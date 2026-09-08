@@ -4,6 +4,7 @@ import com.positivity.inventory.internal.dto.LocationInventoryInquiryResponse;
 import com.positivity.inventory.internal.dto.LocationInventoryItemsResponse;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.LocationInventoryInquiryService;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -66,7 +67,9 @@ public class LocationInventoryInquiryController {
     @ApiResponse(responseCode = "400", description = "Invalid location identifier")
     @ApiResponse(
             responseCode = "403",
-            description = "User lacks required on-hand view authority",
+            description = "FORBIDDEN when the caller lacks inventory:on_hand:view;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the path locationId (ADR-0061)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<LocationInventoryInquiryResponse> getLocationInventory(
             @Parameter(description = "Storage location identifier", required = true) @PathVariable UUID locationId,
@@ -78,6 +81,8 @@ public class LocationInventoryInquiryController {
                                             + "'inventory:ledger:view'; future instants are rejected (422).")
                     @RequestParam(required = false)
                     Instant asOf) {
+        // ADR-0061 §3 (#1872): the path names the location being read.
+        SecurityContextHelper.locationScope().require(InventoryPermissionRegistry.INVENTORY_VIEW, locationId);
         if (asOf != null) {
             return ResponseEntity.ok(locationInventoryInquiryService.getLocationInventoryAsOf(locationId, sku, asOf));
         }
@@ -118,7 +123,9 @@ public class LocationInventoryInquiryController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "User lacks required on-hand view authority",
+            description = "FORBIDDEN when the caller lacks inventory:on_hand:view;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the path locationId (ADR-0061)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<LocationInventoryItemsResponse> listLocationInventoryItems(
             @Parameter(description = "Storage location identifier", required = true) @PathVariable UUID locationId,
@@ -128,6 +135,8 @@ public class LocationInventoryInquiryController {
                                     + "'inventory:ledger:view'; future instants are rejected (422).")
                     @RequestParam(required = false)
                     Instant asOf) {
+        // ADR-0061 §3 (#1872): the path names the location being read.
+        SecurityContextHelper.locationScope().require(InventoryPermissionRegistry.INVENTORY_VIEW, locationId);
         if (asOf != null) {
             return ResponseEntity.ok(locationInventoryInquiryService.listLocationInventoryItemsAsOf(locationId, asOf));
         }

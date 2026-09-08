@@ -20,11 +20,13 @@ import com.positivity.inventory.internal.exception.ScrapNotFoundException;
 import com.positivity.inventory.internal.replenishment.service.ReplenishmentService;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.ScrapRecordRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.ApprovalThresholdEvaluator;
 import com.positivity.inventory.internal.service.CostingMethodResolver;
 import com.positivity.inventory.internal.service.InventoryFactPublisher;
 import com.positivity.inventory.internal.service.InventoryLotOutboundService;
 import com.positivity.inventory.internal.service.LedgerPostingService;
+import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.Quantities;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
@@ -32,6 +34,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -83,6 +86,7 @@ public class ScrapServiceImpl implements ScrapService {
     private final ReplenishmentService replenishmentService;
     private final Clock clock;
     private final CostingMethodResolver methodResolver;
+    private final LocationScopeService locationScopeService;
     private final @Nullable InventoryLotOutboundService lotOutboundService;
 
     /**
@@ -99,7 +103,8 @@ public class ScrapServiceImpl implements ScrapService {
             InventoryFactPublisher inventoryFactPublisher,
             ReplenishmentService replenishmentService,
             Clock clock,
-            CostingMethodResolver methodResolver) {
+            CostingMethodResolver methodResolver,
+            LocationScopeService locationScopeService) {
         this(
                 scrapRepository,
                 ledgerRepository,
@@ -109,6 +114,7 @@ public class ScrapServiceImpl implements ScrapService {
                 replenishmentService,
                 clock,
                 methodResolver,
+                locationScopeService,
                 null);
     }
 
@@ -216,7 +222,15 @@ public class ScrapServiceImpl implements ScrapService {
     @Override
     @Transactional(readOnly = true)
     public @NonNull ScrapResponse getScrap(@NonNull UUID scrapId) {
-        return toResponse(scrapRepository.findById(scrapId).orElseThrow(() -> new ScrapNotFoundException(scrapId)));
+        ScrapRecord scrap = scrapRepository.findById(scrapId).orElseThrow(() -> new ScrapNotFoundException(scrapId));
+        // ADR-0061 §3 (#1872): the list is narrowed by location, so the by-id read is gated on the
+        // loaded record's location — after the 404, so ids cannot be probed. Either view alternate
+        // the caller holds may cover it.
+        locationScopeService.require(
+                scrap.getLocationId(),
+                InventoryPermissionRegistry.SCRAP_VIEW,
+                InventoryPermissionRegistry.SCRAP_APPROVE);
+        return toResponse(scrap);
     }
 
     @Override
@@ -234,8 +248,16 @@ public class ScrapServiceImpl implements ScrapService {
         if (status != null) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), status));
         }
+        // ADR-0061 §3 (#1872): a named location is gated; none narrows a scoped caller to their reach.
+        Optional<Set<UUID>> reach = locationScopeService.narrowTo(
+                locationId, InventoryPermissionRegistry.SCRAP_VIEW, InventoryPermissionRegistry.SCRAP_APPROVE);
         if (locationId != null) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("locationId"), locationId));
+        } else if (reach.isPresent()) {
+            if (reach.get().isEmpty()) {
+                return List.of();
+            }
+            spec = spec.and(LocationScopeService.withinLocations("locationId", reach.get()));
         }
         if (createdFrom != null) {
             spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get(CREATED_AT), createdFrom));

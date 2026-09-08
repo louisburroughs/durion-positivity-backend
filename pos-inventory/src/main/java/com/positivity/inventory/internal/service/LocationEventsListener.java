@@ -43,6 +43,13 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Location deletion marks {@code location_ref} inactive instead of deleting the row: inventory
  * records reference {@code locationId} and the sync flow always modelled removal as
  * deactivation.
+ *
+ * <p>Each location fact also refreshes the materialised location-scope ancestor sets
+ * (ADR-0061 §2, #1878): the child's typed parent edges are replaced from the fact, then
+ * {@link LocationHierarchyService#recomputeAncestors} rebuilds the sets for the location and every
+ * replicated descendant — so a re-parented node propagates, and a parent arriving after its
+ * children pushes its ancestry down to them. Ingestion never fails closed on a parent the replica
+ * has not seen yet; the scope check does.
  */
 @Slf4j
 @Component
@@ -59,6 +66,7 @@ public class LocationEventsListener {
     private final LocationRefRepository locationRefRepository;
     private final ExtLocationParentReplicaRepository extLocationParentReplicaRepository;
     private final ExtStorageLocationReplicaRepository extStorageLocationReplicaRepository;
+    private final LocationHierarchyService locationHierarchyService;
     private final Counter payloadRejectedCounter;
 
     public LocationEventsListener(
@@ -68,6 +76,7 @@ public class LocationEventsListener {
             LocationRefRepository locationRefRepository,
             ExtLocationParentReplicaRepository extLocationParentReplicaRepository,
             ExtStorageLocationReplicaRepository extStorageLocationReplicaRepository,
+            LocationHierarchyService locationHierarchyService,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.clock = clock;
         this.objectMapper = objectMapper;
@@ -75,6 +84,7 @@ public class LocationEventsListener {
         this.locationRefRepository = locationRefRepository;
         this.extLocationParentReplicaRepository = extLocationParentReplicaRepository;
         this.extStorageLocationReplicaRepository = extStorageLocationReplicaRepository;
+        this.locationHierarchyService = locationHierarchyService;
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -185,6 +195,9 @@ public class LocationEventsListener {
                     .parentType(edge.parentType())
                     .build()));
         }
+        // Edges (or the row itself) may have changed: rebuild the scope ancestor sets for this
+        // location and everything replicated beneath it (ADR-0061 §2, #1878).
+        locationHierarchyService.recomputeAncestors(payload.locationId());
         log.info("Updated location_ref locationId={} version={}", payload.locationId(), aggregateVersion);
     }
 
@@ -197,6 +210,10 @@ public class LocationEventsListener {
             locationRefRepository.save(ref);
         });
         extLocationParentReplicaRepository.deleteByChildId(payload.locationId());
+        // The row survives deactivation (see class javadoc), so its ancestor sets must follow
+        // the now-empty edge set rather than keep naming parents it no longer has; the same walk
+        // refreshes any replicated descendant still pointing at it (ADR-0061 §2, #1878).
+        locationHierarchyService.recomputeAncestors(payload.locationId());
         log.info("Deactivated location_ref locationId={}", payload.locationId());
     }
 

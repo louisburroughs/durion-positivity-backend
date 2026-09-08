@@ -3,11 +3,14 @@ package com.positivity.inventory.internal.movement.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.InventoryLedgerEntryResponse;
@@ -22,19 +25,32 @@ import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRep
 import com.positivity.inventory.internal.repository.InventoryAdjustmentRequestRepository;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.LedgerPostingService;
+import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.security.common.LocationAncestorResolver;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.LocationScopeDeniedException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 class StockMovementServiceImplTest {
@@ -42,6 +58,22 @@ class StockMovementServiceImplTest {
     private static final UUID LOC_1 = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID LOC_2 = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID LOC_9 = UUID.fromString("99999999-9999-9999-9999-999999999999");
+
+    /** The site that owns LOC_1 in the replica: assigning it puts LOC_1 in reach. */
+    private static final UUID SITE_OF_LOC_1 = UUID.fromString("aaaaaaaa-aaaa-7aaa-8aaa-aaaaaaaaaaaa");
+    /** A site elsewhere in the tree: assigning it leaves LOC_1 out of reach. */
+    private static final UUID OTHER_SITE = UUID.fromString("bbbbbbbb-bbbb-7bbb-8bbb-bbbbbbbbbbbb");
+
+    /** Replica stand-in: LOC_1 sits under SITE_OF_LOC_1 on both dimensions; nothing else is known. */
+    private static final LocationAncestorResolver RESOLVER = locationId -> LOC_1.equals(locationId)
+            ? new AncestorSets(Set.of(LOC_1, SITE_OF_LOC_1), Set.of(LOC_1, SITE_OF_LOC_1))
+            : AncestorSets.EMPTY;
+
+    /** The grants INVENTORY_MANAGER and INVENTORY_CONTROLLER share (#1373). */
+    private static final List<SimpleGrantedAuthority> ADJUSTMENT_AUTHORITIES = List.of(
+            new SimpleGrantedAuthority(InventoryPermissionRegistry.ADJUSTMENT_CREATE),
+            new SimpleGrantedAuthority(InventoryPermissionRegistry.ADJUSTMENT_APPROVE),
+            new SimpleGrantedAuthority(InventoryPermissionRegistry.ADJUSTMENT_VIEW));
 
     @Mock
     private InventoryLedgerEntryRepository ledgerRepository;
@@ -74,6 +106,37 @@ class StockMovementServiceImplTest {
                 new com.positivity.inventory.internal.service.QuantityScaleGuard(
                         org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
                 clock);
+        // Default caller: a pre-rollout token (no loc_* claims), which ADR-0061 treats as unscoped
+        // so the existing approve expectations are unchanged.
+        authenticate("approver-1", LocationScope.unscoped());
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private static void authenticate(String username, LocationScope scope) {
+        var authentication = new UsernamePasswordAuthenticationToken(username, null, ADJUSTMENT_AUTHORITIES);
+        authentication.setDetails(Map.of(
+                GatewaySecurityConstants.DETAIL_USERNAME, username,
+                GatewaySecurityConstants.DETAIL_LOCATION_SCOPE, scope));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+
+    /** A caller whose ADJUSTMENT_APPROVE is scoped (OTHER dimension) to the given assigned nodes. */
+    private static LocationScope approveScopedTo(LocationAncestorResolver resolver, UUID... nodes) {
+        return LocationScope.of(
+                Set.of(),
+                Set.of(InventoryPermissionRegistry.ADJUSTMENT_APPROVE),
+                Optional.of(Set.of(nodes)),
+                true,
+                resolver);
+    }
+
+    /** A post-rollout caller whose grants are all global: claims present, no permission in either bitset. */
+    private static LocationScope globalReach(UUID... nodes) {
+        return LocationScope.of(Set.of(), Set.of(), Optional.of(Set.of(nodes)), true, RESOLVER);
     }
 
     private void setupClock() {
@@ -365,6 +428,144 @@ class StockMovementServiceImplTest {
         InventoryAdjustmentRequest savedRequest = adjustmentCaptor.getValue();
         assertThat(savedRequest.getStatus()).isEqualTo(AdjustmentRequestStatus.APPROVED);
         assertThat(savedRequest.getApprovedByUserId()).isEqualTo("approver-xyz");
+    }
+
+    @Nested
+    @DisplayName("approveAdjustmentRequest location scope (ADR-0061 §3, #1871)")
+    class ApproveLocationScope {
+
+        @Test
+        @DisplayName("request location in reach: posts the ledger entry and approves")
+        void inReach_postsAndApproves() {
+            authenticate("scoped-approver", approveScopedTo(RESOLVER, SITE_OF_LOC_1));
+            setupClock();
+            stubLedgerSaveReturnsEntry();
+            stubAdjustmentSaveReturnsRequest();
+            InventoryAdjustmentRequest request = pendingAdjustmentRequest(4);
+            when(adjustmentRepository.findById(request.getAdjustmentRequestId()))
+                    .thenReturn(Optional.of(request));
+            when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_1))
+                    .thenReturn(new BigDecimal("15"));
+
+            InventoryLedgerEntryResponse result =
+                    service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "scoped-approver");
+
+            assertThat(result.getEventType()).isEqualTo(InventoryLedgerEventType.ADJUSTMENT_IN);
+            assertThat(request.getStatus()).isEqualTo(AdjustmentRequestStatus.APPROVED);
+            verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
+        }
+
+        @Test
+        @DisplayName("request location out of reach: LocationScopeDeniedException, nothing posted, still PENDING")
+        void outOfReach_deniesBeforeAnyStateChange() {
+            authenticate("scoped-approver", approveScopedTo(RESOLVER, OTHER_SITE));
+            InventoryAdjustmentRequest request = pendingAdjustmentRequest(4);
+            when(adjustmentRepository.findById(request.getAdjustmentRequestId()))
+                    .thenReturn(Optional.of(request));
+
+            Throwable exception = catchThrowable(
+                    () -> service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "scoped-approver"));
+
+            assertThat(exception)
+                    .isInstanceOf(LocationScopeDeniedException.class)
+                    .asInstanceOf(
+                            org.assertj.core.api.InstanceOfAssertFactories.type(LocationScopeDeniedException.class))
+                    .satisfies(denied -> {
+                        assertThat(denied.permission()).isEqualTo(InventoryPermissionRegistry.ADJUSTMENT_APPROVE);
+                        assertThat(denied.locationId()).isEqualTo(LOC_1.toString());
+                    });
+            assertThat(request.getStatus()).isEqualTo(AdjustmentRequestStatus.PENDING);
+            assertThat(request.getApprovedByUserId()).isNull();
+            verify(ledgerPostingService, never()).post(any(InventoryLedgerEntry.class));
+            verify(adjustmentRepository, never()).save(any(InventoryAdjustmentRequest.class));
+            verifyNoInteractions(ledgerRepository);
+        }
+
+        @Test
+        @DisplayName("missing request: not-found rejection first; the scope is never consulted")
+        void missingRequest_rejectsBeforeScopeCheck() {
+            LocationAncestorResolver resolver = mock(LocationAncestorResolver.class);
+            authenticate("scoped-approver", approveScopedTo(resolver, OTHER_SITE));
+            UUID requestId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+            when(adjustmentRepository.findById(requestId)).thenReturn(Optional.empty());
+
+            Throwable exception = catchThrowable(() -> service.approveAdjustmentRequest(requestId, "scoped-approver"));
+
+            assertThat(exception).isInstanceOf(IllegalArgumentException.class);
+            verifyNoInteractions(resolver);
+            verify(ledgerPostingService, never()).post(any(InventoryLedgerEntry.class));
+        }
+
+        @Test
+        @DisplayName("pre-rollout token (no loc_* claims): approval is unchanged even when out of reach")
+        void preRolloutToken_isUnchanged() {
+            authenticate("legacy-approver", LocationScope.unscoped());
+            setupClock();
+            stubLedgerSaveReturnsEntry();
+            stubAdjustmentSaveReturnsRequest();
+            InventoryAdjustmentRequest request = pendingAdjustmentRequest(2);
+            when(adjustmentRepository.findById(request.getAdjustmentRequestId()))
+                    .thenReturn(Optional.of(request));
+            when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_1))
+                    .thenReturn(new BigDecimal("1"));
+
+            service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "legacy-approver");
+
+            assertThat(request.getStatus()).isEqualTo(AdjustmentRequestStatus.APPROVED);
+            verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
+        }
+
+        @Test
+        @DisplayName("ALL-scoped caller (permission in neither bitset): approval is unchanged")
+        void globalCaller_isUnchanged() {
+            authenticate("controller", globalReach(OTHER_SITE));
+            setupClock();
+            stubLedgerSaveReturnsEntry();
+            stubAdjustmentSaveReturnsRequest();
+            InventoryAdjustmentRequest request = pendingAdjustmentRequest(2);
+            when(adjustmentRepository.findById(request.getAdjustmentRequestId()))
+                    .thenReturn(Optional.of(request));
+            when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_1))
+                    .thenReturn(new BigDecimal("1"));
+
+            service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "controller");
+
+            assertThat(request.getStatus()).isEqualTo(AdjustmentRequestStatus.APPROVED);
+            verify(ledgerPostingService).post(any(InventoryLedgerEntry.class));
+        }
+
+        @Test
+        @DisplayName(
+                "#1373 pair: identical grants, same out-of-reach request; LOCATION scope denies, ALL scope approves")
+        void identicalGrants_scopeIsTheOnlyDifference() {
+            InventoryAdjustmentRequest request = pendingAdjustmentRequest(3);
+            when(adjustmentRepository.findById(request.getAdjustmentRequestId()))
+                    .thenReturn(Optional.of(request));
+
+            // INVENTORY_MANAGER: same authorities, ADJUSTMENT_APPROVE carried in a scope bitset,
+            // assigned to a site that is not above LOC_1.
+            authenticate("inventory-manager", approveScopedTo(RESOLVER, OTHER_SITE));
+            Throwable denied = catchThrowable(
+                    () -> service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "inventory-manager"));
+            assertThat(denied).isInstanceOf(LocationScopeDeniedException.class);
+            assertThat(request.getStatus()).isEqualTo(AdjustmentRequestStatus.PENDING);
+            verify(ledgerPostingService, never()).post(any(InventoryLedgerEntry.class));
+
+            // INVENTORY_CONTROLLER: same authorities, same assigned node, but ADJUSTMENT_APPROVE is
+            // in neither bitset, so the grant is global.
+            authenticate("inventory-controller", globalReach(OTHER_SITE));
+            setupClock();
+            stubLedgerSaveReturnsEntry();
+            stubAdjustmentSaveReturnsRequest();
+            when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), LOC_1))
+                    .thenReturn(new BigDecimal("7"));
+
+            service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "inventory-controller");
+
+            assertThat(request.getStatus()).isEqualTo(AdjustmentRequestStatus.APPROVED);
+            assertThat(request.getApprovedByUserId()).isEqualTo("inventory-controller");
+            verify(ledgerPostingService, times(1)).post(any(InventoryLedgerEntry.class));
+        }
     }
 
     private RecordMovementRequest baseMovementRequest(MovementType movementType, int quantity) {

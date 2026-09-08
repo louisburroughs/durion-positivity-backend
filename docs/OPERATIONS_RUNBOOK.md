@@ -408,7 +408,7 @@ Do not confuse the three tables:
 | --- | --- |
 | `role_permissions` | **role → permission** grants — what a role can do |
 | `user_roles` | **user → role**, unscoped — feeds token issuance |
-| `role_assignments` | **user → role** with scope type, location scope and effective dating — read by `check-permission`, but does **not** narrow a JWT |
+| `role_assignments` | **user → role**, effective-dated (`effective_start_date`, `effective_end_date`, `revoked_at`) — feeds `getUserPermissions`; carries no location scope (that is `roles.location_scope` plus the pos-people staffing assignment, ADR-0061 §1) and does **not** narrow a JWT |
 
 ### Provisioning Role Grants
 
@@ -483,7 +483,11 @@ Authorization: Bearer {JWT_TOKEN}
 
 ### Assigning Roles to Users
 
-**Global Scope:**
+Assignments are effective-dated only. Location reach is not set per assignment: it is the
+role's `location_scope` (ADR-0061 §1) resolved against the user's pos-people staffing
+assignment when the token is issued.
+
+**Open-ended:**
 
 ```bash
 POST /api/roles/assignments
@@ -493,12 +497,11 @@ Authorization: Bearer {JWT_TOKEN}
 {
   "userId": 123,
   "roleId": 1,
-  "scopeType": "GLOBAL",
   "effectiveStartDate": "2026-01-13"
 }
 ```
 
-**Location-Scoped:**
+**Bounded window:**
 
 ```bash
 POST /api/roles/assignments
@@ -508,8 +511,6 @@ Authorization: Bearer {JWT_TOKEN}
 {
   "userId": 123,
   "roleId": 2,
-  "scopeType": "LOCATION",
-  "scopeLocationIds": ["STORE-001", "STORE-002"],
   "effectiveStartDate": "2026-01-13",
   "effectiveEndDate": "2026-12-31"
 }
@@ -517,10 +518,10 @@ Authorization: Bearer {JWT_TOKEN}
 
 ### Checking Permissions
 
-```bash
-# Check if user has permission
-GET /api/roles/check-permission?userId=123&permission=pos:order:create&locationId=STORE-001
+There is no per-user `check-permission` probe: location-scoped decisions are made by the owning
+service from the token's `loc_fin_bits` / `loc_oth_bits` / `loc_scope` claims (ADR-0061 §3).
 
+```bash
 # Get all user permissions
 GET /api/roles/permissions/user/123
 
@@ -627,6 +628,60 @@ public class PartyController {
 ❌ Store permissions in application.yml
 ❌ Manually insert permissions into database
 ❌ Create permissions via admin UI
+
+### Location-scope decisions (`location-scope.yaml`)
+
+`@PreAuthorize` answers "may this caller do X"; it does not answer "may they do it *here*". Under
+ADR-0061 the owning service decides that at every endpoint that takes a caller-supplied
+`locationId` (path, query or request body), from the token's `loc_fin_bits` / `loc_oth_bits` /
+`loc_scope` claims via `SecurityContextHelper.locationScope()`. Each module records what it decided
+for each such operation in `<module>/location-scope.yaml` (module root, beside `openapi.yaml`), and
+`scripts/audit-rbac.py --check` (the "Check RBAC authorization drift" step in `pr-checks.yml`)
+fails the build when the file and the code disagree. Rollout: #1872.
+
+**Format** — flat, one entry per operation, every value on one line (the checker is a regex parser,
+not PyYAML; folded `>` / `|` scalars are rejected):
+
+```yaml
+# Location-scope decisions for pos-inventory (ADR-0061, #1872).
+decisions:
+  - operation: StockMovementController.createAdjustmentRequest   # SimpleClassName.methodName
+    shape: gate                                                  # gate | narrow | unscoped
+    permission: inventory:adjustment:create                      # required for gate / narrow
+    reason: locationId names the site the adjustment is raised at; denied outside the caller's reach.
+  - operation: BackorderController.listBackorders
+    shape: narrow
+    permission: inventory:backorder:view
+    reason: locationId is an optional filter; a scoped caller with no filter sees their reach only.
+  - operation: CatalogBulkIngestController.bulkIngest
+    shape: unscoped
+    reason: ADMIN-only bulk load; the location is a payload default, not an access boundary.
+```
+
+| Shape | Meaning |
+| --- | --- |
+| `gate` | `locationId` names the resource acted on: `scope.require(permission, locationId)` → 403 `LOCATION_SCOPE_DENIED` outside the caller's reach |
+| `narrow` | `locationId` is an optional filter on a list/search/report: gate it when given, otherwise restrict the query to `scope.reach(permission)` |
+| `unscoped` | deliberately no check; the `reason` says why (bulk load, no location-private data, or deferred with a tracking issue) |
+
+**CI codes** (never baselined — all three must be zero):
+
+| Code | Fires when |
+| --- | --- |
+| `location_scope_undecided` | a controller operation takes a `locationId` and the module's file has no entry for it (or the file is missing) |
+| `location_scope_stale` | an entry names an operation that no longer exists in the module — an entry for a sibling endpoint that takes no `locationId` (e.g. the by-id detail you gated beside a list) is allowed as long as the `Class.method` exists in one of the module's controllers |
+| `location_scope_invalid` | `shape` not `gate`/`narrow`/`unscoped`, `gate`/`narrow` without `permission`, any entry without `reason`, a duplicate operation, or a file the parser cannot read |
+
+`location_scope_summary` (operations found / decided; entries per shape, per module) is printed for
+information only.
+
+**Adding a location-parameterised endpoint:** decide the shape, implement it (see pos-workorder
+`WipController` for a gate and pos-people `TimeEntryServiceImpl` for a narrow), document the 403
+`LOCATION_SCOPE_DENIED` response on the operation, then add the entry to the module's
+`location-scope.yaml` and run `python3 scripts/audit-rbac.py --check` locally. Renaming or deleting
+the method means updating or removing the entry in the same change. A module adopting `gate` or
+`narrow` for the first time also needs a `LocationAncestorResolver` bean (its location replica's
+hierarchy service) — without one every scoped caller is denied (fail closed).
 
 ---
 

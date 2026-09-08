@@ -85,22 +85,17 @@ ON CONFLICT (user_id, role_id) DO NOTHING;
 
 -- Task 10 scope differentiation (docs/rbac-permission-role-audit-2026-08.md §7):
 -- INVENTORY_MANAGER and INVENTORY_CONTROLLER hold identical permission sets by design
--- (#1373) — location vs. global reach lives in role_assignments.scope_type, mirrored
--- here after the admin.alpha pattern in R__seed_reference_security.sql. scope_type has
--- no DB check constraint (VARCHAR(20) in V1__baseline_rbac_schema.sql), but the
--- application layer (ScopeType enum / RoleManagementServiceImpl) only accepts GLOBAL
--- or LOCATION, and a LOCATION assignment requires at least one row in
--- role_assignment_scope_locations to be meaningful. pos-security-service does not own
--- a locations table (locations live in pos-location's own schema — no cross-service
--- FKs per this repo's architecture), so there is no location fixture this migration can
--- seed or safely reference. raymond.chu (INVENTORY_CONTROLLER) therefore gets the
--- GLOBAL row below; felicia.grant's (INVENTORY_MANAGER) LOCATION-scoped row is deferred
--- until a location fixture this service can reference exists.
-INSERT INTO role_assignments (id, user_id, role_id, scope_type, effective_start_date, created_at, created_by)
+-- (#1373); they differ by reach. Since ADR-0061 §1 (#1868, #1875) reach is a property
+-- of the role — roles.location_scope, seeded in V37 (INVENTORY_CONTROLLER = ALL,
+-- INVENTORY_MANAGER = LOCATION) — combined with the holder's pos-people staffing
+-- assignment. A role assignment carries no scope of its own (V38 dropped scope_type), so
+-- raymond.chu's row below is a plain effective-dated assignment, mirrored after the
+-- admin.alpha pattern in R__seed_reference_security.sql. felicia.grant (INVENTORY_MANAGER)
+-- receives her location through pos-people's employee_location_assignment, not here.
+INSERT INTO role_assignments (id, user_id, role_id, effective_start_date, created_at, created_by)
 SELECT '01960010-0000-7000-9000-000000000016'::uuid,
        '01960010-0000-7000-8000-000000000016'::uuid,
        r.id,
-       'GLOBAL',
        CURRENT_DATE,
        NOW(),
        'seed-generator'

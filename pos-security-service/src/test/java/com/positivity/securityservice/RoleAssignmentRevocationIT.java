@@ -12,7 +12,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
-import com.positivity.securityservice.internal.enums.ScopeType;
 import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
@@ -113,7 +112,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
     @DisplayName("Should revoke assignment immediately with today's date")
     void testImmediateRevocation() throws Exception {
         // Given: Create a role assignment
-        RoleAssignment assignment = createAssignment(LocalDateTime.now(TEST_CLOCK), null, ScopeType.GLOBAL);
+        RoleAssignment assignment = createAssignment(LocalDateTime.now(TEST_CLOCK), null);
 
         Instant beforeRevocation = Instant.now();
 
@@ -138,7 +137,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
     @DisplayName("Should support scheduled revocation with future date")
     void testScheduledRevocation() throws Exception {
         // Given: Create a role assignment
-        RoleAssignment assignment = createAssignment(LocalDateTime.now(TEST_CLOCK), null, ScopeType.GLOBAL);
+        RoleAssignment assignment = createAssignment(LocalDateTime.now(TEST_CLOCK), null);
 
         LocalDateTime futureDate = LocalDateTime.now().plusDays(30).withNano(0);
         Instant beforeRevocation = Instant.now();
@@ -167,7 +166,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
     void testBackdatedRevocation() throws Exception {
         // Given: Create a role assignment
         RoleAssignment assignment =
-                createAssignment(LocalDateTime.now(TEST_CLOCK).minusDays(30), null, ScopeType.GLOBAL);
+                createAssignment(LocalDateTime.now(TEST_CLOCK).minusDays(30), null);
 
         LocalDateTime pastDate = LocalDateTime.now(TEST_CLOCK).minusDays(5);
         Instant beforeRevocation = Instant.now();
@@ -194,7 +193,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
     @DisplayName("Should update revokedAt when revocation is changed")
     void testUpdatingRevocation() throws Exception {
         // Given: Create and revoke an assignment
-        RoleAssignment assignment = createAssignment(LocalDateTime.now(TEST_CLOCK), null, ScopeType.GLOBAL);
+        RoleAssignment assignment = createAssignment(LocalDateTime.now(TEST_CLOCK), null);
 
         LocalDateTime firstEndDate = LocalDateTime.now(TEST_CLOCK).plusDays(7);
         mockMvc.perform(withAuth(delete("/v1/roles/assignments/" + assignment.getId()))
@@ -244,7 +243,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
     void testRetrieveRevokedAssignments() throws Exception {
         // Given: Create and revoke an assignment
         RoleAssignment assignment =
-                createAssignment(LocalDateTime.now(TEST_CLOCK).minusDays(30), null, ScopeType.GLOBAL);
+                createAssignment(LocalDateTime.now(TEST_CLOCK).minusDays(30), null);
 
         mockMvc.perform(withAuth(delete("/v1/roles/assignments/" + assignment.getId()))
                         .param(
@@ -279,7 +278,7 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
     /**
      * Helper method to create a role assignment
      */
-    private RoleAssignment createAssignment(LocalDateTime startDate, LocalDateTime endDate, ScopeType scopeType) {
+    private RoleAssignment createAssignment(LocalDateTime startDate, LocalDateTime endDate) {
         RoleAssignment assignment = new RoleAssignment();
         assignment.setId(UUIDv7Generator.generate());
         assignment.setUser(testUser);
@@ -288,7 +287,6 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
         // Note: setEffectiveEndDate will automatically set revokedAt if endDate is not
         // null
         assignment.setEffectiveEndDate(endDate);
-        assignment.setScopeType(scopeType);
         assignment.setCreatedAt(Instant.now(TEST_CLOCK));
         assignment.setCreatedBy("test");
         return roleAssignmentRepository.save(assignment);

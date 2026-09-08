@@ -1,13 +1,10 @@
 package com.positivity.securityservice.internal.entity;
 
-import com.positivity.securityservice.internal.enums.ScopeType;
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Data;
@@ -18,9 +15,13 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
- * Represents a user's assignment to a role with optional scope and effective
- * dating.
- * Supports scoped RBAC where roles can be limited to specific locations.
+ * Represents a user's effective-dated assignment to a role.
+ *
+ * <p>Carries no location scope. Location reach is a property of the role
+ * ({@link Role#getLocationScope()} / {@link Role#getLocationHierarchy()}) combined with
+ * pos-people's staffing assignment, per ADR-0061 §1; the former
+ * {@code scope_type} column and {@code role_assignment_scope_locations} table were dropped by
+ * {@code V38__drop_role_assignment_scope.sql} (#1875).
  */
 @Data
 @NoArgsConstructor
@@ -41,22 +42,6 @@ public class RoleAssignment {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
-
-    /**
-     * Scope type for this role assignment
-     */
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private ScopeType scopeType = ScopeType.GLOBAL;
-
-    /**
-     * Location IDs this role assignment applies to (only used when scopeType is
-     * LOCATION)
-     */
-    @ElementCollection
-    @CollectionTable(name = "role_assignment_scope_locations", joinColumns = @JoinColumn(name = "role_assignment_id"))
-    @Column(name = "location_id")
-    private Set<String> scopeLocationIds = new HashSet<>();
 
     /**
      * Start date when this assignment becomes effective
@@ -126,16 +111,6 @@ public class RoleAssignment {
         boolean afterStart = !now.isBefore(effectiveStartDate);
         boolean beforeEnd = effectiveEndDate == null || !now.isAfter(effectiveEndDate);
         return afterStart && beforeEnd;
-    }
-
-    /**
-     * Check if this assignment covers a specific location
-     */
-    public boolean coversLocation(String locationId) {
-        if (scopeType == ScopeType.GLOBAL) {
-            return true;
-        }
-        return scopeLocationIds.contains(locationId);
     }
 
     /**

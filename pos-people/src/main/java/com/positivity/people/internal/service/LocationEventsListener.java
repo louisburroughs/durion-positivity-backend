@@ -38,6 +38,13 @@ import tools.jackson.databind.ObjectMapper;
  * facts are ignored, but their eventIds are still recorded in {@code processed_events}: the
  * owner's manifest counts every fact in the window, so skipping the record would read as
  * permanent drift and trigger useless replays.
+ *
+ * <p>Each location fact also refreshes the materialised location-scope ancestor sets
+ * (ADR-0061 §2, #1878): the child's typed parent edges are replaced from the fact, then
+ * {@link LocationHierarchyService#recomputeAncestors} rebuilds the sets for the location and every
+ * replicated descendant — so a re-parented node propagates, and a parent arriving after its
+ * children pushes its ancestry down to them. Ingestion never fails closed on a parent the replica
+ * has not seen yet; the scope check does.
  */
 @Slf4j
 @Component
@@ -51,6 +58,7 @@ public class LocationEventsListener {
     private final ProcessedEventRepository processedEventRepository;
     private final ExtLocationReplicaRepository extLocationReplicaRepository;
     private final ExtLocationParentReplicaRepository extLocationParentReplicaRepository;
+    private final LocationHierarchyService locationHierarchyService;
     private final Counter payloadRejectedCounter;
 
     public LocationEventsListener(
@@ -59,12 +67,14 @@ public class LocationEventsListener {
             ProcessedEventRepository processedEventRepository,
             ExtLocationReplicaRepository extLocationReplicaRepository,
             ExtLocationParentReplicaRepository extLocationParentReplicaRepository,
+            LocationHierarchyService locationHierarchyService,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.extLocationReplicaRepository = extLocationReplicaRepository;
         this.extLocationParentReplicaRepository = extLocationParentReplicaRepository;
+        this.locationHierarchyService = locationHierarchyService;
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -152,6 +162,9 @@ public class LocationEventsListener {
                     .parentType(edge.parentType())
                     .build()));
         }
+        // Edges (or the row itself) may have changed: rebuild the scope ancestor sets for this
+        // location and everything replicated beneath it (ADR-0061 §2, #1878).
+        locationHierarchyService.recomputeAncestors(payload.locationId());
         log.info("Updated ext_location locationId={} version={}", payload.locationId(), aggregateVersion);
     }
 

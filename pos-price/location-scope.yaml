@@ -1,0 +1,19 @@
+# Location-scope decisions for pos-price (ADR-0061, #1872).
+# Every operation that takes a caller-supplied locationId must appear here;
+# scripts/audit-rbac.py --check fails on a missing or stale entry.
+decisions:
+  - operation: PriceQuoteController.calculatePriceQuote
+    shape: unscoped
+    reason: Price computation (isAuthenticated); locationId selects pricing context and the quote carries no location-private data (ADR-0061, #1872)
+  - operation: LaborRateQuoteController.resolveLaborRate
+    shape: unscoped
+    reason: Price computation; locationId selects the labor-rate context and the quote carries no location-private data (ADR-0061, #1872)
+  - operation: LaborRateBulkIngestController.bulkIngest
+    shape: unscoped
+    reason: Bulk load guarded by the domain import/create authority; the location is a payload default applied to imported rows, not an access boundary, and the roles holding it are seeded location_scope ALL (ADR-0061, #1872)
+  - operation: LaborRateAdjustmentBulkIngestController.bulkIngest
+    shape: unscoped
+    reason: Bulk load guarded by the domain import/create authority; the location is a payload default applied to imported rows, not an access boundary, and the roles holding it are seeded location_scope ALL (ADR-0061, #1872)
+  - operation: LaborRateController.createLaborRate
+    shape: unscoped
+    reason: Deferred: intended gate on the rate's locationId, but pos-price has no location replica; tracked in #1885

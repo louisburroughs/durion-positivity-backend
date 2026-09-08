@@ -1,5 +1,6 @@
 package com.positivity.people.internal.service;
 
+import com.positivity.domainevents.location.LocationAncestry.Dimension;
 import com.positivity.people.internal.dto.ApprovedTimeExportResponse;
 import com.positivity.people.internal.dto.AttendanceDiscrepancyReportResponse;
 import com.positivity.people.internal.dto.AttendanceReportKey;
@@ -11,6 +12,10 @@ import com.positivity.people.internal.exception.RequestValidationException;
 import com.positivity.people.internal.repository.ExtJobTimeReplicaRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.repository.TimeEntryRepository;
+import com.positivity.people.internal.security.PeoplePermissions;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.LocationScope.Reach;
+import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -24,9 +29,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -35,6 +42,29 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 
+/**
+ * People reports over the local time entries and the workorder job-time replica.
+ *
+ * <h2>Location scope (ADR-0061 §3, #1872)</h2>
+ *
+ * {@code @PreAuthorize} on the controller answers "may this caller read these reports"; the
+ * caller's {@link LocationScope} on {@code accounting:time:export} answers "…for where":
+ *
+ * <ul>
+ * <li>{@link #getApprovedTimeForExport} names its locations — <b>gate</b>. Every supplied
+ * location must be within the caller's reach or the request is a 403
+ * {@code LOCATION_SCOPE_DENIED}. The gate runs after the existence/active validation so an
+ * unknown location is the same 400 for every caller.</li>
+ * <li>{@link #getAttendanceDiscrepancyReport} takes {@code locationId} as an optional filter —
+ * <b>gate</b> when named, <b>narrow</b> when absent: a scoped caller is not denied, the report
+ * is restricted to their reach (assigned nodes plus replicated descendants on the dimension(s)
+ * the permission is scoped on), and an empty reach is an empty report rather than an
+ * unrestricted one.</li>
+ * </ul>
+ *
+ * A caller whose permission is global, or whose token predates the scope claims, sees the
+ * reports exactly as before.
+ */
 @Slf4j
 @Service
 public class PeopleReportsServiceImpl implements PeopleReportsService {
@@ -54,12 +84,15 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
 
     private final TimekeepingThresholdCache timekeepingThresholdCache;
 
+    private final LocationHierarchyService locationHierarchyService;
+
     public PeopleReportsServiceImpl(
             TimeEntryRepository timeEntryRepository,
             ExtPersonReplicaRepository extPersonReplicaRepository,
             ExtJobTimeReplicaRepository extJobTimeReplicaRepository,
             LocationReferenceService locationReferenceService,
             TimekeepingThresholdCache timekeepingThresholdCache,
+            LocationHierarchyService locationHierarchyService,
             Clock clock) {
         this.clock = clock;
         this.timeEntryRepository = timeEntryRepository;
@@ -67,6 +100,7 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         this.extJobTimeReplicaRepository = extJobTimeReplicaRepository;
         this.locationReferenceService = locationReferenceService;
         this.timekeepingThresholdCache = timekeepingThresholdCache;
+        this.locationHierarchyService = locationHierarchyService;
     }
 
     @Override
@@ -97,6 +131,13 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
             if (!locationReferenceService.isLocationActive(locationId)) {
                 throw new RequestValidationException("Unknown locationId: " + locationId);
             }
+        }
+
+        // Gate: every named location must be within the caller's reach, or this is a 403. Runs
+        // after the validation above so an unknown location is a 400 for every caller.
+        LocationScope scope = SecurityContextHelper.locationScope();
+        for (UUID locationId : locationIds) {
+            scope.require(PeoplePermissions.ACCOUNTING_TIME_EXPORT, locationId);
         }
 
         Instant windowStartInclusive = startDate.atStartOfDay(ZoneId.of("UTC")).toInstant();
@@ -185,14 +226,38 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
         Instant windowEndExclusive = endDate.plusDays(1).atStartOfDay(zoneId).toInstant();
         boolean includeAllTechnicians = technicianIds.isEmpty();
 
-        List<TimeEntry> attendanceEntries = timeEntryRepository.findAttendanceOverlappingWindow(
-                windowStartInclusive, windowEndExclusive, locationId, technicianIds, includeAllTechnicians);
+        LocationScope scope = SecurityContextHelper.locationScope();
+        List<TimeEntry> attendanceEntries;
+        Map<AttendanceReportKey, Long> jobMinutesByKey;
+        if (locationId != null) {
+            // Gate: a named location must be within the caller's reach, or this is a 403.
+            scope.require(PeoplePermissions.ACCOUNTING_TIME_EXPORT, locationId);
+            attendanceEntries = timeEntryRepository.findAttendanceOverlappingWindow(
+                    windowStartInclusive, windowEndExclusive, locationId, technicianIds, includeAllTechnicians);
+            jobMinutesByKey = aggregateJobMinutes(startDate, endDate, zoneId, locationId, technicianIds);
+        } else {
+            Optional<Reach> reach = scope.reach(PeoplePermissions.ACCOUNTING_TIME_EXPORT);
+            if (reach.isEmpty()) {
+                // Global or pre-rollout: the unfiltered report, unchanged.
+                attendanceEntries = timeEntryRepository.findAttendanceOverlappingWindow(
+                        windowStartInclusive, windowEndExclusive, null, technicianIds, includeAllTechnicians);
+                jobMinutesByKey = aggregateJobMinutes(startDate, endDate, zoneId, null, technicianIds);
+            } else {
+                // Narrow: the caller sees their reach and nothing else. An empty reach is an empty
+                // report, never an unrestricted one — and never an `IN ()` handed to the database.
+                Set<UUID> reachable = reachableLocations(reach.get());
+                if (reachable.isEmpty()) {
+                    return List.of();
+                }
+                attendanceEntries = timeEntryRepository.findAttendanceOverlappingWindowWithinLocations(
+                        windowStartInclusive, windowEndExclusive, reachable, technicianIds, includeAllTechnicians);
+                jobMinutesByKey =
+                        aggregateJobMinutesWithinLocations(startDate, endDate, zoneId, reachable, technicianIds);
+            }
+        }
 
         Map<AttendanceReportKey, Long> attendanceMinutesByKey =
                 aggregateAttendanceMinutes(attendanceEntries, windowStartInclusive, windowEndExclusive, zoneId);
-
-        Map<AttendanceReportKey, Long> jobMinutesByKey =
-                aggregateJobMinutes(startDate, endDate, zoneId, locationId, technicianIds);
 
         Set<AttendanceReportKey> allKeys = new HashSet<>();
         allKeys.addAll(attendanceMinutesByKey.keySet());
@@ -233,6 +298,21 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
                 .thenComparing(AttendanceDiscrepancyReportResponse::getTechnicianId)
                 .thenComparing(AttendanceDiscrepancyReportResponse::getLocationId));
         return rows;
+    }
+
+    /**
+     * Expands a reach once per request: the union of the inclusive descendant set of every
+     * assigned node on every dimension the permission is scoped on. A permission scoped on both
+     * dimensions is satisfied by either rollup, so both are unioned (ADR-0061 §2).
+     */
+    private Set<UUID> reachableLocations(Reach reach) {
+        Set<UUID> reachable = new LinkedHashSet<>();
+        for (UUID node : reach.nodes()) {
+            for (Dimension dimension : reach.dimensions()) {
+                reachable.addAll(locationHierarchyService.descendantsOf(node, dimension));
+            }
+        }
+        return reachable;
     }
 
     private ZoneId parseZoneId(String timezone) {
@@ -386,14 +466,45 @@ public class PeopleReportsServiceImpl implements PeopleReportsService {
      */
     private Map<AttendanceReportKey, Long> aggregateJobMinutes(
             LocalDate startDate, LocalDate endDate, ZoneId zoneId, UUID locationId, List<UUID> technicianIds) {
-        // Padding mirrors the old owner-side query: a local date can start/end up to a day away
-        // from its UTC calendar date depending on the zone offset.
-        Instant queryStart = startDate.minusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-        Instant queryEnd = endDate.plusDays(2).atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant queryStart = jobTimeQueryStart(startDate);
+        Instant queryEnd = jobTimeQueryEnd(endDate);
+        return bucketJobMinutes(
+                extJobTimeReplicaRepository.findForReportWindow(
+                        queryStart, queryEnd, locationId, technicianIds, technicianIds.isEmpty()),
+                startDate,
+                endDate,
+                zoneId);
+    }
 
+    /** {@link #aggregateJobMinutes} over the narrowed location set (never empty here). */
+    private Map<AttendanceReportKey, Long> aggregateJobMinutesWithinLocations(
+            LocalDate startDate, LocalDate endDate, ZoneId zoneId, Set<UUID> locationIds, List<UUID> technicianIds) {
+        Instant queryStart = jobTimeQueryStart(startDate);
+        Instant queryEnd = jobTimeQueryEnd(endDate);
+        return bucketJobMinutes(
+                extJobTimeReplicaRepository.findForReportWindowWithinLocations(
+                        queryStart, queryEnd, locationIds, technicianIds, technicianIds.isEmpty()),
+                startDate,
+                endDate,
+                zoneId);
+    }
+
+    /**
+     * Padding mirrors the old owner-side query: a local date can start/end up to a day away from
+     * its UTC calendar date depending on the zone offset.
+     */
+    private static Instant jobTimeQueryStart(LocalDate startDate) {
+        return startDate.minusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+    }
+
+    private static Instant jobTimeQueryEnd(LocalDate endDate) {
+        return endDate.plusDays(2).atStartOfDay(ZoneOffset.UTC).toInstant();
+    }
+
+    private static Map<AttendanceReportKey, Long> bucketJobMinutes(
+            List<ExtJobTimeReplica> rows, LocalDate startDate, LocalDate endDate, ZoneId zoneId) {
         Map<AttendanceReportKey, Long> minutesByKey = new HashMap<>();
-        for (ExtJobTimeReplica row : extJobTimeReplicaRepository.findForReportWindow(
-                queryStart, queryEnd, locationId, technicianIds, technicianIds.isEmpty())) {
+        for (ExtJobTimeReplica row : rows) {
             LocalDate localDate = row.getEndAtUtc().atZone(zoneId).toLocalDate();
             if (localDate.isBefore(startDate) || localDate.isAfter(endDate)) {
                 continue;

@@ -1,10 +1,13 @@
 package com.positivity.inventory.internal.repository;
 
 import com.positivity.inventory.internal.entity.ReplenishmentPolicy;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface ReplenishmentPolicyRepository extends JpaRepository<ReplenishmentPolicy, UUID> {
 
@@ -21,4 +24,17 @@ public interface ReplenishmentPolicyRepository extends JpaRepository<Replenishme
     //     max = 0 and hard-failed every putaway.
     // All three had no caller outside PutawayValidationServiceImpl and were removed with it. This
     // repository now serves only the replenishment scan engine, which is its documented job.
+
+    /**
+     * Every policy at a reachable site, or at a storage location (pick face) replicated under one
+     * (ADR-0061 §3, #1872). Never called with an empty set — an empty reach is an empty page
+     * decided before the query.
+     */
+    @Query("""
+            SELECT p FROM ReplenishmentPolicy p
+            WHERE p.locationId IN :locationIds
+               OR p.locationId IN (SELECT s.storageLocationId FROM ExtStorageLocationReplica s
+                                   WHERE s.siteId IN :locationIds)
+            """)
+    List<ReplenishmentPolicy> findWithinLocations(@Param("locationIds") Collection<UUID> locationIds);
 }

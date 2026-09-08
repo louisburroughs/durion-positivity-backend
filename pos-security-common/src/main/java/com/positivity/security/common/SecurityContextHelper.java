@@ -187,6 +187,32 @@ public final class SecurityContextHelper {
     }
 
     /**
+     * The caller's location reach for this request (ADR-0061 §3, #1870), as decoded by
+     * {@link GatewayAuthoritiesFilter} from the {@code X-Loc-*} headers.
+     *
+     * <p>Fails loudly, like every other accessor here, when there is no authenticated caller.
+     * When there is one but the details carry no scope — a legacy {@code X-Authorities} request,
+     * or an authentication built without gateway details — the answer is
+     * {@link LocationScope#unscoped()}: that is the "claims absent" row of the decision table,
+     * and it is what keeps adoption per-module rather than a flag day.
+     *
+     * <pre>{@code
+     * SecurityContextHelper.locationScope().require(WipPermissions.WIP_VIEW, locationId);
+     * }</pre>
+     *
+     * @return the caller's scope, never null
+     * @throws IllegalStateException if authentication is missing, not authenticated, or anonymous
+     */
+    public static @NonNull LocationScope locationScope() {
+        Authentication authentication = requireAuthenticatedAuthentication();
+        if (authentication.getDetails() instanceof Map<?, ?> detailsMap
+                && detailsMap.get(GatewaySecurityConstants.DETAIL_LOCATION_SCOPE) instanceof LocationScope scope) {
+            return scope;
+        }
+        return LocationScope.unscoped();
+    }
+
+    /**
      * Get all authorities for the current user.
      *
      * @return Set of authority strings

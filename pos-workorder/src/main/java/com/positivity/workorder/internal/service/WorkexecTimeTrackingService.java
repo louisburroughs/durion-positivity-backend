@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -12,12 +13,23 @@ import org.jspecify.annotations.Nullable;
 
 public interface WorkexecTimeTrackingService {
 
+    /**
+     * Tracked job minutes aggregated per technician, location and local day.
+     *
+     * @param startDate first local day, inclusive
+     * @param endDate last local day, inclusive
+     * @param timezone the zone the days are bucketed in
+     * @param locationIds the locations to include, or {@code null} for every location; an empty
+     *     collection includes none (the caller's location reach after narrowing, ADR-0061 §3)
+     * @param technicianIds the technicians to include; empty for every technician
+     * @return the totals in deterministic (date, technician) order
+     */
     @NonNull
     List<JobTimeTotal> getJobTimeTotals(
             @NonNull LocalDate startDate,
             @NonNull LocalDate endDate,
             @NonNull ZoneId timezone,
-            @Nullable UUID locationId,
+            @Nullable Collection<UUID> locationIds,
             @NonNull List<UUID> technicianIds);
 
     @NonNull

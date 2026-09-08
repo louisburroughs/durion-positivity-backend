@@ -3,6 +3,7 @@ package com.positivity.people.internal.repository;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.enums.TimeEntryStatus;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -32,6 +33,29 @@ public interface TimeEntryRepository extends JpaRepository<TimeEntry, UUID> {
             @Param("windowStartInclusive") Instant windowStartInclusive,
             @Param("windowEndExclusive") Instant windowEndExclusive,
             @Param("locationId") UUID locationId,
+            @Param("technicianIds") List<UUID> technicianIds,
+            @Param("includeAllTechnicians") boolean includeAllTechnicians);
+
+    /**
+     * {@link #findAttendanceOverlappingWindow} restricted to a set of locations — the discrepancy
+     * report's rows for a location-scoped caller who named no location (ADR-0061 §3, #1872). The
+     * set is the caller's reach and is never empty here; the service answers an empty reach with
+     * an empty report without querying, because an {@code IN ()} has no portable meaning.
+     */
+    @NonNull
+    @Query("""
+                        SELECT t
+                        FROM TimeEntry t
+                        WHERE t.attendanceStartAt IS NOT NULL
+                          AND t.attendanceStartAt < :windowEndExclusive
+                          AND (t.attendanceEndAt IS NULL OR t.attendanceEndAt > :windowStartInclusive)
+                          AND t.locationId IN :locationIds
+                          AND (:includeAllTechnicians = true OR t.personId IN :technicianIds)
+                        """)
+    List<TimeEntry> findAttendanceOverlappingWindowWithinLocations(
+            @Param("windowStartInclusive") Instant windowStartInclusive,
+            @Param("windowEndExclusive") Instant windowEndExclusive,
+            @Param("locationIds") Collection<UUID> locationIds,
             @Param("technicianIds") List<UUID> technicianIds,
             @Param("includeAllTechnicians") boolean includeAllTechnicians);
 
@@ -75,6 +99,40 @@ public interface TimeEntryRepository extends JpaRepository<TimeEntry, UUID> {
             @Param("status") TimeEntryStatus status,
             @Param("personId") UUID personId,
             @Param("locationId") UUID locationId,
+            @Param("windowStartInclusive") Instant windowStartInclusive,
+            @Param("windowEndExclusive") Instant windowEndExclusive,
+            Pageable pageable);
+
+    /**
+     * {@link #findForApprovalQueue} narrowed to a set of locations rather than one: the shape a
+     * location-scoped caller gets when they name no location (ADR-0061 §3, #1871). The set is
+     * the caller's reach — assigned nodes plus replicated descendants — and is never empty here;
+     * the service answers an empty reach with an empty page without querying, because an
+     * {@code IN ()} has no portable meaning.
+     */
+    @NonNull
+    @Query(value = """
+                        SELECT t
+                        FROM TimeEntry t
+                        WHERE (:status IS NULL OR t.status = :status)
+                          AND (:personId IS NULL OR t.personId = :personId)
+                          AND t.locationId IN :locationIds
+                          AND t.attendanceStartAt >= :windowStartInclusive
+                          AND t.attendanceStartAt < :windowEndExclusive
+                        ORDER BY t.submittedAt ASC NULLS LAST, t.timeEntryId ASC
+                        """, countQuery = """
+                        SELECT COUNT(t)
+                        FROM TimeEntry t
+                        WHERE (:status IS NULL OR t.status = :status)
+                          AND (:personId IS NULL OR t.personId = :personId)
+                          AND t.locationId IN :locationIds
+                          AND t.attendanceStartAt >= :windowStartInclusive
+                          AND t.attendanceStartAt < :windowEndExclusive
+                        """)
+    Page<TimeEntry> findForApprovalQueueWithinLocations(
+            @Param("status") TimeEntryStatus status,
+            @Param("personId") UUID personId,
+            @Param("locationIds") Collection<UUID> locationIds,
             @Param("windowStartInclusive") Instant windowStartInclusive,
             @Param("windowEndExclusive") Instant windowEndExclusive,
             Pageable pageable);

@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.repository;
 
 import com.positivity.securityservice.internal.entity.JwtToken;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,4 +17,7 @@ public interface JwtTokenRepository extends JpaRepository<JwtToken, UUID> {
     void deleteByRefreshToken(String refreshToken);
 
     List<JwtToken> findAllBySubject(String subject);
+
+    /** Token pairs of {@code subject} whose access token has not yet expired at {@code now}. */
+    List<JwtToken> findAllBySubjectAndExpiresAtAfter(String subject, Instant now);
 }

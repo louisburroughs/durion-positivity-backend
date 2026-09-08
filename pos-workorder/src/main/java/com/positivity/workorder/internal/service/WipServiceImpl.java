@@ -86,6 +86,20 @@ public class WipServiceImpl implements WipService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<WorkorderStatusView> getWipWorkordersAtShops(@NonNull Set<UUID> shopIds, @NonNull Pageable pageable) {
+        log.debug("Fetching WIP workorders within reach: shops={}", shopIds.size());
+        if (shopIds.isEmpty()) {
+            // An empty reach is an empty page, never an unrestricted one — and never an
+            // `IN ()` handed to the database.
+            return Page.empty(pageable);
+        }
+        Page<Workorder> workorders =
+                workorderRepository.findByShopIdInAndStatusIn(shopIds, ACTIVE_WIP_STATUSES, pageable);
+        return enrichStatusPage(workorders, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public WorkorderStatusDetail getWipDetail(@NonNull UUID workorderId) {
         log.debug("Fetching WIP detail: workorderId(mask)={}", maskForLog(workorderId));
         Workorder wo = workorderRepository

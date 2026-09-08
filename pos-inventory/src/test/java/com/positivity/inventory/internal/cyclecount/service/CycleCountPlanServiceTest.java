@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.inventory.internal.dto.cyclecount.plan.CreateCycleCountPlanRequest;
@@ -19,10 +21,14 @@ import com.positivity.inventory.internal.exception.CycleCountPlanNotFoundExcepti
 import com.positivity.inventory.internal.repository.CycleCountPlanRepository;
 import com.positivity.inventory.internal.repository.CycleCountScheduleRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.inventory.internal.service.LocationScopeService;
+import com.positivity.security.common.LocationScopeDeniedException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -60,6 +66,9 @@ class CycleCountPlanServiceTest {
     @Mock
     private LocationRefRepository locationRefRepository;
 
+    @Mock
+    private LocationScopeService locationScopeService;
+
     private CycleCountPlanServiceImpl service;
 
     private static final String ACTOR_USER_ID = "test-user-001";
@@ -67,7 +76,11 @@ class CycleCountPlanServiceTest {
     @BeforeEach
     void setUp() {
         service = new CycleCountPlanServiceImpl(
-                cycleCountPlanRepository, cycleCountScheduleRepository, locationRefRepository, FIXED_CLOCK);
+                cycleCountPlanRepository,
+                cycleCountScheduleRepository,
+                locationRefRepository,
+                FIXED_CLOCK,
+                locationScopeService);
     }
 
     // ─── createPlan ────────────────────────────────────────────────────────────
@@ -513,5 +526,66 @@ class CycleCountPlanServiceTest {
         service.updateStatus(planId, CycleCountPlanStatus.REJECTED);
 
         verify(cycleCountScheduleRepository, never()).save(any());
+    }
+
+    // ─── ADR-0061 §3 (#1872): location scope on the read side ────────────────
+
+    @Test
+    void listPlans_scopedNoFilter_queriesWithinReach() {
+        UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID site = UUID.fromString("00000000-0000-0000-0000-000000000010");
+        when(locationScopeService.narrowTo(isNull(), eq(InventoryPermissionRegistry.CYCLE_COUNT_VIEW)))
+                .thenReturn(Optional.of(Set.of(site)));
+        when(cycleCountPlanRepository.findByOptionalFiltersWithinLocations(
+                        eq(Set.of(site)), isNull(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(planEntity(planId))));
+
+        List<CycleCountPlanResponse> response = service.listPlans(null, null, 0, 50);
+
+        assertThat(response).extracting(CycleCountPlanResponse::getPlanId).containsExactly(planId);
+        verify(cycleCountPlanRepository, never()).findByOptionalFilters(any(), any(), any());
+    }
+
+    @Test
+    void listPlans_scopedEmptyReach_returnsEmptyWithoutQuery() {
+        when(locationScopeService.narrowTo(isNull(), eq(InventoryPermissionRegistry.CYCLE_COUNT_VIEW)))
+                .thenReturn(Optional.of(Set.of()));
+
+        assertThat(service.listPlans(null, null, 0, 50)).isEmpty();
+        verifyNoInteractions(cycleCountPlanRepository);
+    }
+
+    @Test
+    void listPlans_filter_isGatedThenQueriedAsBefore() {
+        UUID site = UUID.fromString("00000000-0000-0000-0000-000000000010");
+        when(cycleCountPlanRepository.findByOptionalFilters(eq(site), isNull(), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        service.listPlans(site, null, 0, 50);
+
+        verify(locationScopeService).narrowTo(site, InventoryPermissionRegistry.CYCLE_COUNT_VIEW);
+    }
+
+    @Test
+    void getPlan_gatesOnPlanLocationAfterLoad() {
+        UUID planId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        CycleCountPlan plan = planEntity(planId);
+        when(cycleCountPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
+        doThrow(new LocationScopeDeniedException(
+                        InventoryPermissionRegistry.CYCLE_COUNT_VIEW,
+                        plan.getLocationId().toString()))
+                .when(locationScopeService)
+                .require(plan.getLocationId(), InventoryPermissionRegistry.CYCLE_COUNT_VIEW);
+
+        assertThatThrownBy(() -> service.getPlan(planId)).isInstanceOf(LocationScopeDeniedException.class);
+    }
+
+    @Test
+    void getPlan_unknownId_notFoundBeforeScope() {
+        UUID missing = UUID.fromString("00000000-0000-0000-0000-000000000099");
+        when(cycleCountPlanRepository.findById(missing)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getPlan(missing)).isInstanceOf(CycleCountPlanNotFoundException.class);
+        verifyNoInteractions(locationScopeService);
     }
 }

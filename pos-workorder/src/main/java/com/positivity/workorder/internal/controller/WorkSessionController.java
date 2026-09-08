@@ -1,6 +1,8 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.AddBreakSegmentRequest;
 import com.positivity.workorder.internal.dto.BreakSegmentResponse;
 import com.positivity.workorder.internal.dto.StartWorkSessionRequest;
@@ -10,6 +12,8 @@ import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.WorkSessionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -30,6 +34,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class WorkSessionController {
 
+    private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds timekeeping:work_session:create but its location scope does not cover the requested"
+                    + " location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+
     private final WorkSessionService workSessionService;
 
     @Operation(operationId = "startWorkexecWorkSession", summary = "Start a Technician Work Session", description = """
@@ -39,18 +47,25 @@ public class WorkSessionController {
                     running session, or addBreakSegment, which pauses one.
                     Preconditions: the workorder must exist, and the mechanic must have no other IN_PROGRESS \
                     session unless overlapping sessions are enabled by configuration, the caller holds \
-                    timekeeping:overlap_override, and an overlapOverrideReason is supplied.
+                    timekeeping:overlap_override, and an overlapOverrideReason is supplied. A caller whose \
+                    timekeeping:work_session:create grant is location-scoped must have locationId within reach \
+                    (ADR-0061).
                     Required inputs: mechanicId, workOrderId, workOrderTaskId, and locationId (all UUIDs); \
                     resourceId and overlapOverrideReason are optional.
                     Emits a WORKORDER_WORK_SESSION_START event; any overlap override is recorded with the \
                     overriding user and timestamp.
-                    Returns 201 with the new session, 404 when the workorder does not exist, and 409 when the \
+                    Returns 201 with the new session, 403 LOCATION_SCOPE_DENIED when the caller's location \
+                    scope does not cover locationId, 404 when the workorder does not exist, and 409 when the \
                     mechanic already has an active session and no valid override applies.
                     """)
     @ApiResponse(responseCode = "201", description = "Work session started successfully")
     @ApiResponse(
             responseCode = "400",
             description = "Invalid request - missing required fields or work order not found")
+    @ApiResponse(
+            responseCode = "403",
+            description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/start")
     @EmitEvent(id = "WORKORDER_WORK_SESSION_START", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -76,6 +91,10 @@ public class WorkSessionController {
                     @Valid
                     @RequestBody
                     StartWorkSessionRequest request) {
+        // Gate (ADR-0061 §3, #1872): the body's locationId names the site the session is opened at.
+        // Bean validation has already rejected a null one, so the scope check sees a real id.
+        SecurityContextHelper.locationScope()
+                .require(WorkorderPermissions.TIMEKEEPING_WORK_SESSION_CREATE, request.getLocationId());
         WorkSessionResponse response = workSessionService.startSession(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }

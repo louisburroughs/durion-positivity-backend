@@ -134,6 +134,13 @@ public class PutawayController {
                     @Content(
                             mediaType = "application/json",
                             array = @ArraySchema(schema = @Schema(implementation = PutawayTaskResponse.class))))
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller lacks inventory:putaway:view;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the requested storageLocationId or locationId filter"
+                    + " (ADR-0061); without a filter the result is narrowed to the caller's reach instead",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<PutawayTaskResponse>> getAvailableTasks(
             @Parameter(description = "Location identifier") @RequestParam(required = false) UUID locationId,
             @Parameter(description = "Storage location identifier") @RequestParam(required = false)

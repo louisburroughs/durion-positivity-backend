@@ -59,6 +59,40 @@ Inventory management service for the Durion Positivity ETSMS platform. Manages s
 - `PUT /v1/inventory/putaway/rules/{ruleId}` — full replacement of a putaway rule
 - `DELETE /v1/inventory/putaway/rules/{ruleId}` — delete a putaway rule permanently
 
+## Location scope (ADR-0061, #1872)
+
+Every endpoint that names a location applies the caller's location scope on top of its
+`@PreAuthorize` permission. The scope comes from the gateway's `X-Loc-*` headers; a token without
+them (pre-rollout) is unscoped and behaves exactly as before. A denial is `403` with code
+`LOCATION_SCOPE_DENIED`, distinct from the plain `FORBIDDEN`. The per-operation decisions live in
+[`location-scope.yaml`](location-scope.yaml) (read by `scripts/audit-rbac.py --check`).
+
+- **Gate** — the request names the location acted on, so it must be within the caller's reach:
+  `createAdjustmentRequest`/`approveAdjustmentRequest`, `createCycleCountPlan`,
+  `createCycleCountSchedule`, `createGoodsReceipt`, `createReplenishmentPolicy`, `createScrap`, `submitReturnToStock`
+  (every line's location), `deactivateInventoryLocation` (source and destination),
+  `getLocationInventory`, `listLocationInventoryItems`, `getLocationInventoryRollup`,
+  `queryLeadTime` (when a location or storage location is given), `listShortageOptions` (when a
+  location is given) and `resolveShortage` (location and source location when given). The by-id
+  reads of narrowed lists are gated on the loaded record's location after the 404 so ids cannot
+  be probed: `getBackorder`, `getCycleCountPlan`, `getCycleCountSchedule`, `getLedgerEntry`,
+  `getPurchaseSuggestion`, `getScrap`.
+- **Narrow** — `locationId` is an optional filter. Named, it is gated; absent, a scoped caller
+  sees only rows within their reach and an empty reach is an empty result (never a 403):
+  `listBackorders`, `listCycleCountPlans`, `listCycleCountSchedules`, `listLedgerEntries`,
+  `listInventoryStorageLocations`, `listInventoryLocationZones`, `listPurchaseSuggestions`,
+  `getAvailablePutawayTasks`, `getReplenishmentPolicies`, `listScraps`, `getValuation`,
+  `getAvailabilityBySku`/`listAvailabilityBySku` (SKU-wide view summed over the reach; a storage
+  location or location, when named, is gated).
+
+The reach is expanded over this module's own replica (`LocationHierarchyService.descendantsOf`
+on `location_ref` + `ext_location_parent`); there is no per-request call to pos-location. A
+storage-location (bin) id resolves to its site's ancestors through `ext_storage_location`, and a
+narrowed query admits a bin through its `site_id`, so covering a site covers every bin in it.
+`LocationScopeService` is the single service-side entry point (`require`, `narrowTo`,
+`withinLocations`); endpoints guarded by `hasAnyAuthority(a, b)` deny only when no held alternate
+covers the location and narrow only when every held alternate is scoped.
+
 ## Lot Tracking — Inbound Capture (odoo-parity E1)
 
 Products whose catalog replica (`ext_product.tracking_level`) says `LOT` require a `lotNumber`

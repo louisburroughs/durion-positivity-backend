@@ -1902,17 +1902,19 @@ paths:
       - security:role:create
   /v1/roles/assignments:
     post:
-      description: 'Assigns a role to a user with a scope (GLOBAL or LOCATION) and an optional effective date window.
+      description: 'Assigns a role to a user with an optional effective date window.
 
-        Use this tool when the assignment needs scope or dates; do not use assignUserRole, the simple path-parameter variant that always creates a GLOBAL assignment starting now.
+        Use this tool when the assignment needs dates; do not use assignUserRole, the simple path-parameter variant that always creates an assignment starting now.
 
-        Preconditions: the caller must hold security:role:assign, the user and role must exist, and no overlapping assignment may exist for the same role, scope, and (for LOCATION scope) location.
+        Location reach is not set here: it is a property of the role (location_scope) resolved against the user''s pos-people staffing assignment at token issuance.
 
-        Required inputs: userId and roleId (UUIDs); scopeType defaults to GLOBAL, scopeLocationIds is required for LOCATION scope and forbidden for GLOBAL, and effectiveStartDate defaults to now with an open-ended effectiveEndDate.
+        Preconditions: the caller must hold security:role:assign, the user and role must exist, and no overlapping assignment may exist for the same user and role.
+
+        Required inputs: userId and roleId (UUIDs); effectiveStartDate defaults to now with an open-ended effectiveEndDate.
 
         Emits a SECURITY_ROLE_ASSIGNMENT_CREATE event.
 
-        Returns 400 when the scope and location combination is invalid, 404 when the user or role does not exist, and 409 with ROLE_ASSIGNMENT_CONFLICT when the date window overlaps an existing assignment.
+        Returns 404 when the user or role does not exist, and 409 with ROLE_ASSIGNMENT_CONFLICT when the date window overlaps an existing assignment.
 
         '
       operationId: createRoleAssignment
@@ -1920,19 +1922,16 @@ paths:
         content:
           application/json:
             examples:
-              Location-scoped assignment:
-                description: Location-scoped assignment
+              Effective-dated assignment:
+                description: Effective-dated assignment
                 value:
                   effectiveEndDate: '2026-12-31T00:00:00'
                   effectiveStartDate: '2026-01-15T00:00:00'
                   roleId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
-                  scopeLocationIds:
-                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d
-                  scopeType: LOCATION
                   userId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
             schema:
               $ref: '#/components/schemas/RoleAssignmentRequest'
-        description: The user, role, scope, and effective window of the assignment to create.
+        description: The user, role, and effective window of the assignment to create.
         required: true
       responses:
         '201':
@@ -1970,20 +1969,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Overlapping role assignment for the same user, role, and scope
+          description: Overlapping role assignment for the same user and role
       security:
       - bearerAuth:
         - security:role:assign
-      summary: Create a Scoped Role Assignment
+      summary: Create an Effective-Dated Role Assignment
       tags:
       - Role Management
       x-required-permissions:
       - security:role:assign
   /v1/roles/assignments/user/{userId}:
     get:
-      description: 'Returns a user''s role assignments with their scope and effective window, limited to currently effective assignments by default.
+      description: 'Returns a user''s role assignments with their effective window, limited to currently effective assignments by default.
 
-        Use this tool to inspect who holds which roles and in what scope; use getUserPermissions instead when only the flattened permission set matters.
+        Use this tool to inspect who holds which roles and for what window; use getUserPermissions instead when only the flattened permission set matters.
 
         Preconditions: the caller must hold security:role:view and the user must exist.
 
@@ -2256,78 +2255,6 @@ paths:
       - Role Management
       x-required-permissions:
       - security:role:view
-  /v1/roles/check-permission:
-    get:
-      description: 'Checks whether a user holds a specific permission through a currently effective role assignment whose scope covers the given location.
-
-        Use this tool for a point authorization probe by user UUID; use getAuthorizationDecision instead when the caller has a principal identifier from the RBAC matrix rather than a user id.
-
-        Preconditions: the caller must hold security:permission:view and the user must exist.
-
-        Required inputs: userId (UUID) and permission (domain:resource:action) as query parameters; locationId is optional and defaults to GLOBAL.
-
-        No events are emitted and no state changes; this is a read-only check.
-
-        Returns 200 with a plain boolean body, and 404 when the user does not exist.
-
-        '
-      operationId: checkUserPermission
-      parameters:
-      - in: query
-        name: userId
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - in: query
-        name: permission
-        required: true
-        schema:
-          type: string
-      - in: query
-        name: locationId
-        required: false
-        schema:
-          type: string
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: boolean
-          description: Permission check completed
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Bad Request
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unauthorized
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: User not found
-      security:
-      - bearerAuth:
-        - security:permission:view
-      summary: Check One User Permission at a Location
-      tags:
-      - Role Management
-      x-required-permissions:
-      - security:permission:view
   /v1/roles/permissions:
     put:
       description: 'Replaces a role''s entire permission set with the supplied list of permission names.
@@ -2982,7 +2909,7 @@ paths:
     get:
       description: 'Returns the authority codes a role name expands to: the ROLE_ prefixed authority plus every permission code granted to that role in role_permissions.
 
-        Use this tool to prebuild per-role permission or tool caches, as pos-mcp-server does; do not use getUserPermissions, which reads one specific user''s scoped role assignments rather than the authority set a role carries.
+        Use this tool to prebuild per-role permission or tool caches, as pos-mcp-server does; do not use getUserPermissions, which reads one specific user''s effective role assignments rather than the authority set a role carries.
 
         Preconditions: the caller must hold security:role:view; the role name does not need to exist in the database.
 
@@ -3361,7 +3288,7 @@ paths:
     get:
       description: 'Returns an allow or deny decision for a principal identifier and permission key, evaluated against the principal-role matrix populated by assignPrincipalRole.
 
-        Use this tool for matrix-based checks keyed by principal string; use getPersonAuthorizationDecision instead when the caller has a personId, and checkUserPermission when it has a user UUID and location.
+        Use this tool for matrix-based checks keyed by principal string; use getPersonAuthorizationDecision instead when the caller has a personId; location reach is decided by the owning service from the token''s scope claims (ADR-0061 §3), not by this endpoint.
 
         Preconditions: the caller must hold security:authorization:decide; the principal needs no prior registration.
 
@@ -4317,7 +4244,7 @@ paths:
     get:
       description: 'Returns the union of permissions granted through a user''s currently effective role assignments.
 
-        Use this tool for a user''s flattened effective permission set; use listUserRoleAssignments instead to see the assignments and scopes behind it.
+        Use this tool for a user''s flattened effective permission set; use listUserRoleAssignments instead to see the assignments and effective windows behind it.
 
         Preconditions: the user must exist, and the caller must either hold security:permission:view or be asking about themselves.
 
@@ -4443,9 +4370,9 @@ paths:
       x-required-permissions:
       - security:role:assign
     put:
-      description: 'Creates a GLOBAL-scoped role assignment linking a user to a role, effective immediately with no end date.
+      description: 'Creates a role assignment linking a user to a role, effective immediately with no end date.
 
-        Use this tool for the common unscoped grant; do not use createRoleAssignment, which supports LOCATION scope and effective date windows, and do not use assignPrincipalRole, which targets the string-keyed RBAC principal matrix.
+        Use this tool for the common grant; do not use createRoleAssignment, which supports effective date windows, and do not use assignPrincipalRole, which targets the string-keyed RBAC principal matrix.
 
         Preconditions: the caller must hold security:role:assign and both the user and role must exist; no overlap check is performed here, so repeated calls create duplicate assignments.
 
@@ -5633,7 +5560,7 @@ components:
       - resolutionNotes
       type: object
     RoleAssignmentDto:
-      description: A role assignment binding a user to a role within a scope
+      description: An effective-dated role assignment binding a user to a role
       properties:
         createdAt:
           description: Creation timestamp
@@ -5678,19 +5605,6 @@ components:
           example: 01960003-0000-7000-8000-000000000010
           format: uuid
           type: string
-        scopeLocationIds:
-          description: Location identifiers the assignment applies to when scopeType is LOCATION
-          items:
-            type: string
-          type: array
-          uniqueItems: true
-        scopeType:
-          description: Scope type that constrains the assignment
-          enum:
-          - GLOBAL
-          - LOCATION
-          example: GLOBAL
-          type: string
         userId:
           description: Identifier of the user the role is assigned to
           example: 01960003-0000-7000-8000-000000000001
@@ -5699,11 +5613,10 @@ components:
       required:
       - id
       - roleId
-      - scopeType
       - userId
       type: object
     RoleAssignmentRequest:
-      description: Request to assign a role to a user within a scope
+      description: Request to assign a role to a user for an effective window
       properties:
         effectiveEndDate:
           description: Exclusive end of the effective window
@@ -5719,19 +5632,6 @@ components:
           description: Identifier of the role to assign
           example: 01960003-0000-7000-8000-000000000010
           format: uuid
-          type: string
-        scopeLocationIds:
-          description: Location identifiers the assignment applies to when scopeType is LOCATION
-          items:
-            type: string
-          type: array
-          uniqueItems: true
-        scopeType:
-          description: Scope type that constrains the assignment
-          enum:
-          - GLOBAL
-          - LOCATION
-          example: GLOBAL
           type: string
         userId:
           description: Identifier of the user to assign the role to

@@ -4,7 +4,6 @@ import com.positivity.peoplecontact.internal.client.dto.Role;
 import com.positivity.peoplecontact.internal.client.dto.RoleAssignment;
 import com.positivity.peoplecontact.internal.client.dto.RoleAssignmentRequest;
 import com.positivity.peoplecontact.internal.client.dto.RoleDto;
-import com.positivity.peoplecontact.internal.client.dto.ScopeType;
 import com.positivity.peoplecontact.internal.client.dto.User;
 import com.positivity.peoplecontact.internal.client.dto.UserRoleAssignmentRequest;
 import com.positivity.peoplecontact.internal.client.dto.UserRoleDto;
@@ -14,7 +13,6 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -104,27 +102,22 @@ public class SecurityServiceClient {
         return role;
     }
 
+    /**
+     * List the whole role catalog from pos-security-service.
+     *
+     * <p>{@code GET /v1/roles} takes no parameters: there are no filters and no paging. This
+     * call used to send a {@code scopeType} query parameter that {@code RoleController.getAllRoles()}
+     * has never declared, so Spring dropped it and the same unfiltered catalog came back for
+     * every value — which is why calling this once per "scope" returned each role once per call.
+     */
     @NonNull
-    public List<RoleDto> getAvailableRoles(@NonNull String scope) {
-        log.debug("Fetching available roles for scope: {}", scope);
+    public List<RoleDto> getAvailableRoles() {
+        log.debug("Fetching the available role catalog");
 
         List<RoleDto> roles = restClient
                 .get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/v1/roles")
-                        .queryParam("scopeType", scope)
-                        .build())
+                .uri("/v1/roles")
                 .retrieve()
-                .onStatus(statusCode -> statusCode.value() == 400, (request, response) -> {
-                    // scope only ever arrives here as one of this module's own hardcoded
-                    // constants (LOCATION/GLOBAL, see PeopleAccessControlServiceImpl) — never
-                    // end-user input — so a 400 means this module's own contract with
-                    // pos-security-service has drifted, not that a caller sent something bad.
-                    throw new SecurityServiceContractException(
-                            "pos-security-service rejected GET /v1/roles?scopeType=" + scope + " as malformed, but "
-                                    + "scope is a module-internal constant, never caller input; likely a "
-                                    + "request-shape contract drift with pos-security-service");
-                })
                 .onStatus(statusCode -> statusCode.value() == 404, (request, response) -> {
                     throw new jakarta.persistence.EntityNotFoundException(
                             "Roles endpoint not found in security service");
@@ -136,8 +129,7 @@ public class SecurityServiceClient {
                 .body(new ParameterizedTypeReference<List<RoleDto>>() {});
 
         if (roles == null) {
-            throw new IllegalStateException(
-                    "Security service returned null response for roles lookup with scope: " + scope);
+            throw new IllegalStateException("Security service returned null response for the role catalog");
         }
 
         return roles;
@@ -197,20 +189,11 @@ public class SecurityServiceClient {
             throw new PeopleContactValidationException("Invalid userId format: " + request.getUserId(), e);
         }
 
-        // Build the proper RoleAssignmentRequest matching the API contract
-        Set<String> scopeLocationIds = request.getLocationIds() != null
-                        && !request.getLocationIds().isEmpty()
-                ? request.getLocationIds().stream().map(UUID::toString).collect(java.util.stream.Collectors.toSet())
-                : request.getLocationId() != null
-                        ? Set.of(request.getLocationId().toString())
-                        : null;
-        RoleAssignmentRequest apiRequest = new RoleAssignmentRequest(
-                userIdUuid,
-                role.getId(),
-                scopeLocationIds != null ? ScopeType.LOCATION : ScopeType.GLOBAL,
-                scopeLocationIds,
-                request.getStartDate() != null ? request.getStartDate().toLocalDate() : null,
-                request.getEndDate() != null ? request.getEndDate().toLocalDate() : null);
+        // Under ADR-0061 the assignment is a user-to-role link over an effective window and
+        // nothing else; the dates go across as LocalDateTime because pos-security-service cannot
+        // widen a date-only value into one and answers 400 instead.
+        RoleAssignmentRequest apiRequest =
+                new RoleAssignmentRequest(userIdUuid, role.getId(), request.getStartDate(), request.getEndDate());
 
         RoleAssignment assignment = restClient
                 .post()
@@ -269,21 +252,24 @@ public class SecurityServiceClient {
             throw new IllegalStateException("Security service returned null response");
         }
 
-        java.time.LocalDate today = java.time.LocalDate.now(clock);
+        LocalDateTime now = LocalDateTime.now(clock);
         List<RoleAssignment> currentAndFutureAssignments = fullAssignments.stream()
                 .filter(assignment -> assignment.getEffectiveEndDate() == null
-                        || !assignment.getEffectiveEndDate().isBefore(today))
+                        || !assignment.getEffectiveEndDate().isBefore(now))
                 .toList();
 
-        // Find the assignment for this specific role
+        // Find the assignment for this specific role. The role arrives as a flat roleId, not as a
+        // nested role object.
         java.util.UUID assignmentId = currentAndFutureAssignments.stream()
-                .filter(fa -> role.getId().equals(fa.getRole().getId()))
+                .filter(fa -> role.getId().equals(fa.getRoleId()))
                 .map(RoleAssignment::getId)
                 .findFirst()
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException(
                         "Role assignment not found for userId: " + userId + ", roleCode: " + roleCode));
 
-        java.time.LocalDate revocationDate = endDate != null ? endDate.toLocalDate() : java.time.LocalDate.now(clock);
+        // revokeRoleAssignment binds endDate as an ISO LocalDateTime; a date-only value does not
+        // bind and comes back as a 400.
+        LocalDateTime revocationDate = endDate != null ? endDate : now;
 
         restClient
                 .delete()
@@ -309,41 +295,23 @@ public class SecurityServiceClient {
     }
 
     /**
-     * Helper method to map RoleAssignment to UserRoleDto.
+     * Map the security service's assignment response onto this module's caller-facing shape.
      *
-     * Note: If a RoleAssignment contains multiple scopeLocationIds, only the first one is
-     * mapped to UserRoleDto.locationId. The remaining IDs are ignored.
+     * <p>{@code userId} arrives flat on the response; the role code cannot be read back off it
+     * (only a {@code roleId} is returned), so the code the caller asked for is carried through.
+     * A response missing the {@code userId} its contract declares REQUIRED is a downstream
+     * defect, not an assignment belonging to nobody, so it fails rather than mapping to null.
      */
     private UserRoleDto mapToUserRoleDto(RoleAssignment assignment, String roleCode) {
-        UUID locationId = null;
-        if (assignment.getScopeType() == ScopeType.LOCATION
-                && assignment.getScopeLocationIds() != null
-                && !assignment.getScopeLocationIds().isEmpty()) {
-            if (assignment.getScopeLocationIds().size() > 1) {
-                // Note: The API supports multiple scopeLocationIds, but UserRoleDto
-                // currently
-                // exposes
-                // a single locationId.
-                // Log to make this limitation visible when multi-location assignments are
-                // encountered.
-                UUID userId =
-                        assignment.getUser() != null ? assignment.getUser().getId() : null;
-                log.warn(
-                        "RoleAssignment {} for user {} and role {} has multiple scopeLocationIds; only the first will be used.",
-                        assignment.getId(),
-                        userId,
-                        roleCode);
-            }
-
-            locationId = assignment.getScopeLocationIds().stream()
-                    .findFirst()
-                    .orElseThrow(() -> new SecurityServiceException("Empty location ID set in role assignment", 502));
+        UUID userId = assignment.getUserId();
+        if (userId == null) {
+            throw new SecurityServiceException(
+                    "Security service returned a role assignment without a userId: " + assignment.getId(), 502);
         }
 
         return UserRoleDto.builder()
-                .userId(assignment.getUser().getId().toString())
+                .userId(userId.toString())
                 .roleCode(roleCode)
-                .locationId(locationId)
                 .startDate(assignment.getEffectiveStartDate())
                 .endDate(assignment.getEffectiveEndDate())
                 .active(isAssignmentActive(assignment))
@@ -354,13 +322,14 @@ public class SecurityServiceClient {
      * Helper method to determine if an assignment is currently active
      */
     private boolean isAssignmentActive(RoleAssignment assignment) {
-        java.time.LocalDate today = java.time.LocalDate.now(clock);
-        java.time.LocalDate startDate = assignment.getEffectiveStartDate();
-        java.time.LocalDate endDate = assignment.getEffectiveEndDate();
+        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime startDate = assignment.getEffectiveStartDate();
+        LocalDateTime endDate = assignment.getEffectiveEndDate();
 
-        // Active if started and not yet ended
-        boolean hasStarted = startDate == null || !startDate.isAfter(today);
-        boolean hasNotEnded = endDate == null || today.isBefore(endDate);
+        // Active if started and not yet ended. The effective window is start-inclusive and
+        // end-exclusive, as pos-security-service declares it.
+        boolean hasStarted = startDate == null || !startDate.isAfter(now);
+        boolean hasNotEnded = endDate == null || now.isBefore(endDate);
 
         return hasStarted && hasNotEnded;
     }

@@ -6,6 +6,8 @@ import com.positivity.inventory.internal.dto.ShortageResolutionResultDto;
 import com.positivity.inventory.internal.dto.ShortageResolveRequest;
 import com.positivity.inventory.internal.reservation.service.ShortageResolutionService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -82,7 +84,9 @@ public class ShortageController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "User lacks required shortage view authority",
+            description = "FORBIDDEN when the caller lacks inventory:shortage:view;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the requested locationId (when given) (ADR-0061)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<ShortageOptionDto>> listShortageOptions(
             @Parameter(description = "Allocation experiencing the shortage") @RequestParam UUID allocationId,
@@ -91,6 +95,11 @@ public class ShortageController {
             @Parameter(description = "Workorder line whose demand is short") @RequestParam(required = false)
                     UUID workorderLineId,
             @Parameter(description = "Site the demand is short at") @RequestParam(required = false) UUID locationId) {
+        // ADR-0061 §3 (#1872): the site, when named, drives the location-specific options, so it is
+        // gated; without one no location is consulted and there is nothing to narrow.
+        if (locationId != null) {
+            SecurityContextHelper.locationScope().require(InventoryPermissionRegistry.SHORTAGE_VIEW, locationId);
+        }
         return ResponseEntity.ok(shortageResolutionService.computeShortageOptions(
                 allocationId, workorderLineId, sku, shortQuantity, locationId));
     }
@@ -140,7 +149,10 @@ public class ShortageController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "User lacks required shortage resolution authority",
+            description =
+                    "FORBIDDEN when the caller lacks inventory:shortage:resolve;"
+                            + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                            + " locations that do not cover the request's locationId or sourceLocationId (when given) (ADR-0061)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -167,6 +179,15 @@ public class ShortageController {
                     @Valid
                     @RequestBody
                     ShortageResolveRequest request) {
+        // ADR-0061 §3 (#1872): the destination site and, for TRANSFER_IN, the source site are both
+        // acted on, so each one named is gated. The body is validated by then.
+        LocationScope scope = SecurityContextHelper.locationScope();
+        if (request.getLocationId() != null) {
+            scope.require(InventoryPermissionRegistry.SHORTAGE_RESOLVE, request.getLocationId());
+        }
+        if (request.getSourceLocationId() != null) {
+            scope.require(InventoryPermissionRegistry.SHORTAGE_RESOLVE, request.getSourceLocationId());
+        }
         return ResponseEntity.ok(shortageResolutionService.resolveShortage(request));
     }
 }

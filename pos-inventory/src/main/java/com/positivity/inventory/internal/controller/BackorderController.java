@@ -82,6 +82,16 @@ public class BackorderController {
                     @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             array = @ArraySchema(schema = @Schema(implementation = BackorderResponse.class))))
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller lacks inventory:shortage:view;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the requested locationId filter (ADR-0061);"
+                    + " without a filter the result is narrowed to the caller's reach instead",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<BackorderResponse>> listBackorders(
             @Parameter(description = "Filter by lifecycle status") @RequestParam(required = false)
                     BackorderStatus status,
@@ -123,6 +133,15 @@ public class BackorderController {
                     """,
             tags = {"Backorders"})
     @ApiResponse(responseCode = "200", description = "Backorder found")
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller lacks inventory:shortage:view;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the backorder's locationId (ADR-0061)",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Backorder not found",

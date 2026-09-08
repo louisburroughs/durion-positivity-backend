@@ -1,12 +1,16 @@
 package com.positivity.shopmanager.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import com.positivity.shopmanager.internal.dto.ScheduleViewRequest;
 import com.positivity.shopmanager.internal.dto.ScheduleViewResponse;
 import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.internal.service.AppointmentsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
@@ -31,6 +35,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ScheduleController {
 
+    private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds shop:schedule:view but its location scope does not cover the requested location"
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+
     private final AppointmentsService appointmentsService;
 
     @Operation(operationId = "viewSchedule", summary = "View the Daily Schedule for a Location", description = """
@@ -47,11 +55,17 @@ public class ScheduleController {
                     Emits a SHOPMGR_SCHEDULE_VIEW audit event; no state changes occur, and when the overlay is \
                     requested availabilityOverlayStatus reports AVAILABLE or UNAVAILABLE with an \
                     HR_SYSTEM_UNAVAILABLE warning when the staffing replica has no data for the location.
-                    Returns 404 when the location is unknown or the resourceId filter matches no lane on that date.
+                    A caller whose shop:schedule:view grant is location-scoped must have locationId within reach \
+                    (ADR-0061).
+                    Returns 403 LOCATION_SCOPE_DENIED when the caller's location scope does not cover locationId, \
+                    and 404 when the location is unknown or the resourceId filter matches no lane on that date.
                     """)
     @ApiResponse(responseCode = "200", description = "Schedule retrieved successfully.")
     @ApiResponse(responseCode = "400", description = "Invalid input parameters")
-    @ApiResponse(responseCode = "403", description = "Not authorized for this location")
+    @ApiResponse(
+            responseCode = "403",
+            description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Location or resource not found")
     @GetMapping("/schedules/view")
     @EmitEvent(id = "SHOPMGR_SCHEDULE_VIEW", apiVersion = "1")
@@ -72,6 +86,9 @@ public class ScheduleController {
             @Parameter(description = "Correlation ID for request tracing")
                     @RequestHeader(value = "X-Correlation-Id", required = false)
                     UUID correlationId) {
+        // locationId names the board being read; a scoped caller must have it in reach
+        // (ADR-0061 §3, #1872). Spring has already rejected a malformed id with a 400.
+        SecurityContextHelper.locationScope().require(ShopPermissions.SCHEDULE_VIEW, locationId);
         ScheduleViewRequest request = new ScheduleViewRequest();
         request.setLocationId(locationId);
         request.setDate(date);

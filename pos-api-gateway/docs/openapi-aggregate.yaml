@@ -1275,8 +1275,6 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles~1bulk-ingest
   /v1/roles/by-name/{name}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles~1by-name~1{name}
-  /v1/roles/check-permission:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles~1check-permission
   /v1/roles/permissions:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles~1permissions
   /v1/roles/permissions/bulk-ingest:

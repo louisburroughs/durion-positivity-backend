@@ -84,7 +84,11 @@ public class ValuationController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "User lacks required valuation view authority (or ledger view for as-of)",
+            description =
+                    "FORBIDDEN when the caller lacks inventory:valuation:view (or inventory:ledger:view for as-of);"
+                            + " LOCATION_SCOPE_DENIED when the caller holds inventory:valuation:view but the token scopes"
+                            + " it to locations that do not cover the requested locationId (ADR-0061); without one the"
+                            + " report is narrowed to the caller's reach instead",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",

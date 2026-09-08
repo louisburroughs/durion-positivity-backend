@@ -31,6 +31,7 @@ import com.positivity.workorder.internal.entity.ExtUserLinkReplica;
 import com.positivity.workorder.internal.entity.ProcessedEvent;
 import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtLocationParentReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
@@ -109,6 +110,12 @@ class ReplicaAndManifestListenerContractTest {
     private ExtLocationReplicaRepository locationRepository;
 
     @Mock
+    private ExtLocationParentReplicaRepository locationParentRepository;
+
+    @Mock
+    private LocationHierarchyService locationHierarchyService;
+
+    @Mock
     private ExtBayReplicaRepository bayRepository;
 
     @Mock
@@ -159,6 +166,8 @@ class ReplicaAndManifestListenerContractTest {
                 objectMapper,
                 processedEventRepository,
                 locationRepository,
+                locationParentRepository,
+                locationHierarchyService,
                 bayRepository,
                 mobileUnitRepository,
                 meterRegistryProvider);

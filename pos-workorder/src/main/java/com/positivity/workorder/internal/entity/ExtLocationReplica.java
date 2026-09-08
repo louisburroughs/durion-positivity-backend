@@ -2,11 +2,14 @@ package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,6 +23,11 @@ import lombok.NoArgsConstructor;
  * consumer. Carries the tax-jurisdiction address previously served by the retired
  * {@code LocationClient} — ADR-0044 explicitly reversed the old "never replicate address
  * data" rule for this feed; tax flows still run ADR-0021 address validation on replica data.
+ *
+ * <p>Also carries the two materialised, inclusive-of-self location-scope ancestor sets
+ * (ADR-0061 §2, #1878), recomputed by the consumer from the {@link ExtLocationParentReplica}
+ * edges on every location fact. A scope check intersects the caller's assigned nodes with the set
+ * for the role's hierarchy dimension; an unknown location yields empty sets and therefore denies.
  */
 @Data
 @Builder
@@ -59,6 +67,21 @@ public class ExtLocationReplica {
 
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
+
+    /** Ancestors along the {@code FINANCIAL} parent chain, inclusive of this location (ADR-0061 §2). */
+    @Builder.Default
+    @Convert(converter = UuidSetConverter.class)
+    @Column(name = "financial_ancestor_ids", nullable = false, columnDefinition = "text")
+    private Set<UUID> financialAncestorIds = new LinkedHashSet<>();
+
+    /**
+     * Ancestors along the union of every non-financial parent type (HOME_OFFICE, HEADQUARTERS,
+     * REGION, DISTRICT, PHYSICAL, ORGANIZATIONAL, SHIPPING), inclusive of this location (ADR-0061 §2).
+     */
+    @Builder.Default
+    @Convert(converter = UuidSetConverter.class)
+    @Column(name = "other_ancestor_ids", nullable = false, columnDefinition = "text")
+    private Set<UUID> otherAncestorIds = new LinkedHashSet<>();
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;

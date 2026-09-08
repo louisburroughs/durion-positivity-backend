@@ -3,10 +3,13 @@ package com.positivity.inventory.internal.repository;
 import com.positivity.inventory.internal.entity.PurchaseSuggestion;
 import com.positivity.inventory.internal.enums.PurchaseSuggestionStatus;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface PurchaseSuggestionRepository extends JpaRepository<PurchaseSuggestion, UUID> {
 
@@ -33,4 +36,17 @@ public interface PurchaseSuggestionRepository extends JpaRepository<PurchaseSugg
      * regardless of its current status (a same-day dismissal does not re-suggest).
      */
     boolean existsByPolicyIdAndCreatedAtGreaterThanEqual(UUID policyId, Instant createdAtFrom);
+
+    /**
+     * Every suggestion whose destination is a reachable site, or a storage location replicated
+     * under one (ADR-0061 §3, #1872). Never called with an empty set — an empty reach is an empty
+     * page decided before the query.
+     */
+    @Query("""
+            SELECT p FROM PurchaseSuggestion p
+            WHERE p.locationId IN :locationIds
+               OR p.locationId IN (SELECT s.storageLocationId FROM ExtStorageLocationReplica s
+                                   WHERE s.siteId IN :locationIds)
+            """)
+    List<PurchaseSuggestion> findWithinLocations(@Param("locationIds") Collection<UUID> locationIds);
 }

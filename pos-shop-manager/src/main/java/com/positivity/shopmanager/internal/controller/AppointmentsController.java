@@ -6,6 +6,7 @@ import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
 import com.positivity.shopmanager.internal.dto.CancelAppointmentRequest;
 import com.positivity.shopmanager.internal.dto.RescheduleAppointmentRequest;
+import com.positivity.shopmanager.internal.security.LocationScopeGuard;
 import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.internal.service.AppointmentsService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,6 +17,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,12 +33,40 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+/**
+ * Appointment booking and lookup.
+ *
+ * <p>Creating an appointment and reading one by id are additionally subject to the caller's
+ * location scope (ADR-0061 §3, #1872): {@code @PreAuthorize} answers "may this caller book / read
+ * appointments", and {@link LocationScopeGuard#requireAny} answers "…at this location". Both
+ * endpoints accept either of two permissions, so the gate passes when <em>any</em> alternate the
+ * caller holds covers the location. The by-id read, reschedule and cancel are gated on the stored
+ * appointment's location, after the 404, so the create gate cannot be side-stepped by addressing
+ * an appointment directly (reading, moving or cancelling one outside the caller's reach) and ids
+ * cannot be probed.
+ */
 @Slf4j
 @Tag(name = "Appointments API", description = "Operations for creating and loading appointments in shop management")
 @RestController
 @RequestMapping("/v1")
 @RequiredArgsConstructor
 public class AppointmentsController {
+
+    private static final String CREATE_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds appointments:create or shop:schedule:edit but its location scope does not cover the"
+                    + " requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+
+    private static final String VIEW_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds appointments:view or shop:schedule:view but its location scope does not cover the"
+                    + " appointment's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+
+    private static final String RESCHEDULE_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds appointments:reschedule but its location scope does not cover the appointment's"
+                    + " location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+
+    private static final String CANCEL_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds appointments:cancel but its location scope does not cover the appointment's"
+                    + " location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
 
     private final AppointmentsService appointmentsService;
 
@@ -58,8 +88,11 @@ public class AppointmentsController {
                     fields.
                     Emits a SHOPMGR_APPOINTMENT_CREATE event and persists customer and vehicle snapshots on the \
                     appointment, which is created in SCHEDULED status.
+                    A caller whose appointments:create or shop:schedule:edit grant is location-scoped must have \
+                    locationId within reach (ADR-0061).
                     Returns 400 when the slot is already booked, the idempotency key was reused with a different \
-                    request, or sourceId is missing for a supplied sourceType; 404 when the customer or vehicle is \
+                    request, or sourceId is missing for a supplied sourceType; 403 LOCATION_SCOPE_DENIED when the \
+                    caller's location scope does not cover locationId; 404 when the customer or vehicle is \
                     unknown; 409 when the vehicle does not belong to the customer; and 422 when the source estimate \
                     or work order is not eligible for scheduling.
                     """)
@@ -68,6 +101,10 @@ public class AppointmentsController {
             responseCode = "400",
             description =
                     "Validation or conflict error — requested slot is unavailable, duplicate source appointment, or request fields are invalid.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = CREATE_SCOPE_DENIED_DESCRIPTION,
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
@@ -123,6 +160,10 @@ public class AppointmentsController {
                 "Create appointment requested. X-Correlation-Id(mask)={}, Idempotency-Key(mask)={}",
                 maskForLog(correlationId),
                 maskForLog(idempotencyKey));
+        // locationId is @NotNull-validated before this method runs, so a missing one is a 400 for
+        // every caller; the scope gate only ever sees a well-formed id (ADR-0061 §3, #1872).
+        LocationScopeGuard.requireAny(
+                request.getLocationId(), ShopPermissions.APPOINTMENTS_CREATE, ShopPermissions.SCHEDULE_EDIT);
         AppointmentResponse response = appointmentsService.createAppointment(request, idempotencyKey, correlationId);
         return ResponseEntity.created(ServletUriComponentsBuilder.fromCurrentRequest()
                         .path("/{appointmentId}")
@@ -139,13 +180,20 @@ public class AppointmentsController {
                     Preconditions: the appointment must exist; appointmentId must be a UUID in canonical text form.
                     Required inputs: appointmentId as a path parameter; there is no request body and no filtering.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 400 when appointmentId is not a valid UUID, and 404 when no appointment exists for the \
-                    supplied id.
+                    A caller whose appointments:view or shop:schedule:view grant is location-scoped must have the \
+                    appointment's location within reach (ADR-0061).
+                    Returns 400 when appointmentId is not a valid UUID, 404 when no appointment exists for the \
+                    supplied id, and 403 LOCATION_SCOPE_DENIED when the appointment exists but its location is \
+                    outside the caller's scope.
                     """)
     @ApiResponse(responseCode = "200", description = "Appointment retrieved successfully.")
     @ApiResponse(
             responseCode = "400",
             description = "appointmentId is not a valid UUID.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = VIEW_SCOPE_DENIED_DESCRIPTION,
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
@@ -169,7 +217,13 @@ public class AppointmentsController {
                 "Load appointment requested. appointmentId(mask)={}, X-Correlation-Id(mask)={}",
                 maskForLog(appointmentId),
                 maskForLog(correlationId));
+        // Existence first (404 from the service), then scope: a 403 for an id that does not exist
+        // would let a caller probe which appointment ids are real. An appointment without a
+        // location answers "" which a scoped caller cannot cover.
         AppointmentResponse response = appointmentsService.getById(appointmentId, correlationId);
+        String appointmentLocation = Objects.toString(response.getLocationId(), "");
+        LocationScopeGuard.requireAny(
+                appointmentLocation, ShopPermissions.APPOINTMENTS_VIEW, ShopPermissions.SCHEDULE_VIEW);
         return ResponseEntity.ok(response);
     }
 
@@ -189,14 +243,21 @@ public class AppointmentsController {
                     notifyCustomer defaults to true.
                     Emits a SHOPMGR_APPOINTMENT_RESCHEDULE event; a downstream workorder reschedule notification is \
                     additionally published only when the appointment carries a workorderLinkRef.
+                    A caller whose appointments:reschedule grant is location-scoped must have the appointment's \
+                    location within reach (ADR-0061).
                     Returns 400 when the time window is invalid or notes are missing for reason OTHER, 404 when the \
-                    appointment does not exist, and 409 when the appointment status does not permit rescheduling.
+                    appointment does not exist, 403 LOCATION_SCOPE_DENIED when it exists but its location is outside \
+                    the caller's scope, and 409 when the appointment status does not permit rescheduling.
                     """)
     @ApiResponse(responseCode = "200", description = "Appointment rescheduled successfully.")
     @ApiResponse(
             responseCode = "400",
             description =
                     "Validation error — invalid times, missing mandatory fields, or blank notes required for OTHER reason.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = RESCHEDULE_SCOPE_DENIED_DESCRIPTION,
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
@@ -234,6 +295,7 @@ public class AppointmentsController {
                     @Valid
                     @RequestBody
                     RescheduleAppointmentRequest request) {
+        requireScopeOnStoredLocation(appointmentId, ShopPermissions.APPOINTMENTS_RESCHEDULE);
         return ResponseEntity.ok(appointmentsService.rescheduleAppointment(appointmentId, request));
     }
 
@@ -251,10 +313,16 @@ public class AppointmentsController {
                     VEHICLE_NOT_READY or OTHER); notes is optional free text up to 1000 characters.
                     Emits a SHOPMGR_APPOINTMENT_CANCEL event; a downstream workorder cancellation notification is \
                     additionally published only when the appointment carries a workorderLinkRef.
-                    Returns 404 when the appointment does not exist, and 409 when the appointment is not in \
-                    SCHEDULED status.
+                    A caller whose appointments:cancel grant is location-scoped must have the appointment's \
+                    location within reach (ADR-0061).
+                    Returns 404 when the appointment does not exist, 403 LOCATION_SCOPE_DENIED when it exists but its \
+                    location is outside the caller's scope, and 409 when the appointment is not in SCHEDULED status.
                     """)
     @ApiResponse(responseCode = "200", description = "Appointment cancelled successfully.")
+    @ApiResponse(
+            responseCode = "403",
+            description = CANCEL_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "Appointment not found.",
@@ -288,7 +356,20 @@ public class AppointmentsController {
                     @Valid
                     @RequestBody
                     CancelAppointmentRequest request) {
+        requireScopeOnStoredLocation(appointmentId, ShopPermissions.APPOINTMENTS_CANCEL);
         return ResponseEntity.ok(appointmentsService.cancelAppointment(appointmentId, request));
+    }
+
+    /**
+     * Gate for the resource-addressed mutations (ADR-0061 §3, #1872): existence first (404 from
+     * the service's read), then the caller's scope against the appointment's stored location — so
+     * an id that does not exist never answers 403 and a scoped caller cannot move or cancel work
+     * outside its reach. The location is read through the service rather than passed by the
+     * client so the boundary is the stored fact, not a request field.
+     */
+    private void requireScopeOnStoredLocation(UUID appointmentId, String... alternates) {
+        AppointmentResponse existing = appointmentsService.getById(appointmentId.toString(), null);
+        LocationScopeGuard.requireAny(Objects.toString(existing.getLocationId(), ""), alternates);
     }
 
     private String maskForLog(Object value) {

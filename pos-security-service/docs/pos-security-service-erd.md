@@ -51,7 +51,6 @@ role_assignments {
 UUID id
 UUID user_id
 UUID role_id
-String scope_type
 LocalDateTime effective_start_date
 LocalDateTime effective_end_date
 Instant revoked_at

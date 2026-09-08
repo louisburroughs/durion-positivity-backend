@@ -9,20 +9,16 @@ import com.positivity.peoplecontact.internal.exception.PersonNotFoundException;
 import com.positivity.peoplecontact.internal.repository.PersonRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
 public class PeopleAccessControlServiceImpl implements PeopleAccessControlService {
-
-    private static final String LOCATION_SCOPE = "LOCATION";
-
-    private static final String GLOBAL_SCOPE = "GLOBAL";
 
     private final UserPersonTranslationService userPersonTranslationService;
 
@@ -48,17 +44,17 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
             throw new PersonNotFoundException(personUuid);
         }
 
-        List<RoleDto> allRoles = new ArrayList<>();
-        allRoles.addAll(securityServiceClient.getAvailableRoles(LOCATION_SCOPE));
-        allRoles.addAll(securityServiceClient.getAvailableRoles(GLOBAL_SCOPE));
-        return allRoles;
+        // One call, one listing. pos-security-service's GET /v1/roles takes no filters, so the
+        // previous LOCATION-then-GLOBAL pair fetched the same unfiltered catalog twice and
+        // concatenated it, offering every role to the caller twice over.
+        return securityServiceClient.getAvailableRoles();
     }
 
     @Override
     @NonNull
     @Transactional(readOnly = true)
     public List<UserRoleDto> getPersonRoleAssignments(
-            @NonNull UUID personUuid, boolean includeHistory, LocalDateTime endDate) {
+            @NonNull UUID personUuid, boolean includeHistory, @Nullable LocalDateTime endDate) {
         UUID userId = resolveUserId(personUuid);
         return securityServiceClient.getUserRoleAssignments(userId, includeHistory, endDate);
     }
@@ -68,15 +64,13 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
     public UserRoleDto assignRoleToPerson(
             @NonNull UUID personUuid,
             @NonNull String roleCode,
-            UUID locationId,
-            LocalDateTime startDate,
-            LocalDateTime endDate) {
+            @Nullable LocalDateTime startDate,
+            @Nullable LocalDateTime endDate) {
         validateDateWindow(startDate, endDate);
         UUID userId = resolveUserId(personUuid);
         UserRoleAssignmentRequest request = UserRoleAssignmentRequest.builder()
                 .userId(userId)
                 .roleCode(roleCode)
-                .locationId(locationId)
                 .startDate(startDate)
                 .endDate(endDate)
                 .build();
@@ -84,7 +78,8 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
     }
 
     @Override
-    public void revokeRoleFromPerson(@NonNull UUID personUuid, @NonNull String roleCode, LocalDateTime endDate) {
+    public void revokeRoleFromPerson(
+            @NonNull UUID personUuid, @NonNull String roleCode, @Nullable LocalDateTime endDate) {
         UUID userId = resolveUserId(personUuid);
         securityServiceClient.revokeRole(userId, roleCode, endDate);
     }
@@ -100,7 +95,7 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
                 .orElseThrow(() -> new EntityNotFoundException("No security user found for username: " + username));
     }
 
-    private void validateDateWindow(LocalDateTime startDate, LocalDateTime endDate) {
+    private void validateDateWindow(@Nullable LocalDateTime startDate, @Nullable LocalDateTime endDate) {
         if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
             throw new PeopleContactValidationException("endDate must be greater than or equal to startDate");
         }

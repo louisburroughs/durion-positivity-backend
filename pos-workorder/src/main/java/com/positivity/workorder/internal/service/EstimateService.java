@@ -13,6 +13,7 @@ import com.positivity.workorder.internal.entity.ApprovalConfiguration;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -22,6 +23,16 @@ import org.springframework.data.domain.Pageable;
 public interface EstimateService {
 
     List<EstimateResponse> getAllEstimates();
+
+    /**
+     * Every estimate at one of the given locations — the unfiltered list for a caller whose
+     * {@code workorder:estimate:view} grant is location-scoped (ADR-0061 §3, #1872). The controller
+     * expands the caller's reach to this set; the service only queries it.
+     *
+     * @param locationIds the locations the caller may see; an empty set answers an empty list
+     * @return the estimates at those locations
+     */
+    List<EstimateResponse> getEstimatesAtLocations(@NonNull Set<UUID> locationIds);
 
     Optional<EstimateResponse> getEstimateById(UUID id);
 

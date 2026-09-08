@@ -148,16 +148,21 @@ by `LocationEventsListener`, gives some services a locally resolvable, event-con
 | Module | Location replica | Endpoints (of 77) |
 | --- | --- | ---: |
 | pos-people, pos-invoice, pos-workorder | `ExtLocationReplica` | 18 |
-| pos-inventory | `ExtStorageLocationReplica` — **storage bins/shelves, not the site tree** | 24 |
+| pos-inventory | `LocationRefEntity` (`location_ref`) with direct parent edges in `ext_location_parent`, plus a separate intra-site `ExtStorageLocationReplica` | 24 |
 | the other 11 modules | none | 35 |
 
-pos-inventory is the largest consumer of location-scoped endpoints and does **not** replicate
-the location tree; its replica models intra-site storage (`storage_location_id`, `site_id`,
-`parent_storage_location_id`), a different hierarchy entirely.
+**Correction (2026-09-07, from implementation):** an earlier revision said pos-inventory
+replicated only storage bins. It also consumes `LocationUpdatedV1` into a site-level
+`location_ref` and already stores the direct parent edges — the same shape as pos-people. So 42
+of the 77 endpoints sit in modules with a site replica, not 18, and #1878's ancestor-set work
+extends to pos-inventory as an addendum rather than requiring a new replica there.
 
-And **no location replica carries a parent link.** All three hold `locationId`, `name`,
-`active`, `aggregateVersion` and address fields — nothing hierarchical. So hierarchy resolution
-is new replication work in every module, not an extension of something already present (#1878).
+And **no location replica carries materialised ancestor sets.** (An earlier revision said none
+carried a parent link at all; that overstated it — pos-people has stored the direct parent edges
+in `ext_location_parent` since its V12, though pos-invoice and pos-workorder did not, and none
+computed a transitive closure.) The direct edges are already on the wire — `LocationFactPublisher`
+emits `LocationUpdatedV1.parents` on every location fact — so #1878 is consumer-side work:
+store the edges where missing and materialise the two closures in every module.
 
 ### 2b. Cost of each ownership model
 
@@ -270,8 +275,9 @@ delegation is a separate concern on the role-assignment surface and is out of sc
 `LocationParent` is unique on **`(child_id, parent_type)`** — so a location has at most one
 parent *per dimension*, giving several overlapping trees rather than one tree or a free DAG.
 
-`ParentType` has seven values: `HOME_OFFICE`, `HEADQUARTERS`, `REGION`, `DISTRICT`, `PHYSICAL`,
-`ORGANIZATIONAL`, `FINANCIAL`. Both traversal APIs take one —
+`ParentType` has eight values: `HOME_OFFICE`, `HEADQUARTERS`, `REGION`, `DISTRICT`, `PHYSICAL`,
+`ORGANIZATIONAL`, `FINANCIAL`, `SHIPPING`. (An earlier revision of this document said seven; the
+enum's last constant has no trailing comma and was missed by the grep.) Both traversal APIs take one —
 `LocationServiceImpl.getAllChildrenDto(parentId, parentType)` and
 `getDescendantsDto(locationId, parentType)` — and `getDescendantsDto` defaults to `PHYSICAL`.
 
@@ -280,23 +286,28 @@ parent *per dimension*, giving several overlapping trees rather than one tree or
 | `roles.location_hierarchy` | Traverses | Roles |
 | --- | --- | --- |
 | `FINANCIAL` | the `FINANCIAL` parent chain | accounting and general-manager roles — `ACCOUNT_MANAGER`, `ACCOUNTANT`, `CONTROLLER`, `GENERAL_MANAGER` |
-| `OTHER` | the union of the six non-financial types (`HOME_OFFICE`, `HEADQUARTERS`, `REGION`, `DISTRICT`, `PHYSICAL`, `ORGANIZATIONAL`) | every other role |
+| `OTHER` | the union of the seven non-financial types (`HOME_OFFICE`, `HEADQUARTERS`, `REGION`, `DISTRICT`, `PHYSICAL`, `ORGANIZATIONAL`, `SHIPPING`) | every other role |
 
 A financial rollup and an operational rollup are genuinely different questions — who owns the
 numbers for a site is not who runs it — so the two must not be conflated, and traversing all
-seven types indiscriminately would be the union of every rollup the business has.
+eight types indiscriminately would be the union of every rollup the business has.
 
 Two cautions for seeding:
 
 - **`INVENTORY_CONTROLLER` is not an accounting role.** Any name-based sweep for "CONTROLLER"
   will pick it up incorrectly; it belongs to `OTHER`.
-- **`OTHER` branches.** It is the union of six dimensions, so a location may have up to six
+- **`OTHER` branches.** It is the union of seven dimensions, so a location may have up to seven
   distinct non-financial parents and the ancestor closure is a DAG, not a chain. `FINANCIAL`
   alone is a chain. Materialisation (#1878) must handle both shapes.
 
-There is also no cycle guard at the `Location` level. `StorageLocationServiceImpl` has
-`wouldCreateCycle` / `existsCycleForParent`; `LocationServiceImpl` has no equivalent, so
-ancestor materialisation cannot currently assume termination.
+**Correction on the cycle guard.** An earlier revision said `LocationServiceImpl` had no cycle
+guard. It did — a depth-1 inverse check plus a `WITH RECURSIVE` `isDescendant` native query —
+but it ignored `parent_type`, which made it *stricter* than this model: it rejected A→B on
+`PHYSICAL` with B→A on `FINANCIAL`, a legal DAG. It also threw `IllegalStateException`, which
+had no handler and surfaced as a 500. The gap was dimension conflation, not absence. #1878
+replaced it with a per-dimension walk rejecting 409 `CYCLE_DETECTED`, the same status and reason
+`StorageLocationServiceImpl.wouldCreateCycle` uses. `LocationParent` also carries a second unique
+constraint on `(child_id, parent_id)`, so the same pair can never appear on two dimensions.
 
 ### Hierarchy is evaluated at check time, not expanded at issuance
 
@@ -458,7 +469,7 @@ Recommended, in preference order — all three, they compose:
    against a materialised ancestor set replicated onto `ExtLocationReplica` — never expanded
    into the token. This is what supplies the middle management tier, and it is what keeps the
    claim small. **The dimension traversed is a role property**: `FINANCIAL` for accounting and
-   general-manager roles, `OTHER` (the six non-financial `ParentType`s) for everything else.
+   general-manager roles, `OTHER` (the seven non-financial `ParentType`s) for everything else.
 5. **Carry three additive claims**, `loc_fin_bits`, `loc_oth_bits` and `loc_scope` (§3). No `CATALOG_VERSION` bump,
    no change to `perm_bits` semantics. `loc_scope` is discriminated so a denser encoding can be
    adopted later without a version bump.
@@ -504,9 +515,12 @@ Recommended, in preference order — all three, they compose:
 | [#1874](https://github.com/louisburroughs/durion-positivity-backend/issues/1874) | Revoke live tokens on staffing-assignment change; decide Redis-unavailable policy | M | #1867, #1873 |
 | [#1875](https://github.com/louisburroughs/durion-positivity-backend/issues/1875) | Remove `role_assignments.scope_type`, `role_assignment_scope_locations` and `GET /v1/roles/check-permission` | M | #1872 |
 | [#1876](https://github.com/louisburroughs/durion-positivity-backend/issues/1876) | Decide node granularity for irregular coverage: multi-node assignment vs. group nodes | S | — |
-| [#1878](https://github.com/louisburroughs/durion-positivity-backend/issues/1878) | Materialise `FINANCIAL` and `OTHER` ancestor sets onto the location replicas | L | — |
+| [#1878](https://github.com/louisburroughs/durion-positivity-backend/issues/1878) | Materialise `FINANCIAL` and `OTHER` ancestor sets onto the location replicas (incl. pos-inventory addendum) | L | — |
+| [#1883](https://github.com/louisburroughs/durion-positivity-backend/issues/1883) | Gateway does not honour token revocation — revoked tokens pass until `exp` (surfaced by #1874) | M | #1874 |
+| [#1885](https://github.com/louisburroughs/durion-positivity-backend/issues/1885) | Scope the four endpoints in modules with no location replica (catalog price override, accounting labor overhead report, warranty claim search, people-contact access assignment), recorded `unscoped` by #1872 | M | #1872 |
 
-All eleven are sub-issues of #1375. Sizes: S ≤ 1 day, M 2–4 days, L 1–2 weeks.
+All thirteen are sub-issues of #1375. Sizes: S ≤ 1 day, M 2–4 days, L 1–2 weeks. #1876 was
+decided by ADR-0061 amendment (multi-node assignment, no group nodes) and closed.
 
 #1878 is on the critical path: without a replicated ancestor set there is no way to evaluate
 "L is beneath an assigned node" at check time, and hierarchy is what supplies the middle tier.
@@ -521,8 +535,13 @@ Token sizes:
 python3 scripts/measure-scope-claim-size.py
 ```
 
-Endpoint inventory (77 endpoints) — parses each mapping method's parameter list rather than
-grepping annotations, per the under-reporting caution in #1375:
+Endpoint inventory (77 endpoints at the time of the spike) — parses each mapping method's
+parameter list rather than grepping annotations, per the under-reporting caution in #1375.
+The same parser now lives in `scripts/audit-rbac.py` section F, where it gates CI against a
+recorded decision per operation (`<module>/location-scope.yaml`, #1872); the CI copy scans to
+the next mapping annotation rather than the fixed 4000-character window below, which missed
+three pos-inventory operations whose signatures sat past it, and it counts 89 operations after
+the ten endpoints added since the spike:
 
 ```bash
 python3 - <<'PY'

@@ -39,8 +39,8 @@ import org.springframework.test.web.servlet.MockMvc;
  * through to {@code pos-web-common}'s platform-wide {@code GlobalApiExceptionHandler}, which
  * answers a generic, correlated 500 that never echoes the exception's own text. {@link
  * SecurityServiceContractException} is proven the same way: a downstream 400 that no caller
- * input could have caused (a {@code SecurityServiceClient} call whose every value is fixed or
- * module-internal) must reach the client as that same safe 500, not a misattributed 400.
+ * input could have caused (a {@code SecurityServiceClient} call that transmits no caller value
+ * at all) must reach the client as that same safe 500, not a misattributed 400.
  *
  * <p>{@code @WebMvcTest} does not auto-register {@code pos-web-common}'s {@code
  * @AutoConfiguration} (it is not on the curated slice-test allowlist — an unrelated {@code
@@ -58,7 +58,6 @@ class PersonAccessControllerErrorHandlingTest {
     private static final String ROLE_VIEW = "people-contact:role:view";
     private static final UUID PERSON_ID = UUID.fromString("00000000-0000-0000-0000-0000000000f1");
     private static final String ASSIGNMENTS_PATH = "/v1/people/" + PERSON_ID + "/access/assignments";
-    private static final String ROLES_PATH = "/v1/people/" + PERSON_ID + "/access/roles";
 
     @Autowired
     private MockMvc mockMvc;
@@ -107,21 +106,27 @@ class PersonAccessControllerErrorHandlingTest {
 
     /**
      * Guards the fix for the code-review finding on issue #1694: {@code SecurityServiceClient}'s
-     * {@code getUserByUsername}/{@code getAvailableRoles} 400-mapping used to blame the caller
-     * even when the downstream 400 could not have been caused by anything the caller sent (no
-     * query parameter, or a fixed module constant). That is now a {@link
+     * {@code getUserByUsername} 400-mapping used to blame the caller even when the downstream
+     * 400 could not have been caused by anything the caller sent — {@code GET /v1/users} carries
+     * no query parameter at all, so no caller value reaches it. That is now a {@link
      * SecurityServiceContractException}, which — like a bare {@code IllegalArgumentException} —
      * must reach the client as a generic, correlated 500, never as a 400 carrying the downstream
      * detail (a version-drift message naming pos-security-service internals).
+     *
+     * <p>Exercised through {@code listRoleAssignments}, which resolves the person to a security
+     * user via {@code getUserByUsername} and so is a live path to this exception. The role
+     * listing is no longer one: ADR-0061 (#1875) deleted the assignment scope, {@code GET
+     * /v1/roles} takes no parameters, and that 400 handler went with the phantom query parameter
+     * it was written for.
      */
     @Test
     void aSecurityServiceContractViolationAnswers500WithoutLeakingTheDownstreamDetail() throws Exception {
-        String leakCanary = "pos-security-service rejected GET /v1/roles?scopeType=GLOBAL as malformed, but scope "
-                + "is a module-internal constant, never caller input";
-        when(peopleAccessControlService.getAvailableRolesForPerson(any()))
+        String leakCanary = "pos-security-service rejected GET /v1/users as malformed, but this request carries "
+                + "no caller-supplied value (looking up username=ada.lovelace)";
+        when(peopleAccessControlService.getPersonRoleAssignments(any(), anyBoolean(), any()))
                 .thenThrow(new SecurityServiceContractException(leakCanary));
 
-        String body = mockMvc.perform(get(ROLES_PATH).header(AUTHORITIES, ROLE_VIEW))
+        String body = mockMvc.perform(get(ASSIGNMENTS_PATH).header(AUTHORITIES, ROLE_VIEW))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
                 .andExpect(jsonPath("$.message").value("Unexpected error occurred"))
@@ -133,7 +138,7 @@ class PersonAccessControllerErrorHandlingTest {
         assertThat(body)
                 .doesNotContain(leakCanary)
                 .doesNotContain("pos-security-service")
-                .doesNotContain("scopeType");
+                .doesNotContain("ada.lovelace");
     }
 
     /** Clock for {@link PeopleExceptionHandler} and {@code pos-web-common}'s advice, plus method security. */

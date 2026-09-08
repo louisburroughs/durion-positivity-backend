@@ -21,6 +21,7 @@ import com.positivity.invoice.internal.entity.ExtWorkorderReplica;
 import com.positivity.invoice.internal.entity.ProcessedEvent;
 import com.positivity.invoice.internal.repository.ExtCustomerPartyReplicaRepository;
 import com.positivity.invoice.internal.repository.ExtEmployeeReplicaRepository;
+import com.positivity.invoice.internal.repository.ExtLocationParentReplicaRepository;
 import com.positivity.invoice.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.invoice.internal.repository.ExtWorkorderReplicaRepository;
 import com.positivity.invoice.internal.repository.ProcessedEventRepository;
@@ -94,6 +95,12 @@ class ReplicaListenerContractTest {
     private ExtLocationReplicaRepository locationRepository;
 
     @Mock
+    private ExtLocationParentReplicaRepository locationParentRepository;
+
+    @Mock
+    private LocationHierarchyService locationHierarchyService;
+
+    @Mock
     private ExtEmployeeReplicaRepository employeeRepository;
 
     @Mock
@@ -147,6 +154,8 @@ class ReplicaListenerContractTest {
                                 objectMapper,
                                 processedEventRepository,
                                 locationRepository,
+                                locationParentRepository,
+                                locationHierarchyService,
                                 org.mockito.Mockito.mock(ObjectProvider.class))::onLocationEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(locationRepository)
@@ -296,6 +305,8 @@ class ReplicaListenerContractTest {
                 objectMapper,
                 processedEventRepository,
                 locationRepository,
+                locationParentRepository,
+                locationHierarchyService,
                 org.mockito.Mockito.mock(ObjectProvider.class));
 
         listener.onLocationEvent("""

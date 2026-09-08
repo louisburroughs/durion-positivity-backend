@@ -46,14 +46,17 @@ public class PersonAccessController {
     @GetMapping("/{personUuid}/access/roles")
     @EmitEvent(id = "PEOPLE_CONTACT_ACCESS_ROLES_LIST", apiVersion = "1")
     @Operation(operationId = "listAssignableRoles", summary = "List Roles Assignable to Person", description = """
-                    Lists the role catalog a person could be assigned, combining LOCATION-scoped and \
-                    GLOBAL-scoped roles fetched live from pos-security.
+                    Lists the role catalog a person could be assigned, fetched live from pos-security.
                     Use this tool to populate a role picker before calling assignRoleToPerson; do not use \
                     listRoleAssignments, which returns the roles the person already holds.
                     Preconditions: the person record must exist; the roles themselves are owned by pos-security, \
                     and no user-person link is needed for this listing.
                     Required inputs: personUuid (UUID) as a path parameter; there is no request body and no \
                     filtering.
+                    Each role appears exactly once, identified by a code that is also its name, and the listing \
+                    is not partitioned by location scope: per ADR-0061 a role's location scope is resolved at \
+                    token issuance from the role and the person's pos-people staffing assignment, not chosen \
+                    when the role is picked.
                     Emits a PEOPLE_CONTACT_ACCESS_ROLES_LIST audit event; no state changes.
                     Returns 404 when the person does not exist, and propagates the pos-security status code when \
                     the role listing call fails there.
@@ -99,14 +102,18 @@ public class PersonAccessController {
     @EmitEvent(id = "PEOPLE_CONTACT_ACCESS_ASSIGNMENT_CREATE", apiVersion = "1")
     @Operation(operationId = "assignRoleToPerson", summary = "Assign a Role to a Person", description = """
                     Assigns a role to a person by delegating to pos-security through the person's linked user \
-                    account, optionally scoped to one location and bounded by a date window.
+                    account, bounded by an optional effective date window.
                     Use this tool to grant access; do not use revokePersonRoleAssignment, which ends an assignment \
                     that already exists.
                     Preconditions: the person must have an active user-person link resolving to a pos-security \
                     user, and the roleCode must exist in pos-security.
-                    Required inputs: personUuid (UUID) as a path parameter and roleCode in the body; locationId \
-                    (UUID) scopes the role to one location when supplied, and optional startDate/endDate bound \
-                    the assignment, with endDate required to be on or after startDate.
+                    Required inputs: personUuid (UUID) as a path parameter and roleCode in the body; optional \
+                    startDate/endDate (ISO date-time) bound the assignment, with endDate required to be on or \
+                    after startDate.
+                    The assignment takes no location. Per ADR-0061 it is an effective-dated user-to-role link and \
+                    nothing more: the person's location reach is the assigned role's own location scope combined \
+                    with that person's pos-people staffing assignment, resolved at token issuance rather than \
+                    chosen here.
                     Emits a PEOPLE_CONTACT_ACCESS_ASSIGNMENT_CREATE event; the assignment record itself is \
                     created and owned by pos-security.
                     Returns 201 with the created assignment, 400 when roleCode is blank or endDate precedes \
@@ -141,17 +148,16 @@ public class PersonAccessController {
     public ResponseEntity<UserRoleDto> createAssignment(
             @PathVariable UUID personUuid,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "Role code plus optional location scope and effective date window.",
+                            description = "Role code plus an optional effective date window.",
                             required = true,
                             content =
                                     @Content(
                                             mediaType = "application/json",
                                             examples =
                                                     @ExampleObject(
-                                                            name = "Location-scoped technician role",
+                                                            name = "Technician role for a fixed term",
                                                             value = """
                                                                     {"roleCode":"TECHNICIAN",
-                                                                     "locationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
                                                                      "startDate":"2026-09-01T00:00:00",
                                                                      "endDate":"2026-12-31T23:59:59"}
                                                                     """)))
@@ -162,11 +168,7 @@ public class PersonAccessController {
             throw new PeopleContactValidationException("roleCode is required");
         }
         UserRoleDto created = peopleAccessControlService.assignRoleToPerson(
-                personUuid,
-                request.getRoleCode(),
-                request.getLocationId(),
-                request.getStartDate(),
-                request.getEndDate());
+                personUuid, request.getRoleCode(), request.getStartDate(), request.getEndDate());
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 

@@ -12,10 +12,13 @@ import com.positivity.location.internal.dto.PersonDTO;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.LocationRosterService;
 import com.positivity.location.internal.service.LocationService;
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,6 +33,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -42,6 +46,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @Slf4j
 @Tag(name = "Location API", description = "Operations related to locations and their relationships")
@@ -66,6 +71,24 @@ public class LocationController {
              "checkInBufferMinutes":15,
              "cleanupBufferMinutes":10}
             """;
+
+    private static final String CYCLE_DETECTED_EXAMPLE = """
+            {"type":"about:blank",
+             "title":"Conflict",
+             "status":409,
+             "detail":"CYCLE_DETECTED",
+             "instance":"/v1/locations/018e1c9f-6b5a-7890-abcd-1234567890ab/parents/018e1c9f-0000-7890-abcd-1234567890ab",
+             "correlationId":"019507b4-1f3a-7000-8e04-5c9d3a4f6e12"}
+            """;
+
+    /**
+     * Documented on every operation that gates on the caller's location scope (ADR-0061, #1872).
+     * The body is the {@code ApiError} envelope rendered by pos-security-common's
+     * highest-precedence advice, not this module's {@link ProblemDetail}.
+     */
+    static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds location:write but its location scope does not cover the requested location"
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).";
 
     private final LocationService locationService;
     private final LocationRosterService locationRosterService;
@@ -270,10 +293,15 @@ public class LocationController {
                     Required inputs: locationId (UUID) as a path parameter plus a full body with name, code and \
                     type; omitted optional fields are overwritten with the request values, not preserved.
                     Emits a LOCATION_LOCATION_UPDATE event and publishes a location fact for replica consumers.
-                    Returns 404 when the location does not exist, 409 when the name or code collides with another \
-                    location, and 422 when the timezone or operating hours are invalid.
+                    Returns 404 when the location does not exist, 403 LOCATION_SCOPE_DENIED when it exists but a \
+                    location-scoped location:write grant does not cover it (ADR-0061), 409 when the name or code \
+                    collides with another location, and 422 when the timezone or operating hours are invalid.
                     """)
     @ApiResponse(responseCode = "200", description = "Location updated successfully.")
+    @ApiResponse(
+            responseCode = "403",
+            description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Location not found.")
     @ApiResponse(responseCode = "409", description = "Location name or code already taken.")
     @ApiResponse(responseCode = "422", description = "Invalid timezone or operating hours.")
@@ -301,6 +329,12 @@ public class LocationController {
                     @Valid
                     @RequestBody
                     LocationRequestDTO location) {
+        // Existence first, then scope (ADR-0061 §3): a missing location keeps its 404 for every
+        // caller, and a scoped caller only sees a 403 for a location that is real but out of reach.
+        if (locationService.getLocationByIdDto(locationId).isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        SecurityContextHelper.locationScope().require(LocationPermissions.WRITE, locationId);
         return locationService
                 .updateLocation(locationId, location)
                 .map(ResponseEntity::ok)
@@ -317,10 +351,15 @@ public class LocationController {
                     status only accepts the value INACTIVE to deactivate, and reactivation is not supported \
                     through this operation.
                     Emits a LOCATION_PATCH event and publishes a location fact for replica consumers.
-                    Returns 404 when the location does not exist, 409 when the new name is taken, and 422 when a \
-                    supplied timezone or operating-hours entry is invalid.
+                    Returns 404 when the location does not exist, 403 LOCATION_SCOPE_DENIED when it exists but a \
+                    location-scoped location:write grant does not cover it (ADR-0061), 409 when the new name is \
+                    taken, and 422 when a supplied timezone or operating-hours entry is invalid.
                     """)
     @ApiResponse(responseCode = "200", description = "Location patched successfully.")
+    @ApiResponse(
+            responseCode = "403",
+            description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Location not found.")
     @ApiResponse(responseCode = "409", description = "Location name already taken.")
     @ApiResponse(responseCode = "422", description = "Invalid timezone or operating hours.")
@@ -347,6 +386,11 @@ public class LocationController {
                                                             value = "{\"status\":\"INACTIVE\"}")))
                     @RequestBody
                     LocationPatchRequest patch) {
+        // Existence first (the same 404 ProblemDetail the service answers), then scope (ADR-0061 §3).
+        if (locationService.getLocationByIdDto(locationId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        SecurityContextHelper.locationScope().require(LocationPermissions.WRITE, locationId);
         return ResponseEntity.ok(locationService.patchLocation(locationId, patch));
     }
 
@@ -359,9 +403,14 @@ public class LocationController {
                     callers must confirm the location is unreferenced first.
                     Required inputs: locationId (UUID) as a path parameter; there is no request body.
                     Emits a LOCATION_LOCATION_DELETE event; the row is hard-deleted, not soft-deleted.
-                    Returns 204 on success and 404 when the location does not exist.
+                    Returns 204 on success, 404 when the location does not exist, and 403 LOCATION_SCOPE_DENIED \
+                    when it exists but a location-scoped location:write grant does not cover it (ADR-0061).
                     """)
     @ApiResponse(responseCode = "204", description = "Location deleted successfully.")
+    @ApiResponse(
+            responseCode = "403",
+            description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Location not found.")
     @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @DeleteMapping("/{locationId}")
@@ -376,6 +425,8 @@ public class LocationController {
         if (locationService.getLocationByIdDto(locationId).isEmpty()) {
             return ResponseEntity.notFound().build();
         }
+        // Existence above, scope here (ADR-0061 §3): the 404 stays first for every caller.
+        SecurityContextHelper.locationScope().require(LocationPermissions.WRITE, locationId);
         locationService.deleteLocation(locationId);
         return ResponseEntity.noContent().build();
     }
@@ -390,17 +441,40 @@ public class LocationController {
                     listLocationDescendants, which only read the hierarchy.
                     Preconditions: both locations must exist, the child must not already have a parent of that \
                     type, the pair must not already be linked in either direction, and the parent must not be a \
-                    descendant of the child because cycles are forbidden by ADR-0016.
+                    descendant of the child on the requested parentType because cycles are forbidden by ADR-0016. \
+                    Cycle detection is per parentType: only edges of the requested parentType are walked, so an \
+                    edge that would close a cycle on PHYSICAL is rejected while the same edge on FINANCIAL or \
+                    REGION is legal.
                     Required inputs: childId and parentId (UUIDs) as path parameters and a parentType query \
                     parameter, one of HOME_OFFICE, HEADQUARTERS, REGION, DISTRICT, PHYSICAL, ORGANIZATIONAL, \
                     FINANCIAL or SHIPPING.
                     Emits a LOCATION_PARENT_ADD event and republishes the child's location fact, which carries \
                     the new edge to replica consumers.
-                    Returns 400 when parentType is not a recognized value; self-parenting, duplicate, inverse or \
-                    circular relationships are rejected before the edge is written.
+                    Returns 400 when parentType is not a recognized value; duplicate and inverse relationships \
+                    are rejected before the edge is written. Returns 409 CYCLE_DETECTED when childId equals \
+                    parentId or when the edge would close a cycle on the requested parentType.
+                    Error responses carry an RFC 9457 ProblemDetail body (application/problem+json) whose \
+                    detail holds the machine-readable code and whose correlationId matches the \
+                    X-Correlation-Id response header.
                     """)
     @ApiResponse(responseCode = "200", description = "Parent relationship added successfully.")
-    @ApiResponse(responseCode = "400", description = "Invalid parentType value.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid parentType value.",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "CYCLE_DETECTED: childId equals parentId, or the edge would close a cycle on the requested"
+                    + " parentType. Cycle detection is per parentType, so the same edge on another parentType is"
+                    + " legal.",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class),
+                            examples = @ExampleObject(name = "cycleDetected", value = CYCLE_DETECTED_EXAMPLE)))
     @EmitEvent(id = "LOCATION_PARENT_ADD", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
     @SecurityRequirement(

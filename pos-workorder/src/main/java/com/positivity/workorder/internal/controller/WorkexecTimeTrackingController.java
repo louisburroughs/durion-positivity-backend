@@ -1,7 +1,10 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.LocationScope.Reach;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.WorkexecJobTimeTotalResponse;
 import com.positivity.workorder.internal.dto.WorkexecLaborPerformedRequest;
 import com.positivity.workorder.internal.dto.WorkexecLaborPerformedResponse;
@@ -10,6 +13,7 @@ import com.positivity.workorder.internal.dto.WorkexecTimerStartRequest;
 import com.positivity.workorder.internal.dto.WorkexecTimerStopResponse;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
+import com.positivity.workorder.internal.service.LocationHierarchyService;
 import com.positivity.workorder.internal.service.WorkexecTimeTrackingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -26,6 +30,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,8 +60,12 @@ public class WorkexecTimeTrackingController {
     private static final String ERROR_MESSAGE_KEY = "message";
     private static final String ERROR_INVALID_REQUEST = "WORKEXEC_INVALID_REQUEST";
     private static final String USER_ID_REQUIRED_MESSAGE = "Authenticated user id must be a valid UUID";
+    private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds workorder:labor:view but its location scope does not cover the requested location"
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
 
     private final WorkexecTimeTrackingService service;
+    private final LocationHierarchyService locationHierarchyService;
 
     @GetMapping("/job-time-totals")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -68,15 +78,22 @@ public class WorkexecTimeTrackingController {
                     Use this tool for payroll or utilization reporting across days; do not use getLaborHistory, \
                     which lists individual labor entries for one workorder.
                     Preconditions: none beyond the caller holding workorder:labor:view; totals derive from \
-                    recorded labor entries.
+                    recorded labor entries. A caller whose workorder:labor:view grant is location-scoped must \
+                    have a supplied locationId within reach, and without one sees only the locations within \
+                    reach (ADR-0061).
                     Required inputs: startDate and endDate (ISO dates, endDate on or after startDate) and \
                     timezone (IANA name); locationId and technicianIds are optional filters.
                     No events are emitted and no state changes; this is a read-only aggregation.
-                    Returns 400 when the timezone is invalid or endDate precedes startDate, and 200 with an \
-                    empty list when no time was tracked in the range.
+                    Returns 400 when the timezone is invalid or endDate precedes startDate, 403 \
+                    LOCATION_SCOPE_DENIED when the caller's location scope does not cover the supplied \
+                    locationId, and 200 with an empty list when no time was tracked in the range.
                     """)
     @ApiResponse(responseCode = "200", description = "Job time totals returned successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request parameters")
+    @ApiResponse(
+            responseCode = "403",
+            description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Object> getJobTimeTotals(
             @Parameter(description = "Start date (inclusive)", example = "2026-03-01") @RequestParam("startDate")
                     LocalDate startDate,
@@ -104,12 +121,33 @@ public class WorkexecTimeTrackingController {
             return badRequest(ERROR_INVALID_REQUEST, "endDate must be on or after startDate");
         }
 
+        // ADR-0061 §3 (#1872): locationId is an optional filter, so this is the narrow shape. A
+        // supplied location is gated; an absent one restricts a scoped caller to their reach and
+        // leaves an unscoped caller unrestricted.
+        LocationScope scope = SecurityContextHelper.locationScope();
+        Set<UUID> locationIds;
+        if (locationId != null) {
+            scope.require(WorkorderPermissions.LABOR_VIEW, locationId);
+            locationIds = Set.of(locationId);
+        } else {
+            Optional<Reach> reach = scope.reach(WorkorderPermissions.LABOR_VIEW);
+            if (reach.isEmpty()) {
+                locationIds = null;
+            } else {
+                // An empty reach is an empty report, never an unrestricted one.
+                locationIds = locationHierarchyService.reachableLocations(reach.get());
+                if (locationIds.isEmpty()) {
+                    return ResponseEntity.ok(List.of());
+                }
+            }
+        }
+
         List<WorkexecJobTimeTotalResponse> response = service
                 .getJobTimeTotals(
                         startDate,
                         endDate,
                         zoneId,
-                        locationId,
+                        locationIds,
                         technicianIds == null ? Collections.emptyList() : technicianIds)
                 .stream()
                 .map(this::toJobTimeTotalResponse)

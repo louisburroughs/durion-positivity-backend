@@ -12,9 +12,13 @@ import com.positivity.order.internal.security.OrderPermissions;
 import com.positivity.order.internal.service.RegisterSessionService;
 import com.positivity.order.internal.service.model.CashMovementCommand;
 import com.positivity.order.internal.service.model.OpenSessionCommand;
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -38,6 +42,12 @@ import org.springframework.web.bind.annotation.RestController;
  * open a session, record cash movements, run mid-day/close reports, and
  * reconcile the drawer at
  * close.
+ *
+ * <p>Location scope (ADR-0061 §3, #1872): opening a session is gated in
+ * {@code RegisterSessionServiceImpl} on the resolved location (the request's {@code locationId},
+ * or the terminal's previous session's when omitted) with {@code order:session:open}; reading a
+ * session by id is gated here on the stored session's location with {@code order:session:view},
+ * after the 404, so the open gate cannot be bypassed by addressing a drawer at another shop.
  */
 @RestController
 @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
@@ -47,6 +57,14 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("isAuthenticated()")
 @Tag(name = "Register Sessions", description = "POS register session and cash management")
 public class RegisterSessionController {
+
+    private static final String OPEN_LOCATION_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds order:session:open but its location scope does not cover the session's location"
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+
+    private static final String VIEW_LOCATION_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds order:session:view but its location scope does not cover the session's location"
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
 
     private final RegisterSessionService registerSessionService;
 
@@ -58,14 +76,26 @@ public class RegisterSessionController {
                     while it is open bind to it, and it supplies their location by default.
                     Use this tool at the start of a drawer shift; do not use recordCashMovement, which requires a \
                     session that is already open.
-                    Preconditions: the terminal must have no session in OPEN or CLOSING — one drawer per terminal.
+                    Preconditions: the terminal must have no session in OPEN or CLOSING — one drawer per terminal. \
+                    A caller whose order:session:open grant is location-scoped must have the resolved location \
+                    within reach (ADR-0061); for such a caller a session that resolves to no location is denied.
                     Required inputs: terminalId and openedByClerkId; openingFloat defaults to the terminal's \
                     previous counted close (else zero) when omitted, and locationId defaults from the terminal's \
                     previous session.
                     Emits an ORDER_SESSION_OPEN event.
-                    Returns 201 with the new session, and 409 when the terminal already has an active session.
+                    Returns 201 with the new session, 403 LOCATION_SCOPE_DENIED when the caller's location scope \
+                    does not cover the resolved location, and 409 when the terminal already has an active session.
                     """,
             tags = {"Register Sessions"})
+    @ApiResponse(responseCode = "201", description = "Register session opened.")
+    @ApiResponse(
+            responseCode = "403",
+            description = OPEN_LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The terminal already has an active (OPEN or CLOSING) register session.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_SESSION_OPEN + "')")
     @EmitEvent(id = "ORDER_SESSION_OPEN", apiVersion = "1")
@@ -101,16 +131,36 @@ public class RegisterSessionController {
                     over/short, and lifecycle timestamps.
                     Use this tool when the session id is already known; use getCurrentRegisterSession instead to \
                     resolve the active session from a terminal id.
-                    Preconditions: the session must exist.
+                    Preconditions: the session must exist. A caller whose order:session:view grant is \
+                    location-scoped must have the session's location within reach (ADR-0061).
                     Required inputs: sessionId (UUID) as a path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 when no register session exists for the supplied id.
+                    Returns 404 when no register session exists for the supplied id, and 403 \
+                    LOCATION_SCOPE_DENIED when the session exists but its location is outside the caller's scope.
                     """,
             tags = {"Register Sessions"})
+    @ApiResponse(responseCode = "200", description = "Register session found.")
+    @ApiResponse(
+            responseCode = "403",
+            description = VIEW_LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "No register session exists for the supplied id.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @GetMapping("/{sessionId}")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_SESSION_VIEW + "')")
     public ResponseEntity<RegisterSessionResponse> getSession(@PathVariable UUID sessionId) {
-        return ResponseEntity.ok(RegisterSessionResponse.from(registerSessionService.getSession(sessionId)));
+        // Existence first (404 from the service), then scope (ADR-0061 §3, #1872): a 403 for an id
+        // that does not exist would let a caller probe which session ids are real. This is the
+        // resource-addressed sibling of openSession's gate. A session without a location answers
+        // "" which a scoped caller cannot cover.
+        RegisterSessionSummary summary = registerSessionService.getSession(sessionId);
+        UUID sessionLocation = summary.locationId();
+        SecurityContextHelper.locationScope()
+                .require(
+                        OrderPermissions.ORDER_SESSION_VIEW, sessionLocation == null ? "" : sessionLocation.toString());
+        return ResponseEntity.ok(RegisterSessionResponse.from(summary));
     }
 
     @Operation(

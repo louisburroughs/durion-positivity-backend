@@ -27,6 +27,7 @@ import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
+import com.positivity.order.internal.security.OrderPermissions;
 import com.positivity.order.internal.service.model.AddItemCommand;
 import com.positivity.order.internal.service.model.CheckoutResult;
 import com.positivity.order.internal.service.model.CreateCartCommand;
@@ -50,6 +51,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
@@ -106,6 +108,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
             Optional<SalesOrder> existing = salesOrderRepository.findByCreationIdempotencyKey(idempotencyKey);
             if (existing.isPresent()) {
                 validateCreateReplay(existing.get(), command);
+                // A replay reads the cart back: hold it to the same gate as the original create.
+                requireCartLocation(existing.get().getLocationId());
                 return new CreateCartResult(toSummary(existing.get()), true);
             }
         }
@@ -142,6 +146,12 @@ public class SalesOrderServiceImpl implements SalesOrderService {
             throw new SalesOrderRequestValidationException(
                     "locationId is required when no register session is open on the terminal");
         }
+        // ADR-0061 §3 (#1872): the cart is created *at* the resolved location, so the scope check
+        // runs here — after the open session's location has been applied as the default — rather
+        // than in the controller, or a scoped caller could create a cart at another shop by
+        // omitting locationId on a terminal whose session sits elsewhere. Validation stays first so
+        // a missing location is a 400 for every caller, not a 403 for scoped callers only.
+        requireCartLocation(locationId);
 
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM_ACTOR);
         SalesOrder order = SalesOrder.builder()
@@ -836,6 +846,16 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         } catch (IllegalArgumentException e) {
             throw new SalesOrderRequestValidationException("Unknown sourceType: " + sourceType);
         }
+    }
+
+    /**
+     * Location-scope gate for cart creation (ADR-0061 §3, #1872) on {@code order:order:create}, the
+     * permission {@code createCart}'s {@code @PreAuthorize} checks. A cart with no location answers
+     * "" which a scoped caller cannot cover (fail closed); unscoped and pre-rollout callers pass.
+     */
+    private static void requireCartLocation(@Nullable UUID locationId) {
+        SecurityContextHelper.locationScope()
+                .require(OrderPermissions.ORDER_CREATE, locationId == null ? "" : locationId.toString());
     }
 
     private static String normalizeBlank(String value) {

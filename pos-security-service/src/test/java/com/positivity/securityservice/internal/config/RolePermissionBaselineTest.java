@@ -581,7 +581,7 @@ class RolePermissionBaselineTest {
         // Equality, not containment: #1373 decided who may create and who may approve, and
         // widening either set is as much a regression as losing it. INVENTORY_MANAGER and
         // INVENTORY_CONTROLLER are permission-identical on purpose — location versus global
-        // approval reach lives on role_assignments.scope_type, not in role_permissions.
+        // approval reach lives on roles.location_scope (ADR-0061 §1), not in role_permissions.
         assertThat(holdersOf("inventory:adjustment:create"))
                 .as("roles that may create an adjustment request")
                 .isEqualTo(new TreeSet<>(ADJUSTMENT_CREATORS));

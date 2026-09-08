@@ -7,10 +7,13 @@ import com.positivity.location.internal.dto.BayResponse;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.BayService;
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @Slf4j
 @Tag(name = "Bay API", description = "Operations for managing bays within locations")
@@ -48,6 +52,19 @@ public class BayController {
              "status":"ACTIVE"}
             """;
 
+    /**
+     * Documented on every operation that gates on the caller's location scope (ADR-0061, #1872).
+     * The body is the {@code ApiError} envelope rendered by pos-security-common's
+     * highest-precedence advice, not this module's ProblemDetail.
+     */
+    static final String BAY_READ_SCOPE_DENIED_DESCRIPTION =
+            "Caller lacks location:bay:read, or holds it but its location scope does not cover locationId"
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).";
+
+    static final String BAY_MANAGE_SCOPE_DENIED_DESCRIPTION =
+            "Caller lacks location:bay:manage, or holds it but its location scope does not cover locationId"
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).";
+
     private final BayService bayService;
 
     public BayController(BayService bayService) {
@@ -62,10 +79,17 @@ public class BayController {
                     Required inputs: locationId (UUID) as a path parameter; status (ACTIVE or OUT_OF_SERVICE) and \
                     bayType filters are optional, and page defaults to 0 with size 20.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 when the location does not exist; an unrecognized status or bayType filter value \
-                    fails the request rather than returning an empty page.
+                    Returns 400 when locationId does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a \
+                    location-scoped location:bay:read grant does not cover locationId (ADR-0061), and 404 when \
+                    the location does not exist; an unrecognized status or bayType filter value fails the \
+                    request rather than returning an empty page.
                     """)
     @ApiResponse(responseCode = "200", description = "Bays retrieved successfully.")
+    @ApiResponse(responseCode = "400", description = "locationId is not a UUID.")
+    @ApiResponse(
+            responseCode = "403",
+            description = BAY_READ_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Location not found.")
     @PreAuthorize("hasAuthority('" + LocationPermissions.BAY_READ + "')")
     @SecurityRequirement(
@@ -78,8 +102,9 @@ public class BayController {
             @RequestParam(required = false) String bayType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
+        UUID location = requireInScope(locationId, LocationPermissions.BAY_READ);
         Pageable pageable = PageRequest.of(page, size);
-        return ResponseEntity.ok(bayService.listBays(parseUuid(locationId), status, bayType, pageable));
+        return ResponseEntity.ok(bayService.listBays(location, status, bayType, pageable));
     }
 
     @Operation(operationId = "getBay", summary = "Get a Service Bay by Identifier", description = """
@@ -90,9 +115,16 @@ public class BayController {
                     Preconditions: the location must exist and the bay must belong to it.
                     Required inputs: locationId and bayId (UUIDs) as path parameters.
                     No events are emitted and no state changes; this is a read-only projection.
-                    Returns 404 when the location does not exist or the bay is not found under that location.
+                    Returns 400 when either id does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a \
+                    location-scoped location:bay:read grant does not cover locationId (ADR-0061), and 404 when \
+                    the location does not exist or the bay is not found under that location.
                     """)
     @ApiResponse(responseCode = "200", description = "Bay retrieved successfully.")
+    @ApiResponse(responseCode = "400", description = "locationId or bayId is not a UUID.")
+    @ApiResponse(
+            responseCode = "403",
+            description = BAY_READ_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Bay not found.")
     @PreAuthorize("hasAuthority('" + LocationPermissions.BAY_READ + "')")
     @SecurityRequirement(
@@ -102,7 +134,8 @@ public class BayController {
     public ResponseEntity<BayResponse> getBay(
             @Parameter(description = "Location ID") @PathVariable String locationId,
             @Parameter(description = "Bay ID") @PathVariable String bayId) {
-        return ResponseEntity.ok(bayService.getBay(parseUuid(locationId), parseUuid(bayId)));
+        UUID location = requireInScope(locationId, LocationPermissions.BAY_READ);
+        return ResponseEntity.ok(bayService.getBay(location, parseUuid(bayId)));
     }
 
     @Operation(operationId = "createBay", summary = "Create a Service Bay for Location", description = """
@@ -118,10 +151,16 @@ public class BayController {
                     INSPECTION or WASH_DETAIL) and capacity.maxConcurrentVehicles of at least 1; status is \
                     optional, defaults to ACTIVE and only also accepts OUT_OF_SERVICE.
                     Emits a LOCATION_BAY_CREATE event; no other records are touched.
-                    Returns 404 when the location does not exist and 409 when the bay name is already taken at \
-                    that location.
+                    Returns 400 when locationId does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a \
+                    location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when \
+                    the location does not exist and 409 when the bay name is already taken at that location.
                     """)
     @ApiResponse(responseCode = "201", description = "Bay created successfully.")
+    @ApiResponse(responseCode = "400", description = "locationId is not a UUID, or the payload is invalid.")
+    @ApiResponse(
+            responseCode = "403",
+            description = BAY_MANAGE_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Location not found.")
     @ApiResponse(responseCode = "409", description = "Bay name already taken at this location.")
     @EmitEvent(id = "LOCATION_BAY_CREATE", apiVersion = "1")
@@ -145,7 +184,8 @@ public class BayController {
                     @Valid
                     @RequestBody
                     BayRequest request) {
-        BayResponse created = bayService.createBay(parseUuid(locationId), request);
+        UUID location = requireInScope(locationId, LocationPermissions.BAY_MANAGE);
+        BayResponse created = bayService.createBay(location, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
@@ -159,11 +199,17 @@ public class BayController {
                     Required inputs: locationId and bayId (UUIDs) as path parameters and a body with at least one \
                     field; capacity.maxConcurrentVehicles, when supplied, must be at least 1.
                     Emits a LOCATION_BAY_UPDATE event; no other records are touched.
-                    Returns 404 when the location or bay does not exist and 409 when the new name is already \
-                    taken at that location.
+                    Returns 400 when either id does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a \
+                    location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when \
+                    the location or bay does not exist and 409 when the new name is already taken at that \
+                    location.
                     """)
     @ApiResponse(responseCode = "200", description = "Bay updated successfully.")
-    @ApiResponse(responseCode = "403", description = "Caller lacks location:bay:manage.")
+    @ApiResponse(responseCode = "400", description = "locationId or bayId is not a UUID.")
+    @ApiResponse(
+            responseCode = "403",
+            description = BAY_MANAGE_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Location or bay not found.")
     @ApiResponse(
             responseCode = "409",
@@ -190,7 +236,8 @@ public class BayController {
                                                             value = "{\"status\":\"OUT_OF_SERVICE\"}")))
                     @RequestBody
                     BayPatchRequest patchRequest) {
-        return ResponseEntity.ok(bayService.patchBay(parseUuid(locationId), parseUuid(bayId), patchRequest));
+        UUID location = requireInScope(locationId, LocationPermissions.BAY_MANAGE);
+        return ResponseEntity.ok(bayService.patchBay(location, parseUuid(bayId), patchRequest));
     }
 
     @Operation(operationId = "deleteBay", summary = "Delete a Service Bay", description = """
@@ -203,10 +250,16 @@ public class BayController {
                     usage check, so callers must confirm the bay is not referenced by scheduled work first.
                     Required inputs: locationId and bayId (UUIDs) as path parameters; there is no request body.
                     Emits a LOCATION_BAY_DELETE event; the row is hard-deleted, not soft-deleted.
-                    Returns 204 on success and 404 when the location or bay does not exist.
+                    Returns 204 on success, 400 when either id does not parse as a UUID, 403 \
+                    LOCATION_SCOPE_DENIED when a location-scoped location:bay:manage grant does not cover \
+                    locationId (ADR-0061), and 404 when the location or bay does not exist.
                     """)
     @ApiResponse(responseCode = "204", description = "Bay deleted successfully.")
-    @ApiResponse(responseCode = "403", description = "Caller lacks location:bay:manage.")
+    @ApiResponse(responseCode = "400", description = "locationId or bayId is not a UUID.")
+    @ApiResponse(
+            responseCode = "403",
+            description = BAY_MANAGE_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Location or bay not found.")
     @ApiResponse(responseCode = "409", description = "A concurrent update won the version race.")
     @EmitEvent(id = "LOCATION_BAY_DELETE", apiVersion = "1")
@@ -226,17 +279,36 @@ public class BayController {
         // message or correlationId. It also keeps one 404 contract for this operation -- a missing
         // *location* already surfaces through validateLocationExists as an enveloped 404, so
         // returning a bare body for a missing *bay* would give one endpoint two different 404s.
-        if (!bayService.deleteBay(parseUuid(locationId), parseUuid(bayId))) {
+        UUID location = requireInScope(locationId, LocationPermissions.BAY_MANAGE);
+        if (!bayService.deleteBay(location, parseUuid(bayId))) {
             throw new ResourceNotFoundException("Bay not found");
         }
         return ResponseEntity.noContent().build();
     }
 
-    private UUID parseUuid(String value) {
+    /**
+     * Parses the path {@code locationId} and applies the caller's location scope to it
+     * (ADR-0061 §3, #1872). Parsing comes first so a malformed id is a 400 for every caller,
+     * scoped or not; the scope check comes before the service so a scoped caller is denied
+     * on the location it named rather than on anything the service would go on to load.
+     */
+    private static UUID requireInScope(String locationId, String permission) {
+        UUID location = parseUuid(locationId);
+        SecurityContextHelper.locationScope().require(permission, location);
+        return location;
+    }
+
+    /**
+     * Strict parse: a value that is not a UUID is a 400, never a derived id. The former
+     * {@code nameUUIDFromBytes} fallback mapped a typo onto a deterministic-but-nonexistent
+     * location, which surfaced as a 404 for an unscoped caller and would surface as a 403 for a
+     * scoped one — the scope check fails closed on an unknown id. One status for one fault.
+     */
+    private static UUID parseUuid(String value) {
         try {
             return UUID.fromString(value);
-        } catch (Exception _) {
-            return UUID.nameUUIDFromBytes(value.getBytes());
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_UUID", exception);
         }
     }
 }

@@ -82,10 +82,122 @@ those start with no grants and are outside this baseline.
 | `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN`, `DISPATCHER`, `ACCOUNTING_ASSOCIATE`, `ACCOUNT_MANAGER`, `MANAGER`, `GENERAL_MANAGER` | Least privilege, scoped to the role's job function. |
 | `ACCOUNTANT`, `AP_CLERK`, `CONTROLLER`, `CSR`, `FLEET_MANAGER`, `GL_ANALYST` | **Not granted, and not created.** The retired hardcoded switch expanded these, but no migration or initializer creates the role, and `user_roles` / `role_assignments` are foreign-keyed to `roles(id)` — so no user could ever hold one. They were unreachable branches, documentation personas rather than security roles. To make one real, create the role first, then grant it. |
 | `INVENTORY_LEAD` | The parts-receiving persona (#1439): the receiving surface (`inventory:asn:*`, `inventory:receiving:*`, `inventory:goods_receipt:create/view`, `inventory:issue:parts`, `inventory:putaway:claim/execute/generate/view`, `inventory:shortage:*`, `inventory:on_hand:*`) and purchase-order entry (`order:purchase_order:create/view/availability_view`), plus adjustment requests (`inventory:adjustment:create`, `inventory:adjustment:view`) — it raises adjustments, it does not approve them — and the read-only catalog/order/pricing views and assistant entrypoints. The elevated escape hatches (`inventory:goods_receipt:override`, putaway capacity/compatibility overrides) are deliberately not granted. |
-| `INVENTORY_MANAGER`, `INVENTORY_CONTROLLER` | Create, approve, and view inventory adjustments. **Permission-identical on the adjustment surface on purpose**: the "location-scoped" vs "global" distinction is a property of `role_assignments.scope_type`, not of `role_permissions`, so it cannot be expressed by granting different rows. `INVENTORY_CONTROLLER` additionally holds `inventory:adjustment:override`, the negative-stock escape hatch — only a globally scoped approver should drive on-hand below zero. `INVENTORY_MANAGER` (with `LOCATION_MANAGER`) is also a PO-approver persona (#1438): `order:purchase_order:approve/transmit/view/availability_view`. |
+| `INVENTORY_MANAGER`, `INVENTORY_CONTROLLER` | Create, approve, and view inventory adjustments. **Permission-identical on the adjustment surface on purpose**: the "location-scoped" vs "global" distinction is a property of the role's `location_scope` (`INVENTORY_MANAGER` is `LOCATION`, `INVENTORY_CONTROLLER` is `ALL`; see [Role location scope](#role-location-scope)), not of `role_permissions`, so it cannot be expressed by granting different rows. `INVENTORY_CONTROLLER` additionally holds `inventory:adjustment:override`, the negative-stock escape hatch — only a globally scoped approver should drive on-hand below zero. `INVENTORY_MANAGER` (with `LOCATION_MANAGER`) is also a PO-approver persona (#1438): `order:purchase_order:approve/transmit/view/availability_view`. |
 | `SHOP_MANAGER` | The shop surface its role description names — `shop:location:view`, `shop:bay:view`, `shop:bay:assign`, `shop:schedule:view`, `shop:schedule:edit`, `shop:technician:view` — plus `invoice:finalize:override` (#1374). No audit grant: the shop domain defines no audit permission, so "audit review" in the V3 description has nothing to map to. |
 | `CUSTOMER`, `SELF_SERVICE_CUSTOMER` | **Assistant entrypoints only**, confirmed deliberate on #1373 rather than inherited. External-facing; any domain grant to them is a new product decision. |
 | `SECURITY_ADMIN`, `READ_ONLY_SCHEDULER` | **Deleted.** `V3__seed_candidate_roles.sql` created them as unratified "Candidate Roles v0"; nothing in the codebase ever referenced either, and `SECURITY_ADMIN`'s described scope is already held by `SYSTEM_ADMINISTRATOR`. `V23__drop_unratified_candidate_roles.sql` removes them (#1373). V3 is left untouched — it is applied everywhere, so editing it would break its checksum. |
+
+### Role location scope
+
+Since ADR-0061 (#1868) every role carries two columns that say how far its grants reach. They are
+properties of the **role**, not of the assignment or the employee: two roles may hold identical
+grants and differ only here.
+
+| Column | Values | Meaning |
+| --- | --- | --- |
+| `location_scope` | `ALL` (default) \| `LOCATION` | `ALL`: the grants apply everywhere — today's behaviour. `LOCATION`: the grants apply only at the location nodes pos-people assigns the holder to (`ext_people_staffing_assignment`, below) and every descendant of those nodes. |
+| `location_hierarchy` | `FINANCIAL` \| `OTHER` (default) | Which pos-location parent dimension a `LOCATION` role is evaluated along at check time. `FINANCIAL` is the accounting rollup; `OTHER` is the union of the seven non-financial parent types. |
+
+Seeded values (`V37__add_role_location_scope.sql`, pinned by `RoleLocationScopeSeedTest`):
+
+| Role | `location_scope` | `location_hierarchy` |
+| --- | --- | --- |
+| `ADMIN`, `SYSTEM_ADMINISTRATOR`, `INVENTORY_CONTROLLER`, `SELF_SERVICE_CUSTOMER` | `ALL` | `OTHER` |
+| `CONTROLLER` | `ALL` | `FINANCIAL` |
+| `ACCOUNT_MANAGER`, `ACCOUNTANT`, `GENERAL_MANAGER` | `LOCATION` | `FINANCIAL` |
+| `INVENTORY_MANAGER`, `LOCATION_MANAGER`, `SHOP_MANAGER`, `MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN`, `DISPATCHER` | `LOCATION` | `OTHER` |
+
+`INVENTORY_CONTROLLER` is an inventory role, not an accounting one — it is `OTHER`, and must never
+be classified by a name match on "CONTROLLER". `ACCOUNTING_ASSOCIATE`, `INVENTORY_LEAD` and
+`CUSTOMER` are not named by the ADR and keep the defaults.
+
+Two things about provisioning:
+
+- **A role created later** — through `POST /v1/roles` or `POST /v1/roles/bulk-ingest` — gets the
+  defaults, `ALL` / `OTHER`. Nothing narrows by omission, and nothing widens either: `ALL`
+  only continues what every role does today. The role create/response DTOs do not yet expose
+  the two columns; changing them is a data change (SQL) until that API surface is extended.
+- **A reseed cannot reset these columns.** `R__seed_reference_security.sql` creates only the
+  bootstrap floor (`ADMIN`, `SYSTEM_ADMINISTRATOR` — both at the defaults) with
+  `ON CONFLICT (name) DO NOTHING`, so an existing row is never rewritten; V37 sets the values
+  once, by name. On a *fresh* database the roles the bulk loader provisions after startup arrive
+  at the defaults, so `roles.csv`-provisioned `LOCATION` roles need the same UPDATE applied
+  (or the loader taught the two columns) before location scope is enforced there.
+
+`LOCATION` has no effect until an endpoint checks the scope claims below (#1870+); until then a
+`LOCATION` role behaves exactly as an `ALL` one.
+
+#### Scope claims in the access token
+
+`JwtService.generateTokenPair` composes three **additive** claims next to `perm_bits`
+(ADR-0061 §2). `perm_bits` and `CATALOG_VERSION` are unchanged.
+
+| Claim | Value |
+| --- | --- |
+| `loc_fin_bits` | Base64URL bitset (same `PermissionBitsetCodec`, same bit indexes and `perm_ver` as `perm_bits`) of the permissions that are location-scoped along `FINANCIAL`. Always present; `""` when empty. |
+| `loc_oth_bits` | The same along `OTHER`. |
+| `loc_scope` | `{"v":1,"nodes":["<uuid>", ...]}` — the holder's assigned location nodes, verbatim and never expanded. Omitted when both bitsets are empty. `v` is a discriminator so a denser encoding can be added later without a catalog bump. |
+
+Composition, per permission, from `RoleAuthorityService.resolveRoleGrants`:
+
+- Granted by **any** `ALL` role → global: in neither bitset. The broader grant wins.
+- Otherwise, in `loc_fin_bits` if any granting `LOCATION` role is `FINANCIAL`, and in
+  `loc_oth_bits` if any is `OTHER`. A permission may be in **both**.
+- **Fail closed.** If either bitset is non-empty but no assigned node resolves (the token has no
+  `personId`, or `StaffingAssignmentProjectionService` returns nothing for today), the bitsets
+  are emitted and `loc_scope` is **omitted**. Absence denies; it is never substituted with `ALL`.
+
+Refresh tokens never carry any of the three. Readers: `getFinancialLocationScopedPermissionsFromToken`,
+`getOtherLocationScopedPermissionsFromToken`, `getLocationScopeFromToken` (absent → `Optional.empty()`).
+
+#### Effective-dating clamp on `exp`
+
+When either scope bitset is non-empty, the access token's `exp` is
+`min(now + 3600s, end of the day the earliest contributing staffing assignment ends)` in the
+issuer clock's zone (ADR-0061 §4, #1873). Tokens with no location-scoped grant, and holders whose
+assignments are open-ended, are unaffected. Refresh tokens keep their own lifetime, and because
+`refreshAccessToken` re-enters `generateTokenPair`, the clamp is re-evaluated on every refresh
+rather than inherited.
+
+#### Revocation on assignment change
+
+The second ADR-0061 §4 mechanism (#1874). `PeopleEventsListener` compares each
+`people.staffing-assignment.updated` fact with the replica row it is about to overwrite, and when
+the change **narrows** the person's reach it revokes that person's live tokens through
+`PersonTokenRevocationService` — the same `TokenRevocationManager` + `jwt_token` path
+`revokeAllTokensForUser` uses. Widening never revokes; the next token simply picks it up.
+
+A fact narrows reach only if the assignment was contributing today (`ACTIVE`, effective on the
+issuer-clock date by the same predicate as `findActiveEffectiveOn`) and:
+
+- `status` leaves `ACTIVE` (`ENDED`); or
+- `locationId` changes — the old node is no longer covered; or
+- `effectiveFrom` moves after today (or is dropped; the projection never matches a null); or
+- `effectiveTo` is set where it was open-ended, or moves earlier than it was.
+
+A brand-new assignment, a reactivation, a later or removed `effectiveTo`, an earlier
+`effectiveFrom` or a `primary` flip does not revoke. Neither does a stale fact (older
+`aggregateVersion`) or a replayed `eventId` (`processed_events`).
+
+Revocation is per person: every `users` row with that `person_id` is looked up, and every
+`jwt_token` row of those subjects whose access token is unexpired has its access **and** refresh
+JTI written to Redis (`revokeAllTokensForUser` precedent — the refresh token shares the row) and
+the row deleted. The affected sessions must log in again. Rows whose access token has already
+expired are left alone: there is nothing live to revoke, and their refresh re-enters
+`generateTokenPair`, which re-reads the projection. Re-revoking an already-revoked JTI is a
+no-op overwrite in Redis, and a second pass finds no row.
+
+**Redis unavailable: fail-open, loudly.** If Redis is disabled, unreachable, or the write fails
+after retries, the `jwt_token` rows are still deleted, `security.token-revocation.redis-unavailable`
+is incremented by the number of JTIs that missed Redis, a WARN names the person and the count,
+and the event completes normally. Fail-closed was rejected because it would refuse every token
+platform-wide for the length of a Redis outage, while the `exp` clamp above already bounds the
+stale window to the end of the assignment's effective date — fail-open costs at most that
+window. Residual risk to know: on this module's bearer path `validateToken` also checks the
+`jwt_token` row, so a DB-marked revocation holds even with Redis down; but the API gateway
+verifies signature, issuer, audience and expiry only and consults neither store, so a revoked
+token keeps passing the gateway until `exp` — Redis up or down. Closing that is a gateway
+change, not a security-service one.
 
 ### Assistant baseline
 
@@ -128,22 +240,24 @@ Three tables are easy to confuse:
 | --- | --- | --- |
 | `role_permissions` | **role → permission** grants | Token issuance (`RoleAuthorityService`), `AuthorizationService`, `RoleManagementService` |
 | `user_roles` | **user → role**, unscoped | Token issuance, `AuthorizationService.authorizePerson` |
-| `role_assignments` | **user → role**, with `scope_type`, optional location scope and effective dating | `RoleManagementService.getUserPermissions` / `check-permission` only |
+| `role_assignments` | **user → role**, effective-dated (`effective_start_date`, `effective_end_date`, `revoked_at`) | `RoleManagementService.getUserPermissions` / `userHasPermission` — does **not** narrow a JWT |
 
-Location scope and effective dating live on `role_assignments` and are honoured by
-`RoleManagementService.userHasPermission`. They do **not** narrow the grants in a JWT: token
-issuance takes the union of the roles a user holds and encodes every permission those roles
-grant. Location-sensitive decisions must therefore be enforced by the owning service, or asked
-of `GET /v1/roles/check-permission`, rather than assumed from the token.
+`role_assignments` carries no location scope: `scope_type` and `role_assignment_scope_locations`
+were dropped by `V38__drop_role_assignment_scope.sql` (ADR-0061 §1, #1875), and with them
+`GET /v1/roles/check-permission`, the only reader. Location reach is the role's `location_scope`
+plus the pos-people staffing assignment, carried as the scope claims described under
+[Role location scope](#role-location-scope); `perm_bits` itself still takes the union of every
+role a user holds, and location-sensitive decisions are enforced by the owning service from
+those claims.
 
 ## Key Classes
 
-- `JwtService` — issues and validates JWTs; encodes `perm_bits` via `PermissionBitsetCodec`
+- `JwtService` — issues and validates JWTs; encodes `perm_bits` and the `loc_fin_bits` / `loc_oth_bits` / `loc_scope` scope claims via `PermissionBitsetCodec`, and clamps `exp` to the earliest contributing staffing assignment
 - `AuthenticationService` — login flow; delegates to Spring Security `AuthenticationManager`
 - `LockoutService` — configurable failed-login lockout with automatic and manual unlock
 - `PermissionService` — permission catalog management (bit index assignment)
 - `RoleManagementService` — role CRUD and role-to-permission assignment
-- `RoleAuthorityService` — resolves a role's authorities from persisted `role_permissions` grants
+- `RoleAuthorityService` — resolves a role's authorities from persisted `role_permissions` grants, and (`resolveRoleGrants`) the same grants per role with each role's location reach
 - `SelfRegistrationService` / `SelfRegistrationReviewService` — user self-registration and admin review
 
 ## API Endpoints
@@ -157,6 +271,8 @@ of `GET /v1/roles/check-permission`, rather than assumed from the token.
 - `POST /v1/roles` — create a role
 - `POST /v1/roles/{roleId}/permissions/{permissionKey}` — assign permission to role
 - `DELETE /v1/roles/{roleId}/permissions/{permissionKey}` — remove permission from role
+- `POST /v1/roles/assignments` / `DELETE /v1/roles/assignments/{assignmentId}` — create / revoke an effective-dated role assignment
+- `GET /v1/roles/assignments/user/{userId}` — list a user's role assignments (there is no `check-permission` probe; location scope is decided from the token's scope claims)
 - `GET /v1/users/{id}` — retrieve a user
 - `POST /v1/users/{id}/unlock` — admin: unlock account
 - `POST /v1/users/{id}/enable` / `disable` — admin: enable/disable account
@@ -300,6 +416,9 @@ committed spec against the controllers' declarations and fails on drift in eithe
 | `EUREKA_SERVER_URL`                 | required     | Eureka service discovery URL          |
 | `SECURITY_SEED_ADMIN_PASSWORD_HASH` | required     | BCrypt hash for seed admin user       |
 | `security.lockout.threshold`        | configurable | Failed login threshold before lockout |
+| `pos.security-service.kafka.people-events-topic` | `people.events.v1` | Staffing-assignment facts feeding the assigned-node read model (ADR-0061 §1) |
+| `pos.security-service.kafka.people-manifest-topic` | `people.manifest.v1` | Reconciliation manifests for that read model; drift requests a replay on `people-commands-topic` |
+| `pos.security-service.location-scope.assigned-node-cap` | `8` | Assigned-node count above which `security.location-scope.assigned-nodes.cap-exceeded` fires (WARN + metric, never truncated) |
 
 ## Dependencies
 
@@ -309,6 +428,8 @@ committed spec against the controllers' declarations and fails on drift in eithe
 ## Database
 
 Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`. Seed admin password hash is injected as a Flyway placeholder; never commit real hashes in SQL files.
+
+`ext_people_staffing_assignment` is a read model of pos-people's `employee_location_assignment` (ADR-0061 §1): one row per assignment keyed by `assignment_id`, storing the assigned location node *verbatim* (shop or District/Region/HQ — never expanded), `is_primary`, `status` (`ACTIVE`/`ENDED`, ended rows are kept), and effective dates. Written only by `PeopleEventsListener`; read through `StaffingAssignmentProjectionService` ("nodes effective on date D", "earliest `effective_to`").
 
 ## Development
 

@@ -1,0 +1,7 @@
+# Location-scope decisions for pos-people-contact (ADR-0061, #1872).
+# Every operation that takes a caller-supplied locationId must appear here;
+# scripts/audit-rbac.py --check fails on a missing or stale entry.
+decisions:
+  - operation: PersonAccessController.createAssignment
+    shape: unscoped
+    reason: "Deferred: the request no longer carries a locationId (ADR-0061 leaves an assignment a plain user-to-role link), and pos-people-contact has no location replica to gate the acting user against; tracked in #1885"

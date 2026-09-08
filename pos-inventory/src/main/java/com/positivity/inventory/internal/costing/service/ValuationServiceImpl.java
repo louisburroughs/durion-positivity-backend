@@ -11,9 +11,11 @@ import com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededEx
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.SkuCostStateRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.AsOfQueryGuard;
 import com.positivity.inventory.internal.service.CostingMethodResolver;
 import com.positivity.inventory.internal.service.CostingStrategy;
+import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.Quantities;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -64,6 +66,7 @@ public class ValuationServiceImpl implements ValuationService {
     private final SkuCostStateRepository costStateRepository;
     private final CostingMethodResolver methodResolver;
     private final AsOfQueryGuard asOfQueryGuard;
+    private final LocationScopeService locationScopeService;
     private final int asOfSkuCap;
     private final Map<CostingMethod, CostingStrategy> strategies;
 
@@ -73,6 +76,7 @@ public class ValuationServiceImpl implements ValuationService {
             SkuCostStateRepository costStateRepository,
             CostingMethodResolver methodResolver,
             AsOfQueryGuard asOfQueryGuard,
+            LocationScopeService locationScopeService,
             List<CostingStrategy> costingStrategies,
             @Value("${pos.inventory.valuation.as-of-sku-cap:1000}") int asOfSkuCap) {
         this.stockSummaryRepository = stockSummaryRepository;
@@ -80,6 +84,7 @@ public class ValuationServiceImpl implements ValuationService {
         this.costStateRepository = costStateRepository;
         this.methodResolver = methodResolver;
         this.asOfQueryGuard = asOfQueryGuard;
+        this.locationScopeService = locationScopeService;
         this.asOfSkuCap = asOfSkuCap;
         this.strategies = new EnumMap<>(CostingMethod.class);
         for (CostingStrategy strategy : costingStrategies) {
@@ -91,7 +96,11 @@ public class ValuationServiceImpl implements ValuationService {
     @Transactional(readOnly = true)
     @NonNull
     public ValuationReportResponse getValuation(@Nullable UUID locationId, @Nullable String sku) {
-        List<SkuQty> onHands = currentOnHands(locationId, sku);
+        // ADR-0061 §3 (#1872): a named site is gated; none narrows a scoped caller to their reach.
+        Set<UUID> reach = locationScopeService
+                .narrowTo(locationId, InventoryPermissionRegistry.VALUATION_VIEW)
+                .orElse(null);
+        List<SkuQty> onHands = currentOnHands(locationId, sku, reach);
         Set<String> stockItemIds = stockItemIds(onHands);
         Map<String, CostingMethod> methods = methodResolver.resolveAll(stockItemIds);
         Map<String, SkuCostState> costStates = findCostStatesByStockItemId(stockItemIds);
@@ -110,9 +119,13 @@ public class ValuationServiceImpl implements ValuationService {
     public ValuationReportResponse getValuationAsOf(
             @Nullable UUID locationId, @Nullable String sku, @NonNull Instant asOf) {
         asOfQueryGuard.check(asOf);
+        // ADR-0061 §3 (#1872): a named site is gated; none narrows a scoped caller to their reach.
+        Set<UUID> reach = locationScopeService
+                .narrowTo(locationId, InventoryPermissionRegistry.VALUATION_VIEW)
+                .orElse(null);
 
         Set<InventoryLedgerEventType> onHandTypes = InventoryLedgerEventType.onHandAffectingTypes();
-        List<SkuQty> onHands = asOfOnHands(locationId, sku, onHandTypes, asOf);
+        List<SkuQty> onHands = asOfOnHands(locationId, sku, onHandTypes, asOf, reach);
         enforceFullCatalogAsOfCap(locationId, sku, onHands.size());
         Set<String> stockItemIds = stockItemIds(onHands);
         Map<String, CostingMethod> methods = methodResolver.resolveAll(stockItemIds);
@@ -134,37 +147,73 @@ public class ValuationServiceImpl implements ValuationService {
 
     // ─── On-hand sourcing ────────────────────────────────────────────────────
 
-    private List<SkuQty> currentOnHands(@Nullable UUID locationId, @Nullable String sku) {
+    /**
+     * Current on-hand rows for the report. {@code reach} is non-null only when no site was named
+     * and the caller is location-scoped: the catalog is then summed over the reachable sites
+     * (and their storage locations) instead of every site, and an empty reach is an empty report.
+     */
+    private List<SkuQty> currentOnHands(@Nullable UUID locationId, @Nullable String sku, @Nullable Set<UUID> reach) {
+        if (reach != null && reach.isEmpty()) {
+            return List.of();
+        }
         if (sku != null && !sku.isBlank()) {
-            BigDecimal onHand = locationId == null
-                    ? Quantities.nz(stockSummaryRepository.sumOnHandForSku(sku))
-                    : stockSummaryRepository
-                            .findByStockItemIdAndLocationId(sku, locationId)
-                            .map(InventoryStockSummary::getOnHand)
-                            .map(Quantities::nz)
-                            .orElse(BigDecimal.ZERO);
+            BigDecimal onHand;
+            if (locationId != null) {
+                onHand = stockSummaryRepository
+                        .findByStockItemIdAndLocationId(sku, locationId)
+                        .map(InventoryStockSummary::getOnHand)
+                        .map(Quantities::nz)
+                        .orElse(BigDecimal.ZERO);
+            } else if (reach != null) {
+                onHand = Quantities.nz(stockSummaryRepository.sumOnHandForSkuWithinLocations(sku, reach));
+            } else {
+                onHand = Quantities.nz(stockSummaryRepository.sumOnHandForSku(sku));
+            }
             return Quantities.isZero(onHand) ? List.of() : List.of(new SkuQty(sku, onHand));
         }
-        List<InventoryStockSummaryRepository.SkuOnHand> rows = locationId == null
-                ? stockSummaryRepository.sumOnHandBySku()
-                : stockSummaryRepository.sumOnHandBySkuAtLocation(locationId);
+        List<InventoryStockSummaryRepository.SkuOnHand> rows;
+        if (locationId != null) {
+            rows = stockSummaryRepository.sumOnHandBySkuAtLocation(locationId);
+        } else if (reach != null) {
+            rows = stockSummaryRepository.sumOnHandBySkuWithinLocations(reach);
+        } else {
+            rows = stockSummaryRepository.sumOnHandBySku();
+        }
         return rows.stream()
                 .map(r -> new SkuQty(r.getStockItemId(), Quantities.nz(r.getOnHand())))
                 .toList();
     }
 
+    /** As-of counterpart of {@link #currentOnHands}, reconstructed from the ledger. */
     private List<SkuQty> asOfOnHands(
-            @Nullable UUID locationId, @Nullable String sku, Set<InventoryLedgerEventType> onHandTypes, Instant asOf) {
+            @Nullable UUID locationId,
+            @Nullable String sku,
+            Set<InventoryLedgerEventType> onHandTypes,
+            Instant asOf,
+            @Nullable Set<UUID> reach) {
+        if (reach != null && reach.isEmpty()) {
+            return List.of();
+        }
         if (sku != null && !sku.isBlank()) {
-            BigDecimal onHand = locationId == null
-                    ? sumChangeForSkuAsOf(sku, onHandTypes, asOf)
-                    : ledgerRepository.calculateOnHandForStockItemAtLocationAsOf(sku, locationId, onHandTypes, asOf);
+            BigDecimal onHand;
+            if (locationId != null) {
+                onHand = ledgerRepository.calculateOnHandForStockItemAtLocationAsOf(sku, locationId, onHandTypes, asOf);
+            } else if (reach != null) {
+                onHand = ledgerRepository.calculateOnHandForStockItemWithinLocationsAsOf(sku, reach, onHandTypes, asOf);
+            } else {
+                onHand = sumChangeForSkuAsOf(sku, onHandTypes, asOf);
+            }
             BigDecimal value = Quantities.nz(onHand);
             return Quantities.isZero(value) ? List.of() : List.of(new SkuQty(sku, value));
         }
-        List<InventoryLedgerEntryRepository.LocationOnHand> rows = locationId == null
-                ? ledgerRepository.sumOnHandBySkuAsOf(onHandTypes, asOf)
-                : ledgerRepository.findPositiveOnHandByLocationAsOf(locationId, onHandTypes, asOf);
+        List<InventoryLedgerEntryRepository.LocationOnHand> rows;
+        if (locationId != null) {
+            rows = ledgerRepository.findPositiveOnHandByLocationAsOf(locationId, onHandTypes, asOf);
+        } else if (reach != null) {
+            rows = ledgerRepository.sumOnHandBySkuWithinLocationsAsOf(reach, onHandTypes, asOf);
+        } else {
+            rows = ledgerRepository.sumOnHandBySkuAsOf(onHandTypes, asOf);
+        }
         return rows.stream()
                 .map(r -> new SkuQty(r.getStockItemId(), Quantities.nz(r.getOnHandQuantity())))
                 .toList();

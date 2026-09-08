@@ -6,7 +6,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,11 +24,13 @@ import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.SkuCostStateRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -63,6 +67,9 @@ class ValuationServiceImplTest {
     @Mock
     AsOfQueryGuard asOfQueryGuard;
 
+    @Mock
+    LocationScopeService locationScopeService;
+
     ValuationServiceImpl service;
 
     @BeforeEach
@@ -73,6 +80,7 @@ class ValuationServiceImplTest {
                 costStateRepository,
                 methodResolver,
                 asOfQueryGuard,
+                locationScopeService,
                 List.of(new AverageCostingStrategy(), new StandardCostingStrategy()),
                 1000);
         lenient().when(methodResolver.resolveAll(anySet())).thenReturn(Map.of());
@@ -403,6 +411,7 @@ class ValuationServiceImplTest {
                 costStateRepository,
                 methodResolver,
                 asOfQueryGuard,
+                locationScopeService,
                 List.of(new AverageCostingStrategy(), new StandardCostingStrategy()),
                 1);
         when(ledgerRepository.sumOnHandBySkuAsOf(any(), eq(AS_OF)))
@@ -421,6 +430,7 @@ class ValuationServiceImplTest {
                 costStateRepository,
                 methodResolver,
                 asOfQueryGuard,
+                locationScopeService,
                 List.of(new AverageCostingStrategy(), new StandardCostingStrategy()),
                 1);
         when(ledgerRepository.findPositiveOnHandByLocationAsOf(eq(LOC_1), any(), eq(AS_OF)))
@@ -439,5 +449,95 @@ class ValuationServiceImplTest {
 
         assertThat(report.getRows()).hasSize(2);
         assertThat(report.getTotalOnHandValue()).isEqualByComparingTo("5.0000");
+    }
+
+    // ── ADR-0061 §3 (#1872): location scope ───────────────────────────────────
+
+    @Test
+    void currentValuation_scopedNoSite_sumsWithinReach() {
+        when(locationScopeService.narrowTo(isNull(), eq(InventoryPermissionRegistry.VALUATION_VIEW)))
+                .thenReturn(Optional.of(Set.of(LOC_1)));
+        when(stockSummaryRepository.sumOnHandBySkuWithinLocations(Set.of(LOC_1)))
+                .thenReturn(List.of(skuOnHand(SKU_A, 4L)));
+        when(methodResolver.resolveAll(anySet())).thenReturn(Map.of(SKU_A, CostingMethod.AVERAGE));
+        when(costStateRepository.findByStockItemIdIn(anyCollection()))
+                .thenReturn(List.of(costState(SKU_A, new BigDecimal("2.000000"), null, 4L)));
+
+        ValuationReportResponse report = service.getValuation(null, null);
+
+        assertThat(report.getRows()).hasSize(1);
+        assertThat(report.getRows().get(0).getOnHandValue()).isEqualByComparingTo("8.0000");
+        assertThat(report.getLocationId()).isNull();
+        verify(stockSummaryRepository, never()).sumOnHandBySku();
+    }
+
+    @Test
+    void currentValuation_scopedNoSite_singleSku_sumsWithinReach() {
+        when(locationScopeService.narrowTo(isNull(), eq(InventoryPermissionRegistry.VALUATION_VIEW)))
+                .thenReturn(Optional.of(Set.of(LOC_1, LOC_2)));
+        when(stockSummaryRepository.sumOnHandForSkuWithinLocations(SKU_A, Set.of(LOC_1, LOC_2)))
+                .thenReturn(new BigDecimal("3"));
+        when(methodResolver.resolveAll(anySet())).thenReturn(Map.of(SKU_A, CostingMethod.AVERAGE));
+
+        ValuationReportResponse report = service.getValuation(null, SKU_A);
+
+        assertThat(report.getRows()).extracting(ValuationRow::getStockItemId).containsExactly(SKU_A);
+        verify(stockSummaryRepository, never()).sumOnHandForSku(any());
+    }
+
+    @Test
+    void currentValuation_scopedEmptyReach_isEmptyReportWithoutQuery() {
+        when(locationScopeService.narrowTo(isNull(), eq(InventoryPermissionRegistry.VALUATION_VIEW)))
+                .thenReturn(Optional.of(Set.of()));
+
+        ValuationReportResponse report = service.getValuation(null, null);
+
+        assertThat(report.getRows()).isEmpty();
+        assertThat(report.getTotalOnHandValue()).isEqualByComparingTo("0");
+        verify(stockSummaryRepository, never()).sumOnHandBySku();
+    }
+
+    @Test
+    void currentValuation_namedSite_isGatedThenQueriedAsBefore() {
+        when(stockSummaryRepository.sumOnHandBySkuAtLocation(LOC_1)).thenReturn(List.of());
+
+        service.getValuation(LOC_1, null);
+
+        verify(locationScopeService).narrowTo(LOC_1, InventoryPermissionRegistry.VALUATION_VIEW);
+        verify(stockSummaryRepository).sumOnHandBySkuAtLocation(LOC_1);
+    }
+
+    @Test
+    void asOfValuation_scopedNoSite_reconstructsWithinReach() {
+        when(locationScopeService.narrowTo(isNull(), eq(InventoryPermissionRegistry.VALUATION_VIEW)))
+                .thenReturn(Optional.of(Set.of(LOC_1)));
+        when(ledgerRepository.sumOnHandBySkuWithinLocationsAsOf(eq(Set.of(LOC_1)), any(), eq(AS_OF)))
+                .thenReturn(List.of(ledgerSkuOnHand(SKU_A, 10L)));
+        when(methodResolver.resolveAll(anySet())).thenReturn(Map.of(SKU_A, CostingMethod.AVERAGE));
+        when(costStateRepository.findByStockItemIdIn(anyCollection())).thenReturn(List.of());
+        when(ledgerRepository
+                        .findByStockItemIdInAndEventTypeInAndTimestampLessThanEqualOrderByStockItemIdAscTimestampAscLedgerEntryIdAsc(
+                                anyCollection(), any(), eq(AS_OF)))
+                .thenReturn(
+                        List.of(entry(SKU_A, InventoryLedgerEventType.GOODS_RECEIPT, 10, new BigDecimal("5.0000"))));
+
+        ValuationReportResponse report = service.getValuationAsOf(null, null, AS_OF);
+
+        assertThat(report.getRows().get(0).getOnHandValue()).isEqualByComparingTo("50.0000");
+        verify(ledgerRepository, never()).sumOnHandBySkuAsOf(any(), any());
+    }
+
+    @Test
+    void asOfValuation_scopedNoSite_singleSku_sumsWithinReach() {
+        when(locationScopeService.narrowTo(isNull(), eq(InventoryPermissionRegistry.VALUATION_VIEW)))
+                .thenReturn(Optional.of(Set.of(LOC_1)));
+        when(ledgerRepository.calculateOnHandForStockItemWithinLocationsAsOf(
+                        eq(SKU_A), eq(Set.of(LOC_1)), any(), eq(AS_OF)))
+                .thenReturn(new BigDecimal("2"));
+        when(methodResolver.resolveAll(anySet())).thenReturn(Map.of(SKU_A, CostingMethod.AVERAGE));
+
+        ValuationReportResponse report = service.getValuationAsOf(null, SKU_A, AS_OF);
+
+        assertThat(report.getRows()).extracting(ValuationRow::getStockItemId).containsExactly(SKU_A);
     }
 }

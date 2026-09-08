@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.order.internal.client.CustomerLookupResult;
 import com.positivity.order.internal.client.CustomerPort;
 import com.positivity.order.internal.client.InventoryPort;
@@ -49,6 +50,7 @@ import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.order.internal.repository.SalesOrderLineRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
+import com.positivity.order.internal.security.OrderPermissions;
 import com.positivity.order.internal.service.model.AddItemCommand;
 import com.positivity.order.internal.service.model.CheckoutResult;
 import com.positivity.order.internal.service.model.CreateCartCommand;
@@ -57,6 +59,9 @@ import com.positivity.order.internal.service.model.OrderDiscountCommand;
 import com.positivity.order.internal.service.model.SalesOrderLineSummary;
 import com.positivity.order.internal.service.model.SalesOrderSummary;
 import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.security.common.LocationAncestorResolver;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.LocationScopeDeniedException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -67,6 +72,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -263,6 +269,36 @@ class SalesOrderCartLifecycleTest {
         return new CreateCartCommand(CLERK, TERMINAL, null, null, LOCATION_ID, null, null, null, null, null);
     }
 
+    /** A second shop, outside the scoped caller's reach (ADR-0061, #1872). */
+    private static final UUID OTHER_LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-00000000bbbb");
+
+    /** The node a scoped caller is assigned: a region above {@link #LOCATION_ID}. */
+    private static final UUID REGION_NODE = UUID.fromString("00000000-0000-0000-0000-000000000a00");
+
+    /** Replica stand-in: LOCATION_ID sits under REGION_NODE on the OTHER dimension; OTHER_LOCATION_ID does not. */
+    private static final LocationAncestorResolver RESOLVER = id -> {
+        if (LOCATION_ID.equals(id)) {
+            return new AncestorSets(Set.of(LOCATION_ID), Set.of(LOCATION_ID, REGION_NODE));
+        }
+        if (OTHER_LOCATION_ID.equals(id)) {
+            return new AncestorSets(Set.of(OTHER_LOCATION_ID), Set.of(OTHER_LOCATION_ID));
+        }
+        return AncestorSets.EMPTY;
+    };
+
+    /** Installs a caller whose order:order:create is scoped (OTHER dimension) to the given nodes. */
+    private static void authenticateCreateScopedTo(UUID... nodes) {
+        UsernamePasswordAuthenticationToken token = new UsernamePasswordAuthenticationToken(
+                "jane.smith", "n/a", List.of(new SimpleGrantedAuthority(OrderPermissions.ORDER_CREATE)));
+        token.setDetails(Map.of(
+                GatewaySecurityConstants.DETAIL_USERNAME,
+                "jane.smith",
+                GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
+                LocationScope.of(
+                        Set.of(), Set.of(OrderPermissions.ORDER_CREATE), Optional.of(Set.of(nodes)), true, RESOLVER)));
+        SecurityContextHolder.getContext().setAuthentication(token);
+    }
+
     private SalesOrder order(SalesOrderStatus status) {
         SalesOrder order = SalesOrder.builder()
                 .orderId(ORDER_ID)
@@ -308,6 +344,114 @@ class SalesOrderCartLifecycleTest {
         ArgumentCaptor<SalesOrder> captor = ArgumentCaptor.forClass(SalesOrder.class);
         verify(salesOrderRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
         return captor.getValue();
+    }
+
+    @Nested
+    @DisplayName("createCart location scope (ADR-0061 §3, #1872)")
+    class CreateCartLocationScope {
+
+        @Test
+        @DisplayName("requested location in reach: the cart is created there")
+        void inReach_creates() {
+            authenticateCreateScopedTo(REGION_NODE);
+
+            CreateCartResult result = service.createCart(createCommand());
+
+            assertThat(result.replay()).isFalse();
+            assertThat(savedOrder().getLocationId()).isEqualTo(LOCATION_ID);
+        }
+
+        @Test
+        @DisplayName("requested location out of reach: LocationScopeDeniedException before anything is saved")
+        void outOfReach_deniesBeforeSave() {
+            authenticateCreateScopedTo(REGION_NODE);
+
+            assertThatThrownBy(() -> service.createCart(new CreateCartCommand(
+                            CLERK, TERMINAL, null, null, OTHER_LOCATION_ID, null, null, null, null, null)))
+                    .isInstanceOf(LocationScopeDeniedException.class)
+                    .asInstanceOf(
+                            org.assertj.core.api.InstanceOfAssertFactories.type(LocationScopeDeniedException.class))
+                    .satisfies(denied -> {
+                        assertThat(denied.permission()).isEqualTo(OrderPermissions.ORDER_CREATE);
+                        assertThat(denied.locationId()).isEqualTo(OTHER_LOCATION_ID.toString());
+                    });
+            verify(salesOrderRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName(
+                "omitted locationId supplied by an open session at a shop out of reach is denied — no bypass by omission")
+        void sessionSuppliedLocationOutOfReach_denies() {
+            authenticateCreateScopedTo(REGION_NODE);
+            RegisterSession session = RegisterSession.builder()
+                    .sessionId(UUID.fromString("00000000-0000-0000-0000-0000000000ee"))
+                    .terminalId(TERMINAL)
+                    .locationId(OTHER_LOCATION_ID)
+                    .status(RegisterSessionStatus.OPEN)
+                    .build();
+            when(registerSessionRepository.findFirstByTerminalIdAndStatus(TERMINAL, RegisterSessionStatus.OPEN))
+                    .thenReturn(Optional.of(session));
+
+            assertThatThrownBy(() -> service.createCart(
+                            new CreateCartCommand(CLERK, TERMINAL, null, null, null, null, null, null, null, null)))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+            verify(salesOrderRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("omitted locationId supplied by an open session in reach creates the cart there")
+        void sessionSuppliedLocationInReach_creates() {
+            authenticateCreateScopedTo(REGION_NODE);
+            RegisterSession session = RegisterSession.builder()
+                    .sessionId(UUID.fromString("00000000-0000-0000-0000-0000000000ee"))
+                    .terminalId(TERMINAL)
+                    .locationId(LOCATION_ID)
+                    .status(RegisterSessionStatus.OPEN)
+                    .build();
+            when(registerSessionRepository.findFirstByTerminalIdAndStatus(TERMINAL, RegisterSessionStatus.OPEN))
+                    .thenReturn(Optional.of(session));
+
+            CreateCartResult result = service.createCart(
+                    new CreateCartCommand(CLERK, TERMINAL, null, null, null, null, null, null, null, null));
+
+            assertThat(result.replay()).isFalse();
+            assertThat(savedOrder().getLocationId()).isEqualTo(LOCATION_ID);
+        }
+
+        @Test
+        @DisplayName("no resolvable location is still the 400-class validation error, not a 403, for a scoped caller")
+        void unresolvableLocation_isValidationErrorFirst() {
+            authenticateCreateScopedTo(REGION_NODE);
+
+            assertThatThrownBy(() -> service.createCart(
+                            new CreateCartCommand(CLERK, TERMINAL, null, null, null, null, null, null, null, null)))
+                    .isInstanceOf(SalesOrderRequestValidationException.class);
+        }
+
+        @Test
+        @DisplayName("an Idempotency-Key replay of a cart at a shop out of reach is denied too")
+        void replayOutOfReach_denies() {
+            authenticateCreateScopedTo(REGION_NODE);
+            SalesOrder existing = order(SalesOrderStatus.DRAFT);
+            existing.setLocationId(OTHER_LOCATION_ID);
+            existing.setCreationIdempotencyKey("key-1");
+            when(salesOrderRepository.findByCreationIdempotencyKey("key-1")).thenReturn(Optional.of(existing));
+
+            assertThatThrownBy(() -> service.createCart(new CreateCartCommand(
+                            CLERK, TERMINAL, null, null, OTHER_LOCATION_ID, null, null, "key-1", null, null)))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+        }
+
+        @Test
+        @DisplayName("pre-rollout token (no loc_* claims) creates at any location as before")
+        void unscopedCaller_isUnchanged() {
+            // The class-level caller carries no LocationScope detail: ADR-0061 treats it as unscoped.
+            CreateCartResult result = service.createCart(new CreateCartCommand(
+                    CLERK, TERMINAL, null, null, OTHER_LOCATION_ID, null, null, null, null, null));
+
+            assertThat(result.replay()).isFalse();
+            assertThat(savedOrder().getLocationId()).isEqualTo(OTHER_LOCATION_ID);
+        }
     }
 
     @Nested

@@ -67,7 +67,10 @@ public class InventoryLedgerController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "User lacks required ledger view authority",
+            description = "FORBIDDEN when the caller lacks inventory:ledger:view;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the requested locationId filter (ADR-0061);"
+                    + " without a filter the result is narrowed to the caller's reach instead",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<LedgerPage<InventoryLedgerEntryDto>> listLedgerEntries(
             @RequestParam(required = false) String productSku,
@@ -126,7 +129,9 @@ public class InventoryLedgerController {
                             schema = @Schema(implementation = InventoryLedgerEntryDto.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "User lacks required ledger view authority",
+            description = "FORBIDDEN when the caller lacks inventory:ledger:view;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the entry's locationId (ADR-0061)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
