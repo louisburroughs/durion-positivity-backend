@@ -565,7 +565,7 @@ paths:
 
         Emits a LOCATION_LOCATION_DELETE event; the row is hard-deleted, not soft-deleted.
 
-        Returns 204 on success and 404 when the location does not exist.
+        Returns 204 on success, 404 when the location does not exist, and 403 LOCATION_SCOPE_DENIED when it exists but a location-scoped location:write grant does not cover it (ADR-0061).
 
         '
       operationId: deleteLocation
@@ -581,6 +581,12 @@ paths:
       responses:
         '204':
           description: Location deleted successfully.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds location:write but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
         '404':
           description: Location not found.
       security:
@@ -647,7 +653,7 @@ paths:
 
         Emits a LOCATION_PATCH event and publishes a location fact for replica consumers.
 
-        Returns 404 when the location does not exist, 409 when the new name is taken, and 422 when a supplied timezone or operating-hours entry is invalid.
+        Returns 404 when the location does not exist, 403 LOCATION_SCOPE_DENIED when it exists but a location-scoped location:write grant does not cover it (ADR-0061), 409 when the new name is taken, and 422 when a supplied timezone or operating-hours entry is invalid.
 
         '
       operationId: patchLocation
@@ -679,6 +685,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/LocationResponseDTO'
           description: Location patched successfully.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds location:write but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:
@@ -716,7 +728,7 @@ paths:
 
         Emits a LOCATION_LOCATION_UPDATE event and publishes a location fact for replica consumers.
 
-        Returns 404 when the location does not exist, 409 when the name or code collides with another location, and 422 when the timezone or operating hours are invalid.
+        Returns 404 when the location does not exist, 403 LOCATION_SCOPE_DENIED when it exists but a location-scoped location:write grant does not cover it (ADR-0061), 409 when the name or code collides with another location, and 422 when the timezone or operating hours are invalid.
 
         '
       operationId: updateLocation
@@ -765,6 +777,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/LocationResponseDTO'
           description: Location updated successfully.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds location:write but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:
@@ -803,7 +821,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 404 when the location does not exist; an unrecognized status or bayType filter value fails the request rather than returning an empty page.
+        Returns 400 when locationId does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a location-scoped location:bay:read grant does not cover locationId (ADR-0061), and 404 when the location does not exist; an unrecognized status or bayType filter value fails the request rather than returning an empty page.
 
         '
       operationId: listBays
@@ -845,6 +863,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/PageBayResponse'
           description: Bays retrieved successfully.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageBayResponse'
+          description: locationId is not a UUID.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks location:bay:read, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:
@@ -870,7 +900,7 @@ paths:
 
         Emits a LOCATION_BAY_CREATE event; no other records are touched.
 
-        Returns 404 when the location does not exist and 409 when the bay name is already taken at that location.
+        Returns 400 when locationId does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when the location does not exist and 409 when the bay name is already taken at that location.
 
         '
       operationId: createBay
@@ -909,6 +939,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/BayResponse'
           description: Bay created successfully.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BayResponse'
+          description: locationId is not a UUID, or the payload is invalid.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks location:bay:manage, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:
@@ -941,7 +983,7 @@ paths:
 
         Emits a LOCATION_BAY_DELETE event; the row is hard-deleted, not soft-deleted.
 
-        Returns 204 on success and 404 when the location or bay does not exist.
+        Returns 204 on success, 400 when either id does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a location-scoped location:bay:manage grant does not cover locationId (ADR-0061), and 404 when the location or bay does not exist.
 
         '
       operationId: deleteBay
@@ -963,8 +1005,14 @@ paths:
       responses:
         '204':
           description: Bay deleted successfully.
+        '400':
+          description: locationId or bayId is not a UUID.
         '403':
-          description: Caller lacks location:bay:manage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks location:bay:manage, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
         '404':
           description: Location or bay not found.
         '409':
@@ -988,7 +1036,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 404 when the location does not exist or the bay is not found under that location.
+        Returns 400 when either id does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a location-scoped location:bay:read grant does not cover locationId (ADR-0061), and 404 when the location does not exist or the bay is not found under that location.
 
         '
       operationId: getBay
@@ -1012,6 +1060,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/BayResponse'
           description: Bay retrieved successfully.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BayResponse'
+          description: locationId or bayId is not a UUID.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks location:bay:read, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:
@@ -1037,7 +1097,7 @@ paths:
 
         Emits a LOCATION_BAY_UPDATE event; no other records are touched.
 
-        Returns 404 when the location or bay does not exist and 409 when the new name is already taken at that location.
+        Returns 400 when either id does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when a location-scoped location:bay:manage grant does not cover locationId (ADR-0061), 404 when the location or bay does not exist and 409 when the new name is already taken at that location.
 
         '
       operationId: patchBay
@@ -1071,12 +1131,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/BayResponse'
           description: Bay updated successfully.
-        '403':
+        '400':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/BayResponse'
-          description: Caller lacks location:bay:manage.
+          description: locationId or bayId is not a UUID.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks location:bay:manage, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:
@@ -1165,7 +1231,7 @@ paths:
 
         Emits a LOCATION_SITE_DEFAULTS_GET event; no state changes.
 
-        Returns 404 when the site does not exist.
+        Returns 404 when the site does not exist and 403 LOCATION_SCOPE_DENIED when a location-scoped location:read grant does not cover locationId (ADR-0061).
 
         '
       operationId: getSiteDefaults
@@ -1188,8 +1254,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SiteDefaultsResponse'
-          description: Forbidden
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks location:read, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:
@@ -1215,7 +1281,7 @@ paths:
 
         Emits a LOCATION_SITE_DEFAULTS_PUT event and republishes the location fact carrying the new defaults.
 
-        Returns 404 when the site does not exist, 400 when either id is missing or both ids are the same, and 422 when a referenced storage location does not belong to the site.
+        Returns 404 when the site does not exist, 403 LOCATION_SCOPE_DENIED when a location-scoped location:write grant does not cover locationId (ADR-0061), 400 when either id is missing or both ids are the same, and 422 when a referenced storage location does not belong to the site.
 
         '
       operationId: configureSiteDefaults
@@ -1257,8 +1323,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SiteDefaultsResponse'
-          description: Forbidden
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks location:write, or holds it but its location scope does not cover locationId (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).
         '404':
           content:
             application/json:
@@ -2593,6 +2659,54 @@ paths:
       - location:travel-buffer-policy:manage
 components:
   schemas:
+    ApiError:
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+          type: string
+        correlationId:
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+          type: string
+        fieldErrors:
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
+          items:
+            $ref: '#/components/schemas/FieldError'
+          type: array
+        message:
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+          type: string
+        nextAction:
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+          type: string
+        referenceId:
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+          type: string
+        status:
+          description: HTTP status code
+          example: 404
+          format: int32
+          type: integer
+        supportAction:
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+          type: string
+        timestamp:
+          description: ISO 8601 UTC timestamp of the error
+          example: '2026-03-17T14:30:00.000Z'
+          type: string
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+      type: object
     BayBulkIngestRecord:
       description: One service bay to create at a location
       properties:
@@ -3061,6 +3175,21 @@ components:
           type: integer
       required:
       - id
+      type: object
+    FieldError:
+      description: Validation error for a specific request field
+      properties:
+        field:
+          description: Field name
+          example: quantity
+          type: string
+        message:
+          description: Validation failure message
+          example: must be greater than 0
+          type: string
+      required:
+      - field
+      - message
       type: object
     HolidayClosureRequest:
       description: A single holiday closure entry for a location

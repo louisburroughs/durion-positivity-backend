@@ -1,0 +1,59 @@
+# Location-scope decisions for pos-location (ADR-0061, #1872).
+# Every operation that takes a caller-supplied locationId must appear here;
+# scripts/audit-rbac.py --check fails on a missing or stale entry.
+decisions:
+  - operation: LocationController.updateLocation
+    shape: gate
+    permission: location:write
+    reason: locationId names the location being replaced; a missing location keeps its 404 first, then a scoped caller is denied outside reach.
+  - operation: LocationController.patchLocation
+    shape: gate
+    permission: location:write
+    reason: locationId names the location being patched; a missing location keeps its 404 first, then a scoped caller is denied outside reach.
+  - operation: LocationController.deleteLocation
+    shape: gate
+    permission: location:write
+    reason: locationId names the location being hard-deleted; a missing location keeps its 404 first, then a scoped caller is denied outside reach.
+  - operation: LocationController.getLocationById
+    shape: unscoped
+    reason: Read of the location tree. Hierarchy resolution and navigation need ancestors and siblings of nodes outside a caller's reach, and every module replicates this data anyway; scoping tree reads would break resolution without hiding anything not already replicated (ADR-0061, #1872).
+  - operation: LocationController.validateLocation
+    shape: unscoped
+    reason: Read of the location tree. Hierarchy resolution and navigation need ancestors and siblings of nodes outside a caller's reach, and every module replicates this data anyway; scoping tree reads would break resolution without hiding anything not already replicated (ADR-0061, #1872).
+  - operation: LocationController.getAllChildren
+    shape: unscoped
+    reason: Read of the location tree. Hierarchy resolution and navigation need ancestors and siblings of nodes outside a caller's reach, and every module replicates this data anyway; scoping tree reads would break resolution without hiding anything not already replicated (ADR-0061, #1872).
+  - operation: LocationController.getDescendants
+    shape: unscoped
+    reason: Read of the location tree. Hierarchy resolution and navigation need ancestors and siblings of nodes outside a caller's reach, and every module replicates this data anyway; scoping tree reads would break resolution without hiding anything not already replicated (ADR-0061, #1872).
+  - operation: LocationController.getResponsiblePerson
+    shape: unscoped
+    reason: Read of the location tree. Hierarchy resolution and navigation need ancestors and siblings of nodes outside a caller's reach, and every module replicates this data anyway; scoping tree reads would break resolution without hiding anything not already replicated (ADR-0061, #1872).
+  - operation: BayController.listBays
+    shape: gate
+    permission: location:bay:read
+    reason: locationId names the site whose bays are listed; per-site operational data, denied outside the caller's reach before the service is called.
+  - operation: BayController.getBay
+    shape: gate
+    permission: location:bay:read
+    reason: locationId names the site the bay belongs to; the same gate as listBays so the by-id detail cannot bypass the list guard.
+  - operation: BayController.createBay
+    shape: gate
+    permission: location:bay:manage
+    reason: locationId names the site the bay is created at; denied outside the caller's reach before the service is called.
+  - operation: BayController.patchBay
+    shape: gate
+    permission: location:bay:manage
+    reason: locationId names the site the bay belongs to; denied outside the caller's reach before the service is called.
+  - operation: BayController.deleteBay
+    shape: gate
+    permission: location:bay:manage
+    reason: locationId names the site the bay belongs to; denied outside the caller's reach before the service is called.
+  - operation: SiteDefaultsController.configureDefaults
+    shape: gate
+    permission: location:write
+    reason: locationId names the site whose staging and quarantine defaults are replaced; denied outside the caller's reach before the service is called.
+  - operation: SiteDefaultsController.getDefaults
+    shape: gate
+    permission: location:read
+    reason: locationId names the site whose defaults are read; per-site operational data, denied outside the caller's reach before the service is called.

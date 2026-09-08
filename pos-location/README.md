@@ -40,6 +40,27 @@ Location hierarchy and physical space management service for the Durion Positivi
 - `PATCH /v1/locations/{siteId}/storage-locations/{storageLocationId}` — patch a storage location
 - `GET /v1/mobile-units:eligible` — eligible mobile units for scheduling
 
+## Location scope (ADR-0061, #1872)
+
+A caller whose permission is location-scoped (gateway headers `X-Loc-Fin-Bits`, `X-Loc-Oth-Bits`,
+`X-Loc-Scope`) is checked against the location a request names, on top of `@PreAuthorize`. Tokens
+without the claims behave exactly as before. The per-operation decisions live in
+[`location-scope.yaml`](location-scope.yaml), which CI reads.
+
+- **Gated** (`403` with `ApiError.code = LOCATION_SCOPE_DENIED`, see `docs/ERROR_ENVELOPE.md`):
+  `PUT|PATCH|DELETE /v1/locations/{locationId}` on `location:write` (a missing location still
+  answers `404` first); every `/v1/locations/{locationId}/bays` operation on `location:bay:read` or
+  `location:bay:manage`; `/v1/locations/{locationId}/defaults` on `location:write` / `location:read`.
+  Bay routes now answer `400` for a `locationId` or `bayId` that is not a UUID instead of deriving an id.
+- **Unscoped** reads of the tree itself: `getLocationById`, `validateLocation`, `listLocationChildren`,
+  `listLocationDescendants`, `getLocationResponsiblePerson`. Hierarchy resolution and navigation need
+  ancestors and siblings of nodes outside a caller's reach, and every module replicates this data anyway.
+
+pos-location owns the tree, so it keeps no replica: `LocationHierarchyService` is the module's
+`LocationAncestorResolver` and walks its own `location_parent` edges per dimension (`FINANCIAL`, and
+`OTHER` = the seven remaining `ParentType`s) with the shared `LocationAncestry` closure, inclusive of
+self and bounded by `MAX_DEPTH`. An unknown id answers empty sets, and the scope check then denies.
+
 ## Repair capability on locations (#1657)
 
 `GET /v1/locations` returns `hasRepairCapability`, `activeBayCount` and `activeMobileUnitCount` on every

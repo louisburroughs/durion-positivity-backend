@@ -5,6 +5,8 @@ import com.positivity.location.internal.dto.SiteDefaultsRequest;
 import com.positivity.location.internal.dto.SiteDefaultsResponse;
 import com.positivity.location.internal.security.LocationPermissions;
 import com.positivity.location.internal.service.SiteDefaultsService;
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -35,6 +37,19 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Site Defaults API", description = "Operations for managing location site default settings")
 public class SiteDefaultsController {
 
+    /**
+     * Documented on both operations, which gate on the caller's location scope (ADR-0061, #1872).
+     * The body is the {@code ApiError} envelope rendered by pos-security-common's
+     * highest-precedence advice, not this module's ProblemDetail.
+     */
+    static final String WRITE_SCOPE_DENIED_DESCRIPTION =
+            "Caller lacks location:write, or holds it but its location scope does not cover locationId"
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).";
+
+    static final String READ_SCOPE_DENIED_DESCRIPTION =
+            "Caller lacks location:read, or holds it but its location scope does not cover locationId"
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md).";
+
     private final SiteDefaultsService siteDefaultsService;
 
     @PutMapping
@@ -52,8 +67,9 @@ public class SiteDefaultsController {
                     defaultStagingLocationId and defaultQuarantineLocationId; the two ids must differ.
                     Emits a LOCATION_SITE_DEFAULTS_PUT event and republishes the location fact carrying the new \
                     defaults.
-                    Returns 404 when the site does not exist, 400 when either id is missing or both ids are the \
-                    same, and 422 when a referenced storage location does not belong to the site.
+                    Returns 404 when the site does not exist, 403 LOCATION_SCOPE_DENIED when a location-scoped \
+                    location:write grant does not cover locationId (ADR-0061), 400 when either id is missing or \
+                    both ids are the same, and 422 when a referenced storage location does not belong to the site.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -63,7 +79,10 @@ public class SiteDefaultsController {
                             mediaType = "application/json",
                             schema = @Schema(implementation = SiteDefaultsResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid request payload")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "403",
+            description = WRITE_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Location not found")
     @ApiResponse(responseCode = "422", description = "Default storage location does not belong to the site")
     @PreAuthorize("hasAuthority('" + LocationPermissions.WRITE + "')")
@@ -89,6 +108,8 @@ public class SiteDefaultsController {
                                                                     """)))
                     @RequestBody
                     SiteDefaultsRequest request) {
+        // Scope on the site the caller named (ADR-0061 §3); the service answers 404 for an unknown site.
+        SecurityContextHelper.locationScope().require(LocationPermissions.WRITE, locationId);
         return ResponseEntity.ok(siteDefaultsService.configureDefaults(locationId, request));
     }
 
@@ -100,7 +121,8 @@ public class SiteDefaultsController {
                     Preconditions: the site must exist; both ids are null when defaults were never configured.
                     Required inputs: locationId (UUID) as a path parameter.
                     Emits a LOCATION_SITE_DEFAULTS_GET event; no state changes.
-                    Returns 404 when the site does not exist.
+                    Returns 404 when the site does not exist and 403 LOCATION_SCOPE_DENIED when a \
+                    location-scoped location:read grant does not cover locationId (ADR-0061).
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -109,7 +131,10 @@ public class SiteDefaultsController {
                     @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = SiteDefaultsResponse.class)))
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "403",
+            description = READ_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Location not found")
     @PreAuthorize("hasAuthority('" + LocationPermissions.READ + "')")
     @EmitEvent(id = "LOCATION_SITE_DEFAULTS_GET", apiVersion = "1")
@@ -118,6 +143,8 @@ public class SiteDefaultsController {
             scopes = {"location:read"})
     public ResponseEntity<SiteDefaultsResponse> getDefaults(
             @Parameter(description = "ID of the location", required = true) @PathVariable UUID locationId) {
+        // Scope on the site the caller named (ADR-0061 §3); the service answers 404 for an unknown site.
+        SecurityContextHelper.locationScope().require(LocationPermissions.READ, locationId);
         return ResponseEntity.ok(siteDefaultsService.getDefaults(locationId));
     }
 }
