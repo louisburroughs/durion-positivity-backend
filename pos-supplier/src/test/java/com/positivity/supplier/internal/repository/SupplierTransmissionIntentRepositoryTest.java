@@ -149,6 +149,13 @@ class SupplierTransmissionIntentRepositoryTest {
 
         private static final UUID OTHER_PROFILE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d");
 
+        /**
+         * Any placeholder compared against null, however Hibernate happens to lay the statement
+         * out: {@code DOTALL} so the run of whitespace can be a newline under formatted SQL, and
+         * case-insensitive because the keywords are the dialect's to capitalise, not ours.
+         */
+        private static final String UNTYPED_NULL_CHECK = "(?si).*\\?\\s*is\\s+null.*";
+
         private int sequence = 0;
 
         private SupplierTransmissionIntentEntity searchable(
@@ -310,7 +317,7 @@ class SupplierTransmissionIntentRepositoryTest {
 
             assertThat(CapturedSql.statements())
                     .isNotEmpty()
-                    .allSatisfy(sql -> assertThat(sql.replace(" ", "")).doesNotContain("?isnull"));
+                    .allSatisfy(sql -> assertThat(sql).doesNotMatch(UNTYPED_NULL_CHECK));
         }
     }
 
