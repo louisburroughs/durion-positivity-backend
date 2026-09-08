@@ -15,6 +15,7 @@ import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
 import com.positivity.workorder.internal.service.EstimateService;
 import com.positivity.workorder.internal.service.IdempotencyService;
+import com.positivity.workorder.internal.service.LocationHierarchyService;
 import com.positivity.workorder.internal.service.WorkorderService;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -78,6 +79,9 @@ class EstimateControllerErrorHandlingTest {
 
     @MockitoBean
     private IdempotencyService idempotencyService;
+
+    @MockitoBean
+    private LocationHierarchyService locationHierarchyService;
 
     @Test
     @WithMockUser(authorities = "workorder:estimate:approve")

@@ -2,12 +2,14 @@ package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.LocationScope.Reach;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.WorkorderStatusDetail;
 import com.positivity.workorder.internal.dto.WorkorderStatusView;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
+import com.positivity.workorder.internal.service.LocationHierarchyService;
 import com.positivity.workorder.internal.service.WipService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -16,6 +18,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +52,11 @@ import org.springframework.web.bind.annotation.RestController;
  * {@link LocationScope#require} answers "…at this location". A caller whose
  * {@code workorder:wip:view} grant is location-scoped can no longer read another shop's board by
  * changing the {@code locationId} query parameter, nor by addressing one of its workorders by id.
+ *
+ * <p>
+ * The cross-location board (#1872) is narrowed the same way: a holder of
+ * {@code workorder:wip:view_all_locations} whose grant is itself location-scoped sees every shop
+ * within that grant's reach rather than every shop there is; an unscoped holder is unchanged.
  */
 @Tag(name = "WIP Dashboard", description = "Endpoints for Work-In-Progress status visibility")
 @RestController
@@ -66,6 +75,7 @@ public class WipController {
                     + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
 
     private final WipService wipService;
+    private final LocationHierarchyService locationHierarchyService;
 
     @Operation(operationId = "listWipWorkorders", summary = "List Active WIP Workorders", description = """
                     Returns a page of workorders in active work-in-progress statuses (APPROVED, ASSIGNED, \
@@ -75,9 +85,10 @@ public class WipController {
                     mechanics, bays, and conflicts for one date, and use getWipDetail for a single workorder's \
                     status history.
                     Preconditions: multiLocation=true requires the caller to hold \
-                    workorder:wip:view_all_locations; otherwise results are scoped to the given location, and \
-                    a caller whose workorder:wip:view grant is location-scoped must have that location within \
-                    reach (ADR-0061).
+                    workorder:wip:view_all_locations, and when that grant is itself location-scoped the page \
+                    is narrowed to the shops within its reach (an empty reach is an empty page); otherwise \
+                    results are scoped to the given location, and a caller whose workorder:wip:view grant is \
+                    location-scoped must have that location within reach (ADR-0061).
                     Required inputs: locationId (UUID as a string) as a query parameter — ignored when \
                     multiLocation is true; multiLocation defaults to false and page size defaults to 25.
                     Emits a WORKORDER_WIP_LIST audit event; no workorder state changes — this is a read-only \
@@ -110,12 +121,18 @@ public class WipController {
             Authentication authentication) {
 
         if (multiLocation) {
-            // Widening is gated by a separate, deliberately rare permission. Its only holder today is
-            // ADMIN, seeded with reach ALL, so no scope refinement is applied here: a LOCATION-scoped
-            // holder of view_all_locations would bypass scope on this branch. That refinement is #1872.
+            // Widening is gated by a separate, deliberately rare permission.
             if (authentication.getAuthorities().stream()
                     .noneMatch(a -> WIP_VIEW_ALL_LOCATIONS.equals(a.getAuthority()))) {
                 throw new AccessDeniedException("Missing required permission: " + WIP_VIEW_ALL_LOCATIONS);
+            }
+            // #1872: a LOCATION-scoped holder of view_all_locations is narrowed to that grant's reach
+            // rather than shown every shop. An unscoped holder (ADMIN, reach ALL) keeps the full board.
+            Optional<Reach> reach = SecurityContextHelper.locationScope().reach(WIP_VIEW_ALL_LOCATIONS);
+            if (reach.isPresent()) {
+                Set<UUID> reachable = locationHierarchyService.reachableLocations(reach.get());
+                log.debug("WIP multi-location list narrowed to reach: shops={}", reachable.size());
+                return ResponseEntity.ok(wipService.getWipWorkordersAtShops(reachable, pageable));
             }
         } else {
             // Validate before the scope check so a malformed id is a 400 for every caller rather than

@@ -50,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -98,6 +99,18 @@ public class EstimateServiceImpl implements EstimateService {
     @Override
     public List<EstimateResponse> getAllEstimates() {
         return estimateRepository.findAll().stream()
+                .map(EstimateResponse::fromEntity)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<EstimateResponse> getEstimatesAtLocations(@NonNull Set<UUID> locationIds) {
+        if (locationIds.isEmpty()) {
+            // An empty reach is an empty list, never an unrestricted one — and never an `IN ()`.
+            return List.of();
+        }
+        return estimateRepository.findByLocationIdIn(locationIds).stream()
                 .map(EstimateResponse::fromEntity)
                 .toList();
     }

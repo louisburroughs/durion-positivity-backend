@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.OperationalContextOverrideRequest;
 import com.positivity.workorder.internal.dto.OperationalContextResponse;
 import com.positivity.workorder.internal.dto.StartWorkorderRequest;
@@ -9,6 +10,8 @@ import com.positivity.workorder.internal.dto.WorkorderStartResponse;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.WorkorderService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -28,6 +31,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Tag(name = "Operational Context", description = "Workorder execution context operations")
 public class OperationalContextController {
+
+    private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds workorder:operationalContext:override but its location scope does not cover the"
+                    + " requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
 
     private final WorkorderService workorderService;
 
@@ -68,16 +75,23 @@ public class OperationalContextController {
                     Use this tool when a manager must re-slot a workorder to a different bay, crew, or location \
                     prior to execution; do not use getOperationalContext, which only reads the current context.
                     Preconditions: the workorder must exist and work must not have started — once workStartedAt \
-                    is set the context is locked and overrides are rejected.
+                    is set the context is locked and overrides are rejected. A caller whose \
+                    workorder:operationalContext:override grant is location-scoped must have the body's \
+                    locationId within reach (ADR-0061); that check runs after the existence check.
                     Required inputs: workorderId (UUID) as a path parameter and a body with locationId (UUID, \
                     required); resourceType, assignedMechanics, assignedResources, and constraints are optional, \
                     an absent resourceType is applied as BAY, and constraints are echoed back but not persisted.
                     Emits a WORKORDER_OPERATIONAL_CONTEXT_OVERRIDE event and marks the workorder fact changed for \
                     downstream replication.
-                    Returns 404 when no workorder exists for the id, and 409 when work has already started and \
-                    the context is locked.
+                    Returns 404 when no workorder exists for the id, 403 LOCATION_SCOPE_DENIED when the \
+                    caller's location scope does not cover locationId, and 409 when work has already started \
+                    and the context is locked.
                     """)
     @ApiResponse(responseCode = "200", description = "Override applied")
+    @ApiResponse(
+            responseCode = "403",
+            description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "404", description = "Workorder not found")
     @ApiResponse(responseCode = "409", description = "Context locked (work started)")
     public ResponseEntity<OperationalContextResponse> overrideOperationalContext(

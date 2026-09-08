@@ -3,7 +3,10 @@ package com.positivity.workorder.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.workorder.internal.dto.WorkorderStatusDetail;
@@ -24,6 +27,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -155,6 +159,40 @@ class WipServiceImplTest {
                 .when(vehicleReferenceService.resolve(any(), any(UUID.class)))
                 .thenAnswer(invocation ->
                         new VehicleReferenceService.VehicleReference("vehicle-" + invocation.getArgument(1), null));
+    }
+
+    // -------------------------------------------------------------------------
+    // #1872 — multi-location board narrowed to a set of shops
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getWipWorkordersAtShops: queries exactly the given shops with the active statuses")
+    void getWipWorkordersAtShops_queriesTheGivenShops() {
+        Set<UUID> shops = Set.of(UUID.fromString(LOCATION_1), UUID.fromString(LOCATION_A));
+        Pageable pageable = PageRequest.of(0, 20);
+        when(workorderRepository.findByShopIdInAndStatusIn(eq(shops), anyCollection(), any(Pageable.class)))
+                .thenAnswer(invocation -> toPage(buildSingleLocationWorkorders(UUID.fromString(LOCATION_1)), pageable));
+
+        Page<WorkorderStatusView> result = service.getWipWorkordersAtShops(shops, pageable);
+
+        assertThat(result.getContent()).isNotEmpty().allMatch(v -> LOCATION_1.equals(v.getLocationId()));
+        assertThat(result.getContent())
+                .noneMatch(
+                        v -> v.getStatus() == WorkorderStatus.COMPLETED || v.getStatus() == WorkorderStatus.CANCELLED);
+        verify(workorderRepository, never()).findByStatusIn(anyCollection(), any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("getWipWorkordersAtShops: an empty reach is an empty page and never reaches the database")
+    void getWipWorkordersAtShops_emptyReachIsEmptyPage() {
+        Pageable pageable = PageRequest.of(0, 20);
+
+        Page<WorkorderStatusView> result = service.getWipWorkordersAtShops(Set.of(), pageable);
+
+        assertThat(result.getContent()).isEmpty();
+        assertThat(result.getTotalElements()).isZero();
+        verify(workorderRepository, never()).findByShopIdInAndStatusIn(anyCollection(), anyCollection(), any());
+        verify(workorderRepository, never()).findByStatusIn(anyCollection(), any(Pageable.class));
     }
 
     // -------------------------------------------------------------------------

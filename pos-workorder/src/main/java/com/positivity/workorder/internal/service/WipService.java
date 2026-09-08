@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.service;
 
 import com.positivity.workorder.internal.dto.WorkorderStatusDetail;
 import com.positivity.workorder.internal.dto.WorkorderStatusView;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
@@ -29,6 +30,18 @@ public interface WipService {
      */
     Page<WorkorderStatusView> getWipWorkorders(
             @NonNull String locationId, boolean multiLocation, @NonNull Pageable pageable);
+
+    /**
+     * The cross-location WIP page restricted to a set of shops — the {@code multiLocation=true}
+     * board for a caller whose {@code workorder:wip:view_all_locations} grant is location-scoped
+     * (ADR-0061 §3, #1872). The controller expands the caller's reach to this set; the service
+     * only queries it.
+     *
+     * @param shopIds the shops the caller may see; an empty set answers an empty page
+     * @param pageable page request
+     * @return paginated WIP workorders at those shops, enriched like {@link #getWipWorkorders}
+     */
+    Page<WorkorderStatusView> getWipWorkordersAtShops(@NonNull Set<UUID> shopIds, @NonNull Pageable pageable);
 
     /**
      * Return the full WIP detail for a single workorder.

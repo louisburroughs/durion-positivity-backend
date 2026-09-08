@@ -52,6 +52,21 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
     @NonNull
     Page<Workorder> findByStatusIn(@NonNull Collection<WorkorderStatus> statuses, @NonNull Pageable pageable);
 
+    /**
+     * The multi-location WIP page narrowed to a caller's location reach (ADR-0061 §3, #1872).
+     *
+     * @param shopIds the shops the caller may see; never empty — the service answers an empty
+     *     page for an empty reach rather than handing {@code IN ()} to the database
+     * @param statuses the active WIP statuses
+     * @param pageable page request
+     * @return the page of workorders at those shops
+     */
+    @NonNull
+    Page<Workorder> findByShopIdInAndStatusIn(
+            @NonNull Collection<UUID> shopIds,
+            @NonNull Collection<WorkorderStatus> statuses,
+            @NonNull Pageable pageable);
+
     /** Projection row for {@link #countGroupedByStatus(Collection)} — one status and its count. */
     interface StatusCount {
         WorkorderStatus getStatus();

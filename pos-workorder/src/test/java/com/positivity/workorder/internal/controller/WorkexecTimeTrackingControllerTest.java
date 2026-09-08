@@ -17,6 +17,7 @@ import com.positivity.workorder.internal.dto.WorkexecTimerEntryResponse;
 import com.positivity.workorder.internal.dto.WorkexecTimerStartRequest;
 import com.positivity.workorder.internal.dto.WorkexecTimerStopResponse;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
+import com.positivity.workorder.internal.service.LocationHierarchyService;
 import com.positivity.workorder.internal.service.WorkexecTimeTrackingService;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -61,6 +62,9 @@ class WorkexecTimeTrackingControllerTest {
 
     @Mock
     private WorkexecTimeTrackingService service;
+
+    @Mock
+    private LocationHierarchyService locationHierarchyService;
 
     @InjectMocks
     private WorkexecTimeTrackingController controller;

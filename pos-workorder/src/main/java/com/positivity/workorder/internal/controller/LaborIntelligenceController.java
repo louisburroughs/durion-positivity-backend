@@ -1,10 +1,14 @@
 package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.LocationScope.Reach;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.LaborIntelligenceRow;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import com.positivity.workorder.internal.service.LaborIntelligenceService;
+import com.positivity.workorder.internal.service.LocationHierarchyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -14,6 +18,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Min;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -41,7 +47,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/workorders/labor-intelligence")
 public class LaborIntelligenceController {
 
+    private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds workorder:labor_intelligence:view but its location scope does not cover the requested"
+                    + " location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+
     private final LaborIntelligenceService laborIntelligenceService;
+    private final LocationHierarchyService locationHierarchyService;
 
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + WorkorderPermissions.LABOR_INTELLIGENCE_VIEW + "')")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -66,10 +77,13 @@ public class LaborIntelligenceController {
             because a split line says nothing about either one's speed; and results are not grouped by vehicle \
             class, since pos-workorder holds VIN, plate and odometer but no make or model.
             Required inputs: none — operationCode, locationId and minSamples are all optional, and minSamples \
-            may raise the suggestion threshold but never lower it below the configured floor.
+            may raise the suggestion threshold but never lower it below the configured floor. A caller whose \
+            workorder:labor_intelligence:view grant is location-scoped must have a supplied locationId within \
+            reach, and without one sees only the shops within reach (ADR-0061).
             Emits a WORKORDER_LABOR_INTELLIGENCE_LIST event; no state changes.
-            Returns 200 with one row per operation and shop, and an empty list when no finished line yet \
-            carries both a baseline and clocked time.
+            Returns 200 with one row per operation and shop, an empty list when no finished line yet \
+            carries both a baseline and clocked time, and 403 LOCATION_SCOPE_DENIED when the caller's \
+            location scope does not cover the supplied locationId.
             """)
     @ApiResponse(
             responseCode = "200",
@@ -84,7 +98,7 @@ public class LaborIntelligenceController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "Insufficient permissions.",
+            description = "Insufficient permissions (ApiError.code FORBIDDEN), or " + LOCATION_SCOPE_DENIED_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<LaborIntelligenceRow>> listLaborIntelligence(
             @Parameter(description = "Narrow to one Durion operation code", example = "TIRE-ROTATION")
@@ -97,6 +111,26 @@ public class LaborIntelligenceController {
                     @RequestParam(required = false)
                     @Min(value = 1, message = "minSamples must be at least 1")
                     Integer minSamples) {
-        return ResponseEntity.ok(laborIntelligenceService.operations(operationCode, locationId, minSamples));
+        // ADR-0061 §3 (#1872): locationId is an optional filter, so this is the narrow shape. A
+        // supplied shop is gated; an absent one restricts a scoped caller to their reach and leaves
+        // an unscoped caller (including ROLE_ADMIN without the permission) unrestricted.
+        LocationScope scope = SecurityContextHelper.locationScope();
+        Set<UUID> locationIds;
+        if (locationId != null) {
+            scope.require(WorkorderPermissions.LABOR_INTELLIGENCE_VIEW, locationId);
+            locationIds = Set.of(locationId);
+        } else {
+            Optional<Reach> reach = scope.reach(WorkorderPermissions.LABOR_INTELLIGENCE_VIEW);
+            if (reach.isEmpty()) {
+                locationIds = null;
+            } else {
+                // An empty reach is an empty report, never an unrestricted one.
+                locationIds = locationHierarchyService.reachableLocations(reach.get());
+                if (locationIds.isEmpty()) {
+                    return ResponseEntity.ok(List.of());
+                }
+            }
+        }
+        return ResponseEntity.ok(laborIntelligenceService.operations(operationCode, locationIds, minSamples));
     }
 }

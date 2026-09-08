@@ -51,6 +51,13 @@ public interface EstimateRepository extends JpaRepository<Estimate, UUID> {
 
     List<Estimate> findByLocationId(UUID locationId);
 
+    /**
+     * The estimate book narrowed to a caller's location reach (ADR-0061 §3, #1872). Never called
+     * with an empty collection — the service answers an empty list for an empty reach rather than
+     * handing {@code IN ()} to the database.
+     */
+    List<Estimate> findByLocationIdIn(Collection<UUID> locationIds);
+
     List<Estimate> findByStatus(EstimateStatus status);
 
     boolean existsByLocationIdAndEstimateNumber(UUID locationId, String estimateNumber);

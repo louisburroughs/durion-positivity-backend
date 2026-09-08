@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,6 +15,7 @@ import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.security.common.LocationAncestorResolver;
 import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.LocationScope.Reach;
 import com.positivity.security.common.LocationScopeAutoConfiguration;
 import com.positivity.security.common.LocationScopeDeniedException;
 import com.positivity.workorder.internal.dto.WorkorderStatusDetail;
@@ -21,6 +23,7 @@ import com.positivity.workorder.internal.dto.WorkorderStatusView;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
+import com.positivity.workorder.internal.service.LocationHierarchyService;
 import com.positivity.workorder.internal.service.WipService;
 import java.time.Clock;
 import java.time.Instant;
@@ -52,7 +55,8 @@ import org.springframework.test.web.servlet.MockMvc;
 /**
  * Controller-boundary proof for #1871: {@code GET /v1/workexec/wip} and {@code GET
  * /v1/workexec/wip/{workorderId}} apply the caller's location scope (ADR-0061 §3) on top of
- * {@code workorder:wip:view}.
+ * {@code workorder:wip:view}; and for #1872: {@code multiLocation=true} narrows a LOCATION-scoped
+ * holder of {@code workorder:wip:view_all_locations} to that grant's reach.
  *
  * <p>The {@link LocationScope} is injected through the authentication details map exactly where
  * {@code GatewayAuthoritiesFilter} puts it, with a map-backed {@link LocationAncestorResolver}
@@ -98,6 +102,9 @@ class WipControllerTest {
     @MockitoBean
     private WipService wipService;
 
+    @MockitoBean
+    private LocationHierarchyService locationHierarchyService;
+
     @AfterEach
     void clearCaller() {
         TestSecurityContextHolder.clearContext();
@@ -142,8 +149,23 @@ class WipControllerTest {
         return caller(List.of(WorkorderPermissions.WIP_VIEW), null);
     }
 
-    /** A scoped caller who also holds the widening permission (documents the #1872 gap). */
-    private static Authentication scopedTechnicianWithViewAll() {
+    /**
+     * A caller who holds the widening permission but whose {@code view_all_locations} grant is
+     * itself OTHER-scoped to {@link #REGION_NODE} (#1872).
+     */
+    private static Authentication scopedTechnicianWithScopedViewAll() {
+        return caller(
+                List.of(WorkorderPermissions.WIP_VIEW, WIP_VIEW_ALL_LOCATIONS),
+                LocationScope.of(
+                        Set.of(),
+                        Set.of(WorkorderPermissions.WIP_VIEW, WIP_VIEW_ALL_LOCATIONS),
+                        Optional.of(Set.of(REGION_NODE)),
+                        true,
+                        RESOLVER));
+    }
+
+    /** A caller whose {@code view_all_locations} grant is global even though other grants are scoped. */
+    private static Authentication scopedTechnicianWithGlobalViewAll() {
         return caller(
                 List.of(WorkorderPermissions.WIP_VIEW, WIP_VIEW_ALL_LOCATIONS),
                 LocationScope.of(
@@ -152,6 +174,13 @@ class WipControllerTest {
                         Optional.of(Set.of(REGION_NODE)),
                         true,
                         RESOLVER));
+    }
+
+    /** A widening holder whose token carries the bitset but no {@code loc_scope} nodes: reach is nothing. */
+    private static Authentication scopedViewAllWithoutNodes() {
+        return caller(
+                List.of(WorkorderPermissions.WIP_VIEW, WIP_VIEW_ALL_LOCATIONS),
+                LocationScope.of(Set.of(), Set.of(WIP_VIEW_ALL_LOCATIONS), Optional.empty(), true, RESOLVER));
     }
 
     private static Authentication caller(List<String> authorities, LocationScope scope) {
@@ -306,18 +335,13 @@ class WipControllerTest {
             verify(wipService, never()).getWipWorkorders(any(), eq(true), any(Pageable.class));
         }
 
-        /**
-         * Documents the gap #1872 owns: the widening branch applies no scope refinement, so a
-         * LOCATION-scoped holder of {@code view_all_locations} is not narrowed. Today the only
-         * holder is ADMIN (reach ALL), so this is the intended current behaviour, not a defect here.
-         */
         @Test
-        @DisplayName("with workorder:wip:view_all_locations answers 200 without consulting scope")
-        void withViewAllIsNotScopeChecked() throws Exception {
+        @DisplayName("an unscoped holder of workorder:wip:view_all_locations still sees every location")
+        void unscopedViewAllIsNotNarrowed() throws Exception {
             when(wipService.getWipWorkorders(eq(SHOP_B.toString()), eq(true), any(Pageable.class)))
                     .thenReturn(new PageImpl<WorkorderStatusView>(List.of()));
 
-            Authentication caller = as(scopedTechnicianWithViewAll());
+            Authentication caller = as(scopedTechnicianWithGlobalViewAll());
             mockMvc.perform(get(WIP_URL)
                             .param("locationId", SHOP_B.toString())
                             .param("multiLocation", "true")
@@ -325,6 +349,67 @@ class WipControllerTest {
                     .andExpect(status().isOk());
 
             verify(wipService).getWipWorkorders(eq(SHOP_B.toString()), eq(true), any(Pageable.class));
+            verify(wipService, never()).getWipWorkordersAtShops(any(), any());
+        }
+
+        @Test
+        @DisplayName("pre-rollout token with view_all_locations keeps today's behaviour: every location")
+        void preRolloutViewAllIsUnchanged() throws Exception {
+            when(wipService.getWipWorkorders(eq(SHOP_B.toString()), eq(true), any(Pageable.class)))
+                    .thenReturn(new PageImpl<WorkorderStatusView>(List.of()));
+
+            Authentication caller = as(caller(List.of(WorkorderPermissions.WIP_VIEW, WIP_VIEW_ALL_LOCATIONS), null));
+            mockMvc.perform(get(WIP_URL)
+                            .param("locationId", SHOP_B.toString())
+                            .param("multiLocation", "true")
+                            .principal(caller))
+                    .andExpect(status().isOk());
+
+            verify(wipService).getWipWorkorders(eq(SHOP_B.toString()), eq(true), any(Pageable.class));
+        }
+
+        @Test
+        @DisplayName("a LOCATION-scoped holder of view_all_locations is narrowed to that grant's reach (#1872)")
+        void scopedViewAllIsNarrowedToReach() throws Exception {
+            Set<UUID> reachable = Set.of(REGION_NODE, SHOP_A);
+            when(locationHierarchyService.reachableLocations(any(Reach.class))).thenReturn(reachable);
+            when(wipService.getWipWorkordersAtShops(eq(reachable), any(Pageable.class)))
+                    .thenReturn(new PageImpl<WorkorderStatusView>(List.of()));
+
+            Authentication caller = as(scopedTechnicianWithScopedViewAll());
+            mockMvc.perform(get(WIP_URL)
+                            .param("locationId", SHOP_B.toString())
+                            .param("multiLocation", "true")
+                            .principal(caller))
+                    .andExpect(status().isOk());
+
+            // The reach handed to the replica is the view_all_locations grant's own: OTHER on REGION.
+            verify(locationHierarchyService)
+                    .reachableLocations(argThat(reach -> reach.nodes().equals(Set.of(REGION_NODE))
+                            && reach.dimensions()
+                                    .equals(Set.of(
+                                            com.positivity.domainevents.location.LocationAncestry.Dimension.OTHER))));
+            verify(wipService).getWipWorkordersAtShops(eq(reachable), any(Pageable.class));
+            verify(wipService, never()).getWipWorkorders(any(), eq(true), any(Pageable.class));
+        }
+
+        @Test
+        @DisplayName("a scoped holder whose reach is empty gets an empty page, not every location and not 403")
+        void scopedViewAllWithEmptyReachIsEmptyPage() throws Exception {
+            when(locationHierarchyService.reachableLocations(any(Reach.class))).thenReturn(Set.of());
+            when(wipService.getWipWorkordersAtShops(eq(Set.of()), any(Pageable.class)))
+                    .thenReturn(new PageImpl<WorkorderStatusView>(List.of()));
+
+            Authentication caller = as(scopedViewAllWithoutNodes());
+            mockMvc.perform(get(WIP_URL)
+                            .param("locationId", SHOP_B.toString())
+                            .param("multiLocation", "true")
+                            .principal(caller))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content").isEmpty());
+
+            verify(wipService).getWipWorkordersAtShops(eq(Set.of()), any(Pageable.class));
+            verify(wipService, never()).getWipWorkorders(any(), eq(true), any(Pageable.class));
         }
     }
 

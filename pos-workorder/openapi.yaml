@@ -153,13 +153,13 @@ paths:
 
         Use this tool when deciding how an approval must be captured for a specific job; use getApprovalConfiguration instead when the configuration id is already known.
 
-        Preconditions: none — both filters are optional and narrower matches win.
+        Preconditions: both filters are optional and narrower matches win; a caller whose workorder:approval_config:view grant is location-scoped must have a supplied locationId within reach (ADR-0061).
 
         Required inputs: locationId (UUID) and customerId (UUID) as optional query parameters.
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 404 when no configuration matches at any specificity, in which case callers fall back to built-in defaults.
+        Returns 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the supplied locationId, and 404 when no configuration matches at any specificity, in which case callers fall back to built-in defaults.
 
         '
       operationId: getApplicableApprovalConfiguration
@@ -187,6 +187,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApprovalConfigurationResponse'
           description: Configuration found and returned.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds workorder:approval_config:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:
@@ -361,11 +367,11 @@ paths:
 
         Preconditions: the location must exist as a UUID-keyed location; mechanic availability comes from local people replicas, and a failed replica lookup sets dataQualityWarning to true instead of failing the call. Bay and mobile unit identity is served from local replicas of the location domain, so a unit whose replica row has not arrived yet is listed by id with a null name rather than being omitted.
 
-        Required inputs: locationId (UUID as a string) as a query parameter; date (ISO date) is optional and defaults to today on the server clock.
+        Required inputs: locationId (UUID as a string) as a query parameter; date (ISO date) is optional and defaults to today on the server clock. A caller whose workorder:dashboard:view grant is location-scoped must have locationId within reach (ADR-0061).
 
         Emits a WORKEXEC_DASHBOARD_TODAY_GET audit event; no workorder state changes — this is a read-only aggregation.
 
-        Returns 400 when locationId does not parse as a UUID, and 200 with empty workorder and conflict panels when no workorders are scheduled for the date.
+        Returns 400 when locationId does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId, and 200 with empty workorder and conflict panels when no workorders are scheduled for the date.
 
         '
       operationId: getDispatchDashboard
@@ -387,7 +393,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DashboardResponse'
-          description: OK
+          description: Dispatch board for the location and date
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: locationId does not parse as a UUID
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds workorder:dashboard:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - workorder:dashboard:view
@@ -478,13 +496,13 @@ paths:
 
         Use this tool for payroll or utilization reporting across days; do not use getLaborHistory, which lists individual labor entries for one workorder.
 
-        Preconditions: none beyond the caller holding workorder:labor:view; totals derive from recorded labor entries.
+        Preconditions: none beyond the caller holding workorder:labor:view; totals derive from recorded labor entries. A caller whose workorder:labor:view grant is location-scoped must have a supplied locationId within reach, and without one sees only the locations within reach (ADR-0061).
 
         Required inputs: startDate and endDate (ISO dates, endDate on or after startDate) and timezone (IANA name); locationId and technicianIds are optional filters.
 
         No events are emitted and no state changes; this is a read-only aggregation.
 
-        Returns 400 when the timezone is invalid or endDate precedes startDate, and 200 with an empty list when no time was tracked in the range.
+        Returns 400 when the timezone is invalid or endDate precedes startDate, 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the supplied locationId, and 200 with an empty list when no time was tracked in the range.
 
         '
       operationId: getJobTimeTotals
@@ -544,6 +562,12 @@ paths:
               schema:
                 type: object
           description: Invalid request parameters
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds workorder:labor:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - workorder:labor:view
@@ -815,7 +839,7 @@ paths:
 
         Use this tool for the WIP status board; do not use getDispatchDashboard, which aggregates mechanics, bays, and conflicts for one date, and use getWipDetail for a single workorder''s status history.
 
-        Preconditions: multiLocation=true requires the caller to hold workorder:wip:view_all_locations; otherwise results are scoped to the given location, and a caller whose workorder:wip:view grant is location-scoped must have that location within reach (ADR-0061).
+        Preconditions: multiLocation=true requires the caller to hold workorder:wip:view_all_locations, and when that grant is itself location-scoped the page is narrowed to the shops within its reach (an empty reach is an empty page); otherwise results are scoped to the given location, and a caller whose workorder:wip:view grant is location-scoped must have that location within reach (ADR-0061).
 
         Required inputs: locationId (UUID as a string) as a query parameter — ignored when multiLocation is true; multiLocation defaults to false and page size defaults to 25.
 
@@ -1593,7 +1617,7 @@ paths:
 
         Use this tool only for small datasets or admin views; use searchEstimates instead for paginated, filtered lookup by query, customer, or vehicle.
 
-        Preconditions: none beyond the caller holding workorder:estimate:view.
+        Preconditions: none beyond the caller holding workorder:estimate:view; a caller whose grant is location-scoped sees only estimates at locations within reach (ADR-0061), and an empty reach is an empty list.
 
         Required inputs: none — there are no filters or pagination parameters.
 
@@ -1748,13 +1772,13 @@ paths:
 
         Use this tool when an appointment arrives and needs an estimate started; do not use createEstimate, which builds an estimate from scratch without an appointment link or idempotency guarantee.
 
-        Preconditions: the caller must hold workorder:estimate:create; the appointment id is not verified against the scheduling service, and an estimate already linked to the appointmentId short-circuits creation.
+        Preconditions: the caller must hold workorder:estimate:create, and when that grant is location-scoped the body''s locationId must be within reach (ADR-0061); the appointment id is not verified against the scheduling service, and an estimate already linked to the appointmentId short-circuits creation.
 
         Required inputs: idempotencyKey, appointmentId, customerId, vehicleId, and locationId (all UUIDs); requestedServices is an optional list of free-text service descriptions.
 
         Emits a WORKORDER_ESTIMATE_CREATE_FROM_APPOINTMENT event; the call is idempotent on appointmentId, so retries never create duplicates.
 
-        Returns 201 with created=true when a new estimate is persisted, and 200 with created=false and the existing estimateId when the appointment already has one.
+        Returns 201 with created=true when a new estimate is persisted, 200 with created=false and the existing estimateId when the appointment already has one, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId.
 
         '
       operationId: createEstimateFromAppointment
@@ -1806,8 +1830,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreateEstimateFromAppointmentResponse'
-          description: Forbidden
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks workorder:estimate:create (ApiError.code FORBIDDEN), or Caller holds workorder:estimate:create but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
       security:
       - bearerAuth: []
       summary: Create Draft Estimate From Appointment
@@ -1821,13 +1845,13 @@ paths:
 
         Use this tool for a location''s estimate book; do not use listEstimatesByShop, which is the legacy alias of this same lookup.
 
-        Preconditions: none — an unknown locationId simply yields an empty list.
+        Preconditions: an unknown locationId simply yields an empty list; a caller whose workorder:estimate:view grant is location-scoped must have locationId within reach (ADR-0061).
 
         Required inputs: locationId (UUID) as a path parameter.
 
         Emits a WORKORDER_ESTIMATE_SEARCH_BY_LOCATION audit event; no estimate state changes — this is a read-only projection.
 
-        Returns 200 with the estimates, possibly empty.
+        Returns 200 with the estimates, possibly empty, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId.
 
         '
       operationId: listEstimatesByLocation
@@ -1849,6 +1873,12 @@ paths:
                   $ref: '#/components/schemas/EstimateResponse'
                 type: array
           description: List of estimates returned successfully.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds workorder:estimate:view but its location scope does not cover the estimate's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - workorder:estimate:view
@@ -1863,13 +1893,13 @@ paths:
 
         Use this tool when the caller''s route vocabulary says shop; it is a legacy alias of listEstimatesByLocation and returns identical results, so use listEstimatesByLocation instead in new integrations.
 
-        Preconditions: none — an unknown locationId simply yields an empty list.
+        Preconditions: an unknown locationId simply yields an empty list; a caller whose workorder:estimate:view grant is location-scoped must have locationId within reach (ADR-0061).
 
         Required inputs: locationId (UUID) as a path parameter.
 
         Emits a WORKORDER_ESTIMATE_SEARCH_BY_SHOP audit event; no estimate state changes — this is a read-only projection.
 
-        Returns 200 with the estimates, possibly empty.
+        Returns 200 with the estimates, possibly empty, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId.
 
         '
       operationId: listEstimatesByShop
@@ -1891,6 +1921,12 @@ paths:
                   $ref: '#/components/schemas/EstimateResponse'
                 type: array
           description: List of estimates returned successfully.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds workorder:estimate:view but its location scope does not cover the estimate's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - workorder:estimate:view
@@ -1942,13 +1978,13 @@ paths:
 
         Use this tool when the estimate id is known; use getEstimateSummary instead for the customer-facing grouped view, or searchEstimates to find estimates by text.
 
-        Preconditions: the estimate must exist.
+        Preconditions: the estimate must exist. A caller whose workorder:estimate:view grant is location-scoped must have the estimate''s location within reach (ADR-0061).
 
         Required inputs: estimateId (UUID) as a path parameter.
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 404 when no estimate exists for the id.
+        Returns 404 when no estimate exists for the id, and 403 LOCATION_SCOPE_DENIED when the estimate exists but its location is outside the caller''s scope.
 
         '
       operationId: getEstimate
@@ -1968,6 +2004,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/EstimateResponse'
           description: Estimate found and returned.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds workorder:estimate:view but its location scope does not cover the estimate's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:
@@ -2461,13 +2503,13 @@ paths:
 
         Use this tool when a printable or emailable document is needed; use getEstimateSummary instead for the same content as JSON.
 
-        Preconditions: the estimate must exist and the pos-documents service must be reachable.
+        Preconditions: the estimate must exist and the pos-documents service must be reachable. A caller whose workorder:estimate:view grant is location-scoped must have the estimate''s location within reach (ADR-0061).
 
         Required inputs: estimateId (UUID) as a path parameter.
 
         Emits an ESTIMATE_PDF_GENERATE audit event; no estimate state changes — the render is performed on demand and not stored.
 
-        Returns 404 when the estimate does not exist, and 502 when the document service fails to render the PDF.
+        Returns 404 when the estimate does not exist, 403 LOCATION_SCOPE_DENIED when it exists but its location is outside the caller''s scope, and 502 when the document service fails to render the PDF.
 
         '
       operationId: generateEstimatePdf
@@ -2488,6 +2530,12 @@ paths:
                 format: binary
                 type: string
           description: PDF generated successfully
+        '403':
+          content:
+            application/pdf:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds workorder:estimate:view but its location scope does not cover the estimate's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
         '404':
           content:
             application/pdf:
@@ -2752,13 +2800,13 @@ paths:
 
         Use this tool for presentation to the customer; use getEstimate instead for the raw record, and generateEstimatePdf to render the same content as a PDF document.
 
-        Preconditions: the estimate must exist; totals reflect the last calculateEstimateTotals run.
+        Preconditions: the estimate must exist; totals reflect the last calculateEstimateTotals run. A caller whose workorder:estimate:view grant is location-scoped must have the estimate''s location within reach (ADR-0061).
 
         Required inputs: estimateId (UUID) as a path parameter.
 
         Emits an ESTIMATE_SUMMARY_VIEW audit event; no estimate state changes — this is a read-only projection.
 
-        Returns 404 when no estimate exists for the id.
+        Returns 404 when no estimate exists for the id, and 403 LOCATION_SCOPE_DENIED when the estimate exists but its location is outside the caller''s scope.
 
         '
       operationId: getEstimateSummary
@@ -2778,6 +2826,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/EstimateSummaryResponse'
           description: Summary retrieved successfully
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds workorder:estimate:view but its location scope does not cover the estimate's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:
@@ -2800,11 +2854,11 @@ paths:
 
         Preconditions: only lines carrying a guide baseline count, since an actual with nothing to compare it against would move the variance without changing any real estimate; shops are reported separately, never pooled; a technician''s median counts only lines that technician worked alone, because a split line says nothing about either one''s speed; and results are not grouped by vehicle class, since pos-workorder holds VIN, plate and odometer but no make or model.
 
-        Required inputs: none — operationCode, locationId and minSamples are all optional, and minSamples may raise the suggestion threshold but never lower it below the configured floor.
+        Required inputs: none — operationCode, locationId and minSamples are all optional, and minSamples may raise the suggestion threshold but never lower it below the configured floor. A caller whose workorder:labor_intelligence:view grant is location-scoped must have a supplied locationId within reach, and without one sees only the shops within reach (ADR-0061).
 
         Emits a WORKORDER_LABOR_INTELLIGENCE_LIST event; no state changes.
 
-        Returns 200 with one row per operation and shop, and an empty list when no finished line yet carries both a baseline and clocked time.
+        Returns 200 with one row per operation and shop, an empty list when no finished line yet carries both a baseline and clocked time, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the supplied locationId.
 
         '
       operationId: listLaborIntelligence
@@ -2852,7 +2906,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Insufficient permissions.
+          description: Insufficient permissions (ApiError.code FORBIDDEN), or Caller holds workorder:labor_intelligence:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - ROLE_ADMIN
@@ -3359,13 +3413,13 @@ paths:
 
         Use this tool when a technician clocks onto a task; do not use stopWorkexecWorkSession, which ends a running session, or addBreakSegment, which pauses one.
 
-        Preconditions: the workorder must exist, and the mechanic must have no other IN_PROGRESS session unless overlapping sessions are enabled by configuration, the caller holds timekeeping:overlap_override, and an overlapOverrideReason is supplied.
+        Preconditions: the workorder must exist, and the mechanic must have no other IN_PROGRESS session unless overlapping sessions are enabled by configuration, the caller holds timekeeping:overlap_override, and an overlapOverrideReason is supplied. A caller whose timekeeping:work_session:create grant is location-scoped must have locationId within reach (ADR-0061).
 
         Required inputs: mechanicId, workOrderId, workOrderTaskId, and locationId (all UUIDs); resourceId and overlapOverrideReason are optional.
 
         Emits a WORKORDER_WORK_SESSION_START event; any overlap override is recorded with the overriding user and timestamp.
 
-        Returns 201 with the new session, 404 when the workorder does not exist, and 409 when the mechanic already has an active session and no valid override applies.
+        Returns 201 with the new session, 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId, 404 when the workorder does not exist, and 409 when the mechanic already has an active session and no valid override applies.
 
         '
       operationId: startWorkexecWorkSession
@@ -3397,6 +3451,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkSessionResponse'
           description: Invalid request - missing required fields or work order not found
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds timekeeping:work_session:create but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - timekeeping:work_session:create
@@ -4636,13 +4696,13 @@ paths:
 
         Use this tool when a manager must re-slot a workorder to a different bay, crew, or location prior to execution; do not use getOperationalContext, which only reads the current context.
 
-        Preconditions: the workorder must exist and work must not have started — once workStartedAt is set the context is locked and overrides are rejected.
+        Preconditions: the workorder must exist and work must not have started — once workStartedAt is set the context is locked and overrides are rejected. A caller whose workorder:operationalContext:override grant is location-scoped must have the body''s locationId within reach (ADR-0061); that check runs after the existence check.
 
         Required inputs: workorderId (UUID) as a path parameter and a body with locationId (UUID, required); resourceType, assignedMechanics, assignedResources, and constraints are optional, an absent resourceType is applied as BAY, and constraints are echoed back but not persisted.
 
         Emits a WORKORDER_OPERATIONAL_CONTEXT_OVERRIDE event and marks the workorder fact changed for downstream replication.
 
-        Returns 404 when no workorder exists for the id, and 409 when work has already started and the context is locked.
+        Returns 404 when no workorder exists for the id, 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId, and 409 when work has already started and the context is locked.
 
         '
       operationId: overrideOperationalContext
@@ -4678,6 +4738,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/OperationalContextResponse'
           description: Override applied
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds workorder:operationalContext:override but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
         '404':
           content:
             application/json:

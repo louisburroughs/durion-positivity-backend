@@ -1,0 +1,64 @@
+# Location-scope decisions for pos-workorder (ADR-0061, #1872).
+# Every operation that takes a caller-supplied locationId must appear here;
+# scripts/audit-rbac.py --check fails on a missing or stale entry.
+decisions:
+  - operation: WipController.listWip
+    shape: gate
+    permission: workorder:wip:view
+    reason: locationId names the shop whose WIP board is read; denied outside the caller's reach. multiLocation=true is narrowed to the reach of a location-scoped workorder:wip:view_all_locations grant; an unscoped holder sees every location.
+  - operation: WipController.getWipDetail
+    shape: gate
+    permission: workorder:wip:view
+    reason: by-id sibling of listWip; gated off the loaded workorder's shop after the 404 so ids cannot be probed.
+  - operation: DashboardController.getDashboard
+    shape: gate
+    permission: workorder:dashboard:view
+    reason: locationId names the shop whose dispatch board is aggregated; denied outside the caller's reach.
+  - operation: ApprovalConfigurationController.getApplicableConfiguration
+    shape: gate
+    permission: workorder:approval_config:view
+    reason: a supplied locationId names the site whose approval rule is resolved and is gated; without one the location-less global default is resolved, which belongs to no location and needs no narrowing.
+  - operation: EstimateController.getAllEstimates
+    shape: narrow
+    permission: workorder:estimate:view
+    reason: the unfiltered estimate list has no location parameter; a scoped caller sees only estimates at locations within reach (an empty reach is an empty list) so the shop and location list gates cannot be bypassed; unscoped callers unchanged.
+  - operation: EstimateController.getEstimatesByShop
+    shape: gate
+    permission: workorder:estimate:view
+    reason: the path locationId names the shop whose estimate book is read; denied outside the caller's reach.
+  - operation: EstimateController.getEstimatesByLocation
+    shape: gate
+    permission: workorder:estimate:view
+    reason: the path locationId names the location whose estimate book is read; denied outside the caller's reach.
+  - operation: EstimateController.getEstimateById
+    shape: gate
+    permission: workorder:estimate:view
+    reason: by-id sibling of the two location lists; gated off the loaded estimate's location after the 404 so the list gate cannot be bypassed by id.
+  - operation: EstimateController.getEstimateSummary
+    shape: gate
+    permission: workorder:estimate:view
+    reason: by-id sibling of the two location lists; gated off the loaded summary's location after the 404, exactly as getEstimateById.
+  - operation: EstimateController.generateEstimatePdf
+    shape: gate
+    permission: workorder:estimate:view
+    reason: by-id sibling of the two location lists; the estimate is loaded first (404), then gated off its location before the render, outside the renderer's 502 handling.
+  - operation: EstimateFromAppointmentController.createEstimateFromAppointment
+    shape: gate
+    permission: workorder:estimate:create
+    reason: the body's locationId names the site the draft estimate is opened at; denied outside the caller's reach before anything is written.
+  - operation: OperationalContextController.overrideOperationalContext
+    shape: gate
+    permission: workorder:operationalContext:override
+    reason: both ends of the move are gated in the service after the existence check and before any write - first the workorder's current shopId (the field the WIP detail gate reads; null fails closed), then the body's locationId, the site it is re-slotted to.
+  - operation: WorkSessionController.startWorkexecWorkSession
+    shape: gate
+    permission: timekeeping:work_session:create
+    reason: the body's locationId names the site the technician clocks onto; denied outside the caller's reach before the session is created.
+  - operation: WorkexecTimeTrackingController.getJobTimeTotals
+    shape: narrow
+    permission: workorder:labor:view
+    reason: locationId is an optional report filter; a supplied one is gated, and a scoped caller with no filter sees only the locations within reach (an empty reach is an empty report).
+  - operation: LaborIntelligenceController.listLaborIntelligence
+    shape: narrow
+    permission: workorder:labor_intelligence:view
+    reason: locationId is an optional report filter; a supplied one is gated, and a scoped caller with no filter sees only the shops within reach (an empty reach is an empty report); ROLE_ADMIN without the permission is unrestricted.

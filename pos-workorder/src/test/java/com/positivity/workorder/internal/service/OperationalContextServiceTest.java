@@ -25,6 +25,8 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -84,6 +86,24 @@ class OperationalContextServiceTest {
     private static final UUID LOCATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000060");
     private static final UUID MECHANIC_ID = UUID.fromString("00000000-0000-0000-0000-000000000061");
     private static final UUID RESOURCE_ID = UUID.fromString("00000000-0000-0000-0000-000000000062");
+
+    /**
+     * The override path consults the caller's location scope after the existence check (ADR-0061,
+     * #1872); a token without loc_* claims is unscoped, so these tests keep exercising the
+     * context rules only. {@code OperationalContextLocationScopeTest} owns the scope cases.
+     */
+    @BeforeEach
+    void installUnscopedCaller() {
+        var caller = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                "context-test-user", "n/a", List.of());
+        org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .setAuthentication(caller);
+    }
+
+    @AfterEach
+    void clearCaller() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
 
     // -----------------------------------------------------------------------
     // AC7 — getOperationalContext serves the workorder's own assignment state (#898)

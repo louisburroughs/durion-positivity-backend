@@ -3,7 +3,9 @@ package com.positivity.workorder.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
+import com.positivity.domainevents.location.LocationAncestry.Dimension;
 import com.positivity.domainevents.location.LocationUpdatedV1;
+import com.positivity.security.common.LocationScope.Reach;
 import com.positivity.workorder.internal.entity.ExtLocationParentReplica;
 import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtLocationParentReplicaRepository;
@@ -13,10 +15,12 @@ import com.positivity.workorder.internal.repository.ProcessedEventRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
@@ -254,5 +258,79 @@ class LocationHierarchyServiceTest {
 
         assertThat(unknown).isEqualTo(AncestorSets.EMPTY);
         assertThat(unknown.isEmpty()).isTrue();
+    }
+
+    /**
+     * The downward mirror used by the narrowing endpoints (#1872). Fixture:
+     *
+     * <pre>
+     *   OTHER:      HQ ← REGION (REGION) ← DISTRICT (DISTRICT) ← SHOP (DISTRICT)
+     *   FINANCIAL:  FIN_ROOT ← FIN_MID (FINANCIAL) ← SHOP (FINANCIAL)
+     *   ORG_UNIT    replicated, no edges
+     * </pre>
+     */
+    @Nested
+    @DisplayName("descendantsOf / reachableLocations")
+    class Descendants {
+
+        @BeforeEach
+        void tree() {
+            locationFact(HQ, 1);
+            locationFact(REGION, 1, edge(HQ, "REGION"));
+            locationFact(DISTRICT, 1, edge(REGION, "DISTRICT"));
+            locationFact(FIN_ROOT, 1);
+            locationFact(FIN_MID, 1, edge(FIN_ROOT, "FINANCIAL"));
+            locationFact(SHOP, 1, edge(DISTRICT, "DISTRICT"), edge(FIN_MID, "FINANCIAL"));
+            locationFact(ORG_UNIT, 1);
+            entityManager.flush();
+            entityManager.clear();
+        }
+
+        @Test
+        @DisplayName("is inclusive of the node and follows only the dimension's edge types")
+        void inclusiveAndDimensionFiltered() {
+            assertThat(service.descendantsOf(REGION, Dimension.OTHER))
+                    .containsExactlyInAnyOrder(REGION, DISTRICT, SHOP);
+            assertThat(service.descendantsOf(REGION, Dimension.FINANCIAL)).containsExactly(REGION);
+            assertThat(service.descendantsOf(FIN_ROOT, Dimension.FINANCIAL))
+                    .containsExactlyInAnyOrder(FIN_ROOT, FIN_MID, SHOP);
+            assertThat(service.descendantsOf(FIN_ROOT, Dimension.OTHER)).containsExactly(FIN_ROOT);
+        }
+
+        @Test
+        @DisplayName("a leaf is its own sole descendant; an unreplicated node reaches nothing")
+        void leafAndUnknown() {
+            assertThat(service.descendantsOf(SHOP, Dimension.OTHER)).containsExactly(SHOP);
+            assertThat(service.descendantsOf(ORG_UNIT, Dimension.FINANCIAL)).containsExactly(ORG_UNIT);
+            assertThat(service.descendantsOf(id("99"), Dimension.OTHER)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("reachableLocations unions every node on every scoped dimension")
+        void reachUnionsNodesAndDimensions() {
+            assertThat(service.reachableLocations(new Reach(Set.of(Dimension.OTHER), Set.of(REGION))))
+                    .containsExactlyInAnyOrder(REGION, DISTRICT, SHOP);
+            assertThat(service.reachableLocations(
+                            new Reach(Set.of(Dimension.OTHER, Dimension.FINANCIAL), Set.of(DISTRICT, FIN_ROOT))))
+                    .containsExactlyInAnyOrder(DISTRICT, SHOP, FIN_ROOT, FIN_MID);
+        }
+
+        @Test
+        @DisplayName("a reach with no nodes, or only unreplicated nodes, expands to nothing — never to everything")
+        void emptyReachIsEmpty() {
+            assertThat(service.reachableLocations(new Reach(Set.of(Dimension.OTHER), Set.of())))
+                    .isEmpty();
+            assertThat(service.reachableLocations(new Reach(Set.of(Dimension.OTHER), Set.of(id("99")))))
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("the service is the module's LocationAncestorResolver, so the gate and the narrow agree")
+        void gateAndNarrowAgree() {
+            for (UUID reached : service.descendantsOf(REGION, Dimension.OTHER)) {
+                assertThat(service.ancestorsOf(reached).other()).contains(REGION);
+            }
+            assertThat(service.ancestorsOf(FIN_MID).other()).doesNotContain(REGION);
+        }
     }
 }
