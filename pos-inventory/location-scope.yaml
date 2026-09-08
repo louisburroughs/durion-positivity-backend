@@ -15,11 +15,11 @@ decisions:
   - operation: InventoryAvailabilityController.queryAvailabilityBySku
     shape: narrow
     permission: inventory:availability:read
-    reason: storageLocationId (winning) or locationId is an optional scope and is gated when named; a scoped caller with neither gets the SKU-wide view summed over their reach only (empty reach is an all-zero view).
+    reason: storageLocationId (winning) or locationId is an optional scope and is gated when named; a scoped caller with neither gets the SKU-wide view summed over their reach only (empty reach is an all-zero view). Decided in the controller, not the service: the service's availability read is shared with the outbox snapshot in InventoryFactPublisher, which has no caller (#1887).
   - operation: InventoryAvailabilityController.queryAvailabilityBySkuList
     shape: narrow
     permission: inventory:availability:read
-    reason: Same view as queryAvailabilityBySku in list form; storageLocationId or locationId is gated when named and a scoped caller with neither is narrowed to their reach.
+    reason: Same view as queryAvailabilityBySku in list form; storageLocationId or locationId is gated when named and a scoped caller with neither is narrowed to their reach. Decided in the controller alongside its by-sku sibling (#1887).
   - operation: StockMovementController.createAdjustmentRequest
     shape: gate
     permission: inventory:adjustment:create

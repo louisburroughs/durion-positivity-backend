@@ -17,10 +17,12 @@ import com.positivity.inventory.internal.repository.InventoryLedgerEntryReposito
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
-import com.positivity.security.common.LocationScopeDeniedException;
+import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.security.common.LocationScope;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +32,9 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 class InventoryAvailabilityServiceImplTest {
@@ -56,9 +61,6 @@ class InventoryAvailabilityServiceImplTest {
 
     @Mock
     private LocationRefRepository locationRefRepository;
-
-    @Mock
-    private LocationScopeService locationScopeService;
 
     private InventoryAvailabilityServiceImpl service;
 
@@ -87,8 +89,7 @@ class InventoryAvailabilityServiceImplTest {
                 new com.positivity.inventory.internal.service.QuantityScaleGuard(
                         org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
                 locationRefRepository,
-                java.time.Clock.systemUTC(),
-                locationScopeService);
+                java.time.Clock.systemUTC());
     }
 
     @Test
@@ -461,10 +462,12 @@ class InventoryAvailabilityServiceImplTest {
         verify(forecastQuantityService).forecast(Mockito.eq(sku), Mockito.eq(siteId), Mockito.isNull(), Mockito.any());
     }
 
-    // ─── ADR-0061 §3 (#1872): location scope on the SKU-wide view ───────────
+    // ─── ADR-0061 §3 (#1872): the reach the caller's layer resolved ─────────
+    // The decision to narrow belongs to the controller (#1887): this service is shared with
+    // internal system actors that have no caller, so it only applies a reach handed to it.
 
     @Test
-    void queryAvailability_scopedNoLocation_sumsOnlyReachableRowsAndForecastsTheirSites() {
+    void queryAvailabilityWithinReach_noLocation_sumsOnlyReachableRowsAndForecastsTheirSites() {
         String productSku = "SKU-123";
         UUID binUnderLoc1 = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
         when(stockSummaryRepository.findByStockItemId(productSku))
@@ -479,15 +482,14 @@ class InventoryAvailabilityServiceImplTest {
                                 .storageLocationId(binUnderLoc1)
                                 .siteId(LOC_1)
                                 .build()));
-        when(locationScopeService.narrowTo(null, InventoryPermissionRegistry.AVAILABILITY_READ))
-                .thenReturn(java.util.Optional.of(Set.of(LOC_1)));
         when(forecastQuantityService.forecastWithin(eq(productSku), eq(Set.of(LOC_1)), any(), any()))
                 .thenReturn(new ForecastQuantityService.ForecastQuantities(
                         new BigDecimal("2"), new BigDecimal("1"), new BigDecimal("15")));
         when(inventoryLedgerEntryRepository.findUnitsOfMeasureByStockItem(eq(productSku), any(Pageable.class)))
                 .thenReturn(List.of());
 
-        AvailabilityView result = service.queryAvailability(productSku, null, null, null);
+        AvailabilityView result =
+                service.queryAvailabilityWithinReach(productSku, null, null, null, null, Set.of(LOC_1));
 
         // LOC_1 (10) + its bin (4); LOC_2 and the NULL-location row are outside the reach.
         assertThat(result.getOnHandQuantity()).isEqualByComparingTo("14");
@@ -500,26 +502,26 @@ class InventoryAvailabilityServiceImplTest {
     }
 
     @Test
-    void queryAvailability_scopedEmptyReach_isAllZeroView() {
+    void queryAvailabilityWithinReach_emptyReach_isAllZeroView() {
         String productSku = "SKU-123";
         when(stockSummaryRepository.findByStockItemId(productSku))
                 .thenReturn(List.of(summary(productSku, LOC_1, 10, 1, 0)));
-        when(locationScopeService.narrowTo(null, InventoryPermissionRegistry.AVAILABILITY_READ))
-                .thenReturn(java.util.Optional.of(Set.of()));
         when(forecastQuantityService.forecastWithin(eq(productSku), eq(Set.of()), any(), any()))
                 .thenReturn(new ForecastQuantityService.ForecastQuantities(
                         BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO));
         when(inventoryLedgerEntryRepository.findUnitsOfMeasureByStockItem(eq(productSku), any(Pageable.class)))
                 .thenReturn(List.of());
 
-        AvailabilityView result = service.queryAvailability(productSku, null, null, null);
+        AvailabilityView result = service.queryAvailabilityWithinReach(productSku, null, null, null, null, Set.of());
 
         assertThat(result.getOnHandQuantity()).isEqualByComparingTo("0");
         assertThat(result.getAvailableToPromiseQuantity()).isEqualByComparingTo("0");
     }
 
     @Test
-    void queryAvailability_namedStorageLocation_isGatedOnItThenServedAsBefore() {
+    void queryAvailabilityWithinReach_namedStorageLocation_ignoresTheReachAndServesThatLocation() {
+        // A named location is the caller's own restriction and was gated by the controller; the
+        // reach argument does not apply to it, so the view is the single scoped row as before.
         String productSku = "SKU-123";
         when(stockSummaryRepository.findByStockItemId(productSku))
                 .thenReturn(List.of(summary(productSku, SLOC_A, 10, 1, 0)));
@@ -527,22 +529,51 @@ class InventoryAvailabilityServiceImplTest {
                         eq(productSku), eq(SLOC_A), any(Pageable.class)))
                 .thenReturn(List.of());
 
-        service.queryAvailability(productSku, LOC_1, SLOC_A, null);
+        AvailabilityView result =
+                service.queryAvailabilityWithinReach(productSku, LOC_1, SLOC_A, null, null, Set.of(LOC_2));
 
-        verify(locationScopeService).narrowTo(SLOC_A, InventoryPermissionRegistry.AVAILABILITY_READ);
+        assertThat(result.getOnHandQuantity()).isEqualByComparingTo("10");
+        assertThat(result.getAllocatedQuantity()).isEqualByComparingTo("1");
+        assertThat(result.getStorageLocationId()).isEqualTo(SLOC_A);
+        verify(forecastQuantityService, Mockito.never()).forecastWithin(any(), any(), any(), any());
     }
 
+    /**
+     * Regression for #1887: the plain read is the one internal system actors share
+     * ({@code InventoryFactPublisher}'s beforeCommit snapshot), and it must not consult the caller
+     * at all. The security context here is the exact shape that used to fail — a caller holding
+     * none of the availability alternates, whose scope reaches nothing this SKU sits in — and the
+     * read must still return the full SKU-wide aggregate without throwing.
+     */
     @Test
-    void queryAvailability_deniedLocation_propagatesBeforeAnyAggregation() {
+    void queryAvailability_internalCallerHoldingNoAvailabilityPermission_readsEverythingWithoutDenial() {
         String productSku = "SKU-123";
-        when(stockSummaryRepository.findByStockItemId(productSku))
-                .thenReturn(List.of(summary(productSku, LOC_1, 10, 1, 0)));
-        when(locationScopeService.narrowTo(LOC_1, InventoryPermissionRegistry.AVAILABILITY_READ))
-                .thenThrow(new LocationScopeDeniedException(
-                        InventoryPermissionRegistry.AVAILABILITY_READ, LOC_1.toString()));
+        var token = new UsernamePasswordAuthenticationToken(
+                "scrap-poster", null, List.of(new SimpleGrantedAuthority("inventory:adjustment:override")));
+        token.setDetails(Map.of(
+                GatewaySecurityConstants.DETAIL_USERNAME,
+                "scrap-poster",
+                GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
+                LocationScope.of(
+                        Set.of(),
+                        Set.of(InventoryPermissionRegistry.AVAILABILITY_READ),
+                        java.util.Optional.of(Set.of(LOC_2)),
+                        true,
+                        locationId -> com.positivity.domainevents.location.LocationAncestry.AncestorSets.EMPTY)));
+        SecurityContextHolder.getContext().setAuthentication(token);
+        try {
+            when(stockSummaryRepository.findByStockItemId(productSku))
+                    .thenReturn(List.of(summary(productSku, LOC_1, 10, 1, 0), summary(productSku, LOC_2, 5, 0, 0)));
+            when(inventoryLedgerEntryRepository.findUnitsOfMeasureByStockItem(eq(productSku), any(Pageable.class)))
+                    .thenReturn(List.of());
 
-        assertThatThrownBy(() -> service.queryAvailability(productSku, LOC_1, null, null))
-                .isInstanceOf(LocationScopeDeniedException.class);
-        verify(forecastQuantityService, Mockito.never()).forecast(any(), any(), any(), any());
+            AvailabilityView result = service.queryAvailability(productSku, null, null, null);
+
+            assertThat(result.getOnHandQuantity()).isEqualByComparingTo("15");
+            assertThat(result.getAvailableToPromiseQuantity()).isEqualByComparingTo("14");
+            verify(forecastQuantityService, Mockito.never()).forecastWithin(any(), any(), any(), any());
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
     }
 }

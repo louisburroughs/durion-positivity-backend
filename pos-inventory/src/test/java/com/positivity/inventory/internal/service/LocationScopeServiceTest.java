@@ -134,6 +134,21 @@ class LocationScopeServiceTest {
         }
 
         @Test
+        @DisplayName("a caller holding no alternate is not denied: there is no caller scope to check")
+        void noHeldAlternateIsNotADenial() {
+            // Regression for #1887. Unreachable behind @PreAuthorize, which guarantees a held
+            // alternate on every HTTP path; reachable only with no HTTP caller — the internal
+            // system actors that share these reads (InventoryFactPublisher's beforeCommit
+            // snapshot). Manufacturing a denial there marks the command's own transaction
+            // rollback-only and 500s a write that was authorized and complete.
+            caller(scoped(Set.of(), Set.of(VIEW), OTHER_SITE), APPROVE);
+
+            assertThatCode(() -> service.require(SHOP, VIEW)).doesNotThrowAnyException();
+            assertThatCode(() -> service.require(null, VIEW)).doesNotThrowAnyException();
+            verifyNoInteractions(hierarchy);
+        }
+
+        @Test
         @DisplayName("no permissions is a programming error")
         void requiresAtLeastOnePermission() {
             caller(LocationScope.unscoped(), VIEW);
@@ -177,6 +192,19 @@ class LocationScopeServiceTest {
 
             assertThat(reach).isPresent();
             assertThat(reach.get()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("a caller holding no alternate is not narrowed, the mirror of require's pass")
+        void noHeldAlternateIsNotNarrowed() {
+            // Consistent with require (#1887): no held alternate means no caller scope to read,
+            // so neither decision applies. "Reach nothing" here would silently empty a list for
+            // the same internal actors require would have denied.
+            caller(scoped(Set.of(), Set.of(VIEW), OTHER_SITE), APPROVE);
+
+            assertThat(service.reachOf(VIEW)).isEmpty();
+            assertThat(service.narrowTo(null, VIEW)).isEmpty();
+            verifyNoInteractions(hierarchy);
         }
 
         @Test

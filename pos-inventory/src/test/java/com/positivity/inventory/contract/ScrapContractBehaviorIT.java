@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.domainevents.inventory.InventoryAvailabilityUpdatedV1;
 import com.positivity.domainevents.inventory.ScrapPostedV1;
 import com.positivity.inventory.internal.config.OutboxEventWriter;
 import com.positivity.inventory.internal.entity.ApprovalThresholdConfig;
@@ -240,6 +241,14 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
         // SCRAP_OUT is BLOCKED_OVERRIDABLE: the explicit authorized override
         // permits the negative balance (NegativeStockPolicy matrix, K1).
         assertThat(onHand(sku)).isEqualByComparingTo("-3");
+
+        // Regression for #1887: this caller holds the scrap and override permissions but none of
+        // the availability alternates. The beforeCommit snapshot in InventoryFactPublisher reads
+        // availability as an internal actor on that caller's transaction, so a caller-scope
+        // decision on that read denied it, marked the transaction rollback-only and turned an
+        // authorized, completed write into a 500. The fact reaching the outbox proves the read ran.
+        assertThat(outboxEventRepository.findAll())
+                .anyMatch(row -> row.getPayload().contains(InventoryAvailabilityUpdatedV1.EVENT_TYPE));
     }
 
     @Test

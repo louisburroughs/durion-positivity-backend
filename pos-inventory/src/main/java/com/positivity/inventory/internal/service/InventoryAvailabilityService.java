@@ -5,6 +5,7 @@ import com.positivity.inventory.internal.dto.LocationAvailabilityDto;
 import com.positivity.inventory.internal.enums.InventorySourceType;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -110,4 +111,37 @@ public interface InventoryAvailabilityService {
             @Nullable UUID storageLocationId,
             @Nullable InventorySourceType sourceType,
             @Nullable Instant horizon);
+
+    /**
+     * The location-scoped shape of {@link #queryAvailability(String, UUID, UUID,
+     * InventorySourceType, Instant)} for a browser-facing read (ADR-0061 §3, #1872): identical in
+     * every respect except that, when the caller named no location, the SKU-wide aggregate is
+     * summed over the rows within {@code reach} instead of over every location.
+     *
+     * <p>The reach is <em>decided by the caller's own layer</em> — the controller, which is where a
+     * caller exists — and passed in already resolved; this service performs no caller-scope check
+     * of its own, so the same read serves internal system actors (the outbox snapshot in
+     * {@code InventoryFactPublisher}) unchanged. The gate on a named {@code locationId} or
+     * {@code storageLocationId} belongs to the same layer and has already run when this is called.
+     *
+     * @param productSku        SKU identifier of the product
+     * @param locationId        optional location identifier
+     * @param storageLocationId optional sub-location identifier
+     * @param sourceType        optional inventory source lookup type
+     * @param horizon           optional forecast date cutoff
+     * @param reach             the site-level locations the aggregate is restricted to when no
+     *                          location is named; {@code null} means no restriction, an empty set
+     *                          means an all-zero view — the two must not be collapsed. Ignored when
+     *                          {@code locationId} or {@code storageLocationId} names a location,
+     *                          which is the caller's own restriction.
+     * @return availability view with on-hand, allocated, ATP, and forecast quantities
+     */
+    @NonNull
+    AvailabilityView queryAvailabilityWithinReach(
+            @NonNull String productSku,
+            @Nullable UUID locationId,
+            @Nullable UUID storageLocationId,
+            @Nullable InventorySourceType sourceType,
+            @Nullable Instant horizon,
+            @Nullable Set<UUID> reach);
 }

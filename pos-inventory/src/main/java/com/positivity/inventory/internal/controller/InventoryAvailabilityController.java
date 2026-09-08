@@ -10,6 +10,7 @@ import com.positivity.inventory.internal.exception.InvalidParamCombinationExcept
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.InventoryAvailabilityService;
 import com.positivity.inventory.internal.service.InventoryLeadTimeService;
+import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,6 +23,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -49,11 +51,15 @@ public class InventoryAvailabilityController {
 
     private final InventoryAvailabilityService availabilityService;
     private final InventoryLeadTimeService inventoryLeadTimeService;
+    private final LocationScopeService locationScopeService;
 
     public InventoryAvailabilityController(
-            InventoryAvailabilityService availabilityService, InventoryLeadTimeService inventoryLeadTimeService) {
+            InventoryAvailabilityService availabilityService,
+            InventoryLeadTimeService inventoryLeadTimeService,
+            LocationScopeService locationScopeService) {
         this.availabilityService = availabilityService;
         this.inventoryLeadTimeService = inventoryLeadTimeService;
+        this.locationScopeService = locationScopeService;
     }
 
     @GetMapping("/{productId}")
@@ -307,6 +313,23 @@ public class InventoryAvailabilityController {
         return ResponseEntity.ok(resolveAvailability(productSku, locationId, storageLocationId, sourceType, horizon));
     }
 
+    /**
+     * The shared body of the two SKU reads, and the point where this endpoint's location scope is
+     * decided (ADR-0061 §3, #1872).
+     *
+     * <p>The decision lives here rather than in the service because here is where a caller exists:
+     * {@code @PreAuthorize} has just proven this request holds {@code inventory:availability:read},
+     * so {@link LocationScopeService#narrowTo} reads a scope that is genuinely the caller's. The
+     * service's availability read is shared with internal system actors that have no caller at all
+     * (the outbox snapshot in {@code InventoryFactPublisher}), and a scope decision taken there
+     * fired against a non-caller and rolled their transaction back (#1887).
+     *
+     * <p>{@code narrowTo} keeps both shapes: the location the view is keyed on
+     * ({@code storageLocationId} winning over {@code locationId}) is gated when named — 403
+     * {@code LOCATION_SCOPE_DENIED} before the service is touched — and with neither named, a
+     * scoped caller's reach is resolved and handed to the service to sum the SKU-wide aggregate
+     * over.
+     */
     private AvailabilityView resolveAvailability(
             String sku,
             UUID locationId,
@@ -314,7 +337,12 @@ public class InventoryAvailabilityController {
             InventorySourceType sourceType,
             java.time.Instant horizon) {
         validateLocationAndSourceType(locationId, sourceType);
-        return availabilityService.queryAvailability(sku, locationId, storageLocationId, sourceType, horizon);
+        UUID scopeLocationId = storageLocationId != null ? storageLocationId : locationId;
+        Set<UUID> reach = locationScopeService
+                .narrowTo(scopeLocationId, InventoryPermissionRegistry.AVAILABILITY_READ)
+                .orElse(null);
+        return availabilityService.queryAvailabilityWithinReach(
+                sku, locationId, storageLocationId, sourceType, horizon, reach);
     }
 
     @GetMapping("/lead-time")
