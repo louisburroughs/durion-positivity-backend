@@ -10,7 +10,11 @@ import com.positivity.supplier.internal.entity.SupplierTransmissionIntentEntity;
 import com.positivity.supplier.internal.enums.TransmissionAttemptState;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
+import org.hibernate.resource.jdbc.spi.StatementInspector;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -37,7 +41,10 @@ import org.springframework.data.domain.PageRequest;
             "spring.datasource.username=sa",
             "spring.datasource.password=",
             "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate"
+            "spring.jpa.hibernate.ddl-auto=validate",
+            "spring.jpa.properties.hibernate.session_factory.statement_inspector="
+                    + "com.positivity.supplier.internal.repository.SupplierTransmissionIntentRepositoryTest"
+                    + "$CapturedSql"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({JpaConfig.class, TestClockConfig.class})
@@ -287,6 +294,47 @@ class SupplierTransmissionIntentRepositoryTest {
             assertThat(intentRepository.search(null, null, null, null, null, PageRequest.of(1, 2)))
                     .extracting(SupplierTransmissionIntentEntity::getPurchaseOrderNumber)
                     .containsExactly("PO-OLDEST");
+        }
+
+        @Test
+        void emitsNoUntypedPlaceholderForAnAbsentFilter() {
+            // The regression guard for issue #1891, and the one assertion here that H2 cannot make
+            // on its own. Written as `(:param IS NULL OR column = :param)`, this search emitted a
+            // bare `? is null`, which H2 accepts and PostgreSQL rejects at parse time -- before any
+            // value is bound, so every call to the endpoint was a 500 while this test class stayed
+            // green. CI has no PostgreSQL to fail on it, so what is asserted instead is the shape
+            // of the SQL: an absent filter must contribute no placeholder at all.
+            CapturedSql.clear();
+
+            intentRepository.search(null, null, null, null, null, PageRequest.of(0, 10));
+
+            assertThat(CapturedSql.statements())
+                    .isNotEmpty()
+                    .allSatisfy(sql -> assertThat(sql.replace(" ", "")).doesNotContain("?isnull"));
+        }
+    }
+
+    /**
+     * Records the SQL Hibernate actually emits, so {@code emitsNoUntypedPlaceholderForAnAbsentFilter}
+     * can assert on its shape. Registered through {@code hibernate.session_factory.statement_inspector},
+     * which instantiates it by name -- hence public, static and no-arg.
+     */
+    public static final class CapturedSql implements StatementInspector {
+
+        private static final List<String> STATEMENTS = Collections.synchronizedList(new ArrayList<>());
+
+        static void clear() {
+            STATEMENTS.clear();
+        }
+
+        static List<String> statements() {
+            return List.copyOf(STATEMENTS);
+        }
+
+        @Override
+        public String inspect(String sql) {
+            STATEMENTS.add(sql);
+            return sql;
         }
     }
 }

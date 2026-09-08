@@ -9,13 +9,17 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 
 /** The transmission ledger and its dispatch queue (ADR-0052 §§1–2). */
-public interface SupplierTransmissionIntentRepository extends JpaRepository<SupplierTransmissionIntentEntity, UUID> {
+public interface SupplierTransmissionIntentRepository
+        extends JpaRepository<SupplierTransmissionIntentEntity, UUID>,
+                JpaSpecificationExecutor<SupplierTransmissionIntentEntity> {
 
     /**
      * The intent holding a tuple's active claim, if any.
@@ -66,44 +70,41 @@ public interface SupplierTransmissionIntentRepository extends JpaRepository<Supp
     List<SupplierTransmissionIntentEntity> findByPurchaseOrderIdOrderByTransmissionIntentIdDesc(UUID purchaseOrderId);
 
     /**
-     * The shared filter of the cross-purchase-order ledger search, factored out so the page query
-     * and its count cannot drift apart. Every clause is optional: a null parameter switches its
-     * predicate off rather than matching nothing.
-     *
-     * <p>The window binds against {@code createdAt} — when the intent was minted, i.e. when the
-     * order entered the vendor queue — because that is the axis an operator works a worklist by,
-     * and it is immutable: unlike {@code updatedAt} or {@code lastStatusAt}, a row cannot move out
-     * of a window the operator already searched. Half-open ({@code from} inclusive, {@code to}
-     * exclusive) so adjacent windows tile without listing a boundary intent twice.
-     *
-     * <p>{@code searchPattern} is a pre-lowercased, pre-escaped {@code LIKE} pattern (escape
-     * character {@code !}) built by the service, matched against the buyer's and the vendor's order
-     * numbers — the two references a human on either end of a phone call would quote.
+     * The ledger's documented order: newest first by {@code createdAt}, with the UUIDv7 intent id
+     * as the deterministic tie-break for rows minted in the same instant. Imposed by the search
+     * rather than taken from the caller, because it is part of the endpoint's contract.
      */
-    String SEARCH_WHERE = " WHERE (:attemptState IS NULL OR i.attemptState = :attemptState)"
-            + " AND (:vendorProfileId IS NULL OR i.vendorProfileId = :vendorProfileId)"
-            + " AND (:searchPattern IS NULL OR LOWER(i.purchaseOrderNumber) LIKE :searchPattern ESCAPE '!'"
-            + " OR LOWER(i.supplierOrderNumber) LIKE :searchPattern ESCAPE '!')"
-            + " AND (:createdFrom IS NULL OR i.createdAt >= :createdFrom)"
-            + " AND (:createdTo IS NULL OR i.createdAt < :createdTo)";
+    Sort NEWEST_FIRST = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("transmissionIntentId"));
 
     /**
      * The operator's ledger search (issue #1638 decision 6): one query across purchase orders,
      * filterable to the states that need a human — above all {@code MANUAL_REVIEW}.
      *
-     * <p>Newest first by {@code createdAt}, with the UUIDv7 intent id as the deterministic
-     * tie-break for rows minted in the same instant.
+     * <p>Every filter is optional and an unfiltered call pages the whole ledger. The filter is a
+     * {@link TransmissionLedgerSearch} specification rather than a JPQL string of
+     * {@code (:param IS NULL OR …)} clauses: see that class for why the string form returned 500
+     * from PostgreSQL for every call while passing on H2 (issue #1891). Spring Data derives the
+     * count query from the same specification, so page and count cannot drift apart.
+     *
+     * @param attemptState only intents in this state, or null for every state
+     * @param vendorProfileId only intents to this vendor profile, or null for every vendor
+     * @param searchPattern a pre-lowercased, pre-escaped {@code LIKE} pattern (escape character
+     *     {@code !}) matched against the buyer's and the vendor's order numbers, or null
+     * @param createdFrom inclusive lower bound on {@code createdAt}, or null
+     * @param createdTo exclusive upper bound on {@code createdAt}, or null
+     * @param pageable the page to return; its sort is replaced by {@link #NEWEST_FIRST}
+     * @return one page of matching intents, newest first
      */
-    @Query(
-            value = "SELECT i FROM SupplierTransmissionIntentEntity i" + SEARCH_WHERE
-                    + " ORDER BY i.createdAt DESC, i.transmissionIntentId DESC",
-            countQuery = "SELECT COUNT(i) FROM SupplierTransmissionIntentEntity i" + SEARCH_WHERE)
     @NonNull
-    Page<SupplierTransmissionIntentEntity> search(
-            @Param("attemptState") @Nullable TransmissionAttemptState attemptState,
-            @Param("vendorProfileId") @Nullable UUID vendorProfileId,
-            @Param("searchPattern") @Nullable String searchPattern,
-            @Param("createdFrom") @Nullable Instant createdFrom,
-            @Param("createdTo") @Nullable Instant createdTo,
-            @NonNull Pageable pageable);
+    default Page<SupplierTransmissionIntentEntity> search(
+            @Nullable TransmissionAttemptState attemptState,
+            @Nullable UUID vendorProfileId,
+            @Nullable String searchPattern,
+            @Nullable Instant createdFrom,
+            @Nullable Instant createdTo,
+            @NonNull Pageable pageable) {
+        return findAll(
+                TransmissionLedgerSearch.matching(attemptState, vendorProfileId, searchPattern, createdFrom, createdTo),
+                PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), NEWEST_FIRST));
+    }
 }
