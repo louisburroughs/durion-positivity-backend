@@ -517,8 +517,9 @@ Recommended, in preference order — all three, they compose:
 | [#1876](https://github.com/louisburroughs/durion-positivity-backend/issues/1876) | Decide node granularity for irregular coverage: multi-node assignment vs. group nodes | S | — |
 | [#1878](https://github.com/louisburroughs/durion-positivity-backend/issues/1878) | Materialise `FINANCIAL` and `OTHER` ancestor sets onto the location replicas (incl. pos-inventory addendum) | L | — |
 | [#1883](https://github.com/louisburroughs/durion-positivity-backend/issues/1883) | Gateway does not honour token revocation — revoked tokens pass until `exp` (surfaced by #1874) | M | #1874 |
+| [#1885](https://github.com/louisburroughs/durion-positivity-backend/issues/1885) | Scope the four endpoints in modules with no location replica (catalog price override, accounting labor overhead report, warranty claim search, people-contact access assignment), recorded `unscoped` by #1872 | M | #1872 |
 
-All twelve are sub-issues of #1375. Sizes: S ≤ 1 day, M 2–4 days, L 1–2 weeks. #1876 was
+All thirteen are sub-issues of #1375. Sizes: S ≤ 1 day, M 2–4 days, L 1–2 weeks. #1876 was
 decided by ADR-0061 amendment (multi-node assignment, no group nodes) and closed.
 
 #1878 is on the critical path: without a replicated ancestor set there is no way to evaluate
@@ -534,8 +535,13 @@ Token sizes:
 python3 scripts/measure-scope-claim-size.py
 ```
 
-Endpoint inventory (77 endpoints) — parses each mapping method's parameter list rather than
-grepping annotations, per the under-reporting caution in #1375:
+Endpoint inventory (77 endpoints at the time of the spike) — parses each mapping method's
+parameter list rather than grepping annotations, per the under-reporting caution in #1375.
+The same parser now lives in `scripts/audit-rbac.py` section F, where it gates CI against a
+recorded decision per operation (`<module>/location-scope.yaml`, #1872); the CI copy scans to
+the next mapping annotation rather than the fixed 4000-character window below, which missed
+three pos-inventory operations whose signatures sat past it, and it counts 89 operations after
+the ten endpoints added since the spike:
 
 ```bash
 python3 - <<'PY'
