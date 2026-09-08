@@ -130,6 +130,55 @@ class PartyFactReplayServiceImplTest {
     }
 
     @Test
+    @DisplayName("Two exhausted tables that exactly fill the page still report complete")
+    void exhaustedTablesFillingThePageExactlyAreComplete() {
+        // The regression #1900's review caught: each side returned fewer than the limit, so neither
+        // has more to give, but the merge is exactly the page size. Reading completeness off the
+        // merged size alone reported complete=false and handed back a cursor whose only possible
+        // next page is empty.
+        when(commercialPartyRepository.findForReplay(any(), any(), any()))
+                .thenReturn(List.of(commercial(1), commercial(3)));
+        when(personPartyRepository.findForReplay(any(), any(), any()))
+                .thenReturn(List.of(person(2), person(4), person(5)));
+
+        PartyFactReplayResultDto result = service.replayPage(null, null, 5);
+
+        assertThat(result.emitted()).isEqualTo(5);
+        assertThat(result.complete()).isTrue();
+        assertThat(result.nextAfterId()).isNull();
+    }
+
+    @Test
+    @DisplayName("Two exhausted tables that overflow the page are not complete, and resume mid-merge")
+    void exhaustedTablesOverflowingThePageAreNotComplete() {
+        // Both sides are exhausted, but together they exceed one page: the overflow has to be left
+        // for the next call, so this is not complete even though neither table has more rows.
+        when(commercialPartyRepository.findForReplay(any(), any(), any()))
+                .thenReturn(List.of(commercial(1), commercial(3)));
+        when(personPartyRepository.findForReplay(any(), any(), any())).thenReturn(List.of(person(2), person(4)));
+
+        PartyFactReplayResultDto result = service.replayPage(null, null, 3);
+
+        assertThat(result.emitted()).isEqualTo(3);
+        assertThat(result.complete()).isFalse();
+        assertThat(result.nextAfterId()).isEqualTo(id(3));
+    }
+
+    @Test
+    @DisplayName("A table cut off at exactly the page size is not treated as exhausted")
+    void aFullSingleTablePageIsNotComplete() {
+        // The commercial side returned exactly the limit, so the limit — not the data — ended it.
+        when(commercialPartyRepository.findForReplay(any(), any(), any()))
+                .thenReturn(List.of(commercial(1), commercial(2), commercial(3)));
+        when(personPartyRepository.findForReplay(any(), any(), any())).thenReturn(List.of());
+
+        PartyFactReplayResultDto result = service.replayPage(null, null, 3);
+
+        assertThat(result.complete()).isFalse();
+        assertThat(result.nextAfterId()).isEqualTo(id(3));
+    }
+
+    @Test
     @DisplayName("The cursor and updatedSince filter are passed to both repositories unchanged")
     void passesCursorAndFilterToBothTables() {
         UUID after = id(7);

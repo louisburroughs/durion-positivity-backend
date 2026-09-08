@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -395,7 +396,9 @@ class CrmAccountsControllerTest {
         when(partyFactReplayService.replayPage(any(), any(), eq(500)))
                 .thenReturn(new PartyFactReplayResultDto(500, cursor, false, null, Instant.EPOCH));
 
-        mockMvc.perform(post("/v1/crm/accounts/facts/replay"))
+        // X-Authorities replaces the default test authorities (which include ROLE_ADMIN), so this
+        // exercises the crm:fact:replay grant itself rather than passing on the admin fallback.
+        mockMvc.perform(post("/v1/crm/accounts/facts/replay").header("X-Authorities", "crm:fact:replay"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.emitted").value(500))
                 .andExpect(jsonPath("$.nextAfterId").value(cursor.toString()))
@@ -432,6 +435,17 @@ class CrmAccountsControllerTest {
         mockMvc.perform(post("/v1/crm/accounts/facts/replay"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("STATE_CONFLICT"));
+    }
+
+    @Test
+    @DisplayName("#1893: a caller with neither ROLE_ADMIN nor crm:fact:replay is refused with 403")
+    void replayPartyFacts_forbiddenWithoutTheGrant() throws Exception {
+        // The replay writes to the fact stream every downstream module consumes, so it must not be
+        // reachable with an ordinary CRM read grant.
+        mockMvc.perform(post("/v1/crm/accounts/facts/replay").header("X-Authorities", "crm:party:view"))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(partyFactReplayService);
     }
 
     @Test

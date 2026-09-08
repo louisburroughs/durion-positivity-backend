@@ -3,6 +3,8 @@ package com.positivity.customer.internal.service;
 import com.positivity.customer.internal.config.PartyFactReplayService;
 import com.positivity.customer.internal.dto.PartyFactReplayResultDto;
 import com.positivity.customer.internal.entity.AbstractParty;
+import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.exception.CrmConflictException;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
@@ -88,17 +90,31 @@ public class PartyFactReplayServiceImpl implements PartyFactReplayService {
 
         // Each side returns up to pageSize parties after the cursor in id order, so the first
         // pageSize of the merge is the same page a single ordered party table would have given.
-        List<AbstractParty> parties =
-                new ArrayList<>(commercialPartyRepository.findForReplay(afterPartyId, updatedSince, page));
-        parties.addAll(personPartyRepository.findForReplay(afterPartyId, updatedSince, page));
+        List<CommercialParty> commercial = commercialPartyRepository.findForReplay(afterPartyId, updatedSince, page);
+        List<PersonParty> persons = personPartyRepository.findForReplay(afterPartyId, updatedSince, page);
+
+        // Exhaustion is per table, and has to be read before the merge. A side that returned fewer
+        // than pageSize rows had nothing more to give beyond the cursor; a side that returned
+        // exactly pageSize was cut off by the limit and may well have more.
+        boolean bothExhausted = commercial.size() < pageSize && persons.size() < pageSize;
+
+        List<AbstractParty> parties = new ArrayList<>(commercial);
+        parties.addAll(persons);
         parties.sort(BY_ID);
 
-        // A merge shorter than the page means both tables were exhausted: each side returned fewer
-        // than pageSize, and both are bounded by the same cursor, so nothing remains for this filter.
-        boolean complete = parties.size() < pageSize;
-        if (!complete) {
+        // Two exhausted tables can still overflow one page — 600 and 400 against a limit of 1000 —
+        // and what is not published this call has to be left for the next one.
+        boolean truncated = parties.size() > pageSize;
+        if (truncated) {
             parties = parties.subList(0, pageSize);
         }
+
+        // Complete only when neither table has more to give AND everything they gave was published.
+        // Deriving this from the merged size alone (`parties.size() < pageSize`) reads a one-way
+        // implication as an equivalence: a short merge does prove both tables were exhausted, but
+        // exhausted tables do not have to produce a short merge. The 600 + 400 case fills the page
+        // exactly, and would report complete=false with a cursor that only ever yields an empty page.
+        boolean complete = bothExhausted && !truncated;
 
         for (AbstractParty party : parties) {
             factPublisher.partyChanged(party);
