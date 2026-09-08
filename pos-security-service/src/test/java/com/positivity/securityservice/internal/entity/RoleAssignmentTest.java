@@ -44,7 +44,9 @@ class RoleAssignmentTest {
                 .map(Method::getName)
                 .toList();
 
-        assertThat(methods).doesNotContainAnyElementsOf(RETIRED_METHODS);
+        // isNotEmpty first (S5841): reflection returning nothing would pass the exclusion
+        // vacuously and report a retired accessor as gone when it was never looked for.
+        assertThat(methods).isNotEmpty().doesNotContainAnyElementsOf(RETIRED_METHODS);
     }
 
     @Test

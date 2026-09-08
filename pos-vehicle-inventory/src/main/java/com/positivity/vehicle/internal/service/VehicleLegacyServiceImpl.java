@@ -15,6 +15,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -134,7 +135,7 @@ public class VehicleLegacyServiceImpl implements VehicleLegacyService {
         return true;
     }
 
-    private void validateVehicleRequest(@NonNull VehicleLegacyRequest request, boolean vinRequired) {
+    private void validateVehicleRequest(@Nullable VehicleLegacyRequest request, boolean vinRequired) {
         // Reachable: the controller's @RequestBody carries no @Valid/@NotNull here, so a
         // literal `null` JSON body reaches this method (issue #1694).
         if (request == null) {
