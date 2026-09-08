@@ -34,7 +34,7 @@ ADR-0044 Phase 3 split (#874/#875); this module reads them from event-fed
 ## API Endpoints
 
 - `GET /v1/people/{personId}` — retrieve a person
-- `GET /v1/people/{employeeId}` — retrieve an employee profile, including the `contactInfo`
+- `GET /v1/people/employees/{employeeId}` — retrieve an employee profile, including the `contactInfo`
   block (address, personal phone numbers and emergency contact)
   (auth: `people:employee_pii:view`, not the `people:employee:view` the structural reads use — #1898)
 - `DELETE /v1/people/{personId}` — deactivate a person
