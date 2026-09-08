@@ -352,6 +352,10 @@ class RolePermissionBaselineTest {
                         "workorder:workorder:view",
                         "workorder:workorder:assign-technician",
                         "people:availability:view",
+                        // #1895. The dispatch board reads the caller's own primary location on
+                        // load; every staff role holds this, so it is not dispatch-specific
+                        // capability, it is the floor under the exact list.
+                        "people:self:view",
                         // #1612 reference-data reads. A dispatcher assigning a technician to a job
                         // has to resolve the customer, the vehicle and the order behind it first,
                         // and could not: these six reads were the single permission standing

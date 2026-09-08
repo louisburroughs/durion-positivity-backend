@@ -37,10 +37,10 @@ ADR-0044 Phase 3 split (#874/#875); this module reads them from event-fed
 - `GET /v1/people/{employeeId}` — retrieve an employee
 - `DELETE /v1/people/{personId}` — deactivate a person
 - `GET /v1/people/availability` — employee availability query (auth: `people:availability:view`)
-- `GET /v1/people/me/primary-location` — authenticated user's primary location (auth: any
-  authenticated caller — the read is self-scoped, so it carries no permission of its own)
-- `GET /v1/people/me/locations` — authenticated user's active location assignments (auth: any
-  authenticated caller, same reason)
+- `GET /v1/people/me/primary-location` — authenticated user's primary location
+  (auth: `people:self:view`)
+- `GET /v1/people/me/locations` — authenticated user's active location assignments
+  (auth: `people:self:view`)
 - `GET /v1/people/{personId}/users` — linked user accounts for a person
 - `GET /v1/people/users/{userId}/person` — person record for a user ID
 - `GET /v1/people/{assignmentId}` — retrieve a staffing assignment

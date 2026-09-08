@@ -14,6 +14,8 @@ permissions:
     description: "Edit employee records"
   - name: "people:employee:view"
     description: "View employee records"
+  - name: "people:self:view"
+    description: "View your own person record, staffing assignments and primary location"
   - name: "people:skill:assign"
     description: "Assign skills to employees"
   - name: "people:skill:edit"

@@ -29,10 +29,11 @@ import org.springframework.test.web.servlet.MockMvc;
  * Pins the authorization boundary {@code GET /v1/people/me} moved to in issue #1895.
  *
  * <p>The endpoint returns the caller's own person record and nothing else, so it is gated on
- * authentication alone. It used to require {@code people-contact:person:view} — the same
- * permission that opens the whole identity directory, and one granted to the admin role only, so
- * every other role was refused its own record. The directory reads keep that permission, which is
- * the half of the boundary the last test here holds in place.
+ * {@code people:self:view}, which every staff role holds. It used to require
+ * {@code people-contact:person:view} — the same permission that opens the whole identity
+ * directory, and one granted to the admin role only, so every other role was refused its own
+ * record. The directory reads keep that permission, which is the half of the boundary the last
+ * test here holds in place.
  */
 @WebMvcTest(PersonController.class)
 @Import({TestSecurityConfig.class, PersonControllerSelfScopeWebMvcTest.FixedClockConfig.class})
@@ -42,6 +43,9 @@ import org.springframework.test.web.servlet.MockMvc;
 class PersonControllerSelfScopeWebMvcTest {
 
     private static final String AUTHORITIES = "X-Authorities";
+
+    /** The self-scope permission every staff role holds, and nothing else. */
+    private static final String SELF_VIEW_ONLY = "people:self:view";
 
     /** An authority a technician plausibly holds, and that this controller never asks for. */
     private static final String UNRELATED_AUTHORITY = "workorder:workorder:view";
@@ -58,23 +62,33 @@ class PersonControllerSelfScopeWebMvcTest {
     UserPersonTranslationService userPersonTranslationService;
 
     @Test
-    @DisplayName("any authenticated caller can read their own person record")
-    void getCurrentPerson_isReachableByAnyAuthenticatedCaller() throws Exception {
+    @DisplayName("the self permission alone reads the caller's own person record")
+    void getCurrentPerson_needsOnlyTheSelfPermission() throws Exception {
         Person person = new Person();
         person.setId(PERSON_ID);
         when(userPersonTranslationService.getPersonUuidForCurrentUser()).thenReturn(PERSON_ID);
         when(personService.getPersonById(PERSON_ID)).thenReturn(Optional.of(person));
 
-        mockMvc.perform(get("/v1/people/me").header(AUTHORITIES, UNRELATED_AUTHORITY))
+        mockMvc.perform(get("/v1/people/me").header(AUTHORITIES, SELF_VIEW_ONLY))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(PERSON_ID.toString()));
     }
 
+    /**
+     * Authentication alone is not the gate: the customer-facing roles authenticate against this
+     * platform holding no people permission, and must not reach the staff identity directory.
+     */
     @Test
-    @DisplayName("reading the directory still requires the person-view permission")
-    void listPeople_stillRequiresThePersonViewPermission() throws Exception {
-        mockMvc.perform(get("/v1/people").header(AUTHORITIES, UNRELATED_AUTHORITY))
+    @DisplayName("a caller without the self permission is still refused")
+    void getCurrentPerson_refusesACallerWithoutTheSelfPermission() throws Exception {
+        mockMvc.perform(get("/v1/people/me").header(AUTHORITIES, UNRELATED_AUTHORITY))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("the self permission does not open the identity directory")
+    void listPeople_isNotOpenedByTheSelfPermission() throws Exception {
+        mockMvc.perform(get("/v1/people").header(AUTHORITIES, SELF_VIEW_ONLY)).andExpect(status().isForbidden());
     }
 
     /**
