@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -60,5 +61,24 @@ public interface ForecastQuantityService {
      * the widening: it existed to squeeze a fractional expected quantity into an integer field
      * without over-promising, and there is no longer a field to squeeze it into.
      */
+    /**
+     * {@link #forecast} summed over a set of sites, for an availability view narrowed to the
+     * caller's location reach (ADR-0061 §3, #1872). Site-bound supply and pick demand are summed
+     * per site; open reservation demand is SKU-wide (as it is for a single site) and counted once.
+     * An empty set forecasts nothing: incoming and outgoing are zero and projected is {@code onHand}.
+     *
+     * @param stockItemId the SKU
+     * @param siteIds the reachable sites; may be empty
+     * @param horizon optional forecast horizon
+     * @param onHand the on-hand already summed over the same sites
+     * @return the combined forecast
+     */
+    @NonNull
+    ForecastQuantities forecastWithin(
+            @NonNull String stockItemId,
+            @NonNull Set<UUID> siteIds,
+            @Nullable Instant horizon,
+            @NonNull BigDecimal onHand);
+
     record ForecastQuantities(BigDecimal incomingQty, BigDecimal outgoingQty, BigDecimal projectedAvailable) {}
 }

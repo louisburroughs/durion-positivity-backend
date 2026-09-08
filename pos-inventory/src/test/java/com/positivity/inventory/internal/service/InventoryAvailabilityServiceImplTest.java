@@ -16,9 +16,12 @@ import com.positivity.inventory.internal.exception.ProductNotFoundException;
 import com.positivity.inventory.internal.repository.InventoryLedgerEntryRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
 import com.positivity.inventory.internal.repository.LocationRefRepository;
+import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
+import com.positivity.security.common.LocationScopeDeniedException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,6 +57,9 @@ class InventoryAvailabilityServiceImplTest {
     @Mock
     private LocationRefRepository locationRefRepository;
 
+    @Mock
+    private LocationScopeService locationScopeService;
+
     private InventoryAvailabilityServiceImpl service;
 
     @BeforeEach
@@ -81,7 +87,8 @@ class InventoryAvailabilityServiceImplTest {
                 new com.positivity.inventory.internal.service.QuantityScaleGuard(
                         org.mockito.Mockito.mock(com.positivity.inventory.internal.service.UomConversionService.class)),
                 locationRefRepository,
-                java.time.Clock.systemUTC());
+                java.time.Clock.systemUTC(),
+                locationScopeService);
     }
 
     @Test
@@ -452,5 +459,90 @@ class InventoryAvailabilityServiceImplTest {
         service.queryAvailability(sku, null, binId, null);
 
         verify(forecastQuantityService).forecast(Mockito.eq(sku), Mockito.eq(siteId), Mockito.isNull(), Mockito.any());
+    }
+
+    // ─── ADR-0061 §3 (#1872): location scope on the SKU-wide view ───────────
+
+    @Test
+    void queryAvailability_scopedNoLocation_sumsOnlyReachableRowsAndForecastsTheirSites() {
+        String productSku = "SKU-123";
+        UUID binUnderLoc1 = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
+        when(stockSummaryRepository.findByStockItemId(productSku))
+                .thenReturn(List.of(
+                        summary(productSku, LOC_1, 10, 1, 0),
+                        summary(productSku, binUnderLoc1, 4, 0, 0),
+                        summary(productSku, LOC_2, 5, 2, 0),
+                        summary(productSku, null, 3, 0, 0)));
+        when(storageLocationReplicaRepository.findById(binUnderLoc1))
+                .thenReturn(java.util.Optional.of(
+                        com.positivity.inventory.internal.entity.ExtStorageLocationReplica.builder()
+                                .storageLocationId(binUnderLoc1)
+                                .siteId(LOC_1)
+                                .build()));
+        when(locationScopeService.narrowTo(null, InventoryPermissionRegistry.AVAILABILITY_READ))
+                .thenReturn(java.util.Optional.of(Set.of(LOC_1)));
+        when(forecastQuantityService.forecastWithin(eq(productSku), eq(Set.of(LOC_1)), any(), any()))
+                .thenReturn(new ForecastQuantityService.ForecastQuantities(
+                        new BigDecimal("2"), new BigDecimal("1"), new BigDecimal("15")));
+        when(inventoryLedgerEntryRepository.findUnitsOfMeasureByStockItem(eq(productSku), any(Pageable.class)))
+                .thenReturn(List.of());
+
+        AvailabilityView result = service.queryAvailability(productSku, null, null, null);
+
+        // LOC_1 (10) + its bin (4); LOC_2 and the NULL-location row are outside the reach.
+        assertThat(result.getOnHandQuantity()).isEqualByComparingTo("14");
+        assertThat(result.getAllocatedQuantity()).isEqualByComparingTo("1");
+        assertThat(result.getAvailableToPromiseQuantity()).isEqualByComparingTo("13");
+        assertThat(result.getIncomingQty()).isEqualByComparingTo("2");
+        assertThat(result.getProjectedAvailable()).isEqualByComparingTo("15");
+        verify(forecastQuantityService, Mockito.never()).forecast(any(), any(), any(), any());
+        verify(stockSummaryRepository, Mockito.never()).sumExpiredActiveLotOnHand(eq(productSku), eq(LOC_2), any());
+    }
+
+    @Test
+    void queryAvailability_scopedEmptyReach_isAllZeroView() {
+        String productSku = "SKU-123";
+        when(stockSummaryRepository.findByStockItemId(productSku))
+                .thenReturn(List.of(summary(productSku, LOC_1, 10, 1, 0)));
+        when(locationScopeService.narrowTo(null, InventoryPermissionRegistry.AVAILABILITY_READ))
+                .thenReturn(java.util.Optional.of(Set.of()));
+        when(forecastQuantityService.forecastWithin(eq(productSku), eq(Set.of()), any(), any()))
+                .thenReturn(new ForecastQuantityService.ForecastQuantities(
+                        BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO));
+        when(inventoryLedgerEntryRepository.findUnitsOfMeasureByStockItem(eq(productSku), any(Pageable.class)))
+                .thenReturn(List.of());
+
+        AvailabilityView result = service.queryAvailability(productSku, null, null, null);
+
+        assertThat(result.getOnHandQuantity()).isEqualByComparingTo("0");
+        assertThat(result.getAvailableToPromiseQuantity()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void queryAvailability_namedStorageLocation_isGatedOnItThenServedAsBefore() {
+        String productSku = "SKU-123";
+        when(stockSummaryRepository.findByStockItemId(productSku))
+                .thenReturn(List.of(summary(productSku, SLOC_A, 10, 1, 0)));
+        when(inventoryLedgerEntryRepository.findUnitsOfMeasureByStockItemAtLocation(
+                        eq(productSku), eq(SLOC_A), any(Pageable.class)))
+                .thenReturn(List.of());
+
+        service.queryAvailability(productSku, LOC_1, SLOC_A, null);
+
+        verify(locationScopeService).narrowTo(SLOC_A, InventoryPermissionRegistry.AVAILABILITY_READ);
+    }
+
+    @Test
+    void queryAvailability_deniedLocation_propagatesBeforeAnyAggregation() {
+        String productSku = "SKU-123";
+        when(stockSummaryRepository.findByStockItemId(productSku))
+                .thenReturn(List.of(summary(productSku, LOC_1, 10, 1, 0)));
+        when(locationScopeService.narrowTo(LOC_1, InventoryPermissionRegistry.AVAILABILITY_READ))
+                .thenThrow(new LocationScopeDeniedException(
+                        InventoryPermissionRegistry.AVAILABILITY_READ, LOC_1.toString()));
+
+        assertThatThrownBy(() -> service.queryAvailability(productSku, LOC_1, null, null))
+                .isInstanceOf(LocationScopeDeniedException.class);
+        verify(forecastQuantityService, Mockito.never()).forecast(any(), any(), any(), any());
     }
 }

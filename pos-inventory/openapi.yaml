@@ -490,7 +490,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: User lacks required read permission
+          description: FORBIDDEN when the caller lacks inventory:availability:read; LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations that do not cover the requested locationId or storageLocationId (ADR-0061); without either the view is narrowed to the caller's reach instead
         '404':
           content:
             application/json:
@@ -583,7 +583,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: User lacks required read permission
+          description: FORBIDDEN when the caller lacks inventory:availability:read; LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations that do not cover the requested locationId or storageLocationId (ADR-0061); without either the view is narrowed to the caller's reach instead
         '404':
           content:
             application/json:
@@ -2795,7 +2795,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: User lacks required goods receipt create authority
+          description: FORBIDDEN when the caller lacks inventory:goods_receipt:create; LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations that do not cover the request's locationId (ADR-0061)
         '404':
           content:
             application/json:

@@ -202,7 +202,9 @@ public class AsnController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "User lacks required goods receipt create authority",
+            description = "FORBIDDEN when the caller lacks inventory:goods_receipt:create;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                    + " locations that do not cover the request's locationId (ADR-0061)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
@@ -246,6 +248,10 @@ public class AsnController {
         // future ADR update.
         String actorUserId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException("No current user"));
+        // ADR-0061 §3 (#1872): @PreAuthorize answered "may this caller receive goods"; this answers
+        // "...into this location". The body is validated by then, so locationId is non-null.
+        SecurityContextHelper.locationScope()
+                .require(InventoryPermissionRegistry.GOODS_RECEIPT_CREATE, request.getLocationId());
         GoodsReceiptResponse response = asnService.createGoodsReceipt(request, actorUserId);
         return ResponseEntity.status(201).body(response);
     }

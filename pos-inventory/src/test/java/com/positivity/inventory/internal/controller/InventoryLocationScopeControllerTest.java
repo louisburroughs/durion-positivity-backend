@@ -15,6 +15,7 @@ import com.positivity.inventory.internal.cyclecount.service.CycleCountPlanServic
 import com.positivity.inventory.internal.cyclecount.service.CycleCountScheduleService;
 import com.positivity.inventory.internal.cyclecount.service.CycleCountTaskGenerationService;
 import com.positivity.inventory.internal.location.service.InventoryLocationService;
+import com.positivity.inventory.internal.receiving.service.AsnService;
 import com.positivity.inventory.internal.receiving.service.ReturnService;
 import com.positivity.inventory.internal.replenishment.service.ReplenishmentService;
 import com.positivity.inventory.internal.reservation.service.BackorderService;
@@ -81,7 +82,8 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
     ReturnController.class,
     ScrapController.class,
     ShortageController.class,
-    BackorderController.class
+    BackorderController.class,
+    AsnController.class
 })
 @Import({TestSecurityConfig.class, LocationScopeAutoConfiguration.class})
 @ActiveProfiles("test")
@@ -110,7 +112,8 @@ class InventoryLocationScopeControllerTest {
             InventoryPermissionRegistry.RETURN_WRITE,
             InventoryPermissionRegistry.SCRAP_CREATE,
             InventoryPermissionRegistry.SHORTAGE_VIEW,
-            InventoryPermissionRegistry.SHORTAGE_RESOLVE);
+            InventoryPermissionRegistry.SHORTAGE_RESOLVE,
+            InventoryPermissionRegistry.GOODS_RECEIPT_CREATE);
 
     /** One gated operation: the permission its gate uses and the request naming {@link #SHOP}. */
     record GateCase(
@@ -126,6 +129,14 @@ class InventoryLocationScopeControllerTest {
 
     static Stream<GateCase> gates() {
         return Stream.of(
+                new GateCase(
+                        "AsnController.createGoodsReceipt",
+                        InventoryPermissionRegistry.GOODS_RECEIPT_CREATE,
+                        201,
+                        loc -> json(post("/v1/inventory/goods-receipts"), """
+                                {"poId":"%s","locationId":"%s",
+                                 "lines":[{"poLineId":"%s","sku":"SKU-1","quantityReceived":1,"unitCostMinor":100}]}
+                                """.formatted(SOME_ID, loc, SOME_ID))),
                 new GateCase(
                         "CycleCountPlanController.createPlan",
                         InventoryPermissionRegistry.CYCLE_COUNT_INITIATE,
@@ -280,6 +291,9 @@ class InventoryLocationScopeControllerTest {
     @MockitoBean
     BackorderService backorderService;
 
+    @MockitoBean
+    AsnService asnService;
+
     @BeforeEach
     void stubClock() {
         when(clock.instant()).thenReturn(Instant.parse("2026-09-07T00:00:00Z"));
@@ -300,7 +314,8 @@ class InventoryLocationScopeControllerTest {
                 returnService,
                 scrapService,
                 shortageResolutionService,
-                backorderService);
+                backorderService,
+                asnService);
     }
 
     /** A post-rollout caller holding every gated permission, with the given scope in the details. */
@@ -401,6 +416,27 @@ class InventoryLocationScopeControllerTest {
                     .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE))
                     .andExpect(jsonPath("$.message")
                             .value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(SHOP.toString()))));
+        }
+
+        @Test
+        @DisplayName("queryAvailabilityBySku: a denied locationId renders the same envelope")
+        void availabilityDenial() throws Exception {
+            when(inventoryAvailabilityService.queryAvailability(any(), any(), any(), any(), any()))
+                    .thenThrow(new LocationScopeDeniedException(
+                            InventoryPermissionRegistry.AVAILABILITY_READ, SHOP.toString()));
+
+            mockMvc.perform(get("/v1/inventory/availability/by-sku")
+                            .param("productSku", "SKU-1")
+                            .param("locationId", SHOP.toString())
+                            .with(caller(scopedTo(InventoryPermissionRegistry.AVAILABILITY_READ, OTHER_SITE))))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE));
+            mockMvc.perform(get("/v1/inventory/availability")
+                            .param("sku", "SKU-1")
+                            .param("locationId", SHOP.toString())
+                            .with(caller(scopedTo(InventoryPermissionRegistry.AVAILABILITY_READ, OTHER_SITE))))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE));
         }
 
         @Test

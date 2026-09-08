@@ -169,7 +169,10 @@ public class InventoryAvailabilityController {
                                         schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
-                        description = "User lacks required read permission",
+                        description = "FORBIDDEN when the caller lacks inventory:availability:read;"
+                                + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                                + " locations that do not cover the requested locationId or storageLocationId"
+                                + " (ADR-0061); without either the view is narrowed to the caller's reach instead",
                         content =
                                 @Content(
                                         mediaType = "application/json",
@@ -255,7 +258,10 @@ public class InventoryAvailabilityController {
                                         schema = @Schema(implementation = ApiError.class))),
                 @ApiResponse(
                         responseCode = "403",
-                        description = "User lacks required read permission",
+                        description = "FORBIDDEN when the caller lacks inventory:availability:read;"
+                                + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to"
+                                + " locations that do not cover the requested locationId or storageLocationId"
+                                + " (ADR-0061); without either the view is narrowed to the caller's reach instead",
                         content =
                                 @Content(
                                         mediaType = "application/json",

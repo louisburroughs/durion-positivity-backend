@@ -8,6 +8,7 @@ import com.positivity.inventory.internal.repository.ReservationRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -46,6 +47,27 @@ public class ForecastQuantityServiceImpl implements ForecastQuantityService {
 
         BigDecimal outgoingQty = reservationRemainder(stockItemId, horizon).add(pickTaskRemainder(stockItemId, siteId));
 
+        return new ForecastQuantities(
+                incomingQty, outgoingQty, onHand.add(incomingQty).subtract(outgoingQty));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull ForecastQuantities forecastWithin(
+            @NonNull String stockItemId,
+            @NonNull Set<UUID> siteIds,
+            @Nullable Instant horizon,
+            @NonNull BigDecimal onHand) {
+        if (siteIds.isEmpty()) {
+            return new ForecastQuantities(BigDecimal.ZERO, BigDecimal.ZERO, onHand);
+        }
+        BigDecimal incomingQty = BigDecimal.ZERO;
+        BigDecimal pickDemand = BigDecimal.ZERO;
+        for (UUID siteId : siteIds) {
+            incomingQty = incomingQty.add(expectedSupplyService.expectedIncomingQuantity(stockItemId, siteId, horizon));
+            pickDemand = pickDemand.add(pickTaskRemainder(stockItemId, siteId));
+        }
+        BigDecimal outgoingQty = reservationRemainder(stockItemId, horizon).add(pickDemand);
         return new ForecastQuantities(
                 incomingQty, outgoingQty, onHand.add(incomingQty).subtract(outgoingQty));
     }

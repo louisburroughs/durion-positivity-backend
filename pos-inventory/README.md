@@ -69,7 +69,7 @@ them (pre-rollout) is unscoped and behaves exactly as before. A denial is `403` 
 
 - **Gate** — the request names the location acted on, so it must be within the caller's reach:
   `createAdjustmentRequest`/`approveAdjustmentRequest`, `createCycleCountPlan`,
-  `createCycleCountSchedule`, `createReplenishmentPolicy`, `createScrap`, `submitReturnToStock`
+  `createCycleCountSchedule`, `createGoodsReceipt`, `createReplenishmentPolicy`, `createScrap`, `submitReturnToStock`
   (every line's location), `deactivateInventoryLocation` (source and destination),
   `getLocationInventory`, `listLocationInventoryItems`, `getLocationInventoryRollup`,
   `queryLeadTime` (when a location or storage location is given), `listShortageOptions` (when a
@@ -81,7 +81,9 @@ them (pre-rollout) is unscoped and behaves exactly as before. A denial is `403` 
   sees only rows within their reach and an empty reach is an empty result (never a 403):
   `listBackorders`, `listCycleCountPlans`, `listCycleCountSchedules`, `listLedgerEntries`,
   `listInventoryStorageLocations`, `listInventoryLocationZones`, `listPurchaseSuggestions`,
-  `getAvailablePutawayTasks`, `getReplenishmentPolicies`, `listScraps`, `getValuation`.
+  `getAvailablePutawayTasks`, `getReplenishmentPolicies`, `listScraps`, `getValuation`,
+  `getAvailabilityBySku`/`listAvailabilityBySku` (SKU-wide view summed over the reach; a storage
+  location or location, when named, is gated).
 
 The reach is expanded over this module's own replica (`LocationHierarchyService.descendantsOf`
 on `location_ref` + `ext_location_parent`); there is no per-request call to pos-location. A
