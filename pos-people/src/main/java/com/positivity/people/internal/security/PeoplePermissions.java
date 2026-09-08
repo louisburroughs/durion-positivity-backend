@@ -39,12 +39,20 @@ public final class PeoplePermissions {
      * View your own person record, staffing assignments and primary location.
      *
      * <p>Self-scoped: the endpoints holding this take no person id — identity comes from the
-     * bearer token — so it grants no reach over anyone else. Every staff role holds it (#1895),
-     * which is the point: reading your own row is not a privilege a technician or an advisor can
-     * sensibly be denied. It exists as a permission rather than an {@code isAuthenticated()}
-     * check so the customer-facing roles stay out and the grant stays visible to
-     * {@code scripts/audit-rbac.py}. Reads over <em>other</em> people belong to
+     * bearer token — so it grants no reach over anyone else. That is why the seed gives it to the
+     * operational staff roles (#1895): reading your own row is not a privilege a technician or an
+     * advisor can sensibly be denied. It exists as a permission rather than an
+     * {@code isAuthenticated()} check so the customer-facing roles stay out and the grant stays
+     * visible to {@code scripts/audit-rbac.py}. Reads over <em>other</em> people belong to
      * {@link #EMPLOYEE_VIEW} or {@link #AVAILABILITY_VIEW}.
+     *
+     * <p>Two roles are ungranted, and neither is an oversight. CUSTOMER and SELF_SERVICE_CUSTOMER
+     * are excluded on purpose — they are the reason this is a permission at all.
+     * SYSTEM_ADMINISTRATOR is excluded for a mechanical reason rather than a policy one: its
+     * seeded grants must equal the keep list inside the already-applied
+     * {@code V31__revoke_system_administrator_out_of_band_grants.sql}, so granting it here would
+     * break that migration's checksum. It holds neither of the permissions these endpoints used
+     * before, so this is no regression for it; see #1898.
      */
     public static final String SELF_VIEW = "people:self:view";
 

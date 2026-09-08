@@ -102,9 +102,8 @@ public class PeopleAvailabilityController {
                     of today, defaulting to the platform's top-level location when none is assigned.
                     Use this tool when a UI or service needs the current user's home location; use listMyLocations \
                     instead to see every active assignment, and getPersonPrimaryLocation for a different person.
-                    Preconditions: the people:self:view permission, which every staff role holds; callers \
-                    without a person link or a primary assignment receive the top-level default location \
-                    with defaulted=true.
+                    Preconditions: the people:self:view permission; callers without a person link or a \
+                    primary assignment receive the top-level default location with defaulted=true.
                     Required inputs: none; identity comes from the bearer token and there are no parameters.
                     Emits a PEOPLE_PRIMARY_LOCATION_GET audit event but changes no state; this is a read-only \
                     projection.
@@ -142,9 +141,9 @@ public class PeopleAvailabilityController {
                     Lists the authenticated caller's staffing assignments that are active today, primary first.
                     Use this tool to populate a location switcher for the current user; use getMyPrimaryLocation \
                     instead when only the single primary location is needed.
-                    Preconditions: the people:self:view permission, which every staff role holds, and the \
-                    caller must be linked to a person in the user-link replica to have any assignment to \
-                    list; the link data is event-fed and can lag the link authority.
+                    Preconditions: the people:self:view permission, and the caller must be linked to a \
+                    person in the user-link replica to have any assignment to list; the link data is \
+                    event-fed and can lag the link authority.
                     Required inputs: none; identity comes from the bearer token and there are no parameters.
                     Emits a PEOPLE_ME_LOCATIONS_LIST audit event but changes no state; this is a read-only \
                     projection.

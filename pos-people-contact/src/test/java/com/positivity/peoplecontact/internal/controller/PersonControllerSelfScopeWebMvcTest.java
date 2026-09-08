@@ -29,7 +29,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * Pins the authorization boundary {@code GET /v1/people/me} moved to in issue #1895.
  *
  * <p>The endpoint returns the caller's own person record and nothing else, so it is gated on
- * {@code people:self:view}, which every staff role holds. It used to require
+ * {@code people:self:view}, seeded to the operational staff roles. It used to require
  * {@code people-contact:person:view} — the same permission that opens the whole identity
  * directory, and one granted to the admin role only, so every other role was refused its own
  * record. The directory reads keep that permission, which is the half of the boundary the last
@@ -44,7 +44,7 @@ class PersonControllerSelfScopeWebMvcTest {
 
     private static final String AUTHORITIES = "X-Authorities";
 
-    /** The self-scope permission every staff role holds, and nothing else. */
+    /** The self-scope permission the operational staff roles hold, and nothing else. */
     private static final String SELF_VIEW_ONLY = "people:self:view";
 
     /** An authority a technician plausibly holds, and that this controller never asks for. */

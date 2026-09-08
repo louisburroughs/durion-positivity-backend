@@ -1426,8 +1426,8 @@ class SecurityGatewayConfigTest {
         // (bit 516)
         assertThat(GatewayPermissionCatalog.authorityForBit(516)).isEqualTo("PERM_catalog:service:ingest");
         // catalog v81 (#1895): reading your own person record, staffing assignments and primary
-        // location. Held by every staff role — the self-scoped reads carry no person id, so this
-        // grants no reach over anyone else (bit 517)
+        // location. Seeded to the operational staff roles — the self-scoped reads carry no person
+        // id, so this grants no reach over anyone else (bit 517)
         assertThat(GatewayPermissionCatalog.authorityForBit(517)).isEqualTo("PERM_people:self:view");
         // beyond array must return null
         assertThat(GatewayPermissionCatalog.authorityForBit(518)).isNull();

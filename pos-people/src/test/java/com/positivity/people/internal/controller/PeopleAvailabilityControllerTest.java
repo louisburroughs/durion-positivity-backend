@@ -31,8 +31,8 @@ import org.springframework.test.web.servlet.MockMvc;
  * the service resolves a null name.
  *
  * <p>Also pins the authorization boundary the {@code /me} endpoints moved to in issue #1895: they
- * are self-scoped reads gated on {@code people:self:view}, which every staff role holds, while
- * the location roster read they used to share a permission with still demands
+ * are self-scoped reads gated on {@code people:self:view}, seeded to the operational staff roles,
+ * while the location roster read they used to share a permission with still demands
  * {@code people:availability:view}.
  */
 @WebMvcTest(PeopleAvailabilityController.class)
@@ -44,7 +44,7 @@ class PeopleAvailabilityControllerTest {
     private static final UUID PERSON_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4c02");
     private static final UUID LOCATION_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
-    /** The self-scope permission every staff role holds, and nothing else. */
+    /** The self-scope permission the operational staff roles hold, and nothing else. */
     private static final String SELF_VIEW_ONLY = "people:self:view";
 
     /** An authority a technician plausibly holds, and that this controller never asks for. */
