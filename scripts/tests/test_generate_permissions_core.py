@@ -279,5 +279,242 @@ class SanitizeOpenApiTest(unittest.TestCase):
             )
 
 
+SEED_SQL_TEMPLATE = """\
+-- Repeatable seed: canonical role -> permission baseline (role_permissions).
+INSERT INTO permissions (
+    id, name, description, domain, resource, action,
+    registered_at, registered_by_service, version, bit_index)
+SELECT gen_random_uuid(), c.name, c.name, c.domain, c.resource, c.action,
+       NOW(), 'pos-security-service', '1.0', c.bit_index
+FROM (VALUES
+    ('catalog:product:view', 'catalog', 'product', 'view', 1),
+    ('catalog:zebra:view', 'catalog', 'zebra', 'view', 2),
+    ('workorder:note:add', 'workorder', 'note', 'add', 3)
+) AS c(name, domain, resource, action, bit_index)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM (VALUES
+    ('ADMIN', 'catalog:product:view'),
+    ('ADMIN', 'catalog:zebra:view'),
+    ('ADMIN', 'workorder:note:add'),
+    ('SHOP_MANAGER', 'catalog:product:view')
+) AS g(role_name, permission_name)
+JOIN roles r ON r.name = g.role_name
+JOIN permissions p ON p.name = g.permission_name
+ON CONFLICT DO NOTHING;
+
+DO $$
+DECLARE
+    missing_permissions TEXT;
+BEGIN
+    SELECT string_agg(DISTINCT g.permission_name, ', ' ORDER BY g.permission_name)
+      INTO missing_permissions
+      FROM (VALUES
+        ('catalog:product:view'),
+        ('catalog:zebra:view'),
+        ('workorder:note:add')
+      ) AS g(permission_name)
+     WHERE NOT EXISTS (SELECT 1 FROM permissions p WHERE p.name = g.permission_name);
+END $$;
+"""
+
+CSV_TEMPLATE = """\
+roleName,permissions
+ADMIN,catalog:product:view;catalog:zebra:view;workorder:note:add
+SERVICE_ADVISOR,catalog:product:view
+SHOP_MANAGER,catalog:product:view
+"""
+
+
+class GrantSourceSyncTest(unittest.TestCase):
+    """#1848: --sync must land the grant, not just the bit."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.generator = load_generator_module()
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.root = Path(self.temp_dir.name)
+        self.seed_path = self.root / self.generator.SEED_SQL_RELPATH
+        self.seed_path.parent.mkdir(parents=True, exist_ok=True)
+        self.seed_path.write_text(SEED_SQL_TEMPLATE, encoding="utf-8")
+        self.csv_path = self.root / self.generator.ROLE_PERMISSIONS_CSV_RELPATH
+        self.csv_path.parent.mkdir(parents=True, exist_ok=True)
+        self.csv_path.write_text(CSV_TEMPLATE, encoding="utf-8")
+
+    def sync(self, grants: dict[str, list[str]], bits: dict[str, int], dry_run: bool = False):
+        seed_messages = self.generator.sync_seed_sql(self.root, grants, bits, dry_run)
+        csv_messages = self.generator.sync_role_permissions_csv(self.root, grants, dry_run)
+        return seed_messages + csv_messages
+
+    def seed_rows(self, marker_attr: str, key_fn_name: str) -> list[str]:
+        text = self.seed_path.read_text(encoding="utf-8")
+        marker = getattr(self.generator, marker_attr)
+        start, end = self.generator._values_block_bounds(text, marker)
+        key_of = getattr(self.generator, key_fn_name)
+        return [k for k in (key_of(line) for line in text[start:end].split("\n")) if k is not None]
+
+    def csv_row(self, role: str) -> list[str]:
+        return self.generator.parse_baseline_grants(self.root)[role]
+
+    def test_split_permission_handles_two_and_three_segment_codes(self) -> None:
+        self.assertEqual(
+            self.generator.split_permission("catalog:tread_design:resolve"),
+            ("catalog", "tread_design", "resolve"),
+        )
+        # Two-segment codes carry an empty resource, matching the rows already in the seed.
+        self.assertEqual(self.generator.split_permission("appointments:cancel"), ("appointments", "", "cancel"))
+        with self.assertRaises(ValueError):
+            self.generator.split_permission("nocolonhere")
+
+    def test_seed_grant_lands_row_grant_and_self_check_in_sorted_position(self) -> None:
+        self.sync({"catalog:tread_design:resolve": ["ADMIN"]}, {"catalog:tread_design:resolve": 42})
+
+        self.assertEqual(
+            self.seed_rows("SEED_PERMISSION_ROWS_MARKER", "_permission_row_key"),
+            ["catalog:product:view", "catalog:tread_design:resolve", "catalog:zebra:view", "workorder:note:add"],
+        )
+        self.assertEqual(
+            self.seed_rows("SEED_GRANT_ROWS_MARKER", "_grant_row_key"),
+            [
+                ("ADMIN", "catalog:product:view"),
+                ("ADMIN", "catalog:tread_design:resolve"),
+                ("ADMIN", "catalog:zebra:view"),
+                ("ADMIN", "workorder:note:add"),
+                ("SHOP_MANAGER", "catalog:product:view"),
+            ],
+        )
+        self.assertEqual(
+            self.seed_rows("SEED_SELF_CHECK_MARKER", "_self_check_row_key"),
+            ["catalog:product:view", "catalog:tread_design:resolve", "catalog:zebra:view", "workorder:note:add"],
+        )
+        self.assertIn(
+            "    ('catalog:tread_design:resolve', 'catalog', 'tread_design', 'resolve', 42),",
+            self.seed_path.read_text(encoding="utf-8"),
+        )
+        self.assertEqual(
+            self.csv_row("ADMIN"),
+            ["catalog:product:view", "catalog:tread_design:resolve", "catalog:zebra:view", "workorder:note:add"],
+        )
+
+    def test_appending_past_the_last_row_keeps_the_comma_grammar(self) -> None:
+        # The last row of a VALUES list carries no trailing comma; appending after it has to
+        # give the old last row one, or the migration no longer parses.
+        self.sync({"zz:last:code": ["ADMIN"]}, {"zz:last:code": 99})
+
+        text = self.seed_path.read_text(encoding="utf-8")
+        self.assertIn("    ('workorder:note:add', 'workorder', 'note', 'add', 3),\n", text)
+        self.assertIn("    ('zz:last:code', 'zz', 'last', 'code', 99)\n", text)
+        # The grant block is keyed on (role, permission), so ADMIN's new row lands mid-list and
+        # SHOP_MANAGER stays the comma-less last row.
+        self.assertIn("    ('ADMIN', 'zz:last:code'),\n", text)
+        self.assertIn("    ('SHOP_MANAGER', 'catalog:product:view')\n", text)
+        self.assertIn("        ('workorder:note:add'),\n        ('zz:last:code')\n", text)
+        self.assertNotIn(",,", text)
+        self.assertNotIn("),\n) AS", text)
+
+    def test_rerunning_the_same_grant_changes_nothing(self) -> None:
+        grants = {"catalog:tread_design:resolve": ["ADMIN"]}
+        bits = {"catalog:tread_design:resolve": 42}
+        self.sync(grants, bits)
+        seed_after_first = self.seed_path.read_text(encoding="utf-8")
+        csv_after_first = self.csv_path.read_text(encoding="utf-8")
+
+        self.assertEqual(self.sync(grants, bits), [])
+        self.assertEqual(self.seed_path.read_text(encoding="utf-8"), seed_after_first)
+        self.assertEqual(self.csv_path.read_text(encoding="utf-8"), csv_after_first)
+
+    def test_non_seed_role_grant_stays_out_of_the_sql_grant_and_self_check_blocks(self) -> None:
+        # The seed may only grant to the roles Flyway still creates (#1613 D8), and section 4 is
+        # pinned equal to section 3 by RolePermissionBaselineTest — so a SERVICE_ADVISOR grant is
+        # the CSV's alone. The permission row still lands: role_permissions is FK'd to permissions.
+        self.sync({"catalog:tread_design:resolve": ["SERVICE_ADVISOR"]}, {"catalog:tread_design:resolve": 42})
+
+        self.assertIn("catalog:tread_design:resolve", self.seed_rows("SEED_PERMISSION_ROWS_MARKER", "_permission_row_key"))
+        self.assertNotIn(
+            ("SERVICE_ADVISOR", "catalog:tread_design:resolve"),
+            self.seed_rows("SEED_GRANT_ROWS_MARKER", "_grant_row_key"),
+        )
+        self.assertNotIn("catalog:tread_design:resolve", self.seed_rows("SEED_SELF_CHECK_MARKER", "_self_check_row_key"))
+        self.assertEqual(self.csv_row("SERVICE_ADVISOR"), ["catalog:product:view", "catalog:tread_design:resolve"])
+
+    def test_dry_run_writes_nothing_but_still_reports(self) -> None:
+        before_seed = self.seed_path.read_text(encoding="utf-8")
+        before_csv = self.csv_path.read_text(encoding="utf-8")
+
+        messages = self.sync({"catalog:tread_design:resolve": ["ADMIN"]}, {"catalog:tread_design:resolve": 42}, dry_run=True)
+
+        self.assertTrue(messages)
+        self.assertEqual(self.seed_path.read_text(encoding="utf-8"), before_seed)
+        self.assertEqual(self.csv_path.read_text(encoding="utf-8"), before_csv)
+
+    def test_unknown_role_is_refused_rather_than_invented(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            self.generator.sync_role_permissions_csv(self.root, {"catalog:x:view": ["NO_SUCH_ROLE"]}, False)
+        self.assertIn("NO_SUCH_ROLE", str(ctx.exception))
+        self.assertEqual(self.csv_path.read_text(encoding="utf-8"), CSV_TEMPLATE)
+
+    def test_missing_bit_is_refused(self) -> None:
+        with self.assertRaises(ValueError):
+            self.generator.sync_seed_sql(self.root, {"catalog:x:view": ["ADMIN"]}, {}, False)
+
+    def test_all_granted_permissions_reads_both_sources(self) -> None:
+        self.csv_path.write_text(CSV_TEMPLATE + "TECHNICIAN,only:in:csv\n", encoding="utf-8")
+        granted = self.generator.all_granted_permissions(self.root)
+        self.assertIn("only:in:csv", granted)
+        self.assertIn("workorder:note:add", granted)
+
+    def test_grant_target_precedence_manifest_then_flag_then_admin(self) -> None:
+        manifest = {"catalog:tread_design:resolve": ["SERVICE_ADVISOR"]}
+        # The owning module's decision wins over a run-wide flag.
+        self.assertEqual(
+            self.generator.resolve_grant_roles("catalog:tread_design:resolve", manifest, ["MANAGER"]),
+            ["SERVICE_ADVISOR"],
+        )
+        self.assertEqual(self.generator.resolve_grant_roles("catalog:other:view", manifest, ["MANAGER"]), ["MANAGER"])
+        self.assertEqual(self.generator.resolve_grant_roles("catalog:other:view", manifest, []), ["ADMIN"])
+
+    def test_system_administrator_grants_are_refused(self) -> None:
+        # Its seed block is duplicated in V31 and pinned by RolePermissionBaselineTest; this
+        # script edits only one of the two files, so it must not make the grant at all.
+        with self.assertRaises(ValueError):
+            self.generator.validate_grant_roles(self.root, ["SYSTEM_ADMINISTRATOR"])
+        with self.assertRaises(ValueError):
+            self.generator.resolve_grant_roles("catalog:x:view", {}, ["SYSTEM_ADMINISTRATOR"])
+
+    def test_grant_to_is_preserved_when_a_manifest_is_regenerated(self) -> None:
+        module = self.root / "pos-demo"
+        yaml_path = module / "src" / "main" / "resources" / "permissions.yaml"
+        yaml_path.parent.mkdir(parents=True, exist_ok=True)
+        yaml_path.write_text(
+            'domain: demo\nserviceName: pos-demo\nversion: "1.0"\npermissions:\n'
+            '  - name: "demo:widget:view"\n    description: "View widget"\n'
+            '    grantTo:\n      - "SERVICE_ADVISOR"\n',
+            encoding="utf-8",
+        )
+        java = module / "src" / "main" / "java" / "Demo.java"
+        java.parent.mkdir(parents=True, exist_ok=True)
+        java.write_text(
+            '@PreAuthorize("hasAuthority(\'demo:widget:view\')")\n'
+            '@PreAuthorize("hasAuthority(\'demo:gadget:view\')")\n',
+            encoding="utf-8",
+        )
+
+        self.generator.process_module(module, False, False, {})
+
+        reloaded = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+        entries = {e["name"]: e for e in reloaded["permissions"]}
+        self.assertEqual(entries["demo:widget:view"]["grantTo"], ["SERVICE_ADVISOR"])
+        self.assertNotIn("grantTo", entries["demo:gadget:view"])
+        self.assertEqual(
+            self.generator.collect_manifest_grant_targets(self.root),
+            {"demo:widget:view": ["SERVICE_ADVISOR"]},
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
