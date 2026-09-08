@@ -487,7 +487,7 @@ paths:
 
         Emits a LOCATION_PARENT_ADD event and republishes the child''s location fact, which carries the new edge to replica consumers.
 
-        Returns 400 when parentType is not a recognized value; duplicate and inverse relationships are rejected before the edge is written. Returns 409 CYCLE_DETECTED when childId equals parentId or when the edge would close a cycle on the requested parentType.
+        Returns 400 when parentType is not a recognized value, and 409 CYCLE_DETECTED when childId equals parentId or when the edge would close a cycle on the requested parentType; duplicate and inverse relationships are rejected before the edge is written.
 
         Error responses carry an RFC 9457 ProblemDetail body (application/problem+json) whose detail holds the machine-readable code and whose correlationId matches the X-Correlation-Id response header.
 

@@ -46,12 +46,12 @@ public class PeopleReportsController {
                     Required inputs: startDate and endDate (inclusive, yyyy-MM-dd) and timezone (IANA, used to bucket \
                     minutes into local days); locationId and technicianIds are optional filters, and flaggedOnly \
                     defaults to false.
-                    Location scope: when locationId is given it must lie within the caller's location reach, or \
-                    the request is refused with 403 LOCATION_SCOPE_DENIED. When locationId is omitted and the \
-                    caller's accounting:time:export permission is location-scoped, the report is narrowed to the \
-                    caller's reach — their assigned locations and every location beneath them — rather than \
-                    refused; a caller with no reach receives an empty report. A caller whose permission is not \
-                    location-scoped sees every location.
+                    Location scope: when locationId is given it must lie within the caller's location reach, \
+                    or the request is refused with 403 LOCATION_SCOPE_DENIED. When locationId is omitted and \
+                    the caller's accounting:time:export permission is location-scoped, the report is narrowed \
+                    to the caller's reach — their assigned locations and every location beneath them — rather \
+                    than refused; a caller with no reach receives an empty report, and a caller whose \
+                    permission is not location-scoped sees every location.
                     Emits a REPORT_ATTENDANCE_VS_JOBTIME_GENERATED audit event but changes no state; rows are \
                     flagged when the absolute discrepancy exceeds the location's configured threshold minutes.
                     Returns 400 when endDate is before startDate or timezone is not a valid IANA zone, and 403 \

@@ -49,7 +49,7 @@ paths:
 
         Required inputs: none are mandatory; locationId (UUID) defaults to the requester''s location and date (yyyy-MM-dd) defaults to today.
 
-        Location scope: when locationId is given it must lie within the caller''s location reach, or the request is refused with 403 LOCATION_SCOPE_DENIED. When locationId is omitted the filter is the requester''s own location; if the caller''s people:availability:view permission is location-scoped and that location lies outside their reach the list is empty rather than refused. A caller whose permission is not location-scoped is unaffected.
+        Location scope: when locationId is given it must lie within the caller''s location reach, or the request is refused with 403 LOCATION_SCOPE_DENIED. When locationId is omitted the filter is the requester''s own location; if the caller''s people:availability:view permission is location-scoped and that location lies outside their reach the list is empty rather than refused, and a caller whose permission is not location-scoped is unaffected.
 
         Emits a PEOPLE_AVAILABILITY_LIST audit event but changes no state; this is a read-only projection.
 
@@ -1024,7 +1024,7 @@ paths:
 
         Required inputs: startDate and endDate (inclusive, yyyy-MM-dd) and timezone (IANA, used to bucket minutes into local days); locationId and technicianIds are optional filters, and flaggedOnly defaults to false.
 
-        Location scope: when locationId is given it must lie within the caller''s location reach, or the request is refused with 403 LOCATION_SCOPE_DENIED. When locationId is omitted and the caller''s accounting:time:export permission is location-scoped, the report is narrowed to the caller''s reach — their assigned locations and every location beneath them — rather than refused; a caller with no reach receives an empty report. A caller whose permission is not location-scoped sees every location.
+        Location scope: when locationId is given it must lie within the caller''s location reach, or the request is refused with 403 LOCATION_SCOPE_DENIED. When locationId is omitted and the caller''s accounting:time:export permission is location-scoped, the report is narrowed to the caller''s reach — their assigned locations and every location beneath them — rather than refused; a caller with no reach receives an empty report, and a caller whose permission is not location-scoped sees every location.
 
         Emits a REPORT_ATTENDANCE_VS_JOBTIME_GENERATED audit event but changes no state; rows are flagged when the absolute discrepancy exceeds the location''s configured threshold minutes.
 
@@ -1597,13 +1597,13 @@ paths:
     get:
       description: 'Returns a page of attendance time entries — clock-in, clock-out and the break minutes inside that window — with each entry''s status and approval decision, oldest submission first.
 
-        Use this tool to build the approvals queue or to find the timeEntryId an approve or reject call needs; do not use listWorkexecWorkSessions, which returns time a technician spent on a workorder task. A time entry is attendance only and carries no workorder reference, so this endpoint cannot answer how long a job took.
+        Use this tool to build the approvals queue or to find the timeEntryId an approve or reject call needs; do not use listWorkexecWorkSessions, which returns time a technician spent on a workorder task; a time entry is attendance only and carries no workorder reference, so this endpoint cannot answer how long a job took.
 
         Preconditions: none; a page with an empty items list is returned rather than an error when nothing matches.
 
         Required inputs: none are mandatory. status, workDate, employeeId and locationId each narrow the result and are unfiltered when omitted; workDate is a calendar day resolved in timeZone, which defaults to UTC; page defaults to 0 and size to 20 with a maximum of 100.
 
-        Location scope: when locationId is given it must lie within the caller''s location reach, or the request is refused with 403 LOCATION_SCOPE_DENIED. When locationId is omitted and the caller''s people:timeEntry:view permission is location-scoped, the page is narrowed to the caller''s reach — their assigned locations and every location beneath them — rather than refused; a caller with no reach receives an empty page. A caller whose permission is not location-scoped sees every location.
+        Location scope: when locationId is given it must lie within the caller''s location reach, or the request is refused with 403 LOCATION_SCOPE_DENIED. When locationId is omitted and the caller''s people:timeEntry:view permission is location-scoped, the page is narrowed to the caller''s reach — their assigned locations and every location beneath them — rather than refused; a caller with no reach receives an empty page, and a caller whose permission is not location-scoped sees every location.
 
         Emits a PEOPLE_TIME_ENTRY_LIST audit event but changes no state.
 
