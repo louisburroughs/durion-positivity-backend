@@ -9,6 +9,7 @@ import com.positivity.invoice.internal.entity.ExtLocationParentReplica;
 import com.positivity.invoice.internal.entity.ExtLocationReplica;
 import com.positivity.invoice.internal.repository.ExtLocationParentReplicaRepository;
 import com.positivity.invoice.internal.repository.ExtLocationReplicaRepository;
+import com.positivity.security.common.LocationAncestorResolver;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -30,7 +31,10 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>{@link #ancestorsOf} answers the two inclusive-of-self ancestor sets a scope check
  *       intersects with the caller's assigned nodes (issue #1870). An unknown location answers
  *       {@link AncestorSets#EMPTY}, which the check treats as deny — fail closed happens there,
- *       not at ingestion.</li>
+ *       not at ingestion. This is the module's {@link LocationAncestorResolver} bean (#1872): the
+ *       service implements the SPI directly rather than being wrapped by a bean in
+ *       {@code internal.config}, because {@code internal.service} already depends on
+ *       {@code internal.config} and the reverse edge would be a package cycle.</li>
  *   <li>{@link #recomputeAncestors} rebuilds the sets for a location <em>and every replicated
  *       descendant</em> after its edges change. Re-parenting a mid-level node invalidates the
  *       sets of everything beneath it, and a parent whose fact arrives after its children's must
@@ -43,7 +47,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class LocationHierarchyService {
+public class LocationHierarchyService implements LocationAncestorResolver {
 
     private final ExtLocationReplicaRepository extLocationReplicaRepository;
     private final ExtLocationParentReplicaRepository extLocationParentReplicaRepository;
@@ -55,6 +59,7 @@ public class LocationHierarchyService {
      * @return both dimensions' sets; {@link AncestorSets#EMPTY} when the replica does not hold
      *     the location
      */
+    @Override
     @Transactional(readOnly = true)
     public @NonNull AncestorSets ancestorsOf(@NonNull UUID locationId) {
         return extLocationReplicaRepository

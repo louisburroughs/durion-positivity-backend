@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.invoice.internal.dto.AdjustmentRequest;
 import com.positivity.invoice.internal.dto.InvoiceDetailsResponse;
 import com.positivity.invoice.internal.entity.Invoice;
@@ -19,6 +20,10 @@ import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.InvoiceRequestValidationException;
 import com.positivity.invoice.internal.repository.InvoiceRepository;
+import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.security.common.LocationAncestorResolver;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.LocationScopeDeniedException;
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
@@ -28,15 +33,23 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 class InvoiceServiceImplTest {
@@ -81,11 +94,30 @@ class InvoiceServiceImplTest {
     private UUID workorderId;
     private UUID locationId;
 
+    /** The node a scoped caller is assigned: a region above the test invoice's location. */
+    private static final UUID REGION_NODE = UUID.fromString("019200aa-0000-7000-8000-00000000a000");
+
+    private static final UUID OTHER_SHOP = UUID.fromString("019200aa-0000-7000-8000-00000000000b");
+
+    /** Replica stand-in: the test location sits under REGION_NODE on the OTHER dimension; OTHER_SHOP does not. */
+    private static final LocationAncestorResolver RESOLVER = id -> {
+        if (id.equals(UUID.fromString("01960003-0000-7000-8000-000000000001"))) {
+            return new AncestorSets(Set.of(id), Set.of(id, REGION_NODE));
+        }
+        if (id.equals(OTHER_SHOP)) {
+            return new AncestorSets(Set.of(id), Set.of(id));
+        }
+        return AncestorSets.EMPTY;
+    };
+
     @BeforeEach
     void setUp() {
         // getInvoice/applyAdjustment delegate to the transactional mapping method
         // through the self-reference; in a unit test point it at the real instance.
         invoiceService.setSelf(invoiceService);
+        // Default caller: a pre-rollout token (no loc_* claims), which ADR-0061 treats as unscoped
+        // so the existing expectations are unchanged (#1872).
+        authenticate(LocationScope.unscoped());
 
         invoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         workorderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -100,6 +132,37 @@ class InvoiceServiceImplTest {
         draftInvoice.setTax(BigDecimal.ZERO);
         draftInvoice.setTotal(BigDecimal.valueOf(100));
         draftInvoice.setLocationId(locationId);
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private static void authenticate(LocationScope scope) {
+        var authentication = new UsernamePasswordAuthenticationToken(
+                "invoice-test-user",
+                null,
+                List.of(
+                        new SimpleGrantedAuthority(com.positivity.invoice.internal.security.InvoicePermissions.VIEW),
+                        new SimpleGrantedAuthority(
+                                com.positivity.invoice.internal.security.InvoicePermissions.MANAGE)));
+        authentication.setDetails(Map.of(
+                GatewaySecurityConstants.DETAIL_USERNAME,
+                "invoice-test-user",
+                GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
+                scope));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+
+    /** A caller whose invoice:invoice:view is scoped (OTHER dimension) to the given assigned nodes. */
+    private static LocationScope viewScopedTo(UUID... nodes) {
+        return LocationScope.of(
+                Set.of(),
+                Set.of(com.positivity.invoice.internal.security.InvoicePermissions.VIEW),
+                Optional.of(Set.of(nodes)),
+                true,
+                RESOLVER);
     }
 
     // ---- getInvoice ----
@@ -119,6 +182,68 @@ class InvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> invoiceService.getInvoice(invoiceId)).isInstanceOf(InvoiceNotFoundException.class);
+    }
+
+    @Nested
+    @DisplayName("getInvoice location scope (ADR-0061 §3, #1872)")
+    class GetInvoiceLocationScope {
+
+        @Test
+        @DisplayName("invoice location in reach: detail is returned")
+        void inReach_returnsDetail() {
+            authenticate(viewScopedTo(REGION_NODE));
+            when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+
+            InvoiceDetailsResponse result = invoiceService.getInvoice(invoiceId);
+
+            assertThat(result.getInvoiceId()).isEqualTo(invoiceId);
+        }
+
+        @Test
+        @DisplayName("invoice location out of reach: LocationScopeDeniedException naming the view permission")
+        void outOfReach_denies() {
+            authenticate(viewScopedTo(OTHER_SHOP));
+            when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+
+            assertThatThrownBy(() -> invoiceService.getInvoice(invoiceId))
+                    .isInstanceOf(LocationScopeDeniedException.class)
+                    .asInstanceOf(
+                            org.assertj.core.api.InstanceOfAssertFactories.type(LocationScopeDeniedException.class))
+                    .satisfies(denied -> {
+                        assertThat(denied.permission())
+                                .isEqualTo(com.positivity.invoice.internal.security.InvoicePermissions.VIEW);
+                        assertThat(denied.locationId()).isEqualTo(locationId.toString());
+                    });
+        }
+
+        @Test
+        @DisplayName("missing invoice stays InvoiceNotFoundException for a scoped caller — existence precedes scope")
+        void missing_stays404() {
+            authenticate(viewScopedTo(OTHER_SHOP));
+            when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> invoiceService.getInvoice(invoiceId)).isInstanceOf(InvoiceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("invoice without a location fails closed for a scoped caller")
+        void locationlessInvoice_deniesScopedCaller() {
+            authenticate(viewScopedTo(REGION_NODE));
+            draftInvoice.setLocationId(null);
+            when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+
+            assertThatThrownBy(() -> invoiceService.getInvoice(invoiceId))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+        }
+
+        @Test
+        @DisplayName("caller whose view grant is global (claims present, permission unscoped) is unchanged")
+        void globalGrant_isNotLocationChecked() {
+            authenticate(LocationScope.of(Set.of(), Set.of(), Optional.of(Set.of(OTHER_SHOP)), true, RESOLVER));
+            when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(draftInvoice));
+
+            assertThat(invoiceService.getInvoice(invoiceId).getInvoiceId()).isEqualTo(invoiceId);
+        }
     }
 
     @Test

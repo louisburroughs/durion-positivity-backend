@@ -198,13 +198,13 @@ paths:
 
         Use this tool for workorder billing; do not use createInvoiceFromOrder, which fronts a sales order at counter-sale checkout with order-authoritative totals.
 
-        Preconditions: the workorder must be complete enough to bill; the call is idempotent on workorderId — a replay returns the workorder''s existing invoice instead of creating a duplicate.
+        Preconditions: the workorder must be complete enough to bill; the call is idempotent on workorderId — a replay returns the workorder''s existing invoice instead of creating a duplicate. A caller whose invoice:manage grant is location-scoped must have locationId within reach (ADR-0061); for such a caller an omitted locationId is denied.
 
         Required inputs: workorderId (UUID); estimateId, approvalId, locationId, customerId, idempotencyKey and lineItems (description, quantity, unitPrice, amount, optional type) are optional, and a missing lineItems list produces an empty zero-subtotal draft.
 
         Emits an INVOICE_CREATE event, persists the per-line tax breakdown, and publishes an invoice-updated notification.
 
-        Returns 201 with the invoice (existing or new), and 400 when workorderId is missing.
+        Returns 201 with the invoice (existing or new), 400 when workorderId is missing, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId.
 
         '
       operationId: createInvoice
@@ -236,6 +236,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/InvoiceGenerationResponse'
           description: Invoice created
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds invoice:manage but its location scope does not cover the invoice's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - invoice:manage
@@ -559,13 +565,13 @@ paths:
 
         Use this tool at order checkout; do not use createInvoice, which builds and prices a draft from workorder data.
 
-        Preconditions: the order must carry final totals and at least one line; the call is idempotent on orderId, and when workorderId is set an existing workorder invoice is returned for tender instead of creating a duplicate.
+        Preconditions: the order must carry final totals and at least one line; the call is idempotent on orderId, and when workorderId is set an existing workorder invoice is returned for tender instead of creating a duplicate. A caller whose invoice:manage grant is location-scoped must have locationId within reach (ADR-0061); for such a caller an omitted locationId is denied.
 
         Required inputs: orderId (UUID), subtotal, taxAmount, totalAmount (non-negative) and lines; customerId, locationId and the deposit fields are optional, but depositSourceType and depositSourceId become mandatory when depositAmount is set.
 
         Emits an INVOICE_CREATE_FROM_ORDER event; a deposit take also registers a deposit credit (idempotent on orderId), and a workorder settlement draws down available deposit credits, reported as depositApplied.
 
-        Returns 201 when a new invoice is created, 200 when an existing invoice is returned (orderId replay or workorder dedupe), and 400 when totals are missing or negative, lines are empty, or deposit fields are inconsistent.
+        Returns 201 when a new invoice is created, 200 when an existing invoice is returned (orderId replay or workorder dedupe), 400 when totals are missing or negative, lines are empty, or deposit fields are inconsistent, and 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId.
 
         '
       operationId: createInvoiceFromOrder
@@ -607,6 +613,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrderInvoiceResponse'
           description: Invoice created
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds invoice:manage but its location scope does not cover the invoice's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
       security:
       - bearerAuth:
         - invoice:manage
@@ -791,13 +803,13 @@ paths:
 
         Use this tool when the invoiceId is already known; use searchInvoices instead when locating an invoice by number, customer name or workorder number.
 
-        Preconditions: the invoice must exist.
+        Preconditions: the invoice must exist. A caller whose invoice:invoice:view grant is location-scoped must have the invoice''s location within reach (ADR-0061).
 
         Required inputs: invoiceId (UUID) as a path parameter; there is no request body.
 
         Emits an INVOICE_GET audit event; no state changes — this is a read-only projection.
 
-        Returns 404 when no invoice exists for the supplied id.
+        Returns 404 when no invoice exists for the supplied id, and 403 LOCATION_SCOPE_DENIED when the invoice exists but its location is outside the caller''s scope.
 
         '
       operationId: getInvoice
@@ -815,6 +827,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/InvoiceDetailsResponse'
           description: Invoice found
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds invoice:invoice:view but its location scope does not cover the invoice's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invoice not found
       security:
       - bearerAuth:
         - invoice:invoice:view

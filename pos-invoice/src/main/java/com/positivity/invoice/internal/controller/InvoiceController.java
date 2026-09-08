@@ -9,6 +9,8 @@ import com.positivity.invoice.internal.dto.RevertRequest;
 import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.InvoiceFinalizationService;
 import com.positivity.invoice.internal.service.OrderInvoiceService;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.dto.InvoiceCreationRequest;
 import com.positivity.shared.dto.InvoiceGenerationResponse;
 import com.positivity.shared.dto.OrderInvoiceCreationRequest;
@@ -24,6 +26,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -46,7 +49,22 @@ import org.springframework.web.bind.annotation.RestController;
 // selectable-but-not-callable defect #1606 fixed for facade tools.
 // InvoiceReadAuthorityTest asserts every handler here carries an explicit guard, so removing the
 // class-level default cannot leave a future method unguarded.
+//
+// Location scope (ADR-0061 §3, #1872): @PreAuthorize answers "may this caller manage invoices";
+// LocationScope.require answers "…at this location". The two create routes are gated here on the
+// request's locationId — the shop the invoice is raised at — so a caller whose invoice:manage grant
+// is location-scoped cannot bill another shop by naming it in the body. getInvoice is gated in
+// InvoiceServiceImpl on the stored invoice's location, after the 404, so the create gate cannot be
+// bypassed by reading the invoice back and ids cannot be probed through the 403.
 public class InvoiceController {
+
+    private static final String LOCATION_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds invoice:manage but its location scope does not cover the invoice's location"
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
+
+    private static final String VIEW_LOCATION_SCOPE_DENIED_DESCRIPTION =
+            "Caller holds invoice:invoice:view but its location scope does not cover the invoice's location"
+                    + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
 
     private final InvoiceService invoiceService;
     private final InvoiceFinalizationService invoiceFinalizationService;
@@ -71,15 +89,22 @@ public class InvoiceController {
                     Use this tool for workorder billing; do not use createInvoiceFromOrder, which fronts a sales \
                     order at counter-sale checkout with order-authoritative totals.
                     Preconditions: the workorder must be complete enough to bill; the call is idempotent on \
-                    workorderId — a replay returns the workorder's existing invoice instead of creating a duplicate.
+                    workorderId — a replay returns the workorder's existing invoice instead of creating a duplicate. \
+                    A caller whose invoice:manage grant is location-scoped must have locationId within reach \
+                    (ADR-0061); for such a caller an omitted locationId is denied.
                     Required inputs: workorderId (UUID); estimateId, approvalId, locationId, customerId, \
                     idempotencyKey and lineItems (description, quantity, unitPrice, amount, optional type) are \
                     optional, and a missing lineItems list produces an empty zero-subtotal draft.
                     Emits an INVOICE_CREATE event, persists the per-line tax breakdown, and publishes an \
                     invoice-updated notification.
-                    Returns 201 with the invoice (existing or new), and 400 when workorderId is missing.
+                    Returns 201 with the invoice (existing or new), 400 when workorderId is missing, and 403 \
+                    LOCATION_SCOPE_DENIED when the caller's location scope does not cover locationId.
                     """)
     @ApiResponse(responseCode = "201", description = "Invoice created")
+    @ApiResponse(
+            responseCode = "403",
+            description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"invoice:manage"})
@@ -103,6 +128,7 @@ public class InvoiceController {
                     @RequestBody
                     @NonNull
                     InvoiceCreationRequest request) {
+        requireInvoiceLocation(request.getLocationId());
         InvoiceGenerationResponse response = invoiceService.createInvoice(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -118,7 +144,8 @@ public class InvoiceController {
                     workorder data.
                     Preconditions: the order must carry final totals and at least one line; the call is idempotent \
                     on orderId, and when workorderId is set an existing workorder invoice is returned for tender \
-                    instead of creating a duplicate.
+                    instead of creating a duplicate. A caller whose invoice:manage grant is location-scoped must \
+                    have locationId within reach (ADR-0061); for such a caller an omitted locationId is denied.
                     Required inputs: orderId (UUID), subtotal, taxAmount, totalAmount (non-negative) and lines; \
                     customerId, locationId and the deposit fields are optional, but depositSourceType and \
                     depositSourceId become mandatory when depositAmount is set.
@@ -126,11 +153,16 @@ public class InvoiceController {
                     (idempotent on orderId), and a workorder settlement draws down available deposit credits, \
                     reported as depositApplied.
                     Returns 201 when a new invoice is created, 200 when an existing invoice is returned (orderId \
-                    replay or workorder dedupe), and 400 when totals are missing or negative, lines are empty, or \
-                    deposit fields are inconsistent.
+                    replay or workorder dedupe), 400 when totals are missing or negative, lines are empty, or \
+                    deposit fields are inconsistent, and 403 LOCATION_SCOPE_DENIED when the caller's location \
+                    scope does not cover locationId.
                     """)
     @ApiResponse(responseCode = "201", description = "Invoice created")
     @ApiResponse(responseCode = "200", description = "Existing invoice returned (replay or workorder dedupe)")
+    @ApiResponse(
+            responseCode = "403",
+            description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
             scopes = {"invoice:manage"})
@@ -156,6 +188,7 @@ public class InvoiceController {
                     @RequestBody
                     @NonNull
                     OrderInvoiceCreationRequest request) {
+        requireInvoiceLocation(request.getLocationId());
         OrderInvoiceResponse response = orderInvoiceService.createInvoiceForOrder(request);
         HttpStatus status = response.isExisting() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity.status(status).body(response);
@@ -193,12 +226,22 @@ public class InvoiceController {
                     date and the resolved workorder number.
                     Use this tool when the invoiceId is already known; use searchInvoices instead when locating an \
                     invoice by number, customer name or workorder number.
-                    Preconditions: the invoice must exist.
+                    Preconditions: the invoice must exist. A caller whose invoice:invoice:view grant is \
+                    location-scoped must have the invoice's location within reach (ADR-0061).
                     Required inputs: invoiceId (UUID) as a path parameter; there is no request body.
                     Emits an INVOICE_GET audit event; no state changes — this is a read-only projection.
-                    Returns 404 when no invoice exists for the supplied id.
+                    Returns 404 when no invoice exists for the supplied id, and 403 LOCATION_SCOPE_DENIED when \
+                    the invoice exists but its location is outside the caller's scope.
                     """)
     @ApiResponse(responseCode = "200", description = "Invoice found")
+    @ApiResponse(
+            responseCode = "403",
+            description = VIEW_LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Invoice not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + InvoicePermissions.VIEW + "')")
     @SecurityRequirement(
             name = "bearerAuth",
@@ -355,5 +398,17 @@ public class InvoiceController {
                     RevertRequest request) {
         return ResponseEntity.ok(
                 invoiceFinalizationService.revert(invoiceId, request.getManagerApprovalCode(), request.getReason()));
+    }
+
+    /**
+     * Location-scope gate for the two create routes (ADR-0061 §3, #1872): the request's
+     * {@code locationId} names the shop the invoice is raised at. Both request types leave it
+     * optional; a scoped caller cannot cover "no location", so an omitted id is denied for them
+     * (the same fail-closed rule pos-workorder applies to a locationless workorder), while an
+     * unscoped or pre-rollout caller is unchanged.
+     */
+    private static void requireInvoiceLocation(@Nullable UUID locationId) {
+        LocationScope scope = SecurityContextHelper.locationScope();
+        scope.require(InvoicePermissions.MANAGE, locationId == null ? "" : locationId.toString());
     }
 }
