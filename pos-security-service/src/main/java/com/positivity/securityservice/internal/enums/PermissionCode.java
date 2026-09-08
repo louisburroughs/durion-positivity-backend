@@ -967,13 +967,15 @@ public enum PermissionCode {
     // grant remains visible to scripts/audit-rbac.py. CUSTOMER and
     // SELF_SERVICE_CUSTOMER are ungranted by design; SYSTEM_ADMINISTRATOR is
     // ungranted because V31's keep list must equal its seeded grants (#1898).
-    PEOPLE__SELF__VIEW(517, "people:self:view");
+    PEOPLE__SELF__VIEW(517, "people:self:view"),
+    // ── Crm (new) ──────────────────────────────────────────────────────────────
+    CRM__FACT__REPLAY(518, "crm:fact:replay");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 81;
+    public static final int CATALOG_VERSION = 82;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

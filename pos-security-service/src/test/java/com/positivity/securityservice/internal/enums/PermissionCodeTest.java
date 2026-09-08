@@ -37,8 +37,8 @@ class PermissionCodeTest {
     // service packages (513-514) and v77's pricing labor rates (510-512). Both numbers move
     // together by design: the version bump is what tells a running gateway its cached catalog is
     // stale.
-    private static final int EXPECTED_PERMISSION_COUNT = 518;
-    private static final int EXPECTED_CATALOG_VERSION = 81;
+    private static final int EXPECTED_PERMISSION_COUNT = 519;
+    private static final int EXPECTED_CATALOG_VERSION = 82;
 
     // -------------------------------------------------------------------------
     // AC-1: Catalog size — EXPECTED_PERMISSION_COUNT entries

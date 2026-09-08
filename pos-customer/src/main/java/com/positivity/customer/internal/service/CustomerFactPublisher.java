@@ -110,6 +110,16 @@ public class CustomerFactPublisher {
     }
 
     /**
+     * Whether facts actually reach the outbox. Ordinary writes tolerate a disabled publisher — the
+     * business change is what matters and the fact is a side effect — but a replay exists only to
+     * produce facts, so one that queues none has done nothing at all and must say so rather than
+     * report a page it never emitted (#1893, mirroring {@code CatalogFactPublisher}).
+     */
+    public boolean publicationEnabled() {
+        return outboxEventWriter.getIfAvailable() != null;
+    }
+
+    /**
      * Emit {@code customer.party.updated} for a just-saved party. Person parties additionally
      * re-emit their {@code customer.person-identity.updated} fact, because creating or updating
      * the individual-customer record changes the person's CRM standing.

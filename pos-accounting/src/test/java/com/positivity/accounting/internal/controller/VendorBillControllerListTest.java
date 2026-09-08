@@ -39,6 +39,8 @@ class VendorBillControllerListTest extends BaseIntegrationTest {
         return VendorBillListRow.builder()
                 .billId(UUID.fromString("018f0000-0000-7000-8000-0000000000aa"))
                 .vendorId(UUID.fromString("018f0000-0000-7000-8000-0000000000bb"))
+                .vendorName("Evergreen Parts Supply")
+                .billNumber("TRACKB-BILL-V1-DUE0904")
                 .dueDate(LocalDateTime.of(2026, 6, 15, 0, 0))
                 .amount(new BigDecimal("1200.00"))
                 .status(VendorBillStatus.APPROVED)
@@ -59,7 +61,12 @@ class VendorBillControllerListTest extends BaseIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(1))
                 .andExpect(jsonPath("$.content[0].amount").value(1200.00))
-                .andExpect(jsonPath("$.content[0].status").value("APPROVED"));
+                .andExpect(jsonPath("$.content[0].status").value("APPROVED"))
+                // Issue #1892: the row must carry human-readable values, not only the two UUIDs.
+                .andExpect(jsonPath("$.content[0].billNumber").value("TRACKB-BILL-V1-DUE0904"))
+                .andExpect(jsonPath("$.content[0].vendorName").value("Evergreen Parts Supply"))
+                .andExpect(jsonPath("$.content[0].billId").value("018f0000-0000-7000-8000-0000000000aa"))
+                .andExpect(jsonPath("$.content[0].vendorId").value("018f0000-0000-7000-8000-0000000000bb"));
     }
 
     @Test

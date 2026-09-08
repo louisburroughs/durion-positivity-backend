@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.config;
 
+import com.positivity.customer.internal.exception.CrmConflictException;
 import com.positivity.customer.internal.exception.CrmDuplicateResourceException;
 import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
 import com.positivity.customer.internal.exception.CrmTooManyRequestsException;
@@ -32,6 +33,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
  * Request (malformed request / field validation)</li>
  * <li>{@link DuplicateRedemptionException} - 409 Conflict</li>
  * <li>{@link CrmDuplicateResourceException} - 409 Conflict</li>
+ * <li>{@link CrmConflictException} - 409 Conflict (state conflict, no duplicate key)</li>
  * <li>{@link MethodArgumentNotValidException} - 400 Bad Request
  * (validation)</li>
  * <li>{@link AccessDeniedException} - 403 Forbidden</li>
@@ -121,6 +123,29 @@ public class CrmExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiError.of(
                         "DUPLICATE_RESOURCE",
+                        ex.getMessage(),
+                        HttpStatus.CONFLICT.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /**
+     * A valid request that conflicts with current module state — currently a party-fact replay
+     * asked for while fact publication is off (#1893). Distinct code from
+     * {@code DUPLICATE_RESOURCE} so a caller can tell "retry once publication is on" from
+     * "this already exists".
+     */
+    @ExceptionHandler(CrmConflictException.class)
+    public ResponseEntity<ApiError> handleConflict(
+            CrmConflictException ex, HttpServletRequest request, HttpServletResponse response) {
+        String path = request != null ? request.getRequestURI() : "";
+        log.warn("State conflict on {}: {}", path, ex.getMessage());
+        String correlationId = resolveCorrelationId(request);
+        response.setHeader(X_CORRELATION_ID, correlationId);
+
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiError.of(
+                        "STATE_CONFLICT",
                         ex.getMessage(),
                         HttpStatus.CONFLICT.value(),
                         Instant.now(clock).toString(),

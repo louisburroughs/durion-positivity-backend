@@ -178,6 +178,75 @@ paths:
       - Customer API
       x-required-permissions:
       - crm:party:create
+  /v1/crm/accounts/facts/replay:
+    post:
+      description: 'Re-publishes customer.party.updated facts for one bounded page of parties so that event-fed replicas in other modules can be seeded or repaired, returning what it emitted and a cursor for the next page.
+
+        Use this tool to fill a consumer''s replica after a first deployment or a consumer outage longer than broker retention; do not use it to fix one party, which republishes itself on its next ordinary update.
+
+        Preconditions: fact publication must be enabled — a replay with it off is refused rather than reported as a successful no-op; replayed facts are indistinguishable from live ones, so consumers apply them through their normal path and their stale guard prevents an older fact regressing newer state.
+
+        Required inputs: none; afterPartyId resumes a previous page, updatedSince restricts to parties changed at or after an instant, and limit bounds the page — it is clamped into 1..1000 rather than rejected, so a mistyped limit still replays a sane page.
+
+        Emits a CUSTOMER_PARTY_FACT_REPLAY event and queues one party fact per party in the page; no CRM state changes.
+
+        Returns 200 with complete=true and a null cursor once the customer base end is reached, 400 when a parameter is malformed, and 409 when fact publication is disabled.
+
+        '
+      operationId: replayPartyFacts
+      parameters:
+      - description: Resume cursor from a previous call; omit to start at the beginning.
+        in: query
+        name: afterPartyId
+        required: false
+        schema:
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          format: uuid
+          type: string
+      - description: Restrict to parties changed at or after this instant; omit to replay all.
+        in: query
+        name: updatedSince
+        required: false
+        schema:
+          example: '2026-08-01T00:00:00Z'
+          format: date-time
+          type: string
+      - description: Maximum facts to emit in this call; clamped into 1–1000.
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 500
+          example: 500
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyFactReplayResultDto'
+          description: What this page emitted and where to resume.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A parameter is malformed (for example a non-UUID afterPartyId).
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Fact publication is disabled, so a replay would emit nothing.
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - crm:fact:replay
+      summary: Re-emit Party Facts for Replica Consumers
+      tags:
+      - CRM Accounts
+      x-required-permissions:
+      - crm:fact:replay
   /v1/crm/accounts/parties:
     get:
       description: 'Returns a paged customer directory that unifies commercial parties and standalone individual customers, with person names and contact points resolved from pos-people.
@@ -4509,6 +4578,54 @@ components:
             type: array
         type: object
       description: All child predicates must match
+    ApiError:
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+          type: string
+        correlationId:
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+          type: string
+        fieldErrors:
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
+          items:
+            $ref: '#/components/schemas/FieldError'
+          type: array
+        message:
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+          type: string
+        nextAction:
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+          type: string
+        referenceId:
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+          type: string
+        status:
+          description: HTTP status code
+          example: 404
+          format: int32
+          type: integer
+        supportAction:
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+          type: string
+        timestamp:
+          description: ISO 8601 UTC timestamp of the error
+          example: '2026-03-17T14:30:00.000Z'
+          type: string
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+      type: object
     AssignPartyTagRequest:
       description: Request to attach a tag to a party
       properties:
@@ -5783,6 +5900,21 @@ components:
       required:
       - value
       type: object
+    FieldError:
+      description: Validation error for a specific request field
+      properties:
+        field:
+          description: Field name
+          example: quantity
+          type: string
+        message:
+          description: Validation failure message
+          example: must be greater than 0
+          type: string
+      required:
+      - field
+      - message
+      type: object
     FollowUpTaskResponse:
       description: A customer follow-up task
       properties:
@@ -6490,6 +6622,32 @@ components:
       - size
       - totalElements
       - totalPages
+      type: object
+    PartyFactReplayResultDto:
+      description: Outcome of one page of a party-fact replay.
+      properties:
+        complete:
+          description: True when no further pages remain for this filter.
+          example: false
+          type: boolean
+        emitted:
+          description: Facts published by this call.
+          example: 500
+          format: int32
+          type: integer
+        nextAfterId:
+          description: Cursor for the next page; null when the customer base end was reached.
+          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
+          format: uuid
+          type: string
+        startedAt:
+          description: When this page began.
+          format: date-time
+          type: string
+        updatedSince:
+          description: The updatedSince filter this page ran under, echoed back.
+          format: date-time
+          type: string
       type: object
     PartyMatch:
       description: A single potential duplicate party match

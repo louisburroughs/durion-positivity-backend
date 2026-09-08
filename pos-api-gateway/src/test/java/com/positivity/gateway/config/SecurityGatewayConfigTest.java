@@ -1145,13 +1145,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 81")
+    @DisplayName("CATALOG_VERSION is 82")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(81);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(82);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 517")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 518")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1429,8 +1429,12 @@ class SecurityGatewayConfigTest {
         // location. Seeded to the operational staff roles — the self-scoped reads carry no person
         // id, so this grants no reach over anyone else (bit 517)
         assertThat(GatewayPermissionCatalog.authorityForBit(517)).isEqualTo("PERM_people:self:view");
+        // catalog v82 (#1893): re-emitting party facts to seed or repair a downstream replica, its
+        // own grant rather than crm:party:view because it writes to the fact stream every
+        // downstream module consumes (bit 518)
+        assertThat(GatewayPermissionCatalog.authorityForBit(518)).isEqualTo("PERM_crm:fact:replay");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(518)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(519)).isNull();
     }
 
     @Test

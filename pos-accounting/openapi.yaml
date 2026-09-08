@@ -13749,6 +13749,10 @@ components:
           example: 01936e5d-1234-7a3d-8b6e-3c4567890123
           format: uuid
           type: string
+        billNumber:
+          description: 'The vendor''s own bill/invoice number, shown in place of the raw billId UUID (issue #1892).'
+          example: INV-2026-001234
+          type: string
         dueDate:
           description: Bill due date; bills matched by this endpoint always have a due date in the requested window
           example: '2026-02-14T00:00:00'
@@ -13770,9 +13774,16 @@ components:
           example: 01936e5b-4567-7a3d-8b6e-1a2345678901
           format: uuid
           type: string
+        vendorName:
+          description: 'Vendor display name, so the list can name the vendor instead of showing the raw vendorId UUID (issue #1892). Null when the bill carries no vendor name; render nothing rather than falling back to the UUID.'
+          example: Evergreen Parts Supply
+          type:
+          - string
+          - 'null'
       required:
       - amount
       - billId
+      - billNumber
       - status
       - vendorId
       type: object

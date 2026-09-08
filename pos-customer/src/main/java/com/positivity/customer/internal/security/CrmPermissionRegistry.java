@@ -116,6 +116,14 @@ public class CrmPermissionRegistry {
     public static final String INQUIRY_VIEW = "crm:inquiry:view";
     public static final String INQUIRY_MANAGE = "crm:inquiry:manage";
 
+    /**
+     * Re-emit party facts so a consumer replica can be seeded or repaired (issue #1893). Separate
+     * from every party permission: a replay reads no more than {@link #PARTY_VIEW} does, but it
+     * writes to the fact stream every downstream module consumes, so it is an operator action
+     * rather than a CRM one. Mirrors pos-catalog's {@code catalog:fact:replay}.
+     */
+    public static final String FACT_REPLAY = "crm:fact:replay";
+
     // Integration Monitoring (Read-Only)
     public static final String PROCESSING_LOG_VIEW = "crm:processing_log:view";
     public static final String SUSPENSE_VIEW = "crm:suspense:view";
@@ -165,6 +173,11 @@ public class CrmPermissionRegistry {
                         BILLING_RULES_EDIT,
                         "Create or update billing rules configuration for a commercial party",
                         "HIGH"),
+                permission(
+                        FACT_REPLAY,
+                        "Re-emit party facts to seed or repair a downstream replica",
+                        "HIGH",
+                        "Issue #1893"),
 
                 // Contact Management (8 permissions)
                 permission(CONTACT_VIEW, "View contact points (email, phone) for a party", "LOW"),

@@ -779,11 +779,17 @@ public class VendorBillServiceImpl implements VendorBillService {
 
     /**
      * Map VendorBill entity to the due-date-window list row (Wave 2 E9, issue #1597).
+     *
+     * <p>Carries {@code billNumber} and {@code vendorName} alongside the identifiers (issue #1892)
+     * so the Payables list has something human-readable to render; both come straight off the bill,
+     * exactly as the sibling {@code GET /v1/accounting/ap/bills} projection reads them.
      */
     private @NonNull VendorBillListRow toListRow(@NonNull VendorBill bill) {
         return VendorBillListRow.builder()
                 .billId(bill.getVendorBillId())
                 .vendorId(bill.getVendorId())
+                .vendorName(bill.getVendorName())
+                .billNumber(bill.getBillNumber())
                 .dueDate(bill.getDueDate())
                 .amount(bill.getTotalAmount())
                 .status(bill.getStatus())

@@ -36,6 +36,8 @@ permissions:
     description: "View assigned roles for contacts on an account"
     deprecated: true
     supersededBy: "crm:contact:view"
+  - name: "crm:fact:replay"
+    description: "Re-emit party facts to seed or repair a downstream replica"
   - name: "crm:followup:manage"
     description: "Manage followup"
   - name: "crm:followup:view"

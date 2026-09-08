@@ -4,12 +4,35 @@
 # repository the checkout came from, in one of three modes:
 #
 #   none          leave the working tree alone (artifacts-only run)
-#   pull-request  push a new branch and open a pull request against base-branch
+#   pull-request  force-push the repo's stable sync branch and open (or reuse)
+#                 one pull request against base-branch
 #   direct        push straight onto base-branch
 #
 # Used by api-artifacts-sync.yml for each repo in the contract chain. The
 # token must be able to push to `repository` (and open PRs in pull-request
 # mode); the workflow token only covers the repo running the workflow.
+#
+# Why pull-request mode force-pushes one stable branch per repository
+# ------------------------------------------------------------------
+# The head branch used to carry the run id, so every run opened a *new* pull
+# request. Each one rewrote the same generated files, so the first to merge left
+# every other one conflicted — regenerated artifacts share almost every line, and
+# nothing about them merges cleanly. Runs 5 and 6 both landed against
+# claude/tier-0-spec-implementation-o5j539 and run 5's PR (#1877) was abandoned
+# unmerged for exactly that reason.
+#
+# The head branch is now derived, not passed: `<head-branch-prefix>/<base>`. One
+# branch per (repository, base branch) pair means one open sync PR per pair,
+# force-pushed to whatever the latest run generated. Because each run regenerates
+# from a fresh checkout of base-branch, the replacement commit sits directly on
+# the current base and the PR diff stays minimal — there is nothing to conflict
+# with, and no stale PR to reconcile.
+#
+# Keying on the base matters as much as keying on the repository: base-branch
+# varies per run (github.ref_name here, the sdk_ref/frontend_ref inputs
+# elsewhere). A single branch per repository would force-push work generated
+# from one base onto a pull request opened against another, and the diff would
+# be nonsense.
 
 name: Commit generated artifacts
 description: Commit a checkout's changes and push them to a branch or open a pull request.
@@ -30,10 +53,27 @@ inputs:
   base-branch:
     description: Branch to push onto (direct) or to open the pull request against (pull-request)
     required: true
-  head-branch:
-    description: Branch to push in pull-request mode
+  head-branch-prefix:
+    description: >-
+      Namespace for this repository's stable sync branch (pull-request mode).
+      The branch pushed is "<prefix>/<base-branch>", with slashes in the base
+      flattened to dashes, so one branch — and therefore one open pull request —
+      exists per repository and base branch, and each run force-pushes over it.
     required: false
     default: ""
+  auto-merge:
+    description: >-
+      "true" turns on GitHub auto-merge for the sync pull request, so it lands by
+      itself once the required checks on it pass. Anything else leaves it to be
+      merged by hand. The caller is responsible for only passing "true" when its
+      stage succeeded end to end — this action cannot see the steps that ran
+      before it.
+    required: false
+    default: "false"
+  auto-merge-method:
+    description: merge, squash or rebase; must be a method the repository allows
+    required: false
+    default: squash
   commit-message:
     description: Commit message
     required: true
@@ -53,9 +93,15 @@ outputs:
   commit:
     description: SHA of the commit that was created, if any
     value: ${{ steps.deliver.outputs.commit }}
+  head-branch:
+    description: The stable sync branch this run pushed, in pull-request mode
+    value: ${{ steps.deliver.outputs.head-branch }}
   pr-url:
     description: URL of the pull request, if one was opened or already existed
     value: ${{ steps.deliver.outputs.pr-url }}
+  auto-merge:
+    description: off, enabled or unavailable
+    value: ${{ steps.deliver.outputs.auto-merge }}
   changed-files:
     description: Number of files the commit touched
     value: ${{ steps.deliver.outputs.changed-files }}
@@ -72,10 +118,12 @@ runs:
         TOKEN: ${{ inputs.token }}
         MODE: ${{ inputs.mode }}
         BASE_BRANCH: ${{ inputs.base-branch }}
-        HEAD_BRANCH: ${{ inputs.head-branch }}
+        HEAD_BRANCH_PREFIX: ${{ inputs.head-branch-prefix }}
         COMMIT_MESSAGE: ${{ inputs.commit-message }}
         PR_TITLE: ${{ inputs.pr-title }}
         PR_BODY: ${{ inputs.pr-body }}
+        AUTO_MERGE: ${{ inputs.auto-merge }}
+        AUTO_MERGE_METHOD: ${{ inputs.auto-merge-method }}
         GH_TOKEN: ${{ inputs.token }}
       run: |
         set -euo pipefail
@@ -83,7 +131,9 @@ runs:
         emit() { echo "$1=$2" >> "$GITHUB_OUTPUT"; }
         emit status unchanged
         emit commit ""
+        emit head-branch ""
         emit pr-url ""
+        emit auto-merge off
         emit changed-files 0
 
         case "${MODE}" in
@@ -94,9 +144,28 @@ runs:
             ;;
         esac
 
-        if [[ "${MODE}" == "pull-request" && -z "${HEAD_BRANCH}" ]]; then
-          echo "::error::head-branch is required in pull-request mode"
-          exit 1
+        # The stable sync branch for this (repository, base branch) pair. Slashes
+        # in the base are flattened because git stores refs as paths: with a base
+        # of "release/2026.09" the unflattened name would be
+        # "<prefix>/release/2026.09", which cannot coexist with a "<prefix>/release"
+        # branch from a base of that name — one would have to become a directory.
+        HEAD_BRANCH=""
+        if [[ "${MODE}" == "pull-request" ]]; then
+          if [[ -z "${HEAD_BRANCH_PREFIX}" ]]; then
+            echo "::error::head-branch-prefix is required in pull-request mode"
+            exit 1
+          fi
+          HEAD_BRANCH="${HEAD_BRANCH_PREFIX}/${BASE_BRANCH//\//-}"
+          # An assertion, not an active defence: the line above always prepends a
+          # non-empty prefix and a slash, so the head is strictly longer than the
+          # base and this cannot fire today. It is kept because the push below is a
+          # force-push — if the derivation rule is ever loosened, this is what stops
+          # the base branch being overwritten instead of a sync branch.
+          if [[ "${HEAD_BRANCH}" == "${BASE_BRANCH}" ]]; then
+            echo "::error::head-branch-prefix '${HEAD_BRANCH_PREFIX}' resolves the sync branch to the base branch '${BASE_BRANCH}'; refusing to force-push over it."
+            exit 1
+          fi
+          emit head-branch "${HEAD_BRANCH}"
         fi
 
         # Stage everything the generators touched, including deletions and new
@@ -144,26 +213,77 @@ runs:
           exit 0
         fi
 
-        git push origin "HEAD:refs/heads/${HEAD_BRANCH}"
-        echo "Pushed ${COMMIT_SHA::7} to ${REPOSITORY}@${HEAD_BRANCH}."
-
-        EXISTING="$(gh pr list --repo "${REPOSITORY}" --head "${HEAD_BRANCH}" --base "${BASE_BRANCH}" --state open --json url --jq '.[0].url // empty')"
-        if [[ -n "${EXISTING}" ]]; then
-          echo "Pull request already open: ${EXISTING}"
-          emit pr-url "${EXISTING}"
-          emit status pull-request
-          exit 0
-        fi
+        # Force, because this branch belongs entirely to this workflow and each run
+        # replaces it wholesale: the commit was built on a fresh checkout of
+        # base-branch, so the previous run's artifacts are superseded rather than
+        # merged. An open pull request follows the new head automatically, which is
+        # the whole point — one PR that always shows the latest regeneration against
+        # the current base, instead of a pile of PRs conflicting with each other.
+        #
+        # Not --force-with-lease: the runner never fetched this branch, so it holds
+        # no ref to reason about, and a lease against an unknown ref either fails
+        # outright or degrades into a plain force with extra ceremony.
+        git push --force origin "HEAD:refs/heads/${HEAD_BRANCH}"
+        echo "Force-pushed ${COMMIT_SHA::7} to ${REPOSITORY}@${HEAD_BRANCH}."
 
         BODY_FILE="$(mktemp)"
         printf '%s\n' "${PR_BODY}" > "${BODY_FILE}"
-        PR_URL="$(gh pr create \
-          --repo "${REPOSITORY}" \
-          --base "${BASE_BRANCH}" \
-          --head "${HEAD_BRANCH}" \
-          --title "${PR_TITLE:-${COMMIT_MESSAGE%%$'\n'*}}" \
-          --body-file "${BODY_FILE}")"
+        TITLE="${PR_TITLE:-${COMMIT_MESSAGE%%$'\n'*}}"
+
+        # Number and URL together: the number is what `gh pr edit` is addressed by
+        # (passing a URL alongside --repo gives gh two repo selectors), the URL is
+        # what the workflow reports.
+        EXISTING_PR="$(gh pr list --repo "${REPOSITORY}" --head "${HEAD_BRANCH}" --base "${BASE_BRANCH}" --state open --json number,url --jq '.[0] | select(.) | "\(.number)\t\(.url)"')"
+        if [[ -n "${EXISTING_PR}" ]]; then
+          PR_NUMBER="${EXISTING_PR%%$'\t'*}"
+          PR_URL="${EXISTING_PR#*$'\t'}"
+          # The force-push already moved this PR onto the new commit, but its title
+          # and body still describe whichever run opened it — a stale run link, a
+          # stale SDK version, and stale per-step outcomes that no longer match the
+          # diff underneath. Rewrite both so the one long-lived PR always describes
+          # the regeneration it currently carries.
+          if gh pr edit "${PR_NUMBER}" --repo "${REPOSITORY}" --title "${TITLE}" --body-file "${BODY_FILE}"; then
+            echo "Updated the open sync pull request: ${PR_URL}"
+          else
+            # Not fatal: the code and the commit are delivered either way, and a
+            # stale description is worth a warning rather than a failed run.
+            echo "::warning::Could not refresh the description of ${PR_URL}; it still describes an earlier run."
+          fi
+        else
+          PR_URL="$(gh pr create \
+            --repo "${REPOSITORY}" \
+            --base "${BASE_BRANCH}" \
+            --head "${HEAD_BRANCH}" \
+            --title "${TITLE}" \
+            --body-file "${BODY_FILE}")"
+          # gh prints the URL and offers no --json; the number is its last segment.
+          PR_NUMBER="${PR_URL##*/}"
+          echo "Opened ${PR_URL}"
+        fi
         rm -f "${BODY_FILE}"
-        echo "Opened ${PR_URL}"
         emit pr-url "${PR_URL}"
         emit status pull-request
+
+        if [[ "${AUTO_MERGE}" != "true" ]]; then
+          exit 0
+        fi
+
+        # Auto-merge lands the PR once the required checks on it pass; it never
+        # merges a pull request that is conflicted or failing, it simply waits. So
+        # this is "merge when green" in the reviewer's sense, and the caller has
+        # already established the other half — that the run which produced these
+        # artifacts passed end to end. Re-enabling on a PR that already has it is a
+        # no-op, which is what makes it safe to do on every run.
+        #
+        # Failure here is a warning, never an error: the branch is pushed and the
+        # pull request exists, which is the delivery this step promised. The usual
+        # cause is the repository not allowing auto-merge, or not allowing
+        # "${AUTO_MERGE_METHOD}" as a merge method — both settings, not defects, and
+        # both leave a perfectly good PR to merge by hand.
+        if gh pr merge "${PR_NUMBER}" --repo "${REPOSITORY}" --auto "--${AUTO_MERGE_METHOD}"; then
+          echo "Auto-merge enabled on ${PR_URL}; it will merge once its required checks pass."
+          emit auto-merge enabled
+        else
+          echo "::warning::Could not enable auto-merge on ${PR_URL}. Check that the repository allows auto-merge and the '${AUTO_MERGE_METHOD}' merge method; the pull request is delivered and can be merged by hand."
+          emit auto-merge unavailable
+        fi

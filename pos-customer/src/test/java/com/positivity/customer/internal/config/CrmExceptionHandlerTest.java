@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.customer.internal.exception.CrmConflictException;
 import com.positivity.customer.internal.exception.CrmDuplicateResourceException;
 import com.positivity.customer.internal.exception.CrmResourceNotFoundException;
 import com.positivity.customer.internal.exception.CrmTooManyRequestsException;
@@ -260,6 +261,8 @@ class CrmExceptionHandlerTest {
                     Named.of("handleDuplicateResource", (HandlerInvocation)
                             (request, response) -> h.handleDuplicateResource(
                                     new CrmDuplicateResourceException("Segment", "VIP"), request, response)),
+                    Named.of("handleConflict", (HandlerInvocation) (request, response) -> h.handleConflict(
+                            new CrmConflictException("Fact publication is disabled"), request, response)),
                     Named.of("handleUnprocessable", (HandlerInvocation) (request, response) -> h.handleUnprocessable(
                             new CrmUnprocessableEntityException("predicate references an unknown attribute"),
                             request,

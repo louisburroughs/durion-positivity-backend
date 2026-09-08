@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.customer.config.WebMvcTestSecurityConfig;
 import com.positivity.customer.internal.config.CrmExceptionHandler;
+import com.positivity.customer.internal.config.PartyFactReplayService;
 import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.service.AccountTierService;
 import com.positivity.customer.internal.service.PartyService;
@@ -56,6 +57,9 @@ class CrmAccountsControllerErrorHandlingTest {
 
     @MockitoBean
     private AccountTierService accountTierService;
+
+    @MockitoBean
+    private PartyFactReplayService partyFactReplayService;
 
     @MockitoBean
     private Clock clock;

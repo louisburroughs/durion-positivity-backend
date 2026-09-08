@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.controller;
 
+import com.positivity.customer.internal.config.PartyFactReplayService;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import com.positivity.customer.internal.dto.CreateCommercialAccountResponse;
 import com.positivity.customer.internal.dto.CreateVehicleForPartyRequest;
@@ -10,6 +11,7 @@ import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.GetPartyResponse;
 import com.positivity.customer.internal.dto.MergePartiesRequest;
 import com.positivity.customer.internal.dto.MergePartiesResponse;
+import com.positivity.customer.internal.dto.PartyFactReplayResultDto;
 import com.positivity.customer.internal.dto.PartyNameRef;
 import com.positivity.customer.internal.dto.PartyNameResolveRequest;
 import com.positivity.customer.internal.dto.ResolveAccountTierRequest;
@@ -25,6 +27,7 @@ import com.positivity.customer.internal.service.AccountTierService;
 import com.positivity.customer.internal.service.PartyService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.LogSanitizer;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -35,6 +38,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -66,10 +70,15 @@ public class CrmAccountsController {
 
     private final PartyService partyService;
     private final AccountTierService accountTierService;
+    private final PartyFactReplayService partyFactReplayService;
 
-    public CrmAccountsController(PartyService partyService, AccountTierService accountTierService) {
+    public CrmAccountsController(
+            PartyService partyService,
+            AccountTierService accountTierService,
+            PartyFactReplayService partyFactReplayService) {
         this.partyService = partyService;
         this.accountTierService = accountTierService;
+        this.partyFactReplayService = partyFactReplayService;
     }
 
     @Operation(operationId = "getAccountTier", summary = "Get Account Tier", description = """
@@ -753,5 +762,71 @@ public class CrmAccountsController {
                     UpsertBillingRulesRequest request) {
         BillingRuleRef result = partyService.upsertBillingRulesForParty(partyId, request);
         return ResponseEntity.ok(result);
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CrmPermissionRegistry.FACT_REPLAY + "')")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"ROLE_ADMIN", CrmPermissionRegistry.FACT_REPLAY})
+    @PostMapping("/facts/replay")
+    @EmitEvent(id = "CUSTOMER_PARTY_FACT_REPLAY", apiVersion = "1")
+    @Operation(
+            operationId = "replayPartyFacts",
+            summary = "Re-emit Party Facts for Replica Consumers",
+            description = """
+            Re-publishes customer.party.updated facts for one bounded page of parties so that \
+            event-fed replicas in other modules can be seeded or repaired, returning what it emitted and \
+            a cursor for the next page.
+            Use this tool to fill a consumer's replica after a first deployment or a consumer outage \
+            longer than broker retention; do not use it to fix one party, which republishes itself on \
+            its next ordinary update.
+            Preconditions: fact publication must be enabled — a replay with it off is refused rather \
+            than reported as a successful no-op; replayed facts are indistinguishable from live ones, so \
+            consumers apply them through their normal path and their stale guard prevents an older fact \
+            regressing newer state.
+            Required inputs: none; afterPartyId resumes a previous page, updatedSince restricts to \
+            parties changed at or after an instant, and limit bounds the page — it is clamped into 1..1000 \
+            rather than rejected, so a mistyped limit still replays a sane page.
+            Emits a CUSTOMER_PARTY_FACT_REPLAY event and queues one party fact per party in the page; \
+            no CRM state changes.
+            Returns 200 with complete=true and a null cursor once the customer base end is reached, 400 \
+            when a parameter is malformed, and 409 when fact publication is disabled.
+            """)
+    @ApiResponse(
+            responseCode = "200",
+            description = "What this page emitted and where to resume.",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = PartyFactReplayResultDto.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "A parameter is malformed (for example a non-UUID afterPartyId).",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "Fact publication is disabled, so a replay would emit nothing.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<PartyFactReplayResultDto> replayPartyFacts(
+            @Parameter(
+                            description = "Resume cursor from a previous call; omit to start at the beginning.",
+                            schema =
+                                    @Schema(
+                                            type = "string",
+                                            format = "uuid",
+                                            example = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"))
+                    @RequestParam(required = false)
+                    UUID afterPartyId,
+            @Parameter(
+                            description = "Restrict to parties changed at or after this instant; omit to replay all.",
+                            schema = @Schema(type = "string", format = "date-time", example = "2026-08-01T00:00:00Z"))
+                    @RequestParam(required = false)
+                    Instant updatedSince,
+            @Parameter(
+                            description = "Maximum facts to emit in this call; clamped into 1–1000.",
+                            schema = @Schema(type = "integer", example = "500", defaultValue = "500"))
+                    @RequestParam(defaultValue = "500")
+                    int limit) {
+        return ResponseEntity.ok(partyFactReplayService.replayPage(afterPartyId, updatedSince, limit));
     }
 }

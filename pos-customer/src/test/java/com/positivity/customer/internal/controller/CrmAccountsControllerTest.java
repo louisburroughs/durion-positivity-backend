@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -15,10 +16,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.customer.config.WebMvcTestSecurityConfig;
 import com.positivity.customer.internal.config.CrmExceptionHandler;
+import com.positivity.customer.internal.config.PartyFactReplayService;
 import com.positivity.customer.internal.dto.DuplicateCheckResponse;
+import com.positivity.customer.internal.dto.PartyFactReplayResultDto;
 import com.positivity.customer.internal.dto.SearchPartiesResponse;
 import com.positivity.customer.internal.dto.UpsertBillingRulesRequest;
 import com.positivity.customer.internal.dto.snapshot.BillingRuleRef;
+import com.positivity.customer.internal.exception.CrmConflictException;
 import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.service.AccountTierService;
 import com.positivity.customer.internal.service.PartyService;
@@ -62,6 +66,9 @@ class CrmAccountsControllerTest {
 
     @MockitoBean
     AccountTierService accountTierService;
+
+    @MockitoBean
+    PartyFactReplayService partyFactReplayService;
 
     @MockitoBean
     java.time.Clock clock;
@@ -377,6 +384,74 @@ class CrmAccountsControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"partyIds\":[]}")
                         .header("X-Authorities", "crm:party:view"))
+                .andExpect(status().isBadRequest());
+    }
+
+    // ─── #1893: POST /v1/crm/accounts/facts/replay ──────────────────────────
+
+    @Test
+    @DisplayName("#1893: a replay page reports what it emitted and where to resume")
+    void replayPartyFacts_returnsPageResult() throws Exception {
+        UUID cursor = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b");
+        when(partyFactReplayService.replayPage(any(), any(), eq(500)))
+                .thenReturn(new PartyFactReplayResultDto(500, cursor, false, null, Instant.EPOCH));
+
+        // X-Authorities replaces the default test authorities (which include ROLE_ADMIN), so this
+        // exercises the crm:fact:replay grant itself rather than passing on the admin fallback.
+        mockMvc.perform(post("/v1/crm/accounts/facts/replay").header("X-Authorities", "crm:fact:replay"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.emitted").value(500))
+                .andExpect(jsonPath("$.nextAfterId").value(cursor.toString()))
+                .andExpect(jsonPath("$.complete").value(false));
+    }
+
+    @Test
+    @DisplayName("#1893: afterPartyId, updatedSince and limit reach the service unchanged")
+    void replayPartyFacts_passesParameters() throws Exception {
+        UUID after = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b");
+        Instant since = Instant.parse("2026-08-01T00:00:00Z");
+        when(partyFactReplayService.replayPage(any(), any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(new PartyFactReplayResultDto(3, null, true, since, Instant.EPOCH));
+
+        mockMvc.perform(post("/v1/crm/accounts/facts/replay")
+                        .param("afterPartyId", after.toString())
+                        .param("updatedSince", since.toString())
+                        .param("limit", "250"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.complete").value(true))
+                .andExpect(jsonPath("$.nextAfterId").doesNotExist());
+
+        verify(partyFactReplayService).replayPage(after, since, 250);
+    }
+
+    @Test
+    @DisplayName("#1893: a replay with fact publication disabled is refused with 409, not a silent no-op")
+    void replayPartyFacts_conflictWhenPublicationDisabled() throws Exception {
+        when(partyFactReplayService.replayPage(any(), any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenThrow(
+                        new CrmConflictException(
+                                "Fact publication is disabled (pos.customer.kafka.enabled=false); a replay would emit nothing"));
+
+        mockMvc.perform(post("/v1/crm/accounts/facts/replay"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("STATE_CONFLICT"));
+    }
+
+    @Test
+    @DisplayName("#1893: a caller with neither ROLE_ADMIN nor crm:fact:replay is refused with 403")
+    void replayPartyFacts_forbiddenWithoutTheGrant() throws Exception {
+        // The replay writes to the fact stream every downstream module consumes, so it must not be
+        // reachable with an ordinary CRM read grant.
+        mockMvc.perform(post("/v1/crm/accounts/facts/replay").header("X-Authorities", "crm:party:view"))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(partyFactReplayService);
+    }
+
+    @Test
+    @DisplayName("#1893: a malformed cursor is a 400, not a 500")
+    void replayPartyFacts_malformedCursorIsBadRequest() throws Exception {
+        mockMvc.perform(post("/v1/crm/accounts/facts/replay").param("afterPartyId", "not-a-uuid"))
                 .andExpect(status().isBadRequest());
     }
 }

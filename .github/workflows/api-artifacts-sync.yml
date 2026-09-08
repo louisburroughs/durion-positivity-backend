@@ -25,11 +25,29 @@
 #   Each stage then commits what it regenerated back to its own repository,
 #   according to `commit_mode`:
 #
-#     pull-request (default)  push api-artifacts-sync/<run id> and open a PR
-#                             against the branch the stage ran on. Opened
-#                             whenever generation succeeded, even if the build
-#                             or tests after it failed — the PR is where that
-#                             breakage gets reviewed.
+#     pull-request (default)  force-push the stage's stable sync branch,
+#                             api-artifacts-sync/<repo>/<base branch>, and open
+#                             or refresh one PR against the branch the stage ran
+#                             on. Opened whenever generation succeeded, even if
+#                             the build or tests after it failed — the PR is
+#                             where that breakage gets reviewed.
+#
+#                             One branch per repository and base branch, rather
+#                             than one per run: regenerated artifacts share
+#                             nearly every line, so a PR per run meant merging
+#                             any one of them left the rest conflicted. Each run
+#                             now replaces the branch with output regenerated
+#                             from the current base, and rewrites the PR's title
+#                             and body to match, so the standing PR always
+#                             describes what it currently carries.
+#
+#                             With `auto_merge` on (the default), a stage that
+#                             passed end to end also turns on GitHub auto-merge,
+#                             so its PR lands by itself once the required checks
+#                             on it pass. A stage that generated something but
+#                             then failed its build or tests still opens the PR
+#                             — that is where the breakage gets reviewed — but
+#                             never auto-merges it.
 #     direct                  push straight onto the branch the stage ran on,
 #                             but only when every step of that stage passed.
 #     none                    commit nothing; artifacts only.
@@ -104,6 +122,16 @@ on:
         required: false
         default: true
         type: boolean
+      auto_merge:
+        description: >-
+          Turn on GitHub auto-merge for each sync pull request whose stage passed
+          end to end, so it lands by itself once the required checks on it pass.
+          A stage that generated something but failed its build or tests still
+          opens its PR for review, and never gets auto-merge. Ignored outside
+          pull-request mode.
+        required: false
+        default: true
+        type: boolean
       commit_mode:
         description: >-
           How each stage delivers what it regenerated to its repository:
@@ -134,9 +162,20 @@ env:
   SDK_DIR: durion-positivity-sdk
   SDK_ANGULAR_DIR: durion-positivity-sdk-angular
   FRONTEND_DIR: durion-positivity-frontend
-  # Branch every stage pushes in pull-request mode; one name across the four
-  # repositories so a run's PRs are easy to find together.
-  SYNC_BRANCH: api-artifacts-sync/${{ github.run_id }}
+  # Stable sync-branch namespace, one per repository in the chain. The commit
+  # action appends the stage's base branch and force-pushes, so each repository
+  # has exactly one sync branch — and one open pull request — per base branch,
+  # carrying the latest regeneration rather than a new PR per run.
+  #
+  # This used to be a single `api-artifacts-sync/<run id>` shared by all four
+  # repositories, which opened a fresh PR every run. Since every sync PR rewrites
+  # the same generated files, merging any one of them left the rest conflicted;
+  # run 5's PR (#1877) was abandoned unmerged for exactly that reason while run 6
+  # (#1879) merged over it.
+  SYNC_BRANCH_BACKEND: api-artifacts-sync/backend
+  SYNC_BRANCH_SDK: api-artifacts-sync/sdk
+  SYNC_BRANCH_SDK_ANGULAR: api-artifacts-sync/sdk-angular
+  SYNC_BRANCH_FRONTEND: api-artifacts-sync/frontend
 
 jobs:
   # ───────────────────────────────────────────────────────────────────────────
@@ -292,6 +331,7 @@ jobs:
       changed_files: ${{ steps.changes.outputs.changed_files }}
       commit_status: ${{ steps.commit.outputs.status || 'skipped' }}
       pr_url: ${{ steps.commit.outputs.pr-url }}
+      auto_merge: ${{ steps.commit.outputs.auto-merge || 'off' }}
     defaults:
       run:
         shell: bash
@@ -422,6 +462,8 @@ jobs:
           COMMIT_MODE: ${{ inputs.commit_mode }}
           GENERATE: ${{ steps.generate.outcome }}
           REF_TYPE: ${{ github.ref_type }}
+          AUTO_MERGE: ${{ inputs.auto_merge }}
+          CAN_DELIVER: ${{ needs.preflight.outputs.backend }}
         run: |
           set -euo pipefail
           mode="${COMMIT_MODE}"
@@ -434,6 +476,29 @@ jobs:
           fi
           echo "mode=${mode}" >> "$GITHUB_OUTPUT"
 
+          # Auto-merge only for a stage that passed end to end — the same bar
+          # `direct` mode applies. A stage that generated artifacts but failed
+          # afterwards still opens its PR, because that PR is where the breakage
+          # gets reviewed; what it must not do is merge itself.
+          #
+          # It also requires the PAT. A pull request opened with the workflow
+          # token does not trigger workflows, so it would carry no checks for
+          # auto-merge to wait on — and "merge when green" against an empty set
+          # of checks means merge immediately, unreviewed and unverified.
+          #
+          # This stage merges without waiting for the frontend stage, which has not
+          # run yet. That is correct rather than a shortcut: these specs are
+          # regenerated from controllers already merged on the base branch, so
+          # landing them cannot break the frontend any further than the merged
+          # controllers already did. The frontend's own sync PR is where that shows
+          # up. Waiting would also be impossible — the frontend stage depends on
+          # this one.
+          auto_merge=false
+          if [[ "${mode}" == "pull-request" && "${AUTO_MERGE}" == "true" && "${GENERATE}" == "success" && "${CAN_DELIVER}" == "true" ]]; then
+            auto_merge=true
+          fi
+          echo "auto_merge=${auto_merge}" >> "$GITHUB_OUTPUT"
+
       - name: Commit regenerated backend artifacts
         id: commit
         if: always() && steps.delivery.outputs.mode != 'none'
@@ -445,8 +510,9 @@ jobs:
           # PAT would otherwise fail even a public-repo checkout with a 401.
           token: ${{ needs.preflight.outputs.backend == 'true' && secrets.CROSS_REPO_TOKEN || github.token }}
           mode: ${{ steps.delivery.outputs.mode }}
+          auto-merge: ${{ steps.delivery.outputs.auto_merge }}
           base-branch: ${{ github.ref_name }}
-          head-branch: ${{ env.SYNC_BRANCH }}
+          head-branch-prefix: ${{ env.SYNC_BRANCH_BACKEND }}
           commit-message: |
             chore(openapi): regenerate API artifacts
 
@@ -455,7 +521,7 @@ jobs:
             aggregate index and the permissions manifests.
 
             Modules: ${{ inputs.modules || 'all configured' }}
-          pr-title: "chore(openapi): regenerate API artifacts (sync run ${{ github.run_number }})"
+          pr-title: "chore(openapi): regenerate API artifacts"
           pr-body: |
             ## Capability & Traceability
             - Capability: n/a — automated artifact regeneration
@@ -500,6 +566,7 @@ jobs:
       build: ${{ steps.build.outcome }}
       commit_status: ${{ steps.commit.outputs.status || 'skipped' }}
       pr_url: ${{ steps.commit.outputs.pr-url }}
+      auto_merge: ${{ steps.commit.outputs.auto-merge || 'off' }}
     defaults:
       run:
         shell: bash
@@ -613,6 +680,7 @@ jobs:
           COMMIT_MODE: ${{ inputs.commit_mode }}
           GENERATE: ${{ steps.generate.outcome }}
           BUILD: ${{ steps.build.outcome }}
+          AUTO_MERGE: ${{ inputs.auto_merge }}
           # Preflight probed the credential against this repository and reports
           # false for an absent, expired, revoked or under-scoped token — the
           # cases a bare "is the secret set" test cannot tell apart. A job's
@@ -642,6 +710,22 @@ jobs:
           fi
           echo "mode=${mode}" >> "$GITHUB_OUTPUT"
 
+          # Auto-merge only for a stage that passed end to end — the same bar
+          # `direct` mode applies. A stage that generated artifacts but failed
+          # afterwards still opens its PR, because that PR is where the breakage
+          # gets reviewed; what it must not do is merge itself.
+          #
+          # It also requires the PAT. A pull request opened with the workflow
+          # token does not trigger workflows, so it would carry no checks for
+          # auto-merge to wait on — and "merge when green" against an empty set
+          # of checks means merge immediately, unreviewed and unverified.
+          auto_merge=false
+          if [[ "${mode}" == "pull-request" && "${AUTO_MERGE}" == "true" && "${CAN_DELIVER}" == "true" \
+                && "${GENERATE}" == "success" && "${BUILD}" == "success" ]]; then
+            auto_merge=true
+          fi
+          echo "auto_merge=${auto_merge}" >> "$GITHUB_OUTPUT"
+
       - name: Commit regenerated SDK
         id: commit
         if: always() && steps.delivery.outputs.mode != 'none'
@@ -653,14 +737,15 @@ jobs:
           # PAT would otherwise fail even a public-repo checkout with a 401.
           token: ${{ needs.preflight.outputs.sdk == 'true' && secrets.CROSS_REPO_TOKEN || github.token }}
           mode: ${{ steps.delivery.outputs.mode }}
+          auto-merge: ${{ steps.delivery.outputs.auto_merge }}
           base-branch: ${{ inputs.sdk_ref }}
-          head-branch: ${{ env.SYNC_BRANCH }}
+          head-branch-prefix: ${{ env.SYNC_BRANCH_SDK }}
           commit-message: |
             chore(generate): regenerate clients from backend OpenAPI specs
 
             Regenerated by the API Artifacts Sync workflow (run ${{ github.run_id }})
             against durion-positivity-backend@${{ github.sha }}.
-          pr-title: "chore(generate): regenerate clients from backend OpenAPI specs (sync run ${{ github.run_number }})"
+          pr-title: "chore(generate): regenerate clients from backend OpenAPI specs"
           pr-body: |
             ## Summary
 
@@ -691,6 +776,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       commit_status: ${{ steps.commit.outputs.status || 'skipped' }}
       pr_url: ${{ steps.commit.outputs.pr-url }}
+      auto_merge: ${{ steps.commit.outputs.auto-merge || 'off' }}
     defaults:
       run:
         shell: bash
@@ -874,6 +960,7 @@ jobs:
           COMMIT_MODE: ${{ inputs.commit_mode }}
           GENERATE: ${{ steps.generate.outcome }}
           PACK: ${{ steps.pack.outcome }}
+          AUTO_MERGE: ${{ inputs.auto_merge }}
           # Preflight probed the credential against this repository and reports
           # false for an absent, expired, revoked or under-scoped token — the
           # cases a bare "is the secret set" test cannot tell apart. A job's
@@ -903,6 +990,22 @@ jobs:
           fi
           echo "mode=${mode}" >> "$GITHUB_OUTPUT"
 
+          # Auto-merge only for a stage that passed end to end — the same bar
+          # `direct` mode applies. A stage that generated artifacts but failed
+          # afterwards still opens its PR, because that PR is where the breakage
+          # gets reviewed; what it must not do is merge itself.
+          #
+          # It also requires the PAT. A pull request opened with the workflow
+          # token does not trigger workflows, so it would carry no checks for
+          # auto-merge to wait on — and "merge when green" against an empty set
+          # of checks means merge immediately, unreviewed and unverified.
+          auto_merge=false
+          if [[ "${mode}" == "pull-request" && "${AUTO_MERGE}" == "true" && "${CAN_DELIVER}" == "true" \
+                && "${GENERATE}" == "success" && "${PACK}" == "success" ]]; then
+            auto_merge=true
+          fi
+          echo "auto_merge=${auto_merge}" >> "$GITHUB_OUTPUT"
+
       - name: Commit regenerated Angular SDK
         id: commit
         if: always() && steps.delivery.outputs.mode != 'none'
@@ -914,15 +1017,16 @@ jobs:
           # PAT would otherwise fail even a public-repo checkout with a 401.
           token: ${{ needs.preflight.outputs.sdk_angular == 'true' && secrets.CROSS_REPO_TOKEN || github.token }}
           mode: ${{ steps.delivery.outputs.mode }}
+          auto-merge: ${{ steps.delivery.outputs.auto_merge }}
           base-branch: ${{ inputs.sdk_angular_ref }}
-          head-branch: ${{ env.SYNC_BRANCH }}
+          head-branch-prefix: ${{ env.SYNC_BRANCH_SDK_ANGULAR }}
           commit-message: |
             chore(generate): regenerate Angular clients at ${{ steps.version.outputs.version }}
 
             Regenerated by the API Artifacts Sync workflow (run ${{ github.run_id }})
             against durion-positivity-backend@${{ github.sha }}. Version bump:
             ${{ inputs.bump_sdk_version }}.
-          pr-title: "chore(generate): regenerate Angular clients at ${{ steps.version.outputs.version }} (sync run ${{ github.run_number }})"
+          pr-title: "chore(generate): regenerate Angular clients"
           pr-body: |
             ## Summary
 
@@ -972,6 +1076,7 @@ jobs:
       unit_tests: ${{ steps.unit_tests.outcome }}
       commit_status: ${{ steps.commit.outputs.status || 'skipped' }}
       pr_url: ${{ steps.commit.outputs.pr-url }}
+      auto_merge: ${{ steps.commit.outputs.auto-merge || 'off' }}
     defaults:
       run:
         shell: bash
@@ -1198,6 +1303,7 @@ jobs:
           BUILD: ${{ steps.build.outcome }}
           CONTRACT_TESTS: ${{ steps.contract_tests.outcome }}
           UNIT_TESTS: ${{ steps.unit_tests.outcome }}
+          AUTO_MERGE: ${{ inputs.auto_merge }}
           # Preflight probed the credential against this repository and reports
           # false for an absent, expired, revoked or under-scoped token — the
           # cases a bare "is the secret set" test cannot tell apart. A job's
@@ -1227,6 +1333,23 @@ jobs:
           fi
           echo "mode=${mode}" >> "$GITHUB_OUTPUT"
 
+          # Auto-merge only for a stage that passed end to end — the same bar
+          # `direct` mode applies. A stage that generated artifacts but failed
+          # afterwards still opens its PR, because that PR is where the breakage
+          # gets reviewed; what it must not do is merge itself.
+          #
+          # It also requires the PAT. A pull request opened with the workflow
+          # token does not trigger workflows, so it would carry no checks for
+          # auto-merge to wait on — and "merge when green" against an empty set
+          # of checks means merge immediately, unreviewed and unverified.
+          auto_merge=false
+          if [[ "${mode}" == "pull-request" && "${AUTO_MERGE}" == "true" && "${CAN_DELIVER}" == "true" \
+                && "${SDK_INSTALL}" == "success" && "${BUILD}" == "success" \
+                && "${CONTRACT_TESTS}" == "success" && "${UNIT_TESTS}" == "success" ]]; then
+            auto_merge=true
+          fi
+          echo "auto_merge=${auto_merge}" >> "$GITHUB_OUTPUT"
+
       - name: Commit imported SDK tarballs
         id: commit
         if: always() && steps.delivery.outputs.mode != 'none'
@@ -1238,15 +1361,16 @@ jobs:
           # PAT would otherwise fail even a public-repo checkout with a 401.
           token: ${{ needs.preflight.outputs.frontend == 'true' && secrets.CROSS_REPO_TOKEN || github.token }}
           mode: ${{ steps.delivery.outputs.mode }}
+          auto-merge: ${{ steps.delivery.outputs.auto_merge }}
           base-branch: ${{ inputs.frontend_ref }}
-          head-branch: ${{ env.SYNC_BRANCH }}
+          head-branch-prefix: ${{ env.SYNC_BRANCH_FRONTEND }}
           commit-message: |
             chore(sdk): import Angular SDK ${{ needs.generate-sdk-angular.outputs.version }} tarballs
 
             Imported by the API Artifacts Sync workflow (run ${{ github.run_id }})
             from durion-positivity-sdk-angular regenerated against
             durion-positivity-backend@${{ github.sha }}.
-          pr-title: "chore(sdk): import Angular SDK ${{ needs.generate-sdk-angular.outputs.version }} tarballs (sync run ${{ github.run_number }})"
+          pr-title: "chore(sdk): import Angular SDK tarballs"
           pr-body: |
             ## Summary
 
@@ -1313,26 +1437,38 @@ jobs:
           COMMIT_MODE: ${{ inputs.commit_mode }}
           BACKEND_COMMIT: ${{ needs.backend-openapi.outputs.commit_status }}
           BACKEND_PR: ${{ needs.backend-openapi.outputs.pr_url }}
+          BACKEND_AUTOMERGE: ${{ needs.backend-openapi.outputs.auto_merge }}
           SDK_COMMIT: ${{ needs.generate-sdk.outputs.commit_status }}
           SDK_PR: ${{ needs.generate-sdk.outputs.pr_url }}
+          SDK_AUTOMERGE: ${{ needs.generate-sdk.outputs.auto_merge }}
           SDK_ANGULAR_COMMIT: ${{ needs.generate-sdk-angular.outputs.commit_status }}
           SDK_ANGULAR_PR: ${{ needs.generate-sdk-angular.outputs.pr_url }}
+          SDK_ANGULAR_AUTOMERGE: ${{ needs.generate-sdk-angular.outputs.auto_merge }}
           FRONTEND_COMMIT: ${{ needs.frontend-tests.outputs.commit_status }}
           FRONTEND_PR: ${{ needs.frontend-tests.outputs.pr_url }}
+          FRONTEND_AUTOMERGE: ${{ needs.frontend-tests.outputs.auto_merge }}
         run: |
           set -euo pipefail
           failed=0
 
           delivery() {
-            # delivery <repo> <status> <pr-url>; informational only, never fails the run.
-            local repo="$1" status="${2:-skipped}" pr="${3:-}"
-            local where="—"
+            # delivery <repo> <status> <pr-url> <auto-merge>; informational only,
+            # never fails the run.
+            local repo="$1" status="${2:-skipped}" pr="${3:-}" automerge="${4:-off}"
+            local where="—" merge="—"
             if [[ -n "$pr" ]]; then
               where="$pr"
             elif [[ "$status" == "pushed" ]]; then
               where="pushed to the stage's branch"
             fi
-            printf '| %s | `%s` | %s |\n' "$repo" "$status" "$where"
+            case "$automerge" in
+              # "off" covers both a disabled auto_merge input and a stage that did
+              # not pass end to end; either way the PR waits for a human.
+              enabled) merge="auto-merges when its checks pass" ;;
+              unavailable) merge="requested, but the repository refused it" ;;
+              off) [[ -n "$pr" ]] && merge="merge by hand" ;;
+            esac
+            printf '| %s | `%s` | %s | %s |\n' "$repo" "$status" "$where" "$merge"
           }
 
           row() {
@@ -1370,12 +1506,12 @@ jobs:
             echo ""
             echo "## Delivery (commit_mode: \`${COMMIT_MODE}\`)"
             echo ""
-            echo "| Repository | Status | Where |"
-            echo "|---|---|---|"
-            delivery "durion-positivity-backend" "${BACKEND_COMMIT}" "${BACKEND_PR}"
-            delivery "durion-positivity-sdk" "${SDK_COMMIT}" "${SDK_PR}"
-            delivery "durion-positivity-sdk-angular" "${SDK_ANGULAR_COMMIT}" "${SDK_ANGULAR_PR}"
-            delivery "durion-positivity-frontend" "${FRONTEND_COMMIT}" "${FRONTEND_PR}"
+            echo "| Repository | Status | Where | Merge |"
+            echo "|---|---|---|---|"
+            delivery "durion-positivity-backend" "${BACKEND_COMMIT}" "${BACKEND_PR}" "${BACKEND_AUTOMERGE}"
+            delivery "durion-positivity-sdk" "${SDK_COMMIT}" "${SDK_PR}" "${SDK_AUTOMERGE}"
+            delivery "durion-positivity-sdk-angular" "${SDK_ANGULAR_COMMIT}" "${SDK_ANGULAR_PR}" "${SDK_ANGULAR_AUTOMERGE}"
+            delivery "durion-positivity-frontend" "${FRONTEND_COMMIT}" "${FRONTEND_PR}" "${FRONTEND_AUTOMERGE}"
             echo ""
             echo "\`unchanged\` = nothing to commit; \`skipped\` = held back (credential, generation failure, or direct mode with a failing stage)."
             echo ""
