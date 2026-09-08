@@ -62,7 +62,12 @@ while [[ $# -gt 0 ]]; do
         exit 1
       fi
       GRANTS+=("$2"); shift 2 ;;
-    --grant=*) GRANTS+=("${1#*=}"); shift ;;
+    --grant=*)
+      if [[ -z "${1#*=}" ]]; then
+        echo "--grant requires a role name" >&2
+        exit 1
+      fi
+      GRANTS+=("${1#*=}"); shift ;;
     -h|--help) usage; exit 0 ;;
     pos-*)     MODULES+=("$1"); shift ;;
     *)

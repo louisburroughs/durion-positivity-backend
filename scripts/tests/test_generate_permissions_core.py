@@ -1,4 +1,5 @@
 import importlib.util
+import re
 import subprocess
 import sys
 import tempfile
@@ -514,6 +515,144 @@ class GrantSourceSyncTest(unittest.TestCase):
             self.generator.collect_manifest_grant_targets(self.root),
             {"demo:widget:view": ["SERVICE_ADVISOR"]},
         )
+
+
+class SyncCheckGrantReportTest(unittest.TestCase):
+    """#1848 review: --check must not claim a bit the catalog does not carry."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.generator = load_generator_module()
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.root = Path(self.temp_dir.name)
+
+    def _write(self, relative: str, text: str) -> Path:
+        path = self.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(textwrap.dedent(text), encoding="utf-8")
+        return path
+
+    def _write_root(self, catalog_entries: str, annotated: str) -> None:
+        self._write(
+            self.generator.PERMISSION_CODE_RELPATH,
+            f"""\
+            public enum PermissionCode {{
+            {catalog_entries}
+
+                public static final int CATALOG_VERSION = 2;
+            }}
+            """,
+        )
+        mirror_entries = ",\n".join(
+            f'            "PERM_{name}"'
+            for name in re.findall(r'\(\d+,\s*"([^"]+)"\)', catalog_entries)
+        )
+        for relative, class_name in (
+            (self.generator.GATEWAY_CATALOG_RELPATH, "GatewayPermissionCatalog"),
+            (self.generator.DOWNSTREAM_CATALOG_RELPATH, "DownstreamPermissionCatalog"),
+        ):
+            self._write(
+                relative,
+                f"""\
+                public final class {class_name} {{
+                    public static final int CATALOG_VERSION = 2;
+                    static final String[] AUTHORITY_BY_BIT = {{
+                {mirror_entries}
+                    }};
+                }}
+                """,
+            )
+        # demo:view is the only granted permission in either source.
+        self._write(
+            self.generator.SEED_SQL_RELPATH,
+            """\
+            INSERT INTO permissions (
+                id, name, description, domain, resource, action,
+                registered_at, registered_by_service, version, bit_index)
+            SELECT gen_random_uuid(), c.name, c.name, c.domain, c.resource, c.action,
+                   NOW(), 'pos-security-service', '1.0', c.bit_index
+            FROM (VALUES
+                ('demo:view', 'demo', '', 'view', 0)
+            ) AS c(name, domain, resource, action, bit_index)
+            ON CONFLICT DO NOTHING;
+
+            INSERT INTO role_permissions (role_id, permission_id)
+            SELECT r.id, p.id
+            FROM (VALUES
+                ('ADMIN', 'demo:view')
+            ) AS g(role_name, permission_name)
+            JOIN roles r ON r.name = g.role_name
+            JOIN permissions p ON p.name = g.permission_name
+            ON CONFLICT DO NOTHING;
+
+            DO $$
+            BEGIN
+                SELECT 1
+                  FROM (VALUES
+                    ('demo:view')
+                  ) AS g(permission_name);
+            END $$;
+            """,
+        )
+        self._write(self.generator.ROLE_PERMISSIONS_CSV_RELPATH, "roleName,permissions\nADMIN,demo:view\n")
+        self._write(
+            "pos-demo/src/main/java/DemoController.java",
+            f"""\
+            @PreAuthorize("hasAnyAuthority({annotated})")
+            class DemoController {{}}
+            """,
+        )
+
+    def _run_check(self) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(MODULE_PATH), str(self.root), "--sync", "--check"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def test_check_does_not_claim_a_bit_for_an_unregistered_permission(self) -> None:
+        # demo:brandnew is annotated but absent from PermissionCode. --check writes nothing, so
+        # the bit it would be given does not exist; reporting it as bit-indexed-but-ungranted
+        # states something false and repeats the unregistered error under a second heading.
+        self._write_root('    DEMO__VIEW(0, "demo:view");', "'demo:view', 'demo:brandnew'")
+
+        result = self._run_check()
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("not registered in PermissionCode", result.stderr)
+        self.assertIn("demo:brandnew", result.stderr)
+        self.assertNotIn("have a PermissionCode bit", result.stderr)
+        self.assertEqual(
+            (self.root / self.generator.PERMISSION_CODE_RELPATH).read_text(encoding="utf-8").count("demo:brandnew"),
+            0,
+        )
+
+    def test_check_still_reports_a_bit_indexed_permission_that_no_role_holds(self) -> None:
+        # The narrowing must not disarm the gate: demo:edit does have a bit, is required by an
+        # annotation, and is granted by neither source — the unreachable endpoint #1848 is about.
+        self._write_root(
+            '    DEMO__VIEW(0, "demo:view"),\n    DEMO__EDIT(1, "demo:edit");',
+            "'demo:view', 'demo:edit'",
+        )
+
+        result = self._run_check()
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("have a PermissionCode bit", result.stderr)
+        self.assertIn("demo:edit", result.stderr)
+        self.assertNotIn("not registered in PermissionCode", result.stderr)
+
+    def test_check_is_silent_when_every_annotated_bit_is_granted(self) -> None:
+        self._write_root('    DEMO__VIEW(0, "demo:view");', "'demo:view'")
+
+        result = self._run_check()
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertNotIn("have a PermissionCode bit", result.stderr)
 
 
 if __name__ == "__main__":

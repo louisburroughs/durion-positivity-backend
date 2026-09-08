@@ -1126,8 +1126,14 @@ def main() -> None:
         # is dead weight rather than a broken endpoint, and audit-rbac.py's catalog_dead is
         # where that is triaged.
         granted = all_granted_permissions(root)
+        # --check writes nothing, so the bits handed to new_perms above are hypothetical: those
+        # permissions are still absent from PermissionCode. Gating on them would claim a bit the
+        # file does not have and repeat, in different words, the "not registered in
+        # PermissionCode" error already raised for exactly those names. On a write run the
+        # catalog sync has already run, so the bits are real and new_perms belong in the set.
+        catalogued = registered if args.check else bit_by_permission.keys()
         ungranted = (
-            sorted((annotated & bit_by_permission.keys()) - granted)
+            sorted((annotated & catalogued) - granted)
             if grant_sources_present(root)
             else []
         )
