@@ -41,10 +41,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Controller-boundary proof for #1872 on {@link LocationController}: the location mutations
@@ -147,17 +149,30 @@ class LocationControllerLocationScopeTest {
         }
 
         @Test
-        @DisplayName("a missing location answers 404 before any scope check, even for a scoped caller")
-        void missingLocationIs404First() throws Exception {
+        @DisplayName("an id the resolver does not know is out of reach, so a scoped caller gets 403")
+        void unknownIdIsOutOfReachForAScopedCaller() throws Exception {
             missing(UNKNOWN_LOCATION);
             as(scopedOn(LocationPermissions.WRITE));
 
             mockMvc.perform(put(URL, UNKNOWN_LOCATION)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(FULL_BODY))
-                    .andExpect(status().isNotFound());
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE));
 
             verify(locationService, never()).updateLocation(any(), any());
+        }
+
+        @Test
+        @DisplayName("a location inside the caller's reach that does not exist still answers 404")
+        void missingLocationInReachIs404() throws Exception {
+            missing(SITE_IN_REACH);
+            as(scopedOn(LocationPermissions.WRITE));
+
+            mockMvc.perform(put(URL, SITE_IN_REACH)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(FULL_BODY))
+                    .andExpect(status().isNotFound());
         }
 
         @Test
@@ -232,19 +247,33 @@ class LocationControllerLocationScopeTest {
         }
 
         @Test
-        @DisplayName("a missing location answers the 404 ProblemDetail before any scope check")
-        void missingLocationIs404First() throws Exception {
+        @DisplayName("an id the resolver does not know is out of reach, so a scoped caller gets 403")
+        void unknownIdIsOutOfReachForAScopedCaller() throws Exception {
             missing(UNKNOWN_LOCATION);
             as(scopedOn(LocationPermissions.WRITE));
 
             mockMvc.perform(patch(URL, UNKNOWN_LOCATION)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(PATCH_BODY))
-                    .andExpect(status().isNotFound())
-                    .andExpect(jsonPath("$.status").value(404))
-                    .andExpect(jsonPath("$.correlationId").exists());
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value(LocationScopeDeniedException.ERROR_CODE));
 
             verify(locationService, never()).patchLocation(any(), any());
+        }
+
+        @Test
+        @DisplayName("a location inside the caller's reach that does not exist still answers the 404 ProblemDetail")
+        void missingLocationInReachIs404() throws Exception {
+            missing(SITE_IN_REACH);
+            when(locationService.patchLocation(eq(SITE_IN_REACH), any(LocationPatchRequest.class)))
+                    .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND));
+            as(scopedOn(LocationPermissions.WRITE));
+
+            mockMvc.perform(patch(URL, SITE_IN_REACH)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(PATCH_BODY))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.status").value(404));
         }
 
         @Test
