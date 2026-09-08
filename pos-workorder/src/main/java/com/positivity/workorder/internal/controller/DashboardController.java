@@ -59,7 +59,7 @@ public class DashboardController {
                     the location domain, so a unit whose replica row has not arrived yet is listed by id with a \
                     null name rather than being omitted.
                     Required inputs: locationId (UUID as a string) as a query parameter; date (ISO date) is \
-                    optional and defaults to today on the server clock. A caller whose \
+                    optional and defaults to today on the server clock, and a caller whose \
                     workorder:dashboard:view grant is location-scoped must have locationId within reach \
                     (ADR-0061).
                     Emits a WORKEXEC_DASHBOARD_TODAY_GET audit event; no workorder state changes — this is a \

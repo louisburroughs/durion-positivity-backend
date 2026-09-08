@@ -55,11 +55,11 @@ public class PeopleAvailabilityController {
                     assignment, because the requester's own location becomes the filter.
                     Required inputs: none are mandatory; locationId (UUID) defaults to the requester's location and \
                     date (yyyy-MM-dd) defaults to today.
-                    Location scope: when locationId is given it must lie within the caller's location reach, or \
-                    the request is refused with 403 LOCATION_SCOPE_DENIED. When locationId is omitted the filter \
-                    is the requester's own location; if the caller's people:availability:view permission is \
-                    location-scoped and that location lies outside their reach the list is empty rather than \
-                    refused. A caller whose permission is not location-scoped is unaffected.
+                    Location scope: when locationId is given it must lie within the caller's location reach, \
+                    or the request is refused with 403 LOCATION_SCOPE_DENIED. When locationId is omitted the \
+                    filter is the requester's own location; if the caller's people:availability:view \
+                    permission is location-scoped and that location lies outside their reach the list is empty \
+                    rather than refused, and a caller whose permission is not location-scoped is unaffected.
                     Emits a PEOPLE_AVAILABILITY_LIST audit event but changes no state; this is a read-only \
                     projection.
                     Returns 404 when locationId is omitted and the requester has no active location assignment or no \
