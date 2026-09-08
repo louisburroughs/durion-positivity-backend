@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -68,6 +69,8 @@ class StaffingAssignmentServiceTest {
                 employeeRepository,
                 locationReferenceService,
                 FIXED_CLOCK);
+        // The mutations gate on the caller's location scope; a pre-rollout token is unscoped.
+        LocationScopeFixtures.preRolloutCaller(ACTOR);
 
         employee = Employee.builder()
                 .personId(PERSON_ID)
@@ -88,6 +91,11 @@ class StaffingAssignmentServiceTest {
     private CreateStaffingAssignmentRequest request(boolean primary) {
         return new CreateStaffingAssignmentRequest(
                 PERSON_ID, LOCATION_ID, "TECHNICIAN", primary, LocalDate.of(2026, 2, 1), null);
+    }
+
+    @AfterEach
+    void clearCaller() {
+        LocationScopeFixtures.clearCaller();
     }
 
     @Test

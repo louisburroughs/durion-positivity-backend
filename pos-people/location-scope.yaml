@@ -1,0 +1,35 @@
+# Location-scope decisions for pos-people (ADR-0061, #1872).
+# Every operation that takes a caller-supplied locationId must appear here;
+# scripts/audit-rbac.py --check fails on a missing or stale entry.
+decisions:
+  - operation: TimeEntryApprovalController.listTimeEntries
+    shape: narrow
+    permission: people:timeEntry:view
+    reason: locationId is an optional filter on the approvals queue; a named location is gated and a scoped caller with no filter sees their reach only (#1871).
+  - operation: PeopleAvailabilityController.getPeopleAvailability
+    shape: narrow
+    permission: people:availability:view
+    reason: locationId is an optional filter defaulting to the requester's own assignment; a named location is gated, the defaulted one is narrowed to the caller's reach (empty list when outside it).
+  - operation: PeopleReportsController.getAttendanceDiscrepancyReport
+    shape: narrow
+    permission: accounting:time:export
+    reason: locationId is an optional report filter; a named location is gated and a scoped caller with no filter sees rows within their reach only (empty report for an empty reach).
+  - operation: PeopleReportsController.getApprovedTimeForExport
+    shape: gate
+    permission: accounting:time:export
+    reason: locationId is required (one or more) and names the sites being exported; every one must lie within the caller's reach or the whole request is denied, after the unknown-location 400.
+  - operation: PersonBulkIngestController.bulkIngest
+    shape: unscoped
+    reason: ADMIN-only bulk load; the location is a payload default, not an access boundary; ADMIN is seeded location_scope ALL.
+  - operation: StaffingAssignmentController.createAssignment
+    shape: gate
+    permission: people:employee:edit
+    reason: locationId names the site the person is being assigned to; an assignment feeds the person's JWT location-scope claims, so a LOCATION-scoped HR user must only be able to assign within their own reach; checked after the person/location 404.
+  - operation: StaffingAssignmentController.updateAssignment
+    shape: gate
+    permission: people:employee:edit
+    reason: both the existing assignment's location (after the 404) and any new locationId in the request are gated; an assignment feeds the person's JWT location-scope claims, so a LOCATION-scoped HR user must only be able to move assignments within their own reach.
+  - operation: StaffingAssignmentController.endAssignment
+    shape: gate
+    permission: people:employee:edit
+    reason: resource-addressed sibling of createAssignment/updateAssignment; the assignment's location is read off the loaded entity after the 404 so a LOCATION-scoped HR user cannot end an assignment (and so remove scope) outside their own reach.

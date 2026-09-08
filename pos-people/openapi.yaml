@@ -49,14 +49,16 @@ paths:
 
         Required inputs: none are mandatory; locationId (UUID) defaults to the requester''s location and date (yyyy-MM-dd) defaults to today.
 
+        Location scope: when locationId is given it must lie within the caller''s location reach, or the request is refused with 403 LOCATION_SCOPE_DENIED. When locationId is omitted the filter is the requester''s own location; if the caller''s people:availability:view permission is location-scoped and that location lies outside their reach the list is empty rather than refused. A caller whose permission is not location-scoped is unaffected.
+
         Emits a PEOPLE_AVAILABILITY_LIST audit event but changes no state; this is a read-only projection.
 
-        Returns 404 when locationId is omitted and the requester has no active location assignment or no person link.
+        Returns 404 when locationId is omitted and the requester has no active location assignment or no person link, and 403 LOCATION_SCOPE_DENIED when locationId is outside the caller''s location reach.
 
         '
       operationId: listPeopleAvailability
       parameters:
-      - description: Filter by location ID. Defaults to requester location when omitted.
+      - description: Filter by location ID; it must lie within the caller's location reach (403 LOCATION_SCOPE_DENIED otherwise). Defaults to the requester's own location when omitted, which is narrowed to the caller's reach rather than refused.
         in: query
         name: locationId
         required: false
@@ -79,6 +81,18 @@ paths:
                   $ref: '#/components/schemas/PeopleAvailabilityResponse'
                 type: array
           description: Availability data returned successfully.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'LOCATION_SCOPE_DENIED: locationId is outside the caller''s location reach'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: locationId omitted and the requester has no active location assignment or person link.
       security:
       - bearerAuth:
         - people:availability:view
@@ -920,9 +934,11 @@ paths:
 
         Required inputs: startDate and endDate (inclusive, yyyy-MM-dd, evaluated in UTC) and one or more locationId query parameters.
 
+        Location scope: every locationId must lie within the caller''s location reach, or the request is refused with 403 LOCATION_SCOPE_DENIED; a caller whose accounting:time:export permission is not location-scoped is unaffected.
+
         Emits a PEOPLE_TIME_APPROVED_EXPORT_READ audit event but changes no state; this is a read-only projection sorted by entry date then time entry id.
 
-        Returns 400 when endDate is before startDate, when no locationId is supplied, or when a locationId is unknown or inactive.
+        Returns 400 when endDate is before startDate, when no locationId is supplied, or when a locationId is unknown or inactive, and 403 LOCATION_SCOPE_DENIED when any locationId is outside the caller''s location reach.
 
         '
       operationId: listApprovedTimeForExport
@@ -943,7 +959,7 @@ paths:
         schema:
           format: date
           type: string
-      - description: One or more location IDs
+      - description: One or more location IDs; each must lie within the caller's location reach (403 LOCATION_SCOPE_DENIED otherwise)
         in: query
         name: locationId
         required: true
@@ -977,7 +993,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Forbidden
+          description: 'Caller lacks accounting:time:export (ApiError.code FORBIDDEN), or LOCATION_SCOPE_DENIED: a locationId is outside the caller''s location reach'
         '500':
           content:
             application/json:
@@ -1008,9 +1024,11 @@ paths:
 
         Required inputs: startDate and endDate (inclusive, yyyy-MM-dd) and timezone (IANA, used to bucket minutes into local days); locationId and technicianIds are optional filters, and flaggedOnly defaults to false.
 
+        Location scope: when locationId is given it must lie within the caller''s location reach, or the request is refused with 403 LOCATION_SCOPE_DENIED. When locationId is omitted and the caller''s accounting:time:export permission is location-scoped, the report is narrowed to the caller''s reach — their assigned locations and every location beneath them — rather than refused; a caller with no reach receives an empty report. A caller whose permission is not location-scoped sees every location.
+
         Emits a REPORT_ATTENDANCE_VS_JOBTIME_GENERATED audit event but changes no state; rows are flagged when the absolute discrepancy exceeds the location''s configured threshold minutes.
 
-        Returns 400 when endDate is before startDate or timezone is not a valid IANA zone.
+        Returns 400 when endDate is before startDate or timezone is not a valid IANA zone, and 403 LOCATION_SCOPE_DENIED when locationId is outside the caller''s location reach.
 
         '
       operationId: getAttendanceDiscrepancyReport
@@ -1038,7 +1056,7 @@ paths:
         required: true
         schema:
           type: string
-      - description: Optional location filter
+      - description: Optional location filter; it must lie within the caller's location reach (403 LOCATION_SCOPE_DENIED otherwise). When omitted, a caller whose export permission is location-scoped sees only rows within their reach; an unscoped caller sees every location
         in: query
         name: locationId
         required: false
@@ -1086,7 +1104,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Forbidden
+          description: 'Caller lacks accounting:time:export (ApiError.code FORBIDDEN), or LOCATION_SCOPE_DENIED: locationId is outside the caller''s location reach'
         '500':
           content:
             application/json:
@@ -1156,9 +1174,11 @@ paths:
 
         Required inputs: personId (UUID), locationId (UUID), role, isPrimary, and effectiveFrom (yyyy-MM-dd); effectiveTo is optional and open-ended when null.
 
+        Location scope: an assignment feeds the person''s location-scope claims, so locationId must lie within the caller''s own location reach when their people:employee:edit permission is location-scoped, or the request is refused with 403 LOCATION_SCOPE_DENIED (checked after the person and location are resolved, so a 404 precedes it).
+
         Emits a PEOPLE_STAFFING_ASSIGNMENT_CREATE event and publishes a staffing-assignment fact; a new primary demotes and ends any overlapping existing primary, and a person''s first active assignment is forced primary regardless of the flag.
 
-        Returns 409 when an overlapping assignment exists for the person, location, and role, 404 when the person, employee record, or active location cannot be resolved, and 400 when the person''s employee status is not ACTIVE.
+        Returns 409 when an overlapping assignment exists for the person, location, and role, 404 when the person, employee record, or active location cannot be resolved, 400 when the person''s employee status is not ACTIVE, and 403 LOCATION_SCOPE_DENIED when locationId is outside the caller''s location reach.
 
         '
       operationId: createStaffingAssignment
@@ -1191,6 +1211,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Validation error.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'LOCATION_SCOPE_DENIED: the assignment''s location is outside the caller''s location reach'
         '404':
           content:
             application/json:
@@ -1221,9 +1247,11 @@ paths:
 
         Required inputs: assignmentId (UUID) path parameter; there is no request body.
 
+        Location scope: when the caller''s people:employee:edit permission is location-scoped, the assignment''s location must lie within the caller''s reach, or the request is refused with 403 LOCATION_SCOPE_DENIED (checked after the assignment is found, so a 404 precedes it).
+
         Emits a PEOPLE_STAFFING_ASSIGNMENT_END event and publishes a staffing-assignment fact; a null effectiveTo is stamped with today''s date.
 
-        Returns 204 on success, and 404 when no assignment exists for the supplied id.
+        Returns 204 on success, 404 when no assignment exists for the supplied id, and 403 LOCATION_SCOPE_DENIED when the assignment''s location is outside the caller''s location reach.
 
         '
       operationId: endStaffingAssignment
@@ -1237,6 +1265,12 @@ paths:
       responses:
         '204':
           description: Assignment ended.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'LOCATION_SCOPE_DENIED: the assignment''s location is outside the caller''s location reach'
         '404':
           content:
             application/json:
@@ -1303,9 +1337,11 @@ paths:
 
         Required inputs: assignmentId (UUID) path parameter plus the full body (personId, locationId, role, isPrimary, effectiveFrom); this is a full replacement, not a patch.
 
+        Location scope: when the caller''s people:employee:edit permission is location-scoped, both the assignment''s current location and the requested locationId must lie within the caller''s reach, or the request is refused with 403 LOCATION_SCOPE_DENIED (checked after the assignment is found, so a 404 precedes it).
+
         Emits a PEOPLE_STAFFING_ASSIGNMENT_UPDATE event and publishes a staffing-assignment fact; setting isPrimary true demotes and ends any other overlapping primary assignment.
 
-        Returns 404 when the assignment, person, employee record, or active location cannot be resolved, 409 when another assignment overlaps for the person, location, and role, and 400 when the person''s employee status is not ACTIVE.
+        Returns 404 when the assignment, person, employee record, or active location cannot be resolved, 409 when another assignment overlaps for the person, location, and role, 400 when the person''s employee status is not ACTIVE, and 403 LOCATION_SCOPE_DENIED when the current or requested location is outside the caller''s location reach.
 
         '
       operationId: updateStaffingAssignment
@@ -1346,6 +1382,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Validation error.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'LOCATION_SCOPE_DENIED: the assignment''s location is outside the caller''s location reach'
         '404':
           content:
             application/json:

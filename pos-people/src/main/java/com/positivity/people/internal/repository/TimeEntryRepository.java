@@ -37,6 +37,29 @@ public interface TimeEntryRepository extends JpaRepository<TimeEntry, UUID> {
             @Param("includeAllTechnicians") boolean includeAllTechnicians);
 
     /**
+     * {@link #findAttendanceOverlappingWindow} restricted to a set of locations — the discrepancy
+     * report's rows for a location-scoped caller who named no location (ADR-0061 §3, #1872). The
+     * set is the caller's reach and is never empty here; the service answers an empty reach with
+     * an empty report without querying, because an {@code IN ()} has no portable meaning.
+     */
+    @NonNull
+    @Query("""
+                        SELECT t
+                        FROM TimeEntry t
+                        WHERE t.attendanceStartAt IS NOT NULL
+                          AND t.attendanceStartAt < :windowEndExclusive
+                          AND (t.attendanceEndAt IS NULL OR t.attendanceEndAt > :windowStartInclusive)
+                          AND t.locationId IN :locationIds
+                          AND (:includeAllTechnicians = true OR t.personId IN :technicianIds)
+                        """)
+    List<TimeEntry> findAttendanceOverlappingWindowWithinLocations(
+            @Param("windowStartInclusive") Instant windowStartInclusive,
+            @Param("windowEndExclusive") Instant windowEndExclusive,
+            @Param("locationIds") Collection<UUID> locationIds,
+            @Param("technicianIds") List<UUID> technicianIds,
+            @Param("includeAllTechnicians") boolean includeAllTechnicians);
+
+    /**
      * The approvals-queue finder (#1573): status, person and location are each optional and
      * applied only when supplied, so the same query serves "everything pending today", "one
      * person's week", and an unfiltered browse.

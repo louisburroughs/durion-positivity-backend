@@ -11,6 +11,9 @@ import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
+import com.positivity.people.internal.security.PeoplePermissions;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.SecurityContextHelper;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
@@ -24,6 +27,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * Person-to-location staffing assignments.
+ *
+ * <h2>Location scope on the mutations (ADR-0061 §3, #1872)</h2>
+ *
+ * An assignment is what feeds a person's location-scope claims, so a caller whose
+ * {@code people:employee:edit} is location-scoped must only be able to assign, reshape or end
+ * assignments within their own reach — otherwise a LOCATION-scoped HR user could grant
+ * themselves or others reach they do not hold. Every mutation is therefore a <b>gate</b> on the
+ * assignment's location: {@link #create} on the requested location, {@link #update} on both the
+ * existing assignment's location and the requested one, {@link #end} on the existing one. Each
+ * gate runs after the existence checks so a 404 precedes a 403 and ids cannot be probed; an
+ * uncovered location is a 403 {@code LOCATION_SCOPE_DENIED}. Callers whose permission is global,
+ * or whose token predates the scope claims, are unaffected.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -46,6 +64,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
     public @NonNull StaffingAssignmentResponse create(
             @NonNull CreateStaffingAssignmentRequest request, @NonNull String actor) {
         validatePersonAndLocation(request.getPersonId(), request.getLocationId());
+        requireLocationInReach(request.getLocationId());
 
         if (repository.existsOverlapping(
                 request.getPersonId(),
@@ -142,7 +161,11 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
         if (existingAssignment.isEmpty()) {
             return Optional.empty();
         }
+        // Both ends of the move are gated: the assignment being taken away from its current
+        // location, and the location it is being given to.
+        requireLocationInReach(existingAssignment.get().getLocationId());
         validatePersonAndLocation(request.getPersonId(), request.getLocationId());
+        requireLocationInReach(request.getLocationId());
 
         if (repository.existsOverlappingExcludingId(
                 assignmentId,
@@ -203,6 +226,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
                 .findById(assignmentId)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found: " + assignmentId));
+        requireLocationInReach(assignment.getLocationId());
         assignment.setStatus(AssignmentStatus.ENDED);
         if (assignment.getEffectiveTo() == null) {
             assignment.setEffectiveTo(LocalDate.now(clock));
@@ -230,6 +254,15 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
         LocalDate normalizedLeftEnd = leftEnd != null ? leftEnd : LocalDate.MAX;
         LocalDate normalizedRightEnd = rightEnd != null ? rightEnd : LocalDate.MAX;
         return !normalizedLeftEnd.isBefore(rightStart) && !normalizedRightEnd.isBefore(leftStart);
+    }
+
+    /**
+     * Gate: the caller's {@code people:employee:edit} must cover {@code locationId}, or this is a
+     * 403 {@code LOCATION_SCOPE_DENIED}. A global or pre-rollout caller always passes.
+     */
+    private static void requireLocationInReach(@NonNull UUID locationId) {
+        LocationScope scope = SecurityContextHelper.locationScope();
+        scope.require(PeoplePermissions.EMPLOYEE_EDIT, locationId);
     }
 
     /** Resolve the Employee row for a person; 404 if the person is not an employee. */

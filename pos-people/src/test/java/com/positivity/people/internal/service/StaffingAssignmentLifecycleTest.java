@@ -26,6 +26,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -97,6 +98,13 @@ class StaffingAssignmentLifecycleTest {
                         .build()));
         when(locationReferenceService.isLocationActive(LOCATION_ID)).thenReturn(true);
         when(repository.save(any(EmployeeLocationAssignment.class))).thenAnswer(inv -> inv.getArgument(0));
+        // The mutations gate on the caller's location scope; a pre-rollout token is unscoped.
+        LocationScopeFixtures.preRolloutCaller(ACTOR);
+    }
+
+    @AfterEach
+    void clearCaller() {
+        LocationScopeFixtures.clearCaller();
     }
 
     private static EmployeeLocationAssignment assignment(UUID id, LocalDate from, LocalDate to, boolean primary) {

@@ -46,9 +46,16 @@ public class PeopleReportsController {
                     Required inputs: startDate and endDate (inclusive, yyyy-MM-dd) and timezone (IANA, used to bucket \
                     minutes into local days); locationId and technicianIds are optional filters, and flaggedOnly \
                     defaults to false.
+                    Location scope: when locationId is given it must lie within the caller's location reach, or \
+                    the request is refused with 403 LOCATION_SCOPE_DENIED. When locationId is omitted and the \
+                    caller's accounting:time:export permission is location-scoped, the report is narrowed to the \
+                    caller's reach — their assigned locations and every location beneath them — rather than \
+                    refused; a caller with no reach receives an empty report. A caller whose permission is not \
+                    location-scoped sees every location.
                     Emits a REPORT_ATTENDANCE_VS_JOBTIME_GENERATED audit event but changes no state; rows are \
                     flagged when the absolute discrepancy exceeds the location's configured threshold minutes.
-                    Returns 400 when endDate is before startDate or timezone is not a valid IANA zone.
+                    Returns 400 when endDate is before startDate or timezone is not a valid IANA zone, and 403 \
+                    LOCATION_SCOPE_DENIED when locationId is outside the caller's location reach.
                     """)
     @ApiResponse(responseCode = "200", description = "Report generated successfully.")
     @ApiResponse(
@@ -57,7 +64,8 @@ public class PeopleReportsController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "Forbidden",
+            description = "Caller lacks accounting:time:export (ApiError.code FORBIDDEN), or "
+                    + "LOCATION_SCOPE_DENIED: locationId is outside the caller's location reach",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "503",
@@ -80,7 +88,13 @@ public class PeopleReportsController {
                     LocalDate endDate,
             @Parameter(description = "IANA timezone", required = true, example = "America/Chicago") @RequestParam
                     String timezone,
-            @Parameter(description = "Optional location filter") @RequestParam(required = false) UUID locationId,
+            @Parameter(
+                            description = "Optional location filter; it must lie within the caller's location reach "
+                                    + "(403 LOCATION_SCOPE_DENIED otherwise). When omitted, a caller whose export "
+                                    + "permission is location-scoped sees only rows within their reach; an "
+                                    + "unscoped caller sees every location")
+                    @RequestParam(required = false)
+                    UUID locationId,
             @Parameter(description = "Optional technician IDs filter") @RequestParam(required = false)
                     List<UUID> technicianIds,
             @Parameter(description = "Return flagged rows only") @RequestParam(defaultValue = "false")
@@ -105,10 +119,14 @@ public class PeopleReportsController {
                     approval or attendance timestamps are silently excluded.
                     Required inputs: startDate and endDate (inclusive, yyyy-MM-dd, evaluated in UTC) and one or more \
                     locationId query parameters.
+                    Location scope: every locationId must lie within the caller's location reach, or the request \
+                    is refused with 403 LOCATION_SCOPE_DENIED; a caller whose accounting:time:export permission \
+                    is not location-scoped is unaffected.
                     Emits a PEOPLE_TIME_APPROVED_EXPORT_READ audit event but changes no state; this is a read-only \
                     projection sorted by entry date then time entry id.
                     Returns 400 when endDate is before startDate, when no locationId is supplied, or when a \
-                    locationId is unknown or inactive.
+                    locationId is unknown or inactive, and 403 LOCATION_SCOPE_DENIED when any locationId is \
+                    outside the caller's location reach.
                     """)
     @ApiResponse(responseCode = "200", description = "Approved time rows retrieved successfully")
     @ApiResponse(
@@ -117,7 +135,8 @@ public class PeopleReportsController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "Forbidden",
+            description = "Caller lacks accounting:time:export (ApiError.code FORBIDDEN), or "
+                    + "LOCATION_SCOPE_DENIED: a locationId is outside the caller's location reach",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "503",
@@ -138,7 +157,11 @@ public class PeopleReportsController {
                     LocalDate startDate,
             @Parameter(description = "End date (inclusive)", required = true, example = "2026-02-07") @RequestParam
                     LocalDate endDate,
-            @Parameter(description = "One or more location IDs", required = true) @RequestParam("locationId")
+            @Parameter(
+                            description = "One or more location IDs; each must lie within the caller's location "
+                                    + "reach (403 LOCATION_SCOPE_DENIED otherwise)",
+                            required = true)
+                    @RequestParam("locationId")
                     List<UUID> locationIds,
             @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
         String actorId = SecurityContextHelper.getCurrentUsernameOrDefault("system");

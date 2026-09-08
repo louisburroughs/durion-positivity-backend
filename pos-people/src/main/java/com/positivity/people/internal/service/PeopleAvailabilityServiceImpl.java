@@ -8,6 +8,8 @@ import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
+import com.positivity.people.internal.security.PeoplePermissions;
+import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.SecurityContextHelper;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Clock;
@@ -22,6 +24,28 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Availability and primary-location projections over the staffing assignments.
+ *
+ * <h2>Location scope on the availability list (ADR-0061 §3, #1872)</h2>
+ *
+ * {@code @PreAuthorize} on the controller answers "may this caller view availability"; the
+ * caller's {@link LocationScope} on {@code people:availability:view} answers "…where".
+ * {@link #getPeopleAvailability} takes {@code locationId} as an optional filter that defaults to
+ * the requester's own assignment, so it has two shapes:
+ *
+ * <ul>
+ * <li><b>Named location — gate.</b> The caller must cover it, or the request is a 403
+ * {@code LOCATION_SCOPE_DENIED}.</li>
+ * <li><b>No location — narrow.</b> The filter is the requester's own location; a scoped caller
+ * is not denied, the list is the intersection of that one location with their reach — the
+ * rows when it is covered, an empty list when it is not. (An assignment feeds the token's
+ * scope claims, so the two normally agree; the check keeps a stale token from widening.)</li>
+ * </ul>
+ *
+ * A caller whose permission is global, or whose token predates the scope claims, sees the
+ * list exactly as before.
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -43,7 +67,20 @@ public class PeopleAvailabilityServiceImpl implements PeopleAvailabilityService 
     @NonNull
     public List<PeopleAvailabilityResponse> getPeopleAvailability(UUID locationId, LocalDate date) {
         LocalDate targetDate = date != null ? date : LocalDate.now(clock);
-        UUID resolvedLocationId = locationId != null ? locationId : resolveRequesterLocationId(targetDate);
+        LocationScope scope = SecurityContextHelper.locationScope();
+        UUID resolvedLocationId;
+        if (locationId != null) {
+            // Gate: a named location must be within the caller's reach, or this is a 403.
+            scope.require(PeoplePermissions.AVAILABILITY_VIEW, locationId);
+            resolvedLocationId = locationId;
+        } else {
+            // Narrow: the defaulted location is the requester's own; outside a scoped caller's
+            // reach it yields an empty list rather than a refusal (unscoped callers unchanged).
+            resolvedLocationId = resolveRequesterLocationId(targetDate);
+            if (!scope.covers(PeoplePermissions.AVAILABILITY_VIEW, resolvedLocationId)) {
+                return List.of();
+            }
+        }
 
         List<EmployeeLocationAssignment> assignments =
                 assignmentRepository.findActiveByDateAndOptionalLocation(targetDate, resolvedLocationId);

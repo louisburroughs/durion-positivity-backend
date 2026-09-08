@@ -25,6 +25,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -69,6 +70,9 @@ class AttendanceDiscrepancyReportTest {
     @Mock
     private TimekeepingThresholdCache.ThresholdResolverContext thresholdContext;
 
+    @Mock
+    private LocationHierarchyService locationHierarchyService;
+
     private PeopleReportsServiceImpl service;
 
     @BeforeEach
@@ -79,9 +83,17 @@ class AttendanceDiscrepancyReportTest {
                 extJobTimeReplicaRepository,
                 locationReferenceService,
                 timekeepingThresholdCache,
+                locationHierarchyService,
                 Clock.fixed(Instant.parse("2026-03-02T20:00:00Z"), ZoneOffset.UTC));
         when(timekeepingThresholdCache.createContext(any(), any())).thenReturn(thresholdContext);
         when(thresholdContext.resolveThresholdMinutes(any(), any())).thenReturn(30);
+        // The report reads the caller's location scope; a pre-rollout token is unscoped.
+        LocationScopeFixtures.preRolloutCaller(ACTOR);
+    }
+
+    @AfterEach
+    void clearCaller() {
+        LocationScopeFixtures.clearCaller();
     }
 
     private static TimeEntry attendance(UUID personId, Instant startAt, Instant endAt) {

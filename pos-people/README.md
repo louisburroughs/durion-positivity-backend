@@ -51,6 +51,35 @@ ADR-0044 Phase 3 split (#874/#875); this module reads them from event-fed
 - `GET /v1/people/approvedTime` — approved time summary
 - `POST /v1/people/bulk-ingest` — bulk import employees (auth: `people:employee:create`)
 
+## Location scope
+
+Location-scope enforcement (ADR-0061, #1871/#1872) is decided per operation in
+`location-scope.yaml` beside `openapi.yaml`; `scripts/audit-rbac.py --check` fails on a missing or
+stale entry. `LocationHierarchyService` is the module's `LocationAncestorResolver` bean (ancestor
+sets on the `ext_location` replica) and also serves `descendantsOf` for narrowing. Callers whose
+token predates the scope claims, or whose permission is not location-scoped, are unaffected. A
+refused location is a 403 with `ApiError.code` `LOCATION_SCOPE_DENIED` and never echoes the id.
+
+| Operation | Shape | Permission | Where |
+| --- | --- | --- | --- |
+| `GET /v1/people/timeEntries` | narrow | `people:timeEntry:view` | `TimeEntryServiceImpl.listTimeEntries` |
+| `GET /v1/people/availability` | narrow | `people:availability:view` | `PeopleAvailabilityServiceImpl.getPeopleAvailability` |
+| `GET /v1/people/reports/attendanceJobtimeDiscrepancy` | narrow | `accounting:time:export` | `PeopleReportsServiceImpl.getAttendanceDiscrepancyReport` |
+| `GET /v1/people/reports/approvedTime` | gate (every `locationId`) | `accounting:time:export` | `PeopleReportsServiceImpl.getApprovedTimeForExport` |
+| `POST /v1/people/staffing/assignments` | gate (request `locationId`) | `people:employee:edit` | `StaffingAssignmentServiceImpl.create` |
+| `PUT /v1/people/staffing/assignments/{id}` | gate (existing and requested location) | `people:employee:edit` | `StaffingAssignmentServiceImpl.update` |
+| `DELETE /v1/people/staffing/assignments/{id}` | gate (existing location) | `people:employee:edit` | `StaffingAssignmentServiceImpl.end` |
+| `POST /v1/people/bulk-ingest` | unscoped | — | ADMIN-only load; the location is a payload default |
+
+- **gate** — the named location must be within the caller's reach or the request is refused.
+  Gates run after the existence checks so a 404 precedes a 403 and ids cannot be probed.
+- **narrow** — a named location is gated; with no location a scoped caller sees only their reach
+  (assigned nodes plus replicated descendants on the scoped dimension), and an empty reach is an
+  empty result rather than a refusal. For availability the defaulted location is the requester's
+  own, so the narrowed result is that location's rows when covered and an empty list otherwise.
+- Staffing assignments feed a person's location-scope claims, so every mutation is gated: a
+  LOCATION-scoped HR user can only assign, move or end assignments within their own reach.
+
 ## Configuration
 
 | Property                | Default  | Description                  |
