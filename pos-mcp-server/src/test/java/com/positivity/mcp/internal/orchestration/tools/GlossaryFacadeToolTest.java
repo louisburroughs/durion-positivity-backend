@@ -108,10 +108,7 @@ class GlossaryFacadeToolTest {
             tool.lookupBusinessTerm("who are the best customers at Northgate Freight Ltd?");
 
             assertThat(capture.events()).isNotEmpty();
-            // isNotEmpty first (S5841): logging nothing at all would satisfy allSatisfy and
-            // read as "the customer's text was not logged" without a line ever being emitted.
             assertThat(capture.events())
-                    .isNotEmpty()
                     .allSatisfy(event -> assertThat(event.getFormattedMessage())
                             .doesNotContain("Northgate Freight Ltd")
                             .doesNotContain("who are the"));
@@ -129,7 +126,10 @@ class GlossaryFacadeToolTest {
         try (LogCapture capture = new LogCapture()) {
             tool.lookupBusinessTerm("who are our most loyal customers at Harbor Tool & Die");
 
+            // isNotEmpty first (S5841): logging nothing at all would satisfy allSatisfy and
+            // read as "the customer's text was not logged" without a line ever being emitted.
             assertThat(capture.events())
+                    .isNotEmpty()
                     .allSatisfy(event -> assertThat(event.getFormattedMessage())
                             .doesNotContain("Harbor Tool & Die")
                             .contains("defined=false"));
