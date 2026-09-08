@@ -4,7 +4,9 @@ import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.location.LocationDeletedV1;
 import com.positivity.domainevents.location.LocationUpdatedV1;
 import com.positivity.order.internal.entity.ExtLocation;
+import com.positivity.order.internal.entity.ExtLocationParentReplica;
 import com.positivity.order.internal.entity.ProcessedEvent;
+import com.positivity.order.internal.repository.ExtLocationParentReplicaRepository;
 import com.positivity.order.internal.repository.ExtLocationRepository;
 import com.positivity.order.internal.repository.ProcessedEventRepository;
 import java.time.Clock;
@@ -32,6 +34,15 @@ import tools.jackson.databind.ObjectMapper;
  * idempotent no-op for live traffic and because it is what would let a future
  * regenerate-from-state replay repair a replica that holds the version number but wrong or
  * missing rows.
+ *
+ * <p>Each location fact also refreshes the materialised location-scope ancestor sets
+ * (ADR-0061 §2, #1872): the child's typed parent edges — carried on the same
+ * {@code location.location.updated} fact as {@code parents}; pos-location publishes no separate
+ * parent-added/removed fact — are replaced from the fact, then
+ * {@link LocationHierarchyService#recomputeAncestors} rebuilds the sets for the location and every
+ * replicated descendant, so a re-parented node propagates and a parent arriving after its children
+ * pushes its ancestry down to them. Ingestion never fails closed on a parent the replica has not
+ * seen yet; the scope check does.
  */
 @Slf4j
 @Component
@@ -45,6 +56,8 @@ public class LocationEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final ExtLocationRepository extLocationRepository;
+    private final ExtLocationParentReplicaRepository extLocationParentReplicaRepository;
+    private final LocationHierarchyService locationHierarchyService;
 
     @KafkaListener(
             topics = "${pos.order.kafka.location-events-topic:location.events.v1}",
@@ -77,8 +90,7 @@ public class LocationEventsListener {
             if (update) {
                 applyUpdate(envelope);
             } else {
-                extLocationRepository.deleteById(UUID.fromString(
-                        envelope.path("payload").path("locationId").stringValue(null)));
+                applyDelete(envelope);
             }
             processedEventRepository.save(ProcessedEvent.builder()
                     .eventId(eventId)
@@ -118,5 +130,30 @@ public class LocationEventsListener {
         replica.setAggregateVersion(aggregateVersion);
         replica.setSyncedAt(Instant.now(clock));
         extLocationRepository.save(replica);
+
+        // The fact carries the child's full typed parent-edge set — replace, don't merge.
+        // A missing/null list means the producer predates the field; leave existing edges
+        // untouched. (Same contract as pos-inventory's, pos-people's and pos-invoice's replicas.)
+        JsonNode parents = payload.path("parents");
+        if (parents.isArray()) {
+            extLocationParentReplicaRepository.deleteByChildId(locationId);
+            for (JsonNode edge : parents) {
+                extLocationParentReplicaRepository.save(ExtLocationParentReplica.builder()
+                        .childId(locationId)
+                        .parentId(UUID.fromString(edge.path("parentId").stringValue(null)))
+                        .parentType(edge.path("parentType").stringValue(null))
+                        .build());
+            }
+        }
+        // Edges (or the row itself) may have changed: rebuild the scope ancestor sets for this
+        // location and everything replicated beneath it (ADR-0061 §2, #1872).
+        locationHierarchyService.recomputeAncestors(locationId);
+    }
+
+    private void applyDelete(JsonNode envelope) {
+        UUID locationId =
+                UUID.fromString(envelope.path("payload").path("locationId").stringValue(null));
+        extLocationRepository.deleteById(locationId);
+        extLocationParentReplicaRepository.deleteByChildId(locationId);
     }
 }

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import com.positivity.order.internal.config.OrderDomainEventPublisher;
 import com.positivity.order.internal.dto.RegisterSessionSummary;
@@ -28,15 +29,22 @@ import com.positivity.order.internal.repository.SalesOrderRepository;
 import com.positivity.order.internal.security.OrderPermissions;
 import com.positivity.order.internal.service.model.CashMovementCommand;
 import com.positivity.order.internal.service.model.OpenSessionCommand;
+import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.security.common.LocationAncestorResolver;
+import com.positivity.security.common.LocationScope;
+import com.positivity.security.common.LocationScopeDeniedException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -91,6 +99,50 @@ class RegisterSessionServiceImplTest {
     @AfterEach
     void clearSecurity() {
         SecurityContextHolder.clearContext();
+    }
+
+    /** A second shop, outside the scoped caller's reach. */
+    private static final UUID OTHER_LOCATION = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+
+    /** The node a scoped caller is assigned: a region above {@link #LOCATION}. */
+    private static final UUID REGION_NODE = UUID.fromString("00000000-0000-0000-0000-000000000a00");
+
+    /** Replica stand-in: LOCATION sits under REGION_NODE on the OTHER dimension; OTHER_LOCATION does not. */
+    private static final LocationAncestorResolver RESOLVER = id -> {
+        if (LOCATION.equals(id)) {
+            return new AncestorSets(Set.of(LOCATION), Set.of(LOCATION, REGION_NODE));
+        }
+        if (OTHER_LOCATION.equals(id)) {
+            return new AncestorSets(Set.of(OTHER_LOCATION), Set.of(OTHER_LOCATION));
+        }
+        return AncestorSets.EMPTY;
+    };
+
+    @org.junit.jupiter.api.BeforeEach
+    void authenticateUnscoped() {
+        // Default caller: a pre-rollout token (no loc_* claims), which ADR-0061 treats as unscoped
+        // so the existing expectations are unchanged (#1872). Tests that need authorities or a
+        // scope replace it.
+        authenticate(LocationScope.unscoped());
+    }
+
+    private static void authenticate(LocationScope scope, String... authorities) {
+        var grants = java.util.Arrays.stream(authorities)
+                .map(SimpleGrantedAuthority::new)
+                .toList();
+        var token = new UsernamePasswordAuthenticationToken("opener", "n/a", grants);
+        token.setDetails(Map.of(
+                GatewaySecurityConstants.DETAIL_USERNAME,
+                "opener",
+                GatewaySecurityConstants.DETAIL_LOCATION_SCOPE,
+                scope));
+        SecurityContextHolder.getContext().setAuthentication(token);
+    }
+
+    /** A caller whose order:session:open is scoped (OTHER dimension) to the given assigned nodes. */
+    private static LocationScope openScopedTo(UUID... nodes) {
+        return LocationScope.of(
+                Set.of(), Set.of(OrderPermissions.ORDER_SESSION_OPEN), Optional.of(Set.of(nodes)), true, RESOLVER);
     }
 
     private static RegisterSession openSession(UUID id) {
@@ -310,5 +362,130 @@ class RegisterSessionServiceImplTest {
         UUID id = UUID.randomUUID();
         when(registerSessionRepository.findById(id)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.getSession(id)).isInstanceOf(RegisterSessionNotFoundException.class);
+    }
+
+    @Nested
+    @DisplayName("openSession location scope (ADR-0061 §3, #1872)")
+    class OpenSessionLocationScope {
+
+        private void stubNoActiveSessionAndSave() {
+            when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
+                    .thenReturn(false);
+            when(registerSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        }
+
+        @Test
+        @DisplayName("requested location in reach: the session opens there")
+        void inReach_opens() {
+            authenticate(openScopedTo(REGION_NODE), OrderPermissions.ORDER_SESSION_OPEN);
+            stubNoActiveSessionAndSave();
+            when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+                    .thenReturn(Optional.empty());
+
+            RegisterSessionSummary summary =
+                    service.openSession(new OpenSessionCommand(TERMINAL, LOCATION, null, "clerk-1"));
+
+            assertThat(summary.locationId()).isEqualTo(LOCATION);
+            assertThat(summary.status()).isEqualTo("OPEN");
+        }
+
+        @Test
+        @DisplayName("requested location out of reach: LocationScopeDeniedException, nothing saved")
+        void outOfReach_denies() {
+            authenticate(openScopedTo(REGION_NODE), OrderPermissions.ORDER_SESSION_OPEN);
+            when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
+                    .thenReturn(false);
+            when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+                    .thenReturn(Optional.empty());
+
+            assertThatThrownBy(() ->
+                            service.openSession(new OpenSessionCommand(TERMINAL, OTHER_LOCATION, null, "clerk-1")))
+                    .isInstanceOf(LocationScopeDeniedException.class)
+                    .asInstanceOf(
+                            org.assertj.core.api.InstanceOfAssertFactories.type(LocationScopeDeniedException.class))
+                    .satisfies(denied -> {
+                        assertThat(denied.permission()).isEqualTo(OrderPermissions.ORDER_SESSION_OPEN);
+                        assertThat(denied.locationId()).isEqualTo(OTHER_LOCATION.toString());
+                    });
+            verify(registerSessionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName(
+                "omitted locationId defaulting to a previous session at a shop out of reach is denied — no bypass by omission")
+        void defaultedLocationOutOfReach_denies() {
+            authenticate(openScopedTo(REGION_NODE), OrderPermissions.ORDER_SESSION_OPEN);
+            RegisterSession prior = openSession(UUID.randomUUID());
+            prior.setStatus(RegisterSessionStatus.CLOSED);
+            prior.setLocationId(OTHER_LOCATION);
+            when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
+                    .thenReturn(false);
+            when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+                    .thenReturn(Optional.of(prior));
+
+            assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, null, null, "clerk-1")))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+            verify(registerSessionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("omitted locationId defaulting to a previous session in reach opens there")
+        void defaultedLocationInReach_opens() {
+            authenticate(openScopedTo(REGION_NODE), OrderPermissions.ORDER_SESSION_OPEN);
+            RegisterSession prior = openSession(UUID.randomUUID());
+            prior.setStatus(RegisterSessionStatus.CLOSED);
+            stubNoActiveSessionAndSave();
+            when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+                    .thenReturn(Optional.of(prior));
+
+            RegisterSessionSummary summary =
+                    service.openSession(new OpenSessionCommand(TERMINAL, null, null, "clerk-1"));
+
+            assertThat(summary.locationId()).isEqualTo(LOCATION);
+        }
+
+        @Test
+        @DisplayName("a session that resolves to no location at all fails closed for a scoped caller")
+        void noLocation_deniesScopedCaller() {
+            authenticate(openScopedTo(REGION_NODE), OrderPermissions.ORDER_SESSION_OPEN);
+            when(registerSessionRepository.existsByTerminalIdAndStatusIn(eq(TERMINAL), any()))
+                    .thenReturn(false);
+            when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+                    .thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.openSession(new OpenSessionCommand(TERMINAL, null, null, "clerk-1")))
+                    .isInstanceOf(LocationScopeDeniedException.class);
+            verify(registerSessionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("pre-rollout token (no loc_* claims) opens at any location as before")
+        void unscopedCaller_isUnchanged() {
+            authenticate(LocationScope.unscoped(), OrderPermissions.ORDER_SESSION_OPEN);
+            stubNoActiveSessionAndSave();
+            when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+                    .thenReturn(Optional.empty());
+
+            RegisterSessionSummary summary =
+                    service.openSession(new OpenSessionCommand(TERMINAL, OTHER_LOCATION, null, "clerk-1"));
+
+            assertThat(summary.locationId()).isEqualTo(OTHER_LOCATION);
+        }
+
+        @Test
+        @DisplayName("caller whose open grant is global (claims present, permission unscoped) is unchanged")
+        void globalGrant_isNotLocationChecked() {
+            authenticate(
+                    LocationScope.of(Set.of(), Set.of(), Optional.of(Set.of(REGION_NODE)), true, RESOLVER),
+                    OrderPermissions.ORDER_SESSION_OPEN);
+            stubNoActiveSessionAndSave();
+            when(registerSessionRepository.findFirstByTerminalIdOrderByOpenedAtDesc(TERMINAL))
+                    .thenReturn(Optional.empty());
+
+            RegisterSessionSummary summary =
+                    service.openSession(new OpenSessionCommand(TERMINAL, OTHER_LOCATION, null, "clerk-1"));
+
+            assertThat(summary.locationId()).isEqualTo(OTHER_LOCATION);
+        }
     }
 }

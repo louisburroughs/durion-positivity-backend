@@ -81,6 +81,13 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 ? scale(command.openingFloat())
                 : previousCountedClose(command.terminalId());
         UUID locationId = command.locationId() != null ? command.locationId() : previousLocation(command.terminalId());
+        // ADR-0061 §3 (#1872): the session is opened *at* the resolved location, so the scope check
+        // runs here — after the default from the terminal's previous session is applied — rather
+        // than in the controller, or a scoped caller could open a drawer at another shop by simply
+        // omitting locationId. A session with no location at all answers "" which a scoped caller
+        // cannot cover (fail closed); an unscoped or pre-rollout caller is unchanged.
+        SecurityContextHelper.locationScope()
+                .require(OrderPermissions.ORDER_SESSION_OPEN, locationId == null ? "" : locationId.toString());
 
         Instant now = Instant.now(clock);
         RegisterSession session = RegisterSession.builder()

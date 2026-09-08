@@ -93,13 +93,13 @@ paths:
 
         Use this tool to start a new sale at the counter; do not use addCartItem, which adds line items to a cart that already exists.
 
-        Preconditions: the terminal must not have a register session in CLOSING, the customer and vehicle must exist in CRM when supplied, and a location must be resolvable from the request or the open session.
+        Preconditions: the terminal must not have a register session in CLOSING, the customer and vehicle must exist in CRM when supplied, and a location must be resolvable from the request or the open session. A caller whose order:order:create grant is location-scoped must have the resolved location within reach (ADR-0061).
 
         Required inputs: clerkId and terminalId; customerId and vehicleId are optional UUID strings, depositSourceType (ESTIMATE, WORKORDER or ORDER) and depositSourceId must be supplied together, and the optional Idempotency-Key header makes creation replay-safe.
 
         Emits an ORDER_CART_CREATE event and records the initial DRAFT status-history row.
 
-        Returns 201 on creation, 200 when a replayed Idempotency-Key returns the original cart, 400 when locationId cannot be resolved or depositSourceType/depositSourceId is only half supplied, 409 when the key was previously used with a different payload, and 422 when the customer or vehicle cannot be validated or the terminal''s register session is being closed.
+        Returns 201 on creation, 200 when a replayed Idempotency-Key returns the original cart, 400 when locationId cannot be resolved or depositSourceType/depositSourceId is only half supplied, 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the resolved location, 409 when the key was previously used with a different payload, and 422 when the customer or vehicle cannot be validated or the terminal''s register session is being closed.
 
         '
       operationId: createCart
@@ -151,7 +151,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Insufficient permissions.
+          description: Insufficient permissions (ApiError.code FORBIDDEN), or Caller holds order:order:create but its location scope does not cover the cart's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
         '409':
           content:
             application/json:
@@ -177,13 +177,13 @@ paths:
 
         Use this tool when the order id is already known; use listCarts instead to search by clerk, terminal or status.
 
-        Preconditions: the order must exist.
+        Preconditions: the order must exist. A caller whose order:order:view grant is location-scoped must have the order''s location within reach (ADR-0061).
 
         Required inputs: orderId (UUID) as a path parameter; there is no request body and no filtering.
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 404 when no sales order exists for the supplied id.
+        Returns 404 when no sales order exists for the supplied id, and 403 LOCATION_SCOPE_DENIED when the order exists but its location is outside the caller''s scope.
 
         '
       operationId: getOrder
@@ -200,7 +200,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SalesOrderResponse'
-          description: OK
+          description: Sales order found.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds order:order:view but its location scope does not cover the order's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No sales order exists for the supplied id.
       security:
       - bearerAuth: []
       summary: Get a Sales Order by Id
@@ -1778,13 +1790,13 @@ paths:
 
         Use this tool at the start of a drawer shift; do not use recordCashMovement, which requires a session that is already open.
 
-        Preconditions: the terminal must have no session in OPEN or CLOSING — one drawer per terminal.
+        Preconditions: the terminal must have no session in OPEN or CLOSING — one drawer per terminal. A caller whose order:session:open grant is location-scoped must have the resolved location within reach (ADR-0061); for such a caller a session that resolves to no location is denied.
 
         Required inputs: terminalId and openedByClerkId; openingFloat defaults to the terminal''s previous counted close (else zero) when omitted, and locationId defaults from the terminal''s previous session.
 
         Emits an ORDER_SESSION_OPEN event.
 
-        Returns 201 with the new session, and 409 when the terminal already has an active session.
+        Returns 201 with the new session, 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover the resolved location, and 409 when the terminal already has an active session.
 
         '
       operationId: openRegisterSession
@@ -1804,12 +1816,24 @@ paths:
         description: The terminal, clerk, and optional opening-float context for the shift.
         required: true
       responses:
-        '200':
+        '201':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RegisterSessionResponse'
-          description: OK
+          description: Register session opened.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds order:session:open but its location scope does not cover the session's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The terminal already has an active (OPEN or CLOSING) register session.
       security:
       - bearerAuth: []
       summary: Open a Register Session
@@ -1859,13 +1883,13 @@ paths:
 
         Use this tool when the session id is already known; use getCurrentRegisterSession instead to resolve the active session from a terminal id.
 
-        Preconditions: the session must exist.
+        Preconditions: the session must exist. A caller whose order:session:view grant is location-scoped must have the session''s location within reach (ADR-0061).
 
         Required inputs: sessionId (UUID) as a path parameter; there is no request body.
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        Returns 404 when no register session exists for the supplied id.
+        Returns 404 when no register session exists for the supplied id, and 403 LOCATION_SCOPE_DENIED when the session exists but its location is outside the caller''s scope.
 
         '
       operationId: getRegisterSession
@@ -1882,7 +1906,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RegisterSessionResponse'
-          description: OK
+          description: Register session found.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds order:session:view but its location scope does not cover the session's location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No register session exists for the supplied id.
       security:
       - bearerAuth: []
       summary: Get a Register Session

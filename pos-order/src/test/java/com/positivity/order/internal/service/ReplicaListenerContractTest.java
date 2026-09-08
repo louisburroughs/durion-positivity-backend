@@ -17,6 +17,7 @@ import com.positivity.order.internal.repository.ExtBillingRulesRepository;
 import com.positivity.order.internal.repository.ExtCustomerRepository;
 import com.positivity.order.internal.repository.ExtEstimateLineRepository;
 import com.positivity.order.internal.repository.ExtEstimateRepository;
+import com.positivity.order.internal.repository.ExtLocationParentReplicaRepository;
 import com.positivity.order.internal.repository.ExtLocationRepository;
 import com.positivity.order.internal.repository.ExtProductCodeRepository;
 import com.positivity.order.internal.repository.ExtProductRepository;
@@ -104,6 +105,12 @@ class ReplicaListenerContractTest {
     private ExtLocationRepository extLocationRepository;
 
     @Mock
+    private ExtLocationParentReplicaRepository extLocationParentReplicaRepository;
+
+    @Mock
+    private LocationHierarchyService locationHierarchyService;
+
+    @Mock
     private ExtWorkorderRepository extWorkorderRepository;
 
     @Mock
@@ -152,8 +159,13 @@ class ReplicaListenerContractTest {
                 extProductRepository,
                 extProductUomReplicaRepository,
                 extProductCodeRepository);
-        LocationEventsListener location =
-                new LocationEventsListener(clock, objectMapper, processedEventRepository, extLocationRepository);
+        LocationEventsListener location = new LocationEventsListener(
+                clock,
+                objectMapper,
+                processedEventRepository,
+                extLocationRepository,
+                extLocationParentReplicaRepository,
+                locationHierarchyService);
         WorkorderEventsListener workorder = new WorkorderEventsListener(
                 clock,
                 objectMapper,
