@@ -13,7 +13,9 @@ import java.util.regex.Pattern;
  */
 final class LaborTimeValidation {
 
-    static final Pattern OPERATION_CODE_PATTERN = Pattern.compile("[A-Z0-9]+(?:-[A-Z0-9]+)*");
+    // Possessive quantifiers (S5998): the segment class and the separator are disjoint, so
+    // backtracking can never find a different split and only costs stack depth on a long code.
+    static final Pattern OPERATION_CODE_PATTERN = Pattern.compile("[A-Z0-9]++(?:-[A-Z0-9]++)*+");
 
     private static final BigDecimal MAX_LABOR_HOURS = new BigDecimal("9999.9");
 

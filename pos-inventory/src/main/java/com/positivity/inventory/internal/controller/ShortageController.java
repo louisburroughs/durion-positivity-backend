@@ -182,11 +182,13 @@ public class ShortageController {
         // ADR-0061 §3 (#1872): the destination site and, for TRANSFER_IN, the source site are both
         // acted on, so each one named is gated. The body is validated by then.
         LocationScope scope = SecurityContextHelper.locationScope();
-        if (request.getLocationId() != null) {
-            scope.require(InventoryPermissionRegistry.SHORTAGE_RESOLVE, request.getLocationId());
+        UUID locationId = request.getLocationId();
+        if (locationId != null) {
+            scope.require(InventoryPermissionRegistry.SHORTAGE_RESOLVE, locationId);
         }
-        if (request.getSourceLocationId() != null) {
-            scope.require(InventoryPermissionRegistry.SHORTAGE_RESOLVE, request.getSourceLocationId());
+        UUID sourceLocationId = request.getSourceLocationId();
+        if (sourceLocationId != null) {
+            scope.require(InventoryPermissionRegistry.SHORTAGE_RESOLVE, sourceLocationId);
         }
         return ResponseEntity.ok(shortageResolutionService.resolveShortage(request));
     }

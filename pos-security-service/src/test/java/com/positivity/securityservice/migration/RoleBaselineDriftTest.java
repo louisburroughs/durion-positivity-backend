@@ -159,7 +159,9 @@ class RoleBaselineDriftTest {
         // ADMIN and SYSTEM_ADMINISTRATOR are Flyway's, including their persona metadata. Listing
         // them here too would mean two sources for one role, and the loader — which treats an
         // existing role as success — would silently ignore whichever lost the race.
-        assertThat(baseline).doesNotContainAnyElementsOf(BOOTSTRAP_FLOOR);
+        // isNotEmpty first (S5841): an unreadable or empty roles.csv would otherwise satisfy
+        // the exclusion without proving the baseline excludes anything.
+        assertThat(baseline).isNotEmpty().doesNotContainAnyElementsOf(BOOTSTRAP_FLOOR);
     }
 
     @Test

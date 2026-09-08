@@ -94,6 +94,11 @@ class RegisterSessionServiceImplTest {
                 domainEventPublisher,
                 clock);
         ReflectionTestUtils.setField(service, "authorizedDifferenceLimit", new BigDecimal("5.00"));
+        // Default caller: a pre-rollout token (no loc_* claims), which ADR-0061 treats as unscoped
+        // so the existing expectations are unchanged (#1872). Tests that need authorities or a
+        // scope replace it. Set here rather than in a second @BeforeEach because JUnit does not
+        // define the order between two of them in one class (S8745).
+        authenticate(LocationScope.unscoped());
     }
 
     @AfterEach
@@ -117,14 +122,6 @@ class RegisterSessionServiceImplTest {
         }
         return AncestorSets.EMPTY;
     };
-
-    @org.junit.jupiter.api.BeforeEach
-    void authenticateUnscoped() {
-        // Default caller: a pre-rollout token (no loc_* claims), which ADR-0061 treats as unscoped
-        // so the existing expectations are unchanged (#1872). Tests that need authorities or a
-        // scope replace it.
-        authenticate(LocationScope.unscoped());
-    }
 
     private static void authenticate(LocationScope scope, String... authorities) {
         var grants = java.util.Arrays.stream(authorities)

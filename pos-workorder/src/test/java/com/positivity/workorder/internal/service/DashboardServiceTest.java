@@ -84,20 +84,20 @@ class DashboardServiceTest {
     @InjectMocks
     private DashboardServiceImpl dashboardService;
 
-    @org.junit.jupiter.api.BeforeEach
-    void stubEstimatedLabor() {
-        org.mockito.Mockito.lenient()
-                .when(estimatedLaborService.estimateForWorkorder(any(UUID.class)))
-                .thenReturn(EstimatedLaborService.EstimatedLabor.none());
-    }
-
     /**
      * #1656: the replica tables are empty unless a case populates them. Cases written before mobile
      * units existed therefore keep exercising exactly the paths they were written for — an empty
      * active set plus whatever the day's workorders still point at.
+     *
+     * <p>The estimated-labor stub lives here rather than in a second {@code @BeforeEach} because
+     * JUnit does not define the order between two of them in one class (S8745). Both are lenient
+     * and independent, so one method states the whole default world a case starts from.
      */
     @org.junit.jupiter.api.BeforeEach
-    void stubEmptyResourceReplicas() {
+    void stubDefaultCollaborators() {
+        org.mockito.Mockito.lenient()
+                .when(estimatedLaborService.estimateForWorkorder(any(UUID.class)))
+                .thenReturn(EstimatedLaborService.EstimatedLabor.none());
         org.mockito.Mockito.lenient()
                 .when(extBayReplicaRepository.findActiveByLocationOrdered(any(UUID.class)))
                 .thenReturn(List.of());

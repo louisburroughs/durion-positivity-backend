@@ -132,7 +132,11 @@ class RoleLocationScopeSeedTest {
             "V37 creates no roles: the drift and persona tests harvest names from role INSERTs, and scope literals are upper case")
     void migrationInsertsNoRoles() {
         assertThat(sql.toUpperCase(java.util.Locale.ROOT)).doesNotContain("INSERT INTO ROLES");
-        assertThat(Set.of("ALL", "LOCATION", "FINANCIAL", "OTHER"))
-                .doesNotContain(seeded.keySet().toArray(new String[0]));
+        // Asserted on the harvested names rather than on the literal set (S5841): with the
+        // operands the other way round an empty harvest passed zero expected elements and the
+        // check held vacuously, which is the one case it exists to catch.
+        assertThat(seeded.keySet())
+                .isNotEmpty()
+                .doesNotContainAnyElementsOf(Set.of("ALL", "LOCATION", "FINANCIAL", "OTHER"));
     }
 }

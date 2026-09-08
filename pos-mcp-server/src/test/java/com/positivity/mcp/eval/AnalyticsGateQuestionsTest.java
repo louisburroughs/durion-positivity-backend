@@ -289,7 +289,10 @@ class AnalyticsGateQuestionsTest {
             assertThat(missing)
                     .as("%s: an excluded_reason claiming a missing tool must name it in blocked_by_missing_tool", id)
                     .isNotBlank();
+            // isNotEmpty first (S5841): a facade that exposed no tools would satisfy the
+            // exclusion for every reason at once and report the corpus as current.
             assertThat(facadeToolNames)
+                    .isNotEmpty()
                     .as(
                             "%s: excluded_reason says '%s' is missing, but the facade now has it — rewrite the reason",
                             id, missing)
