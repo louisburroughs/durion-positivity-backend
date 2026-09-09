@@ -80,8 +80,10 @@ public class PersonAccessController {
                     Preconditions: the person must have an active user-person link, and the linked username must \
                     resolve to a pos-security user.
                     Required inputs: personUuid (UUID) as a path parameter; includeHistory defaults to false and \
-                    adds ended assignments when true, and endDate (ISO date-time) optionally evaluates \
-                    assignments as of that moment.
+                    adds ended and revoked assignments when true. There is no as-of filter: the listing is always \
+                    evaluated as of now, and each entry carries its own effective window plus an active flag.
+                    Each entry carries the role code, which is the value revokePersonRoleAssignment addresses an \
+                    assignment by.
                     Emits a PEOPLE_CONTACT_ACCESS_ASSIGNMENTS_LIST audit event; no state changes.
                     Returns 404 when the person has no user link or the linked username has no security user.
                     """)
@@ -91,11 +93,9 @@ public class PersonAccessController {
             scopes = {"people-contact:role:view"})
     @PreAuthorize("hasAuthority('" + PeopleContactPermissions.ROLE_VIEW + "')")
     public ResponseEntity<List<UserRoleDto>> getAssignments(
-            @PathVariable UUID personUuid,
-            @RequestParam(required = false) Boolean includeHistory,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
-        return ResponseEntity.ok(peopleAccessControlService.getPersonRoleAssignments(
-                personUuid, Boolean.TRUE.equals(includeHistory), endDate));
+            @PathVariable UUID personUuid, @RequestParam(required = false) Boolean includeHistory) {
+        return ResponseEntity.ok(
+                peopleAccessControlService.getPersonRoleAssignments(personUuid, Boolean.TRUE.equals(includeHistory)));
     }
 
     @PostMapping("/{personUuid}/access/assignments")

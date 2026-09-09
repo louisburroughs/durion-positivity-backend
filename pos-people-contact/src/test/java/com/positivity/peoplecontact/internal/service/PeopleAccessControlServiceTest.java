@@ -102,14 +102,13 @@ class PeopleAccessControlServiceTest {
         UserRoleDto assignment = UserRoleDto.builder().roleCode("MANAGER").build();
         when(userPersonTranslationService.getUsernameForPerson(testPersonId)).thenReturn(Optional.of(testUsername));
         when(securityServiceClient.getUserByUsername(testUsername)).thenReturn(Optional.of(userWithId()));
-        when(securityServiceClient.getUserRoleAssignments(testUserId, true, null))
-                .thenReturn(List.of(assignment));
+        when(securityServiceClient.getUserRoleAssignments(testUserId, true)).thenReturn(List.of(assignment));
 
-        List<UserRoleDto> result = peopleAccessControlService.getPersonRoleAssignments(testPersonId, true, null);
+        List<UserRoleDto> result = peopleAccessControlService.getPersonRoleAssignments(testPersonId, true);
 
         assertEquals(1, result.size());
         verify(userPersonTranslationService).getUsernameForPerson(testPersonId);
-        verify(securityServiceClient).getUserRoleAssignments(testUserId, true, null);
+        verify(securityServiceClient).getUserRoleAssignments(testUserId, true);
     }
 
     @Test
@@ -152,7 +151,7 @@ class PeopleAccessControlServiceTest {
 
         assertThrows(
                 EntityNotFoundException.class,
-                () -> peopleAccessControlService.getPersonRoleAssignments(testPersonId, false, null));
+                () -> peopleAccessControlService.getPersonRoleAssignments(testPersonId, false));
     }
 
     @Test

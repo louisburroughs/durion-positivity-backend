@@ -68,7 +68,7 @@ class PersonAccessControllerIT extends BaseIntegrationTest {
         UserRoleDto assignment =
                 UserRoleDto.builder().userId("user-1").roleCode("MANAGER").build();
 
-        when(peopleAccessControlService.getPersonRoleAssignments(personUuid, false, null))
+        when(peopleAccessControlService.getPersonRoleAssignments(personUuid, false))
                 .thenReturn(List.of(assignment));
 
         mockMvc.perform(withAuth(get("/v1/people/{personUuid}/access/assignments", personUuid)
@@ -84,7 +84,7 @@ class PersonAccessControllerIT extends BaseIntegrationTest {
                 UserRoleDto.builder().userId("user-1").roleCode("MANAGER").build();
 
         // Should default to false when includeHistory is not provided
-        when(peopleAccessControlService.getPersonRoleAssignments(personUuid, false, null))
+        when(peopleAccessControlService.getPersonRoleAssignments(personUuid, false))
                 .thenReturn(List.of(assignment));
 
         mockMvc.perform(withAuth(get("/v1/people/{personUuid}/access/assignments", personUuid)))
@@ -95,7 +95,7 @@ class PersonAccessControllerIT extends BaseIntegrationTest {
     @Test
     void getAssignments_returns404WhenPersonLinkMissing() throws Exception {
         UUID personUuid = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        when(peopleAccessControlService.getPersonRoleAssignments(personUuid, true, null))
+        when(peopleAccessControlService.getPersonRoleAssignments(personUuid, true))
                 .thenThrow(new EntityNotFoundException("No user link found"));
 
         mockMvc.perform(withAuth(get("/v1/people/{personUuid}/access/assignments", personUuid)

@@ -67,13 +67,18 @@ class PersonAccessControllerErrorHandlingTest {
 
     @Test
     void aPeopleContactValidationFailureAnswers400WithItsOwnMessageAndCode() throws Exception {
-        when(peopleAccessControlService.getPersonRoleAssignments(any(), anyBoolean(), any()))
-                .thenThrow(new PeopleContactValidationException("endDate must be greater than or equal to startDate"));
+        // The message is one this endpoint can actually produce: SecurityServiceClient raises it
+        // when pos-security-service answers the assignment listing with a 400. The listing takes
+        // no dates, so a window-validation message would be unreachable here and would send a
+        // reader looking for a check that does not exist on this path.
+        String downstreamRejection = "Invalid request while listing assignments for userId: " + PERSON_ID;
+        when(peopleAccessControlService.getPersonRoleAssignments(any(), anyBoolean()))
+                .thenThrow(new PeopleContactValidationException(downstreamRejection));
 
         mockMvc.perform(get(ASSIGNMENTS_PATH).header(AUTHORITIES, ROLE_VIEW))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.message").value("endDate must be greater than or equal to startDate"))
+                .andExpect(jsonPath("$.message").value(downstreamRejection))
                 .andExpect(jsonPath("$.correlationId").exists());
     }
 
@@ -86,7 +91,7 @@ class PersonAccessControllerErrorHandlingTest {
     void anUnexpectedIllegalArgumentExceptionAnswers500WithoutLeakingItsMessage() throws Exception {
         String leakCanary = "org.hibernate.query.sqm.UnknownPathException: Could not resolve attribute 'personId' of "
                 + "'com.positivity.peoplecontact.internal.entity.Person'";
-        when(peopleAccessControlService.getPersonRoleAssignments(any(), anyBoolean(), any()))
+        when(peopleAccessControlService.getPersonRoleAssignments(any(), anyBoolean()))
                 .thenThrow(new IllegalArgumentException(leakCanary));
 
         String body = mockMvc.perform(get(ASSIGNMENTS_PATH).header(AUTHORITIES, ROLE_VIEW))
@@ -123,7 +128,7 @@ class PersonAccessControllerErrorHandlingTest {
     void aSecurityServiceContractViolationAnswers500WithoutLeakingTheDownstreamDetail() throws Exception {
         String leakCanary = "pos-security-service rejected GET /v1/users as malformed, but this request carries "
                 + "no caller-supplied value (looking up username=ada.lovelace)";
-        when(peopleAccessControlService.getPersonRoleAssignments(any(), anyBoolean(), any()))
+        when(peopleAccessControlService.getPersonRoleAssignments(any(), anyBoolean()))
                 .thenThrow(new SecurityServiceContractException(leakCanary));
 
         String body = mockMvc.perform(get(ASSIGNMENTS_PATH).header(AUTHORITIES, ROLE_VIEW))

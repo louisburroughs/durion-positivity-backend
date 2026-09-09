@@ -1057,7 +1057,9 @@ paths:
 
         Preconditions: the person must have an active user-person link, and the linked username must resolve to a pos-security user.
 
-        Required inputs: personUuid (UUID) as a path parameter; includeHistory defaults to false and adds ended assignments when true, and endDate (ISO date-time) optionally evaluates assignments as of that moment.
+        Required inputs: personUuid (UUID) as a path parameter; includeHistory defaults to false and adds ended and revoked assignments when true. There is no as-of filter: the listing is always evaluated as of now, and each entry carries its own effective window plus an active flag.
+
+        Each entry carries the role code, which is the value revokePersonRoleAssignment addresses an assignment by.
 
         Emits a PEOPLE_CONTACT_ACCESS_ASSIGNMENTS_LIST audit event; no state changes.
 
@@ -1077,12 +1079,6 @@ paths:
         required: false
         schema:
           type: boolean
-      - in: query
-        name: endDate
-        required: false
-        schema:
-          format: date-time
-          type: string
       responses:
         '200':
           content:
