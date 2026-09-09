@@ -2103,7 +2103,7 @@ paths:
       - accounting:default-mapping:edit
   /v1/accounting/events:
     get:
-      description: 'Lists ingested accounting events as a paginated projection with rich optional filters: organization, event type, idempotency outcome, received-at range, event id, ingestion id, domain key, invoice id and processing status.
+      description: 'Lists ingested accounting events as a paginated projection with rich optional filters: event type, idempotency outcome, received-at range, event id, ingestion id, domain key, invoice id and processing status.
 
         Use this tool to monitor or triage the event pipeline; do not use getAccountingEvent, which fetches one event by its known id.
 
@@ -2118,13 +2118,6 @@ paths:
         '
       operationId: listAccountingEvents
       parameters:
-      - description: Filter by organization
-        in: query
-        name: organizationId
-        required: false
-        schema:
-          format: uuid
-          type: string
       - description: Filter by event type
         in: query
         name: eventType
@@ -2238,7 +2231,7 @@ paths:
 
         Preconditions: no event with the same eventId may already be ingested; duplicates are rejected rather than reprocessed.
 
-        Required inputs: eventType (max 100 chars), organizationId (UUID) and payload (JSON object); eventId, sourceSystem and transactionDate (ISO-8601) are optional, eventId being generated when omitted.
+        Required inputs: eventType (max 100 chars) and payload (JSON object); eventId, sourceSystem and transactionDate (ISO-8601) are optional, eventId being generated when omitted. organizationId is deprecated and ignored — omit it.
 
         Emits an ACCOUNTING_EVENT_SUBMIT event and returns 202 while processing continues asynchronously; callers poll getAccountingEvent for the outcome.
 
@@ -2255,7 +2248,6 @@ paths:
                 value:
                   eventId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
                   eventType: INVOICE_FINALIZED
-                  organizationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c
                   payload:
                     invoiceId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d
                     totalAmount: 150.0
@@ -2335,7 +2327,7 @@ paths:
 
         No events are emitted and no state changes; this is a read-only projection.
 
-        The payload is returned unchanged for audit; payloadReferences adds a display projection of the reference values recognized inside it: UUID-backed invoice, customer, organization, journal-entry, vendor and vendor-bill ids, plus the code-keyed accounting location (locationId / location_id, matched case-insensitively against the location profile code). Each entry carries rawValue as written and id only when that value is a UUID; displayName and displayReference are null when accounting cannot resolve the reference and are never the identifier rendered as text. listAccountingEvents omits payloadReferences.
+        The payload is returned unchanged for audit; payloadReferences adds a display projection of the reference values recognized inside it: UUID-backed invoice, customer, journal-entry, vendor and vendor-bill ids, plus the code-keyed accounting location (locationId / location_id, matched case-insensitively against the location profile code). Each entry carries rawValue as written and id only when that value is a UUID; displayName and displayReference are null when accounting cannot resolve the reference and are never the identifier rendered as text. listAccountingEvents omits payloadReferences.
 
         Returns 404 EVENT_NOT_FOUND when no accounting event exists for the supplied id.
 
@@ -8484,10 +8476,13 @@ components:
           minLength: 0
           type: string
         organizationId:
-          description: Organization UUID
+          deprecated: true
+          description: 'Deprecated and ignored. Vestigial multi-tenancy scope key retained only for producers that still send one: nothing resolves or displays it. Omit it.'
           example: 00000000-0000-4000-a000-000000000010
           format: uuid
-          type: string
+          type:
+          - string
+          - 'null'
         payload:
           description: Event-specific payload content
           type: object
@@ -8504,7 +8499,6 @@ components:
           type: string
       required:
       - eventType
-      - organizationId
       - payload
       type: object
     AccountingPeriodReopenRequest:
@@ -10100,7 +10094,6 @@ components:
           enum:
           - INVOICE
           - CUSTOMER
-          - ORGANIZATION
           - LOCATION
           - JOURNAL_ENTRY
           - VENDOR
