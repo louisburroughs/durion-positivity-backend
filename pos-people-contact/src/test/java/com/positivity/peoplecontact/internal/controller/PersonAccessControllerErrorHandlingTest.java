@@ -67,7 +67,7 @@ class PersonAccessControllerErrorHandlingTest {
 
     @Test
     void aPeopleContactValidationFailureAnswers400WithItsOwnMessageAndCode() throws Exception {
-        when(peopleAccessControlService.getPersonRoleAssignments(any(), anyBoolean(), any()))
+        when(peopleAccessControlService.getPersonRoleAssignments(any(), anyBoolean()))
                 .thenThrow(new PeopleContactValidationException("endDate must be greater than or equal to startDate"));
 
         mockMvc.perform(get(ASSIGNMENTS_PATH).header(AUTHORITIES, ROLE_VIEW))
@@ -86,7 +86,7 @@ class PersonAccessControllerErrorHandlingTest {
     void anUnexpectedIllegalArgumentExceptionAnswers500WithoutLeakingItsMessage() throws Exception {
         String leakCanary = "org.hibernate.query.sqm.UnknownPathException: Could not resolve attribute 'personId' of "
                 + "'com.positivity.peoplecontact.internal.entity.Person'";
-        when(peopleAccessControlService.getPersonRoleAssignments(any(), anyBoolean(), any()))
+        when(peopleAccessControlService.getPersonRoleAssignments(any(), anyBoolean()))
                 .thenThrow(new IllegalArgumentException(leakCanary));
 
         String body = mockMvc.perform(get(ASSIGNMENTS_PATH).header(AUTHORITIES, ROLE_VIEW))
@@ -123,7 +123,7 @@ class PersonAccessControllerErrorHandlingTest {
     void aSecurityServiceContractViolationAnswers500WithoutLeakingTheDownstreamDetail() throws Exception {
         String leakCanary = "pos-security-service rejected GET /v1/users as malformed, but this request carries "
                 + "no caller-supplied value (looking up username=ada.lovelace)";
-        when(peopleAccessControlService.getPersonRoleAssignments(any(), anyBoolean(), any()))
+        when(peopleAccessControlService.getPersonRoleAssignments(any(), anyBoolean()))
                 .thenThrow(new SecurityServiceContractException(leakCanary));
 
         String body = mockMvc.perform(get(ASSIGNMENTS_PATH).header(AUTHORITIES, ROLE_VIEW))

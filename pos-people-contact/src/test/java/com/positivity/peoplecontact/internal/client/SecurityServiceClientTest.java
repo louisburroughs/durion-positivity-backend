@@ -230,15 +230,117 @@ class SecurityServiceClientTest {
         }
 
         @Test
-        @DisplayName("forwards the history and end-date filters to the assignments endpoint")
+        @DisplayName("sends includeHistory and nothing else, the only filter the endpoint declares")
         void assignmentsQuery() {
+            // requestTo() matches the full URI including its query string. This client used to
+            // append ?endDate=..., which RoleController never declared and Spring therefore
+            // dropped; a stray parameter fails here rather than being silently ignored.
             server.expect(requestTo(
-                            "http://security/v1/roles/assignments/user/%s?includeHistory=true&endDate=2026-08-31T00:00"
-                                    .formatted(USER_ID)))
+                            "http://security/v1/roles/assignments/user/%s?includeHistory=true".formatted(USER_ID)))
                     .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
 
-            assertThat(client.getUserRoleAssignments(USER_ID, true, LocalDateTime.of(2026, 8, 31, 0, 0)))
-                    .isEmpty();
+            assertThat(client.getUserRoleAssignments(USER_ID, true)).isEmpty();
+            server.verify();
+        }
+
+        @Test
+        @DisplayName("maps every field of the assignment response, not just the userId")
+        void assignmentsAreMappedFromTheResponseShape() {
+            // The response is RoleAssignmentDto. Read straight into UserRoleDto — which is what
+            // this did — only userId lines up by name, so roleCode, the effective window and the
+            // active flag all came back null and the caller's listing was unusable (issue #1886).
+            server.expect(requestTo(
+                            "http://security/v1/roles/assignments/user/%s?includeHistory=false".formatted(USER_ID)))
+                    .andRespond(withSuccess(
+                            "["
+                                    + assignmentJson(
+                                            ASSIGNMENT_ID, ROLE_ID, "SHOP_MGR", NOW.minusDays(1), NOW.plusDays(1), null)
+                                    + "]",
+                            MediaType.APPLICATION_JSON));
+
+            assertThat(client.getUserRoleAssignments(USER_ID, false))
+                    .singleElement()
+                    .satisfies(assignment -> {
+                        assertThat(assignment.getUserId()).isEqualTo(USER_ID.toString());
+                        assertThat(assignment.getRoleCode()).isEqualTo("SHOP_MGR");
+                        assertThat(assignment.getStartDate()).isEqualTo(NOW.minusDays(1));
+                        assertThat(assignment.getEndDate()).isEqualTo(NOW.plusDays(1));
+                        assertThat(assignment.getActive()).isTrue();
+                    });
+            server.verify();
+        }
+
+        @Test
+        @DisplayName("reports an assignment whose window has closed as inactive")
+        void endedAssignmentsAreNotActive() {
+            server.expect(requestTo(
+                            "http://security/v1/roles/assignments/user/%s?includeHistory=true".formatted(USER_ID)))
+                    .andRespond(withSuccess(
+                            "["
+                                    + assignmentJson(
+                                            ASSIGNMENT_ID,
+                                            ROLE_ID,
+                                            "TECHNICIAN",
+                                            NOW.minusDays(10),
+                                            NOW.minusDays(1),
+                                            "2026-08-15T12:00:00Z")
+                                    + "]",
+                            MediaType.APPLICATION_JSON));
+
+            assertThat(client.getUserRoleAssignments(USER_ID, true))
+                    .singleElement()
+                    .satisfies(assignment -> {
+                        assertThat(assignment.getRoleCode()).isEqualTo("TECHNICIAN");
+                        assertThat(assignment.getActive()).isFalse();
+                    });
+            server.verify();
+        }
+
+        @Test
+        @DisplayName("keeps a bounded assignment active, since revokedAt only means it has an end date")
+        void revokedAtDoesNotDecideTheActiveFlag() {
+            // pos-security-service stamps revokedAt from its effectiveEndDate setter, so an
+            // ordinary assignment created with a future end date carries one from the start.
+            // Reading it as a revocation would report every bounded assignment inactive for the
+            // whole of its life. The window is the test; a real revocation moves the window.
+            server.expect(requestTo(
+                            "http://security/v1/roles/assignments/user/%s?includeHistory=false".formatted(USER_ID)))
+                    .andRespond(withSuccess(
+                            "["
+                                    + assignmentJson(
+                                            ASSIGNMENT_ID,
+                                            ROLE_ID,
+                                            "TECHNICIAN",
+                                            NOW.minusDays(1),
+                                            NOW.plusDays(30),
+                                            "2026-08-11T12:00:00Z")
+                                    + "]",
+                            MediaType.APPLICATION_JSON));
+
+            assertThat(client.getUserRoleAssignments(USER_ID, false))
+                    .singleElement()
+                    .satisfies(assignment -> assertThat(assignment.getActive()).isTrue());
+            server.verify();
+        }
+
+        @Test
+        @DisplayName("leaves the role code null when a downstream older than #1886 omits it")
+        void assignmentsToleratesAResponseWithoutARoleCode() {
+            // A listing has no requested role code to fall back on. Null is the honest answer
+            // here; inventing one would hide a version skew that the caller can see.
+            server.expect(requestTo(
+                            "http://security/v1/roles/assignments/user/%s?includeHistory=false".formatted(USER_ID)))
+                    .andRespond(withSuccess(
+                            "[" + assignmentJson(ASSIGNMENT_ID, ROLE_ID, null, NOW.minusDays(1), null, null) + "]",
+                            MediaType.APPLICATION_JSON));
+
+            assertThat(client.getUserRoleAssignments(USER_ID, false))
+                    .singleElement()
+                    .satisfies(assignment -> {
+                        assertThat(assignment.getRoleCode()).isNull();
+                        assertThat(assignment.getStartDate()).isEqualTo(NOW.minusDays(1));
+                        assertThat(assignment.getActive()).isTrue();
+                    });
             server.verify();
         }
 
@@ -248,7 +350,7 @@ class SecurityServiceClientTest {
             server.expect(requestTo(org.hamcrest.Matchers.containsString("/v1/roles/assignments/user/")))
                     .andRespond(withSuccess("null", MediaType.APPLICATION_JSON));
 
-            assertThatThrownBy(() -> client.getUserRoleAssignments(USER_ID, false, null))
+            assertThatThrownBy(() -> client.getUserRoleAssignments(USER_ID, false))
                     .isInstanceOf(IllegalStateException.class);
             server.verify();
         }
@@ -285,6 +387,25 @@ class SecurityServiceClientTest {
             assertThat(result.getRoleCode()).isEqualTo("TECH");
             assertThat(result.getUserId()).isEqualTo(USER_ID.toString());
             assertThat(result.getActive()).isTrue();
+            server.verify();
+        }
+
+        @Test
+        @DisplayName("takes the role code from the response once the service returns one")
+        void responseRoleCodeWinsOverTheRequestedOne() {
+            expectRoleLookup("TECH");
+            server.expect(requestTo("http://security/v1/roles/assignments"))
+                    .andRespond(withSuccess(
+                            assignmentJson(ASSIGNMENT_ID, ROLE_ID, "TECH", NOW, null, null),
+                            MediaType.APPLICATION_JSON));
+
+            assertThat(client.assignRole(UserRoleAssignmentRequest.builder()
+                                    .userId(USER_ID)
+                                    .roleCode("TECH")
+                                    .startDate(NOW)
+                                    .build())
+                            .getRoleCode())
+                    .isEqualTo("TECH");
             server.verify();
         }
 
@@ -572,18 +693,35 @@ class SecurityServiceClientTest {
     }
 
     /**
-     * pos-security-service's {@code RoleAssignmentDto} on the wire: flat {@code userId}/{@code
-     * roleId} over a {@code LocalDateTime} window, with no scope of any kind.
+     * The pre-#1886 payload: no {@code roleCode}, which is what a pos-security-service older than
+     * that change returns. The assignment tests that use it therefore exercise the fallback to
+     * the role code the caller named.
      */
     private static String assignmentJson(UUID assignmentId, UUID roleId, LocalDateTime start, LocalDateTime end) {
+        return assignmentJson(assignmentId, roleId, null, start, end, null);
+    }
+
+    /**
+     * pos-security-service's {@code RoleAssignmentDto} on the wire: flat {@code userId}/{@code
+     * roleId}/{@code roleCode} over a {@code LocalDateTime} window, with no scope of any kind.
+     * {@code revokedAt} is an {@code Instant}, unlike the window.
+     */
+    private static String assignmentJson(
+            UUID assignmentId, UUID roleId, String roleCode, LocalDateTime start, LocalDateTime end, String revokedAt) {
         return """
-                {"id":"%s","userId":"%s","roleId":"%s",
+                {"id":"%s","userId":"%s","roleId":"%s","roleCode":%s,
                  "effectiveStartDate":%s,"effectiveEndDate":%s,
-                 "revokedAt":null,"createdAt":"2026-08-01T00:00:00Z","createdBy":"system"}""".formatted(
+                 "revokedAt":%s,"createdAt":"2026-08-01T00:00:00Z","createdBy":"system"}""".formatted(
                         assignmentId,
                         USER_ID,
                         roleId,
-                        start == null ? "null" : "\"" + start + "\"",
-                        end == null ? "null" : "\"" + end + "\"");
+                        quoteOrNull(roleCode),
+                        quoteOrNull(start),
+                        quoteOrNull(end),
+                        quoteOrNull(revokedAt));
+    }
+
+    private static String quoteOrNull(Object value) {
+        return value == null ? "null" : "\"" + value + "\"";
     }
 }
