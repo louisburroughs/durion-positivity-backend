@@ -18,6 +18,7 @@ import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.service.RoleManagementService;
 import com.positivity.securityservice.internal.service.TokenRevocationManager;
 import com.positivity.shared.id.UUIDv7Generator;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -38,8 +39,11 @@ import org.springframework.test.context.ActiveProfiles;
  * the real {@code findEffectiveAssignmentsByUser} query against the H2 test schema so the
  * guarantee is proven at the persistence boundary, not only against a mock.
  *
- * <p>The database's own {@code CURRENT_DATE} is the reference point for the JPQL query, so the
- * fixture places windows a year on either side of it rather than at the boundary.
+ * <p>The query takes the evaluation instant as a bound parameter, so windows can sit on the
+ * boundary. They could not before: it compared timestamp columns against the database's
+ * {@code CURRENT_DATE}, midnight of the current day, and this fixture had to place windows a year
+ * on either side to avoid the resulting day-wide skew. The same-day tests below are the ones that
+ * skew hid (#1910).
  */
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -80,6 +84,16 @@ class UserHasPermissionEffectiveDatingIT extends BaseIntegrationTest {
 
     @Autowired
     private RoleManagementService roleManagementService;
+
+    /**
+     * The application's own clock, which is UTC ({@code TimeConfig} supplies
+     * {@link java.time.Clock#systemUTC()}). Fixtures are built from it rather than from
+     * {@code LocalDateTime.now(clock)}, whose system default zone would differ by the machine's offset
+     * — enough for a window placed minutes from the boundary to land on the wrong side of it on
+     * any non-UTC machine, while CI's UTC runner passed.
+     */
+    @Autowired
+    private Clock clock;
 
     private User user;
     private Role role;
@@ -124,7 +138,7 @@ class UserHasPermissionEffectiveDatingIT extends BaseIntegrationTest {
     @Test
     @DisplayName("an assignment inside its window grants the role's permission")
     void currentAssignmentGrants() {
-        persistAssignment(LocalDateTime.now().minusYears(1), null);
+        persistAssignment(LocalDateTime.now(clock).minusYears(1), null);
 
         assertThat(roleManagementService.userHasPermission(user.getId(), PERMISSION))
                 .isTrue();
@@ -133,7 +147,8 @@ class UserHasPermissionEffectiveDatingIT extends BaseIntegrationTest {
     @Test
     @DisplayName("an assignment that has ended grants nothing")
     void expiredAssignmentDoesNotGrant() {
-        persistAssignment(LocalDateTime.now().minusYears(2), LocalDateTime.now().minusYears(1));
+        persistAssignment(
+                LocalDateTime.now(clock).minusYears(2), LocalDateTime.now(clock).minusYears(1));
 
         assertThat(roleManagementService.userHasPermission(user.getId(), PERMISSION))
                 .isFalse();
@@ -142,7 +157,7 @@ class UserHasPermissionEffectiveDatingIT extends BaseIntegrationTest {
     @Test
     @DisplayName("an assignment that has not started yet grants nothing")
     void futureAssignmentDoesNotGrant() {
-        persistAssignment(LocalDateTime.now().plusYears(1), null);
+        persistAssignment(LocalDateTime.now(clock).plusYears(1), null);
 
         assertThat(roleManagementService.userHasPermission(user.getId(), PERMISSION))
                 .isFalse();
@@ -151,16 +166,58 @@ class UserHasPermissionEffectiveDatingIT extends BaseIntegrationTest {
     @Test
     @DisplayName("a revoked assignment stops granting even though its row is kept for history")
     void revokedAssignmentDoesNotGrant() {
-        RoleAssignment assignment = persistAssignment(LocalDateTime.now().minusYears(1), null);
+        RoleAssignment assignment = persistAssignment(LocalDateTime.now(clock).minusYears(1), null);
 
         roleManagementService.revokeRoleAssignment(
-                assignment.getId(), LocalDateTime.now().minusDays(1));
+                assignment.getId(), LocalDateTime.now(clock).minusDays(1));
 
         assertThat(roleAssignmentRepository.findById(assignment.getId()))
                 .as("revocation is an end date, not a delete")
                 .isPresent();
         assertThat(roleManagementService.userHasPermission(user.getId(), PERMISSION))
                 .isFalse();
+    }
+
+    @Test
+    @DisplayName("a role granted earlier today is effective now, not from tomorrow")
+    void grantEarlierTodayIsEffectiveNow() {
+        // The query compared effective_start_date against CURRENT_DATE — midnight — so a grant
+        // made at any point during the day read as "not started yet" until the next midnight.
+        persistAssignment(LocalDateTime.now(clock).minusMinutes(1), null);
+
+        assertThat(roleManagementService.userHasPermission(user.getId(), PERMISSION))
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("a role revoked earlier today stops granting now, not from tomorrow")
+    void revocationEarlierTodayStopsGrantingNow() {
+        // The mirror image, and the one that matters: effective_end_date was compared against
+        // midnight too, so a revocation entered during the day kept granting for the rest of it.
+        // This query backs the authorities on every authenticated request.
+        RoleAssignment assignment = persistAssignment(LocalDateTime.now(clock).minusYears(1), null);
+
+        roleManagementService.revokeRoleAssignment(
+                assignment.getId(), LocalDateTime.now(clock).minusMinutes(1));
+
+        assertThat(roleManagementService.userHasPermission(user.getId(), PERMISSION))
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("creating a bounded assignment does not mark it revoked")
+    void boundedAssignmentIsNotMarkedRevoked() {
+        RoleAssignment bounded = persistAssignment(
+                LocalDateTime.now(clock).minusDays(1), LocalDateTime.now(clock).plusYears(1));
+
+        assertThat(roleAssignmentRepository
+                        .findById(bounded.getId())
+                        .orElseThrow()
+                        .getRevokedAt())
+                .as("an end date is not a revocation")
+                .isNull();
+        assertThat(roleManagementService.userHasPermission(user.getId(), PERMISSION))
+                .isTrue();
     }
 
     private RoleAssignment persistAssignment(LocalDateTime start, LocalDateTime end) {

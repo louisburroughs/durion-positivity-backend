@@ -13,6 +13,8 @@ import com.positivity.securityservice.internal.repository.RoleAssignmentReposito
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import java.security.SecureRandom;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
@@ -46,6 +48,7 @@ public class UserServiceImpl implements UserService {
     private final RoleRepository roleRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final PasswordEncoder passwordEncoder;
+    private final Clock clock;
 
     @Override
     @Transactional
@@ -185,7 +188,8 @@ public class UserServiceImpl implements UserService {
 
     private Set<String> resolveEffectiveRoleNames(User user) {
         Set<String> roleNames = user.getRoles().stream().map(Role::getName).collect(Collectors.toSet());
-        List<RoleAssignment> assignments = roleAssignmentRepository.findEffectiveAssignmentsByUser(user);
+        List<RoleAssignment> assignments =
+                roleAssignmentRepository.findEffectiveAssignmentsByUser(user, LocalDateTime.now(clock));
         if (assignments != null) {
             roleNames.addAll(assignments.stream()
                     .map(RoleAssignment::getRole)

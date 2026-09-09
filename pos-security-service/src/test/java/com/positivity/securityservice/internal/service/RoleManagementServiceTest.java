@@ -652,7 +652,8 @@ class RoleManagementServiceTest {
         assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of(assignment));
+        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(eq(user), any()))
+                .thenReturn(List.of(assignment));
 
         assertThat(sut.getAssignmentsForUser(USER_ID, false)).singleElement().satisfies(dto -> {
             assertThat(dto.getRoleId()).isEqualTo(ROLE_ID);
@@ -687,7 +688,8 @@ class RoleManagementServiceTest {
             assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of(assignment));
+            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(eq(user), any()))
+                    .thenReturn(List.of(assignment));
 
             assertThat(sut.userHasPermission(USER_ID, "security:roles:create")).isTrue();
         }
@@ -714,11 +716,12 @@ class RoleManagementServiceTest {
             expired.setEffectiveEndDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of());
+            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(eq(user), any()))
+                    .thenReturn(List.of());
             lenient().when(roleAssignmentRepository.findAllByUser_Id(USER_ID)).thenReturn(List.of(expired));
 
             assertThat(sut.userHasPermission(USER_ID, "security:roles:create")).isFalse();
-            verify(roleAssignmentRepository).findEffectiveAssignmentsByUser(user);
+            verify(roleAssignmentRepository).findEffectiveAssignmentsByUser(eq(user), any());
             verify(roleAssignmentRepository, never()).findAllByUser_Id(any());
         }
 
@@ -741,7 +744,8 @@ class RoleManagementServiceTest {
             assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of(assignment));
+            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(eq(user), any()))
+                    .thenReturn(List.of(assignment));
 
             assertThat(sut.userHasPermission(USER_ID, "security:other:permission"))
                     .isFalse();
@@ -800,6 +804,70 @@ class RoleManagementServiceTest {
             RoleAssignmentDto result = sut.createRoleAssignment(request);
 
             assertThat(result.getEffectiveStartDate()).isEqualTo(LocalDateTime.now(TEST_CLOCK));
+        }
+
+        @Test
+        @DisplayName("a bounded assignment is created unrevoked")
+        void createRoleAssignment_boundedWindow_leavesRevokedAtNull() {
+            // setEffectiveEndDate used to stamp revokedAt, and this is the call that goes through
+            // it, so every bounded assignment was born marked revoked (#1910).
+            User user = new User();
+            user.setId(USER_ID);
+            user.setUsername("tester");
+
+            Role role = new Role();
+            role.setId(ROLE_ID);
+            role.setName("Tester");
+            role.setPermissions(new HashSet<>());
+
+            RoleAssignmentRequest request = new RoleAssignmentRequest(
+                    USER_ID,
+                    ROLE_ID,
+                    LocalDateTime.now(TEST_CLOCK),
+                    LocalDateTime.now(TEST_CLOCK).plusYears(1));
+
+            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+            when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
+            when(roleAssignmentRepository.findByUser_IdAndRole_Id(USER_ID, ROLE_ID))
+                    .thenReturn(List.of());
+            when(roleAssignmentRepository.save(any(RoleAssignment.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
+
+            assertThat(sut.createRoleAssignment(request).getRevokedAt()).isNull();
+        }
+
+        @Test
+        @DisplayName("a window starting exactly where another ends is a handover, not an overlap")
+        void createRoleAssignment_windowStartingAtPriorEnd_isAccepted() {
+            // The window is half-open, so touching windows do not overlap. The end-inclusive
+            // comparison rejected a clean handover as a conflict.
+            User user = new User();
+            user.setId(USER_ID);
+            user.setUsername("tester");
+
+            Role role = new Role();
+            role.setId(ROLE_ID);
+            role.setName("Tester");
+            role.setPermissions(new HashSet<>());
+
+            LocalDateTime handover = LocalDateTime.now(TEST_CLOCK);
+
+            RoleAssignment ending = new RoleAssignment();
+            ending.setRole(role);
+            ending.setEffectiveStartDate(handover.minusDays(30));
+            ending.setEffectiveEndDate(handover);
+
+            RoleAssignmentRequest request = new RoleAssignmentRequest(USER_ID, ROLE_ID, handover, null);
+
+            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+            when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
+            when(roleAssignmentRepository.findByUser_IdAndRole_Id(USER_ID, ROLE_ID))
+                    .thenReturn(List.of(ending));
+            when(roleAssignmentRepository.save(any(RoleAssignment.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
+
+            assertThat(sut.createRoleAssignment(request).getEffectiveStartDate())
+                    .isEqualTo(handover);
         }
 
         @Test
@@ -905,7 +973,8 @@ class RoleManagementServiceTest {
         ra2.setEffectiveStartDate(java.time.LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of(ra1, ra2));
+        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(eq(user), any()))
+                .thenReturn(List.of(ra1, ra2));
 
         Set<PermissionDto> permissions = sut.getUserPermissions(USER_ID);
 

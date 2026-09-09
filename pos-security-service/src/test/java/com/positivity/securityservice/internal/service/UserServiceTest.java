@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -186,7 +187,8 @@ class UserServiceTest {
         assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK));
 
         when(userRepository.findByUsername("admin.alpha")).thenReturn(Optional.of(user));
-        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of(assignment));
+        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(eq(user), any()))
+                .thenReturn(List.of(assignment));
 
         Optional<UserAuthContext> result = userService.getUserByUsername("admin.alpha");
 

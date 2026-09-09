@@ -6,6 +6,7 @@ import com.positivity.securityservice.internal.repository.RoleAssignmentReposito
 import com.positivity.securityservice.internal.repository.UserRepository;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -36,7 +37,8 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
         Set<String> effectiveRoles =
                 new HashSet<>(user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()));
-        var effectiveAssignments = roleAssignmentRepository.findEffectiveAssignmentsByUser(user);
+        var effectiveAssignments =
+                roleAssignmentRepository.findEffectiveAssignmentsByUser(user, LocalDateTime.now(clock));
         List<String> assignedRoles = effectiveAssignments == null
                 ? List.of()
                 : effectiveAssignments.stream()
