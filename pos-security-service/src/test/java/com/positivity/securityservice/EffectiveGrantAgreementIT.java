@@ -12,7 +12,6 @@ import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
-import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -92,9 +91,6 @@ class EffectiveGrantAgreementIT extends BaseIntegrationTest {
     private RoleAssignmentRepository roleAssignmentRepository;
 
     @Autowired
-    private PrincipalRoleRepository principalRoleRepository;
-
-    @Autowired
     private CustomUserDetailsService customUserDetailsService;
 
     @Autowired
@@ -120,7 +116,6 @@ class EffectiveGrantAgreementIT extends BaseIntegrationTest {
     @BeforeEach
     void seed() {
         roleAssignmentRepository.deleteAll();
-        principalRoleRepository.deleteAll();
         userRepository.deleteAll();
         roleRepository.deleteAll();
     }

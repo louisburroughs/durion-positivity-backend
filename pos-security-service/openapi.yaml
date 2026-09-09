@@ -10,8 +10,6 @@ servers:
 - description: Generated server url
   url: http://localhost:8086
 tags:
-- description: Assign roles to principals for RBAC matrix operations
-  name: Principal Role Management
 - description: Endpoints for JWT authentication and token management per ADR-0011
   name: JWT API
 - description: Assign and revoke roles for users
@@ -24,10 +22,10 @@ tags:
   name: Audit Exports
 - description: Bulk provision roles with persona metadata
   name: Role Bulk Ingest API
+- description: Authorization decision endpoints for a user's effective roles
+  name: Authorization
 - description: Manage roles, permissions, and user assignments
   name: Role Management
-- description: Authorization decision endpoints for principal permissions
-  name: Authorization
 - description: Bulk grant permissions to existing roles
   name: Role Permission Bulk Ingest API
 - description: Endpoints for user management and authentication
@@ -3288,75 +3286,11 @@ paths:
       - User API
       x-required-permissions:
       - security:user:create
-  /v1/users/authorization/decision:
-    get:
-      description: 'Returns an allow or deny decision for a principal identifier and permission key, evaluated against the principal-role matrix populated by assignPrincipalRole.
-
-        Use this tool for matrix-based checks keyed by principal string; use getPersonAuthorizationDecision instead when the caller has a personId; location reach is decided by the owning service from the token''s scope claims (ADR-0061 §3), not by this endpoint.
-
-        Preconditions: the caller must hold security:authorization:decide; the principal needs no prior registration.
-
-        Required inputs: principalId and permission (domain:resource:action) as query parameters.
-
-        No events are emitted and no state changes; this is a read-only evaluation.
-
-        Returns 200 with decision allow or deny; an unknown principal or permission yields deny rather than an error.
-
-        '
-      operationId: getAuthorizationDecision
-      parameters:
-      - description: Principal identifier to evaluate
-        example: userA
-        in: query
-        name: principalId
-        required: true
-        schema:
-          type: string
-      - description: Permission key to evaluate
-        example: pricing:msrp:edit
-        in: query
-        name: permission
-        required: true
-        schema:
-          type: string
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthorizationDecisionResponse'
-          description: Authorization decision returned
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Bad Request
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unauthorized
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: 'Forbidden: authorization decision permission required'
-      security:
-      - bearerAuth:
-        - security:authorization:decide
-      summary: Get Authorization Decision for a Principal
-      tags:
-      - Authorization
-      x-required-permissions:
-      - security:authorization:decide
   /v1/users/authorization/person-decision:
     get:
       description: 'Returns an allow or deny decision for the user account linked to a personId, evaluated against the user''s currently effective roles (effective-dated assignments, honouring the window), the same set token issuance uses.
 
-        Use this tool to verify an off-session approver, such as a manager identified by employee number, holds a required permission; use getAuthorizationDecision instead for matrix principals.
+        Use this tool to verify an off-session approver, such as a manager identified by employee number, holds a required permission.
 
         Preconditions: the caller must hold security:authorization:decide; a user should be linked to the person via the user-person link projection.
 
@@ -3557,71 +3491,6 @@ paths:
       - User Person Link Bulk Ingest API
       x-required-permissions:
       - security:user:edit
-  /v1/users/principals/{principalId}/roles/{roleId}:
-    post:
-      description: 'Links a free-form principal identifier to a role in the RBAC principal matrix consulted by getAuthorizationDecision.
-
-        Use this tool for matrix principals that are not user UUIDs; do not use assignUserRole, which creates a role assignment for a real user account.
-
-        Preconditions: the caller must hold security:role:assign and the role must exist; the principal is not validated against any store, and an existing identical link makes the call a no-op.
-
-        Required inputs: principalId (arbitrary string) and roleId (UUID) as path parameters; there is no request body.
-
-        Emits a SECURITY_PRINCIPAL_ROLE_ASSIGN event.
-
-        Returns 404 when the role does not exist; repeat assignments still return 200.
-
-        '
-      operationId: assignPrincipalRole
-      parameters:
-      - description: Principal identifier receiving the role assignment
-        in: path
-        name: principalId
-        required: true
-        schema:
-          type: string
-      - description: Role identifier to assign to the principal
-        in: path
-        name: roleId
-        required: true
-        schema:
-          format: uuid
-          type: string
-      responses:
-        '200':
-          description: Role assigned to principal successfully
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Bad Request
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unauthorized
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Principal or role not found
-      security:
-      - bearerAuth:
-        - security:role:assign
-      summary: Assign a Role to a Principal
-      tags:
-      - Principal Role Management
-      x-required-permissions:
-      - security:role:assign
   /v1/users/{id}:
     delete:
       description: 'Deletes a user account and queues removal of its user-person link so downstream projections follow the account out.
@@ -4378,7 +4247,7 @@ paths:
     put:
       description: 'Creates a role assignment linking a user to a role, effective immediately with no end date.
 
-        Use this tool for the common grant; do not use createRoleAssignment, which supports effective date windows, and do not use assignPrincipalRole, which targets the string-keyed RBAC principal matrix.
+        Use this tool for the common grant; do not use createRoleAssignment, which supports effective date windows.
 
         Preconditions: the caller must hold security:role:assign and both the user and role must exist.
 

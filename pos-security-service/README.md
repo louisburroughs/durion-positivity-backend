@@ -332,7 +332,7 @@ those claims.
 - `GET /v1/users/{id}` — retrieve a user
 - `POST /v1/users/{id}/unlock` — admin: unlock account
 - `POST /v1/users/{id}/enable` / `disable` — admin: enable/disable account
-- `GET /v1/auth/authorization/decision` — check if caller has a permission
+- `GET /v1/users/authorization/person-decision` — off-session check whether the user linked to a personId has a permission
 
 ## Error Responses
 

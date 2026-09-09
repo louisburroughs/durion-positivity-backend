@@ -14,7 +14,6 @@ import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
-import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -90,9 +89,6 @@ class UserRoleGrantAgreementIT extends BaseIntegrationTest {
     private RoleAssignmentRepository roleAssignmentRepository;
 
     @Autowired
-    private PrincipalRoleRepository principalRoleRepository;
-
-    @Autowired
     private UserService userService;
 
     @Autowired
@@ -117,7 +113,6 @@ class UserRoleGrantAgreementIT extends BaseIntegrationTest {
     @BeforeEach
     void seed() {
         roleAssignmentRepository.deleteAll();
-        principalRoleRepository.deleteAll();
         userRepository.deleteAll();
         roleRepository.deleteAll();
     }

@@ -3,7 +3,6 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,7 +11,6 @@ import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
-import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -49,9 +47,6 @@ class RolePermissionServiceImplTest {
 
     @Mock
     private PermissionRepository permissionRepository;
-
-    @Mock
-    private PrincipalRoleRepository principalRoleRepository;
 
     @Mock
     private ApplicationEventPublisher applicationEventPublisher;
@@ -205,52 +200,6 @@ class RolePermissionServiceImplTest {
 
             org.assertj.core.api.Assertions.assertThatThrownBy(
                             () -> sut.revokePermission(roleId, "security:role:grant"))
-                    .isInstanceOf(RoleNotFoundException.class)
-                    .hasMessageContaining("Role not found");
-        }
-    }
-
-    @Nested
-    @DisplayName("assignRoleToPrincipal()")
-    class AssignRoleToPrincipal {
-        @Test
-        @DisplayName("saves principal role when assignment does not exist")
-        void assignRoleToPrincipal_createsAssignment() {
-            UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-            Role role = new Role();
-            role.setId(roleId);
-
-            when(principalRoleRepository.existsByPrincipalIdAndRole_Id("principal-1", roleId))
-                    .thenReturn(false);
-            when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
-
-            sut.assignRoleToPrincipal("principal-1", roleId);
-
-            verify(principalRoleRepository).save(any());
-        }
-
-        @Test
-        @DisplayName("does nothing when assignment already exists")
-        void assignRoleToPrincipal_existingAssignment_noop() {
-            UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-            when(principalRoleRepository.existsByPrincipalIdAndRole_Id("principal-1", roleId))
-                    .thenReturn(true);
-
-            sut.assignRoleToPrincipal("principal-1", roleId);
-
-            verify(roleRepository, never()).findById(any());
-            verify(principalRoleRepository, never()).save(any());
-        }
-
-        @Test
-        @DisplayName("throws when role does not exist")
-        void assignRoleToPrincipal_roleNotFound_throws() {
-            UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-            when(principalRoleRepository.existsByPrincipalIdAndRole_Id("principal-1", roleId))
-                    .thenReturn(false);
-            when(roleRepository.findById(roleId)).thenReturn(Optional.empty());
-
-            org.assertj.core.api.Assertions.assertThatThrownBy(() -> sut.assignRoleToPrincipal("principal-1", roleId))
                     .isInstanceOf(RoleNotFoundException.class)
                     .hasMessageContaining("Role not found");
         }

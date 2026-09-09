@@ -12,7 +12,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
-import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -77,9 +76,6 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
     @Autowired
     private RoleAssignmentRepository roleAssignmentRepository;
 
-    @Autowired
-    private PrincipalRoleRepository principalRoleRepository;
-
     private User testUser;
     private Role testRole;
 
@@ -87,7 +83,6 @@ class RoleAssignmentRevocationIT extends BaseIntegrationTest {
     void setupTestData() {
         // Clean up any existing test data
         roleAssignmentRepository.deleteAll();
-        principalRoleRepository.deleteAll();
         userRepository.deleteAll();
         roleRepository.deleteAll();
 

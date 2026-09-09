@@ -87,15 +87,15 @@ class SecurityEventTypeInitializerTest {
     // =========================================================
 
     @Nested
-    @DisplayName("T_SETI1: run() registers all 38 event types")
+    @DisplayName("T_SETI1: run() registers all 37 event types")
     class RegistersAllEventTypes {
 
         @Test
-        @DisplayName("T_SETI1 — SecurityEventTypes.all() defines exactly 38 entries")
-        void securityEventTypes_definesExactly38Types() {
+        @DisplayName("T_SETI1 — SecurityEventTypes.all() defines exactly 37 entries")
+        void securityEventTypes_definesExactly37Types() {
             assertThat(EventTypes.all())
-                    .as("SecurityEventTypes.all() must define exactly 38 event type registrations")
-                    .hasSize(38);
+                    .as("SecurityEventTypes.all() must define exactly 37 event type registrations")
+                    .hasSize(37);
         }
 
         @Test

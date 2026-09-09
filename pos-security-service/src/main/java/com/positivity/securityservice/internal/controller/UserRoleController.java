@@ -47,8 +47,7 @@ public class UserRoleController {
     @Operation(operationId = "assignUserRole", summary = "Assign a Role to a User", description = """
                     Creates a role assignment linking a user to a role, effective immediately with no end date.
                     Use this tool for the common grant; do not use createRoleAssignment, which supports \
-                    effective date windows, and do not use assignPrincipalRole, which targets \
-                    the string-keyed RBAC principal matrix.
+                    effective date windows.
                     Preconditions: the caller must hold security:role:assign and both the user and role must exist.
                     Required inputs: userId and roleId (UUIDs) as path parameters; there is no request body.
                     Idempotent: a pair the user already effectively holds is a no-op, not a second, overlapping \

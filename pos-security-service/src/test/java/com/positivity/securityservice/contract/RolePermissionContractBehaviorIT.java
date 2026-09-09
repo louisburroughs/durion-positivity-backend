@@ -9,11 +9,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.securityservice.BaseContractIntegrationTest;
 import com.positivity.securityservice.PosSecurityServiceApplication;
+import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.service.TokenRevocationManager;
+import com.positivity.shared.id.UUIDv7Generator;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationEvent;
 import org.springframework.http.MediaType;
@@ -43,6 +48,9 @@ class RolePermissionContractBehaviorIT extends BaseContractIntegrationTest {
 
     @MockitoBean
     private TokenRevocationManager tokenRevocationManager;
+
+    @Autowired
+    private UserRepository userRepository;
 
     private MockHttpServletRequestBuilder withSystemAdminAuth(MockHttpServletRequestBuilder builder) {
         return withAuth(
@@ -119,11 +127,14 @@ class RolePermissionContractBehaviorIT extends BaseContractIntegrationTest {
         assertThat(duplicateCount).isEqualTo(1);
     }
 
-    // Issue #42: AC3 verifies allow decision for principal with role-permission
-    // grant.
+    // Issue #42: AC3 verifies allow person-decision for a user with a granted
+    // role-permission (ADR-0061 amendment 2026-09-09, #1914 phase 4: the
+    // string-keyed principal matrix this test used to exercise is retired;
+    // the equivalent off-session decision now resolves through a user's
+    // linked personId).
     @Test
-    @DisplayName("AC3: authorization decision returns allow when principal has granted permission")
-    void ac3_authorizationDecision_returnsAllow() throws Exception {
+    @DisplayName("AC3: person-decision returns allow when the user's role has the granted permission")
+    void ac3_personDecision_returnsAllow() throws Exception {
         String rolePayload = objectMapper.writeValueAsString(Map.of(
                 "name", "PricingAnalyst",
                 "description", "Pricing analyst role"));
@@ -145,22 +156,31 @@ class RolePermissionContractBehaviorIT extends BaseContractIntegrationTest {
                         .content(objectMapper.writeValueAsString(Map.of("permission", "pricing:msrp:edit")))))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(withSystemAdminAuth(post("/v1/users/principals/{principalId}/roles/{roleId}", "userA", roleId)))
-                .andExpect(status().isOk());
+        UUID personId = UUIDv7Generator.generate();
+        User user = new User();
+        user.setId(UUIDv7Generator.generate());
+        user.setUsername("userA-" + System.currentTimeMillis());
+        user.setPassword("{noop}test-password");
+        user.setPersonId(personId);
+        user = userRepository.save(user);
 
-        mockMvc.perform(withSystemAdminAuth(get("/v1/users/authorization/decision")
-                        .param("principalId", "userA")
+        mockMvc.perform(withSystemAdminAuth(put("/v1/users/{userId}/roles/{roleId}", user.getId(), roleId)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(withSystemAdminAuth(get("/v1/users/authorization/person-decision")
+                        .param("personId", personId.toString())
                         .param("permission", "pricing:msrp:edit")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.decision").value("allow"));
     }
 
-    // Issue #42: AC4 verifies deny-by-default behavior for unassigned principal.
+    // Issue #42: AC4 verifies deny-by-default behavior for a personId with no
+    // linked user.
     @Test
-    @DisplayName("AC4: authorization decision returns deny by default")
-    void ac4_authorizationDecision_returnsDenyByDefault() throws Exception {
-        mockMvc.perform(withSystemAdminAuth(get("/v1/users/authorization/decision")
-                        .param("principalId", "userB")
+    @DisplayName("AC4: person-decision returns deny by default")
+    void ac4_personDecision_returnsDenyByDefault() throws Exception {
+        mockMvc.perform(withSystemAdminAuth(get("/v1/users/authorization/person-decision")
+                        .param("personId", UUIDv7Generator.generate().toString())
                         .param("permission", "pricing:msrp:edit")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.decision").value("deny"));
