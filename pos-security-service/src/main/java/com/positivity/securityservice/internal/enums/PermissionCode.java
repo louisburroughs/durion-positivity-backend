@@ -969,13 +969,23 @@ public enum PermissionCode {
     // ungranted because V31's keep list must equal its seeded grants (#1898).
     PEOPLE__SELF__VIEW(517, "people:self:view"),
     // ── Crm (new) ──────────────────────────────────────────────────────────────
-    CRM__FACT__REPLAY(518, "crm:fact:replay");
+    CRM__FACT__REPLAY(518, "crm:fact:replay"),
+    // ── People employee PII (#1898) ────────────────────────────────────────────
+    // An employee's personal contact detail — home address, personal phone
+    // numbers, personal email, emergency contact — returned by the one read that
+    // carries EmployeeProfileDto.contactInfo. Split out of people:employee:view,
+    // which fourteen of seventeen roles hold and which guards eight unscoped
+    // reads, so a technician could enumerate colleagues through the employee
+    // search and then pull each one's home address. Seeded to ADMIN,
+    // GENERAL_MANAGER, MANAGER and SHOP_MANAGER: a strict subset of the
+    // people:employee:view holders, so the split removes reach and adds none.
+    PEOPLE__EMPLOYEE_PII__VIEW(519, "people:employee_pii:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 82;
+    public static final int CATALOG_VERSION = 83;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

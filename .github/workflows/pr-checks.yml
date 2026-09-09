@@ -110,9 +110,12 @@ jobs:
       - name: Check @PreAuthorize permissions are registered in the catalog
         run: |
           # Fails if any @PreAuthorize permission is missing from PermissionCode /
-          # GatewayPermissionCatalog / DownstreamPermissionCatalog. Run
-          # `scripts/generate-permissions.sh --sync` locally and commit the result
-          # (note: a catalog change bumps CATALOG_VERSION = fleet-coordinated deploy).
+          # GatewayPermissionCatalog / DownstreamPermissionCatalog, or if a bit-indexed
+          # permission an annotation requires is granted by neither R__seed_role_permissions.sql
+          # nor the alpha role baseline (#1848 -- a bit with no grant is an unreachable
+          # endpoint). Run `scripts/generate-permissions.sh --sync --grant <ROLE>` locally and
+          # commit the result (note: a catalog change bumps CATALOG_VERSION = fleet-coordinated
+          # deploy).
           scripts/generate-permissions.sh --sync --check
 
       - name: Check RBAC authorization drift (audit-rbac.py --check)
@@ -148,6 +151,15 @@ jobs:
         # build, no network, no database.
         run: |
           python3 -m unittest scripts.test_analytics_gate_run
+
+      - name: Permission generator unit tests (test_generate_permissions_*.py)
+        # The generator now writes the two grant sources as well as the catalogs (#1848), so its
+        # seed/CSV rewriting is the thing standing between a new @PreAuthorize and two red CI
+        # jobs. Those pins -- sorted insertion, comma grammar at the end of a VALUES list,
+        # idempotence on re-run, and the roles the seed may not grant to -- are worth nothing
+        # unless a job evaluates them. Stdlib plus PyYAML, already installed above.
+        run: |
+          python3 -m unittest discover -s scripts/tests -p 'test_generate_permissions*.py'
 
   pr-comment:
     name: PR Summary Comment

@@ -207,15 +207,20 @@ public class EmployeeController {
     @EmitEvent(id = "PEOPLE_EMPLOYEE_GET", apiVersion = "1")
     @Operation(operationId = "getEmployee", summary = "Get Employee Profile By Person Id", description = """
                     Returns the full employee profile for a person id, merging identity fields from the \
-                    pos-people-contact replica with local employment fields.
+                    pos-people-contact replica with local employment fields, including the contactInfo block: \
+                    personal address, personal phone numbers, personal email and emergency contact.
                     Use this tool when the person id is already known; use getEmployeeByNumber instead to resolve a \
-                    human-entered employee number.
-                    Preconditions: an employee row or identity-replica row must exist for the id; identity fields may \
-                    briefly be null right after creation while the replica catches up.
+                    human-entered employee number, and searchEmployees to list or pick an employee without their \
+                    personal contact detail.
+                    Preconditions: the caller holds people:employee_pii:view, which is narrower than the \
+                    people:employee:view held by the structural reads; an employee row or identity-replica row must \
+                    exist for the id; identity fields may briefly be null right after creation while the replica \
+                    catches up.
                     Required inputs: employeeId (UUID) path parameter, which is the person id; there is no request \
                     body.
                     Emits a PEOPLE_EMPLOYEE_GET audit event but changes no state; this is a read-only projection.
-                    Returns 404 when neither an employee record nor a person replica row exists for the id.
+                    Returns 403 when the caller does not hold people:employee_pii:view, and 404 when neither an \
+                    employee record nor a person replica row exists for the id.
                     """)
     @ApiResponse(responseCode = "200", description = "Employee found")
     @ApiResponse(
@@ -224,8 +229,12 @@ public class EmployeeController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",
-            scopes = {"people:employee:view"})
-    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_VIEW + "')")
+            scopes = {"people:employee_pii:view"})
+    // #1898: this is the only read that returns EmployeeProfileDto.contactInfo — home address,
+    // personal phone and emergency contact — so it is gated on the narrow PII permission rather
+    // than the people:employee:view every staff role holds. The structural reads on this
+    // controller keep people:employee:view.
+    @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_PII_VIEW + "')")
     public ResponseEntity<EmployeeProfileDto> getEmployee(@PathVariable UUID employeeId) {
         return ResponseEntity.ok(employeeService.getEmployee(employeeId));
     }
@@ -236,7 +245,7 @@ public class EmployeeController {
                     number, employment status, and an active flag.
                     Use this tool for service-to-service approver resolution such as \
                     manager-approval-by-employee-number; use getEmployee instead when the full profile with names and \
-                    contact info is needed.
+                    contact info is needed, which requires the narrower people:employee_pii:view.
                     Preconditions: an employee record with the given employee number must exist; matching is \
                     case-insensitive.
                     Required inputs: employeeNumber (string) path parameter; there is no request body and no \

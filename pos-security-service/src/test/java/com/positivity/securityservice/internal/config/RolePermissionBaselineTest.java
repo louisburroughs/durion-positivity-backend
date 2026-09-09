@@ -518,6 +518,47 @@ class RolePermissionBaselineTest {
     }
 
     @Test
+    @DisplayName("people:employee_pii:view is held by exactly the people-management roles (#1898)")
+    void employeePiiViewIsHeldByExactlyThePeopleManagementRoles() {
+        // The permission guards the one read that returns EmployeeProfileDto.contactInfo — home
+        // address, personal phone and emergency contact. Equality rather than containment: every
+        // role added here can read every colleague's home address, and none of the endpoint's
+        // siblings is location-scoped, so there is no site boundary underneath to contain it.
+        assertThat(holdersOf("people:employee_pii:view"))
+                .as("roles holding people:employee_pii:view")
+                .containsExactly("ADMIN", "GENERAL_MANAGER", "MANAGER", "SHOP_MANAGER");
+    }
+
+    @Test
+    @DisplayName("#1898: the split narrows people:employee:view and widens nothing")
+    void employeePiiViewIsAStrictSubsetOfEmployeeView() {
+        Set<String> employeeView = holdersOf("people:employee:view");
+        Set<String> piiView = holdersOf("people:employee_pii:view");
+
+        // The two properties that make this a narrowing rather than a re-shuffle: nobody gains
+        // reach they did not already have, and the roles the issue names as the disclosure — a
+        // technician reading a colleague's home address, an advisor reading their emergency
+        // contact — lose it.
+        assertThat(piiView)
+                .as("every PII holder already held the permission the profile read moved off")
+                .isSubsetOf(employeeView);
+        assertThat(piiView)
+                .as("the operational roles keep the structural reads and lose the contact block")
+                .doesNotContain(
+                        "ACCOUNTING_ASSOCIATE",
+                        "ACCOUNT_MANAGER",
+                        "CONTROLLER",
+                        "INVENTORY_CONTROLLER",
+                        "INVENTORY_LEAD",
+                        "INVENTORY_MANAGER",
+                        "SERVICE_ADVISOR",
+                        "TECHNICIAN");
+        assertThat(employeeView)
+                .as("the structural reads are untouched, so the employee picker still works")
+                .contains("SERVICE_ADVISOR", "TECHNICIAN");
+    }
+
+    @Test
     @DisplayName("ADMIN holds both tool permissions")
     void adminHoldsToolViewAndManage() {
         assertThat(seededGrants.get("ADMIN")).contains("mcp:tool:view", "mcp:tool:manage");

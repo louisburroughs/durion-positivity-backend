@@ -32,7 +32,34 @@ public final class PeoplePermissions {
     /** Edit employee records. */
     public static final String EMPLOYEE_EDIT = "people:employee:edit";
 
-    /** View employee records. */
+    /**
+     * Read an employee's personal contact detail: home address, personal phone numbers, personal
+     * email and emergency contact.
+     *
+     * <p>Guards {@code GET /v1/people/employees/&#123;employeeId&#125;}, the only read that returns
+     * {@code EmployeeProfileDto.contactInfo}. It exists because {@link #EMPLOYEE_VIEW} was doing
+     * two unrelated jobs under one name — "read staffing structure" and "read employee PII" — and
+     * the seed gave that name to twelve roles including TECHNICIAN and SERVICE_ADVISOR. A
+     * technician could enumerate colleagues through the search endpoint and then pull each one's
+     * home address and emergency contact (#1898).
+     *
+     * <p>Seeded to ADMIN, GENERAL_MANAGER, MANAGER and SHOP_MANAGER: the roles whose job is
+     * managing people. That set is a strict subset of today's {@link #EMPLOYEE_VIEW} holders, so
+     * the split takes reach away and gives none — no role can read anything it could not read
+     * before. The structural reads are untouched, so a technician keeps the employee search and
+     * the assignment reads and loses only the contact block.
+     */
+    public static final String EMPLOYEE_PII_VIEW = "people:employee_pii:view";
+
+    /**
+     * View employee records: the structural reads over other people.
+     *
+     * <p>Staffing assignments, location assignments, the paged employee search and the
+     * employee-number identity lookup. Every staff role holds it, and none of the endpoints it
+     * guards is location-scoped, so it is reach over the whole company — which is why the employee
+     * profile no longer sits behind it. Personal contact detail moved to
+     * {@link #EMPLOYEE_PII_VIEW} in #1898.
+     */
     public static final String EMPLOYEE_VIEW = "people:employee:view";
 
     /**

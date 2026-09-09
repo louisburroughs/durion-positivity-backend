@@ -649,6 +649,8 @@ Also called automatically at the end of each `generate-openapi.sh` run (pass `--
 ./scripts/generate-permissions.sh pos-workorder pos-accounting  # specific modules only
 ./scripts/generate-permissions.sh --dry-run                # print changes without writing
 ./scripts/generate-permissions.sh --check                  # exit non-zero if any file would change (CI)
+./scripts/generate-permissions.sh --sync                   # catalogs + grants for new permissions
+./scripts/generate-permissions.sh --sync --grant SERVICE_ADVISOR   # grant to a role other than ADMIN
 ```
 
 **What it does:**
@@ -660,11 +662,18 @@ Also called automatically at the end of each `generate-openapi.sh` run (pass `--
 6. Sorts all entries alphabetically and writes the file
 7. Writes the aggregate permissions report to `docs/permissions-report.yaml`
 
+**With `--sync` it also:**
+8. Registers any unregistered `@PreAuthorize` permission as a bit-indexed `PermissionCode` constant, mirrors it into `GatewayPermissionCatalog` / `DownstreamPermissionCatalog`, and bumps `CATALOG_VERSION` in all three
+9. Grants it in both grant sources (#1848) — the `permissions` row, role grant and self-check entry in `R__seed_role_permissions.sql`, and the target role's list in `scripts/fixtures/seed/alpha/security/role-permissions.csv`
+
 **Notes:**
 - Requires `python3` and `PyYAML`.
-- `--check` is suitable for CI to detect YAML drift after controller changes.
+- `--check` is suitable for CI to detect YAML drift after controller changes. With `--sync` it also fails when a bit-indexed, `@PreAuthorize`-required permission is granted to no role — an unreachable endpoint.
 - The aggregate report is only refreshed on normal write runs; `--dry-run` and `--check` skip it.
-- **Does not update `CATALOG_VERSION`.** Catalog version bumps are a separate manual step — see [Adding a New Permission](../../../durion/docs/architecture/AUTHORIZATION_MODEL.md#adding-a-new-permission) in `AUTHORIZATION_MODEL.md`.
+- `--grant ROLE` is repeatable and defaults to `ADMIN`; a `grantTo:` list on the permission's `permissions.yaml` entry overrides it. Only the six roles Flyway still creates reach the SQL grant block; every other role's grant is CSV-only. `SYSTEM_ADMINISTRATOR` is refused (its block is mirrored in `V31`), as is any role with no row in the baseline CSV.
+- Insertions are sorted and idempotent: existing rows are never reordered, and re-running adds nothing.
+- **`--sync` bumps `CATALOG_VERSION`, which makes the change a fleet-coordinated deploy** — `perm_ver` is checked strictly downstream. See [Permission Registration](../docs/OPERATIONS_RUNBOOK.md#permission-registration) in the operations runbook and [Adding a New Permission](../../../durion/docs/architecture/AUTHORIZATION_MODEL.md#adding-a-new-permission) in `AUTHORIZATION_MODEL.md`. Without `--sync` no catalog file is touched.
+- Unit tests: `scripts/tests/test_generate_permissions_core.py` and `test_generate_permissions_wrapper.py` (run by the "Permission generator unit tests" step in `pr-checks.yml`).
 
 ---
 

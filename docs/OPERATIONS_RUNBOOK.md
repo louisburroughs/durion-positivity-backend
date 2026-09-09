@@ -629,6 +629,67 @@ public class PartyController {
 ❌ Manually insert permissions into database
 ❌ Create permissions via admin UI
 
+### Adding a permission: one command (#1848)
+
+A permission needs four things to work end to end: an annotation, a bit in the catalog, a
+`permissions.yaml` entry, and a **grant**. The first three come from
+`scripts/generate-permissions.sh --sync`. The fourth used to be a hand edit of two more files,
+and forgetting it failed CI in two separate jobs after the fact — `audit-rbac.py --check`
+(`required_ungranted` / `required_no_bit` / `unreachable_op_count`) in PR Checks, and
+`RoleBaselineDriftTest` in the reactor build. `--sync` now writes the grant too:
+
+```bash
+# 1. annotate the endpoint
+@PreAuthorize("hasAuthority('catalog:tread_design:resolve')")
+
+# 2. one command: bit + catalogs + manifest + both grant sources
+scripts/generate-permissions.sh --sync --grant ADMIN
+
+# 3. verify locally exactly as CI will
+scripts/generate-permissions.sh --sync --check
+python3 scripts/audit-rbac.py --check
+./mvnw -pl pos-security-service -am -Dtest='RoleBaselineDriftTest,RolePermissionBaselineTest' test
+```
+
+What `--sync` writes, beyond the three catalogs:
+
+| File | What lands |
+| --- | --- |
+| `pos-security-service/.../db/migration/R__seed_role_permissions.sql` | the section-2 `permissions` row (name, domain, resource, action, freshly assigned bit); the section-3 role grant; the section-4 self-check entry |
+| `scripts/fixtures/seed/alpha/security/role-permissions.csv` | the permission added to the target role's `;`-separated list |
+
+Rules the command follows, and why:
+
+- **`--grant ROLE` is repeatable**; the default is `ADMIN`, the all-domain role, so a permission
+  granted nowhere else is still reachable by an administrator and widens nothing an operator role
+  can reach. A permission whose owning module's `permissions.yaml` entry carries a `grantTo:` list
+  uses that instead — a per-permission decision reviewed in the module that owns it beats a
+  run-wide flag.
+- **Only the roles Flyway still creates reach the SQL** (#1613 D8): `ADMIN`, `CONTROLLER`,
+  `DISPATCHER`, `SELF_SERVICE_CUSTOMER`, `SHOP_MANAGER`, `SYSTEM_ADMINISTRATOR`. A grant to any
+  other role is written to the baseline CSV alone — the seed's own section-4 guard raises on a
+  role it cannot resolve, and `RoleBaselineDriftTest` fails the build on one it can. The section-2
+  permission row is written either way, because `role_permissions` is foreign-keyed to
+  `permissions` and the CSV loader resolves its grants by name against the same table.
+- **`--grant SYSTEM_ADMINISTRATOR` is refused.** That role's seed block is duplicated in
+  `V31__revoke_system_administrator_out_of_band_grants.sql`, which this script does not edit;
+  widening it stays a deliberate hand edit of both files.
+- **A role with no row in the baseline CSV is refused**, rather than invented: the role set is
+  pinned by `RoleBaselineDriftTest`, so an unknown name is a typo, not a new role.
+- **Re-running changes nothing.** Existing rows are never reordered — the seed carries a few
+  historical deviations from a strict sort, and re-sorting to "fix" them would bury a one-line
+  change in a 500-line diff. Each new row is inserted at its sorted position instead.
+- **`--sync --check` fails** when a permission that has a bit and a `@PreAuthorize` is granted in
+  neither source. (A catalog code no annotation names is dead weight rather than a broken
+  endpoint; `audit-rbac.py`'s informational `catalog_dead` is where that is triaged.)
+
+**A catalog bump is a fleet-coordinated deploy.** Adding a bit increments `CATALOG_VERSION` in
+`PermissionCode`, `GatewayPermissionCatalog` and `DownstreamPermissionCatalog`. JWTs carry
+`perm_bits` plus `perm_ver`, and the downstream check on `perm_ver` is strict: a token minted
+against the old version is rejected once the gateway runs the new one. Ship pos-security-service,
+pos-api-gateway and every service embedding `pos-security-common` together, and expect issued
+tokens to need re-minting — do not roll one service forward on its own.
+
 ### Location-scope decisions (`location-scope.yaml`)
 
 `@PreAuthorize` answers "may this caller do X"; it does not answer "may they do it *here*". Under
@@ -671,9 +732,33 @@ decisions:
 | `location_scope_undecided` | a controller operation takes a `locationId` and the module's file has no entry for it (or the file is missing) |
 | `location_scope_stale` | an entry names an operation that no longer exists in the module — an entry for a sibling endpoint that takes no `locationId` (e.g. the by-id detail you gated beside a list) is allowed as long as the `Class.method` exists in one of the module's controllers |
 | `location_scope_invalid` | `shape` not `gate`/`narrow`/`unscoped`, `gate`/`narrow` without `permission`, any entry without `reason`, a duplicate operation, or a file the parser cannot read |
+| `location_scope_alternates` | a location-scope call passes a permission the endpoint reaching it does not require, or an endpoint takes a scope decision with no `@PreAuthorize` and no authority check at all (#1890) |
 
 `location_scope_summary` (operations found / decided; entries per shape, per module) is printed for
 information only.
+
+**Why the alternates must match (`location_scope_alternates`, #1890).** `LocationScope` and
+`LocationScopeService` decide from the alternates the caller *holds*: a caller who holds none of
+them takes neither decision — `require` does not deny and `reachOf`/`reach` does not narrow (#1889).
+That is safe only because every HTTP path into a scope call is gated on the same alternates, so
+passing the gate guarantees at least one is held and the empty case cannot arise from a request.
+An endpoint whose `@PreAuthorize` names `a, b` while its scope call passes `c` would therefore stop
+narrowing silently, and one with no `@PreAuthorize` at all would return everything rather than
+nothing — a scope check against a permission the endpoint does not actually require is not a check.
+
+The gate holds the alternates to that: every permission named at a scope call must be one the
+reaching endpoint requires, either in its `@PreAuthorize` or through an explicit in-body authority
+check that denies (`WipController.listWip` gates its `workorder:wip:view_all_locations` widening
+flag that way — the annotation cannot name it without letting a caller in who holds only that).
+Calls in service and helper methods carry no annotation, so the checker resolves the controller
+that reaches them through a module-local call graph rather than exempting them; permissions passed
+as arguments into that call count as named, which covers the forwarding helpers
+(`BayController.requireInScope`, `AppointmentsController.requireScopeOnStoredLocation`).
+
+Fixing a report means making the two agree: either widen the `@PreAuthorize` to accept the
+alternate the scope call uses (a contract change — regenerate the spec and run `API Artifacts
+Sync`), or pass the alternates the endpoint actually requires. Never silence it by dropping the
+scope call.
 
 **Adding a location-parameterised endpoint:** decide the shape, implement it (see pos-workorder
 `WipController` for a gate and pos-people `TimeEntryServiceImpl` for a narrow), document the 403
