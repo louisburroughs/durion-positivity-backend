@@ -490,15 +490,15 @@ class EventIngestionServiceAdditionalTest {
     // ========================================
 
     @Test
-    @DisplayName("validateEvent should return error when organizationId is missing")
-    void validateEvent_MissingOrganizationId() {
+    @DisplayName("validateEvent accepts an event with no organizationId — the key is deprecated and ignored")
+    void validateEvent_MissingOrganizationIdIsAccepted() {
         Map<String, Object> event = new HashMap<>();
         event.put("eventType", "INVOICE_RECEIVED");
         event.put("payload", Map.of("amount", "100.00"));
 
         List<String> errors = service.validateEvent(event);
 
-        assertThat(errors).anyMatch(e -> e.contains("organizationId"));
+        assertThat(errors).isEmpty();
     }
 
     @Test

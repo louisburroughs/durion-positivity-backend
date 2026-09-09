@@ -115,7 +115,7 @@ class EventIngestionServiceTest {
     }
 
     @Test
-    @DisplayName("listEvents should return paginated events for organization")
+    @DisplayName("listEvents should return paginated events for a filtered query")
     void testListEvents_WithOrganizationId() {
         // Arrange
         List<AccountingEvent> events = List.of(testEvent);
@@ -127,9 +127,8 @@ class EventIngestionServiceTest {
                 .thenReturn(eventPage);
 
         // Act
-        AccountingEventFilter filter = AccountingEventFilter.builder()
-                .organizationId(testOrganizationId)
-                .build();
+        AccountingEventFilter filter =
+                AccountingEventFilter.builder().eventType("INVOICE_RECEIVED").build();
         Page<AccountingEventResponse> result = service.listEvents(filter, pageable);
 
         // Assert
@@ -157,7 +156,6 @@ class EventIngestionServiceTest {
 
         // Act
         AccountingEventFilter filter = AccountingEventFilter.builder()
-                .organizationId(testOrganizationId)
                 .status(AccountingEventStatus.RECEIVED)
                 .build();
         Page<AccountingEventResponse> result = service.listEvents(filter, pageable);
@@ -172,8 +170,8 @@ class EventIngestionServiceTest {
     }
 
     @Test
-    @DisplayName("listEvents should return all events when organization filter is absent")
-    void testListEvents_WithoutOrganizationFilter() {
+    @DisplayName("listEvents should return all events when no filter is supplied")
+    void testListEvents_WithoutFilter() {
         // Arrange
         List<AccountingEvent> events = List.of(testEvent);
         Page<AccountingEvent> eventPage = new PageImpl<>(events, PageRequest.of(0, 20), 1);
@@ -207,9 +205,7 @@ class EventIngestionServiceTest {
                 .thenReturn(emptyPage);
 
         // Act
-        AccountingEventFilter filter = AccountingEventFilter.builder()
-                .organizationId(testOrganizationId)
-                .build();
+        AccountingEventFilter filter = AccountingEventFilter.builder().build();
         Page<AccountingEventResponse> result = service.listEvents(filter, pageable);
 
         // Assert

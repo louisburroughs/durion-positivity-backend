@@ -72,8 +72,8 @@ public class EventIngestionController {
             summary = "List Accounting Events",
             description = """
                     Lists ingested accounting events as a paginated projection with rich optional filters: \
-                    organization, event type, idempotency outcome, received-at range, event id, ingestion \
-                    id, domain key, invoice id and processing status.
+                    event type, idempotency outcome, received-at range, event id, ingestion id, domain \
+                    key, invoice id and processing status.
                     Use this tool to monitor or triage the event pipeline; do not use getAccountingEvent, \
                     which fetches one event by its known id.
                     Preconditions: none beyond the caller holding accounting:events:view; an unrecognized \
@@ -88,7 +88,6 @@ public class EventIngestionController {
     @ApiResponse(responseCode = "403", description = "Forbidden")
     @EmitEvent(id = "ACCOUNTING_EVENT_LIST", apiVersion = "1")
     public ResponseEntity<Page<AccountingEventResponse>> listAccountingEvents(
-            @Parameter(description = "Filter by organization") @RequestParam(required = false) UUID organizationId,
             @Parameter(description = "Filter by event type") @RequestParam(required = false) String eventType,
             @Parameter(description = "Filter by idempotency outcome") @RequestParam(required = false)
                     String idempotencyOutcome,
@@ -118,7 +117,6 @@ public class EventIngestionController {
         }
 
         AccountingEventFilter filter = AccountingEventFilter.builder()
-                .organizationId(organizationId)
                 .eventType(eventType)
                 .idempotencyOutcome(idempotencyOutcome)
                 .receivedAtFrom(receivedAtFrom)
@@ -151,8 +149,8 @@ public class EventIngestionController {
                     Required inputs: eventId (UUID) as a path parameter; there is no request body.
                     No events are emitted and no state changes; this is a read-only projection.
                     The payload is returned unchanged for audit; payloadReferences adds a display projection of \
-                    the reference values recognized inside it: UUID-backed invoice, customer, organization, \
-                    journal-entry, vendor and vendor-bill ids, plus the code-keyed accounting location \
+                    the reference values recognized inside it: UUID-backed invoice, customer, journal-entry, \
+                    vendor and vendor-bill ids, plus the code-keyed accounting location \
                     (locationId / location_id, matched case-insensitively against the location profile code). \
                     Each entry carries rawValue as written and id only when that value is a UUID; displayName \
                     and displayReference are null when accounting cannot resolve the reference and are never \
@@ -185,9 +183,9 @@ public class EventIngestionController {
                     resolveTestMapping to preview the rules first.
                     Preconditions: no event with the same eventId may already be ingested; duplicates are \
                     rejected rather than reprocessed.
-                    Required inputs: eventType (max 100 chars), organizationId (UUID) and payload (JSON \
-                    object); eventId, sourceSystem and transactionDate (ISO-8601) are optional, eventId being \
-                    generated when omitted.
+                    Required inputs: eventType (max 100 chars) and payload (JSON object); eventId, \
+                    sourceSystem and transactionDate (ISO-8601) are optional, eventId being generated when \
+                    omitted. organizationId is deprecated and ignored — omit it.
                     Emits an ACCOUNTING_EVENT_SUBMIT event and returns 202 while processing continues \
                     asynchronously; callers poll getAccountingEvent for the outcome.
                     Returns 409 DUPLICATE_EVENT when the eventId was already ingested, and 400 when required \
@@ -207,7 +205,6 @@ public class EventIngestionController {
                                             examples = @ExampleObject(name = "Invoice finalized event", value = """
                                                                     {"eventId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
                                                                      "eventType":"INVOICE_FINALIZED",
-                                                                     "organizationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c",
                                                                      "sourceSystem":"POS",
                                                                      "transactionDate":"2026-08-13T10:15:00",
                                                                      "payload":{"invoiceId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5d","totalAmount":150.00}}

@@ -89,23 +89,29 @@ class EventPayloadReferenceProjectorTest {
     @Test
     @DisplayName("An unresolvable reference is still projected, with null display values — never the UUID")
     void unresolvedReferenceProjectsNullDisplayValues() {
-        // The resolver knows nothing: the ORGANIZATION type never resolves today (no directory
-        // exists), and the invoice is simply absent from the replica.
+        // The resolver knows nothing: the customer is simply absent from the replica.
         lenient()
                 .when(displayReferenceResolver.resolve(any(DisplayReferenceType.class), anyCollection()))
                 .thenReturn(Map.of());
 
-        List<EventPayloadReference> projection =
-                projector.project(Map.of("organizationId", ORGANIZATION_ID.toString()));
+        List<EventPayloadReference> projection = projector.project(Map.of("customerId", CUSTOMER_ID.toString()));
 
         assertThat(projection).hasSize(1);
-        EventPayloadReference organization = projection.getFirst();
-        assertThat(organization.getReferenceType()).isEqualTo(DisplayReferenceType.ORGANIZATION);
-        assertThat(organization.getId()).isEqualTo(ORGANIZATION_ID);
-        assertThat(organization.getDisplayName()).isNull();
-        assertThat(organization.getDisplayReference()).isNull();
+        EventPayloadReference customer = projection.getFirst();
+        assertThat(customer.getReferenceType()).isEqualTo(DisplayReferenceType.CUSTOMER);
+        assertThat(customer.getId()).isEqualTo(CUSTOMER_ID);
+        assertThat(customer.getDisplayName()).isNull();
+        assertThat(customer.getDisplayReference()).isNull();
         // The identifier is still there for routing and diagnostics — it is just not a label.
-        assertThat(organization.getId().toString()).isNotEqualTo(organization.getDisplayName());
+        assertThat(customer.getId().toString()).isNotEqualTo(customer.getDisplayName());
+    }
+
+    @Test
+    @DisplayName("organizationId is not a recognized reference key — it is a vestigial scope key (issue #1894)")
+    void organizationIdIsNotProjected() {
+        assertThat(projector.project(Map.of("organizationId", ORGANIZATION_ID.toString())))
+                .isEmpty();
+        verify(displayReferenceResolver, never()).resolve(any(), anyCollection());
     }
 
     @Test
