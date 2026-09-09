@@ -19,7 +19,7 @@ There is one authorization model, and it is the database. A user's authorities a
 along a single chain:
 
 ```
-users -> user_roles -> roles -> role_permissions -> permissions
+users -> role_assignments -> roles -> role_permissions -> permissions
 ```
 
 `RoleAuthorityService` reads that chain at login, `JwtService` encodes the resulting permission
@@ -80,7 +80,7 @@ those start with no grants and are outside this baseline.
 | `ADMIN` | All domains. The intentional blast-radius role. |
 | `SYSTEM_ADMINISTRATOR` | **Security and MCP administration only** — `security:*`, plus MCP administration (`mcp:system_prompt:*`, `mcp:llm_api:*`, `mcp:tool:view`, `mcp:tool:manage`, `mcp:document:ingest`), NLTI audit visibility (`nlti:audit:read`) and the assistant entrypoints. Deliberately *not* a superuser: it holds no accounting, catalog, workorder, inventory, or shop authority, and it does **not** auto-acquire newly registered permissions. Widening it is an explicit edit to the seed. |
 | `LOCATION_MANAGER`, `SERVICE_ADVISOR`, `TECHNICIAN`, `DISPATCHER`, `ACCOUNTING_ASSOCIATE`, `ACCOUNT_MANAGER`, `MANAGER`, `GENERAL_MANAGER` | Least privilege, scoped to the role's job function. |
-| `ACCOUNTANT`, `AP_CLERK`, `CONTROLLER`, `CSR`, `FLEET_MANAGER`, `GL_ANALYST` | **Not granted, and not created.** The retired hardcoded switch expanded these, but no migration or initializer creates the role, and `user_roles` / `role_assignments` are foreign-keyed to `roles(id)` — so no user could ever hold one. They were unreachable branches, documentation personas rather than security roles. To make one real, create the role first, then grant it. |
+| `ACCOUNTANT`, `AP_CLERK`, `CONTROLLER`, `CSR`, `FLEET_MANAGER`, `GL_ANALYST` | **Not granted, and not created.** The retired hardcoded switch expanded these, but no migration or initializer creates the role, and `role_assignments` is foreign-keyed to `roles(id)` — so no user could ever hold one. They were unreachable branches, documentation personas rather than security roles. To make one real, create the role first, then grant it. |
 | `INVENTORY_LEAD` | The parts-receiving persona (#1439): the receiving surface (`inventory:asn:*`, `inventory:receiving:*`, `inventory:goods_receipt:create/view`, `inventory:issue:parts`, `inventory:putaway:claim/execute/generate/view`, `inventory:shortage:*`, `inventory:on_hand:*`) and purchase-order entry (`order:purchase_order:create/view/availability_view`), plus adjustment requests (`inventory:adjustment:create`, `inventory:adjustment:view`) — it raises adjustments, it does not approve them — and the read-only catalog/order/pricing views and assistant entrypoints. The elevated escape hatches (`inventory:goods_receipt:override`, putaway capacity/compatibility overrides) are deliberately not granted. |
 | `INVENTORY_MANAGER`, `INVENTORY_CONTROLLER` | Create, approve, and view inventory adjustments. **Permission-identical on the adjustment surface on purpose**: the "location-scoped" vs "global" distinction is a property of the role's `location_scope` (`INVENTORY_MANAGER` is `LOCATION`, `INVENTORY_CONTROLLER` is `ALL`; see [Role location scope](#role-location-scope)), not of `role_permissions`, so it cannot be expressed by granting different rows. `INVENTORY_CONTROLLER` additionally holds `inventory:adjustment:override`, the negative-stock escape hatch — only a globally scoped approver should drive on-hand below zero. `INVENTORY_MANAGER` (with `LOCATION_MANAGER`) is also a PO-approver persona (#1438): `order:purchase_order:approve/transmit/view/availability_view`. |
 | `SHOP_MANAGER` | The shop surface its role description names — `shop:location:view`, `shop:bay:view`, `shop:bay:assign`, `shop:schedule:view`, `shop:schedule:edit`, `shop:technician:view` — plus `invoice:finalize:override` (#1374). No audit grant: the shop domain defines no audit permission, so "audit review" in the V3 description has nothing to map to. |
@@ -210,6 +210,42 @@ module. Two consequences worth holding onto:
   outage a revoked token passes the gateway until `exp`. That is the accepted cost of fail-open,
   bounded by the `exp` clamp above and visible on `auth.token.revocation.degraded`.
 
+#### Role-assignment expiry clamp and revocation (ADR-0061 §4 amendment, 2026-09-09, #1914 phase 3)
+
+The two mechanisms above (location-reach clamp / staffing-assignment revocation) left a gap: the
+role assignments a token's `perm_bits` is actually built from could still stay valid for the rest
+of the access token's natural lifetime after being ended. Phase 3 closes it with the same two
+mechanisms applied to `role_assignments`:
+
+- **Clamp.** `exp` is `min(now + 3600s, the location-reach bound above, the earliest
+  `effectiveEndDate` among the assignments that contributed to the token)`, floored at `now`. Login
+  (`AuthenticationServiceImpl`) and refresh (`JwtServiceImpl.refreshAccessToken`) both resolve this
+  bound via `UserService#getGrantsExpireAt` and pass it into `generateTokenPair`; the internal
+  token-pair endpoints (`POST /v1/auth/internal/token`, `POST /v1/auth/token-pair` — client-supplied
+  roles, no resolved user) get no assignment clamp, matching how they already sit outside the
+  location-reach clamp.
+- **Revocation.** Ending a role assignment — `UserRoleGrantServiceImpl.revoke` / `reconcile`
+  (covers `DELETE /v1/users/{userId}/roles/{roleId}`, and a `PUT /v1/users/{username}/roles`
+  reconcile that drops a role) or `RoleManagementServiceImpl.revokeRoleAssignment`
+  (`DELETE /v1/roles/assignments/{assignmentId}`, which may set a past or future end date) — ends
+  the holder's live tokens through the same `TokenRevocationManager` + `jwt_token` path
+  `revokeAllTokensForUser` uses, every time, regardless of whether the new end date is already
+  past or still ahead: a future-dated revocation still changes the record the holder's current
+  tokens were minted against, and the token reissued after revocation is then clamped to the
+  scheduled end by the mechanism above, which is the correct outcome either way. Granting a role
+  never revokes; the next token simply picks it up.
+
+Both writers publish `RoleAssignmentRevokedEvent` rather than calling the token layer directly —
+`JwtServiceImpl` depends on `UserService`, and `UserServiceImpl` / `RoleManagementServiceImpl` both
+depend on `UserRoleGrantService`, so a direct call back into `JwtService` would close a Spring bean
+cycle. `RoleAssignmentTokenRevocationListener` reacts to the event `AFTER_COMMIT` (so a rolled-back
+revocation never touches a token) in its own `REQUIRES_NEW` transaction (so the write actually
+commits, rather than silently riding along on the just-completed transaction's about-to-be-discarded
+resources) and calls `JwtService#revokeAllTokensForUser` by username — the same facility
+`AdminAccountStateServiceImpl` already uses for account lockout/disable, now with a second
+security-load-bearing trigger. The Redis-unavailable behaviour is unchanged (fail-open, `jwt_token`
+row still deleted).
+
 ### Assistant baseline
 
 Every role in the baseline seed receives four conversational entrypoints:
@@ -245,13 +281,22 @@ those two.
 
 ### Role grants vs. role assignments
 
-Three tables are easy to confuse:
+Two tables are easy to confuse:
 
 | Table | Meaning | Consumed by |
 | --- | --- | --- |
 | `role_permissions` | **role → permission** grants | Token issuance (`RoleAuthorityService`), `AuthorizationService`, `RoleManagementService` |
-| `user_roles` | **user → role**, unscoped | Token issuance, `AuthorizationService.authorizePerson` |
-| `role_assignments` | **user → role**, effective-dated (`effective_start_date`, `effective_end_date`, `revoked_at`) | `RoleManagementService.getUserPermissions` / `userHasPermission` — does **not** narrow a JWT |
+| `role_assignments` | **user → role**, effective-dated (`effective_start_date`, `effective_end_date`, `revoked_at`) | Every decision point, via `EffectiveGrantResolver` — does **not** narrow a JWT |
+
+`role_assignments` is the only store of a user's roles (ADR-0061 amendment, 2026-09-09, #1914
+phase 2): the undated `user_roles` join table it used to sit alongside — unioned by
+`EffectiveGrantResolver` in phase 1 — was migrated into open-ended assignments and dropped
+(`V40__migrate_user_roles_to_role_assignments.sql`). Every provisioning path (user creation,
+`assignUserRole`, self-registration, the People access page) now writes an assignment; every
+decision point — token issuance (`CustomUserDetailsService`, `UserService`),
+`AuthorizationService.authorizePerson`, and `RoleManagementService.userHasPermission` /
+`getUserPermissions` — reads it through one `EffectiveGrantResolver`, so the same permission set
+answers every check.
 
 `role_assignments` carries no location scope: `scope_type` and `role_assignment_scope_locations`
 were dropped by `V38__drop_role_assignment_scope.sql` (ADR-0061 §1, #1875), and with them
@@ -287,7 +332,7 @@ those claims.
 - `GET /v1/users/{id}` — retrieve a user
 - `POST /v1/users/{id}/unlock` — admin: unlock account
 - `POST /v1/users/{id}/enable` / `disable` — admin: enable/disable account
-- `GET /v1/auth/authorization/decision` — check if caller has a permission
+- `GET /v1/users/authorization/person-decision` — off-session check whether the user linked to a personId has a permission
 
 ## Error Responses
 

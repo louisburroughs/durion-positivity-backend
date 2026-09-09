@@ -16,8 +16,10 @@ import com.positivity.securityservice.internal.dto.TokenPairRequest;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import com.positivity.securityservice.internal.dto.TokenResponse;
 import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.enums.PermissionCode;
+import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.security.service.JwtService;
@@ -27,6 +29,7 @@ import io.jsonwebtoken.Jwts;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Set;
 import java.util.UUID;
@@ -102,6 +105,9 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
 
     @Autowired
     private RoleRepository roleRepository;
+
+    @Autowired
+    private RoleAssignmentRepository roleAssignmentRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -1011,12 +1017,20 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
         user.setId(userId);
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode("ContractPass123!"));
-        user.setRoles(roleNames.stream()
-                .map(roleName -> roleRepository
-                        .findByName(roleName)
-                        .orElseThrow(
-                                () -> new IllegalStateException("Missing role for contract test setup: " + roleName)))
-                .collect(java.util.stream.Collectors.toSet()));
-        userRepository.save(user);
+        User saved = userRepository.save(user);
+
+        for (String roleName : roleNames) {
+            Role role = roleRepository
+                    .findByName(roleName)
+                    .orElseThrow(() -> new IllegalStateException("Missing role for contract test setup: " + roleName));
+            // ADR-0061 amendment phase 2 (#1914): role_assignments is the only store of a user's
+            // roles, so contract-test fixtures grant an open-ended assignment directly.
+            RoleAssignment assignment = new RoleAssignment();
+            assignment.setUser(saved);
+            assignment.setRole(role);
+            assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK));
+            assignment.setCreatedBy("contract-test");
+            roleAssignmentRepository.saveAndFlush(assignment);
+        }
     }
 }

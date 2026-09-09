@@ -126,8 +126,8 @@ public class RoleAssignment {
      * <p>The window is half-open — start-inclusive, end-exclusive — which is what
      * {@code RoleAssignmentDto} has always published ("Exclusive end of the effective window")
      * and what the pos-people-contact edge already applied. This method and
-     * {@code RoleAssignmentRepository.findEffectiveAssignmentsByUser} are the only two places
-     * that define it, and they must agree.
+     * {@code RoleAssignmentRepository.findEffectiveAssignmentsByUser} are the only places that
+     * define it, and they must agree.
      *
      * <p>End-exclusive is what revocation needs: revoking sets {@code effectiveEndDate} to the
      * revocation instant, and the assignment has to stop being effective at that instant rather

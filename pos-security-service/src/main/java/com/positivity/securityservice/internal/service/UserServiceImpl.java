@@ -4,24 +4,21 @@ import com.positivity.securityservice.internal.dto.UserAuthContext;
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.dto.UserUpdateRequest;
 import com.positivity.securityservice.internal.entity.Role;
-import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
-import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import java.security.SecureRandom;
 import java.time.Clock;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -46,7 +43,8 @@ public class UserServiceImpl implements UserService {
     private final com.positivity.securityservice.internal.service.PeopleContactCommandEmitter
             peopleContactCommandEmitter;
     private final RoleRepository roleRepository;
-    private final RoleAssignmentRepository roleAssignmentRepository;
+    private final EffectiveGrantResolver effectiveGrantResolver;
+    private final UserRoleGrantService userRoleGrantService;
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
 
@@ -61,23 +59,32 @@ public class UserServiceImpl implements UserService {
         return createUser(username, generated, roleNames);
     }
 
+    /**
+     * Also serves {@link #createUserWithGeneratedPassword}, bulk ingest, and the alpha CSV
+     * loader. One transaction: the user row and every requested role's grant either all land or
+     * none do (ADR-0061 amendment phase 2, #1914) — a role that does not resolve must not leave a
+     * user created with a partial grant set, and every named role is validated before either the
+     * user or any assignment is written.
+     */
     @Override
+    @Transactional
     public UserDto createUser(String username, String password, Set<String> roleNames) {
         if (userRepository.existsByUsername(username)) {
             throw new DuplicateUsernameException("Username already exists");
         }
-        Set<Role> roles = new HashSet<>();
-        for (String roleName : roleNames) {
-            Role role = roleRepository
-                    .findByName(roleName)
-                    .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleName));
-            roles.add(role);
-        }
+        Set<Role> roles = resolveRoles(roleNames);
+
         User user = new User();
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode(password));
-        user.setRoles(roles);
-        return toDto(userRepository.save(user));
+        User saved = userRepository.save(user);
+
+        String actor = CurrentActor.resolve();
+        for (Role role : roles) {
+            userRoleGrantService.grant(saved, role, actor);
+        }
+
+        return toDto(saved);
     }
 
     @Override
@@ -88,6 +95,13 @@ public class UserServiceImpl implements UserService {
     @Override
     public Optional<UserDto> getUserById(UUID id) {
         return userRepository.findById(id).map(this::toDto);
+    }
+
+    @Override
+    public Optional<Instant> getGrantsExpireAt(UUID userId) {
+        return userRepository
+                .findById(userId)
+                .flatMap(user -> effectiveGrantResolver.resolve(user).earliestAssignmentEnd(clock));
     }
 
     @Override
@@ -121,6 +135,12 @@ public class UserServiceImpl implements UserService {
                         personId, user.getUsername(), "PRIMARY", "Linked by operator"));
     }
 
+    /**
+     * Replaces {@code username}'s effective role set: a reconcile (grants every named role not
+     * already effectively held, revokes every effectively held role not named) rather than a
+     * literal replace, since {@code role_assignments} keeps history instead of being overwritten
+     * (ADR-0061 amendment phase 2, #1914).
+     */
     @Override
     @Transactional
     public UserDto assignRoles(String username, Set<String> roleNames) {
@@ -131,15 +151,9 @@ public class UserServiceImpl implements UserService {
         // they are a fixed catalogue, so RoleNotFoundException echoes the one that did not resolve.
         User user =
                 userRepository.findByUsername(username).orElseThrow(() -> new UserNotFoundException("User not found"));
-        Set<Role> roles = new HashSet<>();
-        for (String roleName : roleNames) {
-            Role role = roleRepository
-                    .findByName(roleName)
-                    .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleName));
-            roles.add(role);
-        }
-        user.setRoles(roles);
-        return toDto(userRepository.save(user));
+        Set<Role> roles = resolveRoles(roleNames);
+        userRoleGrantService.reconcile(user, roles, CurrentActor.resolve());
+        return toDto(user);
     }
 
     @Override
@@ -155,17 +169,24 @@ public class UserServiceImpl implements UserService {
             existingUser.setPassword(passwordEncoder.encode(request.getPassword()));
         }
         if (request.getRoles() != null) {
-            Set<Role> roles = new HashSet<>();
-            for (String roleName : request.getRoles()) {
-                Role role = roleRepository
-                        .findByName(roleName)
-                        .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleName));
-                roles.add(role);
-            }
-            existingUser.setRoles(roles);
+            // A non-null roles list reconciles the effective set the same way assignRoles does,
+            // rather than replacing a direct grant that no longer exists (#1914 phase 2).
+            Set<Role> roles = resolveRoles(request.getRoles());
+            userRoleGrantService.reconcile(existingUser, roles, CurrentActor.resolve());
         }
 
         return toDto(userRepository.save(existingUser));
+    }
+
+    private Set<Role> resolveRoles(Set<String> roleNames) {
+        Set<Role> roles = new HashSet<>();
+        for (String roleName : roleNames) {
+            Role role = roleRepository
+                    .findByName(roleName)
+                    .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleName));
+            roles.add(role);
+        }
+        return roles;
     }
 
     private UserDto toDto(User user) {
@@ -187,15 +208,6 @@ public class UserServiceImpl implements UserService {
     }
 
     private Set<String> resolveEffectiveRoleNames(User user) {
-        Set<String> roleNames = user.getRoles().stream().map(Role::getName).collect(Collectors.toSet());
-        List<RoleAssignment> assignments =
-                roleAssignmentRepository.findEffectiveAssignmentsByUser(user, LocalDateTime.now(clock));
-        if (assignments != null) {
-            roleNames.addAll(assignments.stream()
-                    .map(RoleAssignment::getRole)
-                    .map(Role::getName)
-                    .collect(Collectors.toSet()));
-        }
-        return roleNames;
+        return effectiveGrantResolver.resolve(user).roleNames();
     }
 }

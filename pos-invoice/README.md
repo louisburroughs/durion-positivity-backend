@@ -119,9 +119,12 @@ capability. There are two ways to obtain it:
   (`R__seed_role_permissions.sql`) grants it to `ADMIN` and the manager roles —
   `ACCOUNT_MANAGER`, `GENERAL_MANAGER`, `LOCATION_MANAGER`, `MANAGER`, and
   `SHOP_MANAGER` — so no manual grant is needed after deploy. The only remaining
-  setup is ensuring managers are assigned one of those roles via the **user-role**
-  admin API (the `person-decision` check resolves authorities through `User.roles`,
-  not `role_assignments`). Additional roles can still be granted the permission via
+  setup is ensuring managers hold one of those roles through an effective role
+  assignment: any grant path — user provisioning, the **user-role** admin API's
+  `assignUserRole`, or the People access page — creates one, and the
+  `person-decision` check resolves authorities through that assignment's effective
+  window (`role_assignments`, the only store of a user's roles as of ADR-0061
+  amendment phase 2, #1914). Additional roles can still be granted the permission via
   the role-permission admin API
   (`PUT /v1/roles/{roleId}/permissions/invoice:finalize:override`), but keep the
   holder set small: this permission is the control that caps what a service advisor

@@ -8,6 +8,7 @@ import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.security.service.JwtService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -60,6 +61,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final JwtService jwtService;
     private final LockoutService lockoutService;
     private final UserRepository userRepository;
+    private final UserService userService;
     private final Counter authSuccessCounter;
     private final Counter badCredentialsCounter;
     private final Counter accountLockedCounter;
@@ -72,11 +74,13 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             JwtService jwtService,
             LockoutService lockoutService,
             UserRepository userRepository,
+            UserService userService,
             MeterRegistry meterRegistry) {
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
         this.lockoutService = lockoutService;
         this.userRepository = userRepository;
+        this.userService = userService;
         this.authSuccessCounter = Counter.builder(COUNTER_AUTH_SUCCESS).register(meterRegistry);
         this.badCredentialsCounter = Counter.builder(COUNTER_AUTH_FAILURE)
                 .tag(TAG_REASON, REASON_BAD_CREDENTIALS)
@@ -174,7 +178,12 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             throw new NoRolesAssignedException("User has no roles assigned");
         }
 
-        JwtService.TokenPair pair = jwtService.generateTokenPair(username, userId, p.personId(), roleNames);
+        // ADR-0061 §4 amendment (2026-09-09, #1914 phase 3): resolved here, where the roles that
+        // fed generateTokenPair's perm_bits were themselves resolved, rather than re-resolved a
+        // third time inside JwtServiceImpl.
+        Instant grantsExpireAt = userService.getGrantsExpireAt(userId).orElse(null);
+        JwtService.TokenPair pair =
+                jwtService.generateTokenPair(username, userId, p.personId(), roleNames, grantsExpireAt);
         incrementSuccessCounter();
         log.info("Login succeeded. username={}, userId={}, rolesCount={}", username, userId, roleNames.size());
         return TokenPairResponse.of(pair.accessToken(), pair.refreshToken());

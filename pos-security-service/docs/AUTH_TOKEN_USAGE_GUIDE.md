@@ -168,6 +168,19 @@ curl -X DELETE "http://localhost:8080/security-service/v1/auth/revoke?token=<jwt
   -H "Authorization: Bearer <jwt-access-token>"
 ```
 
+### 7. Role-assignment changes affect token lifetime (ADR-0061 §4 amendment, 2026-09-09)
+
+An access token's natural lifetime is 1 hour, but `exp` is clamped to `min(now + 3600s, the earliest
+end date among the role assignments that contributed to the token)` — the same clamp already
+applied for location-scoped reach (ADR-0061 §2/§4), extended to cover role assignments too. An
+open-ended assignment applies no clamp.
+
+Revoking a role assignment (`DELETE /security-service/v1/users/{userId}/roles/{roleId}`,
+`DELETE /security-service/v1/roles/assignments/{assignmentId}`, or a reconcile via
+`PUT /security-service/v1/users/{username}/roles` that drops a role) ends the holder's live tokens
+immediately — no separate call to `revoke` is needed. The next token issued for them reflects the
+change and, if the assignment was bounded, is clamped to its end.
+
 ## Access-Token Claims
 
 Current access tokens include:

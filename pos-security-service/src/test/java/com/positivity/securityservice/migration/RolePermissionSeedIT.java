@@ -38,7 +38,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * applies, re-applying it does not duplicate rows, and an unresolvable role or permission name
  * aborts loudly instead of silently under-granting authority — plus the end-to-end resolution
  * of a seeded operational user's effective permissions through
- * {@code user_roles -> roles -> role_permissions -> permissions}.
+ * {@code role_assignments -> roles -> role_permissions -> permissions}.
  *
  * <p>Since #1613 (D8) the migration chain is no longer the whole picture: it provisions a
  * bootstrap floor of six roles and the other eleven arrive through the bulk load. {@link
@@ -165,8 +165,8 @@ class RolePermissionSeedIT {
             }
         }
 
-        // Flyway ran this while eleven of the roles above did not exist, so its user_roles insert
-        // resolved only for the floor. Re-running it now links the rest -- the same ordering the
+        // Flyway ran this while eleven of the roles above did not exist, so its role_assignments
+        // insert resolved only for the floor. Re-running it now links the rest -- the same ordering the
         // real pipeline gets by loading users after roles.
         jdbc().execute(operationalSql);
     }
@@ -279,7 +279,7 @@ class RolePermissionSeedIT {
     }
 
     @Test
-    @DisplayName("a seeded user's effective permissions resolve through user_roles to permissions")
+    @DisplayName("a seeded user's effective permissions resolve through role_assignments to permissions")
     void seededUser_resolvesEffectivePermissionsThroughRoleGrants() {
         assertThat(effectivePermissionsOf("kyle.brennan"))
                 .as("kyle.brennan is a TECHNICIAN")
@@ -317,7 +317,7 @@ class RolePermissionSeedIT {
         // The resolution half, end to end: pos-invoice's employee-number approval flow calls
         // GET /v1/users/authorization/person-decision, which lands on
         // AuthorizationService.authorizePerson and resolves
-        // users.person_id -> user_roles -> roles -> role_permissions -> permissions.
+        // users.person_id -> role_assignments -> roles -> role_permissions -> permissions.
         // Run that real code path against the seeded baseline for a manager and a
         // non-manager, so the flow cannot silently regress to "no role holds it" (#1374).
         UUID managerPersonId = UUID.fromString("01990010-0000-7000-8000-000000000001");
@@ -330,7 +330,7 @@ class RolePermissionSeedIT {
             assertThat(authorizationService.authorizePerson(advisorPersonId, "invoice:finalize:override"))
                     .isEqualTo(AuthorizationService.Decision.DENY);
         } finally {
-            jdbc().update("DELETE FROM user_roles WHERE user_id IN "
+            jdbc().update("DELETE FROM role_assignments WHERE user_id IN "
                     + "(SELECT id FROM users WHERE username IN ('it.elevation.manager', 'it.elevation.advisor'))");
             jdbc().update("DELETE FROM users WHERE username IN ('it.elevation.manager', 'it.elevation.advisor')");
         }
@@ -347,8 +347,9 @@ class RolePermissionSeedIT {
                         "INSERT INTO users (id, username, password, enabled) "
                                 + "VALUES (gen_random_uuid(), ?, 'x', true)",
                         "ungranted.user");
-        jdbc().update("INSERT INTO user_roles (user_id, role_id) "
-                + "SELECT u.id, r.id FROM users u, roles r "
+        jdbc().update("INSERT INTO role_assignments (id, user_id, role_id, effective_start_date, created_at, "
+                + "created_by) "
+                + "SELECT gen_random_uuid(), u.id, r.id, NOW(), NOW(), 'test' FROM users u, roles r "
                 + "WHERE u.username = 'ungranted.user' AND r.name = 'IT_UNGRANTED_ROLE'");
 
         assertThat(effectivePermissionsOf("ungranted.user")).isEmpty();
@@ -361,8 +362,10 @@ class RolePermissionSeedIT {
                         username,
                         personId);
         jdbc().update(
-                        "INSERT INTO user_roles (user_id, role_id) "
-                                + "SELECT u.id, r.id FROM users u, roles r WHERE u.username = ? AND r.name = ?",
+                        "INSERT INTO role_assignments (id, user_id, role_id, effective_start_date, created_at, "
+                                + "created_by) "
+                                + "SELECT gen_random_uuid(), u.id, r.id, NOW(), NOW(), 'test' FROM users u, roles r "
+                                + "WHERE u.username = ? AND r.name = ?",
                         username,
                         roleName);
     }
@@ -431,8 +434,10 @@ class RolePermissionSeedIT {
     private List<String> effectivePermissionsOf(String username) {
         return jdbc().queryForList(
                         "SELECT DISTINCT p.name FROM users u "
-                                + "JOIN user_roles ur ON ur.user_id = u.id "
-                                + "JOIN roles r ON r.id = ur.role_id "
+                                + "JOIN role_assignments ra ON ra.user_id = u.id "
+                                + "AND ra.effective_start_date <= NOW() "
+                                + "AND (ra.effective_end_date IS NULL OR ra.effective_end_date > NOW()) "
+                                + "JOIN roles r ON r.id = ra.role_id "
                                 + "JOIN role_permissions rp ON rp.role_id = r.id "
                                 + "JOIN permissions p ON p.id = rp.permission_id "
                                 + "WHERE u.username = ?",

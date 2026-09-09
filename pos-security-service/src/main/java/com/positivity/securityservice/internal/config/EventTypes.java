@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the security module.
-     * Total: 38 event types.
+     * Total: 37 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -42,10 +42,6 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.fastRead(
                                 "SECURITY_PERMISSION_DECODE_EXECUTE", "Decode a perm_bits claim for diagnostics")
-                        .build(),
-
-                // PrincipalRoleController - 1 event
-                EventTypeRegistration.write("SECURITY_PRINCIPAL_ROLE_ASSIGN", "Assign a principal to a role")
                         .build(),
 
                 // RoleController - 9 events

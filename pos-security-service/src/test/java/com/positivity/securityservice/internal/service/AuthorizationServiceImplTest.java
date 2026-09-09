@@ -3,16 +3,16 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-import com.positivity.securityservice.internal.entity.Permission;
-import com.positivity.securityservice.internal.entity.PrincipalRole;
-import com.positivity.securityservice.internal.entity.Role;
-import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
+import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.service.AuthorizationService.Decision;
+import com.positivity.securityservice.internal.service.EffectiveGrantResolver.EffectiveGrants;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -32,52 +32,52 @@ class AuthorizationServiceImplTest {
     Clock clock = TEST_CLOCK;
 
     @Mock
-    private PrincipalRoleRepository principalRoleRepository;
+    private UserRepository userRepository;
+
+    @Mock
+    private EffectiveGrantResolver effectiveGrantResolver;
 
     @InjectMocks
     private AuthorizationServiceImpl sut;
 
     @Nested
-    @DisplayName("authorize()")
-    class Authorize {
+    @DisplayName("authorizePerson()")
+    class AuthorizePerson {
         @Test
-        @DisplayName("returns ALLOW when principal has matching permission")
-        void authorize_matchingPermission_returnsAllow() {
-            Permission permission = new Permission();
-            permission.setName("pricing:price_book:edit");
-            Role role = new Role();
-            role.setPermissions(Set.of(permission));
-            PrincipalRole principalRole = new PrincipalRole();
-            principalRole.setRole(role);
-            when(principalRoleRepository.findByPrincipalId("principal-1")).thenReturn(List.of(principalRole));
+        @DisplayName("returns ALLOW when the resolver's effective grants include the permission")
+        void authorizePerson_matchingPermission_returnsAllow() {
+            UUID personId = UUID.randomUUID();
+            User user = new User();
+            when(userRepository.findByPersonId(personId)).thenReturn(Optional.of(user));
+            when(effectiveGrantResolver.resolve(user))
+                    .thenReturn(new EffectiveGrants(Set.of(), Set.of(), Set.of("invoice:finalize:override")));
 
-            Decision result = sut.authorize("principal-1", "pricing:price_book:edit");
+            Decision result = sut.authorizePerson(personId, "invoice:finalize:override");
 
             assertThat(result).isEqualTo(Decision.ALLOW);
         }
 
         @Test
-        @DisplayName("returns DENY when principal lacks matching permission")
-        void authorize_missingPermission_returnsDeny() {
-            when(principalRoleRepository.findByPrincipalId("principal-2")).thenReturn(List.of());
+        @DisplayName("returns DENY when the resolver's effective grants lack the permission")
+        void authorizePerson_missingPermission_returnsDeny() {
+            UUID personId = UUID.randomUUID();
+            User user = new User();
+            when(userRepository.findByPersonId(personId)).thenReturn(Optional.of(user));
+            when(effectiveGrantResolver.resolve(user))
+                    .thenReturn(new EffectiveGrants(Set.of(), Set.of(), Set.of("invoice:finalize:view")));
 
-            Decision result = sut.authorize("principal-2", "pricing:price_book:edit");
+            Decision result = sut.authorizePerson(personId, "invoice:finalize:override");
 
             assertThat(result).isEqualTo(Decision.DENY);
         }
 
         @Test
-        @DisplayName("returns DENY when principal has different permission")
-        void authorize_differentPermission_returnsDeny() {
-            Permission permission = new Permission();
-            permission.setName("pricing:price_book:view");
-            Role role = new Role();
-            role.setPermissions(Set.of(permission));
-            PrincipalRole principalRole = new PrincipalRole();
-            principalRole.setRole(role);
-            when(principalRoleRepository.findByPrincipalId("principal-3")).thenReturn(List.of(principalRole));
+        @DisplayName("returns DENY when no user is linked to the person")
+        void authorizePerson_noLinkedUser_returnsDeny() {
+            UUID personId = UUID.randomUUID();
+            when(userRepository.findByPersonId(personId)).thenReturn(Optional.empty());
 
-            Decision result = sut.authorize("principal-3", "pricing:price_book:edit");
+            Decision result = sut.authorizePerson(personId, "invoice:finalize:override");
 
             assertThat(result).isEqualTo(Decision.DENY);
         }

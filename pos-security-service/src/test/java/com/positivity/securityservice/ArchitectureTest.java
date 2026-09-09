@@ -5,8 +5,10 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
+import com.positivity.securityservice.internal.service.EffectiveGrantResolverImpl;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaCall;
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
@@ -30,6 +32,31 @@ public class ArchitectureTest {
 
                 public boolean test(JavaCall<?> input) {
                     return input.getTargetOwner().isEquivalentTo(UUID.class) && "randomUUID".equals(input.getName());
+                }
+            };
+
+    // ADR-0061 amendment (2026-09-09, #1914): every authorization decision must resolve through
+    // EffectiveGrantResolver, the single place that reads the effective-dated role_assignments a
+    // decision point is evaluated against. This predicate keeps that true by construction rather
+    // than by convention: nothing outside EffectiveGrantResolverImpl may read that "effective as
+    // of now" shape directly. Phase 2 (#1914) dropped user_roles and User.getRoles() entirely, so
+    // the sibling rule that restricted User.getRoles() the same way no longer has anything to
+    // enforce and was removed with them.
+    private static final DescribedPredicate<JavaCall<?>> FIND_EFFECTIVE_ASSIGNMENTS_CALL =
+            new DescribedPredicate<>("call a RoleAssignmentRepository.findEffectiveAssignments* method") {
+
+                public boolean test(JavaCall<?> input) {
+                    return "com.positivity.securityservice.internal.repository.RoleAssignmentRepository"
+                                    .equals(input.getTargetOwner().getFullName())
+                            && input.getName().startsWith("findEffectiveAssignments");
+                }
+            };
+
+    private static final DescribedPredicate<JavaClass> NOT_EFFECTIVE_GRANT_RESOLVER_IMPL =
+            new DescribedPredicate<>("not EffectiveGrantResolverImpl") {
+
+                public boolean test(JavaClass input) {
+                    return !input.isEquivalentTo(EffectiveGrantResolverImpl.class);
                 }
             };
 
@@ -175,4 +202,13 @@ public class ArchitectureTest {
             .callMethodWhere(UUID_RANDOM_UUID_CALL)
             .allowEmptyShould(true)
             .because("UUIDv7Generator centralizes ID creation; direct randomUUID calls are not allowed");
+
+    @ArchTest
+    static final ArchRule only_effective_grant_resolver_should_read_effective_assignments = noClasses()
+            .that(NOT_EFFECTIVE_GRANT_RESOLVER_IMPL)
+            .should()
+            .callMethodWhere(FIND_EFFECTIVE_ASSIGNMENTS_CALL)
+            .allowEmptyShould(true)
+            .because("ADR-0061 amendment (#1914): every decision point resolves effective role assignments through "
+                    + "EffectiveGrantResolver, not by re-querying findEffectiveAssignments* itself");
 }

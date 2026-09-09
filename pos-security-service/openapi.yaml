@@ -10,8 +10,6 @@ servers:
 - description: Generated server url
   url: http://localhost:8086
 tags:
-- description: Assign roles to principals for RBAC matrix operations
-  name: Principal Role Management
 - description: Endpoints for JWT authentication and token management per ADR-0011
   name: JWT API
 - description: Assign and revoke roles for users
@@ -24,10 +22,10 @@ tags:
   name: Audit Exports
 - description: Bulk provision roles with persona metadata
   name: Role Bulk Ingest API
+- description: Authorization decision endpoints for a user's effective roles
+  name: Authorization
 - description: Manage roles, permissions, and user assignments
   name: Role Management
-- description: Authorization decision endpoints for principal permissions
-  name: Authorization
 - description: Bulk grant permissions to existing roles
   name: Role Permission Bulk Ingest API
 - description: Endpoints for user management and authentication
@@ -2066,6 +2064,8 @@ paths:
 
         Emits a SECURITY_ROLE_ASSIGNMENT_REVOKE event.
 
+        Ends the holder''s live tokens immediately regardless of endDate; the next token issued for them is clamped to the assignment''s (possibly future or backdated) end.
+
         Returns 400 when endDate is malformed, and 404 when the assignment does not exist.
 
         '
@@ -3212,7 +3212,7 @@ paths:
       x-required-permissions:
       - security:user:view
     post:
-      description: 'Creates a user account with a username, a hashed password, and a set of directly attached roles.
+      description: 'Creates a user account with a username, a hashed password, and an open-ended effective role assignment for each of a set of granted roles, all in one transaction.
 
         Use this tool for operator provisioning of accounts; do not use selfRegisterUser, the anonymous customer flow that fixes the role to SELF_SERVICE_CUSTOMER and runs identity resolution first.
 
@@ -3222,7 +3222,7 @@ paths:
 
         Emits a SECURITY_USER_CREATE event; the password is hashed before storage.
 
-        Returns 409 when the username already exists, 400 with INVALID_REQUEST when a required field is missing, and 404 with ROLE_NOT_FOUND when a named role does not exist.
+        Returns 409 when the username already exists, 400 with INVALID_REQUEST when a required field is missing, and 404 with ROLE_NOT_FOUND when a named role does not exist — in which case no user and no assignment are created.
 
         '
       operationId: createUser
@@ -3286,75 +3286,11 @@ paths:
       - User API
       x-required-permissions:
       - security:user:create
-  /v1/users/authorization/decision:
-    get:
-      description: 'Returns an allow or deny decision for a principal identifier and permission key, evaluated against the principal-role matrix populated by assignPrincipalRole.
-
-        Use this tool for matrix-based checks keyed by principal string; use getPersonAuthorizationDecision instead when the caller has a personId; location reach is decided by the owning service from the token''s scope claims (ADR-0061 §3), not by this endpoint.
-
-        Preconditions: the caller must hold security:authorization:decide; the principal needs no prior registration.
-
-        Required inputs: principalId and permission (domain:resource:action) as query parameters.
-
-        No events are emitted and no state changes; this is a read-only evaluation.
-
-        Returns 200 with decision allow or deny; an unknown principal or permission yields deny rather than an error.
-
-        '
-      operationId: getAuthorizationDecision
-      parameters:
-      - description: Principal identifier to evaluate
-        example: userA
-        in: query
-        name: principalId
-        required: true
-        schema:
-          type: string
-      - description: Permission key to evaluate
-        example: pricing:msrp:edit
-        in: query
-        name: permission
-        required: true
-        schema:
-          type: string
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthorizationDecisionResponse'
-          description: Authorization decision returned
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Bad Request
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unauthorized
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: 'Forbidden: authorization decision permission required'
-      security:
-      - bearerAuth:
-        - security:authorization:decide
-      summary: Get Authorization Decision for a Principal
-      tags:
-      - Authorization
-      x-required-permissions:
-      - security:authorization:decide
   /v1/users/authorization/person-decision:
     get:
-      description: 'Returns an allow or deny decision for the user account linked to a personId, evaluated against that user''s directly assigned roles.
+      description: 'Returns an allow or deny decision for the user account linked to a personId, evaluated against the user''s currently effective roles (effective-dated assignments, honouring the window), the same set token issuance uses.
 
-        Use this tool to verify an off-session approver, such as a manager identified by employee number, holds a required permission; use getAuthorizationDecision instead for matrix principals.
+        Use this tool to verify an off-session approver, such as a manager identified by employee number, holds a required permission.
 
         Preconditions: the caller must hold security:authorization:decide; a user should be linked to the person via the user-person link projection.
 
@@ -3555,71 +3491,6 @@ paths:
       - User Person Link Bulk Ingest API
       x-required-permissions:
       - security:user:edit
-  /v1/users/principals/{principalId}/roles/{roleId}:
-    post:
-      description: 'Links a free-form principal identifier to a role in the RBAC principal matrix consulted by getAuthorizationDecision.
-
-        Use this tool for matrix principals that are not user UUIDs; do not use assignUserRole, which creates a role assignment for a real user account.
-
-        Preconditions: the caller must hold security:role:assign and the role must exist; the principal is not validated against any store, and an existing identical link makes the call a no-op.
-
-        Required inputs: principalId (arbitrary string) and roleId (UUID) as path parameters; there is no request body.
-
-        Emits a SECURITY_PRINCIPAL_ROLE_ASSIGN event.
-
-        Returns 404 when the role does not exist; repeat assignments still return 200.
-
-        '
-      operationId: assignPrincipalRole
-      parameters:
-      - description: Principal identifier receiving the role assignment
-        in: path
-        name: principalId
-        required: true
-        schema:
-          type: string
-      - description: Role identifier to assign to the principal
-        in: path
-        name: roleId
-        required: true
-        schema:
-          format: uuid
-          type: string
-      responses:
-        '200':
-          description: Role assigned to principal successfully
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Bad Request
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Unauthorized
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Forbidden
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Principal or role not found
-      security:
-      - bearerAuth:
-        - security:role:assign
-      summary: Assign a Role to a Principal
-      tags:
-      - Principal Role Management
-      x-required-permissions:
-      - security:role:assign
   /v1/users/{id}:
     delete:
       description: 'Deletes a user account and queues removal of its user-person link so downstream projections follow the account out.
@@ -3681,7 +3552,7 @@ paths:
       x-required-permissions:
       - security:user:delete
     get:
-      description: 'Returns a single user account by UUID, including effective role names merged from direct roles and currently active role assignments.
+      description: 'Returns a single user account by UUID, including the role names of the user''s currently effective role assignments.
 
         Use this tool when the user id is known; use listUsers instead to browse accounts, and getUserAccountState for administrative lock and expiry flags.
 
@@ -3744,9 +3615,9 @@ paths:
       x-required-permissions:
       - security:user:view
     put:
-      description: 'Applies a partial update to a user account: username, password, and the direct role set are each replaced only when supplied.
+      description: 'Applies a partial update to a user account: username and password are each replaced only when supplied, and a supplied role set reconciles the effective role assignments (grants a named role not already effectively held, revokes an effectively held role not named; assignment history is kept). Omitting roles entirely leaves the effective set unchanged.
 
-        Use this tool to change account fields; do not use assignUserRolesByUsername, which only replaces roles, and do not use the account-state endpoints such as disableUserAccount, which flip administrative flags.
+        Use this tool to change account fields; do not use assignUserRolesByUsername, which only reconciles roles, and do not use the account-state endpoints such as disableUserAccount, which flip administrative flags.
 
         Preconditions: the caller must hold security:user:edit, the user must exist, and any named role must already exist.
 
@@ -4319,6 +4190,8 @@ paths:
 
         Emits a SECURITY_USER_ROLE_REVOKE event and writes a RoleRevokedFromUser audit record.
 
+        Ends the holder''s live tokens immediately; the next token issued for them is clamped to the revoked assignment''s end.
+
         Returns 404 when the user or role does not exist, or when no active assignment links them.
 
         '
@@ -4374,13 +4247,13 @@ paths:
     put:
       description: 'Creates a role assignment linking a user to a role, effective immediately with no end date.
 
-        Use this tool for the common grant; do not use createRoleAssignment, which supports effective date windows, and do not use assignPrincipalRole, which targets the string-keyed RBAC principal matrix.
+        Use this tool for the common grant; do not use createRoleAssignment, which supports effective date windows.
 
-        Preconditions: the caller must hold security:role:assign and both the user and role must exist; no overlap check is performed here, so repeated calls create duplicate assignments.
+        Preconditions: the caller must hold security:role:assign and both the user and role must exist.
 
         Required inputs: userId and roleId (UUIDs) as path parameters; there is no request body.
 
-        Emits a SECURITY_USER_ROLE_ASSIGN event and writes a RoleAssignedToUser audit record.
+        Idempotent: a pair the user already effectively holds is a no-op, not a second, overlapping assignment. Every call, including a no-op one, emits a SECURITY_USER_ROLE_ASSIGN event and writes a RoleAssignedToUser audit record.
 
         Returns 404 when the user or role does not exist.
 
@@ -4436,15 +4309,17 @@ paths:
       - security:role:assign
   /v1/users/{username}/roles:
     put:
-      description: 'Replaces a user''s directly attached role set with the supplied role names, looking the user up by username.
+      description: 'Reconciles a user''s effective role assignments to the supplied role names, looking the user up by username: grants every named role the user does not already effectively hold, and revokes every effectively held role not named. Assignment history is kept — a revoked row''s window is closed, not deleted — so this is not a destructive replace.
 
-        Use this tool for wholesale role replacement by username; do not use assignUserRole, which adds a single scoped role assignment by UUID without touching the direct set.
+        Use this tool for wholesale role reconciliation by username; do not use assignUserRole, which grants a single role by UUID without touching any other role the user holds.
 
         Preconditions: the caller must hold security:role:assign, the username must resolve to a user, and every named role must exist.
 
-        Required inputs: username as a path parameter and roles, an array of existing role names, in the body; the set replaces all current direct roles.
+        Required inputs: username as a path parameter and roles, an array of existing role names, in the body; this array becomes the user''s complete effective role set.
 
         Emits a SECURITY_USER_ASSIGN_ROLES event.
+
+        A role this reconcile revokes ends the holder''s live tokens immediately; the next token issued for them is clamped to that revoked assignment''s end.
 
         Returns 404 with USER_NOT_FOUND when the username does not resolve to a user, and 404 with ROLE_NOT_FOUND when a named role does not exist.
 
@@ -4505,7 +4380,7 @@ paths:
       security:
       - bearerAuth:
         - security:role:assign
-      summary: Replace a User's Direct Role Set
+      summary: Reconcile a User's Effective Role Set
       tags:
       - User API
       x-required-permissions:

@@ -114,14 +114,17 @@ Audit endpoints use:
 
 ## Specialized Or Legacy Security Endpoints
 
-Two controllers exist but are not the primary request-authorization path:
+One controller exists but is not the primary request-authorization path:
 
 - `AuthorizationController`
   - required permission: `security:authorization:decide`
-- `PrincipalRoleController`
-  - required permission: `security:role:assign`
 
-These support specialized RBAC workflows. They do not replace gateway-enforced authorization on ordinary application APIs.
+Its `person-decision` endpoint supports the off-session approver workflow (e.g. a manager
+identified by employee number). It does not replace gateway-enforced authorization on ordinary
+application APIs. The string-keyed principal-role matrix this controller used to expose
+(`PrincipalRoleController`, `getAuthorizationDecision`) was retired (ADR-0061 amendment
+2026-09-09, #1914 phase 4): no caller used it, since service actors assert permissions directly
+through `X-Authorities`.
 
 ## Operational Notes
 

@@ -3,8 +3,8 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -28,6 +28,7 @@ import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.internal.service.EffectiveGrantResolver.EffectiveGrants;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -111,6 +112,15 @@ class RoleManagementServiceTest {
 
     @Mock
     private RolePersonaEventEmitter rolePersonaEventEmitter;
+
+    @Mock
+    private EffectiveGrantResolver effectiveGrantResolver;
+
+    @Mock
+    private UserRoleGrantService userRoleGrantService;
+
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private RoleManagementServiceImpl sut;
@@ -432,7 +442,10 @@ class RoleManagementServiceTest {
 
             sut.assignRoleToUser(USER_ID, ROLE_ID);
 
-            verify(roleAssignmentRepository).save(any(RoleAssignment.class));
+            // Idempotent-by-construction: the actual grant/no-op logic lives in
+            // UserRoleGrantServiceImpl (ADR-0061 amendment phase 2, #1914), covered directly by
+            // UserRoleGrantServiceImplTest.
+            verify(userRoleGrantService).grant(eq(user), eq(role), anyString());
         }
 
         /**
@@ -500,7 +513,10 @@ class RoleManagementServiceTest {
 
             sut.revokeRoleFromUser(USER_ID, ROLE_ID);
 
-            verify(roleAssignmentRepository).save(assignment);
+            // The pre-check above (an effective assignment exists) stays inline for the 404
+            // contract; the actual revoke is delegated (ADR-0061 amendment phase 2, #1914),
+            // covered directly by UserRoleGrantServiceImplTest.
+            verify(userRoleGrantService).revoke(eq(user), eq(role), anyString());
         }
     }
 
@@ -652,8 +668,8 @@ class RoleManagementServiceTest {
         assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(eq(user), any()))
-                .thenReturn(List.of(assignment));
+        when(effectiveGrantResolver.resolve(user))
+                .thenReturn(new EffectiveGrants(Set.of(), Set.of(), Set.of(), List.of(assignment)));
 
         assertThat(sut.getAssignmentsForUser(USER_ID, false)).singleElement().satisfies(dto -> {
             assertThat(dto.getRoleId()).isEqualTo(ROLE_ID);
@@ -670,82 +686,46 @@ class RoleManagementServiceTest {
     class UserHasPermission {
 
         @Test
-        @DisplayName("permission held through a currently effective assignment — returns true")
+        @DisplayName("permission held through the resolver's effective grants — returns true")
         void userHasPermission_effectiveAssignmentGrants_returnsTrue() {
             User user = new User();
             user.setId(USER_ID);
 
-            Permission perm = new Permission();
-            perm.setName("security:roles:create");
-
-            Role role = new Role();
-            role.setId(ROLE_ID);
-            role.setPermissions(Set.of(perm));
-
-            RoleAssignment assignment = new RoleAssignment();
-            assignment.setUser(user);
-            assignment.setRole(role);
-            assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
-
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(eq(user), any()))
-                    .thenReturn(List.of(assignment));
+            when(effectiveGrantResolver.resolve(user))
+                    .thenReturn(new EffectiveGrants(Set.of(), Set.of(), Set.of("security:roles:create")));
 
             assertThat(sut.userHasPermission(USER_ID, "security:roles:create")).isTrue();
         }
 
         @Test
-        @DisplayName("only effective assignments are consulted — history is never read")
-        void userHasPermission_consultsEffectiveAssignmentsOnly() {
+        @DisplayName("delegates entirely to the resolver — history is never read directly")
+        void userHasPermission_consultsResolverOnly() {
+            // The dating guarantee (an expired assignment is absent from the effective set) is
+            // proven against the real query by EffectiveGrantResolverImplTest and
+            // UserHasPermissionEffectiveDatingIT; here it is enough that this method asks the
+            // resolver and never reaches into role_assignments history itself (#1914).
             User user = new User();
             user.setId(USER_ID);
 
-            Permission perm = new Permission();
-            perm.setName("security:roles:create");
-
-            Role role = new Role();
-            role.setId(ROLE_ID);
-            role.setPermissions(Set.of(perm));
-
-            // The user once held the role, but the assignment has ended: it exists in history
-            // and is absent from the effective-dated projection.
-            RoleAssignment expired = new RoleAssignment();
-            expired.setUser(user);
-            expired.setRole(role);
-            expired.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(30));
-            expired.setEffectiveEndDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
-
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(eq(user), any()))
-                    .thenReturn(List.of());
-            lenient().when(roleAssignmentRepository.findAllByUser_Id(USER_ID)).thenReturn(List.of(expired));
+            when(effectiveGrantResolver.resolve(user)).thenReturn(new EffectiveGrants(Set.of(), Set.of(), Set.of()));
 
             assertThat(sut.userHasPermission(USER_ID, "security:roles:create")).isFalse();
-            verify(roleAssignmentRepository).findEffectiveAssignmentsByUser(eq(user), any());
+            verify(effectiveGrantResolver).resolve(user);
             verify(roleAssignmentRepository, never()).findAllByUser_Id(any());
+            verify(roleAssignmentRepository, never()).findEffectiveAssignmentsByUser(any(), any());
         }
 
         @Test
-        @DisplayName("effective assignment whose role lacks the permission — returns false")
+        @DisplayName("resolver's effective grants lack the permission — returns false")
         void userHasPermission_permissionNotInRole_returnsFalse() {
             User user = new User();
             user.setId(USER_ID);
 
-            Permission perm = new Permission();
-            perm.setName("security:roles:create");
-
-            Role role = new Role();
-            role.setId(ROLE_ID);
-            role.setPermissions(Set.of(perm));
-
-            RoleAssignment assignment = new RoleAssignment();
-            assignment.setUser(user);
-            assignment.setRole(role);
-            assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
-
             when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(eq(user), any()))
-                    .thenReturn(List.of(assignment));
+            when(effectiveGrantResolver.resolve(user))
+                    .thenReturn(new EffectiveGrants(Set.of(), Set.of(), Set.of("security:roles:create")));
 
             assertThat(sut.userHasPermission(USER_ID, "security:other:permission"))
                     .isFalse();
@@ -962,19 +942,10 @@ class RoleManagementServiceTest {
         role2.setId(ROLE_ID_2);
         role2.setPermissions(Set.of(p2));
 
-        RoleAssignment ra1 = new RoleAssignment();
-        ra1.setUser(user);
-        ra1.setRole(role1);
-        ra1.setEffectiveStartDate(java.time.LocalDateTime.now(TEST_CLOCK).minusDays(1));
-
-        RoleAssignment ra2 = new RoleAssignment();
-        ra2.setUser(user);
-        ra2.setRole(role2);
-        ra2.setEffectiveStartDate(java.time.LocalDateTime.now(TEST_CLOCK).minusDays(1));
-
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(eq(user), any()))
-                .thenReturn(List.of(ra1, ra2));
+        when(effectiveGrantResolver.resolve(user))
+                .thenReturn(new EffectiveGrants(
+                        Set.of(role1, role2), Set.of(), Set.of("security:roles:create", "security:users:view")));
 
         Set<PermissionDto> permissions = sut.getUserPermissions(USER_ID);
 

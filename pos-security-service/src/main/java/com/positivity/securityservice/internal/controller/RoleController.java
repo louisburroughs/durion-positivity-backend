@@ -534,6 +534,8 @@ public class RoleController {
                     Required inputs: assignmentId (UUID) as a path parameter; endDate (ISO date-time) is optional \
                     and defaults to the current time, and the revocation timestamp is recorded automatically.
                     Emits a SECURITY_ROLE_ASSIGNMENT_REVOKE event.
+                    Ends the holder's live tokens immediately regardless of endDate; the next token issued for \
+                    them is clamped to the assignment's (possibly future or backdated) end.
                     Returns 400 when endDate is malformed, and 404 when the assignment does not exist.
                     """)
     @ApiResponse(responseCode = "204", description = "Role assignment revoked")

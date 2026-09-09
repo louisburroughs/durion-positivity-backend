@@ -3,7 +3,7 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
@@ -14,10 +14,12 @@ import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.event.RoleAssignmentRevokedEvent;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.internal.service.EffectiveGrantResolver.EffectiveGrants;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -29,10 +31,12 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -58,6 +62,12 @@ class RoleManagementServiceImplTest {
 
     @Mock
     private RolePersonaEventEmitter rolePersonaEventEmitter;
+
+    @Mock
+    private EffectiveGrantResolver effectiveGrantResolver;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private RoleManagementServiceImpl roleManagementService;
@@ -126,8 +136,8 @@ class RoleManagementServiceImplTest {
         when(roleAssignmentRepository.findByUser_IdAndRole_Id(userId, roleId)).thenReturn(List.of());
         when(roleAssignmentRepository.save(any(RoleAssignment.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(eq(user), any()))
-                .thenReturn(List.of(assignment));
+        when(effectiveGrantResolver.resolve(user))
+                .thenReturn(new EffectiveGrants(Set.of(role), Set.of("MANAGER"), Set.of("security:role:grant")));
         when(roleAssignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
 
         var createdAssignment = roleManagementService.createRoleAssignment(request);
@@ -137,6 +147,12 @@ class RoleManagementServiceImplTest {
 
         assertThat(createdAssignment.getRoleId()).isEqualTo(roleId);
         assertThat(hasPermission).isTrue();
+        // ADR-0061 §4 amendment (#1914 phase 3): revokeRoleAssignment ends the holder's live
+        // tokens via RoleAssignmentRevokedEvent, even though endDate here is in the future.
+        ArgumentCaptor<RoleAssignmentRevokedEvent> eventCaptor =
+                ArgumentCaptor.forClass(RoleAssignmentRevokedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().getUserId()).isEqualTo(userId);
     }
 
     @Test

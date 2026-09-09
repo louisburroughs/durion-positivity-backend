@@ -5,18 +5,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.positivity.securityservice.internal.domain.RoleGrant;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.enums.LocationHierarchy;
 import com.positivity.securityservice.internal.enums.LocationScope;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
+import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.security.service.JwtService;
 import jakarta.persistence.EntityManager;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,7 +30,7 @@ import org.springframework.test.context.ActiveProfiles;
  * Proves a user's effective permissions resolve along the persisted chain
  *
  * <pre>
- *   users -&gt; user_roles -&gt; roles -&gt; role_permissions -&gt; permissions
+ *   users -&gt; role_assignments -&gt; roles -&gt; role_permissions -&gt; permissions
  * </pre>
  *
  * all the way into the {@code perm_bits} claim of an issued token, and that a principal with
@@ -58,11 +61,20 @@ class EffectivePermissionResolutionIT {
     private PermissionRepository permissionRepository;
 
     @Autowired
+    private RoleAssignmentRepository roleAssignmentRepository;
+
+    @Autowired
+    private EffectiveGrantResolver effectiveGrantResolver;
+
+    @Autowired
+    private Clock clock;
+
+    @Autowired
     private EntityManager entityManager;
 
     @Test
     @DisplayName("a user inherits its role's granted permissions, and they reach the issued token")
-    void userInheritsRolePermissions_throughUserRolesAndRolePermissions() {
+    void userInheritsRolePermissions_throughRoleAssignmentsAndRolePermissions() {
         Permission view = permission("crm:party:view", 27);
         Permission search = permission("crm:party:search", 28);
         Role role = role(Set.of(view, search));
@@ -70,9 +82,7 @@ class EffectivePermissionResolutionIT {
 
         entityManager.clear();
 
-        Set<String> roleNames = userRepository.findByUsername(user.getUsername()).orElseThrow().getRoles().stream()
-                .map(Role::getName)
-                .collect(Collectors.toSet());
+        Set<String> roleNames = effectiveGrantResolver.resolve(user).roleNames();
 
         assertThat(roleNames).containsExactly(role.getName());
 
@@ -110,9 +120,7 @@ class EffectivePermissionResolutionIT {
 
         entityManager.clear();
 
-        Set<String> roleNames = userRepository.findByUsername(user.getUsername()).orElseThrow().getRoles().stream()
-                .map(Role::getName)
-                .collect(Collectors.toSet());
+        Set<String> roleNames = effectiveGrantResolver.resolve(user).roleNames();
 
         assertThat(roleNames).isEmpty();
         assertThat(roleAuthorityService.expandRolesToAuthorities(roleNames)).isEmpty();
@@ -275,7 +283,15 @@ class EffectivePermissionResolutionIT {
         User user = new User();
         user.setUsername("it-user-" + UUID.randomUUID());
         user.setPassword("{noop}password");
-        user.setRoles(new java.util.HashSet<>(roles));
-        return userRepository.saveAndFlush(user);
+        User saved = userRepository.saveAndFlush(user);
+        for (Role role : roles) {
+            RoleAssignment assignment = new RoleAssignment();
+            assignment.setUser(saved);
+            assignment.setRole(role);
+            assignment.setEffectiveStartDate(LocalDateTime.now(clock));
+            assignment.setCreatedBy("test");
+            roleAssignmentRepository.saveAndFlush(assignment);
+        }
+        return saved;
     }
 }

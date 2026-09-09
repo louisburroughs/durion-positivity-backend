@@ -1,0 +1,13 @@
+-- ADR-0061 amendment (2026-09-09, extending §3, #1914 phase 4): the string-keyed principal-role
+-- matrix is retired, not deprecated.
+--
+-- principal_roles mapped an unvalidated free-form principalId to a role. Nothing in the codebase
+-- ever wrote to it outside pos-security-service's own contract tests (V23 only deletes from it
+-- when a seeded role is removed), and its sole reader -- AuthorizationService.authorize(String,
+-- String) via getAuthorizationDecision -- served no caller: service actors assert permissions
+-- directly through X-Authorities, so no principal type remains for the matrix to serve. It was
+-- the last of the "three stores" the amendment collapses into role_assignments (phase 2,
+-- V40__migrate_user_roles_to_role_assignments.sql, retired the other one).
+--
+-- Forward-only, no data migration: an empty, never-written table carries nothing to preserve.
+DROP TABLE IF EXISTS principal_roles;

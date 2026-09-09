@@ -58,13 +58,6 @@ Instant created_at
 String created_by
 Instant updated_at
 }
-principal_roles {
-UUID id
-String principal_id
-UUID role_id
-Instant created_at
-Instant updated_at
-}
 audit_log_events {
 UUID event_id
 Instant timestamp
@@ -149,5 +142,4 @@ users }o--o{ roles : ""
 roles }o--o{ permissions : ""
 role_assignments }o--|| users : "user_id"
 role_assignments }o--|| roles : "role_id"
-principal_roles }o--|| roles : "role_id"
 pricing_rule_trace_entries }o--|| pricing_snapshots : "snapshot_id"

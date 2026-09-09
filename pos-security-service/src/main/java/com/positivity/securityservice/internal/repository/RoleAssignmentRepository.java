@@ -40,6 +40,13 @@ public interface RoleAssignmentRepository extends JpaRepository<RoleAssignment, 
      * {@code CustomUserDetailsService} (#1910). Binding the instant also puts the answer on the
      * service's injected {@link java.time.Clock}, so a test can place a fixture on the boundary
      * instead of a year away from it.
+     *
+     * <p>ArchUnit restricts this query to {@code EffectiveGrantResolverImpl} alone (#1914): every
+     * other caller, listing endpoints included, reads the same rows off
+     * {@code EffectiveGrantResolver.EffectiveGrants.assignments()} instead of re-querying here —
+     * a duplicated query method ({@code findCurrentAssignmentsByUser}, identical to this one) that
+     * existed only so listing had its own name to call was removed for exactly that reason (#1914
+     * Part A).
      */
     @EntityGraph(attributePaths = {"user", "role"})
     @Query("SELECT ra FROM RoleAssignment ra WHERE ra.user = :user " + "AND ra.effectiveStartDate <= :asOf "

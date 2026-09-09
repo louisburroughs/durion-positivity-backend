@@ -27,41 +27,10 @@ import org.springframework.web.bind.annotation.RestController;
         scopes = {"security:authorization:decide"})
 @RequestMapping("/v1/users")
 @RequiredArgsConstructor
-@Tag(name = "Authorization", description = "Authorization decision endpoints for principal permissions")
+@Tag(name = "Authorization", description = "Authorization decision endpoints for a user's effective roles")
 public class AuthorizationController {
 
     private final AuthorizationService authorizationService;
-
-    @GetMapping("/authorization/decision")
-    @PreAuthorize("hasAuthority('" + SecurityPermissions.AUTHORIZATION_DECIDE + "')")
-    @Operation(
-            operationId = "getAuthorizationDecision",
-            summary = "Get Authorization Decision for a Principal",
-            description = """
-                    Returns an allow or deny decision for a principal identifier and permission key, evaluated \
-                    against the principal-role matrix populated by assignPrincipalRole.
-                    Use this tool for matrix-based checks keyed by principal string; use \
-                    getPersonAuthorizationDecision instead when the caller has a personId; location reach is decided by \
-                    the owning service from the token's scope claims (ADR-0061 §3), not by this endpoint.
-                    Preconditions: the caller must hold security:authorization:decide; the principal needs no prior \
-                    registration.
-                    Required inputs: principalId and permission (domain:resource:action) as query parameters.
-                    No events are emitted and no state changes; this is a read-only evaluation.
-                    Returns 200 with decision allow or deny; an unknown principal or permission yields deny rather \
-                    than an error.
-                    """)
-    @ApiResponse(responseCode = "200", description = "Authorization decision returned")
-    @ApiResponse(responseCode = "403", description = "Forbidden: authorization decision permission required")
-    public ResponseEntity<AuthorizationDecisionResponse> getDecision(
-            @Parameter(description = "Principal identifier to evaluate", example = "userA") @RequestParam
-                    String principalId,
-            @Parameter(description = "Permission key to evaluate", example = "pricing:msrp:edit")
-                    @RequestParam(name = "permission")
-                    String permission) {
-        var decision = authorizationService.authorize(principalId, permission);
-        return ResponseEntity.ok(
-                new AuthorizationDecisionResponse(decision.name().toLowerCase()));
-    }
 
     @GetMapping("/authorization/person-decision")
     @PreAuthorize("hasAuthority('" + SecurityPermissions.AUTHORIZATION_DECIDE + "')")
@@ -70,9 +39,10 @@ public class AuthorizationController {
             summary = "Get Authorization Decision for a Person",
             description = """
                     Returns an allow or deny decision for the user account linked to a personId, evaluated against \
-                    that user's directly assigned roles.
+                    the user's currently effective roles (effective-dated assignments, honouring the window), the \
+                    same set token issuance uses.
                     Use this tool to verify an off-session approver, such as a manager identified by employee \
-                    number, holds a required permission; use getAuthorizationDecision instead for matrix principals.
+                    number, holds a required permission.
                     Preconditions: the caller must hold security:authorization:decide; a user should be linked to \
                     the person via the user-person link projection.
                     Required inputs: personId (UUID) and permission (domain:resource:action) as query parameters.

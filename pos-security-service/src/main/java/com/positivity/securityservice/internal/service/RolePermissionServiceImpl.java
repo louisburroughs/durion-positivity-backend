@@ -3,13 +3,11 @@ package com.positivity.securityservice.internal.service;
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.entity.Permission;
-import com.positivity.securityservice.internal.entity.PrincipalRole;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.event.RolePermissionGrantAuditEvent;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
-import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -25,7 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service for role-permission and principal-role mutation operations.
+ * Service for role-permission mutation operations.
  *
  * Issue: #42
  */
@@ -38,7 +36,6 @@ public class RolePermissionServiceImpl implements RolePermissionService {
 
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
-    private final PrincipalRoleRepository principalRoleRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
 
     @Override
@@ -100,23 +97,6 @@ public class RolePermissionServiceImpl implements RolePermissionService {
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
         role.getPermissions().removeIf(permission -> permissionKey.equals(permission.getName()));
         return toRoleDto(roleRepository.save(role));
-    }
-
-    @Override
-    @Transactional
-    public void assignRoleToPrincipal(@NonNull String principalId, @NonNull UUID roleId) {
-        if (principalRoleRepository.existsByPrincipalIdAndRole_Id(principalId, roleId)) {
-            return;
-        }
-
-        Role role = roleRepository
-                .findById(roleId)
-                .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
-
-        PrincipalRole principalRole = new PrincipalRole();
-        principalRole.setPrincipalId(principalId);
-        principalRole.setRole(role);
-        principalRoleRepository.save(principalRole);
     }
 
     private String getCurrentActor() {

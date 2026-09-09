@@ -1301,16 +1301,12 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1self-registration~1review-cases~1{caseId}~1resolve
   /v1/users:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users
-  /v1/users/authorization/decision:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1authorization~1decision
   /v1/users/authorization/person-decision:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1authorization~1person-decision
   /v1/users/bulk-ingest:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1bulk-ingest
   /v1/users/person-link/bulk-ingest:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1person-link~1bulk-ingest
-  /v1/users/principals/{principalId}/roles/{roleId}:
-    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1principals~1{principalId}~1roles~1{roleId}
   /v1/users/{id}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users~1{id}
   /v1/users/{id}/account-state:

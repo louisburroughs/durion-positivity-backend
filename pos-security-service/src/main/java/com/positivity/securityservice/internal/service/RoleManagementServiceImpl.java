@@ -14,6 +14,7 @@ import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.event.RoleAssignmentRevokedEvent;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
@@ -35,8 +36,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,6 +58,9 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     private final UserRepository userRepository;
     private final AuditEventService auditEventService;
     private final RolePersonaEventEmitter rolePersonaEventEmitter;
+    private final EffectiveGrantResolver effectiveGrantResolver;
+    private final UserRoleGrantService userRoleGrantService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Create a new role, including its optional MCP persona metadata (#1613).
@@ -253,7 +256,9 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     }
 
     /**
-     * Get all permissions for a user (from all their effective role assignments).
+     * Get all permissions for a user's effective grants — the roles of their currently effective
+     * {@code role_assignments}, resolved through {@link EffectiveGrantResolver} (ADR-0061
+     * amendment, 2026-09-09, #1914).
      *
      * <p>Read-only transaction: {@code Role.permissions} is lazy, and this read must not depend on
      * an open-in-view session being present.
@@ -261,43 +266,43 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     @Override
     @Transactional(readOnly = true)
     public Set<PermissionDto> getUserPermissions(UUID userId) {
-        List<RoleAssignment> assignments = getAssignmentEntitiesForUser(userId, false);
-        Set<PermissionDto> allPermissions = new HashSet<>();
-
-        for (RoleAssignment assignment : assignments) {
-            allPermissions.addAll(assignment.getRole().getPermissions().stream()
-                    .map(this::toPermissionDto)
-                    .collect(Collectors.toSet()));
-        }
-
-        return allPermissions;
+        User user = userRepository
+                .findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_PREFIX + userId));
+        return effectiveGrantResolver.resolve(user).roles().stream()
+                .flatMap(role -> role.getPermissions().stream())
+                .map(this::toPermissionDto)
+                .collect(Collectors.toSet());
     }
 
     /**
-     * Check whether a user holds a permission through a currently effective role assignment.
-     *
-     * <p>Effective dating is the only filter: {@code getAssignmentEntitiesForUser(userId, false)}
-     * resolves through {@code findEffectiveAssignmentsByUser}, so assignments outside their
-     * window are never consulted. Location scope is not evaluated here (ADR-0061 §1).
+     * Check whether a user holds a permission through their effective grants — the roles of
+     * their currently effective {@code role_assignments}, resolved through
+     * {@link EffectiveGrantResolver} (ADR-0061 amendment, 2026-09-09, #1914). Location scope is
+     * not evaluated here (ADR-0061 §1).
      */
     @Override
     @Transactional(readOnly = true)
     public boolean userHasPermission(UUID userId, String permissionName) {
-        List<RoleAssignment> assignments = getAssignmentEntitiesForUser(userId, false);
-
-        for (RoleAssignment assignment : assignments) {
-            for (Permission permission : assignment.getRole().getPermissions()) {
-                if (permission.getName().equals(permissionName)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        User user = userRepository
+                .findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_PREFIX + userId));
+        return effectiveGrantResolver.resolve(user).permissionNames().contains(permissionName);
     }
 
     /**
      * Revoke a role assignment.
+     *
+     * <p>{@code endDate} may be backdated (the row was already not effective) or scheduled ahead
+     * of now (still effective until it arrives) — either way this ends the holder's live tokens
+     * now, through {@link RoleAssignmentRevokedEvent} (ADR-0061 §4 amendment, 2026-09-09, #1914
+     * phase 3): a future-dated revocation still changes the assignment record the holder's current
+     * tokens were minted against, and the token reissued after this call is then clamped to the
+     * scheduled end by {@code JwtServiceImpl.generateTokenPair}, which is the correct outcome
+     * either way. Unlike {@link #revokeRoleFromUser}, this does not go through {@link
+     * UserRoleGrantService} — it revokes a specific assignment by id, which may not be the row
+     * {@code revoke}'s effective-window lookup would find — so it publishes the event itself
+     * rather than inheriting it from {@code UserRoleGrantServiceImpl}.
      */
     @Override
     @Transactional
@@ -311,6 +316,8 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         assignment.setLastModifiedAt(Instant.now(clock));
 
         roleAssignmentRepository.save(assignment);
+        eventPublisher.publishEvent(
+                new RoleAssignmentRevokedEvent(this, assignment.getUser().getId()));
 
         log.info(
                 "Revoked role assignment: id={}, user={}, role={}, endDate={}, revokedAt={}",
@@ -399,14 +406,9 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 .findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
 
-        RoleAssignment assignment = new RoleAssignment();
-        assignment.setUser(user);
-        assignment.setRole(role);
-        assignment.setEffectiveStartDate(LocalDateTime.now(clock));
-        assignment.setCreatedBy(getCurrentUsername());
-        assignment.setCreatedAt(Instant.now(clock));
-
-        roleAssignmentRepository.save(assignment);
+        // Idempotent: a pair already effectively assigned is a no-op rather than a second,
+        // overlapping open-ended row (ADR-0061 amendment phase 2, #1914).
+        userRoleGrantService.grant(user, role, getCurrentUsername());
 
         emitAuditEvent(new AuditLogEventRequest(
                 "RoleAssignedToUser", getCurrentUsername(), userId.toString(), "User", "", role.getName(), null));
@@ -423,17 +425,14 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
 
         LocalDateTime now = LocalDateTime.now(clock);
-        RoleAssignment assignment = roleAssignmentRepository.findByUserAndRole(user, role).stream()
-                .filter(assignmentCandidate -> assignmentCandidate.isEffectiveAt(now))
-                .findFirst()
-                .orElseThrow(() -> new RoleAssignmentNotFoundException(
-                        "No active assignment for user " + userId + " and role " + roleId));
+        boolean hasEffectiveAssignment = roleAssignmentRepository.findByUserAndRole(user, role).stream()
+                .anyMatch(assignmentCandidate -> assignmentCandidate.isEffectiveAt(now));
+        if (!hasEffectiveAssignment) {
+            throw new RoleAssignmentNotFoundException(
+                    "No active assignment for user " + userId + " and role " + roleId);
+        }
 
-        assignment.revoke(now, Instant.now(clock));
-        assignment.setLastModifiedBy(getCurrentUsername());
-        assignment.setLastModifiedAt(Instant.now(clock));
-
-        roleAssignmentRepository.save(assignment);
+        userRoleGrantService.revoke(user, role, getCurrentUsername());
 
         emitAuditEvent(new AuditLogEventRequest(
                 "RoleRevokedFromUser", getCurrentUsername(), userId.toString(), "User", role.getName(), "", null));
@@ -448,11 +447,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     }
 
     private String getCurrentUsername() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.isAuthenticated()) {
-            return authentication.getName();
-        }
-        return "system";
+        return CurrentActor.resolve();
     }
 
     private List<RoleAssignment> getAssignmentEntitiesForUser(UUID userId, boolean includeHistory) {
@@ -464,7 +459,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
             return roleAssignmentRepository.findAllByUser_Id(userId);
         }
 
-        return roleAssignmentRepository.findEffectiveAssignmentsByUser(user, LocalDateTime.now(clock));
+        return effectiveGrantResolver.resolve(user).assignments();
     }
 
     private RoleDto toRoleDto(Role role) {
@@ -502,8 +497,8 @@ public class RoleManagementServiceImpl implements RoleManagementService {
      * Maps an assignment to its wire shape, including the role's stable code.
      *
      * <p>{@code roleCode} reads through the lazy {@code role} association, so every path reaching
-     * here must already have it loaded: both listing queries
-     * ({@code findAllByUser_Id}, {@code findEffectiveAssignmentsByUser}) declare
+     * here must already have it loaded: both listing sources ({@code findAllByUser_Id}, and
+     * {@code findEffectiveAssignmentsByUser} reached through {@code EffectiveGrantResolver}) declare
      * {@code @EntityGraph(attributePaths = {"user", "role"})}, and {@code createRoleAssignment}
      * sets a role it fetched itself. Reading {@code getRole().getId()} alone would have been
      * satisfied by an uninitialized proxy; reading the name is not, which is why the fetch plan

@@ -11,12 +11,10 @@ import com.positivity.securityservice.BaseContractIntegrationTest;
 import com.positivity.securityservice.PosSecurityServiceApplication;
 import com.positivity.securityservice.internal.entity.AuditLogEvent;
 import com.positivity.securityservice.internal.entity.Permission;
-import com.positivity.securityservice.internal.entity.PrincipalRole;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.AuditLogEventRepository;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
-import com.positivity.securityservice.internal.repository.PrincipalRoleRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -24,6 +22,7 @@ import com.positivity.securityservice.internal.service.TokenRevocationManager;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,8 +40,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * <ul>
  * <li>AC1 – HTTP 403 on insufficient authority triggers a
  * {@code PermissionDenied} audit event.</li>
- * <li>AC2 – Principal with the required permission receives an {@code allow}
- * authorization decision.</li>
+ * <li>AC2 – A user granted the required permission through a role resolves an
+ * {@code allow} person-decision.</li>
  * <li>AC3 – Successful role assignment persists a {@code RoleAssignedToUser}
  * audit event.</li>
  * <li>AC4 – Successful role revocation persists a {@code RoleRevokedFromUser}
@@ -87,9 +86,6 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
     private AuditLogEventRepository auditLogEventRepository;
 
     @Autowired
-    private PrincipalRoleRepository principalRoleRepository;
-
-    @Autowired
     private PermissionRepository permissionRepository;
 
     /** Test-owned role, re-created per test. */
@@ -106,9 +102,8 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
      * Cleanup order prevents FK constraint violations:
      * <ol>
      * <li>{@code role_assignments} → references user + role</li>
-     * <li>{@code principal_roles} → references role</li>
      * <li>{@code audit_log_events} → standalone</li>
-     * <li>{@code users} → cascade-clears {@code user_roles} join table</li>
+     * <li>{@code users} → the only remaining reference is {@code role_assignments}, already cleared above</li>
      * <li>{@code roles} → cascade-clears {@code role_permissions} join table</li>
      * <li>{@code permissions} → now FK-free</li>
      * </ol>
@@ -116,7 +111,6 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
     @BeforeEach
     void seedTestData() {
         roleAssignmentRepository.deleteAll();
-        principalRoleRepository.deleteAll();
         auditLogEventRepository.deleteAll();
         userRepository.deleteAll();
         roleRepository.deleteAll();
@@ -176,33 +170,40 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
     // ── AC2 ──────────────────────────────────────────────────────────────────
 
     /**
-     * AC2 (GREEN): A principal whose role carries the {@code order:refund:approve}
-     * permission receives an {@code allow} authorization decision.
+     * AC2 (GREEN): A user holding a role that carries the {@code order:refund:approve}
+     * permission resolves an {@code allow} person-decision.
      *
      * <p>
-     * This test exercises the existing {@code AuthorizationServiceImpl} and is
-     * expected to pass once the role–permission–principal chain is seeded.
+     * This test exercises the existing {@code AuthorizationServiceImpl.authorizePerson} and is
+     * expected to pass once the role–permission–user chain is seeded (ADR-0061 amendment
+     * 2026-09-09, #1914 phase 4: the string-keyed principal matrix this test used to exercise
+     * is retired; the equivalent off-session decision now resolves through the user's linked
+     * personId).
      */
     @Test
-    @DisplayName("AC2: principal with APPROVE_REFUND permission via Manager role gets 'allow' authorization decision")
-    void ac2_managerWithApproveRefundPermission_authorizationDecisionIsAllow() throws Exception {
+    @DisplayName("AC2: user with APPROVE_REFUND permission via Manager role gets 'allow' person-decision")
+    void ac2_managerWithApproveRefundPermission_personDecisionIsAllow() throws Exception {
         // Given: order:refund:approve permission exists and is linked to testRole
         Permission approveRefund = buildPermission("order:refund:approve", "order", "refund", "approve");
         testRole.getPermissions().add(approveRefund);
         testRole = roleRepository.save(testRole);
 
-        // Assign testRole (acting as Manager) to a string-keyed principal
-        String managerPrincipal = "manager-principal-" + System.currentTimeMillis();
-        PrincipalRole principalRole = new PrincipalRole();
-        principalRole.setPrincipalId(managerPrincipal);
-        principalRole.setRole(testRole);
-        principalRoleRepository.save(principalRole);
+        // subjectUser stands in for the off-session manager, identified by personId
+        UUID personId = UUIDv7Generator.generate();
+        subjectUser.setPersonId(personId);
+        subjectUser = userRepository.saveAndFlush(subjectUser);
 
-        // When: Admin queries the authorization decision for the manager principal
+        // Assign testRole (acting as Manager) to the user
+        mockMvc.perform(withAuth(
+                        put("/v1/users/{userId}/roles/{roleId}", subjectUser.getId(), testRole.getId()),
+                        ROLE_ASSIGN_AUTH))
+                .andExpect(status().isCreated());
+
+        // When: Admin queries the person-decision for the manager's personId
         // Then: decision must be allow
         mockMvc.perform(withAuth(
-                        get("/v1/users/authorization/decision")
-                                .param("principalId", managerPrincipal)
+                        get("/v1/users/authorization/person-decision")
+                                .param("personId", personId.toString())
                                 .param("permission", "order:refund:approve"),
                         AUTHZ_DECISION_AUTH))
                 .andExpect(status().isOk())
@@ -212,27 +213,29 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
     // ── AC2b ─────────────────────────────────────────────────────────────────
 
     /**
-     * AC2b (GREEN): A principal with NO role assignments receives a {@code deny}
-     * authorization decision for {@code order:refund:approve}.
+     * AC2b (GREEN): A user with NO role assignments receives a {@code deny}
+     * person-decision for {@code order:refund:approve}.
      *
      * <p>
-     * This is the deny-path complement to AC2. The principal string used here
-     * has never been assigned any role, so the authorization service must return
+     * This is the deny-path complement to AC2. The user's personId used here
+     * has never had any role assigned, so the authorization service must return
      * {@code deny} per the default-deny policy.
      *
      * Issue: #2
      */
     @Test
-    @DisplayName("AC2b: principal without permission gets 'deny' authorization decision")
-    void ac2b_principalWithoutPermission_authorizationDecisionIsDeny() throws Exception {
-        // Given: a principal that has no role assignments at all
-        String unprivilegedPrincipal = "no-role-principal-" + System.currentTimeMillis();
+    @DisplayName("AC2b: user without permission gets 'deny' person-decision")
+    void ac2b_userWithoutPermission_personDecisionIsDeny() throws Exception {
+        // Given: a user linked to a person but with no role assignments at all
+        UUID personId = UUIDv7Generator.generate();
+        subjectUser.setPersonId(personId);
+        userRepository.saveAndFlush(subjectUser);
 
-        // When: Admin queries the authorization decision for the unprivileged principal
+        // When: Admin queries the person-decision for the unprivileged user's personId
         // Then: decision must be deny (default-deny policy)
         mockMvc.perform(withAuth(
-                        get("/v1/users/authorization/decision")
-                                .param("principalId", unprivilegedPrincipal)
+                        get("/v1/users/authorization/person-decision")
+                                .param("personId", personId.toString())
                                 .param("permission", "order:refund:approve"),
                         AUTHZ_DECISION_AUTH))
                 .andExpect(status().isOk())

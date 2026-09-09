@@ -49,9 +49,10 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * The location-scope claims (ADR-0061 §2, #1868) and the effective-dating clamp on {@code exp}
- * (ADR-0061 §4, #1873). Same harness as {@link JwtServiceImplTest}, except the clock is mutable so
- * a refresh can be issued later than the original token.
+ * The location-scope claims (ADR-0061 §2, #1868), the location-reach effective-dating clamp on
+ * {@code exp} (ADR-0061 §4, #1873), and the role-assignment effective-dating clamp on {@code exp}
+ * (ADR-0061 §4 amendment, 2026-09-09, #1914 phase 3). Same harness as {@link JwtServiceImplTest},
+ * except the clock is mutable so a refresh can be issued later than the original token.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("JwtServiceImpl — location scope claims and exp clamp")
@@ -451,6 +452,113 @@ class JwtServiceImplLocationScopeTest {
 
         assertThat(claims(refreshed.accessToken()).getExpiration().toInstant())
                 .isEqualTo(Instant.parse("2026-09-08T00:00:00Z"));
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // role-assignment exp clamp (ADR-0061 §4 amendment, 2026-09-09, #1914 phase 3)
+    // ---------------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("a bounded role assignment clamps exp to its end")
+    void exp_clampedToGrantsExpireAt() {
+        Instant bound = T0.plusSeconds(120);
+
+        JwtService.TokenPair pair = sut.generateTokenPair("alice", USER_ID, null, Set.of("TECHNICIAN"), bound);
+
+        assertThat(claims(pair.accessToken()).getExpiration().toInstant()).isEqualTo(bound);
+        // The refresh token keeps its own, unclamped lifetime.
+        assertThat(claims(pair.refreshToken()).getExpiration().toInstant()).isEqualTo(T0.plusSeconds(604800L));
+    }
+
+    @Test
+    @DisplayName("an open-ended role assignment (grantsExpireAt null) leaves exp at the natural 3600s lifetime")
+    void exp_notClampedWhenGrantsExpireAtNull() {
+        JwtService.TokenPair pair = sut.generateTokenPair("alice", USER_ID, null, Set.of("TECHNICIAN"), null);
+
+        assertThat(claims(pair.accessToken()).getExpiration().toInstant())
+                .isEqualTo(T0.plusSeconds(ACCESS_TTL_SECONDS));
+    }
+
+    @Test
+    @DisplayName("a role assignment ending after the token's natural lifetime does not shorten it")
+    void exp_notClampedWhenGrantsExpireAtOutlivesToken() {
+        Instant farBound = T0.plusSeconds(ACCESS_TTL_SECONDS * 10);
+
+        JwtService.TokenPair pair = sut.generateTokenPair("alice", USER_ID, null, Set.of("TECHNICIAN"), farBound);
+
+        assertThat(claims(pair.accessToken()).getExpiration().toInstant())
+                .isEqualTo(T0.plusSeconds(ACCESS_TTL_SECONDS));
+    }
+
+    @Test
+    @DisplayName("both clamps present: the earlier of the location-reach bound and grantsExpireAt wins")
+    void exp_bothClampsPresent_earlierWins() {
+        grants(grant("TECHNICIAN", LocationScope.LOCATION, LocationHierarchy.OTHER, JE_VIEW));
+        nodes(NODE_A);
+        // Location-reach clamps to end of today (600s out); the assignment bound is closer still.
+        when(projection.earliestEffectiveTo(PERSON_ID, TODAY)).thenReturn(Optional.of(TODAY));
+        Instant grantsBound = T0.plusSeconds(120);
+
+        JwtService.TokenPair pair =
+                sut.generateTokenPair("alice", USER_ID, PERSON_ID, Set.of("TECHNICIAN"), grantsBound);
+
+        assertThat(claims(pair.accessToken()).getExpiration().toInstant())
+                .isEqualTo(grantsBound)
+                .isBefore(Instant.parse("2026-09-08T00:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("both clamps present, location-reach earlier: it wins over a later grantsExpireAt")
+    void exp_bothClampsPresent_locationReachEarlierWins() {
+        grants(grant("TECHNICIAN", LocationScope.LOCATION, LocationHierarchy.OTHER, JE_VIEW));
+        nodes(NODE_A);
+        when(projection.earliestEffectiveTo(PERSON_ID, TODAY)).thenReturn(Optional.of(TODAY));
+        Instant endOfToday = Instant.parse("2026-09-08T00:00:00Z");
+        Instant laterGrantsBound = T0.plusSeconds(ACCESS_TTL_SECONDS * 10);
+
+        JwtService.TokenPair pair =
+                sut.generateTokenPair("alice", USER_ID, PERSON_ID, Set.of("TECHNICIAN"), laterGrantsBound);
+
+        assertThat(claims(pair.accessToken()).getExpiration().toInstant()).isEqualTo(endOfToday);
+    }
+
+    @Test
+    @DisplayName("the internal token-pair path (4-arg overload) is unaffected: no grantsExpireAt clamp applies")
+    void internalTokenPairPath_fourArgOverload_noClampApplied() {
+        JwtService.TokenPair pair = sut.generateTokenPair("svc.reporting", USER_ID, null, Set.of("TECHNICIAN"));
+
+        assertThat(claims(pair.accessToken()).getExpiration().toInstant())
+                .isEqualTo(T0.plusSeconds(ACCESS_TTL_SECONDS));
+    }
+
+    @Test
+    @DisplayName("a refresh resolves grantsExpireAt from UserService and reapplies the clamp")
+    void refresh_appliesGrantsExpireAtClamp() {
+        JwtService.TokenPair original = sut.generateTokenPair("alice", USER_ID, null, Set.of("TECHNICIAN"), null);
+        assertThat(claims(original.accessToken()).getExpiration().toInstant())
+                .isEqualTo(T0.plusSeconds(ACCESS_TTL_SECONDS));
+
+        Instant t1 = T0.plusSeconds(60);
+        clock.set(t1);
+        Instant bound = t1.plusSeconds(90);
+        when(userService.getGrantsExpireAt(USER_ID)).thenReturn(Optional.of(bound));
+
+        JwtToken stored = new JwtToken();
+        stored.setToken(original.accessToken());
+        stored.setRefreshToken(original.refreshToken());
+        stored.setIssuedAt(T0);
+        stored.setExpiresAt(T0.plusSeconds(ACCESS_TTL_SECONDS));
+        stored.setRefreshExpiresAt(T0.plusSeconds(604800L));
+        stored.setSubject("alice");
+        when(tokenRevocationManager.isRevoked(anyString())).thenReturn(false);
+        doReturn(Optional.of(stored))
+                .doReturn(Optional.of(stored))
+                .when(jwtTokenRepository)
+                .findByRefreshToken(original.refreshToken());
+
+        JwtService.TokenPair refreshed = sut.refreshAccessToken(original.refreshToken());
+
+        assertThat(claims(refreshed.accessToken()).getExpiration().toInstant()).isEqualTo(bound);
     }
 
     // ---------------------------------------------------------------------------------------

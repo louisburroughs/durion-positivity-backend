@@ -394,7 +394,7 @@ The POS Security Service provides Role-Based Access Control (RBAC) for all micro
 A caller's authorities are resolved from the database along one chain, and only this chain:
 
 ```
-users -> user_roles -> roles -> role_permissions -> permissions
+users -> role_assignments -> roles -> role_permissions -> permissions
 ```
 
 `RoleAuthorityService` reads it at login, `JwtService` encodes the result into the `perm_bits`
@@ -402,13 +402,12 @@ claim, and the gateway decodes `perm_bits` into `X-Authorities` for downstream `
 checks. There is no hardcoded role-to-authority map: a role grants exactly what
 `role_permissions` holds, and a role with no grants yields no permissions at all.
 
-Do not confuse the three tables:
+Do not confuse the two tables:
 
 | Table | Meaning |
 | --- | --- |
 | `role_permissions` | **role → permission** grants — what a role can do |
-| `user_roles` | **user → role**, unscoped — feeds token issuance |
-| `role_assignments` | **user → role**, effective-dated (`effective_start_date`, `effective_end_date`, `revoked_at`) — feeds `getUserPermissions`; carries no location scope (that is `roles.location_scope` plus the pos-people staffing assignment, ADR-0061 §1) and does **not** narrow a JWT |
+| `role_assignments` | **user → role**, effective-dated (`effective_start_date`, `effective_end_date`, `revoked_at`) — the only store of a user's roles (ADR-0061 amendment, 2026-09-09, #1914 phase 2; the undated `user_roles` join table it used to sit alongside was migrated and dropped); feeds every decision point through `EffectiveGrantResolver`. Carries no location scope (that is `roles.location_scope` plus the pos-people staffing assignment, ADR-0061 §1) and does **not** narrow a JWT |
 
 ### Provisioning Role Grants
 
