@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 /**
  * Redis configuration for JWT token revocation caching.
@@ -37,7 +38,18 @@ public class RedisConfig {
 
     /**
      * Redis template for JWT revocation management.
-     * Uses String serialization for both keys and values.
+     *
+     * <p>Keys are serialized as plain UTF-8 strings. This is deliberate and load-bearing, not
+     * cosmetic: {@code RedisTemplate}'s default key serializer is
+     * {@code JdkSerializationRedisSerializer}, which writes {@code jwt:revoked:{jti}} as a Java
+     * object stream. Under that default the key space is readable only by this template — the
+     * {@code jwt:revoked:*} SCAN in {@code TokenRevocationManager.clearAllRevoked()} matches
+     * nothing, and no other process can consult a revocation. The API gateway now checks the same
+     * key space on every request (#1883), so the encoding is a cross-process contract.
+     *
+     * <p>Values keep the default serializer: only key <em>presence</em> carries meaning, and the
+     * only reader of the value is {@code TokenRevocationManager.isRevoked}, which uses this same
+     * template. The gateway issues {@code EXISTS} and never deserializes a value.
      *
      * @param connectionFactory Redis connection factory
      * @return configured RedisTemplate<String, Boolean>
@@ -46,6 +58,8 @@ public class RedisConfig {
     public RedisTemplate<String, Boolean> jwtRevocationRedisTemplate(RedisConnectionFactory connectionFactory) {
         RedisTemplate<String, Boolean> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
+        template.setKeySerializer(new StringRedisSerializer());
+        template.setHashKeySerializer(new StringRedisSerializer());
         template.afterPropertiesSet();
         return template;
     }

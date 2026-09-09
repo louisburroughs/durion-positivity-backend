@@ -60,6 +60,18 @@
       "defaultValue": "HS256"
     },
     {
+      "name": "pos.gateway.security.revocation-check.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Consult the shared jwt:revoked:{jti} key space before forwarding an authenticated request. When false, a revoked token passes the gateway until its exp.",
+      "defaultValue": true
+    },
+    {
+      "name": "pos.gateway.security.revocation-check.timeout",
+      "type": "java.time.Duration",
+      "description": "Ceiling on one revocation lookup. On timeout the request is forwarded unchecked (fail-open) and auth.token.revocation.degraded is incremented.",
+      "defaultValue": "150ms"
+    },
+    {
       "name": "gateway.host",
       "type": "java.lang.String",
       "description": "Public host URL used in generated OpenAPI server metadata.",

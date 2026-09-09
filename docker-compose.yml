@@ -218,6 +218,28 @@ services:
     networks:
       - pos-network
 
+  redis:
+    # JWT revocation store. pos-security-service writes jwt:revoked:{jti} with a TTL matching the
+    # token's own expiry; pos-api-gateway reads the same keys on every authenticated request
+    # (#1883). Both fail open if this container is unavailable, so the stack still comes up — but
+    # without it a revoked token keeps passing the gateway until exp, which is the gap #1883
+    # closed. Not persisted: every key is short-lived and self-expiring, so an empty store after a
+    # restart is correct.
+    image: redis:7-alpine
+    container_name: redis-positivity
+    command: [ "redis-server", "--save", "", "--appendonly", "no" ]
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli ping | grep -q PONG" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    logging: *logging
+    networks:
+      - pos-network
+
   kafka:
     # ADR-0044: Kafka is the domain-event backbone. Single-node KRaft broker for local dev.
     # Event-flow health (#1458): the MANAGEMENT_HEALTH_KAFKA_ENABLED vars that used to
@@ -1238,8 +1260,14 @@ services:
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
       POS_SECURITY_API_SECRET: ${POS_SECURITY_API_SECRET}
       SECURITY_SEED_ADMIN_PASSWORD_HASH: ${SECURITY_SEED_ADMIN_PASSWORD_HASH}
-      SECURITY_REDIS_ENABLED: "false"
+      # #1883: revocation is a security control now that ADR-0061 location scope rides in the
+      # token, so the stack runs a real Redis and this is on. The health indicator stays off:
+      # revocation fails open by decision (#1874), and a Redis outage must not mark the service
+      # unhealthy — auth.token.revocation.* and the WARN carry the degraded state instead.
+      SECURITY_REDIS_ENABLED: "true"
       MANAGEMENT_HEALTH_REDIS_ENABLED: "false"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
@@ -1248,6 +1276,8 @@ services:
       MANAGEMENT_SERVER_PORT: 8080
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       eureka-server:
         condition: service_healthy
@@ -1625,11 +1655,17 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
+      # #1883: the revocation check reads the same keys pos-security-service writes. Fails open if
+      # Redis is unreachable, so this is a correctness dependency, not an availability one.
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
     depends_on:
       eureka-server:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]

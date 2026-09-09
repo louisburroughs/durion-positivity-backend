@@ -193,11 +193,22 @@ is incremented by the number of JTIs that missed Redis, a WARN names the person 
 and the event completes normally. Fail-closed was rejected because it would refuse every token
 platform-wide for the length of a Redis outage, while the `exp` clamp above already bounds the
 stale window to the end of the assignment's effective date — fail-open costs at most that
-window. Residual risk to know: on this module's bearer path `validateToken` also checks the
-`jwt_token` row, so a DB-marked revocation holds even with Redis down; but the API gateway
-verifies signature, issuer, audience and expiry only and consults neither store, so a revoked
-token keeps passing the gateway until `exp` — Redis up or down. Closing that is a gateway
-change, not a security-service one.
+window.
+
+The API gateway now consults the same Redis keys on every authenticated request (#1883) and takes
+the same fail-open position, so revocation reaches the boundary rather than stopping at this
+module. Two consequences worth holding onto:
+
+- **The key encoding is a cross-process contract.** `jwt:revoked:{jti}` is written with a
+  `StringRedisSerializer`, not `RedisTemplate`'s default JDK object serialization. Under the
+  default the keys were readable only by the one template that wrote them — the `jwt:revoked:*`
+  SCAN in `clearAllRevoked` matched nothing, and the gateway would miss every revocation.
+  `GatewayTokenRevocationIT` fails if the two sides stop agreeing.
+- **Redis down is now a wider fail-open.** On this module's bearer path `validateToken` also
+  checks the `jwt_token` row, so a DB-marked revocation still holds with Redis down. The gateway
+  has no such second source — by design, it does not read this module's schema — so during a Redis
+  outage a revoked token passes the gateway until `exp`. That is the accepted cost of fail-open,
+  bounded by the `exp` clamp above and visible on `auth.token.revocation.degraded`.
 
 ### Assistant baseline
 
@@ -311,9 +322,10 @@ Two rules constrain what those bodies may contain and where they can come from (
     locked, expired or whose credentials have expired) or `validateToken` simply refused it
     (expired, revoked, logged out, absent
     from the token store). Clearing rather than returning is what stops a refused credential from
-    riding on gateway-header authorities: the gateway checks signature, issuer, audience and
-    expiry but **not revocation**, so a revoked or logged-out token still arrives here with
-    valid-looking `X-Perm-Bits`.
+    riding on gateway-header authorities. Since #1883 the gateway checks revocation too, so this
+    is no longer the only place a revoked token is caught — but it stays the backstop, because the
+    gateway's check fails open when Redis is unavailable and reads only Redis, while
+    `validateToken` also checks the `jwt_token` row.
   - `JwtAuthenticationFilter` **enforces account state** on every bearer token on the
     `/v1/auth/**` chain (the only chain that carries the filter) (#1803). No
     `AuthenticationProvider` runs on this path, so Spring's `AccountStatusUserDetailsChecker` —
