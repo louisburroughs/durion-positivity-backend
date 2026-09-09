@@ -1028,7 +1028,7 @@ class ContractBehaviorIT extends BaseContractIntegrationTest {
             RoleAssignment assignment = new RoleAssignment();
             assignment.setUser(saved);
             assignment.setRole(role);
-            assignment.setEffectiveStartDate(LocalDateTime.now());
+            assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK));
             assignment.setCreatedBy("contract-test");
             roleAssignmentRepository.saveAndFlush(assignment);
         }
