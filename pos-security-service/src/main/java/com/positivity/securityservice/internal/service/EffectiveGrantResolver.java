@@ -1,8 +1,10 @@
 package com.positivity.securityservice.internal.service;
 
 import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import java.time.Instant;
+import java.util.List;
 import java.util.Set;
 import org.jspecify.annotations.NonNull;
 
@@ -55,9 +57,25 @@ public interface EffectiveGrantResolver {
      * @param roles the effective {@link Role} entities, both directly assigned and effective-dated
      * @param roleNames the names of {@code roles}
      * @param permissionNames the union of {@code Role.getPermissions()} names across {@code roles}
+     * @param assignments the {@code role_assignments} rows effective at the resolved instant — the
+     *     same rows {@code roles} partly derives from, kept here so an assignment-listing caller
+     *     (e.g. {@code RoleManagementServiceImpl.getAssignmentEntitiesForUser}) can read the rows
+     *     themselves through this one query instead of re-querying
+     *     {@code findEffectiveAssignmentsByUser} directly (#1914 Part A)
      */
     record EffectiveGrants(
             @NonNull Set<Role> roles,
             @NonNull Set<String> roleNames,
-            @NonNull Set<String> permissionNames) {}
+            @NonNull Set<String> permissionNames,
+            @NonNull List<RoleAssignment> assignments) {
+
+        /**
+         * Convenience constructor for callers that do not need the raw assignment rows (most
+         * tests, and every call site predating #1914 Part A).
+         */
+        public EffectiveGrants(
+                @NonNull Set<Role> roles, @NonNull Set<String> roleNames, @NonNull Set<String> permissionNames) {
+            this(roles, roleNames, permissionNames, List.of());
+        }
+    }
 }

@@ -64,6 +64,7 @@ class EffectiveGrantResolverImplTest {
         assertThat(grants.roles()).containsExactlyInAnyOrder(directRole, assignedRole);
         assertThat(grants.roleNames()).containsExactlyInAnyOrder("DIRECT_ROLE", "ASSIGNED_ROLE");
         assertThat(grants.permissionNames()).containsExactlyInAnyOrder("catalog:item:view", "catalog:item:edit");
+        assertThat(grants.assignments()).containsExactly(assignment);
     }
 
     @Test
@@ -105,6 +106,7 @@ class EffectiveGrantResolverImplTest {
         assertThat(grants.roles()).containsExactly(directRole);
         assertThat(grants.roleNames()).containsExactly("DIRECT_ROLE");
         assertThat(grants.permissionNames()).containsExactly("catalog:item:view");
+        assertThat(grants.assignments()).isEmpty();
     }
 
     @Test
@@ -122,6 +124,27 @@ class EffectiveGrantResolverImplTest {
         assertThat(grants.roles()).isEmpty();
         assertThat(grants.roleNames()).isEmpty();
         assertThat(grants.permissionNames()).isEmpty();
+        assertThat(grants.assignments()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("assignments() carries the effective assignment rows themselves, for the listing caller")
+    void resolve_assignments_carriesTheEffectiveRows() {
+        Permission permission = permission("catalog:item:view");
+        Role role = role("ASSIGNED_ROLE", permission);
+
+        User user = new User();
+        user.setRoles(Set.of());
+
+        RoleAssignment assignment = new RoleAssignment();
+        assignment.setRole(role);
+        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(
+                        user, LocalDateTime.ofInstant(NOW, TEST_CLOCK.getZone())))
+                .thenReturn(List.of(assignment));
+
+        EffectiveGrants grants = sut.resolve(user, NOW);
+
+        assertThat(grants.assignments()).containsExactly(assignment);
     }
 
     @Test

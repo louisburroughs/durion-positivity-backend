@@ -655,8 +655,8 @@ class RoleManagementServiceTest {
         assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(roleAssignmentRepository.findCurrentAssignmentsByUser(eq(user), any()))
-                .thenReturn(List.of(assignment));
+        when(effectiveGrantResolver.resolve(user))
+                .thenReturn(new EffectiveGrants(Set.of(), Set.of(), Set.of(), List.of(assignment)));
 
         assertThat(sut.getAssignmentsForUser(USER_ID, false)).singleElement().satisfies(dto -> {
             assertThat(dto.getRoleId()).isEqualTo(ROLE_ID);

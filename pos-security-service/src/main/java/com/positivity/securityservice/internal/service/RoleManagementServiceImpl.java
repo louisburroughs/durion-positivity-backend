@@ -456,7 +456,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
             return roleAssignmentRepository.findAllByUser_Id(userId);
         }
 
-        return roleAssignmentRepository.findCurrentAssignmentsByUser(user, LocalDateTime.now(clock));
+        return effectiveGrantResolver.resolve(user).assignments();
     }
 
     private RoleDto toRoleDto(Role role) {

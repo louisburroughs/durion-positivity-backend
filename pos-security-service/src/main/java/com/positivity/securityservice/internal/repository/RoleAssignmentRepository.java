@@ -40,24 +40,16 @@ public interface RoleAssignmentRepository extends JpaRepository<RoleAssignment, 
      * {@code CustomUserDetailsService} (#1910). Binding the instant also puts the answer on the
      * service's injected {@link java.time.Clock}, so a test can place a fixture on the boundary
      * instead of a year away from it.
+     *
+     * <p>ArchUnit restricts this query to {@code EffectiveGrantResolverImpl} alone (#1914): every
+     * other caller, listing endpoints included, reads the same rows off
+     * {@code EffectiveGrantResolver.EffectiveGrants.assignments()} instead of re-querying here —
+     * a duplicated query method ({@code findCurrentAssignmentsByUser}, identical to this one) that
+     * existed only so listing had its own name to call was removed for exactly that reason (#1914
+     * Part A).
      */
     @EntityGraph(attributePaths = {"user", "role"})
     @Query("SELECT ra FROM RoleAssignment ra WHERE ra.user = :user " + "AND ra.effectiveStartDate <= :asOf "
             + "AND (ra.effectiveEndDate IS NULL OR ra.effectiveEndDate > :asOf)")
     List<RoleAssignment> findEffectiveAssignmentsByUser(@Param("user") User user, @Param("asOf") LocalDateTime asOf);
-
-    /**
-     * A user's assignment rows currently in effect at {@code asOf}, for the assignments-listing
-     * endpoints ({@code RoleManagementServiceImpl.getAssignmentsForUser} /
-     * {@code getEffectiveRoleAssignments}). Same half-open window as
-     * {@link #findEffectiveAssignmentsByUser}, and deliberately the same query body: that method
-     * now backs permission decisions exclusively (via {@code EffectiveGrantResolverImpl}), and
-     * ArchUnit restricts it to that one caller (#1914). This method exists so a listing endpoint —
-     * which shows the assignment rows themselves, not a decision — has its own name to call
-     * instead of reaching into the decision-only query.
-     */
-    @EntityGraph(attributePaths = {"user", "role"})
-    @Query("SELECT ra FROM RoleAssignment ra WHERE ra.user = :user " + "AND ra.effectiveStartDate <= :asOf "
-            + "AND (ra.effectiveEndDate IS NULL OR ra.effectiveEndDate > :asOf)")
-    List<RoleAssignment> findCurrentAssignmentsByUser(@Param("user") User user, @Param("asOf") LocalDateTime asOf);
 }

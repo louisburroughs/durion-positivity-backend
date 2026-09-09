@@ -38,11 +38,10 @@ public class EffectiveGrantResolverImpl implements EffectiveGrantResolver {
     public @NonNull EffectiveGrants resolve(@NonNull User user, @NonNull Instant asOf) {
         Set<Role> roles = new HashSet<>(user.getRoles());
 
-        List<RoleAssignment> effectiveAssignments = roleAssignmentRepository.findEffectiveAssignmentsByUser(
+        List<RoleAssignment> queried = roleAssignmentRepository.findEffectiveAssignmentsByUser(
                 user, LocalDateTime.ofInstant(asOf, clock.getZone()));
-        if (effectiveAssignments != null) {
-            effectiveAssignments.forEach(assignment -> roles.add(assignment.getRole()));
-        }
+        List<RoleAssignment> assignments = queried == null ? List.of() : queried;
+        assignments.forEach(assignment -> roles.add(assignment.getRole()));
 
         Set<String> roleNames = roles.stream().map(Role::getName).collect(Collectors.toSet());
         Set<String> permissionNames = roles.stream()
@@ -51,7 +50,7 @@ public class EffectiveGrantResolverImpl implements EffectiveGrantResolver {
                 .map(Permission::getName)
                 .collect(Collectors.toSet());
 
-        return new EffectiveGrants(roles, roleNames, permissionNames);
+        return new EffectiveGrants(roles, roleNames, permissionNames, assignments);
     }
 
     @Override
