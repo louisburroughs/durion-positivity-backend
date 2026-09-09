@@ -629,6 +629,67 @@ public class PartyController {
 ❌ Manually insert permissions into database
 ❌ Create permissions via admin UI
 
+### Adding a permission: one command (#1848)
+
+A permission needs four things to work end to end: an annotation, a bit in the catalog, a
+`permissions.yaml` entry, and a **grant**. The first three come from
+`scripts/generate-permissions.sh --sync`. The fourth used to be a hand edit of two more files,
+and forgetting it failed CI in two separate jobs after the fact — `audit-rbac.py --check`
+(`required_ungranted` / `required_no_bit` / `unreachable_op_count`) in PR Checks, and
+`RoleBaselineDriftTest` in the reactor build. `--sync` now writes the grant too:
+
+```bash
+# 1. annotate the endpoint
+@PreAuthorize("hasAuthority('catalog:tread_design:resolve')")
+
+# 2. one command: bit + catalogs + manifest + both grant sources
+scripts/generate-permissions.sh --sync --grant ADMIN
+
+# 3. verify locally exactly as CI will
+scripts/generate-permissions.sh --sync --check
+python3 scripts/audit-rbac.py --check
+./mvnw -pl pos-security-service -am -Dtest='RoleBaselineDriftTest,RolePermissionBaselineTest' test
+```
+
+What `--sync` writes, beyond the three catalogs:
+
+| File | What lands |
+| --- | --- |
+| `pos-security-service/.../db/migration/R__seed_role_permissions.sql` | the section-2 `permissions` row (name, domain, resource, action, freshly assigned bit); the section-3 role grant; the section-4 self-check entry |
+| `scripts/fixtures/seed/alpha/security/role-permissions.csv` | the permission added to the target role's `;`-separated list |
+
+Rules the command follows, and why:
+
+- **`--grant ROLE` is repeatable**; the default is `ADMIN`, the all-domain role, so a permission
+  granted nowhere else is still reachable by an administrator and widens nothing an operator role
+  can reach. A permission whose owning module's `permissions.yaml` entry carries a `grantTo:` list
+  uses that instead — a per-permission decision reviewed in the module that owns it beats a
+  run-wide flag.
+- **Only the roles Flyway still creates reach the SQL** (#1613 D8): `ADMIN`, `CONTROLLER`,
+  `DISPATCHER`, `SELF_SERVICE_CUSTOMER`, `SHOP_MANAGER`, `SYSTEM_ADMINISTRATOR`. A grant to any
+  other role is written to the baseline CSV alone — the seed's own section-4 guard raises on a
+  role it cannot resolve, and `RoleBaselineDriftTest` fails the build on one it can. The section-2
+  permission row is written either way, because `role_permissions` is foreign-keyed to
+  `permissions` and the CSV loader resolves its grants by name against the same table.
+- **`--grant SYSTEM_ADMINISTRATOR` is refused.** That role's seed block is duplicated in
+  `V31__revoke_system_administrator_out_of_band_grants.sql`, which this script does not edit;
+  widening it stays a deliberate hand edit of both files.
+- **A role with no row in the baseline CSV is refused**, rather than invented: the role set is
+  pinned by `RoleBaselineDriftTest`, so an unknown name is a typo, not a new role.
+- **Re-running changes nothing.** Existing rows are never reordered — the seed carries a few
+  historical deviations from a strict sort, and re-sorting to "fix" them would bury a one-line
+  change in a 500-line diff. Each new row is inserted at its sorted position instead.
+- **`--sync --check` fails** when a permission that has a bit and a `@PreAuthorize` is granted in
+  neither source. (A catalog code no annotation names is dead weight rather than a broken
+  endpoint; `audit-rbac.py`'s informational `catalog_dead` is where that is triaged.)
+
+**A catalog bump is a fleet-coordinated deploy.** Adding a bit increments `CATALOG_VERSION` in
+`PermissionCode`, `GatewayPermissionCatalog` and `DownstreamPermissionCatalog`. JWTs carry
+`perm_bits` plus `perm_ver`, and the downstream check on `perm_ver` is strict: a token minted
+against the old version is rejected once the gateway runs the new one. Ship pos-security-service,
+pos-api-gateway and every service embedding `pos-security-common` together, and expect issued
+tokens to need re-minting — do not roll one service forward on its own.
+
 ### Location-scope decisions (`location-scope.yaml`)
 
 `@PreAuthorize` answers "may this caller do X"; it does not answer "may they do it *here*". Under

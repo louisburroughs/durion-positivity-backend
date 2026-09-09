@@ -67,15 +67,56 @@ class GeneratePermissionsWrapperTest(unittest.TestCase):
         )
         self.assertFalse((self.root / "docs" / "permissions-report.yaml").exists())
 
+    def test_empty_grant_role_is_rejected_in_both_spellings(self) -> None:
+        # #1848 review: --grant= slipped an empty role past the wrapper, and Python then failed
+        # with "no row for role(s): " naming nothing. Both spellings must fail the same way, and
+        # neither may reach the generator — an empty role is a typo, not a request.
+        for argument in ("--grant=", "--grant"):
+            with self.subTest(argument=argument):
+                command = ["bash", str(self.scripts_dir / "generate-permissions.sh"), "--sync", argument]
+                if argument == "--grant":
+                    command.append("")
+                result = subprocess.run(command, cwd=self.root, capture_output=True, text=True, check=False)
+
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("--grant requires a role name", result.stderr)
+                self.assertFalse(self.log_path.exists(), "the generator must not run at all")
+
+    def test_grant_roles_are_passed_through_in_both_spellings(self) -> None:
+        result = subprocess.run(
+            [
+                "bash",
+                str(self.scripts_dir / "generate-permissions.sh"),
+                "--sync",
+                "--grant=ADMIN",
+                "--grant",
+                "SERVICE_ADVISOR",
+            ],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertEqual(
+            (self.root / "generator-args.txt").read_text(encoding="utf-8").split(),
+            ["--sync", "--grant", "ADMIN", "--grant", "SERVICE_ADVISOR"],
+        )
+
     def _write_fake_generator(self) -> None:
         script = textwrap.dedent(
             f"""\
             #!/usr/bin/env python3
             from pathlib import Path
 
+            import sys
+
             root = Path(__file__).resolve().parents[1]
             log_path = root / "execution.log"
             log_path.write_text("generate\\n", encoding="utf-8")
+            # argv[1] is the repo root the wrapper resolves; the rest are the flags it forwarded.
+            (root / "generator-args.txt").write_text(" ".join(sys.argv[2:]), encoding="utf-8")
 
             permissions_path = root / "pos-demo" / "src" / "main" / "resources" / "permissions.yaml"
             permissions_path.parent.mkdir(parents=True, exist_ok=True)
