@@ -53,10 +53,9 @@ class RoleBaselineDriftTest {
     private static final Set<String> BOOTSTRAP_FLOOR = Set.of("ADMIN", "SYSTEM_ADMINISTRATOR");
 
     /**
-     * Roles a fresh database still gets from Flyway despite the move, because they are created by
-     * <em>versioned</em> migrations that are already applied everywhere. Editing those would change
-     * their checksum and fail validation, so they stay — and the baseline file lists them too, which
-     * is harmless because provisioning is idempotent.
+     * Roles a fresh database still gets from Flyway despite the move: the flattened history carries
+     * them in the versioned seed ({@code V2__seed_security_service.sql}), and the baseline file lists
+     * them too, which is harmless because provisioning is idempotent.
      */
     private static final Set<String> VERSIONED_RESIDUE =
             Set.of("DISPATCHER", "SHOP_MANAGER", "SELF_SERVICE_CUSTOMER", "CONTROLLER");
@@ -88,15 +87,6 @@ class RoleBaselineDriftTest {
 
     private static final Path FIXTURES = Path.of("..", "scripts", "fixtures", "seed", "alpha", "security");
     private static final Path MIGRATIONS = Path.of("src", "main", "resources", "db", "migration");
-
-    /**
-     * The whole {@code INSERT INTO roles ... ;} statement, because the seeds use both single-row and
-     * multi-row VALUES lists — V3 inserts four roles in one statement, R__ one per statement.
-     * Role names are then picked out by {@link #QUOTED_NAME}: they are the only upper-case quoted
-     * tokens in these statements, descriptions being sentence case and actors lower case.
-     */
-    private static final Pattern ROLE_INSERT =
-            Pattern.compile("INSERT\\s+INTO\\s+roles\\b(.*?);", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 
     // Permission names may be camelCase (people:timeException:view), so the character class must
     // not be lower-case only — a narrower one silently drops those grants from the comparison and
@@ -246,25 +236,17 @@ class RoleBaselineDriftTest {
      *
      * <p>The {@code isNotEmpty} is load-bearing, not decoration: every caller compares set
      * membership, and a set-membership assertion over an empty set passes. These names come out of a
-     * regex over SQL whose formatting can legitimately change (a quoted identifier, a CTE), and this
+     * parse of SQL whose formatting can legitimately change (a quoted identifier, a CTE), and this
      * PR already shipped one guard that passed while comparing two identically-truncated sets. If the
      * extraction stops matching, this fails loudly instead of going green over nothing.
      */
     private static Set<String> seededRoleNames() throws IOException {
         Set<String> names = new LinkedHashSet<>();
-        try (var files = Files.list(MIGRATIONS)) {
-            for (Path file : files.filter(p -> p.toString().endsWith(".sql")).toList()) {
-                Matcher statement = ROLE_INSERT.matcher(Files.readString(file, StandardCharsets.UTF_8));
-                while (statement.find()) {
-                    Matcher name = QUOTED_NAME.matcher(statement.group(1));
-                    while (name.find()) {
-                        names.add(name.group(1));
-                    }
-                }
-            }
+        for (Map<String, String> row : RoleSeedSql.rows(MIGRATIONS)) {
+            names.add(row.get("name"));
         }
-        // V23 drops candidate roles that were never ratified; a name only ever inserted by a
-        // migration that a later one deletes is not part of the baseline.
+        // A name only ever inserted by a script that a later statement deletes is not part of the
+        // baseline (none today; the flattened history carries only ratified roles).
         names.removeAll(droppedRoleNames());
         assertThat(names)
                 .as("no roles parsed out of %s — the extraction is broken", MIGRATIONS)

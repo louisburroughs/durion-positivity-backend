@@ -1,3 +1,6 @@
+-- Tenant binding for the seed rows below (ADR-0062); transaction-local.
+SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
+
 -- Repeatable seed migration for pos-shop-manager mechanic and mechanic_skill tables.
 -- Sourced from TECHNICIAN-role employees in pos-people / pos-security-service.
 -- 7 active technicians across CLT-MAIN-001, CLT-SOUTH-001, CLT-NORTH-001.
@@ -54,7 +57,7 @@ VALUES
      '01960011-0000-7000-8000-00000000000b',
      'James', 'Okafor', 'ACTIVE', 1, CURRENT_DATE, NOW(), NOW(), NOW())
 
-ON CONFLICT (person_id) DO UPDATE
+ON CONFLICT (tenant_id, person_id) DO UPDATE
     SET first_name     = EXCLUDED.first_name,
         last_name      = EXCLUDED.last_name,
         status         = EXCLUDED.status,
@@ -76,7 +79,7 @@ ON CONFLICT (person_id) DO UPDATE
 --   T6-ELECTRICAL     – Electrical/Electronic Systems (heavy truck)
 --   T7-HVAC           – Heating, Ventilation & Air Conditioning
 --   T8-PMI            – Preventive Maintenance Inspection
--- Idempotency: deterministic id, ON CONFLICT (id) DO UPDATE
+-- Idempotency: deterministic id, ON CONFLICT (tenant_id, id) DO UPDATE
 -- ============================================================
 INSERT INTO mechanic_skill (
     id, mechanic_id, skill_code, proficiency_level, certified_date, created_at, updated_at
@@ -142,7 +145,7 @@ VALUES
     (md5('mechanic_skill:01960040-0000-7000-8000-00000000000b:T8-PMI')::uuid,
      '01960040-0000-7000-8000-00000000000b'::uuid, 'T8-PMI',             5, CURRENT_DATE, NOW(), NOW())
 
-ON CONFLICT (id) DO UPDATE
+ON CONFLICT (tenant_id, id) DO UPDATE
     SET proficiency_level = EXCLUDED.proficiency_level,
         certified_date    = EXCLUDED.certified_date,
         updated_at        = NOW();

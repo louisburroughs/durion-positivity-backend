@@ -1,0 +1,13 @@
+# pos-vehicle-fitment: tables with no tenant_id and no row-level-security policy (ADR-0062 section 5).
+# Format: <table>  # <reason>. Every other table in this module is tenant-scoped.
+# TenancySchemaConformanceIT (plan WS1) reads this file.
+fitment_tags  # fitment reference data (ADR-0062 section 5)
+make  # fitment reference data (ADR-0062 section 5)
+manufacturer  # fitment reference data (ADR-0062 section 5)
+model  # fitment reference data (ADR-0062 section 5)
+part_fitment_entity  # fitment reference data (ADR-0062 section 5)
+part_fitment_entity_vehicle_variable_values  # fitment reference data (ADR-0062 section 5)
+vehicle_applicability_hints  # fitment reference data (ADR-0062 section 5)
+vehicle_type  # fitment reference data (ADR-0062 section 5)
+vehicle_variable  # fitment reference data (ADR-0062 section 5)
+vehicle_variable_value  # fitment reference data (ADR-0062 section 5)

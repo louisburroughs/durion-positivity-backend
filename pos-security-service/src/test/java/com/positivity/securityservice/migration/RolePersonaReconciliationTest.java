@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -28,36 +27,24 @@ import org.junit.jupiter.api.Test;
  * option — adding a role to SQL now forces a decision about what the assistant does with it, and
  * that decision is what this test checks was made.
  *
- * <p>It reads the migrations rather than a live schema deliberately: the guard has to run on every
- * build, not only where a database is available, because the failure it prevents is one that costs
- * nothing to introduce.
+ * <p>It reads the seed scripts and the baseline file rather than a live schema deliberately: the
+ * guard has to run on every build, not only where a database is available, because the failure it
+ * prevents is one that costs nothing to introduce.
  */
 @DisplayName("Role persona reconciliation (#1613 P4)")
 class RolePersonaReconciliationTest {
 
     private static final Path MIGRATIONS = Path.of("src", "main", "resources", "db", "migration");
-    private static final Path PERSONA_BACKFILL = MIGRATIONS.resolve("V35__backfill_role_persona_metadata.sql");
 
     /** The bulk-load baseline — canonical for every role outside the bootstrap floor (#1613 D8). */
     private static final Path BASELINE_ROLES =
             Path.of("..", "scripts", "fixtures", "seed", "alpha", "security", "roles.csv");
 
-    private static final Pattern ROLE_INSERT =
-            Pattern.compile("INSERT\\s+INTO\\s+roles\\b(.*?);", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-    private static final Pattern ROLE_DELETE = Pattern.compile(
-            "DELETE\\s+FROM\\s+roles\\s+WHERE\\s+name\\s+IN\\s*\\(([^)]*)\\)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern QUOTED_NAME = Pattern.compile("'([A-Z_]+)'");
-
-    /** A persona-setting UPDATE: one role named per statement. */
-    private static final Pattern PERSONA_UPDATE = Pattern.compile(
-            "UPDATE\\s+roles\\s+SET\\s+persona_title.*?WHERE\\s+name\\s*=\\s*'([A-Z_]+)'",
-            Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-
-    /** The eligibility UPDATE: several roles named in one IN list. */
-    private static final Pattern INELIGIBLE_UPDATE = Pattern.compile(
-            "UPDATE\\s+roles\\s+SET\\s+mcp_persona_eligible\\s*=\\s*FALSE\\s*WHERE\\s+name\\s+IN\\s*\\(([^)]*)\\)",
-            Pattern.CASE_INSENSITIVE);
-
+    /**
+     * Since the flattened history (2026-09-09) the persona decisions live on the seed rows
+     * themselves — {@code persona_title} set, or {@code mcp_persona_eligible = false} — rather than
+     * in the retired V35 backfill; {@link RoleSeedSql} reads them by column.
+     */
     @Test
     @DisplayName("every provisioned role either gets a persona or is explicitly excluded from resolution")
     void everySeededRoleIsAccountedFor() throws IOException {
@@ -68,7 +55,7 @@ class RolePersonaReconciliationTest {
         provisioned.addAll(baselineRoleNames());
 
         // Vacuity guard: every assertion below is trivially true on an empty set, and these sets come
-        // out of regexes over files whose formatting can change. Assert the extraction found something
+        // out of parsing files whose formatting can change. Assert the extraction found something
         // before trusting what it says.
         assertThat(provisioned)
                 .as("no roles parsed out of the migrations or the baseline file")
@@ -171,22 +158,35 @@ class RolePersonaReconciliationTest {
         return rows;
     }
 
+    /** Roles given a persona: a {@code persona_title} on the seed row, or a curated slot in the baseline file. */
     private static Set<String> personaBackfilledRoles() throws IOException {
         Set<String> names = new LinkedHashSet<>();
-        Matcher matcher = PERSONA_UPDATE.matcher(Files.readString(PERSONA_BACKFILL, StandardCharsets.UTF_8));
-        while (matcher.find()) {
-            names.add(matcher.group(1));
+        for (Map<String, String> row : RoleSeedSql.rows(MIGRATIONS)) {
+            String title = row.get("persona_title");
+            if (title != null && !title.isBlank()) {
+                names.add(row.get("name"));
+            }
+        }
+        for (String[] row : baselineRows()) {
+            boolean hasSlot = row.length > 4 && !(row[2].isBlank() && row[3].isBlank() && row[4].isBlank());
+            if (hasSlot) {
+                names.add(row[0]);
+            }
         }
         return names;
     }
 
+    /** Roles explicitly excluded from persona resolution, on the seed row or in the baseline file. */
     private static Set<String> ineligibleRoles() throws IOException {
         Set<String> names = new LinkedHashSet<>();
-        Matcher statement = INELIGIBLE_UPDATE.matcher(Files.readString(PERSONA_BACKFILL, StandardCharsets.UTF_8));
-        while (statement.find()) {
-            Matcher name = QUOTED_NAME.matcher(statement.group(1));
-            while (name.find()) {
-                names.add(name.group(1));
+        for (Map<String, String> row : RoleSeedSql.rows(MIGRATIONS)) {
+            if ("false".equalsIgnoreCase(row.get("mcp_persona_eligible"))) {
+                names.add(row.get("name"));
+            }
+        }
+        for (String[] row : baselineRows()) {
+            if (row.length > 6 && "false".equalsIgnoreCase(row[6].trim())) {
+                names.add(row[0]);
             }
         }
         return names;
@@ -194,16 +194,8 @@ class RolePersonaReconciliationTest {
 
     private static Set<String> seededRoleNames() throws IOException {
         Set<String> names = new LinkedHashSet<>();
-        try (var files = Files.list(MIGRATIONS)) {
-            for (Path file : files.filter(p -> p.toString().endsWith(".sql")).toList()) {
-                Matcher statement = ROLE_INSERT.matcher(Files.readString(file, StandardCharsets.UTF_8));
-                while (statement.find()) {
-                    Matcher name = QUOTED_NAME.matcher(statement.group(1));
-                    while (name.find()) {
-                        names.add(name.group(1));
-                    }
-                }
-            }
+        for (Map<String, String> row : RoleSeedSql.rows(MIGRATIONS)) {
+            names.add(row.get("name"));
         }
         names.removeAll(droppedRoleNames());
         return names;

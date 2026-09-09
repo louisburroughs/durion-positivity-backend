@@ -1,3 +1,6 @@
+-- Tenant binding for the seed rows below (ADR-0062); transaction-local.
+SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
+
 -- =============================================================
 -- R__seed_reference_catalog_7_labor_time_source_policy.sql
 -- Tier 1 — source precedence for the Tier 0 sources (#1575 Tier 0)
@@ -43,4 +46,4 @@ VALUES
     (md5('ltsp:MANUFACTURER_INSTALL:MICHELIN:TIRE_SERVICE')::uuid, 'MANUFACTURER_INSTALL', 'MICHELIN', 'TIRE_SERVICE',  10, true, NOW(), NOW()),
     (md5('ltsp:MANUFACTURER_INSTALL:MICHELIN:')::uuid,             'MANUFACTURER_INSTALL', 'MICHELIN', NULL,           300, true, NOW(), NOW()),
     (md5('ltsp:DURION_STANDARD:DURION:TIRE_SERVICE')::uuid,        'DURION_STANDARD',      'DURION',   'TIRE_SERVICE',  50, true, NOW(), NOW())
-ON CONFLICT (time_type, source_code, operation_category) DO NOTHING;
+ON CONFLICT (tenant_id, time_type, source_code, operation_category) DO NOTHING;

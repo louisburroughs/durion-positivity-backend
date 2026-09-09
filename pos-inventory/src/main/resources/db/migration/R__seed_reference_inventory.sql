@@ -1,3 +1,6 @@
+-- Tenant binding for the seed rows below (ADR-0062); transaction-local.
+SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
+
 -- Repeatable seed migration for inventory reference data.
 -- Notes:
 -- - Includes only pos-inventory-owned, environment-invariant configuration (tier 1,
@@ -25,4 +28,4 @@ INSERT INTO approval_threshold_config (
     updated_at
 )
 VALUES ('36458d57-6d89-5f33-ab7b-cca72774fd21'::uuid, 'TIER_1_MANAGER', 0, 100, 0, TRUE, NOW(), NOW())
-ON CONFLICT (config_id) DO NOTHING;
+ON CONFLICT (tenant_id, config_id) DO NOTHING;

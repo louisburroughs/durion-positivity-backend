@@ -1,3 +1,6 @@
+-- Tenant binding for the seed rows below (ADR-0062); transaction-local.
+SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
+
 -- Repeatable seed migration for people-contact reference/bootstrap data.
 -- Identity only: employment (employee, location assignments) lives in pos-people.
 SET TIME ZONE 'UTC';
@@ -9,7 +12,7 @@ VALUES (
     'System', 'Administrator',
     NOW(), NOW()
 )
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (tenant_id, id) DO NOTHING;
 
 -- Email lives in person_contact_point (EMAIL); username is resolved via user_person_links.
 INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
@@ -31,4 +34,4 @@ VALUES (
     NOW(),
     'seed-generator'
 )
-ON CONFLICT (username) DO NOTHING;
+ON CONFLICT (tenant_id, username) DO NOTHING;

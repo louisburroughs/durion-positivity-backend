@@ -1,5 +1,13 @@
 # Flyway Baseline Reset Runbook
 
+> **Done on 2026-09-09 for every persisting module.** The whole migration history was flattened
+> in one pass (`V1__baseline_<module>.sql` per module, generated from a `pg_dump` of the migrated
+> schema rather than from Hibernate, with the ADR-0062 tenancy schema folded in). The procedure,
+> the verification and the conventions the baselines now follow are in
+> [`docs/TENANCY_SCHEMA.md`](../TENANCY_SCHEMA.md) and `scripts/db/tenancy/README.md`. The old
+> chain was deleted, not archived; it is in git history before that date. The steps below remain
+> the general method for a future reset.
+
 ## Purpose
 
 Use this runbook when a service database is disposable and the current Flyway
@@ -61,7 +69,7 @@ Record:
 - custom Flyway config or H2 split migration paths
 
 For `pos-accounting`, see
-[pos-accounting/docs/flyway-baseline-reset-plan.md](/home/louis-burroughs/IdeaProjects/durion-positivity-backend/pos-accounting/docs/flyway-baseline-reset-plan.md).
+[pos-accounting/docs/flyway-baseline-reset-plan.md](../../pos-accounting/docs/flyway-baseline-reset-plan.md).
 
 ### 2. Create Scratch Database
 
@@ -117,7 +125,7 @@ Do not use the raw dump as-is. Fold back in:
 Write the new baseline as:
 
 ```text
-src/main/resources/db/migration/V1__baseline_<module>_schema.sql
+src/main/resources/db/migration/V1__baseline_<module>.sql
 ```
 
 ### 5. Keep or Rewrite Repeatables

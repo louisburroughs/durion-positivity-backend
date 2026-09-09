@@ -19,7 +19,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Proves the Story A1 (issue #935) DB-level balance backstop added in
- * {@code V8__je_balance_constraint.sql} against a real Postgres.
+ * the baseline (formerly {@code V8__je_balance_constraint.sql}) against a real Postgres.
  *
  * <p>The default test suite runs on H2 with Flyway disabled, so the PL/pgSQL
  * constraint triggers are never exercised there. This IT runs the full Flyway
@@ -162,9 +162,16 @@ class JournalEntryBalanceTriggerIT {
     // helpers
     // ---------------------------------------------------------------------
 
+    /** The alpha default tenant; every scoped table defaults tenant_id from this binding (ADR-0062). */
+    private static final String TENANT_ID = "01900000-0000-7000-8000-000000000001";
+
     private static Connection open() throws SQLException {
         Connection c =
                 DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+        try (PreparedStatement ps = c.prepareStatement("SELECT set_config('app.current_tenant', ?, false)")) {
+            ps.setString(1, TENANT_ID);
+            ps.execute();
+        }
         c.setAutoCommit(false);
         return c;
     }

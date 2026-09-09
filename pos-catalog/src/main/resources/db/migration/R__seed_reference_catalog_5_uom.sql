@@ -1,3 +1,6 @@
+-- Tenant binding for the seed rows below (ADR-0062); transaction-local.
+SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
+
 -- =============================================================
 -- R__seed_reference_catalog_5_uom.sql
 -- product_uom seed — per-product divisibility and purchase units
@@ -25,7 +28,7 @@ SET TIME ZONE 'UTC';
 INSERT INTO product_uom (id, product_id, uom_code, uom_type, factor_to_base, precision_scale, created_at, updated_at)
 SELECT md5('uom_seed:PARK-387TC-4-FT:FT')::uuid, p.id, 'FT', 'BASE', 1::numeric, 2, NOW(), NOW()
 FROM product p WHERE p.sku = 'PARK-387TC-4-FT'
-ON CONFLICT (product_id, uom_code) DO UPDATE SET
+ON CONFLICT (tenant_id, product_id, uom_code) DO UPDATE SET
     uom_type = EXCLUDED.uom_type,
     factor_to_base = EXCLUDED.factor_to_base,
     precision_scale = EXCLUDED.precision_scale,
@@ -34,7 +37,7 @@ ON CONFLICT (product_id, uom_code) DO UPDATE SET
 INSERT INTO product_uom (id, product_id, uom_code, uom_type, factor_to_base, precision_scale, created_at, updated_at)
 SELECT md5('uom_seed:PARK-387TC-4-FT:ROLL')::uuid, p.id, 'ROLL', 'PURCHASE', 50::numeric, 0, NOW(), NOW()
 FROM product p WHERE p.sku = 'PARK-387TC-4-FT'
-ON CONFLICT (product_id, uom_code) DO UPDATE SET
+ON CONFLICT (tenant_id, product_id, uom_code) DO UPDATE SET
     uom_type = EXCLUDED.uom_type,
     factor_to_base = EXCLUDED.factor_to_base,
     precision_scale = EXCLUDED.precision_scale,

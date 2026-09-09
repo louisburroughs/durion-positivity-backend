@@ -1,0 +1,5 @@
+# pos-event-receiver: tables with no tenant_id and no row-level-security policy (ADR-0062 section 5).
+# Format: <table>  # <reason>. Every other table in this module is tenant-scoped.
+# TenancySchemaConformanceIT (plan WS1) reads this file.
+event_type  # platform event-type registry, registered by every service at startup
+preregistered_event  # platform event-type registry, registered by every service at startup

@@ -20,8 +20,6 @@ spring:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: validate
-  flyway:
-    out-of-order: ${SPRING_FLYWAY_OUT_OF_ORDER:false}
 
 server:
   port: 0

@@ -30,13 +30,14 @@
 - The permission alternates a `LocationScope` / `LocationScopeService` / `LocationScopeGuard` call
   passes must be ones the endpoint reaching it requires — a scope check against a permission the
   caller need not hold does nothing (#1890, gated as `location_scope_alternates`).
-- Tenancy (ADR-0062). **Actionable now:** no new `organizationId` fields (they are a remnant); nothing reads a
-  tenant from a request body, query parameter, or client header; new schema is written retrofit-ready with
-  `tenant_id UUID NOT NULL` and `(tenant_id, ...)` unique constraints from the start. **Once `pos-tenancy-common`
-  lands (plan WS1; none of these types exist yet):** a new table is tenant-scoped (`tenant_id`, RLS enabled and
-  forced, `tenant_isolation` policy) unless listed in the module's `tenancy-global-tables.txt` with a reason; a new
-  entity extends `TenantScopedEntity` or carries `@TenantGlobal`; a new `@Scheduled` job is per-tenant or
-  `@PlatformScoped`; native SQL and `JdbcTemplate` on scoped data carry `@TenantAudited`.
+- Tenancy (ADR-0062). **Schema, actionable now:** a new table goes into the module's `V1__baseline_<module>.sql`
+  with `tenant_id` first, RLS enabled and forced, the `tenant_isolation` policy, unique constraints and
+  scoped-to-scoped foreign keys leading with `tenant_id`, unless it is listed in `db/tenancy-global-tables.txt` with
+  a reason (`docs/TENANCY_SCHEMA.md`); `INSERT ... ON CONFLICT (cols)` on a scoped table names `(tenant_id, cols)`;
+  nothing reads a tenant from a request body, query parameter, or client header; no new `organizationId` fields.
+  **Once `pos-tenancy-common` lands (plan WS1; none of these types exist yet):** a new entity extends
+  `TenantScopedEntity` or carries `@TenantGlobal`; a new `@Scheduled` job is per-tenant or `@PlatformScoped`; native
+  SQL and `JdbcTemplate` on scoped data carry `@TenantAudited`.
 - Keep ArchUnit rules green.
 
 ## Where to Look

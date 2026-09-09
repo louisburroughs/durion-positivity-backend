@@ -1,0 +1,5 @@
+# pos-vehicle-reference-carapi: tables with no tenant_id and no row-level-security policy (ADR-0062 section 5).
+# Format: <table>  # <reason>. Every other table in this module is tenant-scoped.
+# TenancySchemaConformanceIT (plan WS1) reads this file.
+car_api_make  # vehicle reference data (ADR-0062 section 5)
+car_api_model  # vehicle reference data (ADR-0062 section 5)

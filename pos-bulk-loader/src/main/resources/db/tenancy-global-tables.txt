@@ -1,0 +1,9 @@
+# pos-bulk-loader: tables with no tenant_id and no row-level-security policy (ADR-0062 section 5).
+# Format: <table>  # <reason>. Every other table in this module is tenant-scoped.
+# TenancySchemaConformanceIT (plan WS1) reads this file.
+batch_job_execution  # Spring Batch metadata
+batch_job_execution_context  # Spring Batch metadata
+batch_job_execution_params  # Spring Batch metadata
+batch_job_instance  # Spring Batch metadata
+batch_step_execution  # Spring Batch metadata
+batch_step_execution_context  # Spring Batch metadata

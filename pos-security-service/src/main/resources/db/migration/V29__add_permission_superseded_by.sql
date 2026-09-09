@@ -1,2 +1,0 @@
-ALTER TABLE permissions
-ADD COLUMN IF NOT EXISTS superseded_by VARCHAR(255);

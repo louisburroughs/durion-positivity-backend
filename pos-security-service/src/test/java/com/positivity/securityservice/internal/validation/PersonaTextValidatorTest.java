@@ -58,14 +58,14 @@ class PersonaTextValidatorTest {
         }
 
         /**
-         * Every persona authored in {@code V35__backfill_role_persona_metadata.sql}. A slot that the
-         * migration writes but the API would reject is a contradiction that only shows up when
+         * Every persona the seed scripts author (formerly the V35 backfill, now the role rows of
+         * {@code V2__seed_security_service.sql}). A slot that the seed writes but the API would reject is a contradiction that only shows up when
          * somebody later edits that role through the endpoint.
          */
         @ParameterizedTest(name = "[{index}] {0}")
         @MethodSource(
                 "com.positivity.securityservice.internal.validation.PersonaTextValidatorTest#backfilledPersonaSlots")
-        @DisplayName("every persona slot shipped in the V35 backfill passes validation")
+        @DisplayName("every persona slot shipped in the role seed passes validation")
         void backfilledPersonasAreValid(String slot) {
             assertThat(validateFocus(slot)).isEmpty();
         }
@@ -146,7 +146,7 @@ class PersonaTextValidatorTest {
         }
     }
 
-    /** The exact strings written by {@code V35__backfill_role_persona_metadata.sql}. */
+    /** The exact strings the role seed writes (authored in the retired V35 backfill). */
     static Stream<Arguments> backfilledPersonaSlots() {
         return Stream.of(
                         "system administrator",

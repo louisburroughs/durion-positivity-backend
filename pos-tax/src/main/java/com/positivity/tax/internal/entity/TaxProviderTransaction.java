@@ -9,6 +9,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -36,7 +37,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @AllArgsConstructor
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "tax_provider_transaction")
+@Table(
+        name = "tax_provider_transaction",
+        // Mirrors the baseline's idempotency key so the H2 tests (schema from the entities) keep the
+        // ON CONFLICT DO NOTHING semantics; on Postgres the key is (tenant_id, reference_id).
+        uniqueConstraints =
+                @UniqueConstraint(name = "ux_tax_provider_transaction_reference", columnNames = "reference_id"))
 public class TaxProviderTransaction {
 
     /** UUID v7 primary key (ADR-0013). */

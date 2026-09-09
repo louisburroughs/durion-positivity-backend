@@ -1,3 +1,6 @@
+-- Tenant binding for the seed rows below (ADR-0062); transaction-local.
+SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
+
 -- Repeatable seed migration for pos-customer operational data.
 -- Populates 50 PersonParty (individual customers), 20 CommercialParty (fleet operators),
 -- 20 primary Contact rows (one per commercial party), and 20 billing Contact rows
@@ -235,7 +238,7 @@ VALUES
      'CUST-PP-050', '8411 Albemarle Rd, Charlotte, NC 28227',
      0, 0, false, 'EMAIL', NOW(), NOW())
 
-ON CONFLICT (customer_id) DO NOTHING;
+ON CONFLICT (tenant_id, customer_id) DO NOTHING;
 
 -- =========================================================================
 -- SECTION 2: COMMERCIAL PARTY — 20 NC fleet operators (Charlotte metro)
@@ -401,7 +404,7 @@ VALUES
      '1801 Cross Beam Dr, Charlotte, NC 28217',
      NOW(), NOW())
 
-ON CONFLICT (customer_id) DO NOTHING;
+ON CONFLICT (tenant_id, customer_id) DO NOTHING;
 
 -- Sections 3 & 4 (INSERT INTO contact) removed — contact table dropped in V6.
 -- Contacts are seeded via party_relationship in sections 5-8 below.
@@ -480,7 +483,7 @@ VALUES
     ('01960025-0000-7000-8000-000000000014'::uuid, '01960025-0000-7000-8000-000000000014'::uuid,
      'CUST-CPC-020', NULL, 0, 0, false, 'EMAIL', NOW(), NOW())
 
-ON CONFLICT (customer_id) DO NOTHING;
+ON CONFLICT (tenant_id, customer_id) DO NOTHING;
 
 -- SECTION 6 removed (issue #684, 2c.3): contact_point table dropped (V10).
 -- Contacts are sourced solely from pos-people (ADR-0015 I2); no local copy.
@@ -517,7 +520,7 @@ VALUES
     ('01960029-0000-7000-8000-000000000013'::uuid, '01960021-0000-7000-8000-000000000013'::uuid, '01960025-0000-7000-8000-000000000013'::uuid, false, '2020-01-01', NULL, NOW(), NOW()),
     ('01960029-0000-7000-8000-000000000014'::uuid, '01960021-0000-7000-8000-000000000014'::uuid, '01960025-0000-7000-8000-000000000014'::uuid, false, '2020-01-01', NULL, NOW(), NOW())
 
-ON CONFLICT (party_relationship_id) DO NOTHING;
+ON CONFLICT (tenant_id, party_relationship_id) DO NOTHING;
 
 -- =========================================================================
 -- SECTION 8: PARTY_RELATIONSHIP_ROLE — 20 rows, PRIMARY_CONTACT per rel
@@ -1245,4 +1248,4 @@ FROM (VALUES
 ) AS v (vehicle_id, vin, make, model, vehicle_year, color, last_event_at)
 JOIN customer_vehicle cv ON cv.vin = v.vin
 ORDER BY v.vehicle_id, cv.customer_id
-ON CONFLICT (vehicle_id) DO NOTHING;
+ON CONFLICT (tenant_id, vehicle_id) DO NOTHING;

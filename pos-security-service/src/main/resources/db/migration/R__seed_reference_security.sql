@@ -1,3 +1,6 @@
+-- Tenant binding for the seed rows below (ADR-0062); transaction-local.
+SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
+
 -- Repeatable seed migration for security reference/bootstrap data.
 -- Source: durion/scripts/seed-generator/generated-seed-sql/001_security.sql
 -- Notes:
@@ -42,7 +45,7 @@ VALUES ('7a276629-86e5-ee4a-1ee7-0f598b322aea'::uuid, 'ADMIN', 'ADMIN seeded rol
         'access administration, governance, and operational controls',
         'secure, explicit, and attentive to approval, audit, and blast-radius',
         20)
-ON CONFLICT (name) DO NOTHING;
+ON CONFLICT (tenant_id, name) DO NOTHING;
 -- GENERAL_MANAGER, INVENTORY_CONTROLLER, INVENTORY_LEAD, INVENTORY_MANAGER and MANAGER
 -- were created at startup by pos-security-service's RoleInitializer (generated ids)
 -- until #1440 moved baseline role creation into SQL; LOCATION_MANAGER below predates
@@ -56,7 +59,7 @@ VALUES ('e9b3e6ba-af10-08ff-0376-1f2fa60d5093'::uuid, 'SYSTEM_ADMINISTRATOR', 'C
         'platform configuration, service operations, and change safety',
         'secure, precise, and change-aware',
         10)
-ON CONFLICT (name) DO NOTHING;
+ON CONFLICT (tenant_id, name) DO NOTHING;
 
 -- Users
 -- person_id mirrors the authoritative pos-people user_person_links row (ADR-0043);
@@ -64,7 +67,7 @@ ON CONFLICT (name) DO NOTHING;
 -- User without a Person (ADR-0015 §3; durion-positivity-backend#714).
 INSERT INTO users (id, username, password, enabled, person_id)
 VALUES ('d981cd20-55a1-b43c-9332-0ef2cd630e1a'::uuid, 'admin.alpha', '${seed_admin_password_hash}', TRUE, '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid)
-ON CONFLICT (username) DO UPDATE SET password = EXCLUDED.password, enabled = EXCLUDED.enabled, person_id = EXCLUDED.person_id;
+ON CONFLICT (tenant_id, username) DO UPDATE SET password = EXCLUDED.password, enabled = EXCLUDED.enabled, person_id = EXCLUDED.person_id;
 
 -- Permissions (derived from permissions.yaml)
 INSERT INTO permissions (id, name, description, domain, resource, action, registered_at, registered_by_service, version, bit_index)
@@ -800,7 +803,7 @@ ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, bit_index =
 -- Role assignments
 INSERT INTO role_assignments (id, user_id, role_id, effective_start_date, created_at, created_by)
 VALUES ('4f0e5eea-bf75-2da2-0f8a-de2c522d237e'::uuid, 'd981cd20-55a1-b43c-9332-0ef2cd630e1a'::uuid, '7a276629-86e5-ee4a-1ee7-0f598b322aea'::uuid, CURRENT_DATE, NOW(), 'seed-generator')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (tenant_id, id) DO NOTHING;
 
 -- Role/permission mapping
 -- Intentionally minimal by default; populate security.role_permission_overrides for strict curation.

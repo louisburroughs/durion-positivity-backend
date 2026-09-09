@@ -1,3 +1,6 @@
+-- Tenant binding for the seed rows below (ADR-0062); transaction-local.
+SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
+
 -- Repeatable seed migration for invoice reference data.
 -- Source: durion/scripts/seed-generator/generated-seed-sql/006_invoice.sql
 SET TIME ZONE 'UTC';
@@ -28,7 +31,7 @@ VALUES (
     NOW(),
     'seed-generator'
 )
-ON CONFLICT (party_id) DO UPDATE SET
+ON CONFLICT (tenant_id, party_id) DO UPDATE SET
     purchase_order_required = EXCLUDED.purchase_order_required,
     payment_terms_code = EXCLUDED.payment_terms_code,
     invoice_delivery_method = EXCLUDED.invoice_delivery_method,

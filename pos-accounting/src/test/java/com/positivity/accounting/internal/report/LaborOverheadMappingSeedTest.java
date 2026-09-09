@@ -13,19 +13,24 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Guards the issue #731 acceptance criterion that <b>every</b> canonical CAP-316 leaf line carries
- * an authoritative GL-account mapping: parses the V25 seed migration and cross-checks its
- * LABOR_OVERHEAD line codes against {@link LaborOverheadTaxonomy#leafCodes()}. Contract ITs run on
- * H2 without Flyway, so the seed content is verified statically here.
+ * an authoritative GL-account mapping: parses the seed migration (the flattened successor of the
+ * V25 seed) and cross-checks its LABOR_OVERHEAD line codes against
+ * {@link LaborOverheadTaxonomy#leafCodes()}. Contract ITs run on H2 without Flyway, so the seed
+ * content is verified statically here.
  */
 class LaborOverheadMappingSeedTest {
 
-    private static final String MIGRATION =
-            "/db/migration/V25__labor_overhead_full_mapping_and_location_enrichment.sql";
+    private static final String MIGRATION = "/db/migration/V2__seed_accounting.sql";
 
-    private static final Pattern MAPPING_ROW = Pattern.compile("'LABOR_OVERHEAD',\\s*'([^']+)'");
+    /**
+     * A statement_line_mappings seed row, column order {@code (..., operation, statement_type,
+     * parent_line_code, statement_line_code, ...)}: the line code is the second literal after
+     * the statement type; the parent between them is NULL on top-level lines.
+     */
+    private static final Pattern MAPPING_ROW = Pattern.compile("'LABOR_OVERHEAD',\\s*(?:NULL|'[^']*'),\\s*'([^']+)'");
 
     @Test
-    void v25SeedsAGlobalMappingForEveryCanonicalLeafLine() throws IOException {
+    void seedProvidesAGlobalMappingForEveryCanonicalLeafLine() throws IOException {
         String sql = readMigration();
 
         Set<String> seededCodes = new LinkedHashSet<>();

@@ -3,6 +3,11 @@
 # entirely, so it cannot catch seed drift, Postgres-only syntax, or a role-permission grant
 # that silently fails to resolve. The datasource is supplied at runtime by @ServiceConnection.
 spring:
+  datasource:
+    hikari:
+      # Transitional tenant binding (ADR-0062): every scoped table defaults tenant_id from this
+      # session setting and hides rows without it. Replaced by TenantAwareDataSource in plan WS1.
+      connection-init-sql: "SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', false)"
   application:
     name: pos-security-pg-test
   autoconfigure:

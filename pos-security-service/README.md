@@ -98,7 +98,7 @@ grants and differ only here.
 | `location_scope` | `ALL` (default) \| `LOCATION` | `ALL`: the grants apply everywhere — today's behaviour. `LOCATION`: the grants apply only at the location nodes pos-people assigns the holder to (`ext_people_staffing_assignment`, below) and every descendant of those nodes. |
 | `location_hierarchy` | `FINANCIAL` \| `OTHER` (default) | Which pos-location parent dimension a `LOCATION` role is evaluated along at check time. `FINANCIAL` is the accounting rollup; `OTHER` is the union of the seven non-financial parent types. |
 
-Seeded values (`V37__add_role_location_scope.sql`, pinned by `RoleLocationScopeSeedTest`):
+Seeded values (`R__seed_role_location_scope.sql`, formerly V37, pinned by `RoleLocationScopeSeedTest`):
 
 | Role | `location_scope` | `location_hierarchy` |
 | --- | --- | --- |
@@ -291,7 +291,7 @@ Two tables are easy to confuse:
 `role_assignments` is the only store of a user's roles (ADR-0061 amendment, 2026-09-09, #1914
 phase 2): the undated `user_roles` join table it used to sit alongside — unioned by
 `EffectiveGrantResolver` in phase 1 — was migrated into open-ended assignments and dropped
-(`V40__migrate_user_roles_to_role_assignments.sql`). Every provisioning path (user creation,
+(by the retired V40 migration; the flattened baseline never creates `user_roles`). Every provisioning path (user creation,
 `assignUserRole`, self-registration, the People access page) now writes an assignment; every
 decision point — token issuance (`CustomUserDetailsService`, `UserService`),
 `AuthorizationService.authorizePerson`, and `RoleManagementService.userHasPermission` /

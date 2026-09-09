@@ -26,9 +26,9 @@ import org.jspecify.annotations.NonNull;
  * user_roles} grants). The same user could therefore pass one decision point and fail another
  * for the same permission. Every decision point now resolves through this one type instead.
  *
- * <p>Phase 2 (#1914) retired the store split: {@code user_roles} is dropped ({@code
- * V40__migrate_user_roles_to_role_assignments.sql} migrated every row into an open-ended {@code
- * role_assignments} row first) and {@code User.getRoles()} no longer exists, so this resolver's
+ * <p>Phase 2 (#1914) retired the store split: {@code user_roles} is dropped (the retired V40
+ * migration moved every row into an open-ended {@code role_assignments} row first; the flattened
+ * baseline never creates the table) and {@code User.getRoles()} no longer exists, so this resolver's
  * "union" is now just the effective-dated {@code role_assignments} rows for the user. It stays a
  * named type — rather than callers reading {@code RoleAssignmentRepository} directly — because it
  * is still the one place that turns a raw query result into roles / role names / permission
