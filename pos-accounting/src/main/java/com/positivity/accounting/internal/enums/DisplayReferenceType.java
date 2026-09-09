@@ -22,14 +22,6 @@ public enum DisplayReferenceType {
     CUSTOMER(false),
 
     /**
-     * Organization scope key. Recognized so the contract covers it, but always unresolved today:
-     * ADR-0023 retired multi-tenancy and no organization directory exists on the platform, so
-     * there is nothing to name it from. The day one exists, only the resolver changes — not the
-     * wire contract.
-     */
-    ORGANIZATION(false),
-
-    /**
      * Location dimension value, resolved from {@code accounting_location_profile}. Accounting's
      * location dimension is code-keyed ({@code LOC-107}, {@code LOC_USA}) rather than UUID-backed,
      * so this type is matched by code — case-insensitively against

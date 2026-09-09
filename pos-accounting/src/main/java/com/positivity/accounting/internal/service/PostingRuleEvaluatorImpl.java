@@ -200,9 +200,6 @@ public class PostingRuleEvaluatorImpl implements PostingRuleEvaluator {
      */
     @Nullable
     private static PostingResult validateEvent(AccountingEvent event) {
-        if (event.getOrganizationId() == null) {
-            return PostingResult.failure(PostingFailureReason.VALIDATION_ERROR, "Event missing organizationId");
-        }
         if (event.getTransactionDate() == null) {
             return PostingResult.failure(PostingFailureReason.VALIDATION_ERROR, "Event missing transactionDate");
         }

@@ -439,17 +439,10 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     @Override
     @Transactional(readOnly = true)
     public Page<AccountingEventResponse> listEvents(@NonNull AccountingEventFilter filter, @NonNull Pageable pageable) {
-        log.debug(
-                "Listing events with filter [organizationId={}, status={}, eventType={}]",
-                filter.getOrganizationId(),
-                filter.getStatus(),
-                filter.getEventType());
+        log.debug("Listing events with filter [status={}, eventType={}]", filter.getStatus(), filter.getEventType());
 
         Specification<AccountingEvent> specs = (root, query, cb) -> cb.conjunction();
 
-        if (filter.getOrganizationId() != null) {
-            specs = specs.and((root, query, cb) -> cb.equal(root.get(ORGANIZATION_ID), filter.getOrganizationId()));
-        }
         if (filter.getEventType() != null) {
             specs = specs.and((root, query, cb) -> cb.equal(root.get(EVENT_TYPE), filter.getEventType()));
         }
@@ -500,7 +493,8 @@ public class EventIngestionServiceImpl implements EventIngestionService {
                         .jsonPath("$." + ORGANIZATION_ID)
                         .type(UUID_TYPE)
                         .required(false)
-                        .description("Organization context for multi-tenant routing")
+                        .description("Deprecated and ignored: vestigial multi-tenancy scope key, resolved "
+                                + "and displayed by nothing. Omit it.")
                         .build(),
                 ContractField.builder()
                         .name(SOURCE_SYSTEM)
@@ -615,9 +609,6 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     public List<String> validateEvent(Map<String, Object> event) {
         List<String> errors = new java.util.ArrayList<>();
 
-        if (event.get(ORGANIZATION_ID) == null) {
-            errors.add("organizationId is required");
-        }
         if (event.get(EVENT_TYPE) == null) {
             errors.add("eventType is required");
         }

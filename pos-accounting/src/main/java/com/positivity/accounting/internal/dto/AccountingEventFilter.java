@@ -19,13 +19,6 @@ import org.jspecify.annotations.Nullable;
 @Schema(description = "Filter criteria for querying accounting events")
 public class AccountingEventFilter {
 
-    @Schema(
-            description = "Restrict to events for this organization",
-            example = "01960003-0000-7000-8000-000000000001",
-            requiredMode = NOT_REQUIRED)
-    @Nullable
-    private UUID organizationId;
-
     @Schema(description = "Restrict to this event type", example = "INVOICE_RECEIVED", requiredMode = NOT_REQUIRED)
     @Nullable
     private String eventType;
