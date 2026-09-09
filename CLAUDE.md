@@ -68,10 +68,20 @@ External Clients
      ▼
 pos-api-gateway  (JWT validation, path rewrite /{domain}/vN/.., permission bitset → X-Authorities)
      │ lb://SERVICE_NAME (Eureka)
-     ├── pos-security-service (JWT issuer, RBAC source of truth)
+     ├── pos-security-service (JWT issuer, RBAC source of truth; consumes tenant.events.v1)
+     ├── pos-tenant (tenant registry + owning account; platform-tenant callers only; ADR-0062, planned)
      ├── domain services (pos-order, pos-customer, pos-inventory, pos-accounting, pos-catalog, ...)
      └── pos-event-receiver (event ingestion hub, shared-secret auth, not public)
 ```
+
+- **Multitenancy (ADR-0062, accepted 2026-09-09; implementation in progress).** Shared database and schema; every
+  tenant-scoped table carries `tenant_id` under Postgres row-level security, and every scoped entity extends
+  `TenantScopedEntity` (`@TenantId`) or is annotated `@TenantGlobal` with a justification. Tenant context comes only
+  from the JWT `tid` claim via the gateway's `X-Tenant-Id`; services connect as the non-owner `pos_app` role and
+  the owner credential is Flyway-only. Events carry `tenantId`; scheduled jobs are per-tenant (`TenantIterator`) or
+  `@PlatformScoped`. Roles are tenant-scoped rows from a platform template; the permission catalog stays global.
+  Never add an `organizationId` field: it is a remnant. Plan and per-module checklist:
+  `../durion/docs/architecture/plans/adr-0023-suppression-postgres-multitenancy-plan.md`.
 
 - **API Gateway is the security boundary.** It validates JWTs and decodes the permission bitset into
   `X-Authorities` / `X-User` / `X-User-Id` headers. Downstream services trust these headers and **must strip any
