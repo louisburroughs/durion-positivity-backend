@@ -37,6 +37,8 @@ paths:
 
         Emits a WARRANTY_CLAIM_SEARCH audit event; no claim state changes, this is a read-only projection.
 
+        A caller whose warranty:claim:view grant is location-scoped (ADR-0061) sees only claims at locations their assigned nodes cover: a supplied locationId outside that reach is 403 LOCATION_SCOPE_DENIED, and without one the page is narrowed rather than refused, so a caller who reaches no replicated location gets an empty page.
+
         Returns 200 with the page, which is empty rather than 404 when no claim matches.
 
         '
@@ -118,6 +120,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/PageClaimSummaryResponse'
           description: Claims returned.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN when the caller lacks warranty:claim:view; LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations that do not cover the supplied locationId (ADR-0061)
       security:
       - bearerAuth: []
       summary: Search claims
@@ -2212,6 +2220,54 @@ paths:
       - warranty:claim:settle
 components:
   schemas:
+    ApiError:
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+          type: string
+        correlationId:
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+          type: string
+        fieldErrors:
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
+          items:
+            $ref: '#/components/schemas/FieldError'
+          type: array
+        message:
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+          type: string
+        nextAction:
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+          type: string
+        referenceId:
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+          type: string
+        status:
+          description: HTTP status code
+          example: 404
+          format: int32
+          type: integer
+        supportAction:
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+          type: string
+        timestamp:
+          description: ISO 8601 UTC timestamp of the error
+          example: '2026-03-17T14:30:00.000Z'
+          type: string
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+      type: object
     CandidateLine:
       properties:
         description:
@@ -2737,6 +2793,21 @@ components:
           description: Registration id for registration-bound coverage
           format: uuid
           type: string
+      type: object
+    FieldError:
+      description: Validation error for a specific request field
+      properties:
+        field:
+          description: Field name
+          example: quantity
+          type: string
+        message:
+          description: Validation failure message
+          example: must be greater than 0
+          type: string
+      required:
+      - field
+      - message
       type: object
     LineDecision:
       description: Per-line approved amount and disposition

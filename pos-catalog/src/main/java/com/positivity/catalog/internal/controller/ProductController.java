@@ -29,6 +29,7 @@ import com.positivity.catalog.internal.service.ProductLifecycleService;
 import com.positivity.catalog.internal.service.ProductMasterDataService;
 import com.positivity.catalog.internal.service.ProductSearchService;
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -149,8 +150,10 @@ public class ProductController {
             margin check when present.
             Emits a CATALOG_LOCATION_OVERRIDE_CREATE event and invalidates the product-detail cache for that \
             location.
-            Returns 404 when the product does not exist, and 400 when no guardrail policy exists for the \
-            location, the discount exceeds maxDiscountPercent, or the margin falls below minMarginPercent; \
+            Returns 404 when the product does not exist, 400 when no guardrail policy exists for the \
+            location, the discount exceeds maxDiscountPercent, or the margin falls below minMarginPercent, \
+            and 403 with LOCATION_SCOPE_DENIED when the caller holds catalog:location_price_override:write \
+            but the token scopes it to locations that do not cover the request's locationId (ADR-0061); \
             callers must read the returned status to learn whether the override is ACTIVE or PENDING_APPROVAL.
             """)
     @ApiResponse(
@@ -161,7 +164,11 @@ public class ProductController {
                             mediaType = "application/json",
                             schema = @Schema(implementation = LocationPriceOverrideResponseDto.class)))
     @ApiResponse(responseCode = "400", description = "Guardrail validation failed")
-    @ApiResponse(responseCode = "403", description = "Forbidden")
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller lacks catalog:location_price_override:write;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations"
+                    + " that do not cover the request's locationId (ADR-0061); no override is created")
     @EmitEvent(id = "CATALOG_LOCATION_OVERRIDE_CREATE", apiVersion = "1")
     public ResponseEntity<LocationPriceOverrideResponseDto> createLocationPriceOverride(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -184,6 +191,12 @@ public class ProductController {
                     @Valid
                     @RequestBody
                     LocationPriceOverrideCreateRequestDto request) {
+        // ADR-0061 §3 (#1885): @PreAuthorize answered "may this caller write location price
+        // overrides"; this answers "...at this location". The body is validated by then, so
+        // locationId is non-null. Ancestor sets come from this module's own ext_location replica
+        // via LocationHierarchyService, the module's LocationAncestorResolver.
+        SecurityContextHelper.locationScope()
+                .require(CatalogPermissions.LOCATION_PRICE_OVERRIDE_WRITE, request.getLocationId());
         return ResponseEntity.status(HttpStatus.CREATED).body(locationPriceOverrideService.createOverride(request));
     }
 

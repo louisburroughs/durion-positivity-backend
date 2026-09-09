@@ -1,5 +1,6 @@
 package com.positivity.warranty.internal.service;
 
+import com.positivity.security.common.LocationScope.Reach;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.warranty.internal.domain.ClaimStateMachine;
 import com.positivity.warranty.internal.dto.ClaimActionRequest;
@@ -33,6 +34,7 @@ import com.positivity.warranty.internal.repository.PartReturnRepository;
 import com.positivity.warranty.internal.repository.VendorReimbursementRepository;
 import com.positivity.warranty.internal.repository.WarrantyClaimRepository;
 import com.positivity.warranty.internal.repository.WarrantyPolicyRepository;
+import com.positivity.warranty.internal.security.WarrantyPermissions;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -41,6 +43,7 @@ import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -96,6 +99,7 @@ public class ClaimServiceImpl implements ClaimService {
     private final EligibilityService eligibilityService;
     private final ExtVehicleReplicaRepository extVehicleReplicaRepository;
     private final ClaimSnapshotPublisher claimSnapshotPublisher;
+    private final LocationHierarchyService locationHierarchyService;
     private final Clock clock;
 
     // ------------------------------------------------------------------ intake
@@ -163,13 +167,26 @@ public class ClaimServiceImpl implements ClaimService {
             @Nullable String claimCode,
             @Nullable UUID locationId,
             @NonNull Pageable pageable) {
+        // ADR-0061 §3 (#1885): locationId is an optional filter, so this endpoint narrows rather
+        // than gates. A named location is checked against the caller's reach; without one, a
+        // location-scoped caller sees only the locations their assigned nodes cover. An empty
+        // reach is an empty page — never a 403, and never every location.
+        if (locationId != null) {
+            SecurityContextHelper.locationScope().require(WarrantyPermissions.CLAIM_VIEW, locationId);
+        }
+        Set<UUID> reach = locationId == null ? reachOrNull() : null;
+        if (reach != null && reach.isEmpty()) {
+            return Page.empty(pageable);
+        }
+
         if (claimCode != null && !claimCode.isBlank()) {
             List<ClaimSummaryResponse> match = claimRepository
                     .findByClaimCode(claimCode.trim())
                     .filter(c -> (customerId == null || customerId.equals(c.getCustomerId()))
                             && (vehicleId == null || vehicleId.equals(c.getVehicleId()))
                             && (status == null || status == c.getStatus())
-                            && (locationId == null || locationId.equals(c.getLocationId())))
+                            && (locationId == null || locationId.equals(c.getLocationId()))
+                            && (reach == null || reach.contains(c.getLocationId())))
                     .map(ClaimServiceImpl::toSummary)
                     .map(List::of)
                     .orElse(List.of());
@@ -177,9 +194,25 @@ public class ClaimServiceImpl implements ClaimService {
             // Claim codes are unique, so any page past the first is empty by definition.
             return new PageImpl<>(pageable.getOffset() == 0 ? match : List.of(), pageable, match.size());
         }
+        if (reach != null) {
+            return claimRepository
+                    .searchWithinLocations(customerId, vehicleId, status, reach, pageable)
+                    .map(ClaimServiceImpl::toSummary);
+        }
         return claimRepository
                 .search(customerId, vehicleId, status, locationId, pageable)
                 .map(ClaimServiceImpl::toSummary);
+    }
+
+    /**
+     * The location set an unfiltered claim search is narrowed to, or {@code null} when it is not
+     * narrowed at all (ADR-0061 §2): a pre-rollout token, or a caller whose
+     * {@code warranty:claim:view} grant is global. The two must not be collapsed — an empty set
+     * means "show nothing", {@code null} means "show everything, as before".
+     */
+    private @Nullable Set<UUID> reachOrNull() {
+        Optional<Reach> reach = SecurityContextHelper.locationScope().reach(WarrantyPermissions.CLAIM_VIEW);
+        return reach.map(locationHierarchyService::reachableLocations).orElse(null);
     }
 
     // ------------------------------------------------------------------ edits (DRAFT / INFO_NEEDED)

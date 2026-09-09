@@ -1,7 +1,13 @@
-# Location-scope decisions for pos-warranty (ADR-0061, #1872).
+# Location-scope decisions for pos-warranty (ADR-0061, #1872 and #1885).
 # Every operation that takes a caller-supplied locationId must appear here;
 # scripts/audit-rbac.py --check fails on a missing or stale entry.
+#
+# narrow = locationId is an optional filter: named -> gated (403 LOCATION_SCOPE_DENIED outside the
+#          caller's reach); absent -> a scoped caller sees only the locations within reach, and an
+#          empty reach is an empty page rather than every claim. Reach is expanded over this
+#          module's own ext_location replica; there is no per-request call to pos-location.
 decisions:
   - operation: ClaimController.searchClaims
-    shape: unscoped
-    reason: Deferred: intended narrow (optional filter), but pos-warranty has no location replica; tracked in #1885
+    shape: narrow
+    permission: warranty:claim:view
+    reason: locationId is an optional filter, so a named location is gated and an unfiltered search is narrowed to the caller's reach in ClaimServiceImpl (a claim carrying no locationId is outside every reach and is not returned to a scoped caller). The claimCode short-circuit applies the same restriction (#1885)

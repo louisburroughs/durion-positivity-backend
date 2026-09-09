@@ -2762,7 +2762,7 @@ paths:
 
         Emits a CATALOG_LOCATION_OVERRIDE_CREATE event and invalidates the product-detail cache for that location.
 
-        Returns 404 when the product does not exist, and 400 when no guardrail policy exists for the location, the discount exceeds maxDiscountPercent, or the margin falls below minMarginPercent; callers must read the returned status to learn whether the override is ACTIVE or PENDING_APPROVAL.
+        Returns 404 when the product does not exist, 400 when no guardrail policy exists for the location, the discount exceeds maxDiscountPercent, or the margin falls below minMarginPercent, and 403 with LOCATION_SCOPE_DENIED when the caller holds catalog:location_price_override:write but the token scopes it to locations that do not cover the request''s locationId (ADR-0061); callers must read the returned status to learn whether the override is ACTIVE or PENDING_APPROVAL.
 
         '
       operationId: createLocationPriceOverride
@@ -2801,7 +2801,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LocationPriceOverrideResponseDto'
-          description: Forbidden
+          description: FORBIDDEN when the caller lacks catalog:location_price_override:write; LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations that do not cover the request's locationId (ADR-0061); no override is created
       security:
       - bearerAuth:
         - ROLE_ADMIN

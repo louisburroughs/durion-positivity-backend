@@ -56,5 +56,8 @@ security user via their active user-person link.
 - **Effective dates are date-times.** Both the inbound `startDate`/`endDate` and the downstream
   `effectiveStartDate`/`effectiveEndDate` are `LocalDateTime`; a date-only value is rejected
   downstream rather than coerced to midnight. The window is start-inclusive and end-exclusive.
-- Location-scope enforcement on `createAssignment` itself is deferred to #1885; see
-  `location-scope.yaml`.
+- **There is nothing here for location scope to enforce (#1885).** `createAssignment` accepts no
+  location, so there is no location to check the acting user's reach against; the module keeps its
+  `location-scope.yaml` entry as an `unscoped` decision rather than a deferral, and gains no
+  location replica. Reach on the *resulting* access is decided by ADR-0061 §2 at token issuance,
+  and enforced by whichever service the assignee then calls.

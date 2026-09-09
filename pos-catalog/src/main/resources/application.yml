@@ -78,6 +78,10 @@ pos:
       inventory-manifest-topic: ${POS_CATALOG_INVENTORY_MANIFEST_TOPIC:inventory.manifest.v1}
       inventory-manifest-consumer-group: ${POS_CATALOG_INVENTORY_MANIFEST_CONSUMER_GROUP:pos-catalog-inventory-manifests}
       inventory-commands-topic: ${POS_CATALOG_INVENTORY_COMMANDS_TOPIC:inventory.commands.v1}
+      # Location fact feed maintaining the ext_location replica whose materialised ancestor sets
+      # answer the ADR-0061 location-scope check on createLocationPriceOverride (#1885).
+      location-events-topic: ${POS_CATALOG_LOCATION_EVENTS_TOPIC:location.events.v1}
+      location-events-consumer-group: ${POS_CATALOG_LOCATION_EVENTS_CONSUMER_GROUP:pos-catalog-location-events}
       # catalog.product.updated fact producer (#924)
       events-topic: ${POS_CATALOG_EVENTS_TOPIC:catalog.events.v1}
       # Own command inbox (ADR-0044 §4, #1537): CatalogCommandListener's replay-only listener,
