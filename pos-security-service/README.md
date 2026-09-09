@@ -250,8 +250,14 @@ Three tables are easy to confuse:
 | Table | Meaning | Consumed by |
 | --- | --- | --- |
 | `role_permissions` | **role → permission** grants | Token issuance (`RoleAuthorityService`), `AuthorizationService`, `RoleManagementService` |
-| `user_roles` | **user → role**, unscoped | Token issuance, `AuthorizationService.authorizePerson` |
-| `role_assignments` | **user → role**, effective-dated (`effective_start_date`, `effective_end_date`, `revoked_at`) | `RoleManagementService.getUserPermissions` / `userHasPermission` — does **not** narrow a JWT |
+| `user_roles` | **user → role**, unscoped | Every decision point, via `EffectiveGrantResolver` |
+| `role_assignments` | **user → role**, effective-dated (`effective_start_date`, `effective_end_date`, `revoked_at`) | Every decision point, via `EffectiveGrantResolver` — does **not** narrow a JWT |
+
+Every decision point — token issuance (`CustomUserDetailsService`, `UserService`),
+`AuthorizationService.authorizePerson`, and `RoleManagementService.userHasPermission` /
+`getUserPermissions` — resolves the union of both tables through one `EffectiveGrantResolver`
+(ADR-0061 amendment, 2026-09-09, #1914), so the same permission set answers every check. The
+`user_roles` half of that union is scheduled for removal in a later phase.
 
 `role_assignments` carries no location scope: `scope_type` and `role_assignment_scope_locations`
 were dropped by `V38__drop_role_assignment_scope.sql` (ADR-0061 §1, #1875), and with them

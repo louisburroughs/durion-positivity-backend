@@ -3,7 +3,6 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
@@ -18,6 +17,7 @@ import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.internal.service.EffectiveGrantResolver.EffectiveGrants;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -58,6 +58,9 @@ class RoleManagementServiceImplTest {
 
     @Mock
     private RolePersonaEventEmitter rolePersonaEventEmitter;
+
+    @Mock
+    private EffectiveGrantResolver effectiveGrantResolver;
 
     @InjectMocks
     private RoleManagementServiceImpl roleManagementService;
@@ -126,8 +129,8 @@ class RoleManagementServiceImplTest {
         when(roleAssignmentRepository.findByUser_IdAndRole_Id(userId, roleId)).thenReturn(List.of());
         when(roleAssignmentRepository.save(any(RoleAssignment.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(eq(user), any()))
-                .thenReturn(List.of(assignment));
+        when(effectiveGrantResolver.resolve(user))
+                .thenReturn(new EffectiveGrants(Set.of(role), Set.of("MANAGER"), Set.of("security:role:grant")));
         when(roleAssignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
 
         var createdAssignment = roleManagementService.createRoleAssignment(request);

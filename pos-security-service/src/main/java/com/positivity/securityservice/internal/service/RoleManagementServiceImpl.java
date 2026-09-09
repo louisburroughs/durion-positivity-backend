@@ -58,6 +58,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     private final UserRepository userRepository;
     private final AuditEventService auditEventService;
     private final RolePersonaEventEmitter rolePersonaEventEmitter;
+    private final EffectiveGrantResolver effectiveGrantResolver;
 
     /**
      * Create a new role, including its optional MCP persona metadata (#1613).
@@ -253,7 +254,9 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     }
 
     /**
-     * Get all permissions for a user (from all their effective role assignments).
+     * Get all permissions for a user's effective grants — {@code user_roles} union effective-dated
+     * {@code role_assignments}, resolved through {@link EffectiveGrantResolver} (ADR-0061
+     * amendment, 2026-09-09, #1914).
      *
      * <p>Read-only transaction: {@code Role.permissions} is lazy, and this read must not depend on
      * an open-in-view session being present.
@@ -261,39 +264,28 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     @Override
     @Transactional(readOnly = true)
     public Set<PermissionDto> getUserPermissions(UUID userId) {
-        List<RoleAssignment> assignments = getAssignmentEntitiesForUser(userId, false);
-        Set<PermissionDto> allPermissions = new HashSet<>();
-
-        for (RoleAssignment assignment : assignments) {
-            allPermissions.addAll(assignment.getRole().getPermissions().stream()
-                    .map(this::toPermissionDto)
-                    .collect(Collectors.toSet()));
-        }
-
-        return allPermissions;
+        User user = userRepository
+                .findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_PREFIX + userId));
+        return effectiveGrantResolver.resolve(user).roles().stream()
+                .flatMap(role -> role.getPermissions().stream())
+                .map(this::toPermissionDto)
+                .collect(Collectors.toSet());
     }
 
     /**
-     * Check whether a user holds a permission through a currently effective role assignment.
-     *
-     * <p>Effective dating is the only filter: {@code getAssignmentEntitiesForUser(userId, false)}
-     * resolves through {@code findEffectiveAssignmentsByUser}, so assignments outside their
-     * window are never consulted. Location scope is not evaluated here (ADR-0061 §1).
+     * Check whether a user holds a permission through their effective grants — {@code user_roles}
+     * union effective-dated {@code role_assignments}, resolved through
+     * {@link EffectiveGrantResolver} (ADR-0061 amendment, 2026-09-09, #1914). Location scope is
+     * not evaluated here (ADR-0061 §1).
      */
     @Override
     @Transactional(readOnly = true)
     public boolean userHasPermission(UUID userId, String permissionName) {
-        List<RoleAssignment> assignments = getAssignmentEntitiesForUser(userId, false);
-
-        for (RoleAssignment assignment : assignments) {
-            for (Permission permission : assignment.getRole().getPermissions()) {
-                if (permission.getName().equals(permissionName)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        User user = userRepository
+                .findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(USER_NOT_FOUND_PREFIX + userId));
+        return effectiveGrantResolver.resolve(user).permissionNames().contains(permissionName);
     }
 
     /**
@@ -464,7 +456,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
             return roleAssignmentRepository.findAllByUser_Id(userId);
         }
 
-        return roleAssignmentRepository.findEffectiveAssignmentsByUser(user, LocalDateTime.now(clock));
+        return roleAssignmentRepository.findCurrentAssignmentsByUser(user, LocalDateTime.now(clock));
     }
 
     private RoleDto toRoleDto(Role role) {
@@ -503,7 +495,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
      *
      * <p>{@code roleCode} reads through the lazy {@code role} association, so every path reaching
      * here must already have it loaded: both listing queries
-     * ({@code findAllByUser_Id}, {@code findEffectiveAssignmentsByUser}) declare
+     * ({@code findAllByUser_Id}, {@code findCurrentAssignmentsByUser}) declare
      * {@code @EntityGraph(attributePaths = {"user", "role"})}, and {@code createRoleAssignment}
      * sets a role it fetched itself. Reading {@code getRole().getId()} alone would have been
      * satisfied by an uninitialized proxy; reading the name is not, which is why the fetch plan

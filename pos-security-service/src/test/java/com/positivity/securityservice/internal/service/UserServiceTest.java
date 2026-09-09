@@ -3,7 +3,7 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,35 +11,26 @@ import com.positivity.securityservice.internal.dto.UserAuthContext;
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.dto.UserUpdateRequest;
 import com.positivity.securityservice.internal.entity.Role;
-import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
-import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import com.positivity.securityservice.internal.service.EffectiveGrantResolver.EffectiveGrants;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
-
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
-    @Spy
-    Clock clock = TEST_CLOCK;
 
     @Mock
     private UserRepository userRepository;
@@ -48,7 +39,7 @@ class UserServiceTest {
     private RoleRepository roleRepository;
 
     @Mock
-    private RoleAssignmentRepository roleAssignmentRepository;
+    private EffectiveGrantResolver effectiveGrantResolver;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -58,6 +49,19 @@ class UserServiceTest {
 
     @InjectMocks
     private UserServiceImpl userService;
+
+    @BeforeEach
+    void stubResolverToMirrorDirectRoles() {
+        // UserServiceImpl asks the resolver for a user's effective role names; the resolver's own
+        // union/dating behaviour is covered by EffectiveGrantResolverImplTest and
+        // EffectiveGrantAgreementIT, so here it is stubbed to mirror whatever roles the User
+        // object under test directly carries, which is what these fixtures set up.
+        lenient().when(effectiveGrantResolver.resolve(any(User.class))).thenAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            Set<String> roleNames = user.getRoles().stream().map(Role::getName).collect(Collectors.toSet());
+            return new EffectiveGrants(Set.copyOf(user.getRoles()), roleNames, Set.of());
+        });
+    }
 
     @Test
     void createUser_assignsRolesAndEncodedPassword() {
@@ -176,19 +180,15 @@ class UserServiceTest {
 
     @Test
     void getUserByUsername_includesEffectiveRoleAssignments() {
+        // UserServiceImpl no longer computes the union itself: it asks EffectiveGrantResolver,
+        // which is what carries a user_roles-vs-role_assignments grant (proven directly by
+        // EffectiveGrantResolverImplTest and end-to-end by EffectiveGrantAgreementIT).
         User user = new User();
         user.setUsername("admin.alpha");
         user.setPassword("hashed");
-        Role role = new Role();
-        role.setName("ADMIN");
-        RoleAssignment assignment = new RoleAssignment();
-        assignment.setUser(user);
-        assignment.setRole(role);
-        assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK));
 
         when(userRepository.findByUsername("admin.alpha")).thenReturn(Optional.of(user));
-        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(eq(user), any()))
-                .thenReturn(List.of(assignment));
+        when(effectiveGrantResolver.resolve(user)).thenReturn(new EffectiveGrants(Set.of(), Set.of("ADMIN"), Set.of()));
 
         Optional<UserAuthContext> result = userService.getUserByUsername("admin.alpha");
 

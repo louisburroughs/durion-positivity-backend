@@ -24,6 +24,7 @@ public class AuthorizationServiceImpl implements AuthorizationService {
 
     private final PrincipalRoleRepository principalRoleRepository;
     private final UserRepository userRepository;
+    private final EffectiveGrantResolver effectiveGrantResolver;
 
     @Override
     @Transactional(readOnly = true)
@@ -41,13 +42,12 @@ public class AuthorizationServiceImpl implements AuthorizationService {
     @Override
     @Transactional(readOnly = true)
     public Decision authorizePerson(@NonNull UUID personId, @NonNull String permissionKey) {
-        return userRepository.findByPersonId(personId).stream()
-                        .map(user -> user.getRoles())
-                        .flatMap(Set::stream)
-                        .map(Role::getPermissions)
-                        .flatMap(Set::stream)
-                        .map(Permission::getName)
-                        .anyMatch(permissionKey::equals)
+        return userRepository
+                        .findByPersonId(personId)
+                        .map(effectiveGrantResolver::resolve)
+                        .map(EffectiveGrantResolver.EffectiveGrants::permissionNames)
+                        .map(permissionNames -> permissionNames.contains(permissionKey))
+                        .orElse(false)
                 ? Decision.ALLOW
                 : Decision.DENY;
     }

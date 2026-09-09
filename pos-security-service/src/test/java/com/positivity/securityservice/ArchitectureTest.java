@@ -5,8 +5,11 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
+import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.service.EffectiveGrantResolverImpl;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaCall;
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
@@ -30,6 +33,48 @@ public class ArchitectureTest {
 
                 public boolean test(JavaCall<?> input) {
                     return input.getTargetOwner().isEquivalentTo(UUID.class) && "randomUUID".equals(input.getName());
+                }
+            };
+
+    // ADR-0061 amendment (2026-09-09, #1914): every authorization decision must resolve through
+    // EffectiveGrantResolver, the single place that unions user.getRoles() (undated user_roles)
+    // with the effective-dated role_assignments a decision point is evaluated against. These two
+    // predicates keep that true by construction rather than by convention: nothing outside
+    // EffectiveGrantResolverImpl may read either store's raw "effective as of now" shape directly.
+    private static final DescribedPredicate<JavaCall<?>> FIND_EFFECTIVE_ASSIGNMENTS_CALL =
+            new DescribedPredicate<>("call a RoleAssignmentRepository.findEffectiveAssignments* method") {
+
+                public boolean test(JavaCall<?> input) {
+                    return "com.positivity.securityservice.internal.repository.RoleAssignmentRepository"
+                                    .equals(input.getTargetOwner().getFullName())
+                            && input.getName().startsWith("findEffectiveAssignments");
+                }
+            };
+
+    private static final DescribedPredicate<JavaCall<?>> USER_GET_ROLES_CALL =
+            new DescribedPredicate<>("call User.getRoles()") {
+
+                public boolean test(JavaCall<?> input) {
+                    return input.getTargetOwner().isEquivalentTo(User.class) && "getRoles".equals(input.getName());
+                }
+            };
+
+    private static final DescribedPredicate<JavaClass> NOT_EFFECTIVE_GRANT_RESOLVER_IMPL =
+            new DescribedPredicate<>("not EffectiveGrantResolverImpl") {
+
+                public boolean test(JavaClass input) {
+                    return !input.isEquivalentTo(EffectiveGrantResolverImpl.class);
+                }
+            };
+
+    // User itself is exempted here too: Lombok's generated equals/hashCode/toString read every
+    // field, including roles, on `this` — that is not a decision point reaching around the
+    // resolver, just the entity describing its own state.
+    private static final DescribedPredicate<JavaClass> NOT_EFFECTIVE_GRANT_RESOLVER_IMPL_OR_USER =
+            new DescribedPredicate<>("not EffectiveGrantResolverImpl or User") {
+
+                public boolean test(JavaClass input) {
+                    return !input.isEquivalentTo(EffectiveGrantResolverImpl.class) && !input.isEquivalentTo(User.class);
                 }
             };
 
@@ -175,4 +220,23 @@ public class ArchitectureTest {
             .callMethodWhere(UUID_RANDOM_UUID_CALL)
             .allowEmptyShould(true)
             .because("UUIDv7Generator centralizes ID creation; direct randomUUID calls are not allowed");
+
+    @ArchTest
+    static final ArchRule only_effective_grant_resolver_should_read_effective_assignments = noClasses()
+            .that(NOT_EFFECTIVE_GRANT_RESOLVER_IMPL)
+            .should()
+            .callMethodWhere(FIND_EFFECTIVE_ASSIGNMENTS_CALL)
+            .allowEmptyShould(true)
+            .because("ADR-0061 amendment (#1914): every decision point resolves effective role assignments through "
+                    + "EffectiveGrantResolver, not by re-querying findEffectiveAssignments* itself");
+
+    @ArchTest
+    static final ArchRule only_effective_grant_resolver_should_read_user_getRoles = noClasses()
+            .that(NOT_EFFECTIVE_GRANT_RESOLVER_IMPL_OR_USER)
+            .should()
+            .callMethodWhere(USER_GET_ROLES_CALL)
+            .allowEmptyShould(true)
+            .because("ADR-0061 amendment (#1914): every decision point resolves a user's directly-assigned roles "
+                    + "through EffectiveGrantResolver, not by reading User.getRoles() itself; writers still "
+                    + "call User.setRoles until user_roles is retired in phase 2");
 }

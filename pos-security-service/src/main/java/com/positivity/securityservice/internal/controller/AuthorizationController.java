@@ -70,7 +70,8 @@ public class AuthorizationController {
             summary = "Get Authorization Decision for a Person",
             description = """
                     Returns an allow or deny decision for the user account linked to a personId, evaluated against \
-                    that user's directly assigned roles.
+                    the user's currently effective roles (effective-dated assignments, honouring the window), the \
+                    same set token issuance uses.
                     Use this tool to verify an off-session approver, such as a manager identified by employee \
                     number, holds a required permission; use getAuthorizationDecision instead for matrix principals.
                     Preconditions: the caller must hold security:authorization:decide; a user should be linked to \
