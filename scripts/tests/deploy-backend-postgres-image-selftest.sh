@@ -117,7 +117,9 @@ make_alpha_root() {
   local root="$1"
   rm -rf "${root}"
   mkdir -p "${root}/backend/postgres" "${root}/backend/observability"
-  # Never parsed by the stub; they only have to exist and match the digests below.
+  # Content is irrelevant: the stub never parses these, and the drift guard is inert here
+  # because PROD_OVERRIDE_SHA256 / BASE_COMPOSE_SHA256 go unset, which verify_checksum
+  # treats as "skip". They only have to exist, so the script's own path checks pass.
   echo "services: {}" > "${root}/backend/docker-compose.yml"
   echo "services: {}" > "${root}/docker-compose.prod.yml"
   printf 'CREATE DATABASE pos_order_db;\n' > "${root}/backend/postgres/init-databases.sql"
