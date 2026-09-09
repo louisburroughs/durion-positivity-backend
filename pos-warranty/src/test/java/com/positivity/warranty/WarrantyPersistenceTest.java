@@ -40,8 +40,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 
 /**
- * Boots the Flyway baseline ({@code V1__baseline_warranty_schema.sql}) against H2 in
- * PostgreSQL mode with {@code ddl-auto=validate}, proving the JPA mappings match the DDL,
+ * Boots the entity-generated schema ({@code ddl-auto=create-drop}) against H2 in PostgreSQL
+ * mode (the Flyway baseline is Postgres-only since the ADR-0062 flatten: row-level security),
  * then exercises the repository finders and the WC-yyyy-nnnnnn claim-code allocator.
  */
 @DataJpaTest(
@@ -51,7 +51,8 @@ import org.springframework.data.domain.PageRequest;
             "spring.datasource.username=sa",
             "spring.datasource.password=",
             "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate"
+            "spring.jpa.hibernate.ddl-auto=create-drop",
+            "spring.flyway.enabled=false"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({JpaConfig.class, ClaimCodeServiceImpl.class, WarrantyPersistenceTest.ClockConfig.class})

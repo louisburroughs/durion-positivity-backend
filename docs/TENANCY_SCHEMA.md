@@ -16,8 +16,10 @@ follow and the checklist for adding a table. The decision record is
 | `R__seed_*.sql` | Repeatable seeds, unchanged in content; each now opens with the tenant binding below and its `ON CONFLICT` targets lead with `tenant_id`. |
 | `../tenancy-global-tables.txt` | The module's global tables with a reason each. Everything else is tenant-scoped. |
 
-`pos-mcp-server` still carries a parallel `db/h2-migration` set for its H2 `dev`/`test` profiles;
-that set was not flattened and goes away when the module moves to Testcontainers (plan WS5).
+`pos-mcp-server` still carries a parallel `db/h2-migration` set for its H2 `dev`/`test` profiles,
+and `pos-supplier` carries one (its retired chain, verbatim) for the H2 test slices that validate
+the entities against real DDL and prove its unique, check and foreign-key constraints. Neither set
+was flattened; both go away when those modules move to Testcontainers (plan WS5).
 `pos-inquiry` has no Flyway migrations (Hibernate `ddl-auto: update`) and is outside this contract.
 
 ## What every tenant-scoped table has
@@ -61,7 +63,7 @@ Nothing in the application binds `app.current_tenant` yet; `pos-tenancy-common` 
 | Compose and alpha | `postgres/init-tenancy.sh` sets `ALTER ROLE "$POSTGRES_USER" SET app.current_tenant = '<alpha default tenant>'`; every service still connects as that role, so every connection is bound. WS1 removes that line and switches services to `pos_app`. |
 | Flyway seeds | Each seed file opens with `SELECT set_config('app.current_tenant', '<alpha default tenant>', true)`, transaction-local to the migration. |
 | Testcontainers tests (`pg` profiles) | `spring.datasource.hikari.connection-init-sql` sets the same value per connection. Tests that open raw JDBC connections set it themselves. |
-| H2 `dev`/`test` profiles | Hibernate `create-drop` from the entities; no tenancy columns, no Flyway. |
+| H2 `dev`/`test` profiles and `@DataJpaTest` slices | Hibernate `create-drop` from the entities; no tenancy columns, no Flyway (`spring.flyway.enabled: false` in every `application-dev.yml`, and inline in the slices that used to validate against the old H2-compatible baselines). The baseline is Postgres-only. |
 
 Constants:
 
