@@ -802,11 +802,21 @@ public class SecurityGatewayConfig {
         return response.writeWith(Mono.just(response.bufferFactory().wrap(body)));
     }
 
+    /**
+     * Echoes the caller's correlation id when it is one, else mints one.
+     *
+     * <p>Trimmed before validating, matching {@code GlobalApiExceptionHandler} in pos-web-common:
+     * a padded header is the same id, and minting a fresh one for it would silently break the
+     * cross-service correlation the header exists for. Validated because the value is echoed into
+     * the response body, and only the shape the platform issues is accepted.
+     */
     private static String resolveCorrelationId(ServerHttpRequest request) {
         String inbound = request.getHeaders().getFirst(HEADER_X_CORRELATION_ID);
-        if (StringUtils.hasText(inbound)
-                && CORRELATION_ID_PATTERN.matcher(inbound).matches()) {
-            return inbound;
+        if (StringUtils.hasText(inbound)) {
+            String trimmed = inbound.trim();
+            if (CORRELATION_ID_PATTERN.matcher(trimmed).matches()) {
+                return trimmed;
+            }
         }
         return UUID.randomUUID().toString();
     }

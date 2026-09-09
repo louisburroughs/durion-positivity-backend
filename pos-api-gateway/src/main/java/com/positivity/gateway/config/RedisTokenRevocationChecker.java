@@ -1,5 +1,6 @@
 package com.positivity.gateway.config;
 
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
@@ -47,17 +48,34 @@ public class RedisTokenRevocationChecker implements TokenRevocationChecker {
     private static final Logger LOG = LoggerFactory.getLogger(RedisTokenRevocationChecker.class);
 
     private final ReactiveStringRedisTemplate redisTemplate;
-    private final MeterRegistry meterRegistry;
     private final Duration timeout;
     private final AtomicBoolean degraded = new AtomicBoolean(false);
+
+    // Resolved once. This runs on the gateway's auth path for every authenticated request, and
+    // every outcome is known here, so there is no reason to walk the registry per request. It also
+    // means the meters exist at zero from startup, rather than appearing on the first event —
+    // a dashboard or alert on them works before anything has happened.
+    private final Timer revokedTimer;
+    private final Timer clearTimer;
+    private final Timer degradedTimer;
+    private final Counter timeoutCounter;
+    private final Counter errorCounter;
 
     public RedisTokenRevocationChecker(
             @NonNull ReactiveStringRedisTemplate redisTemplate,
             @NonNull MeterRegistry meterRegistry,
             @NonNull Duration timeout) {
         this.redisTemplate = redisTemplate;
-        this.meterRegistry = meterRegistry;
         this.timeout = timeout;
+        this.revokedTimer = timer(meterRegistry, OUTCOME_REVOKED);
+        this.clearTimer = timer(meterRegistry, OUTCOME_CLEAR);
+        this.degradedTimer = timer(meterRegistry, OUTCOME_DEGRADED);
+        this.timeoutCounter = meterRegistry.counter(METRIC_DEGRADED, REASON_TAG, REASON_TIMEOUT);
+        this.errorCounter = meterRegistry.counter(METRIC_DEGRADED, REASON_TAG, REASON_ERROR);
+    }
+
+    private static Timer timer(MeterRegistry meterRegistry, String outcome) {
+        return Timer.builder(METRIC_CHECK_DURATION).tag(OUTCOME_TAG, outcome).register(meterRegistry);
     }
 
     @Override
@@ -69,15 +87,13 @@ public class RedisTokenRevocationChecker implements TokenRevocationChecker {
                 .map(revoked -> {
                     boolean isRevoked = Boolean.TRUE.equals(revoked);
                     clearDegraded();
-                    record(startedNanos, isRevoked ? OUTCOME_REVOKED : OUTCOME_CLEAR);
+                    record(isRevoked ? revokedTimer : clearTimer, startedNanos);
                     return isRevoked;
                 })
                 .onErrorResume(error -> {
                     boolean timedOut = error instanceof java.util.concurrent.TimeoutException;
-                    meterRegistry
-                            .counter(METRIC_DEGRADED, REASON_TAG, timedOut ? REASON_TIMEOUT : REASON_ERROR)
-                            .increment();
-                    record(startedNanos, OUTCOME_DEGRADED);
+                    (timedOut ? timeoutCounter : errorCounter).increment();
+                    record(degradedTimer, startedNanos);
                     if (degraded.compareAndSet(false, true)) {
                         LOG.warn(
                                 "Gateway token-revocation check degraded — accepting tokens without a revocation"
@@ -95,10 +111,7 @@ public class RedisTokenRevocationChecker implements TokenRevocationChecker {
         }
     }
 
-    private void record(long startedNanos, String outcome) {
-        Timer.builder(METRIC_CHECK_DURATION)
-                .tag(OUTCOME_TAG, outcome)
-                .register(meterRegistry)
-                .record(System.nanoTime() - startedNanos, TimeUnit.NANOSECONDS);
+    private static void record(Timer timer, long startedNanos) {
+        timer.record(System.nanoTime() - startedNanos, TimeUnit.NANOSECONDS);
     }
 }

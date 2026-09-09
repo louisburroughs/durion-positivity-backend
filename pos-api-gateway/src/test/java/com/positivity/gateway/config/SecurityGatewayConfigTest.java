@@ -2208,6 +2208,18 @@ class SecurityGatewayConfigTest {
                     .isEqualTo(correlationId);
             assertThat(bodyOf(good)).contains(correlationId);
 
+            // A padded header is the same id: pos-web-common's GlobalApiExceptionHandler trims
+            // before use, and minting a fresh id here would break cross-service correlation.
+            var padded = MockServerWebExchange.from(MockServerHttpRequest.get(PATH)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .header("X-Correlation-Id", "  " + correlationId + "  ")
+                    .build());
+            filter(jti -> Mono.just(true), new SimpleMeterRegistry())
+                    .filter(padded, ignored -> Mono.empty())
+                    .block();
+            assertThat(padded.getResponse().getHeaders().getFirst("X-Correlation-Id"))
+                    .isEqualTo(correlationId);
+
             var bad = MockServerWebExchange.from(MockServerHttpRequest.get(PATH)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .header("X-Correlation-Id", "not a correlation id\n{\"injected\":true}")
