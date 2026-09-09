@@ -92,6 +92,21 @@ public final class GatewaySecurityConstants {
      * Header containing the authenticated username/subject.
      * Injected by pos-api-gateway after JWT validation.
      */
+    /**
+     * The tenant the gateway derived from the validated access token's {@code tid} claim
+     * (ADR-0062 §3). Bound to {@link com.positivity.tenancy.TenantContext} by
+     * {@link TenantBindingFilter} and written to {@code app.current_tenant} on every connection.
+     * The gateway strips any inbound copy: a client can never name its own tenant.
+     */
+    public static final String HEADER_TENANT_ID = "X-Tenant-Id";
+
+    /**
+     * The tenant slug the gateway derives from the {@code Host} header, forwarded on the login
+     * route only so the token issuer can resolve a tenant before the credential check
+     * (ADR-0062 §3). Stripped inbound like every other identity header.
+     */
+    public static final String HEADER_TENANT_SLUG = "X-Tenant-Slug";
+
     public static final String HEADER_USER = "X-User";
 
     /**

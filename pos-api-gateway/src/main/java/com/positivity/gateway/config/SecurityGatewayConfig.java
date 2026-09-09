@@ -67,6 +67,16 @@ public class SecurityGatewayConfig {
     private static final String HEADER_X_LOC_FIN_BITS = "X-Loc-Fin-Bits";
     private static final String HEADER_X_LOC_OTH_BITS = "X-Loc-Oth-Bits";
     private static final String HEADER_X_LOC_SCOPE = "X-Loc-Scope";
+    /**
+     * The tenant a request is scoped to (ADR-0062 §3). Stripped inbound so a client can never name
+     * its own tenant; the gateway will inject it from the access token's {@code tid} claim once
+     * the token carries one (plan WS2b).
+     */
+    private static final String HEADER_X_TENANT_ID = "X-Tenant-Id";
+
+    /** The tenant slug derived from the {@code Host} header for the login route (ADR-0062 §3). */
+    private static final String HEADER_X_TENANT_SLUG = "X-Tenant-Slug";
+
     private static final String HEADER_X_CORRELATION_ID = "X-Correlation-Id";
     private static final String JWT_HEADER_ALG = "alg";
     private static final String CLAIM_PERMISSION_VERSION = "perm_ver";
@@ -294,6 +304,8 @@ public class SecurityGatewayConfig {
                         headers.remove(HEADER_X_LOC_FIN_BITS);
                         headers.remove(HEADER_X_LOC_OTH_BITS);
                         headers.remove(HEADER_X_LOC_SCOPE);
+                        headers.remove(HEADER_X_TENANT_ID);
+                        headers.remove(HEADER_X_TENANT_SLUG);
                         incrementCounter(METRIC_AUTH_HEADER_STRIP_COUNT);
                     }
                 })

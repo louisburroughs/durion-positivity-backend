@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.positivity</groupId>
+        <artifactId>positivity</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>pos-tenancy-common</artifactId>
+    <name>pos-tenancy-common</name>
+    <description>Tenancy binding (ADR-0062): TenantContext and the TenantAwareDataSource that sets app.current_tenant per connection checkout</description>
+    <packaging>jar</packaging>
+
+    <properties>
+        <!-- Measured 84.5% line / 60.7% branch by the gate's own command, `verify -DskipITs`
+             (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1). Floors sit three points under. The
+             Postgres isolation IT is deliberately excluded from the measurement: the gate cannot
+             see it, so counting it would describe coverage the ratchet does not enforce.
+             Regenerate with scripts/update-coverage-floors.sh. -->
+        <jacoco.line.min>0.81</jacoco.line.min>
+        <jacoco.branch.min>0.57</jacoco.branch.min>
+    </properties>
+
+    <dependencies>
+        <!-- DelegatingDataSource -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-jdbc</artifactId>
+        </dependency>
+
+        <!-- Auto-configuration and @ConfigurationProperties -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+
+        <!-- SLF4J for logging -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <!-- JSpecify for null safety annotations -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Real Postgres for the binding and isolation tests: H2 has no row-level security -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

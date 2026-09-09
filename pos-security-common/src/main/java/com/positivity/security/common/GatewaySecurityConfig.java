@@ -89,12 +89,23 @@ public class GatewaySecurityConfig {
         return new GatewayAuthoritiesFilter(locationAncestorResolver.getIfAvailable());
     }
 
+    /**
+     * Binds the request's tenant (ADR-0062 §3). Separate from the authorities filter so the
+     * security filter's exit paths stay untouched, and ahead of it because binding a tenant does
+     * not depend on authentication.
+     */
+    @Bean
+    public TenantBindingFilter tenantBindingFilter() {
+        return new TenantBindingFilter();
+    }
+
     @Bean
     @Order(1)
     @SuppressWarnings("java:S4502") // CSRF not needed: stateless API, JWT in headers (not cookies)
     public SecurityFilterChain gatewaySecurityFilterChain(
             HttpSecurity http,
             GatewayAuthoritiesFilter gatewayAuthoritiesFilter,
+            TenantBindingFilter tenantBindingFilter,
             @Value("${pos.security.metrics-scrape.username:prometheus}") String metricsUsername,
             @Value("${pos.security.metrics-scrape.password:prometheus-scrape}") String metricsPassword) {
         http
@@ -144,7 +155,10 @@ public class GatewaySecurityConfig {
                 .authenticationProvider(prometheusScrapeAuthenticationProvider(metricsUsername, metricsPassword))
 
                 // Add gateway authorities filter before username/password filter
-                .addFilterBefore(gatewayAuthoritiesFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(gatewayAuthoritiesFilter, UsernamePasswordAuthenticationFilter.class)
+                // Tenant binding runs first: the datasource reads it on every connection the
+                // request borrows, including work done before authentication resolves.
+                .addFilterBefore(tenantBindingFilter, GatewayAuthoritiesFilter.class);
 
         return http.build();
     }

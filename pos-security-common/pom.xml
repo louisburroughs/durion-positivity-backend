@@ -27,6 +27,13 @@
         <!-- Shared web MVC concerns (issue #1471): deliberately a compile dependency so every
              service that uses gateway security transitively gets the auto-configured
              GlobalApiExceptionHandler (ApiError envelope + correlation id on unmapped exceptions). -->
+        <!-- TenantContext for the request-scoped tenant binding (ADR-0062) -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-tenancy-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-web-common</artifactId>

@@ -36,6 +36,12 @@
                 <version>${project.version}</version>
             </dependency>
 
+            <dependency>
+                <groupId>com.positivity</groupId>
+                <artifactId>pos-tenancy-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
             <!-- Shared Event Library -->
             <dependency>
                 <groupId>com.positivity</groupId>
