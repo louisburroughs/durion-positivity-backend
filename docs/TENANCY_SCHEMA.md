@@ -53,16 +53,22 @@ outboxes and processed-event ledgers (they carry `tenant_id` as plain data), Spr
 the event-type registry, the permission catalog, the MCP tool/screen/prompt catalogs and RAG
 corpus, and the vehicle reference and fitment modules in full.
 
-## Binding the tenant (transitional until plan WS1)
+## Binding the tenant
 
-Nothing in the application binds `app.current_tenant` yet; `pos-tenancy-common` (WS1) adds the
-`TenantAwareDataSource` that sets it per checkout from the request's `X-Tenant-Id`. Until then:
+`pos-tenancy-common` binds it. `TenantAwareDataSource` wraps each module's datasource and sets
+`app.current_tenant` on every connection checkout from `TenantContext`, resetting it as the
+connection returns to the pool. `TenantBindingFilter` (pos-security-common) fills `TenantContext`
+from the gateway's `X-Tenant-Id`, and the gateway strips any inbound copy of that header.
+
+The access token carries no `tid` claim until plan WS2b, so nothing can derive a per-request
+tenant yet; `pos.tenancy.fallback-tenant-id` names the one tenant a cell serves in the meantime.
+Unset it and the deployment fails closed.
 
 | Where | Binding |
 | --- | --- |
-| Compose and alpha | `postgres/init-tenancy.sh` sets `ALTER ROLE "$POSTGRES_USER" SET app.current_tenant = '<alpha default tenant>'`; every service still connects as that role, so every connection is bound. WS1 removes that line and switches services to `pos_app`. |
+| Compose and alpha | `POS_TENANCY_FALLBACK_TENANT_ID` (the alpha default tenant). Services connect as `pos_app`, which owns nothing and cannot bypass row-level security, so the policies bind them; `SPRING_FLYWAY_USER` keeps the owner credential for migrations only. |
 | Flyway seeds | Each seed file opens with `SELECT set_config('app.current_tenant', '<alpha default tenant>', true)`, transaction-local to the migration. |
-| Testcontainers tests (`pg` profiles) | `spring.datasource.hikari.connection-init-sql` sets the same value per connection. Tests that open raw JDBC connections set it themselves. |
+| Testcontainers tests (`pg` profiles) | `pos.tenancy.fallback-tenant-id` names the tenant the fixtures use; the wrapper binds it per checkout. Tests that open raw JDBC connections set it themselves. |
 | H2 `dev`/`test` profiles and `@DataJpaTest` slices | Hibernate `create-drop` from the entities; no tenancy columns, no Flyway (`spring.flyway.enabled: false` in every `application-dev.yml`, and inline in the slices that used to validate against the old H2-compatible baselines). The baseline is Postgres-only. |
 
 Constants:
@@ -72,9 +78,14 @@ Constants:
 | alpha default tenant | `01900000-0000-7000-8000-000000000001` | The one tenant the alpha cell serves until `pos-tenant` (plan WS2a) provisions tenants. Every seed row and every transitional binding uses it. |
 | platform tenant | `01900000-0000-7000-8000-000000000000` | Reserved for the platform-operator tenant of ADR-0062 §7; created by the `pos-tenant` bootstrap migration, not used yet. |
 
-`postgres/init-tenancy.sh` also creates the shared `pos_app` role (LOGIN, `NOSUPERUSER`,
+`postgres/init-tenancy.sh` creates the shared `pos_app` role (LOGIN, `NOSUPERUSER`,
 `NOBYPASSRLS`, DML and sequence usage on every `pos_*` database, default privileges for tables
-created later). Services do not use it until WS1.
+created later). Its grants run before Flyway creates any table, so the default privileges are what
+cover the baselines' tables; that ordering is verified, along with `pos_app` reading zero rows and
+being refused inserts when no tenant is bound.
+
+Switching an existing deployment needs a fresh Postgres volume: `init-tenancy.sh` runs only on
+first initialisation, so a volume created before WS1 has neither the role nor the grants.
 
 ## Adding a table
 
@@ -83,7 +94,7 @@ created later). Services do not use it until WS1.
 2. Lead every unique constraint and unique index with `tenant_id`; make foreign keys to scoped
    tables composite.
 3. If the table is global, list it in `tenancy-global-tables.txt` with a reason and skip the above.
-4. The entity needs no `tenant_id` mapping until `TenantScopedEntity` exists (WS1); Hibernate's
+4. The entity needs no `tenant_id` mapping until `TenantScopedEntity` exists (plan WS3); Hibernate's
    `validate` ignores unmapped columns and the column default fills the value.
 
 ## What the retrofit changed for application code

@@ -5,12 +5,11 @@
 # 1. The single shared application role `pos_app`: LOGIN, not a superuser, NOBYPASSRLS, owns
 #    nothing, DML on every service database. Services switch their datasource to it in plan WS1
 #    (TenantAwareDataSource); the owner credential stays Flyway-only from then on.
-# 2. TRANSITIONAL: until WS1 binds app.current_tenant per checkout, the owner role the services
-#    still connect as carries the alpha default tenant as a role-level setting. Every scoped table
-#    defaults tenant_id from that setting. Remove the ALTER ROLE line in WS1; with nothing bound,
-#    scoped tables read as empty and refuse inserts (fail closed).
+# Services connect as pos_app from plan WS1 onward and bind app.current_tenant per checkout
+# (TenantAwareDataSource); the owner credential is Flyway's alone. Nothing sets a role-level
+# tenant any more: with nothing bound, scoped tables read as empty and refuse inserts, which is
+# the fail-closed behaviour ADR-0062 §2 asks for.
 set -euo pipefail
-DEFAULT_TENANT_ID=01900000-0000-7000-8000-000000000001
 POS_APP_PASSWORD="${POS_APP_PASSWORD:-$POSTGRES_PASSWORD}"
 
 if [ "$(psql -Atq -U "$POSTGRES_USER" -d postgres -c "SELECT 1 FROM pg_roles WHERE rolname = 'pos_app'")" != "1" ]; then
@@ -18,9 +17,6 @@ if [ "$(psql -Atq -U "$POSTGRES_USER" -d postgres -c "SELECT 1 FROM pg_roles WHE
     -c "CREATE ROLE pos_app LOGIN PASSWORD :'pw' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT"
 fi
 
-# TRANSITIONAL (plan WS1 removes this line)
-psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d postgres \
-  -c "ALTER ROLE \"$POSTGRES_USER\" SET app.current_tenant = '$DEFAULT_TENANT_ID'"
 
 for db in $(psql -Atq -U "$POSTGRES_USER" -d postgres -c "SELECT datname FROM pg_database WHERE datname LIKE 'pos_%'"); do
   psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$db" <<SQL

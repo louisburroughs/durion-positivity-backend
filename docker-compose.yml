@@ -18,6 +18,10 @@ x-pos-security-client-env: &pos-security-client-env
 # Remove POS_TENANCY_FALLBACKTENANTID when the claim ships.
 x-pos-tenancy-env: &pos-tenancy-env
   POS_TENANCY_FALLBACKTENANTID: ${POS_TENANCY_FALLBACK_TENANT_ID:-01900000-0000-7000-8000-000000000001}
+  # Flyway keeps the owner credential; the application pool connects as pos_app, which owns
+  # nothing and cannot bypass row-level security, so the policies actually bind it (ADR-0062 §2).
+  SPRING_FLYWAY_USER: ${POSTGRES_USER}
+  SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
 
 x-logging: &logging
   driver: json-file
