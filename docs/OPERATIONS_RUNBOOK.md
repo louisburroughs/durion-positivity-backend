@@ -732,9 +732,33 @@ decisions:
 | `location_scope_undecided` | a controller operation takes a `locationId` and the module's file has no entry for it (or the file is missing) |
 | `location_scope_stale` | an entry names an operation that no longer exists in the module — an entry for a sibling endpoint that takes no `locationId` (e.g. the by-id detail you gated beside a list) is allowed as long as the `Class.method` exists in one of the module's controllers |
 | `location_scope_invalid` | `shape` not `gate`/`narrow`/`unscoped`, `gate`/`narrow` without `permission`, any entry without `reason`, a duplicate operation, or a file the parser cannot read |
+| `location_scope_alternates` | a location-scope call passes a permission the endpoint reaching it does not require, or an endpoint takes a scope decision with no `@PreAuthorize` and no authority check at all (#1890) |
 
 `location_scope_summary` (operations found / decided; entries per shape, per module) is printed for
 information only.
+
+**Why the alternates must match (`location_scope_alternates`, #1890).** `LocationScope` and
+`LocationScopeService` decide from the alternates the caller *holds*: a caller who holds none of
+them takes neither decision — `require` does not deny and `reachOf`/`reach` does not narrow (#1889).
+That is safe only because every HTTP path into a scope call is gated on the same alternates, so
+passing the gate guarantees at least one is held and the empty case cannot arise from a request.
+An endpoint whose `@PreAuthorize` names `a, b` while its scope call passes `c` would therefore stop
+narrowing silently, and one with no `@PreAuthorize` at all would return everything rather than
+nothing — a scope check against a permission the endpoint does not actually require is not a check.
+
+The gate holds the alternates to that: every permission named at a scope call must be one the
+reaching endpoint requires, either in its `@PreAuthorize` or through an explicit in-body authority
+check that denies (`WipController.listWip` gates its `workorder:wip:view_all_locations` widening
+flag that way — the annotation cannot name it without letting a caller in who holds only that).
+Calls in service and helper methods carry no annotation, so the checker resolves the controller
+that reaches them through a module-local call graph rather than exempting them; permissions passed
+as arguments into that call count as named, which covers the forwarding helpers
+(`BayController.requireInScope`, `AppointmentsController.requireScopeOnStoredLocation`).
+
+Fixing a report means making the two agree: either widen the `@PreAuthorize` to accept the
+alternate the scope call uses (a contract change — regenerate the spec and run `API Artifacts
+Sync`), or pass the alternates the endpoint actually requires. Never silence it by dropping the
+scope call.
 
 **Adding a location-parameterised endpoint:** decide the shape, implement it (see pos-workorder
 `WipController` for a gate and pos-people `TimeEntryServiceImpl` for a narrow), document the 403

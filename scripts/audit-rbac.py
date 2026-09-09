@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """RBAC cross-reference audit (issues #1499 / #1512) and location-scope
-decision check (ADR-0061, #1872).
+decision checks (ADR-0061, #1872 / #1890).
 
 Cross-references five sources of truth about the authorization model:
 
@@ -21,6 +21,10 @@ Cross-references five sources of truth about the authorization model:
                   docs/location-scope-effective-dating-spike-2026-09.md section 7),
                   cross-checked against the module's recorded decision in
                   pos-*/location-scope.yaml (shape gate | narrow | unscoped)
+  G. Scope alternates -- every location-scope call (LocationScope /
+                  LocationScopeService / LocationScopeGuard), the controller
+                  mapping method that reaches it through a module-local call
+                  graph, and that endpoint's @PreAuthorize
 
 and reports every disagreement between them:
 
@@ -42,6 +46,9 @@ and reports every disagreement between them:
   location_scope_invalid  shape not gate|narrow|unscoped, gate/narrow without a
                         permission, any entry without a reason, a duplicate
                         operation, or a file the flat-format parser cannot read
+  location_scope_alternates  a location-scope call passes a permission the
+                        endpoint reaching it does not require, or the endpoint
+                        requires nothing at all (#1890)
   location_scope_summary  informational: operations found and entries per shape,
                         per module
 
@@ -77,11 +84,31 @@ real operation. Flat format, one line per value, parsed with regex (no PyYAML):
 
 See docs/OPERATIONS_RUNBOOK.md "Location-scope decisions (location-scope.yaml)".
 
+--check also gates location_scope_alternates, with no baseline (#1890). A scope
+call decides from the permission alternates the caller HOLDS, so a caller holding
+none of them takes no decision at all -- safe only while every HTTP path into the
+call is gated on the same alternates. This checks that: for each controller
+mapping method that reaches a scope call, every permission named at that call
+must be one the endpoint requires, and an endpoint taking a scope decision must
+require something. "Requires" is the method's @PreAuthorize plus an explicit
+in-body authority check that denies (WipController.listWip gates its
+view_all_locations widening flag that way, per ADR-0061). Service-layer call
+sites carry no annotation, so the reaching controller is resolved rather than
+exempted: declared types (plus same-module subtypes) resolve each receiver, and
+permissions passed as arguments into a scope-reaching call count as named, which
+is how the forwarding helpers (requireInScope, requireScopeOnStoredLocation)
+are covered. Background: #1890, #1889, #1887.
+
 Known limitations (see docs/rbac-permission-role-audit-2026-08.md):
   - x-required-permissions alternates are treated as OR (mirrors
     hasAnyAuthority); complex and() expressions are not modelled.
   - Dynamically constructed permission strings (e.g. "people:timeEntry:" +
     action) are only partially visible.
+  - Section G's call graph is module-local and resolves receivers by declared
+    type, so a scope call reached only through a cross-module call, a functional
+    interface or reflection is not attributed to an endpoint -- it is reported as
+    reached by no mapping method rather than silently skipped. A scope call made
+    through a statically imported helper (no receiver) is not recognised.
   - 149 of 999 contract operations carry no x-required-permissions at all,
     so "required nowhere" is an upper bound for those modules.
 """
@@ -495,6 +522,364 @@ for mod in sorted(location_modules):
     # the real cause.
     flag_location_undecided.extend(f"{mod}: {op}" for op in sorted(ops - seen))
 
+# ---- G. location-scope alternates vs the endpoint's @PreAuthorize (#1890) ----
+# A location-scope call reads its two decisions -- deny a named location, narrow an
+# unfiltered list -- off the alternates the caller HOLDS. #1889 settled that a caller
+# holding none of them takes neither decision, which is safe only because every HTTP
+# path into such a call sits behind an authorization gate naming the same alternates:
+# passing the gate guarantees at least one alternate is held, so the empty case is
+# unreachable from a request (off the HTTP path a denial is not enforcement -- it is
+# the #1887 regression, a denial inside the triggering write's transaction).
+#
+# Nothing enforced that. This section does: for every scope call reachable from a
+# controller mapping method, the permissions named at the call must be a subset of the
+# permissions that endpoint requires, and an endpoint taking a scope decision must
+# require something.
+#
+# "Requires" is @PreAuthorize plus the equivalent explicit in-body authority gate --
+# WipController.listWip reads reach(workorder:wip:view_all_locations) only after
+# throwing AccessDeniedException for a caller whose authorities lack it, and that
+# establishes the same guarantee the annotation does (ADR-0061 names this widening
+# flag). The invariant is "the caller demonstrably holds the alternate before the
+# decision is read", not "the alternate appears in one particular annotation".
+#
+# Scope calls in service and helper methods (ScrapServiceImpl, TimeEntryServiceImpl,
+# WorkorderServiceImpl, the private requireInScope/requireScopeOnStoredLocation
+# forwarders) carry no annotation of their own, so the reaching controller is resolved
+# through a module-local call graph rather than exempted: an exemption list would have
+# to name the ~25 service-layer sites that are the majority of the adopting code, and
+# would exempt exactly the sites whose annotation is furthest from the call.
+LOCATION_SCOPE_METHODS = ("require", "requireAny", "narrowTo", "reachOf", "covers", "reach", "isScoped")
+# Types whose methods ARE the scope decision, reached through a variable or statically.
+LOCATION_SCOPE_TYPES = frozenset({"LocationScope", "LocationScopeService", "LocationScopeGuard"})
+# ...and therefore the classes whose own bodies implement it: their internal calls are
+# the helper, not a call site with alternates to check.
+LOCATION_SCOPE_HELPERS = LOCATION_SCOPE_TYPES
+AUTHORITY_GATE_HINT = re.compile(r'hasAuthority|hasAnyAuthority|getAuthority|getAuthorities')
+MAPPING_ANNOTATION_RE = re.compile(r'@(?:Get|Post|Put|Patch|Delete|Request)Mapping\b')
+
+
+def blank_string_bodies(src):
+    """Blank the CONTENTS of string, char and text-block literals, preserving every
+    offset and newline.
+
+    {@link #strip_comments} deliberately keeps literals verbatim -- section C reads
+    permission codes out of them, and section F reads `locationId` out of @Schema
+    examples. Structural scanning needs the opposite: a `{` in a log format string or a
+    JSON example inside a text block is not a brace, and counting it desynchronises
+    every method boundary after it. So the two views are kept side by side: `body` for
+    content, this skeleton for braces, parens and statement shape, at identical offsets.
+    """
+    out, i, n = list(src), 0, len(src)
+    while i < n:
+        if src.startswith('"""', i):
+            i += 3
+            while i < n and not src.startswith('"""', i):
+                if src[i] != "\n":
+                    out[i] = " "
+                i += 1
+            i += 3
+            continue
+        quote = src[i]
+        if quote == '"' or quote == "'":
+            i += 1
+            while i < n:
+                if src[i] == "\\" and i + 1 < n:
+                    out[i] = out[i + 1] = " "
+                    i += 2
+                    continue
+                if src[i] == quote:
+                    break
+                if src[i] != "\n":
+                    out[i] = " "
+                i += 1
+            i += 1
+            continue
+        i += 1
+    return "".join(out)
+
+
+def close_paren(sk, i):
+    """Index of the `)` matching the `(` at sk[i]; the end of the text when unbalanced."""
+    depth = 0
+    for j in range(i, len(sk)):
+        if sk[j] == "(":
+            depth += 1
+        elif sk[j] == ")":
+            depth -= 1
+            if depth == 0:
+                return j
+    return len(sk) - 1
+
+
+# A member declaration with a body: modifiers, then anything that is not a statement
+# separator, then `name(`. Generic return types nest (`ResponseEntity<Page<X>>`), so the
+# return type is matched as "not ; = { } ( )" rather than as a balanced type expression.
+JAVA_METHOD_RE = re.compile(
+    r'(?m)^[ \t]+(?:(?:public|private|protected|static|final|synchronized|abstract|default|native|strictfp)\s+)+'
+    r'[^;={}()]*?\b(\w+)\s*\(')
+
+# ...and the same declaration with NO access modifier at all: `void publish(Event e) {`.
+# Package-private is the default in Java, so requiring a modifier keyword silently drops
+# those methods -- and a dropped method is a dropped call-graph edge, which in a security
+# gate is a false negative rather than a cosmetic gap. It cannot share the pattern above:
+# with the modifier group made optional, `if (x) {` parses as a method named `if` whose
+# body is the if-block. The discriminator is that a declaration has a RETURN TYPE before
+# the name and a control-flow keyword does not (`if`, `for`, `while`, `switch`, `catch`,
+# `try`, `else if` are all keyword-then-paren), so this pattern requires a type token
+# first, anchored to the start of the line so the type cannot be picked up mid-expression
+# -- which is also what keeps `Foo foo = bar(baz);` and `service.doThing(arg);` out. The
+# keyword lookahead is belt-and-braces; the modifier lookahead just avoids matching a
+# declaration the pattern above already found, at a different offset. `record` is in the
+# keyword list for a sharper reason than the rest: a package-private nested
+# `record SkuCategoryRef(...) {` has exactly the shape of a method declaration, and
+# reading it as one would swallow the record's own methods into its "body" and drop them
+# from the graph -- the opposite of what this pattern is here to fix.
+JAVA_PACKAGE_PRIVATE_METHOD_RE = re.compile(
+    r'(?m)^[ \t]+'
+    r'(?!(?:public|private|protected|static|final|synchronized|abstract|default|native|strictfp)\b)'
+    r'(?:<[^;={}()]{0,200}>\s+)?'                       # generic method type parameters
+    r'(?!(?:if|for|while|switch|catch|try|do|else|return|new|throw|assert|yield|case'
+    r'|record|class|interface|enum)\b)'
+    r'[A-Za-z_$][\w.$]*(?:\s*<[^;={}()]{0,300}>)?(?:\s*\[\s*\])*\s+'   # return type
+    r'(\w+)\s*\(')
+
+
+def methods_in(sk):
+    """[(name, decl_start, body_start, body_end)] for every method with a body.
+
+    Abstract and interface declarations (`);` before any `{`) are skipped, as is anything
+    that starts inside a previous method's body -- an anonymous inner class or a lambda's
+    inner method belongs to its enclosing method, not beside it.
+    """
+    found = []
+    seen_starts = set()
+    for m in list(JAVA_METHOD_RE.finditer(sk)) + list(JAVA_PACKAGE_PRIVATE_METHOD_RE.finditer(sk)):
+        if m.start() in seen_starts:
+            continue
+        seen_starts.add(m.start())
+        open_paren = m.end() - 1
+        k = close_paren(sk, open_paren) + 1
+        while k < len(sk) and sk[k] not in "{;":   # skip `throws ...`
+            k += 1
+        if k >= len(sk) or sk[k] == ";":
+            continue
+        depth, j = 0, k
+        while j < len(sk):
+            if sk[j] == "{":
+                depth += 1
+            elif sk[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        found.append((m.group(1), m.start(), k, j))
+    found.sort(key=lambda t: t[1])
+    kept = []
+    for entry in found:
+        if kept and entry[1] < kept[-1][3]:
+            continue
+        kept.append(entry)
+    return kept
+
+
+def permissions_in(text):
+    """Permission codes named in a fragment: string literals (both quotings, since SpEL
+    nests single quotes inside the Java string) and ALL_CAPS constants resolved through
+    the section-C constant table."""
+    codes = set(re.findall(r'"(' + PERM_RE + r')"', text))
+    codes |= set(re.findall(r"'(" + PERM_RE + r")'", text))
+    for cst in re.findall(r'\b([A-Z][A-Z0-9_]{2,})\b', text):
+        codes |= const_to_code.get(cst, set())
+    return codes
+
+
+VAR_DECL_RE = re.compile(r'\b([A-Z][A-Za-z0-9_]*)(?:<[^<>;={}()]{0,160}>)?(?:\[\])?(?:\s*\.\.\.)?\s+(\w+)\s*(?=[;=,)])')
+CALL_RE = re.compile(r'(?:(\w+)\s*(?:\.|::)\s*)?\b(\w+)\s*\(')
+NOT_A_CALL = frozenset({"if", "for", "while", "switch", "catch", "return", "new", "synchronized",
+                        "try", "assert", "throw", "do", "else", "record", "yield"})
+
+# Per class: variable -> declared types, method -> occurrences (header, body, line).
+java_classes = {}          # (module, SimpleName) -> dict
+for f in sorted(java_files):
+    body = file_bodies[f]
+    sk = blank_string_bodies(body)
+    module, cls = f.parts[0], f.stem
+    decl = re.search(r'\b(?:class|interface|enum|record)\s+' + re.escape(cls) + r'\b([^{]*)\{', sk)
+    var_types = collections.defaultdict(set)
+    for m in VAR_DECL_RE.finditer(sk):
+        var_types[m.group(2)].add(m.group(1))
+    entry = {
+        "supertypes": set(re.findall(r'\b([A-Z]\w*)', decl.group(1))) if decl else set(),
+        "var_types": var_types,
+        "methods": collections.defaultdict(list),
+        "is_controller": f.name.endswith("Controller.java"),
+        "path": str(f),
+    }
+    cursor = decl.end() if decl else 0
+    for (name, decl_start, body_start, body_end) in methods_in(sk):
+        entry["methods"][name].append({
+            "header": body[cursor:decl_start], "header_sk": sk[cursor:decl_start],
+            "body": body[body_start:body_end + 1], "body_sk": sk[body_start:body_end + 1],
+            "line": body[:decl_start].count("\n") + 1,
+        })
+        cursor = body_end + 1
+    java_classes[(module, cls)] = entry
+
+# A declared type resolves to itself and to every class in the same module that extends
+# or implements it, so `scrapService.getScrap(...)` in a controller reaches
+# ScrapServiceImpl.getScrap. Cross-module resolution is deliberately absent: a scope call
+# is always in the module whose endpoint it guards.
+type_impls = collections.defaultdict(set)   # (module, type name) -> {SimpleName}
+for (module, cls), entry in java_classes.items():
+    type_impls[(module, cls)].add(cls)
+    for supertype in entry["supertypes"]:
+        type_impls[(module, supertype)].add(cls)
+
+scope_call_sites = collections.defaultdict(list)   # (module, cls, method) -> [call]
+authority_gates = collections.defaultdict(set)     # (module, cls, method) -> {permission}
+call_edges = collections.defaultdict(list)         # caller node -> [(callee node, perms at call)]
+for (module, cls), entry in java_classes.items():
+    var_types = entry["var_types"]
+    for method, occurrences in entry["methods"].items():
+        node = (module, cls, method)
+        for md in occurrences:
+            body, sk = md["body"], md["body_sk"]
+            if cls not in LOCATION_SCOPE_HELPERS:
+                for m in re.finditer(
+                        r'(?:(\w+)\s*\(\s*\)|\b(\w+))\s*\.\s*(' + "|".join(LOCATION_SCOPE_METHODS) + r')\s*\(', sk):
+                    receiver_call, receiver_var, called = m.group(1), m.group(2), m.group(3)
+                    scoped = receiver_call == "locationScope" or (
+                        receiver_var is not None
+                        and (bool(var_types.get(receiver_var, set()) & LOCATION_SCOPE_TYPES)
+                             or receiver_var in LOCATION_SCOPE_TYPES))
+                    if not scoped:
+                        continue
+                    open_paren = m.end() - 1
+                    args = body[open_paren + 1:close_paren(sk, open_paren)]
+                    scope_call_sites[node].append({
+                        "call": called,
+                        "permissions": permissions_in(args),
+                        "line": md["line"] + body[:m.start()].count("\n"),
+                    })
+            for raw_line in body.splitlines():
+                if AUTHORITY_GATE_HINT.search(raw_line):
+                    authority_gates[node] |= permissions_in(raw_line)
+            for m in CALL_RE.finditer(sk):
+                receiver, called = m.group(1), m.group(2)
+                if called in NOT_A_CALL:
+                    continue
+                if receiver is None or receiver in ("this", "super"):
+                    targets = {cls}
+                else:
+                    targets = set()
+                    for t in var_types.get(receiver, set()) | ({receiver} if receiver[:1].isupper() else set()):
+                        targets |= type_impls.get((module, t), set())
+                if not targets:
+                    continue
+                open_paren = m.end() - 1
+                passed = permissions_in(body[open_paren + 1:close_paren(sk, open_paren)])
+                for target in targets:
+                    callee = java_classes.get((module, target))
+                    if callee is not None and called in callee["methods"]:
+                        call_edges[node].append(((module, target, called), passed))
+
+# Which methods reach a scope call at all, walking the edges backwards from every site.
+reverse_edges = collections.defaultdict(set)
+for caller, called_nodes in call_edges.items():
+    for callee, _ in called_nodes:
+        reverse_edges[callee].add(caller)
+scope_reaching = set(scope_call_sites)
+frontier = list(scope_reaching)
+while frontier:
+    node = frontier.pop()
+    for caller in reverse_edges.get(node, ()):
+        if caller not in scope_reaching:
+            scope_reaching.add(caller)
+            frontier.append(caller)
+
+_path_cache = {}
+
+
+def path_permissions(node, stack=()):
+    """(permissions named at scope calls reachable from `node`, permissions gated by an
+    explicit authority check on the way).
+
+    Permissions passed as ARGUMENTS into a scope-reaching call count as named: the
+    forwarding helpers (`requireInScope(permission, location)`,
+    `requireScopeOnStoredLocation(id, alternates...)`) name the alternate at the caller,
+    not at the scope call, and checking only what the helper body spells out would check
+    nothing at all. Recursion is cut at a cycle rather than memoised through one, so a
+    mutually recursive pair cannot cache a half-built answer.
+    """
+    if node in _path_cache:
+        return _path_cache[node]
+    if node in stack:
+        return set(), set()
+    named = set()
+    gated = set(authority_gates.get(node, ()))
+    for call in scope_call_sites.get(node, ()):
+        named |= call["permissions"]
+    for callee, passed in call_edges.get(node, ()):
+        if callee in scope_reaching and callee != node:
+            sub_named, sub_gated = path_permissions(callee, stack + (node,))
+            named |= sub_named | passed
+            gated |= sub_gated
+    if not stack:
+        _path_cache[node] = (named, gated)
+    return named, gated
+
+
+flag_location_alternates = []          # "<module>: Class.method ..." -- never baselined
+location_scope_endpoints = 0
+endpoint_covered = set()
+for (module, cls), entry in java_classes.items():
+    if not entry["is_controller"]:
+        continue
+    for method, occurrences in entry["methods"].items():
+        node = (module, cls, method)
+        for md in occurrences:
+            if not MAPPING_ANNOTATION_RE.search(md["header_sk"]) or node not in scope_reaching:
+                continue
+            location_scope_endpoints += 1
+            visited = set()
+            walk = [node]
+            while walk:                     # every scope call this endpoint accounts for
+                current = walk.pop()
+                if current in visited:
+                    continue
+                visited.add(current)
+                endpoint_covered.add(current)
+                walk.extend(c for c, _ in call_edges.get(current, ()) if c in scope_reaching)
+            required_here = set()
+            for m in re.finditer(r'@(?:Pre|Post)Authorize\s*\(', md["header_sk"]):
+                open_paren = m.end() - 1
+                required_here |= permissions_in(md["header"][open_paren + 1:close_paren(md["header_sk"], open_paren)])
+            named, gated = path_permissions(node)
+            where = f"{module}: {cls}.{method} (line {md['line']})"
+            if not required_here and not gated:
+                flag_location_alternates.append(
+                    f"{where}: takes a location-scope decision on {sorted(named)} with no @PreAuthorize "
+                    f"and no authority check -- the caller may hold none of the alternates, so neither "
+                    f"the gate nor the narrowing applies (#1890)")
+                continue
+            unrequired = sorted(named - required_here - gated)
+            if unrequired:
+                flag_location_alternates.append(
+                    f"{where}: location-scope call passes {unrequired} which the endpoint does not "
+                    f"require (@PreAuthorize accepts {sorted(required_here) or 'nothing'}"
+                    + (f", authority-checked in body: {sorted(gated)}" if gated else "")
+                    + ") -- a caller holding none of those takes no scope decision (#1890)")
+# A scope call no annotated endpoint reaches has no annotation to agree with: there is
+# nothing guaranteeing the caller holds the alternate, so the empty-held case that #1889
+# made a no-op is live.
+for node in sorted(set(scope_call_sites) - endpoint_covered):
+    for call in scope_call_sites[node]:
+        flag_location_alternates.append(
+            f"{node[0]}: {node[1]}.{node[2]} (line {call['line']}): {call['call']}"
+            f"({sorted(call['permissions'])}) is reached by no @PreAuthorize'd mapping method "
+            f"in the module (#1890)")
+
 # ---- op-level reachability --------------------------------------------------
 # Listed perms are treated as OR-alternates (mirrors hasAnyAuthority). An op is
 # unreachable when no listed perm is granted to any role and the AUTHENTICATED
@@ -558,6 +943,8 @@ out = {
         "location_scope_undecided": len(flag_location_undecided),
         "location_scope_stale": len(flag_location_stale),
         "location_scope_invalid": len(flag_location_invalid),
+        "location_scope_endpoints": location_scope_endpoints,
+        "location_scope_alternates": len(flag_location_alternates),
     },
     "roles": {r: len(ps) for r, ps in sorted(role_perms.items())},
     "op_missing_by_module": {m: [op_missing[m], op_counts[m]] for m in sorted(op_counts) if op_missing[m] > 0},
@@ -579,6 +966,7 @@ out = {
     "location_scope_undecided": flag_location_undecided,
     "location_scope_stale": flag_location_stale,
     "location_scope_invalid": flag_location_invalid,
+    "location_scope_alternates": flag_location_alternates,
     "location_scope_summary": location_scope_summary,
 }
 
@@ -653,6 +1041,8 @@ location_gated = {
                              "location-scope.yaml entries whose operation no longer exists in the module"),
     "location_scope_invalid": (flag_location_invalid,
                                "location-scope.yaml entries or files the checker cannot accept"),
+    "location_scope_alternates": (flag_location_alternates,
+                                  "location-scope calls whose permission alternates the endpoint does not require"),
 }
 for category, (items, what) in location_gated.items():
     if items:
@@ -668,6 +1058,8 @@ print("  location_scope_summary (operations taking a locationId / decided; gate 
 for mod, sm in sorted(location_scope_summary.items()):
     print(f"    {mod}: {sm['operations']}/{sm['decided']}; "
           f"{sm['gate']} / {sm['narrow']} / {sm['unscoped']}")
+print(f"  location-scope calls checked against their endpoint's @PreAuthorize: "
+      f"{location_scope_endpoints} endpoints")
 
 if failed:
     print(f"\nFAIL: new authorization drift, a stale baseline entry and/or a location-scope "
@@ -680,5 +1072,6 @@ if failed:
 
 print(f"\nOK: no new authorization drift (baseline: {sum(len(baseline.get(c, {})) for c in gated)} accepted "
       f"exceptions across {len(gated)} categories, 0 unreachable ops, "
-      f"{out['counts']['location_scope_operations']} location-scope decisions recorded).")
+      f"{out['counts']['location_scope_operations']} location-scope decisions recorded, "
+      f"{location_scope_endpoints} location-scope endpoints agreeing with their @PreAuthorize).")
 sys.exit(0)
