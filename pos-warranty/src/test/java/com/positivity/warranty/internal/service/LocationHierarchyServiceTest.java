@@ -54,7 +54,8 @@ import tools.jackson.databind.ObjectMapper;
             "spring.datasource.username=sa",
             "spring.datasource.password=",
             "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate"
+            "spring.jpa.hibernate.ddl-auto=create-drop",
+            "spring.flyway.enabled=false"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({JpaConfig.class, LocationHierarchyServiceTest.ClockConfig.class})

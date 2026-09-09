@@ -51,6 +51,7 @@ import org.springframework.orm.jpa.JpaSystemException;
             "spring.datasource.password=",
             "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
             "spring.jpa.hibernate.ddl-auto=validate",
+            "spring.flyway.locations=classpath:db/h2-migration",
             // 16 contenders each hold a connection while racing, plus the test's own. Without an
             // explicit ceiling the pool default can be smaller, and threads then block acquiring a
             // connection instead of racing -- which made a deliberately broken claim fail on the

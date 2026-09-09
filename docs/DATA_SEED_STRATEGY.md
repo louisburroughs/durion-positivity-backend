@@ -62,9 +62,11 @@ projection all happen for free.
 Stays exactly where it is: `R__seed_role_permissions.sql`, `R__seed_reference_security.sql`,
 `R__seed_reference_accounting.sql`, `R__seed_reference_invoice.sql`,
 `R__seed_reference_people*.sql`, `R__seed_location_1_reference.sql`,
-`R__seed_reference_price.sql`, `R__seed_reference_inventory.sql`, and the versioned
-config seeds (`V3__seed_labor_overhead_mapping.sql`, `V18__seed_facade_tool_permissions.sql`,
-`V34__processing_return_workflow_seed.sql`). These are schema-adjacent configuration each
+`R__seed_reference_price.sql`, `R__seed_reference_inventory.sql`,
+`R__seed_role_location_scope.sql`, and the versioned config seeds, which since the 2026-09-09
+baseline flatten are the per-module `V2__seed_<module>.sql` files (formerly
+`V3__seed_labor_overhead_mapping.sql`, `V18__seed_facade_tool_permissions.sql`,
+`V34__processing_return_workflow_seed.sql` and their successors). These are schema-adjacent configuration each
 service owns outright; no other service ever hears about them, so no event is missing.
 
 ### Tier 2 — API-driven seed pipeline (new): alpha demo data

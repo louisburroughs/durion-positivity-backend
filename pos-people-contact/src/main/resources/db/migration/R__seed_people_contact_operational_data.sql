@@ -1,3 +1,6 @@
+-- Tenant binding for the seed rows below (ADR-0062); transaction-local.
+SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
+
 -- Repeatable seed migration for pos-people-contact operational identity data (ADR-0044 §6, #875).
 -- Ported from pos-people's operational seed when identity ownership moved (#874):
 -- 39 employee persons (01960011-*), 50 customer persons (01960024-*), 20+20 commercial
@@ -46,7 +49,7 @@ VALUES
     ('01960011-0000-7000-8000-000000000025'::uuid, 'Curtis', 'Benton', NOW(), NOW()),
     ('01960011-0000-7000-8000-000000000026'::uuid, 'Paula', 'Knight', NOW(), NOW()),
     ('01960011-0000-7000-8000-000000000027'::uuid, 'Simon', 'Hayes', NOW(), NOW())
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (tenant_id, id) DO NOTHING;
 INSERT INTO person (id, first_name, last_name, created_at, updated_at)
 VALUES
     ('01960024-0000-7000-8000-000000000001'::uuid, 'Marcus', 'Patterson', NOW(), NOW()),
@@ -99,7 +102,7 @@ VALUES
     ('01960024-0000-7000-8000-000000000030'::uuid, 'Betty', 'Crawford', NOW(), NOW()),
     ('01960024-0000-7000-8000-000000000031'::uuid, 'Samuel', 'Reed', NOW(), NOW()),
     ('01960024-0000-7000-8000-000000000032'::uuid, 'Dorothy', 'Bell', NOW(), NOW())
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (tenant_id, id) DO NOTHING;
 INSERT INTO person (id, first_name, last_name, created_at, updated_at)
 VALUES
     ('01960025-0000-7000-8000-000000000001'::uuid, 'Greg', 'Whitfield', NOW(), NOW()),
@@ -122,7 +125,7 @@ VALUES
     ('01960025-0000-7000-8000-000000000012'::uuid, 'Veronica', 'Pratt', NOW(), NOW()),
     ('01960025-0000-7000-8000-000000000013'::uuid, 'Jonathon', 'Culpepper', NOW(), NOW()),
     ('01960025-0000-7000-8000-000000000014'::uuid, 'Sheryl', 'Davenport', NOW(), NOW())
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (tenant_id, id) DO NOTHING;
 
 -- Typed contact points (EMAIL primary / PHONE_WORK).
 INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
@@ -425,7 +428,7 @@ VALUES
     ('01960031-0000-7000-8000-000000000013'::uuid, '01960025-0000-7000-8000-000000000013'::uuid, 'PHONE_WORK', '704-555-3019', true, NOW(), NOW()),
     ('01960030-0000-7000-8000-000000000014'::uuid, '01960025-0000-7000-8000-000000000014'::uuid, 'EMAIL', 's.davenport@highlandmoving.example.com', true, NOW(), NOW()),
     ('01960031-0000-7000-8000-000000000014'::uuid, '01960025-0000-7000-8000-000000000014'::uuid, 'PHONE_WORK', '980-555-3020', true, NOW(), NOW())
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (tenant_id, id) DO NOTHING;
 INSERT INTO person_contact_point (id, person_id, contact_type, value, is_primary, created_at, updated_at)
 SELECT gen_random_uuid(), '01960011-0000-7000-8000-000000000011'::uuid, 'EMAIL', 'hector.alvarez@durion.internal', TRUE, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM person_contact_point WHERE person_id='01960011-0000-7000-8000-000000000011'::uuid AND contact_type='EMAIL' AND value='hector.alvarez@durion.internal');
@@ -515,4 +518,4 @@ INSERT INTO user_person_links (id, username, person_id, link_type, status, creat
             ('01960012-0000-7000-8000-00000000000e'::uuid, 'olivia.chen', '01960011-0000-7000-8000-00000000000e'::uuid, 'PRIMARY', 'ACTIVE', NOW(), 'seed-generator'),
             ('01960012-0000-7000-8000-00000000000f'::uuid, 'harold.sanders', '01960011-0000-7000-8000-00000000000f'::uuid, 'PRIMARY', 'ACTIVE', NOW(), 'seed-generator'),
             ('01960012-0000-7000-8000-000000000010'::uuid, 'irene.torres', '01960011-0000-7000-8000-000000000010'::uuid, 'PRIMARY', 'ACTIVE', NOW(), 'seed-generator')
-        ON CONFLICT (username) DO NOTHING;
+        ON CONFLICT (tenant_id, username) DO NOTHING;

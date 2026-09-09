@@ -1,3 +1,6 @@
+-- Tenant binding for the seed rows below (ADR-0062); transaction-local.
+SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
+
 -- =============================================================
 -- R__seed_reference_catalog_2_products.sql
 -- 500 real mechanical auto parts products
@@ -148,7 +151,7 @@ VALUES
     (gen_random_uuid(), 'VALV-782253', 'Valvoline High Mileage MaxLife 5W-30 5qt', 'ACTIVE', '01960034-0000-7000-8000-00000000001c', 'Valvoline', 'Valvoline', '782253', 'US', 'PART', 'EA', '01960030-0000-7000-8000-000000000007', '01960031-0000-7000-8000-000000000019', NOW(), NOW()),
     (gen_random_uuid(), 'VALV-882', 'Valvoline Daily Protection 10W-40 1qt', 'ACTIVE', '01960034-0000-7000-8000-00000000001c', 'Valvoline', 'Valvoline', '882', 'US', 'PART', 'QT', '01960030-0000-7000-8000-000000000007', '01960031-0000-7000-8000-000000000019', NOW(), NOW()),
     (gen_random_uuid(), 'PRES-AF2100', 'Prestone Extended Life 50/50 Antifreeze 1gal', 'ACTIVE', '01960034-0000-7000-8000-00000000001d', 'Prestone', 'Prestone', 'AF2100', 'US', 'PART', 'GA', '01960030-0000-7000-8000-000000000007', '01960031-0000-7000-8000-00000000001a', NOW(), NOW())
-ON CONFLICT (sku) DO UPDATE SET
+ON CONFLICT (tenant_id, sku) DO UPDATE SET
     name = EXCLUDED.name,
     status = EXCLUDED.status,
     updated_at = NOW();
@@ -284,7 +287,7 @@ VALUES
     (gen_random_uuid(), 'BRDG-TQT-0011', 'Bridgestone Turanza QuietTrack 235/60R18', 'ACTIVE', '01960034-0000-7000-8000-000000000003', 'Bridgestone', 'Bridgestone', 'TQT-0011', 'JP', 'PART', 'EA', '01960030-0000-7000-8000-000000000001', '01960031-0000-7000-8000-000000000001', NOW(), NOW()),
     (gen_random_uuid(), 'CONT-TCT-0001', 'Continental TrueContact Tour 205/55R16', 'ACTIVE', '01960034-0000-7000-8000-000000000004', 'Continental', 'Continental', 'TCT-0001', 'DE', 'PART', 'EA', '01960030-0000-7000-8000-000000000001', '01960031-0000-7000-8000-000000000001', NOW(), NOW()),
     (gen_random_uuid(), 'CONT-TCT-0002', 'Continental TrueContact Tour 215/55R17', 'ACTIVE', '01960034-0000-7000-8000-000000000004', 'Continental', 'Continental', 'TCT-0002', 'DE', 'PART', 'EA', '01960030-0000-7000-8000-000000000001', '01960031-0000-7000-8000-000000000001', NOW(), NOW())
-ON CONFLICT (sku) DO UPDATE SET
+ON CONFLICT (tenant_id, sku) DO UPDATE SET
     name = EXCLUDED.name,
     status = EXCLUDED.status,
     updated_at = NOW();
@@ -420,7 +423,7 @@ VALUES
     (gen_random_uuid(), 'MICH-PSC-0004', 'Michelin Pilot Sport Cup 2 235/40R19', 'ACTIVE', '01960034-0000-7000-8000-000000000001', 'Michelin', 'Michelin', 'PSC-0004', 'FR', 'PART', 'EA', '01960030-0000-7000-8000-000000000001', '01960031-0000-7000-8000-000000000004', NOW(), NOW()),
     (gen_random_uuid(), 'MICH-PSC-0005', 'Michelin Pilot Sport Cup 2 245/50R20', 'ACTIVE', '01960034-0000-7000-8000-000000000001', 'Michelin', 'Michelin', 'PSC-0005', 'FR', 'PART', 'EA', '01960030-0000-7000-8000-000000000001', '01960031-0000-7000-8000-000000000004', NOW(), NOW()),
     (gen_random_uuid(), 'MICH-PSC-0006', 'Michelin Pilot Sport Cup 2 265/70R17', 'ACTIVE', '01960034-0000-7000-8000-000000000001', 'Michelin', 'Michelin', 'PSC-0006', 'FR', 'PART', 'EA', '01960030-0000-7000-8000-000000000001', '01960031-0000-7000-8000-000000000004', NOW(), NOW())
-ON CONFLICT (sku) DO UPDATE SET
+ON CONFLICT (tenant_id, sku) DO UPDATE SET
     name = EXCLUDED.name,
     status = EXCLUDED.status,
     updated_at = NOW();
@@ -556,7 +559,7 @@ VALUES
     (gen_random_uuid(), 'NGKP-LFR05AIX', 'NGK Laser Iridium Plug LFR05AIX', 'ACTIVE', '01960034-0000-7000-8000-000000000009', 'NGK', 'NGK', 'LFR05AIX', 'JP', 'PART', 'EA', '01960030-0000-7000-8000-000000000002', '01960031-0000-7000-8000-000000000007', NOW(), NOW()),
     (gen_random_uuid(), 'BSCH-SP996205', 'Bosch Iridium Spark Plug 996205', 'ACTIVE', '01960034-0000-7000-8000-00000000000a', 'Bosch', 'Bosch', 'SP996205', 'DE', 'PART', 'EA', '01960030-0000-7000-8000-000000000002', '01960031-0000-7000-8000-000000000007', NOW(), NOW()),
     (gen_random_uuid(), 'WIXF-XP50006F', 'WIX XP Series Oil Filter XP50006', 'ACTIVE', '01960034-0000-7000-8000-00000000001f', 'WIX', 'WIX Filters', 'XP50006F', 'US', 'PART', 'EA', '01960030-0000-7000-8000-000000000008', '01960031-0000-7000-8000-00000000001d', NOW(), NOW())
-ON CONFLICT (sku) DO UPDATE SET
+ON CONFLICT (tenant_id, sku) DO UPDATE SET
     name = EXCLUDED.name,
     status = EXCLUDED.status,
     updated_at = NOW();

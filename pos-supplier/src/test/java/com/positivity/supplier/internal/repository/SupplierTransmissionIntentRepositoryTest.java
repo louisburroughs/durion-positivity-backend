@@ -42,6 +42,7 @@ import org.springframework.data.domain.PageRequest;
             "spring.datasource.password=",
             "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
             "spring.jpa.hibernate.ddl-auto=validate",
+            "spring.flyway.locations=classpath:db/h2-migration",
             "spring.jpa.properties.hibernate.session_factory.statement_inspector="
                     + "com.positivity.supplier.internal.repository.SupplierTransmissionIntentRepositoryTest"
                     + "$CapturedSql"

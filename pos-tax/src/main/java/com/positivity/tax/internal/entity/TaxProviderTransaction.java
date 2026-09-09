@@ -9,6 +9,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -36,7 +37,13 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @AllArgsConstructor
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "tax_provider_transaction")
+@Table(
+        name = "tax_provider_transaction",
+        // For the H2 tests only, which build the schema from the entities: it gives ON CONFLICT DO
+        // NOTHING a key to conflict on. On Postgres the Flyway baseline owns the key, and there it is
+        // the tenant-scoped (tenant_id, reference_id) index (ADR-0062); the two are not meant to match.
+        uniqueConstraints =
+                @UniqueConstraint(name = "ux_tax_provider_transaction_reference", columnNames = "reference_id"))
 public class TaxProviderTransaction {
 
     /** UUID v7 primary key (ADR-0013). */

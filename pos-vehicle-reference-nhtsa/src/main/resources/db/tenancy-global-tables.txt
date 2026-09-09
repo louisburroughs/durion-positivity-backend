@@ -1,0 +1,9 @@
+# pos-vehicle-reference-nhtsa: tables with no tenant_id and no row-level-security policy (ADR-0062 section 5).
+# Format: <table>  # <reason>. Every other table in this module is tenant-scoped.
+# TenancySchemaConformanceIT (plan WS1) reads this file.
+make  # vehicle reference data (ADR-0062 section 5)
+manufacturer  # vehicle reference data (ADR-0062 section 5)
+model  # vehicle reference data (ADR-0062 section 5)
+vehicle_type  # vehicle reference data (ADR-0062 section 5)
+vehicle_variable  # vehicle reference data (ADR-0062 section 5)
+vehicle_variable_value  # vehicle reference data (ADR-0062 section 5)

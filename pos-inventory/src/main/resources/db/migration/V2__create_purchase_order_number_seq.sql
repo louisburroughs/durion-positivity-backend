@@ -1,4 +1,0 @@
-CREATE SEQUENCE IF NOT EXISTS purchase_order_number_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO CYCLE;

@@ -1,3 +1,6 @@
+-- Tenant binding for the seed rows below (ADR-0062); transaction-local.
+SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
+
 -- Repeatable seed migration for people reference/bootstrap data.
 -- Notes:
 -- - HR tables (employee, assignments, timekeeping_policy) plus dev-bootstrap rows for the
@@ -16,13 +19,13 @@ INSERT INTO timekeeping_policy (
     updated_at
 )
 VALUES ('7b1f81a7-34fa-f0f9-7caf-a55541d36a60'::uuid, 'GLOBAL', NULL, 10, NOW(), 'seed-generator', NOW(), NOW())
-ON CONFLICT (timekeeping_policy_id) DO NOTHING;
+ON CONFLICT (tenant_id, timekeeping_policy_id) DO NOTHING;
 
 -- ext_people_contact_person replica bootstrap for admin.alpha (identity owned by
 -- pos-people-contact since #874; dev/docker convenience seed, ids match the authority's seed).
 INSERT INTO ext_people_contact_person (person_id, first_name, last_name, primary_email, aggregate_version, updated_at)
 VALUES ('583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid, 'System', 'Administrator', 'admin.alpha@durionpos.org', 0, NOW())
-ON CONFLICT (person_id) DO NOTHING;
+ON CONFLICT (tenant_id, person_id) DO NOTHING;
 
 -- employee (employment record for admin.alpha; ACTIVE).
 INSERT INTO employee (id, person_id, employee_number, status, hire_date, status_effective_at, created_at, updated_at)
@@ -31,12 +34,12 @@ VALUES (
     '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid,
     NULL, 'ACTIVE', NULL, NOW(), NOW(), NOW()
 )
-ON CONFLICT (person_id) DO NOTHING;
+ON CONFLICT (tenant_id, person_id) DO NOTHING;
 
 -- ext_people_contact_user_link replica bootstrap for admin.alpha.
 INSERT INTO ext_people_contact_user_link (link_id, person_id, username, status, aggregate_version, updated_at)
 VALUES ('4790360f-65ab-20e9-88e3-7bf9277bf2b9'::uuid, '583fa3b3-d1bf-a40d-8e21-8cd54424d5d0'::uuid, 'admin.alpha', 'ACTIVE', 0, NOW())
-ON CONFLICT (link_id) DO NOTHING;
+ON CONFLICT (tenant_id, link_id) DO NOTHING;
 
 -- employee_location_assignment (guarded by external location + employee existence).
 DO $$
@@ -72,7 +75,7 @@ BEGIN
                 SELECT 1 FROM public.location
                 WHERE id = 'f3ad439a-7dff-850c-395e-ea280bb82f05'::uuid
             )
-            ON CONFLICT (id) DO NOTHING
+            ON CONFLICT (tenant_id, id) DO NOTHING
         $sql$;
     END IF;
 END $$;

@@ -41,7 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link WarrantyIntegrationException} propagates out of
  * {@link SettlementServiceImpl#create} — i.e. the {@code noRollbackFor} on the service
  * transaction actually commits. Mockito-only tests cannot observe a rollback, so this runs the
- * real Spring bean with transaction proxying against the Flyway baseline on H2
+ * real Spring bean with transaction proxying against the entity-generated schema on H2
  * ({@code WarrantyPersistenceTest} recipe) and — critically — outside any test-managed
  * transaction ({@code NOT_SUPPORTED}), so {@code create()} opens, and commits, its own
  * transaction. Removing {@code noRollbackFor} (or changing the exception type) turns these
@@ -54,7 +54,8 @@ import org.springframework.transaction.annotation.Transactional;
             "spring.datasource.username=sa",
             "spring.datasource.password=",
             "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate"
+            "spring.jpa.hibernate.ddl-auto=create-drop",
+            "spring.flyway.enabled=false"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({JpaConfig.class, SettlementServiceImpl.class, SettlementFailedPathPersistenceTest.ClockConfig.class})

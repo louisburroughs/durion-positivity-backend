@@ -24,7 +24,7 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.context.annotation.Import;
 
 /**
- * Runs {@code PolicyService.findApplicable} against the real Flyway schema on H2 in
+ * Runs {@code PolicyService.findApplicable} against the entity-generated schema on H2 in
  * PostgreSQL mode: proves the {@code findEffectiveOn} sale-date window (inclusive bounds,
  * open-ended {@code effective_to}) and that the {@code PRODUCT_LIST} scope round-trips the
  * jsonb product-id list and matches only ids actually in it (PRD §3.2 / §6 step 1).
@@ -36,7 +36,8 @@ import org.springframework.context.annotation.Import;
             "spring.datasource.username=sa",
             "spring.datasource.password=",
             "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate"
+            "spring.jpa.hibernate.ddl-auto=create-drop",
+            "spring.flyway.enabled=false"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({JpaConfig.class, TestClockConfig.class})

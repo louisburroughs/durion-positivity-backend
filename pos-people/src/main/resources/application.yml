@@ -21,7 +21,6 @@ spring:
     hibernate:
       ddl-auto: validate
   flyway:
-    out-of-order: ${SPRING_FLYWAY_OUT_OF_ORDER:false}
     # R__seed_timekeeping_approval_data.sql was retired without a fixture
     # replacement (docs/DATA_SEED_STRATEGY.md, #1527). Environments that ran it
     # keep its schema-history row, which default validation flags as "applied

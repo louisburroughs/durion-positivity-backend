@@ -44,7 +44,8 @@ import org.springframework.transaction.annotation.Transactional;
             "spring.datasource.username=sa",
             "spring.datasource.password=",
             "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate"
+            "spring.jpa.hibernate.ddl-auto=validate",
+            "spring.flyway.locations=classpath:db/h2-migration"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({JpaConfig.class, TestClockConfig.class, SupplierScheduleCoordinator.class})

@@ -7,35 +7,12 @@ import java.io.IOException;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
 
+/**
+ * The Postgres side of this history was flattened into {@code V1__baseline_mcp_server.sql}
+ * (2026-09-09); the H2 chain still carries its own version numbers and this keeps that alignment
+ * script present until the H2 profiles move to Testcontainers.
+ */
 class RagScopeMigrationScriptsTest {
-
-    @Test
-    void postgresMigrationBackfillsLegacyEmbeddingMetadataWithMasterScope() throws IOException {
-        String sql = new String(
-                Objects.requireNonNull(
-                                getClass().getResourceAsStream("/db/migration/V16__backfill_embedding_rag_scope.sql"))
-                        .readAllBytes(),
-                UTF_8);
-
-        assertThat(sql)
-                .contains("UPDATE mcp_document_embedding")
-                .contains("jsonb_set")
-                .contains("rag_scope")
-                .contains("'master'");
-    }
-
-    @Test
-    void postgresMigrationRenamesEmbeddingColumnsToPgVectorSchema() throws IOException {
-        String sql = new String(
-                Objects.requireNonNull(getClass()
-                                .getResourceAsStream("/db/migration/V24__align_pgvector_document_columns.sql"))
-                        .readAllBytes(),
-                UTF_8);
-
-        assertThat(sql)
-                .contains("ALTER TABLE mcp_document_embedding RENAME COLUMN embedding_id TO id")
-                .contains("ALTER TABLE mcp_document_embedding RENAME COLUMN text TO content");
-    }
 
     @Test
     void h2MigrationExistsForFlywayVersionAlignment() throws IOException {

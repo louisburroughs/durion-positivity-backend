@@ -8,7 +8,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -22,22 +21,12 @@ import org.junit.jupiter.api.Test;
  * Facade permission seed guard (#1115, #1519 Wave 4, #1606 finding 1).
  *
  * <p>The facade grants are Postgres-seed data with no offline Flyway path (the H2 chain has no
- * tool-registry tables), so this test asserts on the net effect of the migration SQL directly:
- * {@code V18} (initial seed) → {@code V29} (AUTHENTICATED removals) → {@code V35} (retarget) →
- * {@code V36} (ADR-0057 availability code) → {@code V37} (full re-derivation from the real
- * downstream endpoints after the #1519 Wave 2/3 retargeting; per-tool delete-and-reinsert) →
- * {@code V38} (adds {@code tax:rates:view} to TaxFacadeTool for the restored getTaxRate, #1522) →
- * {@code V39} (re-derives AccountingFacadeTool for the W1.2 aging facades; permission-net-neutral)
- * → {@code V40} (per-method AND-groups, #1606 finding 1) → {@code V41} (re-derives InvoiceFacadeTool
- * and AdminFacadeTool after #1612 moved two endpoint guards) → {@code V42} (Wave 2 W2.3 facade
- * promotion, #1601: adds one analytics method each to InvoiceFacadeTool, WorkorderFacadeTool, and
- * AccountingFacadeTool) → {@code V43} (#1675: registers the new DateWindowFacadeTool, AUTHENTICATED-
- * gated like EventsFacadeTool — the resolver it fronts makes no downstream call and enforces no
- * permission of its own) → {@code V44} (#1660: promotes E4 to InvoiceFacadeTool.getInvoicingLag,
- * gated {@code invoice:analytics:view} — the group V42 already derived for getRevenueByCustomer on
- * the same class) → {@code V48} (#1898: re-derives HrFacadeTool after pos-people moved the employee
- * profile read onto {@code people:employee_pii:view}; permission-net-neutral for who reaches the
- * tool, since searchEmployees still qualifies on {@code people:employee:view}).
+ * tool-registry tables), so this test asserts on the seed SQL directly. Since the migration
+ * history was flattened (2026-09-09) that is one file, {@code V2__seed_mcp_server.sql}, whose
+ * {@code mcp_tool_permission} rows are the net result of the retired chain V18 → V48 (initial
+ * seed, AUTHENTICATED removals, the per-method AND-groups of #1606 finding 1, and every later
+ * re-derivation); the derivation citations live in this class's group table and in the retired
+ * migration headers in git history.
  *
  * <p><b>V40 changed the unit of the assertion.</b> Rows now carry a {@code permission_group} and a
  * tool is offered iff the caller holds ALL codes of AT LEAST ONE group, so a flat union no longer
@@ -45,11 +34,6 @@ import org.junit.jupiter.api.Test;
  * group per {@code @Tool} method holding the codes that method's <em>required</em> downstream calls
  * need. It is declared once so the V40 migration comment and this test cannot drift apart silently:
  * any edit to the seeded SQL must be mirrored in this table and vice versa.
- *
- * <p>The replay models the migration chain exactly: everything through V39 is flat, V40's backfill
- * turns each of those rows into its own singleton group ({@code permission_group = permission_code},
- * behaviour-identical to the old OR gate), V40's per-tool delete-and-reinsert then replaces the
- * 16 facades with real method groups, and V41 replaces two of those again.
  *
  * <p>It also keeps the #1115 regression guard: no facade may carry the {@code AUTHENTICATED}
  * pseudo-permission alongside a privileged code — every authenticated caller holds
@@ -83,17 +67,13 @@ class FacadeToolPermissionSeedTest {
     private static final Set<String> ASSISTANT_ENTRYPOINTS =
             Set.of("mcp:chat:execute", "mcp:chat:stream", "nlti:request:submit", "nlti:request:read", AUTHENTICATED);
 
-    // One pre-V40 INSERT block: VALUES ('code'), ('code2') ... WHERE mcp_tool.name = 'ToolName';
-    private static final Pattern TOOL_NAME = Pattern.compile("mcp_tool\\.name\\s*=\\s*'([^']+)'");
-    private static final Pattern QUOTED_CODE = Pattern.compile("\\('([^']+)'\\)");
-    // One V40 INSERT block: VALUES ('group', 'code'), ('group2', 'code2') ...
-    private static final Pattern QUOTED_GROUP_CODE = Pattern.compile("\\('([^']+)'\\s*,\\s*'([^']+)'\\)");
-    // V37/V38/V39/V40 per-tool full delete: DELETE FROM mcp_tool_permission WHERE tool_id IN
-    //   (SELECT id FROM mcp_tool WHERE name = 'ToolName');
-    private static final Pattern FULL_DELETE = Pattern.compile(
-            "DELETE\\s+FROM\\s+mcp_tool_permission\\s+WHERE\\s+tool_id\\s+IN\\s*"
-                    + "\\(\\s*SELECT\\s+id\\s+FROM\\s+mcp_tool\\s+WHERE\\s+name\\s*=\\s*'([^']+)'\\s*\\)",
-            Pattern.CASE_INSENSITIVE);
+    /** {@code INSERT INTO mcp_tool (id, name, ...) VALUES ('<uuid>', 'ToolName', ...)}. */
+    private static final Pattern TOOL_ROW = Pattern.compile(
+            "INSERT\\s+INTO\\s+mcp_tool\\s*\\(id,\\s*name\\b[^)]*\\)\\s*VALUES\\s*\\('([^']+)',\\s*'([^']+)'");
+    /** {@code INSERT INTO mcp_tool_permission (tool_id, permission_code, permission_group) VALUES (...)}. */
+    private static final Pattern PERMISSION_ROW = Pattern.compile(
+            "INSERT\\s+INTO\\s+mcp_tool_permission\\s*\\(tool_id,\\s*permission_code,\\s*permission_group\\)"
+                    + "\\s*VALUES\\s*\\('([^']+)',\\s*'([^']+)',\\s*'([^']+)'\\)");
 
     /**
      * #1606 finding-1 group table: tool → {@code @Tool} method → the permission codes that method's
@@ -227,7 +207,7 @@ class FacadeToolPermissionSeedTest {
                             "getAuditLog", Set.of("security:audit:view"))));
 
     @Test
-    @DisplayName("net facade seed (V18..V48) equals the #1606 per-method group table")
+    @DisplayName("the facade seed equals the #1606 per-method group table")
     void netSeedMatchesGroupTable() throws IOException {
         Map<String, Map<String, Set<String>>> groups = netGroupGrants();
 
@@ -254,34 +234,6 @@ class FacadeToolPermissionSeedTest {
     }
 
     @Test
-    @DisplayName("V40 re-derives every facade it clears (delete always followed by a reinsert)")
-    void everyClearedToolIsReseeded() throws IOException {
-        String v40 = read("V40__mcp_tool_permission_groups.sql");
-        Set<String> cleared = parseFullDeletes(v40);
-        Map<String, Map<String, Set<String>>> reinserted = parseGroupSeed(v40);
-
-        assertThat(cleared).isNotEmpty();
-        assertThat(reinserted.keySet())
-                .as("each per-tool DELETE in V40 must be paired with an INSERT of the derived groups")
-                .containsExactlyInAnyOrderElementsOf(cleared);
-        reinserted.values().forEach(groups -> assertThat(groups).isNotEmpty());
-    }
-
-    @Test
-    @DisplayName("V37 re-derives every facade it clears (delete always followed by a reinsert)")
-    void everyClearedToolIsReseededInV37() throws IOException {
-        String v37 = read("V37__facade_permission_rederivation.sql");
-        Set<String> cleared = parseFullDeletes(v37);
-        Map<String, Set<String>> reinserted = parseSeed(v37);
-
-        assertThat(cleared).isNotEmpty();
-        assertThat(reinserted.keySet())
-                .as("each per-tool DELETE in V37 must be paired with an INSERT of the derived codes")
-                .containsExactlyInAnyOrderElementsOf(cleared);
-        reinserted.values().forEach(codes -> assertThat(codes).isNotEmpty());
-    }
-
-    @Test
     @DisplayName("no facade grants AUTHENTICATED alongside a privileged permission (#1115)")
     void noFacadeMixesAuthenticatedWithPrivilege() throws IOException {
         Map<String, Set<String>> grants = netGrants();
@@ -303,10 +255,8 @@ class FacadeToolPermissionSeedTest {
     @DisplayName(
             "assistant entrypoints alone qualify only the deliberately open Events, DateWindow and Glossary facades")
     void assistantOnlyCallerQualifiesOnlyEventsFacade() throws IOException {
-        // Coupled to the replay list above: a migration seeding a new tool that is left out of that
-        // list makes this set look wrong, and a name added here without the migration makes the
-        // replay look wrong. Both omissions together cancel and the test passes while covering
-        // nothing, which is the failure this class exists to prevent — so change them together.
+        // Coupled to the seed: a new AUTHENTICATED-gated tool added to the seed without a name here
+        // fails, and a name added here without the seed row fails, so the two change together.
         Set<String> authenticatedOnlyFacades = Set.of("EventsFacadeTool", "DateWindowFacadeTool", "GlossaryFacadeTool");
         netGroupGrants()
                 .forEach((tool, groups) -> assertThat(qualifies(groups, ASSISTANT_ENTRYPOINTS))
@@ -364,126 +314,26 @@ class FacadeToolPermissionSeedTest {
 
     // ── parsing ───────────────────────────────────────────────────────────────
 
-    private static Map<String, Set<String>> parseSeed(String sql) {
-        Map<String, Set<String>> grants = new LinkedHashMap<>();
-        for (String block : sql.split("(?i)INSERT\\s+INTO\\s+mcp_tool_permission")) {
-            Matcher nameMatcher = TOOL_NAME.matcher(block);
-            if (!nameMatcher.find()) {
-                continue;
-            }
-            String tool = nameMatcher.group(1);
-            Set<String> codes = grants.computeIfAbsent(tool, t -> new LinkedHashSet<>());
-            Matcher codeMatcher = QUOTED_CODE.matcher(block);
-            while (codeMatcher.find()) {
-                codes.add(codeMatcher.group(1));
-            }
-        }
-        return grants;
-    }
-
-    /** V40 shape: {@code VALUES ('group', 'code'), ...} → tool → group → codes. */
-    private static Map<String, Map<String, Set<String>>> parseGroupSeed(String sql) {
-        Map<String, Map<String, Set<String>>> grants = new LinkedHashMap<>();
-        for (String block : sql.split("(?i)INSERT\\s+INTO\\s+mcp_tool_permission")) {
-            Matcher nameMatcher = TOOL_NAME.matcher(block);
-            if (!nameMatcher.find()) {
-                continue;
-            }
-            Map<String, Set<String>> groups = grants.computeIfAbsent(nameMatcher.group(1), t -> new LinkedHashMap<>());
-            Matcher pairMatcher = QUOTED_GROUP_CODE.matcher(block);
-            while (pairMatcher.find()) {
-                groups.computeIfAbsent(pairMatcher.group(1), g -> new LinkedHashSet<>())
-                        .add(pairMatcher.group(2));
-            }
-        }
-        return grants;
-    }
-
-    /**
-     * Apply an AUTHENTICATED-removal DELETE (V29/V35 shape): strip AUTHENTICATED from every tool
-     * named in the migration's {@code name IN (...)} list. Parsed generically so the guard tracks
-     * the migration rather than a hardcoded tool set.
-     */
-    private static void applyAuthenticatedDeletes(Map<String, Set<String>> grants, String sql) {
-        if (!sql.toUpperCase(java.util.Locale.ROOT).contains("'" + AUTHENTICATED + "'")) {
-            return;
-        }
-        Matcher inList = Pattern.compile("name\\s+IN\\s*\\(([^)]*)\\)", Pattern.CASE_INSENSITIVE)
-                .matcher(sql);
-        if (!inList.find()) {
-            return;
-        }
-        Matcher names = Pattern.compile("'([^']+)'").matcher(inList.group(1));
-        while (names.find()) {
-            Set<String> codes = grants.get(names.group(1));
-            if (codes != null) {
-                codes.remove(AUTHENTICATED);
-            }
-        }
-    }
-
-    /** Tool names cleared by a migration's per-tool full deletes. */
-    private static Set<String> parseFullDeletes(String sql) {
-        Set<String> tools = new LinkedHashSet<>();
-        Matcher deletes = FULL_DELETE.matcher(sql);
-        while (deletes.find()) {
-            tools.add(deletes.group(1));
-        }
-        return tools;
-    }
-
-    /** The flat (pre-V40) row set after V18 → V39. */
-    private static Map<String, Set<String>> flatGrantsThroughV39() throws IOException {
-        Map<String, Set<String>> grants = parseSeed(read("V18__seed_facade_tool_permissions.sql"));
-        applyAuthenticatedDeletes(grants, read("V29__fix_facade_authenticated_gating.sql"));
-        String v35 = read("V35__retarget_facade_authenticated_gating.sql");
-        mergeSeed(grants, v35);
-        applyAuthenticatedDeletes(grants, v35);
-        mergeSeed(grants, read("V36__inventory_facade_availability_permission.sql"));
-        String v37 = read("V37__facade_permission_rederivation.sql");
-        parseFullDeletes(v37).forEach(grants::remove);
-        mergeSeed(grants, v37);
-        String v38 = read("V38__facade_rate_lookup_permission.sql");
-        parseFullDeletes(v38).forEach(grants::remove);
-        mergeSeed(grants, v38);
-        String v39 = read("V39__aged_reports_facade_tools.sql");
-        parseFullDeletes(v39).forEach(grants::remove);
-        mergeSeed(grants, v39);
-        return grants;
-    }
-
-    /**
-     * The net grouped state after V40: the flat V18→V39 rows become singleton groups (V40's
-     * behaviour-preserving backfill, {@code permission_group = permission_code}), then V40's
-     * per-tool delete-and-reinsert replaces the 16 facades with real per-method groups.
-     */
+    /** The seeded gate: tool name → permission group → the codes that group requires. */
     private static Map<String, Map<String, Set<String>>> netGroupGrants() throws IOException {
+        String sql = read("V2__seed_mcp_server.sql");
+        Map<String, String> toolNamesById = new LinkedHashMap<>();
+        Matcher tools = TOOL_ROW.matcher(sql);
+        while (tools.find()) {
+            toolNamesById.put(tools.group(1), tools.group(2));
+        }
+        assertThat(toolNamesById).as("no mcp_tool rows parsed out of the seed").isNotEmpty();
+
         Map<String, Map<String, Set<String>>> groups = new LinkedHashMap<>();
-        flatGrantsThroughV39().forEach((tool, codes) -> {
-            Map<String, Set<String>> singletons = groups.computeIfAbsent(tool, t -> new LinkedHashMap<>());
-            codes.forEach(code ->
-                    singletons.computeIfAbsent(code, g -> new LinkedHashSet<>()).add(code));
-        });
-        // V40 and V41 share a shape — a per-tool full delete followed by the derived groups — so
-        // they replay identically. Each later migration of that shape belongs in this list; a
-        // re-derivation left out of it would leave the test asserting a chain the database does
-        // not have, which is the failure mode this whole class exists to prevent.
-        for (String migration : List.of(
-                "V40__mcp_tool_permission_groups.sql",
-                "V41__facade_permission_rederivation_1612.sql",
-                "V42__wave2_facade_promotion.sql",
-                "V43__date_window_facade_tool.sql",
-                "V44__invoicing_lag_facade_tool.sql",
-                "V46__glossary_facade_tool.sql",
-                "V47__open_workorders_by_customer_facade_tool.sql",
-                "V48__hr_facade_employee_pii_permission.sql")) {
-            String sql = read(migration);
-            parseFullDeletes(sql).forEach(groups::remove);
-            parseGroupSeed(sql).forEach((tool, seeded) -> {
-                Map<String, Set<String>> existing = groups.computeIfAbsent(tool, t -> new LinkedHashMap<>());
-                seeded.forEach((group, codes) -> existing.computeIfAbsent(group, g -> new LinkedHashSet<>())
-                        .addAll(codes));
-            });
+        Matcher rows = PERMISSION_ROW.matcher(sql);
+        while (rows.find()) {
+            String tool = toolNamesById.get(rows.group(1));
+            assertThat(tool)
+                    .as("mcp_tool_permission row for tool id %s has no mcp_tool row", rows.group(1))
+                    .isNotNull();
+            groups.computeIfAbsent(tool, t -> new LinkedHashMap<>())
+                    .computeIfAbsent(rows.group(3), g -> new LinkedHashSet<>())
+                    .add(rows.group(2));
         }
         return groups;
     }
@@ -498,12 +348,6 @@ class FacadeToolPermissionSeedTest {
                                 .collect(Collectors.toCollection(TreeSet::new)),
                         (a, b) -> a,
                         LinkedHashMap::new));
-    }
-
-    private static void mergeSeed(Map<String, Set<String>> grants, String sql) {
-        parseSeed(sql)
-                .forEach((tool, codes) -> grants.computeIfAbsent(tool, ignored -> new LinkedHashSet<>())
-                        .addAll(codes));
     }
 
     private static String read(String migration) throws IOException {

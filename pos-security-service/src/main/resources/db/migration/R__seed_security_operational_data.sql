@@ -1,3 +1,6 @@
+-- Tenant binding for the seed rows below (ADR-0062); transaction-local.
+SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
+
 -- Repeatable seed migration for pos-security-service operational users.
 -- 25 users (23 employees + 2 customer personas) across 16 roles for Durion Positivity (medium truck mechanical repair corporation).
 -- The 8 users added 2026-08 (…012-…019) fill roles that previously had no seeded user at
@@ -39,7 +42,7 @@ VALUES
     ('01960010-0000-7000-8000-000000000017', 'walter.simmons',  '$2y$10$r2Vph.8y7daYEIMfBfDp/eGd0sAIwewYL9sBAAN2eonKnAYBJSfc.', true),
     ('01960010-0000-7000-8000-000000000018', 'lena.fischer',    '$2y$10$r2Vph.8y7daYEIMfBfDp/eGd0sAIwewYL9sBAAN2eonKnAYBJSfc.', true),
     ('01960010-0000-7000-8000-000000000019', 'margaret.olsen',  '$2y$10$r2Vph.8y7daYEIMfBfDp/eGd0sAIwewYL9sBAAN2eonKnAYBJSfc.', true)
-ON CONFLICT (username) DO UPDATE SET password = EXCLUDED.password, enabled = EXCLUDED.enabled;
+ON CONFLICT (tenant_id, username) DO UPDATE SET password = EXCLUDED.password, enabled = EXCLUDED.enabled;
 
 -- Role assignments (resolved by role name to tolerate variable UUIDs from versioned migrations)
 --
@@ -120,4 +123,4 @@ SELECT '01960010-0000-7000-9000-000000000016'::uuid,
        'seed-generator'
 FROM roles r
 WHERE r.name = 'INVENTORY_CONTROLLER'
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (tenant_id, id) DO NOTHING;

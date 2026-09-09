@@ -1,4 +1,8 @@
 spring:
+  # H2 dev profile: Hibernate builds the schema from the entities. The Flyway baseline is
+  # Postgres-only (row-level security, ADR-0062) and runs in the docker/alpha/prod profiles.
+  flyway:
+    enabled: false
   datasource:
     url: jdbc:h2:mem:pos_marketing;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver

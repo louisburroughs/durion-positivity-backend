@@ -1,3 +1,6 @@
+-- Tenant binding for the seed rows below (ADR-0062); transaction-local.
+SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
+
 -- Repeatable seed for pos-catalog reference data (file 1 of 4): categories + subcategories.
 -- Products: R__seed_reference_catalog_2_products.sql
 -- Services: R__seed_reference_catalog_3_services.sql
@@ -21,7 +24,7 @@ INSERT INTO category (id, name, created_at, updated_at) VALUES
   ('01960030-0000-7000-8000-00000000000a', 'HVAC & Climate',                  NOW(), NOW()),
   ('01960030-0000-7000-8000-00000000000b', 'Body & Lighting',                 NOW(), NOW()),
   ('01960030-0000-7000-8000-00000000000c', 'Heavy Equipment & Hydraulics',    NOW(), NOW())
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW();
+ON CONFLICT (tenant_id, id) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW();
 
 INSERT INTO subcategory (id, name, category_id, created_at, updated_at) VALUES
   ('01960031-0000-7000-8000-000000000001', 'Commercial Truck Tires',            '01960030-0000-7000-8000-000000000001', NOW(), NOW()),
@@ -64,4 +67,4 @@ INSERT INTO subcategory (id, name, category_id, created_at, updated_at) VALUES
   ('01960031-0000-7000-8000-000000000026', 'Mirrors & Body Hardware',           '01960030-0000-7000-8000-00000000000b', NOW(), NOW()),
   ('01960031-0000-7000-8000-000000000027', 'Hydraulic Cylinders & Hoses',       '01960030-0000-7000-8000-00000000000c', NOW(), NOW()),
   ('01960031-0000-7000-8000-000000000028', 'Heavy Equipment Filters',           '01960030-0000-7000-8000-00000000000c', NOW(), NOW())
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, category_id = EXCLUDED.category_id, updated_at = NOW();
+ON CONFLICT (tenant_id, id) DO UPDATE SET name = EXCLUDED.name, category_id = EXCLUDED.category_id, updated_at = NOW();

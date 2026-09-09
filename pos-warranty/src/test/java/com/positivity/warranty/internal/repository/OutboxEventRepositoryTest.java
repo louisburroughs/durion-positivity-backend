@@ -14,8 +14,8 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 /**
  * Database-level contract of the outbox drain/replay queries (ADR-0044 §4): pending-row
  * selection order, replay re-queueing of already-published rows only, and the half-open
- * {@code [since, until)} replay window. Runs against the Flyway baseline on H2 in PostgreSQL
- * mode with {@code ddl-auto=validate} (same recipe as {@code WarrantyPersistenceTest}).
+ * {@code [since, until)} replay window. Runs against the entity-generated schema on H2 in
+ * PostgreSQL mode with {@code ddl-auto=create-drop} (same recipe as {@code WarrantyPersistenceTest}).
  *
  * <p>{@code createdAt} is pinned to exact window boundaries with a bulk update after insert,
  * since entity-listener auditing stamps it with now() on persist.
@@ -27,7 +27,8 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
             "spring.datasource.username=sa",
             "spring.datasource.password=",
             "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate"
+            "spring.jpa.hibernate.ddl-auto=create-drop",
+            "spring.flyway.enabled=false"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class OutboxEventRepositoryTest {

@@ -33,6 +33,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
             "spring.datasource.password=",
             "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
             "spring.jpa.hibernate.ddl-auto=validate",
+            "spring.flyway.locations=classpath:db/h2-migration",
             "eureka.client.enabled=false"
         })
 @Import(PosSupplierApplicationSmokeTest.TestCodecConfig.class)

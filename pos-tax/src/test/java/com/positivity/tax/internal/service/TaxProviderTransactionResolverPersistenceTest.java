@@ -60,9 +60,8 @@ import org.springframework.test.context.ActiveProfiles;
             "spring.datasource.username=sa",
             "spring.datasource.password=",
             "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate",
-            "spring.flyway.enabled=true",
-            "spring.flyway.locations=classpath:db/migration"
+            "spring.jpa.hibernate.ddl-auto=create-drop",
+            "spring.flyway.enabled=false"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TaxProviderTransactionResolver.class, TaxProviderTransactionResolverPersistenceTest.TestClockConfig.class})

@@ -13,9 +13,9 @@ matched for all ten roles the issue scored — which is what makes the offline s
 trustworthy substitutes for the database.
 
 SOURCES (no database, no build)
-  A. Facade permission groups — pos-mcp-server db/migration, the per-tool re-derivations
-     replayed in order. Each such migration DELETEs a tool's rows before re-inserting, so a
-     later one replaces an earlier one rather than adding to it.
+  A. Facade permission groups — pos-mcp-server db/migration/V2__seed_mcp_server.sql, the
+     mcp_tool_permission rows as seeded. Since the 2026-09-09 flatten that one file is the net
+     result of the retired per-tool re-derivations (V18 -> V48).
   B. Role grants — scripts/fixtures/seed/alpha/security/role-permissions.csv, the bulk-load
      baseline, canonical for role grants since #1613 D8 moved them out of Flyway.
 
@@ -50,28 +50,26 @@ BASELINE = ROOT / "scripts/mcp-facade-reachability-baseline.json"
 
 EXCLUDED_TOOLS = {"EventsFacadeTool", "DateWindowFacadeTool"}
 
-# A per-tool group re-derivation: VALUES ('group', 'code'), ... WHERE mcp_tool.name = 'Tool'
-GROUP_BLOCK = re.compile(
-    r"FROM mcp_tool, \(VALUES(.*?)\) AS perms\(grp, code\)\s*WHERE mcp_tool\.name = '([A-Za-z]+)'",
-    re.DOTALL,
+# The flattened seed's column inserts (pg_dump --column-inserts form).
+TOOL_ROW = re.compile(r"INSERT\s+INTO\s+mcp_tool\s*\(id,\s*name\b[^)]*\)\s*VALUES\s*\('([^']+)',\s*'([^']+)'")
+PERMISSION_ROW = re.compile(
+    r"INSERT\s+INTO\s+mcp_tool_permission\s*\(tool_id,\s*permission_code,\s*permission_group\)"
+    r"\s*VALUES\s*\('([^']+)',\s*'([^']+)',\s*'([^']+)'\)"
 )
-GROUP_PAIR = re.compile(r"\('([^']+)',\s*'([^']+)'\)")
 
 
 def facade_groups():
-    """tool -> group -> {codes}, replaying the group-shaped migrations in version order."""
+    """tool -> group -> {codes}, from the seed's mcp_tool_permission rows."""
+    sql = re.sub(r"(?m)--.*$", "", (MIGRATION_DIR / "V2__seed_mcp_server.sql").read_text(encoding="utf-8"))
+    tool_names = {tool_id: name for tool_id, name in TOOL_ROW.findall(sql)}
     out = {}
-    migrations = sorted(
-        (p for p in MIGRATION_DIR.glob("V*.sql")),
-        key=lambda p: int(re.match(r"V(\d+)__", p.name).group(1)),
-    )
-    for migration in migrations:
-        for body, tool in GROUP_BLOCK.findall(migration.read_text(encoding="utf-8")):
-            if tool in EXCLUDED_TOOLS:
-                continue
-            groups = out[tool] = {}
-            for group, code in GROUP_PAIR.findall(body):
-                groups.setdefault(group, set()).add(code)
+    for tool_id, code, group in PERMISSION_ROW.findall(sql):
+        tool = tool_names.get(tool_id)
+        if tool is None:
+            sys.exit(f"mcp_tool_permission row for tool id {tool_id} has no mcp_tool row")
+        if tool in EXCLUDED_TOOLS:
+            continue
+        out.setdefault(tool, {}).setdefault(group, set()).add(code)
     if not out:
         sys.exit("no facade groups parsed — the regex, not the seed, is what broke")
     return out

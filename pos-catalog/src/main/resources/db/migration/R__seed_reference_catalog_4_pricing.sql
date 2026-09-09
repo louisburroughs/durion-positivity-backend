@@ -1,3 +1,6 @@
+-- Tenant binding for the seed rows below (ADR-0062); transaction-local.
+SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
+
 -- =============================================================
 -- R__seed_reference_catalog_4_pricing.sql
 -- MSRP and item_cost for all 500 products (CTE join on sku)
@@ -517,7 +520,7 @@ JOIN (VALUES
     ('BSCH-SP996205', 13.8::numeric),
     ('WIXF-XP50006F', 12.9::numeric)
 ) AS v(sku, amount) ON p.sku = v.sku
-ON CONFLICT (msrp_id) DO UPDATE SET
+ON CONFLICT (tenant_id, msrp_id) DO UPDATE SET
     amount = EXCLUDED.amount,
     updated_at = NOW();
 
@@ -1035,7 +1038,7 @@ JOIN (VALUES
     ('BSCH-SP996205', 5.8::numeric, 5.92::numeric, 5.86::numeric),
     ('WIXF-XP50006F', 5.16::numeric, 5.26::numeric, 5.21::numeric)
 ) AS v(sku, standard_cost, last_cost, average_cost) ON p.sku = v.sku
-ON CONFLICT (item_id) DO UPDATE SET
+ON CONFLICT (tenant_id, item_id) DO UPDATE SET
     standard_cost = EXCLUDED.standard_cost,
     last_cost = EXCLUDED.last_cost,
     average_cost = EXCLUDED.average_cost,

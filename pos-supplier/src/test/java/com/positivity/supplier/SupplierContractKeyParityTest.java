@@ -108,16 +108,16 @@ class SupplierContractKeyParityTest {
 
     /**
      * The two audit enums additionally have a <em>third</em> copy: the {@code chk_saccess_kind} and
-     * {@code chk_saccess_payload_outcome} CHECK constraints in V4. A constant added to the enums but not
+     * {@code chk_saccess_payload_outcome} CHECK constraints in the baseline (formerly V4). A constant added to the enums but not
      * to the constraint is not a compile error and not a mapping error — it is a runtime constraint
      * violation on an audit write, which is the worst place to discover it, because ADR-0050 §7 makes
      * that write a precondition of serving a payload. This pins the enums to the migration text.
      */
     @Test
-    void auditEnumsMatchTheCheckConstraintsInTheV4Migration() throws Exception {
+    void auditEnumsMatchTheCheckConstraintsInTheBaseline() throws Exception {
         String migration = new String(
                 java.nio.file.Files.readAllBytes(
-                        java.nio.file.Path.of("src/main/resources/db/migration/V4__supplier_audit_access.sql")),
+                        java.nio.file.Path.of("src/main/resources/db/migration/V1__baseline_supplier.sql")),
                 java.nio.charset.StandardCharsets.UTF_8);
 
         for (var kind : com.positivity.supplier.internal.enums.AuditAccessKind.values()) {
@@ -143,9 +143,9 @@ class SupplierContractKeyParityTest {
      * in the type system connects the enum to the column at all.
      */
     @Test
-    void exchangeAuditEnumsMatchTheCheckConstraintsInTheV3Migration() throws Exception {
+    void exchangeAuditEnumsMatchTheExchangeAuditCheckConstraints() throws Exception {
         String migration = java.nio.file.Files.readString(
-                java.nio.file.Path.of("src/main/resources/db/migration/V3__supplier_exchange_audit.sql"));
+                java.nio.file.Path.of("src/main/resources/db/migration/V1__baseline_supplier.sql"));
 
         for (var level : com.positivity.supplier.internal.enums.PayloadCaptureLevel.values()) {
             assertThat(constraintBody(migration, "chk_saudit_capture_level"))
@@ -163,15 +163,15 @@ class SupplierContractKeyParityTest {
     }
 
     /**
-     * The same pin for V7's redaction-classification CHECK. A classification added to the enum (and given a
+     * The same pin for the binding redaction-classification CHECK (formerly V7). A classification added to the enum (and given a
      * vocabulary in {@code PayloadRedactor}) but not to the constraint would fail the binding admin write
      * that declares it — better than a silent audit gap, but still a runtime discovery this makes a build
      * failure instead.
      */
     @Test
-    void redactionClassificationEnumMatchesTheCheckConstraintInTheV7Migration() throws Exception {
+    void redactionClassificationEnumMatchesItsCheckConstraint() throws Exception {
         String migration = java.nio.file.Files.readString(
-                java.nio.file.Path.of("src/main/resources/db/migration/V7__binding_redaction_classifications.sql"));
+                java.nio.file.Path.of("src/main/resources/db/migration/V1__baseline_supplier.sql"));
 
         for (var classification : com.positivity.supplier.internal.enums.RedactionClassification.values()) {
             assertThat(constraintBody(migration, "chk_sbinding_redaction_classification"))
@@ -186,7 +186,7 @@ class SupplierContractKeyParityTest {
     private static String constraintBody(String migration, String constraintName) {
         int start = migration.indexOf("CONSTRAINT " + constraintName);
         assertThat(start)
-                .as("V4 must still declare %s; a renamed constraint silently voids this pin", constraintName)
+                .as("the baseline must still declare %s; a renamed constraint silently voids this pin", constraintName)
                 .isNotNegative();
         int end = migration.indexOf("))", start);
         assertThat(end).as("%s must be a parenthesised CHECK", constraintName).isNotNegative();

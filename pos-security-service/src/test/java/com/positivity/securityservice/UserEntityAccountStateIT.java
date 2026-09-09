@@ -20,8 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
  * AUTH-002.
  *
  * <p>
- * T15 verifies that account-state columns added by
- * {@code V6__add_account_state_columns.sql}
+ * T15 verifies that the account-state columns (added by the retired V6, now in the baseline)
  * are correctly mapped in the JPA entity and that values written to H2 are read
  * back
  * accurately after flushing and clearing the persistence context. These tests

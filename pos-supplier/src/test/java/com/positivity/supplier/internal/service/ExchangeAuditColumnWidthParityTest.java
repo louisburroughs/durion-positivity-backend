@@ -168,9 +168,15 @@ class ExchangeAuditColumnWidthParityTest {
      * <p>Three things this deliberately gets right, each of which an earlier version got wrong:
      *
      * <ul>
-     *   <li>Migrations are <strong>globbed and applied in version order</strong>, so a future V6 that narrows a
-     *       width is seen. Hardcoding V3 and V5 made any later change invisible.
-     *   <li>The {@code CREATE TABLE} parse is <strong>scoped to the audited table</strong>. V3 also creates
+     *   <li>Migrations are <strong>globbed and applied in version order</strong>, so a future V2 that narrows a
+     *
+     *       width is seen. Hardcoding versions made any later change invisible. Since the 2026-09-09 flatten the
+     *
+     *       chain is the Postgres baseline ({@code V1__baseline_supplier.sql}, pg_dump form with a {@code public.}
+     *
+     *       prefix), which is what production actually has.
+     *
+     *   <li>The {@code CREATE TABLE} parse is <strong>scoped to the audited table</strong>. The baseline also creates
      *       {@code supplier_schedule_lease}, which has its own {@code capability varchar(64)} and
      *       {@code last_run_outcome varchar(32)}; a whole-file parse with {@code putIfAbsent} silently mixed the
      *       two tables' columns together.
@@ -202,8 +208,9 @@ class ExchangeAuditColumnWidthParityTest {
         }
 
         assertThat(widths.get("protocol_version"))
-                .as("protocol_version must resolve to 64 (V3 declares 32, V5 widens it). Anything else means"
-                        + " the migration parse is wrong and every comparison here is meaningless")
+                .as("protocol_version must resolve to 64 (the retired V3 declared 32, V5 widened it; the baseline"
+                        + " carries 64). Anything else means the migration parse is wrong and every comparison"
+                        + " here is meaningless")
                 .isEqualTo(64);
         return widths;
     }
@@ -235,7 +242,7 @@ class ExchangeAuditColumnWidthParityTest {
     @org.jspecify.annotations.Nullable
     private static String createTableBody(String sql, String table) {
         Matcher create = Pattern.compile(
-                        "CREATE TABLE\\s+" + Pattern.quote(table) + "\\s*\\(", Pattern.CASE_INSENSITIVE)
+                        "CREATE TABLE\\s+(?:public\\.)?" + Pattern.quote(table) + "\\s*\\(", Pattern.CASE_INSENSITIVE)
                 .matcher(sql);
         if (!create.find()) {
             return null;

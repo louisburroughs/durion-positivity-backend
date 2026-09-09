@@ -74,16 +74,16 @@ pos-api-gateway  (JWT validation, path rewrite /{domain}/vN/.., permission bitse
      └── pos-event-receiver (event ingestion hub, shared-secret auth, not public)
 ```
 
-- **Multitenancy (ADR-0062, accepted 2026-09-09; target state, not yet implemented).** None of the types, topics,
-  roles, or headers below exist in this repo yet; they arrive with `pos-tenancy-common` (plan WS1), `pos-tenant`
-  (WS2a), and the per-module retrofit (WS3). The target: shared database and schema; every tenant-scoped table
-  carries `tenant_id` under Postgres row-level security, and every scoped entity extends `TenantScopedEntity`
-  (`@TenantId`) or is annotated `@TenantGlobal` with a justification. Tenant context comes only from the JWT `tid`
-  claim via the gateway's `X-Tenant-Id`; services connect as the non-owner `pos_app` role and the owner credential
-  is Flyway-only. Events carry `tenantId`; scheduled jobs are per-tenant (`TenantIterator`) or `@PlatformScoped`.
-  Roles are tenant-scoped rows from a platform template; the permission catalog stays global. What applies today:
-  never add an `organizationId` field (it is a remnant), and write new schema retrofit-ready (see `AGENTS.md`).
-  Plan and per-module checklist: `../durion/docs/architecture/plans/adr-0023-suppression-postgres-multitenancy-plan.md`.
+- **Multitenancy (ADR-0062, accepted 2026-09-09; schema in place, runtime binding pending).** Every persisting
+  module's Flyway history is one flattened baseline (`V1__baseline_<module>.sql`, 2026-09-09) that already carries
+  the tenancy schema: `tenant_id` on every scoped table under Postgres row-level security, unique constraints and
+  foreign keys scoped by tenant, and a per-module `db/tenancy-global-tables.txt` whitelist. Conventions and the
+  add-a-table checklist: `docs/TENANCY_SCHEMA.md`. Not yet present: `pos-tenancy-common` (`TenantScopedEntity`,
+  `@TenantGlobal`, `TenantAwareDataSource`, `TenantIterator`, plan WS1), `pos-tenant` (WS2a), the JWT `tid` claim
+  and `X-Tenant-Id` (WS2b), the `pos_app` runtime role switch. Until WS1 the owner role carries a transitional
+  default tenant (`postgres/init-tenancy.sh`) and the `pg` test profiles bind it per connection. Never add an
+  `organizationId` field (it is a remnant). Plan:
+  `../durion/docs/architecture/plans/adr-0023-suppression-postgres-multitenancy-plan.md`.
 
 - **API Gateway is the security boundary.** It validates JWTs and decodes the permission bitset into
   `X-Authorities` / `X-User` / `X-User-Id` headers. Downstream services trust these headers and **must strip any

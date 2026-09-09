@@ -2,6 +2,7 @@ package com.positivity.warranty.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.warranty.internal.entity.ClaimCodeSequence;
 import com.positivity.warranty.internal.repository.ClaimCodeSequenceRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -15,6 +16,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -31,7 +33,11 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code ClaimCodeSequenceRepository.lockByYear} — this test allocates from many threads in
  * real, separate transactions (no test-managed transaction), so dropping the lock annotation
  * produces duplicate codes and turns it red. Also covers the unseeded-year insert fallback
- * (years past the V1 seed range 2024–2075).
+ * (years the seed does not pre-create; the Postgres seed covers 2024–2075).
+ *
+ * <p>The schema is entity-generated on H2, so the seed rows are absent: {@link #seedCurrentYear}
+ * plays the seed's part for the current year, which is what keeps the concurrent test from
+ * racing on the bootstrap insert the way an unseeded year legitimately can.
  */
 @DataJpaTest(
         properties = {
@@ -41,7 +47,8 @@ import org.springframework.transaction.annotation.Transactional;
             "spring.datasource.username=sa",
             "spring.datasource.password=",
             "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate"
+            "spring.jpa.hibernate.ddl-auto=create-drop",
+            "spring.flyway.enabled=false"
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ClaimCodeServiceImpl.class, ClaimCodeConcurrencyTest.ClockConfig.class})
@@ -63,6 +70,16 @@ class ClaimCodeConcurrencyTest {
 
     @Autowired
     private ClaimCodeSequenceRepository claimCodeSequenceRepository;
+
+    /** The seed's current-year row, committed outside the test transaction (idempotent). */
+    @BeforeEach
+    void seedCurrentYear() {
+        int year = Year.now(Clock.systemUTC()).getValue();
+        if (claimCodeSequenceRepository.findById(year).isEmpty()) {
+            claimCodeSequenceRepository.saveAndFlush(
+                    ClaimCodeSequence.builder().year(year).nextSeq(1L).build());
+        }
+    }
 
     /**
      * Runs outside any test-managed transaction so every {@code nextClaimCode()} call opens —
@@ -109,7 +126,7 @@ class ClaimCodeConcurrencyTest {
     }
 
     /**
-     * Years beyond the V1 seed range (2024–2075) have no counter row: the first allocation
+     * Years the seed does not cover have no counter row: the first allocation
      * must create it and hand out {@code WC-<year>-000001}. Runs in the default rolled-back
      * test transaction; the service is instantiated directly with a 2080 clock because the
      * shared bean's clock must stay at the current (seeded) year for the concurrency test.

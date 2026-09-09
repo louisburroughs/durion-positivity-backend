@@ -1,3 +1,6 @@
+-- Tenant binding for the seed rows below (ADR-0062); transaction-local.
+SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
+
 -- =============================================================
 -- R__seed_reference_catalog_6_labor_guide.sql
 -- MOCKGUIDE vendor-code cross-reference + default source policy
@@ -27,7 +30,7 @@ FROM service s
 CROSS JOIN (VALUES ('MOCKGUIDE'), ('MOCKGUIDE_LIVE')) AS src (source_code)
 WHERE s.operation_code IS NOT NULL
   AND s.operation_code <> 'HEADLIGHT-RESTORATION'
-ON CONFLICT (source_code, provider_op_code) DO NOTHING;
+ON CONFLICT (tenant_id, source_code, provider_op_code) DO NOTHING;
 
 -- Default resolution precedence (lower wins). One row per (time_type, source) that stores
 -- rows; the QUERY_ONLY live source and any unlisted pair fall back to the provider's
@@ -42,4 +45,4 @@ VALUES
     (md5('ltsp:OEM_WARRANTY:MOCKGUIDE')::uuid,         'OEM_WARRANTY',         'MOCKGUIDE', NULL, 100, true, NOW(), NOW()),
     (md5('ltsp:MANUFACTURER_INSTALL:MOCKGUIDE')::uuid, 'MANUFACTURER_INSTALL', 'MOCKGUIDE', NULL, 100, true, NOW(), NOW()),
     (md5('ltsp:DURION_STANDARD:DURION')::uuid,         'DURION_STANDARD',      'DURION',    NULL, 100, true, NOW(), NOW())
-ON CONFLICT (time_type, source_code, operation_category) DO NOTHING;
+ON CONFLICT (tenant_id, time_type, source_code, operation_category) DO NOTHING;

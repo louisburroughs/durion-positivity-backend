@@ -1,3 +1,6 @@
+-- Tenant binding for the seed rows below (ADR-0062); transaction-local.
+SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
+
 -- =============================================================
 -- R__seed_reference_catalog_3_services.sql
 -- 50 mechanical auto services
@@ -56,7 +59,7 @@ VALUES
     ('c54b6d26-b6f1-26b0-0cc9-ead4a98210ee', 'Tie Rod End Replacement', 'Replace outer tie rod end', 'Remove and replace outer tie rod end, set toe to spec, road test, print alignment report.', NOW(), NOW()),
     ('c9b2df00-247f-6224-a0f4-1636a894ee8d', 'Wheel Bearing Replacement - Single Hub', 'Replace one wheel hub and bearing assembly', 'Remove wheel, brake components, and old hub assembly, press in new bearing or install new hub assembly, torque to spec, verify no noise.', NOW(), NOW()),
     ('c31b4b23-0678-4322-9da2-58e14e8a63f2', 'Power Steering Rack Replacement', 'Remove and install steering rack', 'Remove old steering rack, install remanufactured or new unit, connect lines, bleed system, perform 4-wheel alignment.', NOW(), NOW())
-ON CONFLICT (id) DO UPDATE SET
+ON CONFLICT (tenant_id, id) DO UPDATE SET
     name = EXCLUDED.name,
     short_description = EXCLUDED.short_description,
     long_description = EXCLUDED.long_description,

@@ -41,7 +41,7 @@ import org.junit.jupiter.api.Test;
  *       fixture keys on must exist there, because that is what the driver resolves against;
  *   <li>the storage topology and its capabilities, {@code location/storage-locations.csv} — the
  *       fixture that creates the destinations these rules point at;
- *   <li>the compatibility matrix, {@code V43__storage_compatibility.sql} — the authority on which
+ *   <li>the compatibility matrix, seeded by {@code V2__seed_inventory.sql} (formerly V43) — the authority on which
  *       storage class may hold which catalog class;
  *   <li>the product fixture, {@code catalog/products.csv} — the driver resolves a category name to
  *       its id through an exemplar product, so a name with no product is unresolvable in practice
@@ -64,15 +64,14 @@ class AlphaFixturePutawayRulesTest {
     private static final Path CATALOG_SEED = MODULE_DIR
             .resolve("../pos-catalog/src/main/resources/db/migration/R__seed_reference_catalog.sql")
             .normalize();
-    private static final Path MATRIX_SQL =
-            MODULE_DIR.resolve("src/main/resources/db/migration/V43__storage_compatibility.sql");
+    private static final Path MATRIX_SQL = MODULE_DIR.resolve("src/main/resources/db/migration/V2__seed_inventory.sql");
 
     /** {@code ('<uuid>', 'Name'} in a taxonomy seed VALUES tuple. */
     private static final Pattern TAXONOMY_ROW = Pattern.compile("'([0-9a-fA-F-]{36})',\\s*'([^']*)'");
 
     /** One {@code storage_compatibility} VALUES tuple. */
     private static final Pattern MATRIX_ROW = Pattern.compile("'[0-9a-fA-F-]{36}',\\s*'(CATEGORY|SUBCATEGORY)',"
-            + "\\s*'([0-9a-fA-F-]{36})',\\s*'([A-Z_]+)',\\s*(TRUE|FALSE)");
+            + "\\s*'([0-9a-fA-F-]{36})',\\s*'([A-Z_]+)',\\s*(?i:(true|false))");
 
     /** Putaway sources; they are destinations for nothing. */
     private static final Set<String> SOURCE_ONLY = Set.of("STAGING", "QUARANTINE");
@@ -224,7 +223,7 @@ class AlphaFixturePutawayRulesTest {
         Matcher matcher = MATRIX_ROW.matcher(Files.readString(MATRIX_SQL, StandardCharsets.UTF_8));
         while (matcher.find()) {
             byRef.computeIfAbsent(matcher.group(1) + "|" + matcher.group(2), k -> new LinkedHashSet<>())
-                    .add(new Accepted(matcher.group(3), "TRUE".equals(matcher.group(4))));
+                    .add(new Accepted(matcher.group(3), "true".equalsIgnoreCase(matcher.group(4))));
         }
         return byRef;
     }

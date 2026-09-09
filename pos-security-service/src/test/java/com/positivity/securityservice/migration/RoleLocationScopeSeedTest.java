@@ -18,25 +18,31 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Pins the per-role {@code location_scope} / {@code location_hierarchy} seed in V37 (ADR-0061 §2
- * and its 2026-09-07 amendment, #1868). The values are decisions, not defaults, so a change here
- * must be a deliberate edit to both the migration and this test.
+ * Pins the per-role {@code location_scope} / {@code location_hierarchy} seed (ADR-0061 §2 and its
+ * 2026-09-07 amendment, #1868), which lives in the repeatable {@code R__seed_role_location_scope.sql}
+ * since the migration history was flattened (formerly V37). The values are decisions, not defaults,
+ * so a change here must be a deliberate edit to both the seed and this test. The column defaults are
+ * pinned against the baseline that creates the columns.
  */
-@DisplayName("Role location scope seed (V37, ADR-0061)")
+@DisplayName("Role location scope seed (R__seed_role_location_scope, ADR-0061)")
 class RoleLocationScopeSeedTest {
 
     private static final Path MIGRATION =
-            Path.of("src", "main", "resources", "db", "migration", "V37__add_role_location_scope.sql");
+            Path.of("src", "main", "resources", "db", "migration", "R__seed_role_location_scope.sql");
+    private static final Path BASELINE =
+            Path.of("src", "main", "resources", "db", "migration", "V1__baseline_security_service.sql");
 
     private static final Pattern SCOPE_UPDATE = Pattern.compile(
             "UPDATE\\s+roles\\s+SET\\s+location_scope\\s*=\\s*'([A-Z]+)'\\s*,\\s*location_hierarchy\\s*=\\s*'([A-Z]+)'"
                     + "\\s*WHERE\\s+name\\s+IN\\s*\\(([^)]*)\\)",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern QUOTED_NAME = Pattern.compile("'([A-Z_]+)'");
+    /** The baseline is pg_dump output: {@code location_scope character varying(16) DEFAULT 'ALL'::character varying NOT NULL}. */
     private static final Pattern SCOPE_DEFAULT = Pattern.compile(
-            "location_scope\\s+VARCHAR\\(16\\)\\s+NOT\\s+NULL\\s+DEFAULT\\s+'([A-Z]+)'", Pattern.CASE_INSENSITIVE);
+            "location_scope\\s+character varying\\(16\\)\\s+DEFAULT\\s+'([A-Z]+)'", Pattern.CASE_INSENSITIVE);
+
     private static final Pattern HIERARCHY_DEFAULT = Pattern.compile(
-            "location_hierarchy\\s+VARCHAR\\(16\\)\\s+NOT\\s+NULL\\s+DEFAULT\\s+'([A-Z]+)'", Pattern.CASE_INSENSITIVE);
+            "location_hierarchy\\s+character varying\\(16\\)\\s+DEFAULT\\s+'([A-Z]+)'", Pattern.CASE_INSENSITIVE);
 
     /** The seed table from the issue and ADR-0061 §2, verbatim. */
     private static final Map<String, Seed> EXPECTED = Map.ofEntries(
@@ -59,11 +65,13 @@ class RoleLocationScopeSeedTest {
     private record Seed(LocationScope scope, LocationHierarchy hierarchy) {}
 
     private static String sql;
+    private static String baseline;
     private static Map<String, Seed> seeded;
 
     @BeforeAll
     static void parse() throws IOException {
         sql = Files.readString(MIGRATION, StandardCharsets.UTF_8);
+        baseline = Files.readString(BASELINE, StandardCharsets.UTF_8);
         seeded = new LinkedHashMap<>();
         Matcher statement = SCOPE_UPDATE.matcher(sql);
         while (statement.find()) {
@@ -73,7 +81,7 @@ class RoleLocationScopeSeedTest {
             while (name.find()) {
                 Seed previous = seeded.put(name.group(1), seed);
                 assertThat(previous)
-                        .as("%s is seeded twice in V37", name.group(1))
+                        .as("%s is seeded twice in %s", name.group(1), MIGRATION.getFileName())
                         .isNull();
             }
         }
@@ -119,8 +127,8 @@ class RoleLocationScopeSeedTest {
     @Test
     @DisplayName("column defaults are ALL / OTHER so a role created later never widens or narrows by omission")
     void columnDefaultsPreserveTodaysBehaviour() {
-        Matcher scope = SCOPE_DEFAULT.matcher(sql);
-        Matcher hierarchy = HIERARCHY_DEFAULT.matcher(sql);
+        Matcher scope = SCOPE_DEFAULT.matcher(baseline);
+        Matcher hierarchy = HIERARCHY_DEFAULT.matcher(baseline);
         assertThat(scope.find()).isTrue();
         assertThat(hierarchy.find()).isTrue();
         assertThat(LocationScope.valueOf(scope.group(1))).isEqualTo(LocationScope.ALL);
@@ -129,7 +137,7 @@ class RoleLocationScopeSeedTest {
 
     @Test
     @DisplayName(
-            "V37 creates no roles: the drift and persona tests harvest names from role INSERTs, and scope literals are upper case")
+            "the scope seed creates no roles: the drift and persona tests harvest names from role INSERTs, and scope literals are upper case")
     void migrationInsertsNoRoles() {
         assertThat(sql.toUpperCase(java.util.Locale.ROOT)).doesNotContain("INSERT INTO ROLES");
         // Asserted on the harvested names rather than on the literal set (S5841): with the

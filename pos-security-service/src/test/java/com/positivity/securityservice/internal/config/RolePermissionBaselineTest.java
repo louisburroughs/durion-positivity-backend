@@ -49,9 +49,8 @@ import org.junit.jupiter.api.Test;
  * role-audit-2026-08.md §6, decided 2026-08-25), ACCOUNT_MANAGER was narrowed to a
  * customer-accounts (AR) role and its accounting-management grants — chart of accounts, journal
  * entries, GL/posting-category/mapping-key/default-mapping configuration, posting rules,
- * accounting events, exports and AP — moved to the newly created CONTROLLER role ({@code
- * V24__seed_controller_role.sql}, revoked from ACCOUNT_MANAGER by {@code
- * V25__rescope_account_manager_to_customer_accounts.sql}). Six dead codes (accounting:ap:approve,
+ * accounting events, exports and AP — moved to the newly created CONTROLLER role (seeded by the retired V24, now a row of {@code
+ * V2__seed_security_service.sql}; revoked from ACCOUNT_MANAGER by the retired V25). Six dead codes (accounting:ap:approve,
  * accounting:ap:reject and the accounting:mapping:* family) were retired at the same time. {@code
  * role-authority-legacy-baseline.tsv} was edited deliberately to match: the moved codes'
  * ACCOUNT_MANAGER rows were relabeled to CONTROLLER (the no-regression floor moves with the role
@@ -63,7 +62,7 @@ import org.junit.jupiter.api.Test;
  * / {@code shop:bay:view} rows were relabeled to {@code location:read} / {@code
  * location:bay:read} (with LOCATION_MANAGER's {@code shop:location/bay:create/edit} rows
  * relabeled to {@code location:write} / {@code location:bay:manage}). The 2026-08 task 5
- * retirement wave ({@code V28__retire_unenforced_permission_grants.sql}, docs/rbac-permission-
+ * retirement wave (the retired V28, docs/rbac-permission-
  * role-audit-2026-08.md §7) deleted the fixture's 38 rows for the 34 codes it retires outright
  * (enforced by no endpoint or capability check — ADMIN, plus LOCATION_MANAGER and
  * SERVICE_ADVISOR for two of them) rather than relabeling them to a successor: these are
@@ -112,23 +111,12 @@ class RolePermissionBaselineTest {
             Path.of("..", "scripts", "fixtures", "seed", "alpha", "security", "role-permissions.csv");
 
     /**
-     * The #1512 revoke of SYSTEM_ADMINISTRATOR's out-of-band grants. Its keep list is a copy of
-     * this seed's SYSTEM_ADMINISTRATOR block, which is what
-     * {@link #v31KeepListMatchesTheSeededSystemAdministratorGrants} exists to police.
-     */
-    private static final Path V31_REVOKE =
-            MIGRATIONS.resolve("V31__revoke_system_administrator_out_of_band_grants.sql");
-
-    /**
      * A lower-case, colon-bearing quoted literal — a permission name. Deliberately not matched
      * against role names (upper-case, no colon) or the migration's {@code RAISE} messages (which
      * start upper-case and contain spaces), so the keep list is the only thing it picks up once
      * comments are stripped.
      */
     private static final Pattern QUOTED_PERMISSION = Pattern.compile("'([a-z][a-z0-9_.-]*(?::[a-z0-9_.-]+)+)'");
-
-    /** A {@code --} comment, to end of line. */
-    private static final Pattern SQL_LINE_COMMENT = Pattern.compile("--.*");
 
     /**
      * Roles the retired hardcoded switch expanded that no migration and no runtime initializer
@@ -137,16 +125,16 @@ class RolePermissionBaselineTest {
      * carried into the baseline.
      *
      * <p>CONTROLLER is deliberately absent from this set as of the 2026-08 ACCOUNT_MANAGER /
-     * CONTROLLER rescope (#1499/#1512, docs/rbac-permission-role-audit-2026-08.md §6): {@code
-     * V24__seed_controller_role.sql} now creates it, so it is reachable and this baseline grants
-     * it the accounting-management authority {@code V25} revokes from ACCOUNT_MANAGER.
+     * CONTROLLER rescope (#1499/#1512, docs/rbac-permission-role-audit-2026-08.md §6): the role seed ({@code
+     * V2__seed_security_service.sql}, formerly V24) creates it, so it is reachable and this baseline
+     * grants it the accounting-management authority the retired V25 revoked from ACCOUNT_MANAGER.
      */
     private static final Set<String> UNREACHABLE_LEGACY_ROLES =
             Set.of("ACCOUNTANT", "AP_CLERK", "CSR", "FLEET_MANAGER", "GL_ANALYST");
 
     /**
-     * The two unratified "Candidate Roles v0" that {@code V3__seed_candidate_roles.sql}
-     * created and {@code V23__drop_unratified_candidate_roles.sql} deletes (#1373).
+     * The two unratified "Candidate Roles v0" that the retired V3 created and the retired V23
+     * deleted (#1373); the flattened seed never creates them.
      * Nothing in the codebase ever referenced either, and SECURITY_ADMIN's described
      * scope is already held by SYSTEM_ADMINISTRATOR. Granting to a deleted role would
      * resolve nothing and trip the seed's own assertion at startup, so this must stay
@@ -733,65 +721,6 @@ class RolePermissionBaselineTest {
         assertThat(assertedPermissions)
                 .as("permissions asserted in section 4 vs permissions actually granted")
                 .isEqualTo(grantedPermissions);
-    }
-
-    @Test
-    @DisplayName("V31's keep list is exactly the SYSTEM_ADMINISTRATOR grants this seed makes")
-    void v31KeepListMatchesTheSeededSystemAdministratorGrants() throws IOException {
-        // V31 (#1512) deletes every SYSTEM_ADMINISTRATOR grant *not* in a hardcoded list, because
-        // SQL cannot read a repeatable seed in another file. That makes the list a second copy of
-        // this block, and a copy drifts. Both directions are a defect, and they fail differently:
-        // a name missing from V31 revokes authority the seed deliberately gives the role, and a
-        // name in V31 that the seed no longer grants keeps an out-of-band grant alive past the
-        // migration written to remove it. Equality is the only version of this that holds.
-        Set<String> keepList = parsePermissionLiterals(Files.readString(V31_REVOKE));
-
-        assertThat(keepList).as("no keep list parsed out of %s", V31_REVOKE).isNotEmpty();
-        assertThat(keepList)
-                .as("V31's keep list vs the seed's SYSTEM_ADMINISTRATOR grants")
-                .isEqualTo(seededGrants.get("SYSTEM_ADMINISTRATOR"));
-    }
-
-    @Test
-    @DisplayName("V31 revokes from SYSTEM_ADMINISTRATOR alone, never role-agnostically")
-    void v31RevokeIsScopedToSystemAdministrator() throws IOException {
-        // The #1512 investigation turned on V25-V28 deleting by permission_id with no role filter:
-        // written to retire grants from the seeded roles, they also stripped 48 grants off
-        // SYSTEM_ADMINISTRATOR, a role none of them mentions. V31 must not repeat that. A DELETE
-        // against role_permissions here has to name the role it means.
-        String body = SQL_LINE_COMMENT.matcher(Files.readString(V31_REVOKE)).replaceAll("");
-
-        assertThat(body)
-                .as("V31 must resolve the role it revokes from")
-                .contains("FROM roles WHERE name = 'SYSTEM_ADMINISTRATOR'");
-        assertThat(body)
-                .as("every DELETE against role_permissions in V31 must be role-scoped")
-                .containsPattern("DELETE FROM role_permissions\\s+WHERE role_id = sa_role_id");
-        assertThat(countOccurrences(body, "DELETE FROM role_permissions"))
-                .as("a second, unscoped DELETE would reintroduce the V25-V28 footgun")
-                .isEqualTo(1);
-    }
-
-    /** Permission names quoted in {@code sql}, with {@code --} comments stripped first. */
-    private static Set<String> parsePermissionLiterals(String sql) {
-        // Comments first: this migration's header names permission families in prose, and the
-        // audit tooling has already been bitten once by scoring a commented-out code as real
-        // (docs/rbac-permission-role-audit-2026-08.md, task 7).
-        String body = SQL_LINE_COMMENT.matcher(sql).replaceAll("");
-        Set<String> names = new TreeSet<>();
-        Matcher literal = QUOTED_PERMISSION.matcher(body);
-        while (literal.find()) {
-            names.add(literal.group(1));
-        }
-        return names;
-    }
-
-    private static int countOccurrences(String haystack, String needle) {
-        int count = 0;
-        for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {
-            count++;
-        }
-        return count;
     }
 
     private static String readResource(String name) throws IOException {

@@ -7,7 +7,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -36,7 +35,7 @@ import tools.jackson.databind.ObjectMapper;
  * being true when V40 (#1606) replaced that union with per-method AND-groups.
  *
  * <p>This asserts the fixtures agree with the two files that decide the gate — the facade group
- * migrations and the bulk-load grant baseline — so the next grant or guard change that strands a
+ * seed and the bulk-load grant baseline — so the next grant or guard change that strands a
  * fixture fails a build instead of quietly lowering a score.
  */
 @DisplayName("Eval fixtures are satisfiable against the real gate (#1612)")
@@ -62,11 +61,13 @@ class EvalFixtureSatisfiabilityTest {
 
     private static final int NEGATIVE_FIXTURES = 31;
 
-    private static final Pattern GROUP_BLOCK = Pattern.compile(
-            "FROM mcp_tool, \\(VALUES(.*?)\\) AS perms\\(grp, code\\)\\s*WHERE mcp_tool\\.name = '([A-Za-z]+)'",
-            Pattern.DOTALL);
-    private static final Pattern GROUP_PAIR = Pattern.compile("\\('([^']+)',\\s*'([^']+)'\\)");
-    private static final Pattern VERSION = Pattern.compile("^V(\\d+)__");
+    /** {@code INSERT INTO mcp_tool (id, name, ...) VALUES ('<uuid>', 'ToolName', ...)}. */
+    private static final Pattern TOOL_ROW = Pattern.compile(
+            "INSERT\\s+INTO\\s+mcp_tool\\s*\\(id,\\s*name\\b[^)]*\\)\\s*VALUES\\s*\\('([^']+)',\\s*'([^']+)'");
+    /** {@code INSERT INTO mcp_tool_permission (tool_id, permission_code, permission_group) VALUES (...)}. */
+    private static final Pattern PERMISSION_ROW = Pattern.compile(
+            "INSERT\\s+INTO\\s+mcp_tool_permission\\s*\\(tool_id,\\s*permission_code,\\s*permission_group\\)"
+                    + "\\s*VALUES\\s*\\('([^']+)',\\s*'([^']+)',\\s*'([^']+)'\\)");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -268,41 +269,34 @@ class EvalFixtureSatisfiabilityTest {
     }
 
     /**
-     * tool → group → codes, replaying the group-shaped migrations in version order. Each such
-     * migration deletes a tool's rows before re-inserting, so a later re-derivation replaces an
-     * earlier one. Same source and same reading as
-     * {@code scripts/mcp-facade-reachability.py}.
+     * tool → group → codes, read from the seed. Since the migration history was flattened
+     * (2026-09-09) the net result of the retired group-shaped migrations is one file,
+     * {@code V2__seed_mcp_server.sql}, whose {@code mcp_tool_permission} rows are the gate; the
+     * same reading as {@code FacadeToolPermissionSeedTest} and {@code scripts/mcp-facade-reachability.py}.
      */
     private static Map<String, Map<String, Set<String>>> facadeGroups() throws IOException {
-        Map<String, Map<String, Set<String>>> groups = new LinkedHashMap<>();
-        List<Path> migrations;
-        try (var files = Files.list(MIGRATIONS)) {
-            migrations = files.filter(path ->
-                            VERSION.matcher(path.getFileName().toString()).find())
-                    .sorted(Comparator.comparingInt(EvalFixtureSatisfiabilityTest::version))
-                    .toList();
+        String sql = Files.readString(MIGRATIONS.resolve("V2__seed_mcp_server.sql"), StandardCharsets.UTF_8)
+                .replaceAll("(?m)--.*$", "");
+        Map<String, String> toolNamesById = new LinkedHashMap<>();
+        Matcher tools = TOOL_ROW.matcher(sql);
+        while (tools.find()) {
+            toolNamesById.put(tools.group(1), tools.group(2));
         }
-        for (Path migration : migrations) {
-            Matcher block = GROUP_BLOCK.matcher(Files.readString(migration, StandardCharsets.UTF_8));
-            while (block.find()) {
-                Map<String, Set<String>> tool = new LinkedHashMap<>();
-                groups.put(block.group(2), tool);
-                Matcher pair = GROUP_PAIR.matcher(block.group(1));
-                while (pair.find()) {
-                    tool.computeIfAbsent(pair.group(1), key -> new LinkedHashSet<>())
-                            .add(pair.group(2));
-                }
-            }
+        Map<String, Map<String, Set<String>>> groups = new LinkedHashMap<>();
+        Matcher rows = PERMISSION_ROW.matcher(sql);
+        while (rows.find()) {
+            String tool = toolNamesById.get(rows.group(1));
+            assertThat(tool)
+                    .as("mcp_tool_permission row for tool id %s has no mcp_tool row", rows.group(1))
+                    .isNotNull();
+            groups.computeIfAbsent(tool, key -> new LinkedHashMap<>())
+                    .computeIfAbsent(rows.group(3), key -> new LinkedHashSet<>())
+                    .add(rows.group(2));
         }
         assertThat(groups)
                 .as("no facade groups parsed — the regex, not the seed, is what broke")
                 .isNotEmpty();
         return groups;
-    }
-
-    private static int version(Path migration) {
-        Matcher matcher = VERSION.matcher(migration.getFileName().toString());
-        return matcher.find() ? Integer.parseInt(matcher.group(1)) : Integer.MAX_VALUE;
     }
 
     /** role → codes, from the bulk-load baseline (canonical for grants since #1613 D8). */
