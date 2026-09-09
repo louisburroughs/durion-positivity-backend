@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.service;
 import com.positivity.securityservice.internal.dto.UserAuthContext;
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.dto.UserUpdateRequest;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -40,4 +41,15 @@ public interface UserService {
     void requestPersonLink(UUID userId, UUID personId);
 
     UserDto updateUser(UUID id, UserUpdateRequest request);
+
+    /**
+     * The bound a reissued access token's {@code exp} clamps to (ADR-0061 §4 amendment,
+     * 2026-09-09, #1914 phase 3): the earliest {@code effectiveEndDate} among {@code userId}'s
+     * currently effective role assignments, if any is bounded. Internal-only — not surfaced
+     * through any controller response; used by the login and refresh token-issuance paths.
+     *
+     * @param userId the user whose effective assignments are checked
+     * @return empty when the user does not exist, or holds no bounded effective assignment
+     */
+    Optional<Instant> getGrantsExpireAt(UUID userId);
 }

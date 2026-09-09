@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.event.RoleAssignmentRevokedEvent;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -24,6 +26,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * ADR-0061 amendment phase 2 (#1914): {@link UserRoleGrantServiceImpl} is the only writer of
@@ -41,6 +44,9 @@ class UserRoleGrantServiceImplTest {
     @Mock
     private RoleAssignmentRepository roleAssignmentRepository;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private UserRoleGrantServiceImpl sut;
 
     private User user;
@@ -49,7 +55,7 @@ class UserRoleGrantServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        sut = new UserRoleGrantServiceImpl(roleAssignmentRepository, TEST_CLOCK);
+        sut = new UserRoleGrantServiceImpl(roleAssignmentRepository, TEST_CLOCK, eventPublisher);
         user = new User();
         user.setId(UUID.randomUUID());
         roleA = new Role();
@@ -76,6 +82,9 @@ class UserRoleGrantServiceImplTest {
         assertThat(saved.getEffectiveEndDate()).isNull();
         assertThat(saved.getCreatedBy()).isEqualTo(ACTOR);
         assertThat(saved.getCreatedAt()).isEqualTo(NOW);
+        // Grants are not security-critical the way revocations are (ADR-0061 §4 amendment,
+        // #1914 phase 3 explicitly names revocation only): no token revocation event.
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -118,6 +127,12 @@ class UserRoleGrantServiceImplTest {
         assertThat(existing.getRevokedAt()).isEqualTo(NOW);
         assertThat(existing.getLastModifiedBy()).isEqualTo(ACTOR);
         verify(roleAssignmentRepository).save(existing);
+        // ADR-0061 §4 amendment (#1914 phase 3): revocation ends the holder's live tokens, via
+        // RoleAssignmentRevokedEvent rather than a direct call (see that type's javadoc).
+        ArgumentCaptor<RoleAssignmentRevokedEvent> eventCaptor =
+                ArgumentCaptor.forClass(RoleAssignmentRevokedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().getUserId()).isEqualTo(user.getId());
     }
 
     @Test
@@ -128,6 +143,8 @@ class UserRoleGrantServiceImplTest {
         sut.revoke(user, roleA, ACTOR);
 
         verify(roleAssignmentRepository, never()).save(any(RoleAssignment.class));
+        // A no-op revoke must not tell the token layer to revoke anything.
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -141,6 +158,8 @@ class UserRoleGrantServiceImplTest {
         ArgumentCaptor<RoleAssignment> captor = ArgumentCaptor.forClass(RoleAssignment.class);
         verify(roleAssignmentRepository).save(captor.capture());
         assertThat(captor.getValue().getRole()).isEqualTo(roleA);
+        // Reconcile granting only, nothing revoked: no token revocation event.
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -155,6 +174,10 @@ class UserRoleGrantServiceImplTest {
         assertThat(existing.getEffectiveEndDate()).isEqualTo(LocalDateTime.ofInstant(NOW, TEST_CLOCK.getZone()));
         assertThat(existing.getRevokedAt()).isEqualTo(NOW);
         verify(roleAssignmentRepository).save(existing);
+        ArgumentCaptor<RoleAssignmentRevokedEvent> eventCaptor =
+                ArgumentCaptor.forClass(RoleAssignmentRevokedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().getUserId()).isEqualTo(user.getId());
     }
 
     @Test
@@ -174,6 +197,12 @@ class UserRoleGrantServiceImplTest {
         assertThat(captor.getAllValues()).contains(existingA);
         assertThat(captor.getAllValues())
                 .anySatisfy(a -> assertThat(a.getRole()).isEqualTo(roleB));
+        // Exactly one event for the one user, even though one assignment was revoked and another
+        // granted in the same call.
+        ArgumentCaptor<RoleAssignmentRevokedEvent> eventCaptor =
+                ArgumentCaptor.forClass(RoleAssignmentRevokedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().getUserId()).isEqualTo(user.getId());
     }
 
     @Test
@@ -186,6 +215,7 @@ class UserRoleGrantServiceImplTest {
         sut.reconcile(user, Set.of(roleA), ACTOR);
 
         verify(roleAssignmentRepository, never()).save(any(RoleAssignment.class));
+        verifyNoInteractions(eventPublisher);
     }
 
     private RoleAssignment openEndedAssignment(Role role, LocalDateTime start) {

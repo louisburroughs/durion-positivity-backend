@@ -260,6 +260,8 @@ public class UserController {
                         Required inputs: username as a path parameter and roles, an array of existing role names, in \
                         the body; this array becomes the user's complete effective role set.
                         Emits a SECURITY_USER_ASSIGN_ROLES event.
+                        A role this reconcile revokes ends the holder's live tokens immediately; the next token \
+                        issued for them is clamped to that revoked assignment's end.
                         Returns 404 with USER_NOT_FOUND when the username does not resolve to a user, and 404 with \
                         ROLE_NOT_FOUND when a named role does not exist.
                         """)

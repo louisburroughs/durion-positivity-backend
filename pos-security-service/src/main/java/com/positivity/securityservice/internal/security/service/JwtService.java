@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.security.service;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -282,9 +283,41 @@ public interface JwtService {
      * @return a TokenPair containing the access and refresh tokens
      *
      * @throws IllegalArgumentException if username, userId, or roles are invalid
+     * @see #generateTokenPair(String, UUID, UUID, Set, Instant) the overload the login and refresh
+     *      paths use, which additionally clamps {@code exp} to a role-assignment end date. This
+     *      overload always passes {@code null} for that bound — the internal token-issuance
+     *      endpoints (client-supplied roles, no resolved user) deliberately get no assignment
+     *      clamp (ADR-0061 §4 amendment, 2026-09-09, #1914 phase 3).
      */
     TokenPair generateTokenPair(
             @NonNull String username, @NonNull UUID userId, @Nullable UUID personId, @NonNull Set<String> roles);
+
+    /**
+     * As {@link #generateTokenPair(String, UUID, UUID, Set)}, additionally clamping {@code exp} to
+     * {@code grantsExpireAt} when it is earlier than every other applicable bound.
+     *
+     * <p>ADR-0061 §4 amendment (2026-09-09, #1914 phase 3): the location-reach clamp already
+     * bounds {@code exp} to the end of the earliest contributing staffing assignment. The role
+     * assignments {@code perm_bits} is built from were left out of that clamp — this overload
+     * closes that gap. {@code exp} is {@code min(now + 3600s, the location-reach bound,
+     * grantsExpireAt)}, floored at {@code now}; used by the login path ({@code
+     * AuthenticationServiceImpl}, which resolves the bound via {@code
+     * UserService#getGrantsExpireAt}) and the refresh path ({@link #refreshAccessToken}, which
+     * resolves it the same way).
+     *
+     * @param grantsExpireAt the earliest end of a role assignment currently contributing to {@code
+     *                       roles}, or {@code null} when every contributing assignment is
+     *                       open-ended (no clamp from this bound)
+     * @return a TokenPair containing the access and refresh tokens
+     *
+     * @throws IllegalArgumentException if username, userId, or roles are invalid
+     */
+    TokenPair generateTokenPair(
+            @NonNull String username,
+            @NonNull UUID userId,
+            @Nullable UUID personId,
+            @NonNull Set<String> roles,
+            @Nullable Instant grantsExpireAt);
 
     /**
      * Validates the given refresh token by checking:

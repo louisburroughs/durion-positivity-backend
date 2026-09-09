@@ -11,6 +11,8 @@ import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import java.security.SecureRandom;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
@@ -44,6 +46,7 @@ public class UserServiceImpl implements UserService {
     private final EffectiveGrantResolver effectiveGrantResolver;
     private final UserRoleGrantService userRoleGrantService;
     private final PasswordEncoder passwordEncoder;
+    private final Clock clock;
 
     @Override
     @Transactional
@@ -92,6 +95,13 @@ public class UserServiceImpl implements UserService {
     @Override
     public Optional<UserDto> getUserById(UUID id) {
         return userRepository.findById(id).map(this::toDto);
+    }
+
+    @Override
+    public Optional<Instant> getGrantsExpireAt(UUID userId) {
+        return userRepository
+                .findById(userId)
+                .flatMap(user -> effectiveGrantResolver.resolve(user).earliestAssignmentEnd(clock));
     }
 
     @Override

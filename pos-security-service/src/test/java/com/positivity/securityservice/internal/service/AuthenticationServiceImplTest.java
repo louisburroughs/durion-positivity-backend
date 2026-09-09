@@ -17,7 +17,9 @@ import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.security.service.JwtService;
 import com.positivity.securityservice.internal.security.service.JwtService.TokenPair;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -119,6 +121,15 @@ class AuthenticationServiceImplTest {
     private PasswordEncoder passwordEncoder;
 
     /**
+     * UserService mock — required since #1914 phase 3 so login() can resolve the assignment-end
+     * clamp bound (ADR-0061 §4) via {@link UserService#getGrantsExpireAt}. Unstubbed by default:
+     * Mockito answers {@code Optional.empty()}, matching every pre-existing test's expectation of
+     * an unclamped token.
+     */
+    @Mock
+    private UserService userService;
+
+    /**
      * Real {@code SimpleMeterRegistry} so the {@code AuthenticationServiceImpl}
      * constructor can initialize its cached Counters without NPE.
      * Declared as {@code @Spy} so Mockito's {@code @InjectMocks} machinery injects it.
@@ -169,7 +180,7 @@ class AuthenticationServiceImplTest {
                             UUID.randomUUID(), null, new User("testuser", "password", List.of())));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
             when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(ANY_ROLE));
-            when(jwtService.generateTokenPair(any(), any(), any(), any()))
+            when(jwtService.generateTokenPair(any(), any(), any(), any(), any()))
                     .thenReturn(new TokenPair("access.stub", "refresh.stub"));
 
             // GREEN: completes; verify PasswordEncoder.matches() was never called.
@@ -198,7 +209,7 @@ class AuthenticationServiceImplTest {
                             UUID.randomUUID(), null, new User("alice", "secret", List.of())));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
             when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(ANY_ROLE));
-            when(jwtService.generateTokenPair(any(), any(), any(), any()))
+            when(jwtService.generateTokenPair(any(), any(), any(), any(), any()))
                     .thenReturn(new TokenPair("access.stub", "refresh.stub"));
 
             // GREEN: delegates to authManager, completes normally.
@@ -271,7 +282,7 @@ class AuthenticationServiceImplTest {
 
             String fakeAccess = "access.token.stub";
             String fakeRefresh = "refresh.token.stub";
-            when(jwtService.generateTokenPair(any(), any(), any(), any()))
+            when(jwtService.generateTokenPair(any(), any(), any(), any(), any()))
                     .thenReturn(new TokenPair(fakeAccess, fakeRefresh));
 
             // reached.
@@ -284,7 +295,7 @@ class AuthenticationServiceImplTest {
                     .as("refreshToken must equal value returned by JwtService")
                     .isEqualTo(fakeRefresh);
 
-            verify(jwtService).generateTokenPair(argThat("bob"::equals), any(UUID.class), isNull(), any());
+            verify(jwtService).generateTokenPair(argThat("bob"::equals), any(UUID.class), isNull(), any(), any());
         }
 
         /**
@@ -309,7 +320,7 @@ class AuthenticationServiceImplTest {
                     .isInstanceOf(NoRolesAssignedException.class)
                     .hasMessageContaining("no roles assigned");
 
-            verify(jwtService, never()).generateTokenPair(any(), any(), any(), any());
+            verify(jwtService, never()).generateTokenPair(any(), any(), any(), any(), any());
         }
 
         /**
@@ -339,7 +350,7 @@ class AuthenticationServiceImplTest {
                     .isInstanceOf(NoRolesAssignedException.class)
                     .hasMessageContaining("no roles assigned");
 
-            verify(jwtService, never()).generateTokenPair(any(), any(), any(), any());
+            verify(jwtService, never()).generateTokenPair(any(), any(), any(), any(), any());
         }
 
         /**
@@ -363,7 +374,8 @@ class AuthenticationServiceImplTest {
                             UUID.randomUUID(), null, new User("bob", "pass", List.of())));
             when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(shopManager, passwordFactor));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
-            when(jwtService.generateTokenPair(any(), any(), any(), any())).thenReturn(new TokenPair("a", "r"));
+            when(jwtService.generateTokenPair(any(), any(), any(), any(), any()))
+                    .thenReturn(new TokenPair("a", "r"));
 
             sut.login(new LoginRequest("bob", "pass"));
 
@@ -372,7 +384,8 @@ class AuthenticationServiceImplTest {
                             eq("bob"),
                             any(UUID.class),
                             isNull(),
-                            argThat(roles -> Set.of("SHOP_MANAGER").equals(roles)));
+                            argThat(roles -> Set.of("SHOP_MANAGER").equals(roles)),
+                            any());
         }
     }
 
@@ -429,7 +442,8 @@ class AuthenticationServiceImplTest {
                             new org.springframework.security.core.userdetails.User("alice", "pass", List.of())));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
             when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(ANY_ROLE));
-            when(jwtService.generateTokenPair(any(), any(), any(), any())).thenReturn(new TokenPair("a", "r"));
+            when(jwtService.generateTokenPair(any(), any(), any(), any(), any()))
+                    .thenReturn(new TokenPair("a", "r"));
 
             sut.login(new LoginRequest("alice", "pass"));
 
@@ -471,7 +485,8 @@ class AuthenticationServiceImplTest {
                             roleUserId, null, new User("charlie", "pass", List.of())));
             when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(roleAuthority));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
-            when(jwtService.generateTokenPair(any(), any(), any(), any())).thenReturn(new TokenPair("a", "r"));
+            when(jwtService.generateTokenPair(any(), any(), any(), any(), any()))
+                    .thenReturn(new TokenPair("a", "r"));
 
             sut.login(new LoginRequest("charlie", "pass"));
 
@@ -480,7 +495,8 @@ class AuthenticationServiceImplTest {
                             any(),
                             any(UUID.class),
                             isNull(),
-                            argThat(roles -> roles.contains("ADMIN") && !roles.contains("ROLE_ADMIN")));
+                            argThat(roles -> roles.contains("ADMIN") && !roles.contains("ROLE_ADMIN")),
+                            any());
         }
 
         @Test
@@ -495,12 +511,14 @@ class AuthenticationServiceImplTest {
                             roleUserId, null, new User("dave", "pass", List.of())));
             when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(plainAuthority));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
-            when(jwtService.generateTokenPair(any(), any(), any(), any())).thenReturn(new TokenPair("a", "r"));
+            when(jwtService.generateTokenPair(any(), any(), any(), any(), any()))
+                    .thenReturn(new TokenPair("a", "r"));
 
             sut.login(new LoginRequest("dave", "pass"));
 
             verify(jwtService)
-                    .generateTokenPair(any(), any(UUID.class), isNull(), argThat(roles -> roles.contains("MANAGER")));
+                    .generateTokenPair(
+                            any(), any(UUID.class), isNull(), argThat(roles -> roles.contains("MANAGER")), any());
         }
     }
 
@@ -591,11 +609,64 @@ class AuthenticationServiceImplTest {
                             new org.springframework.security.core.userdetails.User("alice", "pass", List.of())));
             when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(ANY_ROLE));
             when(authenticationManager.authenticate(any())).thenReturn(successAuth);
-            when(jwtService.generateTokenPair(any(), any(), any(), any())).thenReturn(new TokenPair("a", "r"));
+            when(jwtService.generateTokenPair(any(), any(), any(), any(), any()))
+                    .thenReturn(new TokenPair("a", "r"));
 
             sut.login(new LoginRequest("alice", "pass"));
 
-            verify(jwtService).generateTokenPair(eq("alice"), eq(t18UserId), eq(t18PersonId), any());
+            verify(jwtService).generateTokenPair(eq("alice"), eq(t18UserId), eq(t18PersonId), any(), any());
+        }
+    }
+
+    // =========================================================
+    // T19 — the assignment-end clamp bound is resolved and forwarded (ADR-0061 §4, #1914 phase 3)
+    // =========================================================
+
+    @Nested
+    @DisplayName("T19: grantsExpireAt is resolved via UserService and forwarded to generateTokenPair")
+    class GrantsExpireAtPropagation {
+
+        @Test
+        @DisplayName("T19a — a bounded assignment's end is forwarded as grantsExpireAt")
+        void t19a_boundedAssignment_grantsExpireAtForwarded() {
+            UUID t19UserId = UUID.randomUUID();
+            Instant bound = Instant.parse("2026-09-10T00:00:00Z");
+
+            Authentication successAuth = mock(Authentication.class);
+            when(successAuth.getName()).thenReturn("erin");
+            when(successAuth.getPrincipal())
+                    .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
+                            t19UserId, null, new User("erin", "pass", List.of())));
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(ANY_ROLE));
+            when(authenticationManager.authenticate(any())).thenReturn(successAuth);
+            when(userService.getGrantsExpireAt(t19UserId)).thenReturn(Optional.of(bound));
+            when(jwtService.generateTokenPair(any(), any(), any(), any(), any()))
+                    .thenReturn(new TokenPair("a", "r"));
+
+            sut.login(new LoginRequest("erin", "pass"));
+
+            verify(jwtService).generateTokenPair(eq("erin"), eq(t19UserId), isNull(), any(), eq(bound));
+        }
+
+        @Test
+        @DisplayName("T19b — no bounded assignment: grantsExpireAt is null, not re-queried by JwtService")
+        void t19b_noBoundedAssignment_grantsExpireAtNull() {
+            UUID t19UserId = UUID.randomUUID();
+
+            Authentication successAuth = mock(Authentication.class);
+            when(successAuth.getName()).thenReturn("frank");
+            when(successAuth.getPrincipal())
+                    .thenReturn(new CustomUserDetailsService.SecurityUserPrincipal(
+                            t19UserId, null, new User("frank", "pass", List.of())));
+            when(successAuth.getAuthorities()).thenAnswer(inv -> List.of(ANY_ROLE));
+            when(authenticationManager.authenticate(any())).thenReturn(successAuth);
+            when(userService.getGrantsExpireAt(t19UserId)).thenReturn(Optional.empty());
+            when(jwtService.generateTokenPair(any(), any(), any(), any(), any()))
+                    .thenReturn(new TokenPair("a", "r"));
+
+            sut.login(new LoginRequest("frank", "pass"));
+
+            verify(jwtService).generateTokenPair(eq("frank"), eq(t19UserId), isNull(), any(), isNull());
         }
     }
 }

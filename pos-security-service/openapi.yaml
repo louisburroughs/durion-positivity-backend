@@ -2066,6 +2066,8 @@ paths:
 
         Emits a SECURITY_ROLE_ASSIGNMENT_REVOKE event.
 
+        Ends the holder''s live tokens immediately regardless of endDate; the next token issued for them is clamped to the assignment''s (possibly future or backdated) end.
+
         Returns 400 when endDate is malformed, and 404 when the assignment does not exist.
 
         '
@@ -4319,6 +4321,8 @@ paths:
 
         Emits a SECURITY_USER_ROLE_REVOKE event and writes a RoleRevokedFromUser audit record.
 
+        Ends the holder''s live tokens immediately; the next token issued for them is clamped to the revoked assignment''s end.
+
         Returns 404 when the user or role does not exist, or when no active assignment links them.
 
         '
@@ -4445,6 +4449,8 @@ paths:
         Required inputs: username as a path parameter and roles, an array of existing role names, in the body; this array becomes the user''s complete effective role set.
 
         Emits a SECURITY_USER_ASSIGN_ROLES event.
+
+        A role this reconcile revokes ends the holder''s live tokens immediately; the next token issued for them is clamped to that revoked assignment''s end.
 
         Returns 404 with USER_NOT_FOUND when the username does not resolve to a user, and 404 with ROLE_NOT_FOUND when a named role does not exist.
 

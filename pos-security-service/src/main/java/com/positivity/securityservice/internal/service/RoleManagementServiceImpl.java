@@ -14,6 +14,7 @@ import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.event.RoleAssignmentRevokedEvent;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
@@ -35,6 +36,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,6 +60,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     private final RolePersonaEventEmitter rolePersonaEventEmitter;
     private final EffectiveGrantResolver effectiveGrantResolver;
     private final UserRoleGrantService userRoleGrantService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Create a new role, including its optional MCP persona metadata (#1613).
@@ -289,6 +292,17 @@ public class RoleManagementServiceImpl implements RoleManagementService {
 
     /**
      * Revoke a role assignment.
+     *
+     * <p>{@code endDate} may be backdated (the row was already not effective) or scheduled ahead
+     * of now (still effective until it arrives) — either way this ends the holder's live tokens
+     * now, through {@link RoleAssignmentRevokedEvent} (ADR-0061 §4 amendment, 2026-09-09, #1914
+     * phase 3): a future-dated revocation still changes the assignment record the holder's current
+     * tokens were minted against, and the token reissued after this call is then clamped to the
+     * scheduled end by {@code JwtServiceImpl.generateTokenPair}, which is the correct outcome
+     * either way. Unlike {@link #revokeRoleFromUser}, this does not go through {@link
+     * UserRoleGrantService} — it revokes a specific assignment by id, which may not be the row
+     * {@code revoke}'s effective-window lookup would find — so it publishes the event itself
+     * rather than inheriting it from {@code UserRoleGrantServiceImpl}.
      */
     @Override
     @Transactional
@@ -302,6 +316,8 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         assignment.setLastModifiedAt(Instant.now(clock));
 
         roleAssignmentRepository.save(assignment);
+        eventPublisher.publishEvent(
+                new RoleAssignmentRevokedEvent(this, assignment.getUser().getId()));
 
         log.info(
                 "Revoked role assignment: id={}, user={}, role={}, endDate={}, revokedAt={}",

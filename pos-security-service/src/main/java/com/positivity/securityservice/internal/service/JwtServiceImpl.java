@@ -309,6 +309,18 @@ public class JwtServiceImpl implements JwtService {
     @Override
     public TokenPair generateTokenPair(
             @NonNull String username, @NonNull UUID userId, @Nullable UUID personId, @NonNull Set<String> roles) {
+        // Internal token-issuance endpoints (client-supplied roles, no resolved user) get no
+        // assignment clamp — see the interface javadoc.
+        return generateTokenPair(username, userId, personId, roles, null);
+    }
+
+    @Override
+    public TokenPair generateTokenPair(
+            @NonNull String username,
+            @NonNull UUID userId,
+            @Nullable UUID personId,
+            @NonNull Set<String> roles,
+            @Nullable Instant grantsExpireAt) {
         if (username == null || username.isBlank()) {
             throw new SecurityValidationException("Username cannot be blank");
         }
@@ -351,6 +363,17 @@ public class JwtServiceImpl implements JwtService {
         LocationScopeBits scopeBits = LocationScopeBits.compose(roleAuthorityService.resolveRoleGrants(roles));
         LocationReach reach = resolveLocationReach(scopeBits, personId, now);
         Instant accessExpiry = reach.clampedExpiry();
+
+        // ADR-0061 §4 amendment (2026-09-09, #1914 phase 3): exp is the minimum of every
+        // applicable bound — the natural 3600s lifetime, the location-reach clamp above, and now
+        // the earliest end of a role assignment perm_bits was built from — floored at now so a
+        // stale or racing bound can never produce an already-expired token.
+        if (grantsExpireAt != null && grantsExpireAt.isBefore(accessExpiry)) {
+            accessExpiry = grantsExpireAt;
+        }
+        if (accessExpiry.isBefore(now)) {
+            accessExpiry = now;
+        }
 
         var accessBuilder = Jwts.builder()
                 .id(accessJti)
@@ -529,7 +552,12 @@ public class JwtServiceImpl implements JwtService {
 
         log.debug("Refreshed token pair: username={}", username);
 
-        return generateTokenPair(username, userId, user.getPersonId(), roles);
+        // ADR-0061 §4 amendment (2026-09-09, #1914 phase 3): re-resolved on every refresh, exactly
+        // like the location-reach clamp above it — a refresh after an assignment ended simply no
+        // longer carries that role (roles, above), and a refresh while a bounded assignment is
+        // still effective re-applies the clamp against its current end date.
+        Instant grantsExpireAt = userService.getGrantsExpireAt(userId).orElse(null);
+        return generateTokenPair(username, userId, user.getPersonId(), roles, grantsExpireAt);
     }
 
     @Override

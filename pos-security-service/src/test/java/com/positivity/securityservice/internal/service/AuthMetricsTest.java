@@ -77,6 +77,14 @@ class AuthMetricsTest {
     private UserRepository userRepository;
 
     /**
+     * UserService mock — required since #1914 phase 3 so login() can resolve the assignment-end
+     * clamp bound (ADR-0061 §4) via {@link UserService#getGrantsExpireAt}. Unstubbed by default:
+     * Mockito answers {@code Optional.empty()}.
+     */
+    @Mock
+    private UserService userService;
+
+    /**
      * Real {@code SimpleMeterRegistry} so counter increments are directly observable.
      * Declared as {@code @Spy} so Mockito's {@code @InjectMocks} machinery will
      * inject it into {@code AuthenticationServiceImpl} once GREEN adds the
@@ -134,7 +142,7 @@ class AuthMetricsTest {
             when(userRepository.findByUsername("alice")).thenReturn(Optional.of(userEntity(userId)));
             when(lockoutService.isLockedOut(userId)).thenReturn(false);
             when(authenticationManager.authenticate(any())).thenReturn(auth);
-            when(jwtService.generateTokenPair(any(), any(), any(), any()))
+            when(jwtService.generateTokenPair(any(), any(), any(), any(), any()))
                     .thenReturn(new TokenPair("access.stub", "refresh.stub"));
 
             sut.login(new LoginRequest("alice", "pass"));

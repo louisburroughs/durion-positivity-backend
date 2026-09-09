@@ -210,6 +210,42 @@ module. Two consequences worth holding onto:
   outage a revoked token passes the gateway until `exp`. That is the accepted cost of fail-open,
   bounded by the `exp` clamp above and visible on `auth.token.revocation.degraded`.
 
+#### Role-assignment expiry clamp and revocation (ADR-0061 §4 amendment, 2026-09-09, #1914 phase 3)
+
+The two mechanisms above (location-reach clamp / staffing-assignment revocation) left a gap: the
+role assignments a token's `perm_bits` is actually built from could still stay valid for the rest
+of the access token's natural lifetime after being ended. Phase 3 closes it with the same two
+mechanisms applied to `role_assignments`:
+
+- **Clamp.** `exp` is `min(now + 3600s, the location-reach bound above, the earliest
+  `effectiveEndDate` among the assignments that contributed to the token)`, floored at `now`. Login
+  (`AuthenticationServiceImpl`) and refresh (`JwtServiceImpl.refreshAccessToken`) both resolve this
+  bound via `UserService#getGrantsExpireAt` and pass it into `generateTokenPair`; the internal
+  token-pair endpoints (`POST /v1/auth/internal/token`, `POST /v1/auth/token-pair` — client-supplied
+  roles, no resolved user) get no assignment clamp, matching how they already sit outside the
+  location-reach clamp.
+- **Revocation.** Ending a role assignment — `UserRoleGrantServiceImpl.revoke` / `reconcile`
+  (covers `DELETE /v1/users/{userId}/roles/{roleId}`, and a `PUT /v1/users/{username}/roles`
+  reconcile that drops a role) or `RoleManagementServiceImpl.revokeRoleAssignment`
+  (`DELETE /v1/roles/assignments/{assignmentId}`, which may set a past or future end date) — ends
+  the holder's live tokens through the same `TokenRevocationManager` + `jwt_token` path
+  `revokeAllTokensForUser` uses, every time, regardless of whether the new end date is already
+  past or still ahead: a future-dated revocation still changes the record the holder's current
+  tokens were minted against, and the token reissued after revocation is then clamped to the
+  scheduled end by the mechanism above, which is the correct outcome either way. Granting a role
+  never revokes; the next token simply picks it up.
+
+Both writers publish `RoleAssignmentRevokedEvent` rather than calling the token layer directly —
+`JwtServiceImpl` depends on `UserService`, and `UserServiceImpl` / `RoleManagementServiceImpl` both
+depend on `UserRoleGrantService`, so a direct call back into `JwtService` would close a Spring bean
+cycle. `RoleAssignmentTokenRevocationListener` reacts to the event `AFTER_COMMIT` (so a rolled-back
+revocation never touches a token) in its own `REQUIRES_NEW` transaction (so the write actually
+commits, rather than silently riding along on the just-completed transaction's about-to-be-discarded
+resources) and calls `JwtService#revokeAllTokensForUser` by username — the same facility
+`AdminAccountStateServiceImpl` already uses for account lockout/disable, now with a second
+security-load-bearing trigger. The Redis-unavailable behaviour is unchanged (fail-open, `jwt_token`
+row still deleted).
+
 ### Assistant baseline
 
 Every role in the baseline seed receives four conversational entrypoints:

@@ -84,6 +84,8 @@ public class UserRoleController {
                     least one effective assignment must link them.
                     Required inputs: userId and roleId (UUIDs) as path parameters; there is no request body.
                     Emits a SECURITY_USER_ROLE_REVOKE event and writes a RoleRevokedFromUser audit record.
+                    Ends the holder's live tokens immediately; the next token issued for them is clamped to the \
+                    revoked assignment's end.
                     Returns 404 when the user or role does not exist, or when no active assignment links them.
                     """)
     @ApiResponse(responseCode = "204", description = "Role revoked from user")

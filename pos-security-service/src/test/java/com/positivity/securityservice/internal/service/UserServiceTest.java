@@ -13,11 +13,16 @@ import com.positivity.securityservice.internal.dto.UserAuthContext;
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.dto.UserUpdateRequest;
 import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.service.EffectiveGrantResolver.EffectiveGrants;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -27,11 +32,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
+
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2026-09-09T00:00:00Z"), ZoneOffset.UTC);
+
+    @Spy
+    private Clock clock = TEST_CLOCK;
 
     @Mock
     private UserRepository userRepository;
@@ -228,6 +239,47 @@ class UserServiceTest {
         when(userRepository.findById(id)).thenReturn(Optional.empty());
 
         assertThat(userService.getUserById(id)).isEmpty();
+    }
+
+    // ── getGrantsExpireAt (ADR-0061 §4 amendment, #1914 phase 3) ────────────────
+
+    @Test
+    void getGrantsExpireAt_boundedAssignment_returnsItsEnd() {
+        User user = new User();
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        LocalDateTime end = LocalDateTime.now(TEST_CLOCK).plusDays(3);
+        when(userRepository.findById(id)).thenReturn(Optional.of(user));
+        when(effectiveGrantResolver.resolve(user))
+                .thenReturn(new EffectiveGrants(Set.of(), Set.of(), Set.of(), List.of(assignmentEndingAt(end))));
+
+        assertThat(userService.getGrantsExpireAt(id))
+                .contains(end.atZone(TEST_CLOCK.getZone()).toInstant());
+    }
+
+    @Test
+    void getGrantsExpireAt_openEndedAssignment_returnsEmpty() {
+        User user = new User();
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000004");
+        when(userRepository.findById(id)).thenReturn(Optional.of(user));
+        when(effectiveGrantResolver.resolve(user))
+                .thenReturn(new EffectiveGrants(Set.of(), Set.of(), Set.of(), List.of(assignmentEndingAt(null))));
+
+        assertThat(userService.getGrantsExpireAt(id)).isEmpty();
+    }
+
+    @Test
+    void getGrantsExpireAt_unknownUser_returnsEmpty() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000005");
+        when(userRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThat(userService.getGrantsExpireAt(id)).isEmpty();
+    }
+
+    private RoleAssignment assignmentEndingAt(LocalDateTime end) {
+        RoleAssignment assignment = new RoleAssignment();
+        assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(30));
+        assignment.setEffectiveEndDate(end);
+        return assignment;
     }
 
     @Test

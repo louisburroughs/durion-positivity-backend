@@ -3,8 +3,13 @@ package com.positivity.securityservice.internal.service;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.NonNull;
 
@@ -80,6 +85,31 @@ public interface EffectiveGrantResolver {
         public EffectiveGrants(
                 @NonNull Set<Role> roles, @NonNull Set<String> roleNames, @NonNull Set<String> permissionNames) {
             this(roles, roleNames, permissionNames, List.of());
+        }
+
+        /**
+         * The earliest {@code effectiveEndDate} among {@link #assignments()}, if any assignment is
+         * bounded — the bound a reissued access token's {@code exp} is clamped to alongside the
+         * existing location-reach clamp (ADR-0061 §4 amendment, 2026-09-09, #1914 phase 3).
+         *
+         * <p>{@code effectiveEndDate} is a {@link LocalDateTime}; it is converted to an {@link
+         * Instant} with {@code clock.getZone()}, the same conversion {@link
+         * EffectiveGrantResolverImpl#resolve(User, Instant)} uses in the other direction, so a
+         * fixed-zone test clock and the production {@code Clock.systemUTC()} agree with the window
+         * this {@code EffectiveGrants} was resolved against.
+         *
+         * @param clock the caller's clock, for the {@code LocalDateTime}-to-{@code Instant}
+         *     conversion; must use the same zone the assignments were resolved with
+         * @return empty when no assignment in {@link #assignments()} carries an end date (every
+         *     contributing grant is open-ended)
+         */
+        @NonNull
+        public Optional<Instant> earliestAssignmentEnd(@NonNull Clock clock) {
+            return assignments.stream()
+                    .map(RoleAssignment::getEffectiveEndDate)
+                    .filter(Objects::nonNull)
+                    .min(Comparator.naturalOrder())
+                    .map(end -> end.atZone(clock.getZone()).toInstant());
         }
     }
 }
