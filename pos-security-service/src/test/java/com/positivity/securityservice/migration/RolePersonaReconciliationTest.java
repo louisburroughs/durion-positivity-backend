@@ -8,9 +8,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -39,6 +41,10 @@ class RolePersonaReconciliationTest {
     /** The bulk-load baseline — canonical for every role outside the bootstrap floor (#1613 D8). */
     private static final Path BASELINE_ROLES =
             Path.of("..", "scripts", "fixtures", "seed", "alpha", "security", "roles.csv");
+
+    private static final Pattern ROLE_DELETE = Pattern.compile(
+            "DELETE\\s+FROM\\s+roles\\s+WHERE\\s+name\\s+IN\\s*\\(([^)]*)\\)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern QUOTED_NAME = Pattern.compile("'([A-Z_]+)'");
 
     /**
      * Since the flattened history (2026-09-09) the persona decisions live on the seed rows
