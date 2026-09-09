@@ -1988,6 +1988,8 @@ paths:
 
         Required inputs: userId (UUID) as a path parameter; includeHistory defaults to false and, when true, also returns expired and revoked assignments.
 
+        Each assignment carries both roleId and roleCode, the role''s stable name, so a caller can render and act on the listing without resolving each role through the catalog.
+
         No events are emitted and no state changes; this is a read-only projection.
 
         Returns 404 when the user does not exist.
@@ -5600,6 +5602,10 @@ components:
           example: '2026-06-01T12:00:00Z'
           format: date-time
           type: string
+        roleCode:
+          description: Stable code of the assigned role, identical to the role's name
+          example: SHOP_MGR
+          type: string
         roleId:
           description: Identifier of the assigned role
           example: 01960003-0000-7000-8000-000000000010
@@ -5612,6 +5618,7 @@ components:
           type: string
       required:
       - id
+      - roleCode
       - roleId
       - userId
       type: object

@@ -489,11 +489,23 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 .build();
     }
 
+    /**
+     * Maps an assignment to its wire shape, including the role's stable code.
+     *
+     * <p>{@code roleCode} reads through the lazy {@code role} association, so every path reaching
+     * here must already have it loaded: both listing queries
+     * ({@code findAllByUser_Id}, {@code findEffectiveAssignmentsByUser}) declare
+     * {@code @EntityGraph(attributePaths = {"user", "role"})}, and {@code createRoleAssignment}
+     * sets a role it fetched itself. Reading {@code getRole().getId()} alone would have been
+     * satisfied by an uninitialized proxy; reading the name is not, which is why the fetch plan
+     * matters here and did not before.
+     */
     private RoleAssignmentDto toRoleAssignmentDto(RoleAssignment assignment) {
         return RoleAssignmentDto.builder()
                 .id(assignment.getId())
                 .userId(assignment.getUser().getId())
                 .roleId(assignment.getRole().getId())
+                .roleCode(assignment.getRole().getName())
                 .effectiveStartDate(assignment.getEffectiveStartDate())
                 .effectiveEndDate(assignment.getEffectiveEndDate())
                 .revokedAt(assignment.getRevokedAt())

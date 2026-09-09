@@ -421,6 +421,8 @@ public class RoleController {
                     Preconditions: the caller must hold security:role:view and the user must exist.
                     Required inputs: userId (UUID) as a path parameter; includeHistory defaults to false and, when \
                     true, also returns expired and revoked assignments.
+                    Each assignment carries both roleId and roleCode, the role's stable name, so a caller can \
+                    render and act on the listing without resolving each role through the catalog.
                     No events are emitted and no state changes; this is a read-only projection.
                     Returns 404 when the user does not exist.
                     """)

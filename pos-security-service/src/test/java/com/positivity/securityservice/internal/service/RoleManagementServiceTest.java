@@ -632,6 +632,36 @@ class RoleManagementServiceTest {
         assertThat(result).hasSize(2);
     }
 
+    @Test
+    @DisplayName("getAssignmentsForUser() returns the role's stable code alongside its id")
+    void getAssignmentsForUser_carriesTheRoleCode() {
+        // Without roleCode a caller can only turn a listing into something renderable — or
+        // revocable, which addresses an assignment by code — by resolving every roleId through
+        // the role catalog (issue #1886).
+        User user = new User();
+        user.setId(USER_ID);
+
+        Role role = new Role();
+        role.setId(ROLE_ID);
+        role.setName("SHOP_MGR");
+        role.setPermissions(new HashSet<>());
+
+        RoleAssignment assignment = new RoleAssignment();
+        assignment.setUser(user);
+        assignment.setRole(role);
+        assignment.setEffectiveStartDate(LocalDateTime.now(TEST_CLOCK).minusDays(1));
+
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of(assignment));
+
+        assertThat(sut.getAssignmentsForUser(USER_ID, false)).singleElement().satisfies(dto -> {
+            assertThat(dto.getRoleId()).isEqualTo(ROLE_ID);
+            // The name IS the stable code in this system: it is what GET /v1/roles/by-name/{name}
+            // resolves and what RoleDto.name carries.
+            assertThat(dto.getRoleCode()).isEqualTo("SHOP_MGR");
+        });
+    }
+
     // ── userHasPermission — effective dating without a scope branch (#1875) ───
 
     @Nested

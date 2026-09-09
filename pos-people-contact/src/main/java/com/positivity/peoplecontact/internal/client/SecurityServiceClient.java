@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -135,21 +136,30 @@ public class SecurityServiceClient {
         return roles;
     }
 
+    /**
+     * Lists a user's role assignments.
+     *
+     * <p>The response is {@code RoleAssignmentDto}, not {@code UserRoleDto}: it carries
+     * {@code roleId}/{@code roleCode} over an {@code effectiveStartDate}/{@code effectiveEndDate}
+     * window. Reading it straight into {@code UserRoleDto} — which is what this did — left every
+     * field but {@code userId} null, because no name on the two shapes lines up. That emptied the
+     * caller's listing of its role code, its effective window and its active flag, and the role
+     * code is the value revocation addresses an assignment by, so the revoke path downstream had
+     * nothing to act on (issue #1886).
+     *
+     * <p>There is no as-of parameter. This used to send {@code ?endDate=...}, which
+     * pos-security-service never declared and Spring therefore dropped; {@code includeHistory} is
+     * the only filter the endpoint has.
+     */
     @NonNull
-    public List<UserRoleDto> getUserRoleAssignments(
-            @NonNull UUID userId, Boolean includeHistory, LocalDateTime endDate) {
-        log.debug(
-                "Fetching role assignments for userId: {}, includeHistory: {}, endDate: {}",
-                userId,
-                includeHistory,
-                endDate);
+    public List<UserRoleDto> getUserRoleAssignments(@NonNull UUID userId, Boolean includeHistory) {
+        log.debug("Fetching role assignments for userId: {}, includeHistory: {}", userId, includeHistory);
 
-        List<UserRoleDto> assignments = restClient
+        List<RoleAssignment> assignments = restClient
                 .get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/v1/roles/assignments/user/{userId}")
                         .queryParam("includeHistory", includeHistory)
-                        .queryParam("endDate", endDate)
                         .build(userId))
                 .retrieve()
                 .onStatus(statusCode -> statusCode.value() == 400, (request, response) -> {
@@ -165,13 +175,15 @@ public class SecurityServiceClient {
                     throw new SecurityServiceException(
                             "Security service failed while listing role assignments", statusCode);
                 })
-                .body(new ParameterizedTypeReference<List<UserRoleDto>>() {});
+                .body(new ParameterizedTypeReference<List<RoleAssignment>>() {});
 
         if (assignments == null) {
             throw new IllegalStateException("Security service returned empty response for user role assignments");
         }
 
-        return assignments;
+        return assignments.stream()
+                .map(assignment -> mapToUserRoleDto(assignment, null))
+                .toList();
     }
 
     @NonNull
@@ -297,17 +309,24 @@ public class SecurityServiceClient {
     /**
      * Map the security service's assignment response onto this module's caller-facing shape.
      *
-     * <p>{@code userId} arrives flat on the response; the role code cannot be read back off it
-     * (only a {@code roleId} is returned), so the code the caller asked for is carried through.
-     * A response missing the {@code userId} its contract declares REQUIRED is a downstream
-     * defect, not an assignment belonging to nobody, so it fails rather than mapping to null.
+     * <p>{@code userId} arrives flat on the response. A response missing the {@code userId} its
+     * contract declares REQUIRED is a downstream defect, not an assignment belonging to nobody,
+     * so it fails rather than mapping to null.
+     *
+     * <p>The role code is read off the response, which now carries it (issue #1886).
+     * {@code requestedRoleCode} is the code the caller named on a call that supplied one, and is
+     * used only if the response omits it — which is what a pos-security-service older than that
+     * change returns. It keeps a rolling deploy that reaches this module first from blanking a
+     * code the caller already knows; a listing has no such value to fall back on and passes null.
      */
-    private UserRoleDto mapToUserRoleDto(RoleAssignment assignment, String roleCode) {
+    private UserRoleDto mapToUserRoleDto(RoleAssignment assignment, @Nullable String requestedRoleCode) {
         UUID userId = assignment.getUserId();
         if (userId == null) {
             throw new SecurityServiceException(
                     "Security service returned a role assignment without a userId: " + assignment.getId(), 502);
         }
+
+        String roleCode = assignment.getRoleCode() != null ? assignment.getRoleCode() : requestedRoleCode;
 
         return UserRoleDto.builder()
                 .userId(userId.toString())
@@ -319,7 +338,15 @@ public class SecurityServiceClient {
     }
 
     /**
-     * Helper method to determine if an assignment is currently active
+     * Helper method to determine if an assignment is currently active.
+     *
+     * <p>The effective window is the whole test, and {@code revokedAt} deliberately plays no part
+     * in it. pos-security-service revokes by setting {@code effectiveEndDate}, and its entity
+     * stamps {@code revokedAt} from that setter on any non-null end date — including the ordinary
+     * future end date a caller supplies when creating a bounded assignment. The field therefore
+     * marks "has an end date", not "was revoked", and treating it as revocation would report
+     * every bounded assignment inactive for the whole of its life. A genuine revocation moves
+     * {@code effectiveEndDate}, so the window already catches it.
      */
     private boolean isAssignmentActive(RoleAssignment assignment) {
         LocalDateTime now = LocalDateTime.now(clock);

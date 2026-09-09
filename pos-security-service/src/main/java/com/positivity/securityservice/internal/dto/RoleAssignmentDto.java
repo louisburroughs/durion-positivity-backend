@@ -32,6 +32,19 @@ public class RoleAssignmentDto {
             requiredMode = REQUIRED)
     UUID roleId;
 
+    /**
+     * The assigned role's stable code, which in this system is the role's {@code name} — the same
+     * value {@code RoleDto.name} carries and the one {@code GET /v1/roles/by-name/{name}}
+     * resolves. It is returned alongside {@code roleId} so a caller listing a user's assignments
+     * can render and act on them without a second round trip through the role catalog to turn
+     * each {@code roleId} back into a code.
+     */
+    @Schema(
+            description = "Stable code of the assigned role, identical to the role's name",
+            example = "SHOP_MGR",
+            requiredMode = REQUIRED)
+    String roleCode;
+
     @Schema(
             description = "Inclusive start of the effective window",
             example = "2026-01-15T00:00:00",

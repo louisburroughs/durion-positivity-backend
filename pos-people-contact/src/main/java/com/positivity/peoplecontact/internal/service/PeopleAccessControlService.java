@@ -14,8 +14,7 @@ public interface PeopleAccessControlService {
     List<RoleDto> getAvailableRolesForPerson(@NonNull UUID personUuid);
 
     @NonNull
-    List<UserRoleDto> getPersonRoleAssignments(
-            @NonNull UUID personUuid, boolean includeHistory, @Nullable LocalDateTime endDate);
+    List<UserRoleDto> getPersonRoleAssignments(@NonNull UUID personUuid, boolean includeHistory);
 
     @NonNull
     UserRoleDto assignRoleToPerson(

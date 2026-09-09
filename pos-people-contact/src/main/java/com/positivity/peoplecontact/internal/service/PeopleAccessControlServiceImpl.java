@@ -53,10 +53,9 @@ public class PeopleAccessControlServiceImpl implements PeopleAccessControlServic
     @Override
     @NonNull
     @Transactional(readOnly = true)
-    public List<UserRoleDto> getPersonRoleAssignments(
-            @NonNull UUID personUuid, boolean includeHistory, @Nullable LocalDateTime endDate) {
+    public List<UserRoleDto> getPersonRoleAssignments(@NonNull UUID personUuid, boolean includeHistory) {
         UUID userId = resolveUserId(personUuid);
-        return securityServiceClient.getUserRoleAssignments(userId, includeHistory, endDate);
+        return securityServiceClient.getUserRoleAssignments(userId, includeHistory);
     }
 
     @Override

@@ -23,9 +23,17 @@ import lombok.NoArgsConstructor;
  * <p>Under ADR-0061 an assignment has no location scope, so there is no {@code scopeType} or
  * {@code scopeLocationIds} here; issue #1875 deleted both downstream.
  *
+ * <p>{@code roleCode} is the role's stable name, returned alongside {@code roleId} by
+ * pos-security-service (issue #1886). Without it a listing could only be rendered by resolving
+ * every {@code roleId} through the role catalog, and the code is what callers act on: revocation
+ * addresses an assignment by role code, not by role id.
+ *
  * <p>The audit metadata pos-security-service also returns ({@code revokedAt}, {@code createdAt},
  * {@code createdBy}, {@code lastModifiedAt}, {@code lastModifiedBy}) is deliberately not mapped:
- * nothing in this module reads it, and {@code ignoreUnknown} absorbs it.
+ * nothing in this module reads it, and {@code ignoreUnknown} absorbs it. {@code revokedAt} in
+ * particular is not the revocation marker its name suggests — pos-security-service stamps it
+ * from the {@code effectiveEndDate} setter, so an ordinary bounded assignment carries one from
+ * the moment it is created — so an active flag must not be derived from it.
  */
 @Data
 @NoArgsConstructor
@@ -51,6 +59,12 @@ public class RoleAssignment {
             example = "01960011-0000-7000-8000-000000000020",
             requiredMode = REQUIRED)
     private UUID roleId;
+
+    @Schema(
+            description = "Stable code of the assigned role, identical to the role's name",
+            example = "TECHNICIAN",
+            requiredMode = REQUIRED)
+    private String roleCode;
 
     @Schema(
             description = "Inclusive start of the effective window",
