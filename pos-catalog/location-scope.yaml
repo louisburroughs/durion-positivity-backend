@@ -1,6 +1,10 @@
-# Location-scope decisions for pos-catalog (ADR-0061, #1872).
+# Location-scope decisions for pos-catalog (ADR-0061, #1872 and #1885).
 # Every operation that takes a caller-supplied locationId must appear here;
 # scripts/audit-rbac.py --check fails on a missing or stale entry.
+#
+# gate = require(permission, locationId): outside the caller's reach is 403 LOCATION_SCOPE_DENIED.
+# Ancestor sets come from this module's own ext_location replica (LocationHierarchyService, the
+# module's LocationAncestorResolver); there is no per-request call to pos-location.
 decisions:
   - operation: CatalogBulkIngestController.bulkIngest
     shape: unscoped
@@ -30,5 +34,6 @@ decisions:
     shape: unscoped
     reason: Catalog read; locationId selects which location's packages to list beside the platform ones and the response carries no location-private data (ADR-0061, #1872)
   - operation: ProductController.createLocationPriceOverride
-    shape: unscoped
-    reason: Deferred: intended gate on the override's locationId, but pos-catalog has no location replica; tracked in #1885
+    shape: gate
+    permission: catalog:location_price_override:write
+    reason: The required body locationId names the location whose shelf price the override changes; gated in the controller after bean validation, against the ext_location replica this module gained for the purpose (#1885)

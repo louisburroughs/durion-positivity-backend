@@ -209,6 +209,25 @@ person attached earlier; `DEFER` optionally carries a `deferUntil`. Invalid comb
 an unknown design or product 404, and attaching a product another design already holds by a
 reviewer's decision 409 — all in the standard `ApiError` envelope.
 
+## Location scope (ADR-0061, #1885)
+
+Location-scoped permissions are enforced on top of `@PreAuthorize` using the caller's
+`LocationScope` (decoded from the gateway's `X-Loc-Fin-Bits`, `X-Loc-Oth-Bits` and `X-Loc-Scope`
+headers). Tokens without those claims are unscoped and behave exactly as before. Ancestor sets
+come from this module's own `ext_location` replica via `LocationHierarchyService`, which is the
+module's `LocationAncestorResolver`; there is no per-request call to pos-location. A denial is a
+403 `ApiError` with code `LOCATION_SCOPE_DENIED`. The full per-operation record CI checks is
+`location-scope.yaml` in this module's root.
+
+**Gate** — the location names the site acted on; outside the caller's reach is a 403:
+
+| Operation | Permission | Where |
+| --- | --- | --- |
+| `createLocationPriceOverride` | `catalog:location_price_override:write` | controller, on the body's `locationId`, after bean validation |
+
+The module's other location-parameterised operations stay unscoped by decision: a location there
+selects a price book or a bulk-load default, and the response carries no location-private data.
+
 ## Configuration
 
 | Property                                | Default  | Description                                                     |

@@ -84,6 +84,10 @@ pos:
       # ext_catalog read-replica feed (issue #924) — replaces the sync CatalogClient
       catalog-events-topic: ${POS_WARRANTY_CATALOG_EVENTS_TOPIC:catalog.events.v1}
       catalog-events-consumer-group: ${POS_WARRANTY_CATALOG_EVENTS_CONSUMER_GROUP:pos-warranty-catalog-events}
+      # ext_location replica feed (#1885) — the materialised ancestor sets the ADR-0061
+      # location-scope narrowing on searchClaims is evaluated against, in-process.
+      location-events-topic: ${POS_WARRANTY_LOCATION_EVENTS_TOPIC:location.events.v1}
+      location-events-consumer-group: ${POS_WARRANTY_LOCATION_EVENTS_CONSUMER_GROUP:pos-warranty-location-events}
   events:
     base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}
     api-secret: ${POS_EVENTS_API_SECRET:}

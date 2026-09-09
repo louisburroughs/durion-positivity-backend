@@ -7385,7 +7385,7 @@ paths:
 
         Emits a REPORT_LABOR_OVERHEAD_GENERATE audit event; no state changes.
 
-        Returns 400 when fiscalYear is not a four-digit year or asOfMonth is outside 1 to 12.
+        Returns 400 when fiscalYear is not a four-digit year or asOfMonth is outside 1 to 12, and 403 with LOCATION_SCOPE_DENIED when the caller holds reporting:view:financial-statements but the token scopes it to locations that do not cover locationId (ADR-0061); an accounting location code the location replica cannot place is denied for a location-scoped caller.
 
         '
       operationId: generateLaborOverheadReport
@@ -7438,7 +7438,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LaborOverheadCostReport'
-          description: Forbidden - missing reporting:view:financial-statements
+          description: FORBIDDEN when the caller lacks reporting:view:financial-statements; LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations that do not cover locationId (ADR-0061)
       security:
       - bearerAuth:
         - reporting:view:financial-statements

@@ -2,6 +2,7 @@ package com.positivity.warranty.internal.repository;
 
 import com.positivity.warranty.internal.entity.WarrantyClaim;
 import com.positivity.warranty.internal.enums.ClaimStatus;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -46,5 +47,26 @@ public interface WarrantyClaimRepository extends JpaRepository<WarrantyClaim, UU
             @Param("vehicleId") @Nullable UUID vehicleId,
             @Param("status") @Nullable ClaimStatus status,
             @Param("locationId") @Nullable UUID locationId,
+            @NonNull Pageable pageable);
+
+    /**
+     * {@link #search} narrowed to the caller's location reach (ADR-0061 §3, #1885): the unfiltered
+     * search restricted to claims at a location the caller's assigned nodes cover.
+     *
+     * <p>A claim with no {@code locationId} is outside every reach and is therefore not returned to
+     * a location-scoped caller — fail closed, the same rule the gate applies to an unknown location.
+     * Never called with an empty reach: that is an empty page decided before the query.
+     */
+    @NonNull
+    @Query("select c from WarrantyClaim c"
+            + " where (:customerId is null or c.customerId = :customerId)"
+            + " and (:vehicleId is null or c.vehicleId = :vehicleId)"
+            + " and (:status is null or c.status = :status)"
+            + " and c.locationId in :locationIds")
+    Page<WarrantyClaim> searchWithinLocations(
+            @Param("customerId") @Nullable UUID customerId,
+            @Param("vehicleId") @Nullable UUID vehicleId,
+            @Param("status") @Nullable ClaimStatus status,
+            @Param("locationIds") @NonNull Collection<UUID> locationIds,
             @NonNull Pageable pageable);
 }

@@ -231,6 +231,30 @@ Accounting is event-only inbound and outbound (ADR-0044 §6). Invoice revenue re
 optimistic-lock conflict, re-reading fresh state and re-running all validations (AD-010 idempotency
 preserved); a second conflict returns `409 Conflict` and the client should retry.
 
+## Location scope (ADR-0061, #1885)
+
+Location-scoped permissions are enforced on top of `@PreAuthorize` using the caller's
+`LocationScope` (decoded from the gateway's `X-Loc-Fin-Bits`, `X-Loc-Oth-Bits` and `X-Loc-Scope`
+headers). Tokens without those claims are unscoped and behave exactly as before. Ancestor sets
+come from this module's own `ext_location` replica via `LocationHierarchyService`, which is the
+module's `LocationAncestorResolver`; there is no per-request call to pos-location. A denial is a
+403 `ApiError` with code `LOCATION_SCOPE_DENIED`. The full per-operation record CI checks is
+`location-scope.yaml` in this module's root.
+
+Accounting names a location by its GL `locationId` dimension value (e.g. `LOC-107`) rather than by
+pos-location's UUID, so the replica also carries the owner's `code` and the gate resolves the code
+to the id the ancestor sets are keyed on before checking. A code the replica cannot place is
+denied for a location-scoped caller — fail closed — and ignored for a global one.
+
+**Gate** — the location names the site the report is derived for; outside the caller's reach is a 403:
+
+| Operation | Permission | Where |
+| --- | --- | --- |
+| `generateLaborOverheadReport` | `reporting:view:financial-statements` | controller, after `fiscalYear`/`asOfMonth` validation |
+
+This is the platform's clearest `FINANCIAL`-dimension case: an `ACCOUNTANT` assigned to a region
+sees that region's shops and no others.
+
 ## Configuration
 
 | Property                                            | Default              | Description                              |

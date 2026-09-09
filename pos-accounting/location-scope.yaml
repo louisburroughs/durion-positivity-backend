@@ -1,7 +1,13 @@
-# Location-scope decisions for pos-accounting (ADR-0061, #1872).
+# Location-scope decisions for pos-accounting (ADR-0061, #1872 and #1885).
 # Every operation that takes a caller-supplied locationId must appear here;
 # scripts/audit-rbac.py --check fails on a missing or stale entry.
+#
+# gate = require(permission, locationId): outside the caller's reach is 403 LOCATION_SCOPE_DENIED.
+# Accounting names a location by its GL dimension code (e.g. LOC-107), so the gate resolves the
+# code through this module's own ext_location replica before the check; a code the replica cannot
+# place is denied for a location-scoped caller and ignored for a global one.
 decisions:
   - operation: LaborOverheadReportController.generateLaborOverheadReport
-    shape: unscoped
-    reason: Deferred: intended narrow on the FINANCIAL dimension, but pos-accounting has no location replica; tracked in #1885
+    shape: gate
+    permission: reporting:view:financial-statements
+    reason: The required locationId names the single location the cost matrix is derived for; the clearest FINANCIAL case in the platform, so an ACCOUNTANT assigned to a region sees that region's shops and no others. Gated in the controller after fiscalYear/asOfMonth validation, on the location the GL dimension code resolves to (#1885)

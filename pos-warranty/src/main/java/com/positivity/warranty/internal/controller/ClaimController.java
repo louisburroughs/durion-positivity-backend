@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.warranty.internal.dto.CandidateLine;
 import com.positivity.warranty.internal.dto.ClaimActionRequest;
 import com.positivity.warranty.internal.dto.ClaimCreateRequest;
@@ -19,6 +20,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -172,9 +174,19 @@ public class ClaimController {
                     sorted by createdAt descending.
                     Emits a WARRANTY_CLAIM_SEARCH audit event; no claim state changes, this is a read-only \
                     projection.
+                    A caller whose warranty:claim:view grant is location-scoped (ADR-0061) sees only claims \
+                    at locations their assigned nodes cover: a supplied locationId outside that reach is \
+                    403 LOCATION_SCOPE_DENIED, and without one the page is narrowed rather than refused, \
+                    so a caller who reaches no replicated location gets an empty page.
                     Returns 200 with the page, which is empty rather than 404 when no claim matches.
                     """)
     @ApiResponse(responseCode = "200", description = "Claims returned.")
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN when the caller lacks warranty:claim:view;"
+                    + " LOCATION_SCOPE_DENIED when the caller holds it but the token scopes it to locations"
+                    + " that do not cover the supplied locationId (ADR-0061)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + WarrantyPermissions.CLAIM_VIEW + "')")
     @EmitEvent(id = "WARRANTY_CLAIM_SEARCH", apiVersion = "1")
     @GetMapping

@@ -76,6 +76,10 @@ pos:
       invoice-commands-topic: ${POS_ACCOUNTING_KAFKA_INVOICE_COMMANDS_TOPIC:invoice.commands.v1}
       # Accounting's own fact feed (accounting.invoice.gl-posted), drained from kafka_event_outbox (#1843)
       accounting-events-topic: ${POS_ACCOUNTING_KAFKA_ACCOUNTING_EVENTS_TOPIC:accounting.events.v1}
+      # Location fact feed maintaining the ext_location replica whose materialised ancestor sets
+      # answer the ADR-0061 location-scope check on the Labor & Overhead report (#1885)
+      location-events-topic: ${POS_ACCOUNTING_KAFKA_LOCATION_EVENTS_TOPIC:location.events.v1}
+      location-events-consumer-group: ${POS_ACCOUNTING_KAFKA_LOCATION_EVENTS_CONSUMER_GROUP:pos-accounting-location-events}
 
 # Payment Gateway Configuration
 payment:

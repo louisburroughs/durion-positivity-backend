@@ -8,6 +8,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.warranty.internal.dto.ClaimActionRequest;
 import com.positivity.warranty.internal.dto.ClaimCreateRequest;
 import com.positivity.warranty.internal.dto.ClaimDecisionRequest;
@@ -50,8 +51,10 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -62,6 +65,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Claim lifecycle service (PRD §5, §7): intake with frozen vehicle snapshot and claim-code
@@ -113,6 +118,9 @@ class ClaimServiceImplTest {
     @Mock
     private ClaimSnapshotPublisher claimSnapshotPublisher;
 
+    @Mock
+    private LocationHierarchyService locationHierarchyService;
+
     private ClaimServiceImpl service;
 
     @BeforeEach
@@ -129,6 +137,7 @@ class ClaimServiceImplTest {
                 eligibilityService,
                 extVehicleReplicaRepository,
                 claimSnapshotPublisher,
+                locationHierarchyService,
                 Clock.fixed(Instant.parse("2026-07-15T12:00:00Z"), ZoneOffset.UTC));
     }
 
@@ -1093,6 +1102,23 @@ class ClaimServiceImplTest {
         // of the matched claim, and JaCoCo had that predicate at 25% branch — 12 of 16 paths
         // unexercised. The customerId filter is the one that matters most: without it, anyone who
         // can guess or is told a claim code could read another customer's claim.
+        //
+        // search() also reads the caller's location scope (ADR-0061, #1885), so these cases run as
+        // a pre-rollout caller: no loc_* claims, hence no narrowing and exactly the behaviour
+        // asserted below. ClaimSearchLocationScopeTest owns the scoped shapes.
+
+        @BeforeEach
+        void preRolloutCaller() {
+            var authentication = new TestingAuthenticationToken("claim-search-user", null, "ROLE_USER");
+            authentication.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "claim-search-user"));
+            authentication.setAuthenticated(true);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+
+        @AfterEach
+        void clearCaller() {
+            SecurityContextHolder.clearContext();
+        }
 
         @Test
         @DisplayName("A claim code belonging to another customer is filtered out")
