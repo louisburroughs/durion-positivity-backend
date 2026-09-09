@@ -619,6 +619,31 @@ JAVA_METHOD_RE = re.compile(
     r'(?m)^[ \t]+(?:(?:public|private|protected|static|final|synchronized|abstract|default|native|strictfp)\s+)+'
     r'[^;={}()]*?\b(\w+)\s*\(')
 
+# ...and the same declaration with NO access modifier at all: `void publish(Event e) {`.
+# Package-private is the default in Java, so requiring a modifier keyword silently drops
+# those methods -- and a dropped method is a dropped call-graph edge, which in a security
+# gate is a false negative rather than a cosmetic gap. It cannot share the pattern above:
+# with the modifier group made optional, `if (x) {` parses as a method named `if` whose
+# body is the if-block. The discriminator is that a declaration has a RETURN TYPE before
+# the name and a control-flow keyword does not (`if`, `for`, `while`, `switch`, `catch`,
+# `try`, `else if` are all keyword-then-paren), so this pattern requires a type token
+# first, anchored to the start of the line so the type cannot be picked up mid-expression
+# -- which is also what keeps `Foo foo = bar(baz);` and `service.doThing(arg);` out. The
+# keyword lookahead is belt-and-braces; the modifier lookahead just avoids matching a
+# declaration the pattern above already found, at a different offset. `record` is in the
+# keyword list for a sharper reason than the rest: a package-private nested
+# `record SkuCategoryRef(...) {` has exactly the shape of a method declaration, and
+# reading it as one would swallow the record's own methods into its "body" and drop them
+# from the graph -- the opposite of what this pattern is here to fix.
+JAVA_PACKAGE_PRIVATE_METHOD_RE = re.compile(
+    r'(?m)^[ \t]+'
+    r'(?!(?:public|private|protected|static|final|synchronized|abstract|default|native|strictfp)\b)'
+    r'(?:<[^;={}()]{0,200}>\s+)?'                       # generic method type parameters
+    r'(?!(?:if|for|while|switch|catch|try|do|else|return|new|throw|assert|yield|case'
+    r'|record|class|interface|enum)\b)'
+    r'[A-Za-z_$][\w.$]*(?:\s*<[^;={}()]{0,300}>)?(?:\s*\[\s*\])*\s+'   # return type
+    r'(\w+)\s*\(')
+
 
 def methods_in(sk):
     """[(name, decl_start, body_start, body_end)] for every method with a body.
@@ -628,7 +653,11 @@ def methods_in(sk):
     inner method belongs to its enclosing method, not beside it.
     """
     found = []
-    for m in JAVA_METHOD_RE.finditer(sk):
+    seen_starts = set()
+    for m in list(JAVA_METHOD_RE.finditer(sk)) + list(JAVA_PACKAGE_PRIVATE_METHOD_RE.finditer(sk)):
+        if m.start() in seen_starts:
+            continue
+        seen_starts.add(m.start())
         open_paren = m.end() - 1
         k = close_paren(sk, open_paren) + 1
         while k < len(sk) and sk[k] not in "{;":   # skip `throws ...`
