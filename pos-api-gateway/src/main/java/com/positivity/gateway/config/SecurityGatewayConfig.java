@@ -15,15 +15,19 @@ import io.jsonwebtoken.security.SignatureException;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.BitSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import javax.crypto.SecretKey;
 import org.jspecify.annotations.NonNull;
@@ -39,7 +43,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.config.CorsRegistry;
 import org.springframework.web.reactive.config.WebFluxConfigurer;
@@ -61,6 +67,7 @@ public class SecurityGatewayConfig {
     private static final String HEADER_X_LOC_FIN_BITS = "X-Loc-Fin-Bits";
     private static final String HEADER_X_LOC_OTH_BITS = "X-Loc-Oth-Bits";
     private static final String HEADER_X_LOC_SCOPE = "X-Loc-Scope";
+    private static final String HEADER_X_CORRELATION_ID = "X-Correlation-Id";
     private static final String JWT_HEADER_ALG = "alg";
     private static final String CLAIM_PERMISSION_VERSION = "perm_ver";
     private static final String CLAIM_ROLES = "roles";
@@ -74,11 +81,23 @@ public class SecurityGatewayConfig {
     private static final String METRIC_AUTH_PERMISSION_DECODE_FAILURE = "auth.perm.decode.failure";
     private static final String METRIC_AUTH_TOKEN_VALIDATION_FAILURE = "auth.token.validation.failure";
     private static final String METRIC_AUTH_USER_IDENTITY_MISSING = "auth.user.identity.missing";
+    private static final String METRIC_AUTH_TOKEN_REVOKED = "auth.token.revocation.rejected";
+    private static final String METRIC_AUTH_TOKEN_REVOCATION_SKIPPED = "auth.token.revocation.skipped";
     private static final String REJECTION_REASON_TAG = "reason";
     private static final String UNSIGNED_ALG = "NONE";
     private static final String TEST_SIGNATURE_MARKER = "test-signature";
     private static final String HS256 = "HS256";
     private static final String UNKNOWN_JTI = "unknown";
+    // ADR-0061 §4 / #1883: the one rejection a client can act on differently — the credential was
+    // valid and is now withdrawn, so re-authenticate rather than retry. Every other auth failure
+    // stays deliberately undifferentiated in the body; the reason is logged, not returned.
+    private static final String ERROR_CODE_TOKEN_REVOKED = "TOKEN_REVOKED";
+    private static final String ERROR_CODE_UNAUTHORIZED = "UNAUTHORIZED";
+    private static final String ERROR_MESSAGE_TOKEN_REVOKED = "Access token has been revoked";
+    private static final String ERROR_MESSAGE_UNAUTHORIZED = "Authentication is required to access this resource";
+    // An inbound correlation id is echoed into the error envelope, so it is accepted only in the
+    // shape the platform issues (a UUID-ish token); anything else gets a fresh id.
+    private static final Pattern CORRELATION_ID_PATTERN = Pattern.compile("[A-Za-z0-9_.:-]{1,64}");
     // Accelerated-run startup probe (read-only clock diagnostics). Matched exactly, never as a
     // prefix: permitting /system/** would make every future system endpoint public by default.
     private static final String SYSTEM_TIME_PATH = "/system/time";
@@ -90,6 +109,7 @@ public class SecurityGatewayConfig {
     private final Set<String> allowedJwtAlgorithms;
     private final GatewayAuthProperties authProperties;
     private final MeterRegistry meterRegistry;
+    private final TokenRevocationChecker revocationChecker;
 
     @Autowired
     public SecurityGatewayConfig(
@@ -97,13 +117,34 @@ public class SecurityGatewayConfig {
             @Value("${pos.gateway.security.strict-jwt-header-validation:false}") boolean strictJwtHeaderValidation,
             @Value("${pos.gateway.security.allowed-jwt-algorithms:HS256}") String allowedJwtAlgorithmsCsv,
             @NonNull GatewayAuthProperties authProperties,
-            @NonNull MeterRegistry meterRegistry) {
+            @NonNull MeterRegistry meterRegistry,
+            @NonNull TokenRevocationChecker revocationChecker) {
         this(
                 jwtSecret,
                 strictJwtHeaderValidation,
                 parseAllowedJwtAlgorithms(allowedJwtAlgorithmsCsv),
                 authProperties,
-                meterRegistry);
+                meterRegistry,
+                revocationChecker);
+    }
+
+    /**
+     * Claim-handling constructor: no revocation check. Kept so the validation, bitset-decode and
+     * header trust-boundary tests exercise exactly the code path they are about, unchanged.
+     */
+    SecurityGatewayConfig(
+            @NonNull String jwtSecret,
+            boolean strictJwtHeaderValidation,
+            Set<String> allowedJwtAlgorithms,
+            @NonNull GatewayAuthProperties authProperties,
+            @NonNull MeterRegistry meterRegistry) {
+        this(
+                jwtSecret,
+                strictJwtHeaderValidation,
+                allowedJwtAlgorithms,
+                authProperties,
+                meterRegistry,
+                TokenRevocationChecker.DISABLED);
     }
 
     SecurityGatewayConfig(
@@ -111,12 +152,14 @@ public class SecurityGatewayConfig {
             boolean strictJwtHeaderValidation,
             Set<String> allowedJwtAlgorithms,
             @NonNull GatewayAuthProperties authProperties,
-            @NonNull MeterRegistry meterRegistry) {
+            @NonNull MeterRegistry meterRegistry,
+            @NonNull TokenRevocationChecker revocationChecker) {
         this.secretKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
         this.strictJwtHeaderValidation = strictJwtHeaderValidation;
         this.allowedJwtAlgorithms = normalizeAllowedJwtAlgorithms(allowedJwtAlgorithms);
         this.authProperties = authProperties;
         this.meterRegistry = meterRegistry;
+        this.revocationChecker = revocationChecker;
     }
 
     /**
@@ -191,7 +234,39 @@ public class SecurityGatewayConfig {
             return unauthorized(context.exchange());
         }
 
-        return forwardAuthenticatedRequest(context, chain, identity.get());
+        return forwardUnlessRevoked(context, chain, identity.get());
+    }
+
+    /**
+     * Consults the shared revocation key space before forwarding (#1883, ADR-0061 §4).
+     *
+     * <p>Signature, issuer, audience and expiry are all the gateway used to check, so a token
+     * revoked by logout, {@code revokeAllTokensForUser}, refresh rotation or a reach-narrowing
+     * staffing change kept passing here until its {@code exp} — and every downstream service
+     * trusts the headers this filter writes. The lookup is one {@code EXISTS} against the keys
+     * {@code TokenRevocationManager} writes; it never reads pos-security-service's {@code
+     * jwt_token} table, which is that module's own schema.
+     *
+     * <p>A token with no {@code jti} cannot be looked up and is forwarded. That is not a bypass an
+     * attacker can reach for — the claim set is fixed by the issuer's signature, and only legacy
+     * pre-{@code perm_ver} tokens lack the claim — but it is a real hole in coverage while such
+     * tokens are still accepted, so it is counted rather than passed over silently.
+     */
+    private Mono<Void> forwardUnlessRevoked(
+            AuthRequestContext context, GatewayFilterChain chain, AuthenticatedIdentity identity) {
+        if (UNKNOWN_JTI.equals(identity.jti())) {
+            incrementTaggedCounter(METRIC_AUTH_TOKEN_REVOCATION_SKIPPED, REJECTION_REASON_TAG, "no_jti");
+            return forwardAuthenticatedRequest(context, chain, identity);
+        }
+
+        return revocationChecker.isRevoked(identity.jti()).flatMap(revoked -> {
+            if (Boolean.TRUE.equals(revoked)) {
+                incrementCounter(METRIC_AUTH_TOKEN_REVOKED);
+                LOG.warn(LOG_JWT_AUTH_REJECTED, context.path(), "revoked", identity.jti());
+                return unauthorized(context.exchange(), ERROR_CODE_TOKEN_REVOKED, ERROR_MESSAGE_TOKEN_REVOKED);
+            }
+            return forwardAuthenticatedRequest(context, chain, identity);
+        });
     }
 
     private AuthRequestContext createAuthRequestContext(ServerWebExchange exchange) {
@@ -687,9 +762,53 @@ public class SecurityGatewayConfig {
         return Set.copyOf(normalized);
     }
 
-    private static Mono<Void> unauthorized(org.springframework.web.server.ServerWebExchange exchange) {
-        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-        return exchange.getResponse().setComplete();
+    private static Mono<Void> unauthorized(ServerWebExchange exchange) {
+        return unauthorized(exchange, ERROR_CODE_UNAUTHORIZED, ERROR_MESSAGE_UNAUTHORIZED);
+    }
+
+    /**
+     * Completes the exchange with 401 and the platform {@code ApiError} envelope
+     * ({@code docs/ERROR_ENVELOPE.md}).
+     *
+     * <p>Rejections used to be a bare 401 with no body, which left the gateway as the one place in
+     * the platform returning an un-parseable error. The body says only which of two things
+     * happened — the credential is unusable, or it was revoked — because the specific reason
+     * (bad signature, unknown {@code perm_ver}, malformed claim) is diagnostic for us and a probing
+     * oracle for anyone else; it is logged and counted instead.
+     */
+    private static Mono<Void> unauthorized(ServerWebExchange exchange, String code, String message) {
+        ServerHttpResponse response = exchange.getResponse();
+        response.setStatusCode(HttpStatus.UNAUTHORIZED);
+        String correlationId = resolveCorrelationId(exchange.getRequest());
+        response.getHeaders().set(HEADER_X_CORRELATION_ID, correlationId);
+
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        envelope.put("code", code);
+        envelope.put("message", message);
+        envelope.put("status", HttpStatus.UNAUTHORIZED.value());
+        envelope.put("timestamp", Instant.now().toString());
+        envelope.put("correlationId", correlationId);
+
+        byte[] body;
+        try {
+            body = OBJECT_MAPPER.writeValueAsBytes(envelope);
+        } catch (JsonProcessingException ex) {
+            // Unreachable for a map of strings and an int; a 401 without a body still beats a 500.
+            LOG.warn("Failed to serialize 401 error envelope; responding without a body", ex);
+            return response.setComplete();
+        }
+
+        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        return response.writeWith(Mono.just(response.bufferFactory().wrap(body)));
+    }
+
+    private static String resolveCorrelationId(ServerHttpRequest request) {
+        String inbound = request.getHeaders().getFirst(HEADER_X_CORRELATION_ID);
+        if (StringUtils.hasText(inbound)
+                && CORRELATION_ID_PATTERN.matcher(inbound).matches()) {
+            return inbound;
+        }
+        return UUID.randomUUID().toString();
     }
 
     private String normalizeRoleClaim(String role) {

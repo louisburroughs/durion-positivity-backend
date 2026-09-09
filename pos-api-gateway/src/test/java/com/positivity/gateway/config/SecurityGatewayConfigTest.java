@@ -25,6 +25,7 @@ import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.web.reactive.config.CorsRegistry;
@@ -2113,6 +2114,193 @@ class SecurityGatewayConfigTest {
                     .block();
 
             assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+    }
+
+    @Nested
+    @DisplayName("#1883 token revocation at the boundary")
+    class TokenRevocationTests {
+
+        private static final String PATH = "/people/v1/employees";
+
+        private static MockServerWebExchange exchange(String token) {
+            return MockServerWebExchange.from(MockServerHttpRequest.get(PATH)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .build());
+        }
+
+        private static GlobalFilter filter(TokenRevocationChecker checker, SimpleMeterRegistry registry) {
+            return new SecurityGatewayConfig(
+                            TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), registry, checker)
+                    .authFilter();
+        }
+
+        /** Records every jti the filter looked up, so "did it ask at all?" is assertable. */
+        private static TokenRevocationChecker recording(List<String> lookups, boolean revoked) {
+            return jti -> {
+                lookups.add(jti);
+                return Mono.just(revoked);
+            };
+        }
+
+        private static String bodyOf(MockServerWebExchange exchange) {
+            return exchange.getResponse().getBodyAsString().block();
+        }
+
+        @Test
+        @DisplayName("a revoked jti is rejected with 401 and never reaches the chain")
+        void revokedToken_returns401_andIsNotForwarded() {
+            String token = buildCanonicalToken(
+                    "alice", "u1", null, encodePermBits(116), GatewayPermissionCatalog.CATALOG_VERSION);
+            SimpleMeterRegistry registry = new SimpleMeterRegistry();
+            AtomicReference<Boolean> chainCalled = new AtomicReference<>(false);
+
+            var exchange = exchange(token);
+            filter(jti -> Mono.just(true), registry)
+                    .filter(exchange, ignored -> {
+                        chainCalled.set(true);
+                        return Mono.empty();
+                    })
+                    .block();
+
+            assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(chainCalled.get()).isFalse();
+            assertThat(registry.counter("auth.token.revocation.rejected").count())
+                    .isEqualTo(1.0);
+        }
+
+        @Test
+        @DisplayName("the rejection carries the standard ApiError envelope with code TOKEN_REVOKED")
+        void revokedToken_returnsErrorEnvelope() {
+            String token = buildCanonicalToken(
+                    "alice", "u1", null, encodePermBits(116), GatewayPermissionCatalog.CATALOG_VERSION);
+
+            var exchange = exchange(token);
+            filter(jti -> Mono.just(true), new SimpleMeterRegistry())
+                    .filter(exchange, ignored -> Mono.empty())
+                    .block();
+
+            assertThat(exchange.getResponse().getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_JSON);
+            assertThat(bodyOf(exchange))
+                    .contains("\"code\":\"TOKEN_REVOKED\"")
+                    .contains("\"status\":401")
+                    .contains("\"correlationId\"")
+                    .contains("\"timestamp\"");
+            assertThat(exchange.getResponse().getHeaders().getFirst("X-Correlation-Id"))
+                    .isNotBlank();
+        }
+
+        @Test
+        @DisplayName("an inbound correlation id is echoed into the envelope; a malformed one is replaced")
+        void correlationId_echoedWhenWellFormed() {
+            String token = buildCanonicalToken(
+                    "alice", "u1", null, encodePermBits(116), GatewayPermissionCatalog.CATALOG_VERSION);
+            String correlationId = "019507b4-1f3a-7000-8e04-5c9d3a4f6e12";
+
+            var good = MockServerWebExchange.from(MockServerHttpRequest.get(PATH)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .header("X-Correlation-Id", correlationId)
+                    .build());
+            filter(jti -> Mono.just(true), new SimpleMeterRegistry())
+                    .filter(good, ignored -> Mono.empty())
+                    .block();
+            assertThat(good.getResponse().getHeaders().getFirst("X-Correlation-Id"))
+                    .isEqualTo(correlationId);
+            assertThat(bodyOf(good)).contains(correlationId);
+
+            var bad = MockServerWebExchange.from(MockServerHttpRequest.get(PATH)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .header("X-Correlation-Id", "not a correlation id\n{\"injected\":true}")
+                    .build());
+            filter(jti -> Mono.just(true), new SimpleMeterRegistry())
+                    .filter(bad, ignored -> Mono.empty())
+                    .block();
+            assertThat(bad.getResponse().getHeaders().getFirst("X-Correlation-Id"))
+                    .doesNotContain("injected");
+            assertThat(bodyOf(bad)).doesNotContain("injected");
+        }
+
+        @Test
+        @DisplayName("a token that is not revoked is forwarded, and the jti actually looked up is the token's")
+        void clearToken_isForwarded() {
+            String token = buildCanonicalToken(
+                    "alice", "u1", null, encodePermBits(116), GatewayPermissionCatalog.CATALOG_VERSION);
+            String jti = Jwts.parser()
+                    .verifyWith(TEST_KEY)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload()
+                    .getId();
+            List<String> lookups = new java.util.ArrayList<>();
+            AtomicReference<HttpHeaders> downstream = new AtomicReference<>();
+
+            var exchange = exchange(token);
+            filter(recording(lookups, false), new SimpleMeterRegistry())
+                    .filter(exchange, ex -> {
+                        downstream.set(ex.getRequest().getHeaders());
+                        return Mono.empty();
+                    })
+                    .block();
+
+            assertThat(exchange.getResponse().getStatusCode()).isNull();
+            assertThat(downstream.get().getFirst("X-User")).isEqualTo("alice");
+            assertThat(lookups).containsExactly(jti);
+        }
+
+        @Test
+        @DisplayName("a legacy token with no jti is forwarded without a lookup, and the gap is counted")
+        void tokenWithoutJti_isForwardedAndCounted() {
+            // No .id(...): the legacy authorities shape predates jti.
+            String token = buildLegacyAuthoritiesToken("alice", "u1", "people:employee:view");
+            SimpleMeterRegistry registry = new SimpleMeterRegistry();
+            List<String> lookups = new java.util.ArrayList<>();
+            AtomicReference<Boolean> chainCalled = new AtomicReference<>(false);
+
+            var exchange = exchange(token);
+            filter(recording(lookups, true), registry)
+                    .filter(exchange, ignored -> {
+                        chainCalled.set(true);
+                        return Mono.empty();
+                    })
+                    .block();
+
+            assertThat(lookups).isEmpty();
+            assertThat(chainCalled.get()).isTrue();
+            assertThat(exchange.getResponse().getStatusCode()).isNull();
+            assertThat(registry.counter("auth.token.revocation.skipped", "reason", "no_jti")
+                            .count())
+                    .isEqualTo(1.0);
+        }
+
+        @Test
+        @DisplayName("the disabled checker never reports a revocation")
+        void disabledChecker_forwards() {
+            String token = buildCanonicalToken(
+                    "alice", "u1", null, encodePermBits(116), GatewayPermissionCatalog.CATALOG_VERSION);
+            AtomicReference<Boolean> chainCalled = new AtomicReference<>(false);
+
+            var exchange = exchange(token);
+            filter(TokenRevocationChecker.DISABLED, new SimpleMeterRegistry())
+                    .filter(exchange, ignored -> {
+                        chainCalled.set(true);
+                        return Mono.empty();
+                    })
+                    .block();
+
+            assertThat(chainCalled.get()).isTrue();
+            assertThat(exchange.getResponse().getStatusCode()).isNull();
+        }
+
+        @Test
+        @DisplayName("an unauthenticated rejection carries the same envelope, without leaking the reason")
+        void unauthenticatedRejection_carriesGenericEnvelope() {
+            var exchange = exchange(buildExpiredToken("alice", "u1"));
+            filter(TokenRevocationChecker.DISABLED, new SimpleMeterRegistry())
+                    .filter(exchange, ignored -> Mono.empty())
+                    .block();
+
+            assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(bodyOf(exchange)).contains("\"code\":\"UNAUTHORIZED\"").doesNotContain("expired");
         }
     }
 }

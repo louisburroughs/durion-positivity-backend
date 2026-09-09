@@ -4,6 +4,14 @@ security:
     # Must be >= 32 bytes for HS256 key material.
     secret: ${SECURITY_JWT_SECRET:local-dev-jwt-secret-change-me-32-bytes-minimum}
 
+pos:
+  gateway:
+    security:
+      revocation-check:
+        # Local dev usually runs without Redis. Off explicitly so the degraded-path WARN means
+        # something when it does appear, rather than being the normal state of every dev run.
+        enabled: false
+
 eureka:
   client:
     serviceUrl:

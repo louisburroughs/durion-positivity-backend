@@ -4,6 +4,14 @@ server:
 spring:
   application:
     name: pos-api-gateway
+  data:
+    # #1883: the shared jwt:revoked:{jti} key space written by pos-security-service's
+    # TokenRevocationManager. The gateway only issues EXISTS against it — it never reads the
+    # jwt_token table, which is that module's own schema.
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      timeout: 2000ms
   cloud:
     gateway:
       server:
@@ -171,6 +179,12 @@ spring:
                 - StripPrefix=1
 
 management:
+  health:
+    redis:
+      # Off on purpose. The revocation check fails open (#1883/#1874), so a Redis outage must not
+      # mark the gateway unhealthy and take the whole platform's ingress out of rotation. The
+      # degraded state is surfaced by auth.token.revocation.degraded and a WARN instead.
+      enabled: false
   endpoints:
     web:
       exposure:
@@ -195,6 +209,15 @@ pos:
       strict-jwt-header-validation: true
       # Allowed JWT 'alg' values when strict header validation is enabled.
       allowed-jwt-algorithms: HS256
+      revocation-check:
+        # #1883: consult the shared revocation key space on every authenticated request. On by
+        # default — leaving revocation unenforced at the security boundary has to be a decision,
+        # not an omission. Nothing is cached: a negative cache's TTL is exactly the window in
+        # which a revoked token still passes.
+        enabled: true
+        # Ceiling on the latency one lookup may add to an authenticated request. On timeout the
+        # request is forwarded unchecked (fail-open) and the degraded counter is incremented.
+        timeout: 150ms
 
 # Auth feature flags - rollout controls for PERM bitset migration
 auth:
