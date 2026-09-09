@@ -701,10 +701,16 @@ if [[ "${MODE}" == "config-only" ]]; then
   exit 0
 fi
 
+# The awk deliberately reads its input to the end instead of `{print $2; exit}`. Exiting at
+# the first match closes the pipe while `sed` is still writing the rest of the postgres block,
+# and `sed` then dies of SIGPIPE — which `set -o pipefail` turns into status 141 for the whole
+# pipeline and `set -e` turns into a deploy that aborts here, before a single container is
+# touched, with no message at all. Whether the write lands after awk is gone is a scheduling
+# race, so it failed only intermittently (run 34336034228).
 DESIRED_POSTGRES_IMAGE="$(
   docker compose "${COMPOSE_ARGS[@]}" config \
     | sed -n '/^  postgres:/,/^[^ ]/p' \
-    | awk '/image:/ {print $2; exit}'
+    | awk '/image:/ && !found { image = $2; found = 1 } END { if (found) print image }'
 )"
 CURRENT_POSTGRES_CONTAINER_ID="$(docker compose "${COMPOSE_ARGS[@]}" ps -q postgres 2>/dev/null || true)"
 CURRENT_POSTGRES_IMAGE=""

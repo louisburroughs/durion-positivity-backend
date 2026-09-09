@@ -78,10 +78,13 @@ COMPOSE_ARGS=(
   --env-file "$ENV_FILE"
 )
 
+# No early `exit` in the awk: it would close the pipe mid-block and SIGPIPE the `sed`,
+# which `set -o pipefail` reports as status 141 and `set -e` turns into a silent abort.
+# Same fix as deploy-backend.sh, which carries the full explanation.
 desired_postgres_image="$(
   docker compose "${COMPOSE_ARGS[@]}" config \
     | sed -n '/^  postgres:/,/^[^ ]/p' \
-    | awk '/image:/ {print $2; exit}'
+    | awk '/image:/ && !found { image = $2; found = 1 } END { if (found) print image }'
 )"
 current_postgres_container_id="$(docker compose "${COMPOSE_ARGS[@]}" ps -q postgres 2>/dev/null || true)"
 current_postgres_image=""

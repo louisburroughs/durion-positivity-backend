@@ -192,6 +192,14 @@ jobs:
         # the real script against a stubbed Docker (#1646).
         run: bash scripts/tests/deploy-backend-config-only-selftest.sh
 
+      - name: Verify the full deploy's postgres image reconciliation
+        # The desired postgres image comes out of `docker compose config` through a
+        # sed/awk pipeline. An early-exiting awk closes that pipe mid-block, and the
+        # SIGPIPE it hands the sed ends the deploy at status 141 with no message — a
+        # scheduling race, so it went red only now and then (run 34336034228). The
+        # self-test drives the real script against a stubbed Docker.
+        run: bash scripts/tests/deploy-backend-postgres-image-selftest.sh
+
       - name: Verify the deploy's pre-pull disk reclaim
         # The periodic prune is the last line of deploy-backend.sh, so it never runs on a
         # deploy that failed. When alpha filled up mid-pull that turned one failure into a
