@@ -2,8 +2,13 @@
 """Rewrite `ON CONFLICT (cols)` to `ON CONFLICT (tenant_id, cols)` for INSERTs into tenant-scoped tables.
 usage: rescope_conflicts.py <scoped-tables-file> <sql-file>"""
 import re, sys
-scoped = set(open(sys.argv[1]).read().split())
-text = open(sys.argv[2]).read()
+from pathlib import Path
+
+if len(sys.argv) != 3:
+    sys.exit("usage: rescope_conflicts.py <scoped-tables-file> <sql-file>")
+scoped = set(Path(sys.argv[1]).read_text(encoding="utf-8").split())
+sql_file = Path(sys.argv[2])
+text = sql_file.read_text(encoding="utf-8")
 out, pos, changed = [], 0, 0
 for m in re.finditer(r"ON CONFLICT \(([^)]*)\)", text, re.I):
     before = text[:m.start()]
@@ -13,5 +18,5 @@ for m in re.finditer(r"ON CONFLICT \(([^)]*)\)", text, re.I):
     if table in scoped and cols and cols[0].lower() != "tenant_id":
         out.append(text[pos:m.start()]); out.append(f"ON CONFLICT (tenant_id, {m.group(1).strip()})"); pos = m.end(); changed += 1
 out.append(text[pos:])
-open(sys.argv[2], "w").write("".join(out))
-print(f"  {sys.argv[2].split('/')[-1]}: {changed} conflict targets re-scoped")
+sql_file.write_text("".join(out), encoding="utf-8")
+print(f"  {sql_file.name}: {changed} conflict targets re-scoped")
