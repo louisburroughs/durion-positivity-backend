@@ -3,6 +3,7 @@ package com.positivity.gateway.config;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.time.TimeSource;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jws;
@@ -15,7 +16,6 @@ import io.jsonwebtoken.security.SignatureException;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.BitSet;
@@ -786,7 +786,7 @@ public class SecurityGatewayConfig {
         envelope.put("code", code);
         envelope.put("message", message);
         envelope.put("status", HttpStatus.UNAUTHORIZED.value());
-        envelope.put("timestamp", Instant.now().toString());
+        envelope.put("timestamp", TimeSource.instant().toString());
         envelope.put("correlationId", correlationId);
 
         byte[] body;
