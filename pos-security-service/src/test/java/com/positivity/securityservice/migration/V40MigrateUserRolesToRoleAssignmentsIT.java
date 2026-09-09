@@ -110,12 +110,20 @@ class V40MigrateUserRolesToRoleAssignmentsIT {
 
         // (1) The fresh pair migrated to an open-ended assignment starting at the user's created_at.
         Map<String, Object> migrated = jdbc().queryForMap(
-                        "SELECT effective_start_date, effective_end_date, revoked_at, created_by "
+                        "SELECT effective_end_date, revoked_at, created_by "
                                 + "FROM role_assignments WHERE user_id = ? AND role_id = ?",
                         freshUserId,
                         freshRoleId);
-        assertThat(((OffsetDateTime) migrated.get("effective_start_date")).toInstant())
-                .isEqualTo(freshUserCreatedAt.toInstant());
+        // Read the timestamptz through the driver's typed conversion: queryForMap materialises it
+        // as java.sql.Timestamp, which cannot be cast to OffsetDateTime (the first main run of this
+        // IT failed exactly there), whereas getObject(OffsetDateTime.class) is what pgjdbc supports.
+        OffsetDateTime migratedStart = jdbc().queryForObject(
+                        "SELECT effective_start_date FROM role_assignments WHERE user_id = ? AND role_id = ?",
+                        OffsetDateTime.class,
+                        freshUserId,
+                        freshRoleId);
+        assertThat(migratedStart).isNotNull();
+        assertThat(migratedStart.toInstant()).isEqualTo(freshUserCreatedAt.toInstant());
         assertThat(migrated.get("effective_end_date")).isNull();
         assertThat(migrated.get("revoked_at")).isNull();
         assertThat(migrated.get("created_by")).isEqualTo("V40__migrate_user_roles_to_role_assignments");
