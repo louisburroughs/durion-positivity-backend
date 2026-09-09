@@ -688,16 +688,24 @@ class PostingRuleEvaluatorDefaultMappingTest {
     class InputValidationTests {
 
         @Test
-        @DisplayName("Should fail with VALIDATION_ERROR when organizationId is null")
-        void shouldFailWhenOrgIdNull() {
+        @DisplayName("Should post against the global default mapping when organizationId is null (issue #1894)")
+        void shouldPostGlobalDefaultWhenOrgIdNull() {
+            // organizationId is a vestigial scope key that no longer gates evaluation: a null one
+            // resolves the global default (the mapping row whose organization_id IS NULL), which
+            // is what findActiveDefaultForEvent already falls back to.
             AccountingEvent event = createEventWithAmount("billing.invoicePosted", "100.00");
             event.setOrganizationId(null);
 
+            DefaultGLMapping globalMapping = createDefaultMapping("billing.invoicePosted", "Global default");
+            globalMapping.setOrganizationId(null);
+            stubNoPostingRules();
+            when(defaultGLMappingRepository.findActiveDefaultForEvent("billing.invoicePosted", null))
+                    .thenReturn(Optional.of(globalMapping));
+
             PostingResult result = evaluator.evaluateEvent(event);
 
-            assertThat(result.isSuccess()).isFalse();
-            assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.VALIDATION_ERROR);
-            assertThat(result.getFailureDetails()).contains("organizationId");
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getJournalEntryDraft().getLines()).hasSize(2);
         }
 
         @Test

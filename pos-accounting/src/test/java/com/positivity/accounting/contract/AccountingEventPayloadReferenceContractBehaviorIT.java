@@ -43,14 +43,18 @@ import org.springframework.test.web.servlet.MvcResult;
  * leaves what it does not know as null rather than echoing the identifier. They also pin the
  * non-regression the issue insists on: the payload itself, and the ids callers route and audit
  * with, are unchanged. Issue #1797 adds the code-keyed {@code LOCATION} type, resolved against
- * accounting's own location profile by code rather than by UUID.
+ * accounting's own location profile by code rather than by UUID. Issue #1894 removes the
+ * {@code ORGANIZATION} type: ADR-0023 left no organization directory, so the entry could only ever
+ * be a blank row, and the envelope key is now accepted but not projected.
  */
-@DisplayName("Accounting Event Payload Reference Contract Tests (issues #1778, #1797)")
+@DisplayName("Accounting Event Payload Reference Contract Tests (issues #1778, #1797, #1894)")
 class AccountingEventPayloadReferenceContractBehaviorIT extends BaseContractIntegrationTest {
 
     private static final String API_V1_EVENTS = "/v1/accounting/events";
 
+    /** The deprecated envelope scope key, kept only to prove it is accepted and not projected. */
     private static final UUID ORGANIZATION_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f1000");
+
     private static final UUID KNOWN_INVOICE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f1001");
     private static final UUID UNKNOWN_INVOICE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f1002");
     private static final UUID KNOWN_CUSTOMER_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f1003");
@@ -149,33 +153,29 @@ class AccountingEventPayloadReferenceContractBehaviorIT extends BaseContractInte
         UUID eventId = submitEvent(payload);
 
         // Paths are relative to the stored payload, which is the whole submitted envelope: the
-        // producer's own payload is nested under its "payload" key, and the envelope's
-        // organizationId is a reference in its own right.
+        // producer's own payload is nested under its "payload" key.
         mockMvc.perform(withAuth(get(API_V1_EVENTS + "/" + eventId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.payloadReferences.length()").value(4))
-                // Ordered by path: organizationId, payload.billDetails.vendorId,
-                // payload.customerId, payload.invoiceId.
-                .andExpect(jsonPath("$.payloadReferences[0].path").value("organizationId"))
-                .andExpect(jsonPath("$.payloadReferences[0].referenceType").value("ORGANIZATION"))
-                .andExpect(jsonPath("$.payloadReferences[1].path").value("payload.billDetails.vendorId"))
-                .andExpect(jsonPath("$.payloadReferences[1].referenceType").value("VENDOR"))
-                .andExpect(jsonPath("$.payloadReferences[1].id").value(KNOWN_VENDOR_ID.toString()))
-                .andExpect(jsonPath("$.payloadReferences[1].displayName").value(VENDOR_NAME))
-                .andExpect(jsonPath("$.payloadReferences[2].path").value("payload.customerId"))
-                .andExpect(jsonPath("$.payloadReferences[2].referenceType").value("CUSTOMER"))
-                .andExpect(jsonPath("$.payloadReferences[2].displayName").value(CUSTOMER_NAME))
-                .andExpect(jsonPath("$.payloadReferences[2].displayReference").value(CUSTOMER_NUMBER))
-                .andExpect(jsonPath("$.payloadReferences[3].path").value("payload.invoiceId"))
-                .andExpect(jsonPath("$.payloadReferences[3].referenceType").value("INVOICE"))
-                .andExpect(jsonPath("$.payloadReferences[3].displayReference").value(INVOICE_NUMBER));
+                .andExpect(jsonPath("$.payloadReferences.length()").value(3))
+                // Ordered by path: payload.billDetails.vendorId, payload.customerId,
+                // payload.invoiceId.
+                .andExpect(jsonPath("$.payloadReferences[0].path").value("payload.billDetails.vendorId"))
+                .andExpect(jsonPath("$.payloadReferences[0].referenceType").value("VENDOR"))
+                .andExpect(jsonPath("$.payloadReferences[0].id").value(KNOWN_VENDOR_ID.toString()))
+                .andExpect(jsonPath("$.payloadReferences[0].displayName").value(VENDOR_NAME))
+                .andExpect(jsonPath("$.payloadReferences[1].path").value("payload.customerId"))
+                .andExpect(jsonPath("$.payloadReferences[1].referenceType").value("CUSTOMER"))
+                .andExpect(jsonPath("$.payloadReferences[1].displayName").value(CUSTOMER_NAME))
+                .andExpect(jsonPath("$.payloadReferences[1].displayReference").value(CUSTOMER_NUMBER))
+                .andExpect(jsonPath("$.payloadReferences[2].path").value("payload.invoiceId"))
+                .andExpect(jsonPath("$.payloadReferences[2].referenceType").value("INVOICE"))
+                .andExpect(jsonPath("$.payloadReferences[2].displayReference").value(INVOICE_NUMBER));
     }
 
     @Test
     @DisplayName("An unresolvable reference is projected with null display values, never the UUID")
     void detailProjectsUnresolvedReferenceWithoutDisplayValues() throws Exception {
-        // organizationId can never resolve (ADR-0023 left no organization directory) and this
-        // invoice is not in the replica: two references accounting cannot name.
+        // This invoice is not in the replica: a reference accounting cannot name.
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("invoiceId", UNKNOWN_INVOICE_ID.toString());
 
@@ -189,12 +189,6 @@ class AccountingEventPayloadReferenceContractBehaviorIT extends BaseContractInte
                         .isEmpty())
                 .andExpect(jsonPath("$.payloadReferences[?(@.path=='payload.invoiceId')].displayReference")
                         .isEmpty())
-                // organizationId can never resolve today, and is projected with no display values
-                // rather than omitted or filled with its own UUID.
-                .andExpect(jsonPath("$.payloadReferences[?(@.path=='organizationId')].id")
-                        .value(ORGANIZATION_ID.toString()))
-                .andExpect(jsonPath("$.payloadReferences[?(@.path=='organizationId')].displayName")
-                        .isEmpty())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -202,8 +196,6 @@ class AccountingEventPayloadReferenceContractBehaviorIT extends BaseContractInte
         // The defect being fixed is a UUID rendered as a label: prove no display key holds one.
         assertThat(body).doesNotContain("\"displayName\":\"" + UNKNOWN_INVOICE_ID + "\"");
         assertThat(body).doesNotContain("\"displayReference\":\"" + UNKNOWN_INVOICE_ID + "\"");
-        assertThat(body).doesNotContain("\"displayName\":\"" + ORGANIZATION_ID + "\"");
-        assertThat(body).doesNotContain("\"displayReference\":\"" + ORGANIZATION_ID + "\"");
     }
 
     @Test
@@ -219,24 +211,24 @@ class AccountingEventPayloadReferenceContractBehaviorIT extends BaseContractInte
 
         mockMvc.perform(withAuth(get(API_V1_EVENTS + "/" + eventId)))
                 .andExpect(status().isOk())
-                // organizationId, payload.dimensions.location_id, payload.lines[0].locationId
-                .andExpect(jsonPath("$.payloadReferences.length()").value(3))
-                .andExpect(jsonPath("$.payloadReferences[1].path").value("payload.dimensions.location_id"))
-                .andExpect(jsonPath("$.payloadReferences[1].referenceType").value("LOCATION"))
+                // payload.dimensions.location_id, payload.lines[0].locationId
+                .andExpect(jsonPath("$.payloadReferences.length()").value(2))
+                .andExpect(jsonPath("$.payloadReferences[0].path").value("payload.dimensions.location_id"))
+                .andExpect(jsonPath("$.payloadReferences[0].referenceType").value("LOCATION"))
                 // The raw value correlates back to the payload, as the producer spelled it ...
-                .andExpect(jsonPath("$.payloadReferences[1].rawValue").value(LOCATION_CODE.toLowerCase()))
+                .andExpect(jsonPath("$.payloadReferences[0].rawValue").value(LOCATION_CODE.toLowerCase()))
                 // ... there is no UUID for a code-keyed reference ...
-                .andExpect(jsonPath("$.payloadReferences[1].id").doesNotExist())
+                .andExpect(jsonPath("$.payloadReferences[0].id").doesNotExist())
                 // ... and the profile is matched regardless of case, with the canonical code shown.
-                .andExpect(jsonPath("$.payloadReferences[1].displayName").value(LOCATION_LABEL))
-                .andExpect(jsonPath("$.payloadReferences[1].displayReference").value(LOCATION_CODE))
+                .andExpect(jsonPath("$.payloadReferences[0].displayName").value(LOCATION_LABEL))
+                .andExpect(jsonPath("$.payloadReferences[0].displayReference").value(LOCATION_CODE))
                 // A location accounting holds no profile for is still projected, unnamed.
-                .andExpect(jsonPath("$.payloadReferences[2].path").value("payload.lines[0].locationId"))
-                .andExpect(jsonPath("$.payloadReferences[2].referenceType").value("LOCATION"))
-                .andExpect(jsonPath("$.payloadReferences[2].rawValue").value("LOC_USA"))
-                .andExpect(jsonPath("$.payloadReferences[2].id").doesNotExist())
-                .andExpect(jsonPath("$.payloadReferences[2].displayName").doesNotExist())
-                .andExpect(jsonPath("$.payloadReferences[2].displayReference").doesNotExist())
+                .andExpect(jsonPath("$.payloadReferences[1].path").value("payload.lines[0].locationId"))
+                .andExpect(jsonPath("$.payloadReferences[1].referenceType").value("LOCATION"))
+                .andExpect(jsonPath("$.payloadReferences[1].rawValue").value("LOC_USA"))
+                .andExpect(jsonPath("$.payloadReferences[1].id").doesNotExist())
+                .andExpect(jsonPath("$.payloadReferences[1].displayName").doesNotExist())
+                .andExpect(jsonPath("$.payloadReferences[1].displayReference").doesNotExist())
                 // The raw payload still carries the producer's value verbatim.
                 .andExpect(jsonPath("$.payload.payload.dimensions.location_id").value(LOCATION_CODE.toLowerCase()));
     }
@@ -284,23 +276,43 @@ class AccountingEventPayloadReferenceContractBehaviorIT extends BaseContractInte
     }
 
     @Test
-    @DisplayName("A producer payload with no recognized reference projects only the envelope's own")
-    void payloadWithoutReferencesProjectsOnlyEnvelopeReferences() throws Exception {
+    @DisplayName("A producer payload with no recognized reference projects nothing")
+    void payloadWithoutReferencesProjectsNothing() throws Exception {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("amount", 100.00);
         payload.put("description", "No identifiers here");
 
         UUID eventId = submitEvent(payload);
 
-        // Nothing in the producer's payload is a reference, so the only entry is the envelope's
-        // organizationId — projected, but with no display values, since nothing can name it.
         mockMvc.perform(withAuth(get(API_V1_EVENTS + "/" + eventId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.payloadReferences.length()").value(1))
-                .andExpect(jsonPath("$.payloadReferences[0].path").value("organizationId"))
-                .andExpect(jsonPath("$.payloadReferences[0].displayName").doesNotExist())
-                .andExpect(jsonPath("$.payloadReferences[0].displayReference").doesNotExist())
+                .andExpect(jsonPath("$.payloadReferences.length()").value(0))
                 .andExpect(jsonPath("$.payload.payload.amount").value(100.00));
+    }
+
+    @Test
+    @DisplayName("A deprecated envelope organizationId is accepted and never projected (issue #1894)")
+    void deprecatedOrganizationIdIsAcceptedAndNotProjected() throws Exception {
+        // ADR-0023 retired multi-tenancy, leaving organizationId a scope key nothing can name.
+        // Projecting it produced a permanently blank reference row, so it is no longer recognized
+        // — while an envelope that still carries one is still accepted.
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("invoiceId", KNOWN_INVOICE_ID.toString());
+
+        UUID eventId = submitEvent(payload, ORGANIZATION_ID);
+
+        String body = mockMvc.perform(withAuth(get(API_V1_EVENTS + "/" + eventId)))
+                .andExpect(status().isOk())
+                // The invoice is projected; the envelope's organizationId is not.
+                .andExpect(jsonPath("$.payloadReferences.length()").value(1))
+                .andExpect(jsonPath("$.payloadReferences[0].path").value("payload.invoiceId"))
+                // The raw payload is still the untouched audit record, organizationId included.
+                .andExpect(jsonPath("$.payload.organizationId").value(ORGANIZATION_ID.toString()))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(body).doesNotContain("\"referenceType\":\"ORGANIZATION\"");
     }
 
     @Test
@@ -308,15 +320,23 @@ class AccountingEventPayloadReferenceContractBehaviorIT extends BaseContractInte
     void listResponseOmitsProjection() throws Exception {
         submitEvent(new HashMap<>(Map.of("invoiceId", KNOWN_INVOICE_ID.toString())));
 
-        mockMvc.perform(withAuth(get(API_V1_EVENTS)).param("organizationId", ORGANIZATION_ID.toString()))
+        mockMvc.perform(withAuth(get(API_V1_EVENTS)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(1))
                 .andExpect(jsonPath("$.content[0].payloadReferences").doesNotExist());
     }
 
     private UUID submitEvent(Map<String, Object> payload) throws Exception {
+        return submitEvent(payload, null);
+    }
+
+    /**
+     * @param organizationId the deprecated envelope key, sent only by the test that pins it as
+     *     still accepted and never projected (issue #1894); null for every other caller
+     */
+    private UUID submitEvent(Map<String, Object> payload, UUID organizationId) throws Exception {
         AccountingEventSubmitRequest request = AccountingEventSubmitRequest.builder()
-                .organizationId(ORGANIZATION_ID)
+                .organizationId(organizationId)
                 .eventType("INVOICE_FINALIZED")
                 .payload(payload)
                 .build();

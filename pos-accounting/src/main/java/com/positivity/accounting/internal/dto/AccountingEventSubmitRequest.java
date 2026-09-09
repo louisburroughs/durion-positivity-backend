@@ -40,11 +40,21 @@ public class AccountingEventSubmitRequest {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String eventType;
 
-    @NotNull(message = "organizationId is required")
+    /**
+     * @deprecated Vestigial multi-tenancy scope key. ADR-0023 retired multi-tenancy and no
+     *     organization directory exists on the platform, so nothing validates, resolves or
+     *     displays this value — it is stored verbatim and read by nothing (issue #1894). Accepted
+     *     for the producers that still send one; new callers should omit it. Slated for removal
+     *     with the {@code accounting_event.organization_id} column.
+     */
+    @Deprecated
     @Schema(
-            description = "Organization UUID",
+            description = "Deprecated and ignored. Vestigial multi-tenancy scope key retained only for "
+                    + "producers that still send one: nothing resolves or displays it. Omit it.",
             example = "00000000-0000-4000-a000-000000000010",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+            deprecated = true,
+            nullable = true)
     private UUID organizationId;
 
     @Size(max = 100, message = "sourceSystem must not exceed 100 characters")

@@ -107,11 +107,6 @@ public class DisplayReferenceResolver {
                         vendorBillRepository.findAllById(distinct),
                         VendorBill::getVendorBillId,
                         bill -> ResolvedDisplayReference.ofReference(bill.getBillNumber()));
-            // ADR-0023 retired multi-tenancy: there is no organization directory to name an
-            // organizationId from, so the type is recognized by the contract and always resolves
-            // to nothing. Recognizing it costs one branch and means a future directory is a
-            // resolver change, not a wire-contract change.
-            case ORGANIZATION -> Map.of();
             case LOCATION -> throw codeKeyedMisuse(type);
         };
     }
@@ -147,7 +142,7 @@ public class DisplayReferenceResolver {
 
         return switch (type) {
             case LOCATION -> resolveLocations(distinct);
-            case INVOICE, CUSTOMER, ORGANIZATION, JOURNAL_ENTRY, VENDOR, VENDOR_BILL ->
+            case INVOICE, CUSTOMER, JOURNAL_ENTRY, VENDOR, VENDOR_BILL ->
                 throw new IllegalArgumentException(
                         type + " is UUID-keyed; resolve it through resolve(type, ids) rather than by code");
         };

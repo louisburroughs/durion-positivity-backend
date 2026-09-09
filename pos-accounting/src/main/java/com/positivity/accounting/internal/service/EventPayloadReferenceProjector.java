@@ -57,7 +57,6 @@ public class EventPayloadReferenceProjector {
             Map.entry("customerid", DisplayReferenceType.CUSTOMER),
             Map.entry("partyid", DisplayReferenceType.CUSTOMER),
             Map.entry("billtopartyid", DisplayReferenceType.CUSTOMER),
-            Map.entry("organizationid", DisplayReferenceType.ORGANIZATION),
             Map.entry("locationid", DisplayReferenceType.LOCATION),
             Map.entry("journalentryid", DisplayReferenceType.JOURNAL_ENTRY),
             Map.entry("vendorid", DisplayReferenceType.VENDOR),
