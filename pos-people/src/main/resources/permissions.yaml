@@ -14,6 +14,8 @@ permissions:
     description: "Edit employee records"
   - name: "people:employee:view"
     description: "View employee records"
+  - name: "people:employee_pii:view"
+    description: "View an employee's personal contact detail: address, personal phone numbers, personal email and emergency contact"
   - name: "people:self:view"
     description: "View your own person record, staffing assignments and primary location"
   - name: "people:skill:assign"
