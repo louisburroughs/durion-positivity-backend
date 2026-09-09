@@ -1,9 +1,10 @@
 package com.positivity.accounting.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
@@ -15,6 +16,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Read-only location replica fed by {@code location.events.v1} (ADR-0044 §6, #892).
@@ -31,6 +34,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "ext_location")
 public class ExtLocationReplica {
 
@@ -70,15 +74,19 @@ public class ExtLocationReplica {
     @Column(name = "other_ancestor_ids", nullable = false, columnDefinition = "text")
     private Set<UUID> otherAncestorIds = new LinkedHashSet<>();
 
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
     /**
      * Explicit dependency hook for the ArchUnit UUIDv7 rule (ADR-0013): the primary key IS a
-     * UUIDv7 minted by the owning module's envelope factory; this replica stores it verbatim.
+     * UUIDv7 minted by the owning module's envelope factory; this replica stores it verbatim and
+     * generates no identifier of its own. Names {@link UUIDv7Generator} because that is the
+     * dependency the cross-module {@code EntityStandardsArchitectureTest} recognises, matching
+     * this module's other replicas (e.g. {@code ExtCustomerParty}).
      */
     @Transient
     public Class<?> uuidv7Dependency() {
-        return UUIDv7Id.class;
+        return UUIDv7Generator.class;
     }
 }

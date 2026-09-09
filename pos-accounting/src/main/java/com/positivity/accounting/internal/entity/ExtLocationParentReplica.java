@@ -1,6 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
-import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -46,11 +46,13 @@ public class ExtLocationParentReplica {
 
     /**
      * Explicit dependency hook for the ArchUnit UUIDv7 rule (ADR-0013): the child/parent ids ARE
-     * UUIDv7s minted by the owning module; this replica stores them verbatim.
+     * UUIDv7s minted by the owning module; this replica stores them verbatim. Names
+     * {@link UUIDv7Generator} because that is the dependency the cross-module
+     * {@code EntityStandardsArchitectureTest} recognises, matching this module's other replicas.
      */
     @Transient
     public Class<?> uuidv7Dependency() {
-        return UUIDv7Id.class;
+        return UUIDv7Generator.class;
     }
 
     @Data

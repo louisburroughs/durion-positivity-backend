@@ -1,5 +1,6 @@
 package com.positivity.warranty.internal.entity;
 
+import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shared.id.UUIDv7Id;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -45,12 +46,14 @@ public class ExtLocationParentReplica {
     private UUID parentId;
 
     /**
-     * Explicit dependency hook for the ArchUnit UUIDv7 rule (ADR-0013): the child/parent ids ARE
-     * UUIDv7s minted by the owning module; this replica stores them verbatim.
+     * Explicit dependency hooks for the ArchUnit UUIDv7 rules (ADR-0013): the child/parent ids ARE
+     * UUIDv7s minted by the owning module and stored verbatim. References both {@link UUIDv7Id}
+     * (module ArchitectureTest) and {@link UUIDv7Generator} (cross-module EntityStandards) so both
+     * identifier-standard rules recognise the replica, as {@code ExtVehicleReplica} does.
      */
     @Transient
-    public Class<?> uuidv7Dependency() {
-        return UUIDv7Id.class;
+    public Class<?>[] uuidv7Dependency() {
+        return new Class<?>[] {UUIDv7Id.class, UUIDv7Generator.class};
     }
 
     @Data
