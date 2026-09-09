@@ -40,3 +40,10 @@ eureka:
 logging:
   level:
     com.positivity: INFO
+
+pos:
+  # TenantAwareDataSource (pos-tenancy-common, plan WS1) binds app.current_tenant per checkout
+  # from TenantContext and clears it when nothing is bound. A test has no request to bind from,
+  # so it names the tenant the Postgres fixtures use; without this every scoped table reads empty.
+  tenancy:
+    fallback-tenant-id: 01900000-0000-7000-8000-000000000001
