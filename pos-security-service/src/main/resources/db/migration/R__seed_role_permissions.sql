@@ -2,7 +2,7 @@
 --
 -- WHY THIS FILE EXISTS
 -- Authorities carried in a JWT are resolved from this table at login:
---     users -> user_roles -> roles -> role_permissions -> permissions
+--     users -> role_assignments -> roles -> role_permissions -> permissions
 -- RoleAuthorityServiceImpl reads these rows; it no longer hardcodes role
 -- expansion in Java. An empty role_permissions therefore means "no authority",
 -- so the baseline must stay complete — but it is now split across two places, this
@@ -53,8 +53,8 @@
 -- * The retired switch also expanded ACCOUNTANT, AP_CLERK, CONTROLLER, CSR,
 --   FLEET_MANAGER and GL_ANALYST. Those are NOT reproduced here except
 --   CONTROLLER (see the 2026-08 rescope bullet below): no migration and no
---   runtime initializer creates the remaining five, and both user_roles and
---   role_assignments are foreign-keyed to roles(id), so no user could hold one.
+--   runtime initializer creates the remaining five, and role_assignments is
+--   foreign-keyed to roles(id), so no user could hold one.
 --   To make a persona real, create the role first, then grant it here.
 -- * invoice:finalize:override (#1374) gates manager-approval elevation for
 --   invoice finalization above the service-advisor cap. It is held by ADMIN

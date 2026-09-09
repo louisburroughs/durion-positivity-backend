@@ -48,9 +48,10 @@ import org.springframework.test.context.ActiveProfiles;
  * call sites each read a different slice of a user's grants — some unioned {@code user_roles}
  * with effective-dated {@code role_assignments}, one read {@code user_roles} only, two read
  * {@code role_assignments} only — so the same permission could pass one decision point and fail
- * another. This builds a fixture matrix covering every combination of the two stores and their
- * dating edge cases, then asserts the permission set every decision point answers is identical
- * for every fixture.
+ * another. Phase 2 (#1914) then dropped {@code user_roles} entirely, making {@code
+ * role_assignments} the only store. This builds a fixture matrix covering no grants at all,
+ * effective-dated assignments, and their dating edge cases, then asserts the permission set every
+ * decision point answers is identical for every fixture.
  *
  * <p>Modeled on {@link UserHasPermissionEffectiveDatingIT} for the Spring/H2/{@link Clock}
  * fixture pattern, and on {@code CustomUserDetailsServiceIT} for exercising the real
@@ -130,16 +131,16 @@ class EffectiveGrantAgreementIT extends BaseIntegrationTest {
 
     @Test
     @DisplayName("loadUserByUsername, getUserByUsername, authorizePerson, userHasPermission and getUserPermissions"
-            + " all agree, for direct grants, effective-dated assignments, and their dating edge cases")
+            + " all agree, with no grants at all, effective-dated assignments, and their dating edge cases")
     void allDecisionPointsAgreeOnTheEffectivePermissionSet() {
         List<Fixture> fixtures = List.of(
-                directGrantOnly(),
+                noGrantsAtAll(),
                 openEndedAssignment(),
                 futureDatedAssignment(),
                 expiredAssignment(),
                 revokedEarlierToday(),
                 boundedAssignmentInsideWindow(),
-                mixOfDirectGrantAndAssignment());
+                mixOfTwoEffectiveAssignments());
 
         Set<String> universe =
                 fixtures.stream().flatMap(f -> f.declaredPermissions().stream()).collect(Collectors.toSet());
@@ -175,19 +176,16 @@ class EffectiveGrantAgreementIT extends BaseIntegrationTest {
 
     // ── Fixtures ───────────────────────────────────────────────────────────────
 
-    /** (a) A user_roles direct grant only — no role_assignments row at all. */
-    private Fixture directGrantOnly() {
-        String permissionName = permissionName("a-direct-grant-only");
-        Role role = roleWithPermission("A_DIRECT_ONLY", permissionName);
-        User user = newUser("eg-a-direct-only");
-        user.setRoles(Set.of(role));
-        user = userRepository.saveAndFlush(user);
-        return new Fixture(
-                "(a) user_roles direct grant only",
-                user,
-                user.getPersonId(),
-                Set.of(permissionName),
-                Set.of(permissionName));
+    /**
+     * (a) No grants at all: no {@code role_assignments} row for this user, and no other store to
+     * fall back to since {@code user_roles} was dropped (ADR-0061 amendment phase 2, #1914).
+     * Still exercised against the shared {@code universe} built from every other fixture's
+     * declared permissions, so this proves fail-closed rather than merely "an empty set is
+     * trivially equal to itself".
+     */
+    private Fixture noGrantsAtAll() {
+        User user = userRepository.saveAndFlush(newUser("eg-a-no-grants"));
+        return new Fixture("(a) no grants at all", user, user.getPersonId(), Set.of(), Set.of());
     }
 
     /** (b) An effective open-ended role_assignments row, no user_roles grant. */
@@ -271,24 +269,27 @@ class EffectiveGrantAgreementIT extends BaseIntegrationTest {
                 Set.of(permissionName));
     }
 
-    /** (g) A mix: one permission via a direct user_roles grant, another via an effective assignment. */
-    private Fixture mixOfDirectGrantAndAssignment() {
-        String directPermissionName = permissionName("g-mix-direct");
-        String assignedPermissionName = permissionName("g-mix-assignment");
-        Role directRole = roleWithPermission("G_MIX_DIRECT", directPermissionName);
-        Role assignedRole = roleWithPermission("G_MIX_ASSIGNED", assignedPermissionName);
+    /**
+     * (g) A mix of two roles, each granted through its own open-ended effective assignment —
+     * proves the resolved set aggregates across multiple {@code role_assignments} rows rather
+     * than only ever reading one.
+     */
+    private Fixture mixOfTwoEffectiveAssignments() {
+        String firstPermissionName = permissionName("g-mix-first");
+        String secondPermissionName = permissionName("g-mix-second");
+        Role firstRole = roleWithPermission("G_MIX_FIRST", firstPermissionName);
+        Role secondRole = roleWithPermission("G_MIX_SECOND", secondPermissionName);
 
-        User user = newUser("eg-g-mix");
-        user.setRoles(Set.of(directRole));
-        user = userRepository.saveAndFlush(user);
-        persistAssignment(user, assignedRole, LocalDateTime.now(clock).minusYears(1), null);
+        User user = userRepository.saveAndFlush(newUser("eg-g-mix"));
+        persistAssignment(user, firstRole, LocalDateTime.now(clock).minusYears(1), null);
+        persistAssignment(user, secondRole, LocalDateTime.now(clock).minusYears(1), null);
 
         return new Fixture(
-                "(g) mix of direct grant and effective assignment",
+                "(g) mix of two effective assignments",
                 user,
                 user.getPersonId(),
-                Set.of(directPermissionName, assignedPermissionName),
-                Set.of(directPermissionName, assignedPermissionName));
+                Set.of(firstPermissionName, secondPermissionName),
+                Set.of(firstPermissionName, secondPermissionName));
     }
 
     // ── Decision-point adapters ───────────────────────────────────────────────

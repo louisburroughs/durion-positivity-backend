@@ -12,15 +12,20 @@ import com.positivity.securityservice.BaseIntegrationTest;
 import com.positivity.securityservice.internal.entity.ExtCustomerPersonIdentity;
 import com.positivity.securityservice.internal.entity.ExtPersonReplica;
 import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.repository.ExtCustomerPersonIdentityRepository;
 import com.positivity.securityservice.internal.repository.ExtPersonReplicaRepository;
+import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.SelfRegistrationAttemptRepository;
 import com.positivity.securityservice.internal.repository.SelfRegistrationReviewCaseRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.internal.service.EffectiveGrantResolver;
 import com.positivity.securityservice.internal.service.PeopleContactCommandEmitter;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -49,6 +54,15 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
     private RoleRepository roleRepository;
 
     @Autowired
+    private RoleAssignmentRepository roleAssignmentRepository;
+
+    @Autowired
+    private EffectiveGrantResolver effectiveGrantResolver;
+
+    @Autowired
+    private Clock clock;
+
+    @Autowired
     private SelfRegistrationAttemptRepository selfRegistrationAttemptRepository;
 
     @Autowired
@@ -67,6 +81,11 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
     void clearUsers() {
         selfRegistrationAttemptRepository.deleteAll();
         selfRegistrationReviewCaseRepository.deleteAll();
+        // role_assignments is FK'd to users with no cascade, unlike the retired user_roles join
+        // table Hibernate cleaned up implicitly when a user was removed; a prior test's
+        // self-registration (which grants a role) or grantRole() call leaves a row here that must
+        // go before users can be deleted (ADR-0061 amendment phase 2, #1914).
+        roleAssignmentRepository.deleteAll();
         userRepository.deleteAll();
         extPersonReplicaRepository.deleteAll();
         extCustomerPersonIdentityRepository.deleteAll();
@@ -82,6 +101,16 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
             roleRepository.save(customerRole);
         }
         assertThat(roleRepository.findByName("SELF_SERVICE_CUSTOMER")).isPresent();
+    }
+
+    /** Grants {@code roleName} as an open-ended role_assignments row (ADR-0061 amendment phase 2, #1914). */
+    private void grantRole(User user, String roleName) {
+        RoleAssignment assignment = new RoleAssignment();
+        assignment.setUser(user);
+        assignment.setRole(roleRepository.findByName(roleName).orElseThrow());
+        assignment.setEffectiveStartDate(LocalDateTime.now(clock));
+        assignment.setCreatedBy("test");
+        roleAssignmentRepository.saveAndFlush(assignment);
     }
 
     private void seedReplicaPerson(UUID personId, String email, String phone) {
@@ -137,7 +166,7 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
         // users.person_id is a projection written only from link facts — the fresh user is unlinked.
         User created = userRepository.findByUsername("jane").orElseThrow();
         assertThat(created.getPersonId()).isNull();
-        assertThat(created.getRoles()).extracting("name").containsExactly("SELF_SERVICE_CUSTOMER");
+        assertThat(effectiveGrantResolver.resolve(created).roleNames()).containsExactly("SELF_SERVICE_CUSTOMER");
 
         ArgumentCaptor<UserPersonLinkCreateRequestedV1> command =
                 ArgumentCaptor.forClass(UserPersonLinkCreateRequestedV1.class);
@@ -152,9 +181,8 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
         User existing = new User();
         existing.setUsername("jane");
         existing.setPassword("encoded");
-        existing.getRoles()
-                .add(roleRepository.findByName("SELF_SERVICE_CUSTOMER").orElseThrow());
-        userRepository.save(existing);
+        existing = userRepository.save(existing);
+        grantRole(existing, "SELF_SERVICE_CUSTOMER");
 
         mockMvc.perform(post("/v1/auth/self-register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -188,8 +216,8 @@ class SelfRegistrationControllerIT extends BaseIntegrationTest {
         linked.setUsername("other.jane");
         linked.setPassword("encoded");
         linked.setPersonId(personId);
-        linked.getRoles().add(roleRepository.findByName("SELF_SERVICE_CUSTOMER").orElseThrow());
-        userRepository.save(linked);
+        linked = userRepository.save(linked);
+        grantRole(linked, "SELF_SERVICE_CUSTOMER");
 
         mockMvc.perform(post("/v1/auth/self-register")
                         .contentType(MediaType.APPLICATION_JSON)

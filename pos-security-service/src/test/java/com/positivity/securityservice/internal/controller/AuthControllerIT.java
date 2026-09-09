@@ -11,14 +11,17 @@ import com.positivity.securityservice.BaseContractIntegrationTest;
 import com.positivity.securityservice.internal.dto.LoginRequest;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.security.service.JwtService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import java.nio.charset.StandardCharsets;
-import java.util.Set;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -121,6 +124,12 @@ class AuthControllerIT extends BaseContractIntegrationTest {
     @Autowired
     private RoleRepository roleRepository;
 
+    @Autowired
+    private RoleAssignmentRepository roleAssignmentRepository;
+
+    @Autowired
+    private Clock clock;
+
     @Value("${security.jwt.secret}")
     private String jwtSecret;
 
@@ -136,7 +145,7 @@ class AuthControllerIT extends BaseContractIntegrationTest {
         }
 
         // Remove any stale user from a previous test run
-        userRepository.findByUsername(TEST_USERNAME).ifPresent(userRepository::delete);
+        deleteUserAndAssignmentsIfPresent(TEST_USERNAME);
 
         Role role = roleRepository
                 .findByName(TEST_ROLE)
@@ -145,16 +154,38 @@ class AuthControllerIT extends BaseContractIntegrationTest {
         User user = new User();
         user.setUsername(TEST_USERNAME);
         user.setPassword(passwordEncoder.encode(TEST_PASSWORD));
-        user.setRoles(Set.of(role));
-        userRepository.save(user);
+        user = userRepository.save(user);
+        grantRole(user, role);
 
         // #1725: a second, otherwise-valid account with no roles at all, for the 403 case.
-        userRepository.findByUsername(NO_ROLES_USERNAME).ifPresent(userRepository::delete);
+        deleteUserAndAssignmentsIfPresent(NO_ROLES_USERNAME);
         User noRolesUser = new User();
         noRolesUser.setUsername(NO_ROLES_USERNAME);
         noRolesUser.setPassword(passwordEncoder.encode(TEST_PASSWORD));
-        noRolesUser.setRoles(Set.of());
         userRepository.save(noRolesUser);
+    }
+
+    /** Grants {@code role} as an open-ended role_assignments row (ADR-0061 amendment phase 2, #1914). */
+    private void grantRole(User user, Role role) {
+        RoleAssignment assignment = new RoleAssignment();
+        assignment.setUser(user);
+        assignment.setRole(role);
+        assignment.setEffectiveStartDate(LocalDateTime.now(clock));
+        assignment.setCreatedBy("auth-001-test");
+        roleAssignmentRepository.saveAndFlush(assignment);
+    }
+
+    /**
+     * role_assignments is FK'd to users with no cascade, unlike the retired user_roles join table
+     * Hibernate cleaned up implicitly when a user was removed — a role_assignments row this test
+     * granted on a previous run must go before the user it references can be deleted (ADR-0061
+     * amendment phase 2, #1914).
+     */
+    private void deleteUserAndAssignmentsIfPresent(String username) {
+        userRepository.findByUsername(username).ifPresent(user -> {
+            roleAssignmentRepository.deleteAll(roleAssignmentRepository.findByUser(user));
+            userRepository.delete(user);
+        });
     }
 
     // =========================================================

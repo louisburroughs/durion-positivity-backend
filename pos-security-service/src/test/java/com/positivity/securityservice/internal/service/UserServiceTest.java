@@ -3,6 +3,8 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,7 +22,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,6 +43,9 @@ class UserServiceTest {
     private EffectiveGrantResolver effectiveGrantResolver;
 
     @Mock
+    private UserRoleGrantService userRoleGrantService;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     @Mock
@@ -51,16 +55,16 @@ class UserServiceTest {
     private UserServiceImpl userService;
 
     @BeforeEach
-    void stubResolverToMirrorDirectRoles() {
+    void stubResolverToReturnNoGrantsByDefault() {
         // UserServiceImpl asks the resolver for a user's effective role names; the resolver's own
-        // union/dating behaviour is covered by EffectiveGrantResolverImplTest and
-        // EffectiveGrantAgreementIT, so here it is stubbed to mirror whatever roles the User
-        // object under test directly carries, which is what these fixtures set up.
-        lenient().when(effectiveGrantResolver.resolve(any(User.class))).thenAnswer(invocation -> {
-            User user = invocation.getArgument(0);
-            Set<String> roleNames = user.getRoles().stream().map(Role::getName).collect(Collectors.toSet());
-            return new EffectiveGrants(Set.copyOf(user.getRoles()), roleNames, Set.of());
-        });
+        // behaviour is covered by EffectiveGrantResolverImplTest and EffectiveGrantAgreementIT.
+        // Roles now live in role_assignments rather than on the User object itself (ADR-0061
+        // amendment phase 2, #1914), so a test that cares about the resolved roles stubs this
+        // explicitly for its own User instance (registered after this one, it takes precedence);
+        // this default just keeps every other test's toDto/toAuthContext call from NPEing.
+        lenient()
+                .when(effectiveGrantResolver.resolve(any(User.class)))
+                .thenReturn(new EffectiveGrants(Set.of(), Set.of(), Set.of()));
     }
 
     @Test
@@ -71,11 +75,14 @@ class UserServiceTest {
         when(roleRepository.findByName("ADMIN")).thenReturn(Optional.of(role));
         when(passwordEncoder.encode("secret")).thenReturn("encoded");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(effectiveGrantResolver.resolve(any(User.class)))
+                .thenReturn(new EffectiveGrants(Set.of(role), Set.of("ADMIN"), Set.of()));
 
         UserDto result = userService.createUser("alice", "secret", Set.of("ADMIN"));
 
         assertThat(result.getUsername()).isEqualTo("alice");
         assertThat(result.getRoles()).contains("ADMIN");
+        verify(userRoleGrantService).grant(any(User.class), eq(role), anyString());
     }
 
     @Test
@@ -96,11 +103,13 @@ class UserServiceTest {
         existingUser.setUsername("alice");
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(existingUser));
         when(roleRepository.findByName("ADMIN")).thenReturn(Optional.of(role));
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(effectiveGrantResolver.resolve(existingUser))
+                .thenReturn(new EffectiveGrants(Set.of(role), Set.of("ADMIN"), Set.of()));
 
         UserDto result = userService.assignRoles("alice", Set.of("ADMIN"));
 
         assertThat(result.getRoles()).contains("ADMIN");
+        verify(userRoleGrantService).reconcile(eq(existingUser), eq(Set.of(role)), anyString());
     }
 
     @Test
@@ -247,6 +256,8 @@ class UserServiceTest {
         when(roleRepository.findByName("MANAGER")).thenReturn(Optional.of(role));
         when(passwordEncoder.encode("newpass")).thenReturn("newEncoded");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(effectiveGrantResolver.resolve(existing))
+                .thenReturn(new EffectiveGrants(Set.of(role), Set.of("MANAGER"), Set.of()));
 
         UserUpdateRequest req = new UserUpdateRequest();
         req.setUsername("newname");
@@ -257,6 +268,7 @@ class UserServiceTest {
 
         assertThat(result.getUsername()).isEqualTo("newname");
         assertThat(result.getRoles()).contains("MANAGER");
+        verify(userRoleGrantService).reconcile(eq(existing), eq(Set.of(role)), anyString());
     }
 
     @Test

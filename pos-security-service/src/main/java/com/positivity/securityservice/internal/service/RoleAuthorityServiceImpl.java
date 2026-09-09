@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
  * authorities originates here, and therefore from the database:
  *
  * <pre>
- *   users -&gt; user_roles -&gt; roles -&gt; role_permissions -&gt; permissions
+ *   users -&gt; role_assignments -&gt; roles -&gt; role_permissions -&gt; permissions
  * </pre>
  *
  * <p>Grants are provisioned by the {@code R__seed_role_permissions.sql} baseline and by the

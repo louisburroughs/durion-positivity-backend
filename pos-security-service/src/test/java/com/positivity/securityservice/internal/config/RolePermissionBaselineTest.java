@@ -132,9 +132,9 @@ class RolePermissionBaselineTest {
 
     /**
      * Roles the retired hardcoded switch expanded that no migration and no runtime initializer
-     * ever creates. Both {@code user_roles} and {@code role_assignments} are foreign-keyed to
-     * {@code roles(id)}, so no user could hold one — they were unreachable branches, and their
-     * grants are deliberately not carried into the baseline.
+     * ever creates. {@code role_assignments} is foreign-keyed to {@code roles(id)}, so no user
+     * could hold one — they were unreachable branches, and their grants are deliberately not
+     * carried into the baseline.
      *
      * <p>CONTROLLER is deliberately absent from this set as of the 2026-08 ACCOUNT_MANAGER /
      * CONTROLLER rescope (#1499/#1512, docs/rbac-permission-role-audit-2026-08.md §6): {@code

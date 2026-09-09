@@ -35,8 +35,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,6 +57,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     private final AuditEventService auditEventService;
     private final RolePersonaEventEmitter rolePersonaEventEmitter;
     private final EffectiveGrantResolver effectiveGrantResolver;
+    private final UserRoleGrantService userRoleGrantService;
 
     /**
      * Create a new role, including its optional MCP persona metadata (#1613).
@@ -254,7 +253,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     }
 
     /**
-     * Get all permissions for a user's effective grants — {@code user_roles} union effective-dated
+     * Get all permissions for a user's effective grants — the roles of their currently effective
      * {@code role_assignments}, resolved through {@link EffectiveGrantResolver} (ADR-0061
      * amendment, 2026-09-09, #1914).
      *
@@ -274,8 +273,8 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     }
 
     /**
-     * Check whether a user holds a permission through their effective grants — {@code user_roles}
-     * union effective-dated {@code role_assignments}, resolved through
+     * Check whether a user holds a permission through their effective grants — the roles of
+     * their currently effective {@code role_assignments}, resolved through
      * {@link EffectiveGrantResolver} (ADR-0061 amendment, 2026-09-09, #1914). Location scope is
      * not evaluated here (ADR-0061 §1).
      */
@@ -391,14 +390,9 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 .findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
 
-        RoleAssignment assignment = new RoleAssignment();
-        assignment.setUser(user);
-        assignment.setRole(role);
-        assignment.setEffectiveStartDate(LocalDateTime.now(clock));
-        assignment.setCreatedBy(getCurrentUsername());
-        assignment.setCreatedAt(Instant.now(clock));
-
-        roleAssignmentRepository.save(assignment);
+        // Idempotent: a pair already effectively assigned is a no-op rather than a second,
+        // overlapping open-ended row (ADR-0061 amendment phase 2, #1914).
+        userRoleGrantService.grant(user, role, getCurrentUsername());
 
         emitAuditEvent(new AuditLogEventRequest(
                 "RoleAssignedToUser", getCurrentUsername(), userId.toString(), "User", "", role.getName(), null));
@@ -415,17 +409,14 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
 
         LocalDateTime now = LocalDateTime.now(clock);
-        RoleAssignment assignment = roleAssignmentRepository.findByUserAndRole(user, role).stream()
-                .filter(assignmentCandidate -> assignmentCandidate.isEffectiveAt(now))
-                .findFirst()
-                .orElseThrow(() -> new RoleAssignmentNotFoundException(
-                        "No active assignment for user " + userId + " and role " + roleId));
+        boolean hasEffectiveAssignment = roleAssignmentRepository.findByUserAndRole(user, role).stream()
+                .anyMatch(assignmentCandidate -> assignmentCandidate.isEffectiveAt(now));
+        if (!hasEffectiveAssignment) {
+            throw new RoleAssignmentNotFoundException(
+                    "No active assignment for user " + userId + " and role " + roleId);
+        }
 
-        assignment.revoke(now, Instant.now(clock));
-        assignment.setLastModifiedBy(getCurrentUsername());
-        assignment.setLastModifiedAt(Instant.now(clock));
-
-        roleAssignmentRepository.save(assignment);
+        userRoleGrantService.revoke(user, role, getCurrentUsername());
 
         emitAuditEvent(new AuditLogEventRequest(
                 "RoleRevokedFromUser", getCurrentUsername(), userId.toString(), "User", role.getName(), "", null));
@@ -440,11 +431,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     }
 
     private String getCurrentUsername() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.isAuthenticated()) {
-            return authentication.getName();
-        }
-        return "system";
+        return CurrentActor.resolve();
     }
 
     private List<RoleAssignment> getAssignmentEntitiesForUser(UUID userId, boolean includeHistory) {

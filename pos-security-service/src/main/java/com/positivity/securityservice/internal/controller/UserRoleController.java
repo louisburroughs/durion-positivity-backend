@@ -49,10 +49,11 @@ public class UserRoleController {
                     Use this tool for the common grant; do not use createRoleAssignment, which supports \
                     effective date windows, and do not use assignPrincipalRole, which targets \
                     the string-keyed RBAC principal matrix.
-                    Preconditions: the caller must hold security:role:assign and both the user and role must exist; \
-                    no overlap check is performed here, so repeated calls create duplicate assignments.
+                    Preconditions: the caller must hold security:role:assign and both the user and role must exist.
                     Required inputs: userId and roleId (UUIDs) as path parameters; there is no request body.
-                    Emits a SECURITY_USER_ROLE_ASSIGN event and writes a RoleAssignedToUser audit record.
+                    Idempotent: a pair the user already effectively holds is a no-op, not a second, overlapping \
+                    assignment. Every call, including a no-op one, emits a SECURITY_USER_ROLE_ASSIGN event and \
+                    writes a RoleAssignedToUser audit record.
                     Returns 404 when the user or role does not exist.
                     """)
     @ApiResponse(responseCode = "201", description = "Role assigned to user")

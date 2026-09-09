@@ -12,7 +12,7 @@ import org.jspecify.annotations.NonNull;
  * Resolves the single effective role/permission set a decision point evaluates a user against.
  *
  * <p>ADR-0061 amendment (2026-09-09, #1914): before this resolver existed, four call sites each
- * read a different slice of the two stores that carry a user's roles — {@code
+ * read a different slice of the two stores that used to carry a user's roles — {@code
  * CustomUserDetailsService} and {@code UserServiceImpl} unioned {@code user.getRoles()} (the
  * undated {@code user_roles} join table) with {@code role_assignments}, while {@code
  * AuthorizationServiceImpl.authorizePerson} read {@code user.getRoles()} only (so it ignored
@@ -21,18 +21,22 @@ import org.jspecify.annotations.NonNull;
  * user_roles} grants). The same user could therefore pass one decision point and fail another
  * for the same permission. Every decision point now resolves through this one type instead.
  *
- * <p>The store split itself is not removed by this phase: {@code user.getRoles()} is retired in
- * phase 2 (#1914), at which point this resolver's union collapses to the effective-assignment
- * half alone. Nothing outside {@link EffectiveGrantResolverImpl} may call {@code
- * User.getRoles()} or {@code RoleAssignmentRepository.findEffectiveAssignmentsByUser} directly —
- * enforced by {@code ArchitectureTest} in this module's test sources.
+ * <p>Phase 2 (#1914) retired the store split: {@code user_roles} is dropped ({@code
+ * V40__migrate_user_roles_to_role_assignments.sql} migrated every row into an open-ended {@code
+ * role_assignments} row first) and {@code User.getRoles()} no longer exists, so this resolver's
+ * "union" is now just the effective-dated {@code role_assignments} rows for the user. It stays a
+ * named type — rather than callers reading {@code RoleAssignmentRepository} directly — because it
+ * is still the one place that turns a raw query result into roles / role names / permission
+ * names, and because {@code EffectiveGrants.assignments()} gives a listing caller the rows
+ * themselves without a second query. Nothing outside {@link EffectiveGrantResolverImpl} may call
+ * {@code RoleAssignmentRepository.findEffectiveAssignmentsByUser} directly — enforced by
+ * {@code ArchitectureTest} in this module's test sources.
  */
 public interface EffectiveGrantResolver {
 
     /**
-     * The roles and permissions {@code user} effectively holds at {@code asOf}: the union of
-     * {@code user.getRoles()} (undated {@code user_roles}) and the roles of the assignments in
-     * {@code role_assignments} whose effective window covers {@code asOf}.
+     * The roles and permissions {@code user} effectively holds at {@code asOf}: the roles of the
+     * assignments in {@code role_assignments} whose effective window covers {@code asOf}.
      *
      * @param user the user to resolve grants for
      * @param asOf the evaluation instant
@@ -54,7 +58,7 @@ public interface EffectiveGrantResolver {
     /**
      * The roles and permissions a user effectively holds at one instant.
      *
-     * @param roles the effective {@link Role} entities, both directly assigned and effective-dated
+     * @param roles the effective {@link Role} entities, resolved from {@code assignments}
      * @param roleNames the names of {@code roles}
      * @param permissionNames the union of {@code Role.getPermissions()} names across {@code roles}
      * @param assignments the {@code role_assignments} rows effective at the resolved instant — the

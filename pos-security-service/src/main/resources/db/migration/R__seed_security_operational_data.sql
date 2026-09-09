@@ -48,8 +48,16 @@ ON CONFLICT (username) DO UPDATE SET password = EXCLUDED.password, enabled = EXC
 -- is made. That is covered rather than broken: scripts/fixtures/seed/alpha/security/users.csv
 -- provisions the same 25 accounts with the same roles through the SECURITY_USER loader, which runs
 -- after the role load. On an environment that already has the roles this seed applies as before.
-INSERT INTO user_roles (user_id, role_id)
-SELECT a.user_id, r.id
+--
+-- ADR-0061 amendment (2026-09-09, #1914) phase 2: role_assignments is the only store of a user's
+-- roles now, so this grants an open-ended assignment directly rather than a user_roles row (which
+-- V40 dropped). Idempotent by an existence check against the half-open effective window
+-- (RoleAssignment.isEffectiveAt / RoleAssignmentRepository.findEffectiveAssignmentsByUser) rather
+-- than a natural-key ON CONFLICT: role_assignments' primary key is a generated id and (user_id,
+-- role_id) is not unique on it — a user can hold non-overlapping windows of the same role — so
+-- "already granted" here means "already effective now", the same test V40's migration uses.
+INSERT INTO role_assignments (id, user_id, role_id, effective_start_date, created_at, created_by)
+SELECT gen_random_uuid(), a.user_id, r.id, u.created_at, NOW(), 'seed-generator'
 FROM (VALUES
     ('01960010-0000-7000-8000-000000000001'::uuid, 'SYSTEM_ADMINISTRATOR'),
     ('01960010-0000-7000-8000-000000000002'::uuid, 'LOCATION_MANAGER'),
@@ -72,7 +80,9 @@ FROM (VALUES
     ('01960010-0000-7000-8000-000000000013'::uuid, 'MANAGER'),
     ('01960010-0000-7000-8000-000000000014'::uuid, 'SHOP_MANAGER'),
     ('01960010-0000-7000-8000-000000000015'::uuid, 'INVENTORY_MANAGER'),
-    ('01960010-0000-7000-8000-000000000016'::uuid, 'INVENTORY_CONTROLLER'),
+    -- raymond.chu (000016, INVENTORY_CONTROLLER) is deliberately absent here: the dedicated
+    -- insert below grants him that role, and is kept separate to demonstrate the scope
+    -- differentiation callout in its own comment.
     ('01960010-0000-7000-8000-000000000017'::uuid, 'CUSTOMER'),
     ('01960010-0000-7000-8000-000000000018'::uuid, 'SELF_SERVICE_CUSTOMER'),
     -- CONTROLLER is created by the concurrent §6 migration; JOIN silently skips this
@@ -81,7 +91,15 @@ FROM (VALUES
     ('01960010-0000-7000-8000-000000000019'::uuid, 'CONTROLLER')
 ) AS a(user_id, role_name)
 JOIN roles r ON r.name = a.role_name
-ON CONFLICT (user_id, role_id) DO NOTHING;
+JOIN users u ON u.id = a.user_id
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM role_assignments ra
+    WHERE ra.user_id = a.user_id
+      AND ra.role_id = r.id
+      AND ra.effective_start_date <= NOW()
+      AND (ra.effective_end_date IS NULL OR ra.effective_end_date > NOW())
+);
 
 -- Task 10 scope differentiation (docs/rbac-permission-role-audit-2026-08.md §7):
 -- INVENTORY_MANAGER and INVENTORY_CONTROLLER hold identical permission sets by design
@@ -91,7 +109,8 @@ ON CONFLICT (user_id, role_id) DO NOTHING;
 -- assignment. A role assignment carries no scope of its own (V38 dropped scope_type), so
 -- raymond.chu's row below is a plain effective-dated assignment, mirrored after the
 -- admin.alpha pattern in R__seed_reference_security.sql. felicia.grant (INVENTORY_MANAGER)
--- receives her location through pos-people's employee_location_assignment, not here.
+-- receives her location through pos-people's employee_location_assignment, not here. This is
+-- raymond.chu's only role_assignments row — the general insert above omits him.
 INSERT INTO role_assignments (id, user_id, role_id, effective_start_date, created_at, created_by)
 SELECT '01960010-0000-7000-9000-000000000016'::uuid,
        '01960010-0000-7000-8000-000000000016'::uuid,

@@ -63,6 +63,9 @@ class SelfRegistrationServiceImplTest {
     @Mock
     private SelfRegistrationReviewService selfRegistrationReviewService;
 
+    @Mock
+    private UserRoleGrantService userRoleGrantService;
+
     @InjectMocks
     private SelfRegistrationServiceImpl service;
 
@@ -116,6 +119,10 @@ class SelfRegistrationServiceImplTest {
         ArgumentCaptor<User> savedUser = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(savedUser.capture());
         assertThat(savedUser.getValue().getPersonId()).isNull();
+
+        // The default self-registration role is granted through role_assignments, not a direct
+        // user.roles set (ADR-0061 amendment phase 2, #1914).
+        verify(userRoleGrantService).grant(eq(savedUser.getValue()), eq(customerRole), anyString());
 
         ArgumentCaptor<UserPersonLinkCreateRequestedV1> linkCommand =
                 ArgumentCaptor.forClass(UserPersonLinkCreateRequestedV1.class);

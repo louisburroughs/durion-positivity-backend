@@ -24,6 +24,11 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+/**
+ * ADR-0061 amendment phase 2 (#1914): {@code role_assignments} is the only store of a user's
+ * roles, so the resolver's former "union of {@code user.getRoles()} and effective assignments" is
+ * now just the roles of the effective assignments themselves.
+ */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("EffectiveGrantResolverImpl")
 class EffectiveGrantResolverImplTest {
@@ -42,60 +47,59 @@ class EffectiveGrantResolverImplTest {
     }
 
     @Test
-    @DisplayName("unions user.getRoles() with the roles of the effective assignments")
-    void resolve_unionsDirectRolesAndEffectiveAssignmentRoles() {
-        Permission directPermission = permission("catalog:item:view");
-        Role directRole = role("DIRECT_ROLE", directPermission);
+    @DisplayName("resolves the roles, role names, and permission names of the effective assignments")
+    void resolve_returnsRolesOfEffectiveAssignments() {
+        Permission viewPermission = permission("catalog:item:view");
+        Role viewRole = role("VIEW_ROLE", viewPermission);
 
-        Permission assignedPermission = permission("catalog:item:edit");
-        Role assignedRole = role("ASSIGNED_ROLE", assignedPermission);
+        Permission editPermission = permission("catalog:item:edit");
+        Role editRole = role("EDIT_ROLE", editPermission);
 
         User user = new User();
-        user.setRoles(Set.of(directRole));
 
-        RoleAssignment assignment = new RoleAssignment();
-        assignment.setRole(assignedRole);
+        RoleAssignment viewAssignment = new RoleAssignment();
+        viewAssignment.setRole(viewRole);
+        RoleAssignment editAssignment = new RoleAssignment();
+        editAssignment.setRole(editRole);
         when(roleAssignmentRepository.findEffectiveAssignmentsByUser(
                         user, LocalDateTime.ofInstant(NOW, TEST_CLOCK.getZone())))
-                .thenReturn(List.of(assignment));
+                .thenReturn(List.of(viewAssignment, editAssignment));
 
         EffectiveGrants grants = sut.resolve(user, NOW);
 
-        assertThat(grants.roles()).containsExactlyInAnyOrder(directRole, assignedRole);
-        assertThat(grants.roleNames()).containsExactlyInAnyOrder("DIRECT_ROLE", "ASSIGNED_ROLE");
+        assertThat(grants.roles()).containsExactlyInAnyOrder(viewRole, editRole);
+        assertThat(grants.roleNames()).containsExactlyInAnyOrder("VIEW_ROLE", "EDIT_ROLE");
         assertThat(grants.permissionNames()).containsExactlyInAnyOrder("catalog:item:view", "catalog:item:edit");
-        assertThat(grants.assignments()).containsExactly(assignment);
+        assertThat(grants.assignments()).containsExactlyInAnyOrder(viewAssignment, editAssignment);
     }
 
     @Test
-    @DisplayName("a role held both directly and via assignment contributes its permissions once")
+    @DisplayName("two assignments of the same role contribute its permissions once")
     void resolve_overlappingRole_deduplicates() {
         Permission permission = permission("catalog:item:view");
         Role sharedRole = role("SHARED_ROLE", permission);
 
         User user = new User();
-        user.setRoles(Set.of(sharedRole));
 
-        RoleAssignment assignment = new RoleAssignment();
-        assignment.setRole(sharedRole);
+        RoleAssignment first = new RoleAssignment();
+        first.setRole(sharedRole);
+        RoleAssignment second = new RoleAssignment();
+        second.setRole(sharedRole);
         when(roleAssignmentRepository.findEffectiveAssignmentsByUser(
                         user, LocalDateTime.ofInstant(NOW, TEST_CLOCK.getZone())))
-                .thenReturn(List.of(assignment));
+                .thenReturn(List.of(first, second));
 
         EffectiveGrants grants = sut.resolve(user, NOW);
 
         assertThat(grants.roles()).containsExactly(sharedRole);
         assertThat(grants.permissionNames()).containsExactly("catalog:item:view");
+        assertThat(grants.assignments()).containsExactlyInAnyOrder(first, second);
     }
 
     @Test
     @DisplayName("null-safe when the assignment repository answers null")
-    void resolve_nullAssignments_returnsDirectRolesOnly() {
-        Permission permission = permission("catalog:item:view");
-        Role directRole = role("DIRECT_ROLE", permission);
-
+    void resolve_nullAssignments_returnsEmpty() {
         User user = new User();
-        user.setRoles(Set.of(directRole));
 
         when(roleAssignmentRepository.findEffectiveAssignmentsByUser(
                         user, LocalDateTime.ofInstant(NOW, TEST_CLOCK.getZone())))
@@ -103,17 +107,16 @@ class EffectiveGrantResolverImplTest {
 
         EffectiveGrants grants = sut.resolve(user, NOW);
 
-        assertThat(grants.roles()).containsExactly(directRole);
-        assertThat(grants.roleNames()).containsExactly("DIRECT_ROLE");
-        assertThat(grants.permissionNames()).containsExactly("catalog:item:view");
+        assertThat(grants.roles()).isEmpty();
+        assertThat(grants.roleNames()).isEmpty();
+        assertThat(grants.permissionNames()).isEmpty();
         assertThat(grants.assignments()).isEmpty();
     }
 
     @Test
-    @DisplayName("a user with no direct roles and no effective assignments resolves empty")
-    void resolve_noGrants_returnsEmpty() {
+    @DisplayName("a user with no effective assignments resolves empty")
+    void resolve_noAssignments_returnsEmpty() {
         User user = new User();
-        user.setRoles(Set.of());
 
         when(roleAssignmentRepository.findEffectiveAssignmentsByUser(
                         user, LocalDateTime.ofInstant(NOW, TEST_CLOCK.getZone())))
@@ -128,30 +131,9 @@ class EffectiveGrantResolverImplTest {
     }
 
     @Test
-    @DisplayName("assignments() carries the effective assignment rows themselves, for the listing caller")
-    void resolve_assignments_carriesTheEffectiveRows() {
-        Permission permission = permission("catalog:item:view");
-        Role role = role("ASSIGNED_ROLE", permission);
-
-        User user = new User();
-        user.setRoles(Set.of());
-
-        RoleAssignment assignment = new RoleAssignment();
-        assignment.setRole(role);
-        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(
-                        user, LocalDateTime.ofInstant(NOW, TEST_CLOCK.getZone())))
-                .thenReturn(List.of(assignment));
-
-        EffectiveGrants grants = sut.resolve(user, NOW);
-
-        assertThat(grants.assignments()).containsExactly(assignment);
-    }
-
-    @Test
     @DisplayName("resolve(User) evaluates at the injected clock's current instant")
     void resolve_withoutInstant_usesClock() {
         User user = new User();
-        user.setRoles(Set.of());
 
         ArgumentCaptor<LocalDateTime> asOfCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
         when(roleAssignmentRepository.findEffectiveAssignmentsByUser(ArgumentMatchers.eq(user), asOfCaptor.capture()))

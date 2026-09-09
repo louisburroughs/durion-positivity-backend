@@ -27,8 +27,9 @@ public interface AuthorizationService {
      * maps cleanly to a {@code User} (FK), whereas {@code principalId} is a free-form
      * string with no guaranteed mapping from {@code personId}, so routing through the
      * principal model is not safely possible here. Operationally, the roles that carry
-     * the queried permission must therefore be assigned to the user, either directly
-     * ({@code user_roles}) or through an effective-dated {@code role_assignments} row.
+     * the queried permission must therefore be assigned to the user through an effective-dated
+     * {@code role_assignments} row — the only store of a user's roles since ADR-0061 amendment
+     * phase 2 (#1914).
      */
     Decision authorizePerson(@NonNull UUID personId, @NonNull String permissionKey);
 

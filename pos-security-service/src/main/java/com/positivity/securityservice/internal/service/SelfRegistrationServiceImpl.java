@@ -42,6 +42,7 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
     private final CrmSignalService crmSignalService;
     private final SelfRegistrationAttemptService selfRegistrationAttemptService;
     private final SelfRegistrationReviewService selfRegistrationReviewService;
+    private final UserRoleGrantService userRoleGrantService;
 
     @Override
     @Transactional
@@ -300,8 +301,9 @@ public class SelfRegistrationServiceImpl implements SelfRegistrationService {
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode(password));
         // users.person_id is written only by the people-contact link-fact consumer (ADR-0043 §2).
-        user.setRoles(Set.of(defaultRole));
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        userRoleGrantService.grant(saved, defaultRole, CurrentActor.resolve());
+        return saved;
     }
 
     private boolean isActive(User user) {

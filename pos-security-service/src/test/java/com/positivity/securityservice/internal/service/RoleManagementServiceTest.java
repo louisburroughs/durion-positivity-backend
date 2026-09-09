@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -114,6 +115,9 @@ class RoleManagementServiceTest {
 
     @Mock
     private EffectiveGrantResolver effectiveGrantResolver;
+
+    @Mock
+    private UserRoleGrantService userRoleGrantService;
 
     @InjectMocks
     private RoleManagementServiceImpl sut;
@@ -435,7 +439,10 @@ class RoleManagementServiceTest {
 
             sut.assignRoleToUser(USER_ID, ROLE_ID);
 
-            verify(roleAssignmentRepository).save(any(RoleAssignment.class));
+            // Idempotent-by-construction: the actual grant/no-op logic lives in
+            // UserRoleGrantServiceImpl (ADR-0061 amendment phase 2, #1914), covered directly by
+            // UserRoleGrantServiceImplTest.
+            verify(userRoleGrantService).grant(eq(user), eq(role), anyString());
         }
 
         /**
@@ -503,7 +510,10 @@ class RoleManagementServiceTest {
 
             sut.revokeRoleFromUser(USER_ID, ROLE_ID);
 
-            verify(roleAssignmentRepository).save(assignment);
+            // The pre-check above (an effective assignment exists) stays inline for the 404
+            // contract; the actual revoke is delegated (ADR-0061 amendment phase 2, #1914),
+            // covered directly by UserRoleGrantServiceImplTest.
+            verify(userRoleGrantService).revoke(eq(user), eq(role), anyString());
         }
     }
 

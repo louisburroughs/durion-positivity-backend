@@ -108,7 +108,7 @@ class PermissionManagementContractIT extends BaseContractIntegrationTest {
      * <li>{@code role_assignments} → references user + role</li>
      * <li>{@code principal_roles} → references role</li>
      * <li>{@code audit_log_events} → standalone</li>
-     * <li>{@code users} → cascade-clears {@code user_roles} join table</li>
+     * <li>{@code users} → the only remaining reference is {@code role_assignments}, already cleared above</li>
      * <li>{@code roles} → cascade-clears {@code role_permissions} join table</li>
      * <li>{@code permissions} → now FK-free</li>
      * </ol>

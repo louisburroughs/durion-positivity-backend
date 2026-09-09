@@ -35,8 +35,8 @@ public class UserController {
     private final UserService userService;
 
     @Operation(operationId = "createUser", summary = "Create a User With Roles", description = """
-                        Creates a user account with a username, a hashed password, and a set of directly attached \
-                        roles.
+                        Creates a user account with a username, a hashed password, and an open-ended effective role \
+                        assignment for each of a set of granted roles, all in one transaction.
                         Use this tool for operator provisioning of accounts; do not use selfRegisterUser, the anonymous \
                         customer flow that fixes the role to SELF_SERVICE_CUSTOMER and runs identity resolution first.
                         Preconditions: the caller must hold security:user:create, the username must be unused, and \
@@ -44,7 +44,8 @@ public class UserController {
                         Required inputs: username, password, and roles, a non-empty array of existing role names.
                         Emits a SECURITY_USER_CREATE event; the password is hashed before storage.
                         Returns 409 when the username already exists, 400 with INVALID_REQUEST when a required field \
-                        is missing, and 404 with ROLE_NOT_FOUND when a named role does not exist.
+                        is missing, and 404 with ROLE_NOT_FOUND when a named role does not exist — in which case no \
+                        user and no assignment are created.
                         """)
     @ApiResponse(responseCode = "201", description = "User created successfully.")
     @ApiResponse(
@@ -100,8 +101,8 @@ public class UserController {
     }
 
     @Operation(operationId = "getUserById", summary = "Get a User Account by Id", description = """
-                        Returns a single user account by UUID, including effective role names merged from direct roles \
-                        and currently active role assignments.
+                        Returns a single user account by UUID, including the role names of the user's currently \
+                        effective role assignments.
                         Use this tool when the user id is known; use listUsers instead to browse accounts, and \
                         getUserAccountState for administrative lock and expiry flags.
                         Preconditions: the caller must hold security:user:view and the user must exist.
@@ -130,10 +131,12 @@ public class UserController {
     }
 
     @Operation(operationId = "updateUser", summary = "Partially Update a User Account", description = """
-                        Applies a partial update to a user account: username, password, and the direct role set are \
-                        each replaced only when supplied.
+                        Applies a partial update to a user account: username and password are each replaced only \
+                        when supplied, and a supplied role set reconciles the effective role assignments (grants a \
+                        named role not already effectively held, revokes an effectively held role not named; \
+                        assignment history is kept). Omitting roles entirely leaves the effective set unchanged.
                         Use this tool to change account fields; do not use assignUserRolesByUsername, which only \
-                        replaces roles, and do not use the account-state endpoints such as disableUserAccount, which \
+                        reconciles roles, and do not use the account-state endpoints such as disableUserAccount, which \
                         flip administrative flags.
                         Preconditions: the caller must hold security:user:edit, the user must exist, and any named role \
                         must already exist.
@@ -244,16 +247,18 @@ public class UserController {
 
     @Operation(
             operationId = "assignUserRolesByUsername",
-            summary = "Replace a User's Direct Role Set",
+            summary = "Reconcile a User's Effective Role Set",
             description = """
-                        Replaces a user's directly attached role set with the supplied role names, looking the user up \
-                        by username.
-                        Use this tool for wholesale role replacement by username; do not use assignUserRole, which adds \
-                        a single scoped role assignment by UUID without touching the direct set.
+                        Reconciles a user's effective role assignments to the supplied role names, looking the user \
+                        up by username: grants every named role the user does not already effectively hold, and \
+                        revokes every effectively held role not named. Assignment history is kept — a revoked row's \
+                        window is closed, not deleted — so this is not a destructive replace.
+                        Use this tool for wholesale role reconciliation by username; do not use assignUserRole, which \
+                        grants a single role by UUID without touching any other role the user holds.
                         Preconditions: the caller must hold security:role:assign, the username must resolve to a user, \
                         and every named role must exist.
                         Required inputs: username as a path parameter and roles, an array of existing role names, in \
-                        the body; the set replaces all current direct roles.
+                        the body; this array becomes the user's complete effective role set.
                         Emits a SECURITY_USER_ASSIGN_ROLES event.
                         Returns 404 with USER_NOT_FOUND when the username does not resolve to a user, and 404 with \
                         ROLE_NOT_FOUND when a named role does not exist.
