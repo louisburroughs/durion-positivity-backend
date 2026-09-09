@@ -10,6 +10,7 @@ spring:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: validate
+  flyway:
     # R__seed_location_2_operational_data.sql was retired in favour of the alpha
     # fixture packs (docs/DATA_SEED_STRATEGY.md, #1554). Environments that ran it
     # keep its schema-history row, which default validation flags as "applied
