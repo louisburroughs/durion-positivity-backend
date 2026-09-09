@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -345,7 +346,7 @@ class CustomUserDetailsServiceTest {
             assignment.setEffectiveStartDate(LocalDateTime.now());
 
             when(userRepository.findByUsername("admin.alpha")).thenReturn(Optional.of(entity));
-            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(entity))
+            when(roleAssignmentRepository.findEffectiveAssignmentsByUser(eq(entity), any()))
                     .thenReturn(List.of(assignment));
 
             UserDetails principal = sut.loadUserByUsername("admin.alpha");

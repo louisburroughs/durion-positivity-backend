@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
@@ -125,7 +126,8 @@ class RoleManagementServiceImplTest {
         when(roleAssignmentRepository.findByUser_IdAndRole_Id(userId, roleId)).thenReturn(List.of());
         when(roleAssignmentRepository.save(any(RoleAssignment.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(user)).thenReturn(List.of(assignment));
+        when(roleAssignmentRepository.findEffectiveAssignmentsByUser(eq(user), any()))
+                .thenReturn(List.of(assignment));
         when(roleAssignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
 
         var createdAssignment = roleManagementService.createRoleAssignment(request);

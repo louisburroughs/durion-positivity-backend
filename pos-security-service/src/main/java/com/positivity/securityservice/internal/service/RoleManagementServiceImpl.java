@@ -218,12 +218,20 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         }
     }
 
+    /**
+     * Whether two effective windows overlap, on the half-open convention
+     * {@code RoleAssignment.isEffectiveAt} defines: start-inclusive, end-exclusive.
+     *
+     * <p>So windows that merely touch do not overlap — an assignment ending at T and another
+     * starting at T is a clean handover, which the previous end-inclusive comparison rejected as
+     * a conflict.
+     */
     private boolean hasDateOverlap(RoleAssignment existing, LocalDateTime requestStart, LocalDateTime requestEnd) {
         LocalDateTime existingStart = existing.getEffectiveStartDate();
         LocalDateTime existingEnd = existing.getEffectiveEndDate();
 
-        return (existingEnd == null || !requestStart.isAfter(existingEnd))
-                && (requestEnd == null || !existingStart.isAfter(requestEnd));
+        return (existingEnd == null || requestStart.isBefore(existingEnd))
+                && (requestEnd == null || existingStart.isBefore(requestEnd));
     }
 
     /**
@@ -298,7 +306,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 .findById(assignmentId)
                 .orElseThrow(() -> new RoleAssignmentNotFoundException("Role assignment not found: " + assignmentId));
 
-        assignment.setEffectiveEndDate(endDate); // This automatically sets revokedAt
+        assignment.revoke(endDate, Instant.now(clock));
         assignment.setLastModifiedBy(getCurrentUsername());
         assignment.setLastModifiedAt(Instant.now(clock));
 
@@ -414,13 +422,14 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 .findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + roleId));
 
+        LocalDateTime now = LocalDateTime.now(clock);
         RoleAssignment assignment = roleAssignmentRepository.findByUserAndRole(user, role).stream()
-                .filter(RoleAssignment::isEffective)
+                .filter(assignmentCandidate -> assignmentCandidate.isEffectiveAt(now))
                 .findFirst()
                 .orElseThrow(() -> new RoleAssignmentNotFoundException(
                         "No active assignment for user " + userId + " and role " + roleId));
 
-        assignment.setEffectiveEndDate(LocalDateTime.now(clock));
+        assignment.revoke(now, Instant.now(clock));
         assignment.setLastModifiedBy(getCurrentUsername());
         assignment.setLastModifiedAt(Instant.now(clock));
 
@@ -455,7 +464,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
             return roleAssignmentRepository.findAllByUser_Id(userId);
         }
 
-        return roleAssignmentRepository.findEffectiveAssignmentsByUser(user);
+        return roleAssignmentRepository.findEffectiveAssignmentsByUser(user, LocalDateTime.now(clock));
     }
 
     private RoleDto toRoleDto(Role role) {
