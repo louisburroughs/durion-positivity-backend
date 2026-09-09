@@ -67,13 +67,18 @@ class PersonAccessControllerErrorHandlingTest {
 
     @Test
     void aPeopleContactValidationFailureAnswers400WithItsOwnMessageAndCode() throws Exception {
+        // The message is one this endpoint can actually produce: SecurityServiceClient raises it
+        // when pos-security-service answers the assignment listing with a 400. The listing takes
+        // no dates, so a window-validation message would be unreachable here and would send a
+        // reader looking for a check that does not exist on this path.
+        String downstreamRejection = "Invalid request while listing assignments for userId: " + PERSON_ID;
         when(peopleAccessControlService.getPersonRoleAssignments(any(), anyBoolean()))
-                .thenThrow(new PeopleContactValidationException("endDate must be greater than or equal to startDate"));
+                .thenThrow(new PeopleContactValidationException(downstreamRejection));
 
         mockMvc.perform(get(ASSIGNMENTS_PATH).header(AUTHORITIES, ROLE_VIEW))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.message").value("endDate must be greater than or equal to startDate"))
+                .andExpect(jsonPath("$.message").value(downstreamRejection))
                 .andExpect(jsonPath("$.correlationId").exists());
     }
 
