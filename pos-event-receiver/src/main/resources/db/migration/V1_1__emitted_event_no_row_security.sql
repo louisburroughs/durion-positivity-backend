@@ -11,5 +11,11 @@
 DROP POLICY IF EXISTS tenant_isolation ON public.emitted_event;
 ALTER TABLE public.emitted_event NO FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.emitted_event DISABLE ROW LEVEL SECURITY;
+-- With no policy, tenant_id is the leading predicate of the entity lookup (GET /v1/events): the
+-- partial index gains it, replacing the tenant-less one from the baseline.
+DROP INDEX IF EXISTS public.idx_emitted_event_entity_time;
+CREATE INDEX IF NOT EXISTS idx_emitted_event_tenant_entity_time
+    ON public.emitted_event USING btree (tenant_id, entity_id, published_at DESC)
+    WHERE (entity_id IS NOT NULL);
 COMMENT ON COLUMN public.emitted_event.tenant_id IS
     'Producing tenant (ADR-0062). Data column, not a policy: TimescaleDB compression and continuous aggregates exclude row security.';

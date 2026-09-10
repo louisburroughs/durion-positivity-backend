@@ -58,10 +58,9 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                 });
 
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM emitted_event WHERE entity_id = 'ENTITY-1'", Integer.class))
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM emitted_event WHERE entity_id = 'ENTITY-1'", Long.class))
                 .as("no row-level security: raw SQL sees both tenants' rows, so every query must name the tenant")
-                .isEqualTo(2);
+                .isEqualTo(2L);
         // Unbound: app_current_tenant() is NULL, so the NOT NULL column refuses the row.
         assertThatThrownBy(() -> jdbc.update(
                         "INSERT INTO emitted_event (event_id, id, \"timestamp\", elapsed_ms, published_at)"
@@ -83,9 +82,9 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM timescaledb_information.continuous_aggregates"
                                 + " WHERE view_name = 'emitted_event_hourly'",
-                        Integer.class))
+                        Long.class))
                 .as("the continuous aggregate, which row security would have excluded")
-                .isEqualTo(1);
+                .isEqualTo(1L);
         assertThat(jdbc.queryForObject(
                         "SELECT relrowsecurity FROM pg_class WHERE relname = 'emitted_event'", Boolean.class))
                 .as("row security is off on the hypertable (V1_1)")

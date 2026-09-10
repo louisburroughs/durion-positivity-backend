@@ -55,7 +55,9 @@ keeps both. `V1_1__emitted_event_no_row_security.sql` drops the policy (out of o
 carry `V2`, hence `spring.flyway.out-of-order: true`), the table is whitelisted in
 `src/main/resources/db/tenancy-global-tables.txt`, and `EmittedEvent` is `@TenantGlobal` with `tenant_id` as a
 data column: `EventDaoImpl` stamps it from the bound request on every row, and every query in
-`EmittedEventRepository` names it. **Never query `emitted_event` without the tenant predicate.** The event-type
+`EmittedEventRepository` names it; the repository is a marker `Repository`, not a `JpaRepository`, so no inherited
+`findAll()`/`findById()` can read across tenants, and `V1_1` leads the entity-lookup index with `tenant_id`.
+**Never query `emitted_event` without the tenant predicate.** The event-type
 registry (`event_type`, `preregistered_event`) and the `emitted_event_hourly` continuous aggregate (platform-wide
 hourly statistics; per-tenant observability with global rollups is plan WS6) are global as before.
 

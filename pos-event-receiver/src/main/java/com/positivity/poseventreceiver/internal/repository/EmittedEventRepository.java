@@ -6,11 +6,19 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
-public interface EmittedEventRepository extends JpaRepository<EmittedEvent, UUID> {
+public interface EmittedEventRepository extends Repository<EmittedEvent, UUID> {
+
+    // Deliberately not a JpaRepository: emitted_event has no row-level security (ADR-0062
+    // exception), so an inherited findAll()/findById() would read across tenants. Only
+    // tenant-bound reads and the writes the module needs are declared here.
+
+    <S extends EmittedEvent> List<S> saveAll(Iterable<S> events);
+
+    <S extends EmittedEvent> List<S> saveAllAndFlush(Iterable<S> events);
 
     /**
      * Event counts by type for one tenant. {@code emitted_event} has no row-level security (see
@@ -23,8 +31,9 @@ public interface EmittedEventRepository extends JpaRepository<EmittedEvent, UUID
     /**
      * Entity-indexed event lookup for GET /v1/events (issue #1521). Always bound on
      * publishedAt — the hypertable's partition column — so this never becomes an unbounded
-     * scan; the partial index {@code idx_emitted_event_entity_time} serves exactly this shape. Bound
-     * on the tenant as well: {@code emitted_event} has no row-level security (see {@link EmittedEvent}).
+     * scan. Bound on the tenant as well, since {@code emitted_event} has no row-level security (see
+     * {@link EmittedEvent}); the partial index {@code idx_emitted_event_tenant_entity_time}
+     * ({@code tenant_id, entity_id, published_at DESC}, V1_1) serves exactly this shape.
      */
     Page<EmittedEvent> findByTenantIdAndEntityIdAndPublishedAtGreaterThanEqual(
             UUID tenantId, String entityId, Instant since, Pageable pageable);
