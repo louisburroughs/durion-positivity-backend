@@ -22,8 +22,14 @@ public class EventListenerConfig {
 
     @EventListener(ApplicationReadyEvent.class)
     public void startKafkaListeners(ApplicationReadyEvent event) {
-        KafkaListenerEndpointRegistry registry =
-                event.getApplicationContext().getBean(KafkaListenerEndpointRegistry.class);
+        KafkaListenerEndpointRegistry registry = event.getApplicationContext()
+                .getBeanProvider(KafkaListenerEndpointRegistry.class)
+                .getIfAvailable();
+        if (registry == null) {
+            // Kafka auto-configuration is excluded (the Postgres tenancy test profile): nothing to start.
+            log.info("No Kafka listener registry in this context; event ingestion is off");
+            return;
+        }
         try {
             registry.start();
             log.info("Kafka listeners started after application ready");
