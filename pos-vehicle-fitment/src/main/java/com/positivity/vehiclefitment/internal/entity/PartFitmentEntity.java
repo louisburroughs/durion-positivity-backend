@@ -1,6 +1,7 @@
 package com.positivity.vehiclefitment.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.List;
@@ -11,6 +12,8 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
+@TenantGlobal(
+        reason = "fitment reference data shared by every tenant (ADR-0062 section 5, db/tenancy-global-tables.txt)")
 @Data
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "part_fitment_entity")

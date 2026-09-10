@@ -1,0 +1,44 @@
+# Test profile that runs the real Flyway migration chain + repeatable seed against a
+# Testcontainers Postgres, with Hibernate ddl-auto=validate. This executes migrations
+# and cross-service-shaped seed SQL in CI (issue #684 process follow-up), catching the
+# class of breakages that H2 + flyway-disabled tests miss (e.g. seed/column drift).
+# The datasource is supplied at runtime: PostgresTenancyTestBase connects the pool as pos_app with Flyway on
+# the owner (@DynamicPropertySource). Tenancy is strict (nothing binds a tenant unless the test does; ADR-0062).
+spring:
+  application:
+    name: pos-vehicle-inventory-pg-test
+  autoconfigure:
+    exclude: org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+  kafka:
+    bootstrap-servers: localhost:9092
+
+# Disable security for tests
+security:
+  enabled: false
+
+# Disable eureka for tests
+eureka:
+  client:
+    enabled: false
+
+logging:
+  level:
+    com.positivity: INFO
+
+pos:
+  tenancy:
+    # strict: nothing binds a tenant unless the test does
+    default-tenant-id:
+  vehicle-inventory:
+    kafka:
+      enabled: false

@@ -2,6 +2,7 @@ package com.positivity.marketing.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -36,7 +37,7 @@ import lombok.NoArgsConstructor;
 @Table(
         name = "ext_party_consent",
         indexes = {@Index(name = "idx_ext_party_consent_decided", columnList = "decided_at")})
-public class PartyConsentReplica {
+public class PartyConsentReplica extends TenantScopedEntity {
 
     /** {@code partyId:CHANNEL} — the owner's natural key for a per-channel decision. */
     @Id

@@ -4,6 +4,7 @@ import com.positivity.price.internal.enums.ConditionType;
 import com.positivity.price.internal.enums.RuleCombination;
 import com.positivity.price.internal.enums.RuleOperator;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -33,7 +34,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "promotion_eligibility_rule")
-public class PromotionEligibilityRule {
+public class PromotionEligibilityRule extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

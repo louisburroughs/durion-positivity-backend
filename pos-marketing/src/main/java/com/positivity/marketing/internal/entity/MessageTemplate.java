@@ -3,6 +3,7 @@ package com.positivity.marketing.internal.entity;
 import com.positivity.marketing.internal.enums.AudienceType;
 import com.positivity.marketing.internal.enums.CampaignChannel;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -40,7 +41,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(
         name = "message_template",
         indexes = {@Index(name = "idx_message_template_channel", columnList = "channel, audience_type")})
-public class MessageTemplate {
+public class MessageTemplate extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

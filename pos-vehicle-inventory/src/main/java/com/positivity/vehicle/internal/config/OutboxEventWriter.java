@@ -1,6 +1,7 @@
 package com.positivity.vehicle.internal.config;
 
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.tenancy.TenantResolver;
 import com.positivity.vehicle.internal.entity.OutboxEvent;
 import com.positivity.vehicle.internal.repository.OutboxEventRepository;
 import java.time.Clock;
@@ -30,6 +31,7 @@ public class OutboxEventWriter {
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final OutboxEventRepository outboxEventRepository;
+    private final TenantResolver tenantResolver;
 
     /**
      * Queue an envelope for publication as part of the current transaction. Must be called inside
@@ -38,6 +40,7 @@ public class OutboxEventWriter {
     @Transactional(propagation = Propagation.MANDATORY)
     public void publish(@NonNull String topic, @NonNull DomainEventEnvelope<?> envelope) {
         OutboxEvent event = OutboxEvent.builder()
+                .tenantId(tenantResolver.require())
                 .topic(topic)
                 .recordKey(envelope.recordKey())
                 .payload(serialize(envelope))

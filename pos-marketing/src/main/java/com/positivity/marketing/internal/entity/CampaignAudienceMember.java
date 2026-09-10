@@ -1,6 +1,7 @@
 package com.positivity.marketing.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -35,7 +36,7 @@ import lombok.NoArgsConstructor;
                         name = "uq_campaign_audience_member",
                         columnNames = {"campaign_id", "party_id"}),
         indexes = {@Index(name = "idx_campaign_audience_campaign", columnList = "campaign_id")})
-public class CampaignAudienceMember {
+public class CampaignAudienceMember extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

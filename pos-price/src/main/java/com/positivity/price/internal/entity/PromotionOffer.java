@@ -3,6 +3,7 @@ package com.positivity.price.internal.entity;
 import com.positivity.price.internal.enums.DiscountType;
 import com.positivity.price.internal.enums.PromotionStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -31,7 +32,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "promotion_offer")
-public class PromotionOffer {
+public class PromotionOffer extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

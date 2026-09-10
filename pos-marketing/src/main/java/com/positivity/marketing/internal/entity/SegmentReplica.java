@@ -2,6 +2,7 @@ package com.positivity.marketing.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -28,7 +29,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Entity
 @Table(name = "ext_segment")
-public class SegmentReplica {
+public class SegmentReplica extends TenantScopedEntity {
 
     @Id
     @Column(name = "segment_id", columnDefinition = "UUID", nullable = false, updatable = false)

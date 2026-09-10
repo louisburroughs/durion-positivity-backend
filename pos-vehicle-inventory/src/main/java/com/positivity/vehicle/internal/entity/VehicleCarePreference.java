@@ -1,6 +1,7 @@
 package com.positivity.vehicle.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -41,7 +42,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         name = "vehicle_care_preferences",
         indexes = {@Index(name = "idx_vcp_vehicle_id", columnList = "vehicle_id")})
 @EntityListeners(AuditingEntityListener.class)
-public class VehicleCarePreference {
+public class VehicleCarePreference extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

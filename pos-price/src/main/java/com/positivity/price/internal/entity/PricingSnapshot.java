@@ -1,6 +1,7 @@
 package com.positivity.price.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -24,7 +25,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "pricing_snapshot")
-public class PricingSnapshot {
+public class PricingSnapshot extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

@@ -5,6 +5,7 @@ import com.positivity.marketing.internal.enums.CampaignChannel;
 import com.positivity.marketing.internal.enums.CampaignStatus;
 import com.positivity.marketing.internal.enums.ScheduleType;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -55,7 +56,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_campaign_program", columnList = "campaign_program_id"),
             @Index(name = "idx_campaign_segment", columnList = "segment_id")
         })
-public class Campaign {
+public class Campaign extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

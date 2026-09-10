@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.vehicle.internal.enums.OdometerUnit;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -48,7 +49,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_vr_license_plate", columnList = "license_plate")
         })
 @EntityListeners(AuditingEntityListener.class)
-public class VehicleRecord {
+public class VehicleRecord extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

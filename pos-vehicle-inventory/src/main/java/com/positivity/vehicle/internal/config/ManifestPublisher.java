@@ -3,6 +3,7 @@ package com.positivity.vehicle.internal.config;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.domainevents.UuidV7Timestamps;
+import com.positivity.tenancy.PlatformScoped;
 import com.positivity.vehicle.internal.entity.OutboxEvent;
 import com.positivity.vehicle.internal.repository.OutboxEventRepository;
 import io.micrometer.core.instrument.Counter;
@@ -104,6 +105,9 @@ public class ManifestPublisher {
                         .register(registry);
     }
 
+    @PlatformScoped(
+            reason = "summarises event_outbox, a global table, per window across every tenant; consumers compare"
+                    + " against their global processed-events ledger (per-tenant manifests are plan WS8)")
     @Scheduled(fixedDelayString = "${pos.vehicle-inventory.manifest.poll-interval-ms:300000}")
     public void publishDueManifest() {
         Instant latestClosed = latestClosedWindowEnd();

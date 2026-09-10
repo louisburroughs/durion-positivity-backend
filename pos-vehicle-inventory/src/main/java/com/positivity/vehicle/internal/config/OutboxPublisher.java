@@ -1,5 +1,7 @@
 package com.positivity.vehicle.internal.config;
 
+import com.positivity.tenancy.PlatformScoped;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import com.positivity.vehicle.internal.entity.OutboxEvent;
 import com.positivity.vehicle.internal.repository.OutboxEventRepository;
 import io.micrometer.core.instrument.Counter;
@@ -61,6 +63,9 @@ public class OutboxPublisher {
                         .register(registry);
     }
 
+    @PlatformScoped(
+            reason = "drains the global event_outbox for every tenant; each row carries its producing tenant,"
+                    + " which goes on the Kafka record header")
     @Scheduled(fixedDelayString = "${pos.vehicle-inventory.outbox.poll-interval-ms:1000}")
     public void publishPending() {
         List<OutboxEvent> pending = outboxEventRepository.findTop100ByPublishedAtIsNullOrderByIdAsc();
@@ -75,7 +80,8 @@ public class OutboxPublisher {
     private boolean publish(OutboxEvent event) {
         try {
             kafkaTemplate
-                    .send(event.getTopic(), event.getRecordKey(), event.getPayload())
+                    .send(TenantKafkaHeaders.record(
+                            event.getTopic(), event.getRecordKey(), event.getPayload(), event.getTenantId()))
                     .get(sendTimeoutMs, TimeUnit.MILLISECONDS);
             event.setPublishedAt(Instant.now(clock));
             event.setAttempts(0);

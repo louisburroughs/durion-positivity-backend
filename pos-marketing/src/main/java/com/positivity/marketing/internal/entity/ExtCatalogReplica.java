@@ -3,6 +3,7 @@ package com.positivity.marketing.internal.entity;
 import com.positivity.marketing.internal.enums.CatalogItemKind;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -35,7 +36,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Entity
 @Table(name = "ext_catalog")
-public class ExtCatalogReplica {
+public class ExtCatalogReplica extends TenantScopedEntity {
 
     /** The owning aggregate's id: a product id or a service id, never one this module minted. */
     @Id

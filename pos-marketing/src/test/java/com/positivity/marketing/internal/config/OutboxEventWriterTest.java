@@ -1,5 +1,6 @@
 package com.positivity.marketing.internal.config;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
@@ -9,6 +10,8 @@ import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.marketing.MarketingCampaignScheduledV1;
 import com.positivity.marketing.internal.entity.OutboxEvent;
 import com.positivity.marketing.internal.repository.OutboxEventRepository;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantResolver;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -55,9 +58,16 @@ class OutboxEventWriterTest {
 
     private OutboxEventWriter writer;
 
+    /** Resolves the alpha default tenant, as an unbound path does at runtime (ADR-0062). */
+    private static TenantResolver tenantResolver() {
+        TenancyProperties tenancy = new TenancyProperties();
+        tenancy.setDefaultTenantId(TENANT_A);
+        return new TenantResolver(tenancy);
+    }
+
     @BeforeEach
     void setUp() {
-        writer = new OutboxEventWriter(clock, new ObjectMapper(), outboxEventRepository);
+        writer = new OutboxEventWriter(clock, new ObjectMapper(), outboxEventRepository, tenantResolver());
     }
 
     private static DomainEventEnvelope<Object> envelope() {
@@ -85,6 +95,9 @@ class OutboxEventWriterTest {
         writer.publish("marketing.events.v1", envelope());
 
         OutboxEvent saved = captureSaved();
+        assertThat(saved.getTenantId())
+                .as("the producing tenant is stamped on the row (ADR-0062)")
+                .isEqualTo(TENANT_A);
         assertThat(saved.getTopic()).isEqualTo("marketing.events.v1");
         assertThat(saved.getRecordKey()).isEqualTo(AGGREGATE_ID.toString());
         assertThat(saved.getCreatedAt()).isEqualTo(NOW);
@@ -115,7 +128,8 @@ class OutboxEventWriterTest {
         ObjectMapper failing = org.mockito.Mockito.mock(ObjectMapper.class);
         when(failing.writeValueAsString(org.mockito.ArgumentMatchers.any()))
                 .thenThrow(new IllegalStateException("boom"));
-        OutboxEventWriter failingWriter = new OutboxEventWriter(clock, failing, outboxEventRepository);
+        OutboxEventWriter failingWriter =
+                new OutboxEventWriter(clock, failing, outboxEventRepository, tenantResolver());
 
         assertThatThrownBy(() -> failingWriter.publish("marketing.events.v1", envelope()))
                 .isInstanceOf(IllegalStateException.class)
