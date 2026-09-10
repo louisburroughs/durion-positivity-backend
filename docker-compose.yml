@@ -1047,8 +1047,11 @@ services:
       POS_MCP_DB_HOST: postgres
       POS_MCP_DB_PORT: 5432
       POS_MCP_DB_NAME: pos_mcp
-      POS_MCP_DB_USER: ${SPRING_DATASOURCE_USERNAME}
-      POS_MCP_DB_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      # ADR-0062: the pool is the non-owner pos_app role; Flyway alone uses the owner credential.
+      POS_MCP_DB_USER: pos_app
+      POS_MCP_DB_PASSWORD: ${POS_APP_PASSWORD:-${POSTGRES_PASSWORD}}
+      SPRING_FLYWAY_USER: ${POSTGRES_USER}
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       <<: [ *pos-security-client-env, *pos-events-client-env ]
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
       # Role persona sync (#1613). The listener removes the staleness window on a persona edit;

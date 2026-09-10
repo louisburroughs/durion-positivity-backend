@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.entity;
 
 import com.positivity.mcp.internal.enums.NltiAuditEventType;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -24,7 +25,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "nlti_audit_event")
-public class NltiAuditEvent {
+public class NltiAuditEvent extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

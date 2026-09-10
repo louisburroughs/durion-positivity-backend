@@ -417,6 +417,32 @@ Key tables (Flyway migrations under `src/main/resources/db/migration`, H2 varian
 - `mcp_tool_invocation_log` — per-decision audit feeding adaptive tuning.
 - `mcp_rag_*` — RAG ingestion jobs, preload tracking, and immutable preload audit records.
 
+## Multitenancy (ADR-0062, WS3 wave 12)
+
+This module runs on the ADR-0062 runtime: it depends on `pos-tenancy-common`; the conversation entities
+(`NltiSession`, `NltiRequest`, `NltiIntent`, `NltiWritePlan`, `NltiAuditEvent`) extend `TenantScopedEntity`, and the
+platform catalogs (tool catalog, screen registry, chat rules, prompts, LLM configuration, RAG corpus bookkeeping)
+carry `@TenantGlobal` and are listed in `src/main/resources/db/tenancy-global-tables.txt`. The request tenant is
+bound by `TenantContextFilter` from `X-Tenant-Id` (the gateway injects it from the token's `tid`), the Kafka tenant by
+`TenantRecordInterceptor` on the role-events consumer, and every connection checkout binds `app.current_tenant` for
+row-level security. `pos.tenancy.default-tenant-id` still binds the alpha default tenant on every unbound path.
+
+The application pool connects as the non-owner `pos_app` role (Compose: `POS_MCP_DB_USER` / `POS_APP_PASSWORD`);
+Flyway alone uses the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`, read by Boot's Flyway
+auto-configuration).
+
+The two JDBC-written scoped tables, `mcp_tool_invocation_log` and `mcp_eval_turn_trace`, take their `tenant_id` from
+the Postgres default of the bound request. The two scheduled jobs run per tenant: `ToolPriorityTuningService`
+(each tenant's invocation log tunes the shared tool catalog in turn; per-tenant priorities are plan WS6, with the
+session scoping) and `AlphaEvalTraceRetentionScheduler`. The startup runners seed and embed platform tables only.
+The H2 chain (`db/h2-migration`, `V10__tenancy.sql`) carries `tenant_id` with a fixed default standing in for
+`app_current_tenant()`.
+
+Proof: `TenantIsolationIT` (tenant A's `nlti_session` row is invisible to tenant B and to an unbound connection,
+through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every non-whitelisted table has
+`tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is `pos_app` with no bypass), both
+on Testcontainers Postgres (`./mvnw -pl pos-mcp-server -am verify`).
+
 ## Dependencies
 
 - `pos-security-common` — JWT-based security filter.

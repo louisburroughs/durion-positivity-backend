@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.positivity.tenancy.TenantIterator;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -53,6 +54,7 @@ public class ToolPriorityTuningService {
     private final TuningMode mode;
     private final Path evalResultPath;
     private final long evalFreshnessHours;
+    private final TenantIterator tenantIterator;
 
     public ToolPriorityTuningService(
             @NonNull JdbcTemplate jdbcTemplate,
@@ -62,7 +64,9 @@ public class ToolPriorityTuningService {
             @Value("${mcp.tuning.enabled:}") @Nullable String legacyEnabled,
             @Value("${mcp.tuning.eval-result-path:target/eval/baseline-live-python.json}") @NonNull
                     String evalResultPath,
-            @Value("${mcp.tuning.eval-freshness-hours:48}") long evalFreshnessHours) {
+            @Value("${mcp.tuning.eval-freshness-hours:48}") long evalFreshnessHours,
+            @NonNull TenantIterator tenantIterator) {
+        this.tenantIterator = tenantIterator;
         this.jdbcTemplate = jdbcTemplate;
         this.clock = clock;
         this.meterRegistry = meterRegistry;
@@ -80,8 +84,16 @@ public class ToolPriorityTuningService {
         return mode;
     }
 
+    /**
+     * Per tenant (ADR-0062 §3): the invocation log is tenant-scoped, so each active tenant's log tunes the
+     * shared tool catalog in turn (per-tenant priorities are plan WS6, with the rest of the session scoping).
+     */
     @Scheduled(cron = "${mcp.tuning.cron:0 0 2 * * ?}")
     public void tuneToolPriorities() {
+        tenantIterator.forEachActiveTenant(tenantId -> tuneToolPrioritiesForTenant());
+    }
+
+    void tuneToolPrioritiesForTenant() {
         if (mode == TuningMode.OFF) {
             LOGGER.debug("Tool priority tuning skipped: mcp.tuning.mode=off");
             return;

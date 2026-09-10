@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -20,6 +21,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Data
 @NoArgsConstructor
 @Entity
+@TenantGlobal(reason = "RAG corpus ingestion bookkeeping for the platform corpus (db/tenancy-global-tables.txt)")
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "mcp_document_ingestion_job")
 public class DocumentIngestionJobEntity {
