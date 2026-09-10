@@ -83,9 +83,8 @@ public class ExchangeAuditRetentionJob {
      *
      * <p>Runs daily by default rather than hourly: the window is 400 days, so purge latency of a day
      * is immaterial, and a large first run is better amortised outside business hours.
-     */
-    /**
-     * Per tenant (ADR-0062 §3): the audit table is tenant-scoped, so the purge runs once per active
+     *
+     * <p>Per tenant (ADR-0062 §3): the audit table is tenant-scoped, so the purge runs once per active
      * tenant with the transaction opened inside the binding (a {@code @Transactional} tick would open
      * it before the tenant is bound).
      */

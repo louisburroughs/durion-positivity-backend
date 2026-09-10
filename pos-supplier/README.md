@@ -566,7 +566,7 @@ The outbox row carries the producing tenant as data (`tenant_id`, stamped from t
 is the one platform-scoped job (it drains the global outbox and puts each row's `tenant_id` on the record
 header). Every other scheduled sweep is per tenant through `TenantIterator.forEachActiveTenant`: the
 MKCAT, PRICAT, stock-report and invoice schedulers, the MKCAT image retry, the quarantine re-application,
-the three order-transmission polls, the two workorder-authorization polls, and the exchange-audit purge
+the three order-transmission polls, the two workorder authorization polls, and the exchange-audit purge
 (which opens its transaction inside the binding). `SupplierYamlBootstrap` reconciles the YAML profiles into
 every active tenant the same way. The stock-availability fan-out re-binds the request tenant on each
 virtual-thread leg, since virtual threads do not inherit the binding. The schedule-lease UPDATE/COUNT
