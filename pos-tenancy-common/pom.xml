@@ -14,8 +14,8 @@
     <properties>
         <!-- Coverage floors set a few points under the first measured baseline (plan Phase 4);
              regenerate with scripts/update-coverage-floors.sh from a -DskipITs run. -->
-        <jacoco.line.min>0.80</jacoco.line.min>
-        <jacoco.branch.min>0.60</jacoco.branch.min>
+        <jacoco.line.min>0.91</jacoco.line.min>
+        <jacoco.branch.min>0.75</jacoco.branch.min>
     </properties>
     <dependencies>
         <dependency>

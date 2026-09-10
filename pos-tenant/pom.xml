@@ -16,7 +16,7 @@
              points under the coverage measured by `verify -DskipITs`. Re-derive them only from a
              -DskipITs run. -->
         <jacoco.line.min>0.80</jacoco.line.min>
-        <jacoco.branch.min>0.60</jacoco.branch.min>
+        <jacoco.branch.min>0.78</jacoco.branch.min>
     </properties>
     <packaging>jar</packaging>
 
