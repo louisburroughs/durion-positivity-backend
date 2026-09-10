@@ -33,10 +33,20 @@ import org.springframework.jdbc.datasource.DelegatingDataSource;
  * <p>The setting is session-level ({@code set_config(..., false)}) because services connect to
  * Postgres directly. Adopting PgBouncer transaction pooling later requires moving to
  * {@code SET LOCAL} inside mandatory transactions; ADR-0062 §2 records that constraint.
+ *
+ * <p>On anything but Postgres this is a no-op. The tenancy schema is Postgres-only — H2 has neither
+ * row-level security nor {@code set_config} — so the H2 {@code dev} profile and the H2 test slices
+ * would otherwise fail on the first checkout with "Function SET_CONFIG not found". The product is
+ * read once from the first connection's metadata and remembered.
  */
 public class TenantAwareDataSource extends DelegatingDataSource {
 
+    private static final String POSTGRES = "PostgreSQL";
+
     private final @Nullable UUID fallbackTenantId;
+
+    /** Null until the first connection tells us what this datasource actually talks to. */
+    private volatile @Nullable Boolean postgres;
 
     /**
      * @param delegate the module's real pooled datasource
@@ -61,12 +71,24 @@ public class TenantAwareDataSource extends DelegatingDataSource {
 
     private Connection wrap(Connection connection) throws SQLException {
         try {
+            if (!isPostgres(connection)) {
+                return connection;
+            }
             applyTenant(connection, resolveTenant());
         } catch (SQLException | RuntimeException e) {
             closeQuietly(connection);
             throw e;
         }
         return proxy(connection);
+    }
+
+    private boolean isPostgres(Connection connection) throws SQLException {
+        Boolean known = postgres;
+        if (known == null) {
+            known = POSTGRES.equalsIgnoreCase(connection.getMetaData().getDatabaseProductName());
+            postgres = known;
+        }
+        return known;
     }
 
     private @Nullable UUID resolveTenant() {

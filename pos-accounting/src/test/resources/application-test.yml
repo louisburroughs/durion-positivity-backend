@@ -48,6 +48,12 @@ logging:
 
 # Required GL account configuration for Credit Memo processing
 pos:
+  # TenantAwareDataSource (pos-tenancy-common, plan WS1) binds app.current_tenant per checkout
+  # from TenantContext. These ITs run against Testcontainers Postgres with no request to bind
+  # from, so they name the tenant their fixtures use; without it every scoped insert fails the
+  # NOT NULL on tenant_id, whose default reads that setting.
+  tenancy:
+    fallback-tenant-id: 01900000-0000-7000-8000-000000000001
   accounting:
     credit-memo:
       revenue-account-id: "01234567-89ab-cdef-0123-456789abcdef"

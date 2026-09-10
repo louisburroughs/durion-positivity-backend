@@ -44,6 +44,9 @@ class TenantAwareDataSourceTest {
         parameters = new ArrayList<>();
         when(delegate.getConnection()).thenReturn(connection);
         when(connection.isClosed()).thenReturn(false);
+        java.sql.DatabaseMetaData metaData = mock(java.sql.DatabaseMetaData.class);
+        when(metaData.getDatabaseProductName()).thenReturn("PostgreSQL");
+        when(connection.getMetaData()).thenReturn(metaData);
         when(connection.prepareStatement(anyString())).thenAnswer(invocation -> {
             sql.add(invocation.getArgument(0));
             PreparedStatement statement = mock(PreparedStatement.class);
@@ -120,6 +123,23 @@ class TenantAwareDataSourceTest {
         assertThatThrownBy(() -> new TenantAwareDataSource(delegate, null).getConnection())
                 .isInstanceOf(SQLException.class);
         verify(connection).close();
+    }
+
+    @Test
+    @DisplayName("does nothing on a non-Postgres datasource, so H2 slices and the dev profile survive")
+    void noOpsOnNonPostgres() throws SQLException {
+        java.sql.DatabaseMetaData h2 = mock(java.sql.DatabaseMetaData.class);
+        when(h2.getDatabaseProductName()).thenReturn("H2");
+        when(connection.getMetaData()).thenReturn(h2);
+        TenantContext.bind(TENANT);
+
+        Connection borrowed = new TenantAwareDataSource(delegate, null).getConnection();
+
+        // H2 has neither row-level security nor set_config; issuing it fails the checkout.
+        assertThat(sql).isEmpty();
+        assertThat(borrowed).isSameAs(connection);
+        borrowed.close();
+        assertThat(sql).isEmpty();
     }
 
     @Test
