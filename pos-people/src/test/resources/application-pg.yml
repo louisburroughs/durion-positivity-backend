@@ -1,28 +1,33 @@
-# Test profile that runs the real Flyway baseline + repeatable seeds against a Testcontainers
-# Postgres, with Hibernate ddl-auto=validate. This executes the migrations and seed SQL in CI,
-# catching the class of breakages that H2 + flyway-disabled tests miss (column drift, cross-DB
-# refs, seed FK gaps). The datasource is supplied at runtime by @ServiceConnection.
+# Test profile that runs the real Flyway migration chain + repeatable seed against a
+# Testcontainers Postgres, with Hibernate ddl-auto=validate. This executes migrations
+# and cross-service-shaped seed SQL in CI (issue #684 process follow-up), catching the
+# class of breakages that H2 + flyway-disabled tests miss (e.g. seed/column drift).
+# The datasource is supplied at runtime: PostgresTenancyTestBase connects the pool as pos_app with Flyway on
+# the owner (@DynamicPropertySource); FlywayMigrationIT uses @ServiceConnection
+# as the owner. Tenancy is strict (nothing binds a tenant unless the test does; ADR-0062).
 spring:
-  datasource:
-    hikari:
-      # Transitional tenant binding (ADR-0062): every scoped table defaults tenant_id from this
-      # session setting and hides rows without it. Replaced by TenantAwareDataSource in plan WS1.
-      connection-init-sql: "SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', false)"
   application:
     name: pos-people-pg-test
   autoconfigure:
-    exclude: org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+    exclude: org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: validate
     show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
   flyway:
     enabled: true
+  kafka:
+    bootstrap-servers: localhost:9092
 
+# Disable security for tests
 security:
   enabled: false
 
+# Disable eureka for tests
 eureka:
   client:
     enabled: false
@@ -30,3 +35,11 @@ eureka:
 logging:
   level:
     com.positivity: INFO
+
+pos:
+  tenancy:
+    # strict: nothing binds a tenant unless the test does
+    default-tenant-id:
+  people:
+    kafka:
+      enabled: false

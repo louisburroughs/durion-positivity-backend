@@ -1,6 +1,7 @@
 package com.positivity.invoice.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -25,6 +26,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
+@TenantGlobal(
+        reason = "consumer idempotency ledger keyed by eventId; checked before the record's tenant is bound,"
+                + " so the row has no tenant (db/tenancy-global-tables.txt)")
 @Table(name = "processed_events")
 public class ProcessedEvent {
 

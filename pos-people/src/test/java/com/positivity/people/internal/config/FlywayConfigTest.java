@@ -25,7 +25,10 @@ class FlywayConfigTest {
 
     @Test
     void mcpFlyway_appliesIgnoreMigrationPatterns() {
-        Flyway flyway = config.mcpFlyway(mock(DataSource.class), new String[] {"repeatable:missing"});
+        Flyway flyway = config.mcpFlyway(
+                mock(DataSource.class), "", "", "", "", new String[] {"classpath:db/migration"}, new String[] {
+                    "repeatable:missing"
+                });
 
         // Assert presence rather than total count so Flyway-supplied default patterns
         // (present or future) don't break the test; the paired default-config check
@@ -40,7 +43,8 @@ class FlywayConfigTest {
     void mcpFlyway_emptyPatternBinding_leavesFlywayDefaults() {
         // @Value("${...:}") yields a single blank entry when the property is unset;
         // it must not be passed to Flyway as a pattern.
-        Flyway defaultFlyway = config.mcpFlyway(mock(DataSource.class), new String[] {""});
+        Flyway defaultFlyway = config.mcpFlyway(
+                mock(DataSource.class), "", "", "", "", new String[] {"classpath:db/migration"}, new String[] {""});
 
         assertThat(patternStrings(defaultFlyway)).isEqualTo(patternStrings(flywayWithDefaults()));
     }

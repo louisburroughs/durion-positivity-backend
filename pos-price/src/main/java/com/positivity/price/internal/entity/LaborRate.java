@@ -2,6 +2,7 @@ package com.positivity.price.internal.entity;
 
 import com.positivity.price.internal.enums.ServiceOperationCategory;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -43,7 +44,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
                     name = "ix_labor_rate_scope",
                     columnList = "location_id,operation_category,effective_from,effective_to")
         })
-public class LaborRate {
+public class LaborRate extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

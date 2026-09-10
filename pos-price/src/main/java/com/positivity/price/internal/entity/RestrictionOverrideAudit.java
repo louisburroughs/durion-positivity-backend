@@ -3,6 +3,7 @@ package com.positivity.price.internal.entity;
 import com.positivity.price.internal.enums.EvaluationContext;
 import com.positivity.price.internal.enums.OverrideStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -26,7 +27,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "restriction_override_audit")
-public class RestrictionOverrideAudit {
+public class RestrictionOverrideAudit extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

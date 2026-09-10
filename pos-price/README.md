@@ -75,6 +75,27 @@ Routing rule for new stories: computing **what a customer pays** → pos-price; 
 | `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL    |
 | `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
 
+## Multitenancy (ADR-0062, WS3 wave 10)
+
+This module runs on the ADR-0062 runtime: it depends on `pos-tenancy-common`, and every entity extends `TenantScopedEntity` (there are no global tables). The request tenant is
+bound by `TenantContextFilter` from `X-Tenant-Id` (the gateway injects it from the token's `tid`), and every
+connection checkout binds `app.current_tenant` for row-level security. `pos.tenancy.default-tenant-id` still binds
+the alpha default tenant on every unbound path.
+
+The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_DATASOURCE_USERNAME`
+/ `POS_APP_PASSWORD`); Flyway alone uses the owner credential (`SPRING_FLYWAY_USER` /
+`SPRING_FLYWAY_PASSWORD`, `FlywayConfig`).
+
+There is no outbox, no consumer and no scheduled job. The restriction evaluation runs each item on a virtual
+thread, which does not inherit the caller's binding, so `RestrictionEvaluationServiceImpl` re-binds the request
+tenant on that thread before the rule lookup. The H2 fixtures (`src/test/resources/data.sql`) name `tenant_id`
+explicitly: H2 has no `app_current_tenant()`.
+
+Proof: `TenantIsolationIT` (tenant A's `labor_rate` row is invisible to tenant B and to an unbound
+connection, through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every
+non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is
+`pos_app` with no bypass), both on Testcontainers Postgres (`./mvnw -pl pos-price -am verify`).
+
 ## Dependencies
 
 - `pos-security-common` — JWT-based security filter

@@ -2,6 +2,7 @@ package com.positivity.people.internal.entity;
 
 import com.positivity.people.internal.enums.TimekeepingPolicyScopeType;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -27,7 +28,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
                     name = "idx_timekeeping_policy_scope_effective_updated",
                     columnList = "scope_type, scope_id, effective_start_at, effective_end_at, updated_at")
         })
-public class TimekeepingPolicy {
+public class TimekeepingPolicy extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

@@ -3,6 +3,7 @@ package com.positivity.invoice.internal.entity;
 import com.positivity.invoice.internal.enums.DepositSourceType;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -33,7 +34,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @Table(name = "invoices")
-public class Invoice {
+public class Invoice extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

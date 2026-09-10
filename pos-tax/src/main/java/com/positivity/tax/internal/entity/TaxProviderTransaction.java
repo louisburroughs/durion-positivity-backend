@@ -2,6 +2,7 @@ package com.positivity.tax.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tax.common.enums.TaxProviderTransactionStatus;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -44,7 +45,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         // the tenant-scoped (tenant_id, reference_id) index (ADR-0062); the two are not meant to match.
         uniqueConstraints =
                 @UniqueConstraint(name = "ux_tax_provider_transaction_reference", columnNames = "reference_id"))
-public class TaxProviderTransaction {
+public class TaxProviderTransaction extends TenantScopedEntity {
 
     /** UUID v7 primary key (ADR-0013). */
     @Id

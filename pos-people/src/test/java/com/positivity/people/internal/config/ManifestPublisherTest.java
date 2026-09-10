@@ -1,5 +1,6 @@
 package com.positivity.people.internal.config;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -108,6 +109,7 @@ class ManifestPublisherTest {
 
     private static OutboxEvent row(String eventId, String eventType, Instant createdAt) {
         return OutboxEvent.builder()
+                .tenantId(TENANT_A)
                 .id(UUID.randomUUID())
                 .topic(EVENTS_TOPIC)
                 .recordKey(eventId)
@@ -211,6 +213,7 @@ class ManifestPublisherTest {
     @DisplayName("excludes a row with no eventId instead of failing the window")
     void skipsRowWithoutEventId() {
         OutboxEvent broken = OutboxEvent.builder()
+                .tenantId(TENANT_A)
                 .id(UUID.randomUUID())
                 .topic(EVENTS_TOPIC)
                 .recordKey("k")
@@ -230,6 +233,7 @@ class ManifestPublisherTest {
     @DisplayName("excludes a row whose payload will not parse instead of blocking reconciliation forever")
     void skipsRowWithUnparsablePayload() {
         OutboxEvent broken = OutboxEvent.builder()
+                .tenantId(TENANT_A)
                 .id(UUID.randomUUID())
                 .topic(EVENTS_TOPIC)
                 .recordKey("k")

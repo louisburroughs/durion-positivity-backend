@@ -1,5 +1,6 @@
 package com.positivity.tax.internal.service;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
@@ -150,6 +151,7 @@ class TaxProviderTransactionResolverPersistenceTest {
         Instant now = Instant.now();
 
         int winner = repository.insertIfAbsent(
+                TENANT_A,
                 UUIDv7Generator.generate(),
                 ref,
                 "INVOICE",
@@ -158,6 +160,7 @@ class TaxProviderTransactionResolverPersistenceTest {
                 now);
         // The "loser": same reference_id, a different (never-colliding) primary key.
         int loser = repository.insertIfAbsent(
+                TENANT_A,
                 UUIDv7Generator.generate(),
                 ref,
                 "INVOICE",

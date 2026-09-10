@@ -3,6 +3,7 @@ package com.positivity.marketing.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -18,6 +19,10 @@ import com.positivity.marketing.internal.enums.SendStatus;
 import com.positivity.marketing.internal.repository.CampaignRepository;
 import com.positivity.marketing.internal.repository.CampaignSendRepository;
 import com.positivity.marketing.internal.repository.MessageTemplateRepository;
+import com.positivity.tenancy.StaticTenantRegistry;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantIterator;
+import com.positivity.tenancy.testing.TenantTestSupport;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -31,6 +36,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Pins the send worker's fail-closed contract at the level that actually matters.
@@ -78,7 +84,16 @@ class CampaignSendWorkerTest {
                 new TemplateRenderService(),
                 factPublisher,
                 100,
-                3);
+                3,
+                singleTenant(),
+                mock(PlatformTransactionManager.class));
+    }
+
+    /** One active tenant, the alpha default, for the per-tenant drain (ADR-0062); the transaction manager is a mock. */
+    private static TenantIterator singleTenant() {
+        TenancyProperties tenancy = new TenancyProperties();
+        tenancy.setDefaultTenantId(TenantTestSupport.TENANT_A);
+        return new TenantIterator(new StaticTenantRegistry(tenancy));
     }
 
     private static CampaignSend pendingSend() {

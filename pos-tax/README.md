@@ -76,6 +76,26 @@ deterministically, largest-raw-amount-first (mirrors Odoo `_distribute_delta_amo
 `effectiveTaxRate` is `totalTax` divided by the exempt-filtered taxable base (exempt lines are
 excluded from the denominator). An all-exempt or zero-base cart yields `0.00`.
 
+## Multitenancy (ADR-0062, WS3 wave 11)
+
+This module runs on the ADR-0062 runtime: it depends on `pos-tenancy-common`, and every entity extends `TenantScopedEntity` (there are no global tables). The request tenant is
+bound by `TenantContextFilter` from `X-Tenant-Id` (the gateway injects it from the token's `tid`), and every
+connection checkout binds `app.current_tenant` for row-level security. `pos.tenancy.default-tenant-id` still binds
+the alpha default tenant on every unbound path.
+
+The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_DATASOURCE_USERNAME`
+/ `POS_APP_PASSWORD`); Flyway alone uses the owner credential (`SPRING_FLYWAY_USER` /
+`SPRING_FLYWAY_PASSWORD`, `FlywayConfig`).
+
+There is no outbox, no consumer and no scheduled job. The one native statement,
+`TaxProviderTransactionRepository.insertIfAbsent`, names the tenant explicitly from the caller's resolved tenant and
+carries `@TenantAudited`, so the lifecycle row is the bound tenant's on Postgres and on the H2 slices alike.
+
+Proof: `TenantIsolationIT` (tenant A's `exemption_certificate` row is invisible to tenant B and to an unbound
+connection, through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every
+non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is
+`pos_app` with no bypass), both on Testcontainers Postgres (`./mvnw -pl pos-tax -am verify`).
+
 ## Dependencies
 
 - `pos-events` — `@EmitEvent` annotation and event registration

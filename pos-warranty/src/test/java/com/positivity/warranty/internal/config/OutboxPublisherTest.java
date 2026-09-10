@@ -3,12 +3,15 @@ package com.positivity.warranty.internal.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
+import com.positivity.tenancy.testing.TenantTestSupport;
 import com.positivity.warranty.internal.entity.OutboxEvent;
 import com.positivity.warranty.internal.repository.OutboxEventRepository;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -16,9 +19,11 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,6 +76,7 @@ class OutboxPublisherTest {
 
     private static OutboxEvent event(String key, int attempts, String lastError) {
         return OutboxEvent.builder()
+                .tenantId(TenantTestSupport.TENANT_A)
                 .id(UUID.randomUUID())
                 .topic(TOPIC)
                 .recordKey(key)
@@ -79,6 +85,39 @@ class OutboxPublisherTest {
                 .attempts(attempts)
                 .lastError(lastError)
                 .build();
+    }
+
+    /**
+     * Stubs the broker per record key: the publisher sends one {@link ProducerRecord} per row, so
+     * the stub answers by the record's key and the assertions read the captured records back (topic,
+     * key, payload and the producing tenant on the {@code tenantId} header, ADR-0062 §3).
+     */
+    @SafeVarargs
+    private final void brokerAnswers(Map.Entry<String, CompletableFuture<SendResult<String, String>>>... byKey) {
+        Map<String, CompletableFuture<SendResult<String, String>>> outcomes = Map.ofEntries(byKey);
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenAnswer(invocation -> {
+            ProducerRecord<String, String> record = invocation.getArgument(0);
+            CompletableFuture<SendResult<String, String>> outcome = outcomes.get(record.key());
+            if (outcome == null) {
+                throw new AssertionError("unexpected send for key " + record.key());
+            }
+            return outcome;
+        });
+    }
+
+    private List<ProducerRecord<String, String>> sentRecords() {
+        ArgumentCaptor<ProducerRecord<String, String>> sent = ArgumentCaptor.captor();
+        verify(kafkaTemplate, atLeast(0)).send(sent.capture());
+        return sent.getAllValues();
+    }
+
+    private static void assertSent(ProducerRecord<String, String> record, OutboxEvent event) {
+        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.key()).isEqualTo(event.getRecordKey());
+        assertThat(record.value()).isEqualTo(event.getPayload());
+        assertThat(TenantKafkaHeaders.read(record.headers()))
+                .as("the row's tenant travels on the record header (ADR-0062)")
+                .contains(TenantTestSupport.TENANT_A);
     }
 
     private static CompletableFuture<SendResult<String, String>> acked() {
@@ -90,15 +129,16 @@ class OutboxPublisherTest {
         OutboxEvent first = event("k1", 3, "previous broker outage");
         OutboxEvent second = event("k2", 0, null);
         when(outboxEventRepository.findTop100ByPublishedAtIsNullOrderByIdAsc()).thenReturn(List.of(first, second));
-        when(kafkaTemplate.send(TOPIC, "k1", first.getPayload())).thenReturn(acked());
-        when(kafkaTemplate.send(TOPIC, "k2", second.getPayload())).thenReturn(acked());
+        brokerAnswers(Map.entry("k1", acked()), Map.entry("k2", acked()));
 
         publisher.publishPending();
 
-        InOrder inOrder = Mockito.inOrder(kafkaTemplate, outboxEventRepository);
-        inOrder.verify(kafkaTemplate).send(TOPIC, "k1", first.getPayload());
+        List<ProducerRecord<String, String>> sent = sentRecords();
+        assertThat(sent).hasSize(2);
+        assertSent(sent.get(0), first);
+        assertSent(sent.get(1), second);
+        InOrder inOrder = Mockito.inOrder(outboxEventRepository);
         inOrder.verify(outboxEventRepository).save(first);
-        inOrder.verify(kafkaTemplate).send(TOPIC, "k2", second.getPayload());
         inOrder.verify(outboxEventRepository).save(second);
         assertThat(first.getPublishedAt()).isEqualTo(NOW);
         assertThat(first.getAttempts()).isZero();
@@ -110,8 +150,7 @@ class OutboxPublisherTest {
     void failedSendRecordsAttemptsAndLastErrorAndNeverMarksPublished() {
         OutboxEvent failing = event("k1", 4, null);
         when(outboxEventRepository.findTop100ByPublishedAtIsNullOrderByIdAsc()).thenReturn(List.of(failing));
-        when(kafkaTemplate.send(TOPIC, "k1", failing.getPayload()))
-                .thenReturn(CompletableFuture.failedFuture(new RuntimeException("broker unavailable")));
+        brokerAnswers(Map.entry("k1", CompletableFuture.failedFuture(new RuntimeException("broker unavailable"))));
 
         publisher.publishPending();
 
@@ -129,14 +168,15 @@ class OutboxPublisherTest {
         OutboxEvent third = event("k3", 0, null);
         when(outboxEventRepository.findTop100ByPublishedAtIsNullOrderByIdAsc())
                 .thenReturn(List.of(first, second, third));
-        when(kafkaTemplate.send(TOPIC, "k1", first.getPayload())).thenReturn(acked());
-        when(kafkaTemplate.send(TOPIC, "k2", second.getPayload()))
-                .thenReturn(CompletableFuture.failedFuture(new TimeoutException("send timed out")));
+        brokerAnswers(
+                Map.entry("k1", acked()),
+                Map.entry("k2", CompletableFuture.failedFuture(new TimeoutException("send timed out"))));
 
         publisher.publishPending();
 
         // Row three is untouched: not sent, not saved — it retries behind row two next poll.
-        verify(kafkaTemplate, never()).send(TOPIC, "k3", third.getPayload());
+        List<ProducerRecord<String, String>> sent = sentRecords();
+        assertThat(sent).extracting(ProducerRecord::key).containsExactly("k1", "k2");
         verify(outboxEventRepository).save(first);
         verify(outboxEventRepository).save(second);
         verify(outboxEventRepository, never()).save(third);
@@ -152,8 +192,7 @@ class OutboxPublisherTest {
     void lastErrorIsTruncatedToTwoThousandCharacters() {
         OutboxEvent failing = event("k1", 0, null);
         when(outboxEventRepository.findTop100ByPublishedAtIsNullOrderByIdAsc()).thenReturn(List.of(failing));
-        when(kafkaTemplate.send(TOPIC, "k1", failing.getPayload()))
-                .thenReturn(CompletableFuture.failedFuture(new RuntimeException("x".repeat(3_000))));
+        brokerAnswers(Map.entry("k1", CompletableFuture.failedFuture(new RuntimeException("x".repeat(3_000)))));
 
         publisher.publishPending();
 
@@ -168,7 +207,7 @@ class OutboxPublisherTest {
         when(outboxEventRepository.findTop100ByPublishedAtIsNullOrderByIdAsc()).thenReturn(List.of(first, second));
         CompletableFuture<SendResult<String, String>> interrupted = mock(CompletableFuture.class);
         when(interrupted.get(anyLong(), any())).thenThrow(new InterruptedException("shutdown"));
-        when(kafkaTemplate.send(TOPIC, "k1", first.getPayload())).thenReturn(interrupted);
+        brokerAnswers(Map.entry("k1", interrupted));
 
         publisher.publishPending();
 
@@ -177,7 +216,7 @@ class OutboxPublisherTest {
         assertThat(first.getAttempts()).isEqualTo(1);
         verify(outboxEventRepository).save(first);
         // Batch stops: the second row is neither sent nor saved.
-        verify(kafkaTemplate, never()).send(TOPIC, "k2", second.getPayload());
+        assertThat(sentRecords()).extracting(ProducerRecord::key).containsExactly("k1");
         verify(outboxEventRepository).findTop100ByPublishedAtIsNullOrderByIdAsc();
         verifyNoMoreInteractions(outboxEventRepository);
     }

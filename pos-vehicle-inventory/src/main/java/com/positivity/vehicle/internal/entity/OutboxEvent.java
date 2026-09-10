@@ -1,6 +1,7 @@
 package com.positivity.vehicle.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -18,6 +19,9 @@ import lombok.NoArgsConstructor;
  * transaction as the business state change and drained by {@code OutboxPublisher}.
  */
 @Entity
+@TenantGlobal(
+        reason = "transactional outbox drained by the platform-scoped OutboxPublisher across every tenant;"
+                + " the producing tenant travels as data in tenant_id (db/tenancy-global-tables.txt)")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -29,6 +33,10 @@ public class OutboxEvent {
     @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
+
+    /** The producing tenant (ADR-0062 §3): stamped from the bound tenant on write, put on the Kafka record header on publish. */
+    @Column(name = "tenant_id", nullable = false, updatable = false)
+    private UUID tenantId;
 
     @Column(nullable = false)
     private String topic;

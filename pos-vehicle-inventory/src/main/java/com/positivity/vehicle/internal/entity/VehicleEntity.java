@@ -1,6 +1,7 @@
 package com.positivity.vehicle.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.DiscriminatorColumn;
 import jakarta.persistence.Entity;
@@ -21,7 +22,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @EntityListeners(AuditingEntityListener.class)
 @Inheritance(strategy = InheritanceType.SINGLE_TABLE)
 @DiscriminatorColumn(name = "vehicle_type")
-public abstract class VehicleEntity implements Vehicle {
+public abstract class VehicleEntity extends TenantScopedEntity implements Vehicle {
     @Id
     @GeneratedValue
     @UUIDv7Id

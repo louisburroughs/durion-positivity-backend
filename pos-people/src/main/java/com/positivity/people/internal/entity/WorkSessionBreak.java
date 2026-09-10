@@ -1,6 +1,7 @@
 package com.positivity.people.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -21,7 +22,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "work_session_break")
 @Data
-public class WorkSessionBreak {
+public class WorkSessionBreak extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

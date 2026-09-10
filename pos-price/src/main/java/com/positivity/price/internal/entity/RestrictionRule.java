@@ -3,6 +3,7 @@ package com.positivity.price.internal.entity;
 import com.positivity.price.internal.enums.LocationTag;
 import com.positivity.price.internal.enums.ServiceTag;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -29,7 +30,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "restriction_rule")
-public class RestrictionRule {
+public class RestrictionRule extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

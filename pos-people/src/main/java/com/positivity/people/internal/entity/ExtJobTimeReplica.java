@@ -1,6 +1,7 @@
 package com.positivity.people.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -29,7 +30,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "ext_workorder_job_time")
-public class ExtJobTimeReplica {
+public class ExtJobTimeReplica extends TenantScopedEntity {
 
     @Id
     @Column(name = "labor_entry_id", nullable = false)

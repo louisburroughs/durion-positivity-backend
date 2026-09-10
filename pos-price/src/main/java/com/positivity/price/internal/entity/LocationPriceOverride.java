@@ -1,6 +1,7 @@
 package com.positivity.price.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -32,7 +33,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
                     name = "idx_location_override_product_location_effective",
                     columnList = "product_id,location_id,effective_from,effective_to")
         })
-public class LocationPriceOverride {
+public class LocationPriceOverride extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

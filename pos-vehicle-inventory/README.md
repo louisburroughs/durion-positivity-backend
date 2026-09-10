@@ -44,6 +44,30 @@ Vehicle registry and inventory service for the Durion Positivity ETSMS platform.
 | `POS_VEHICLE_INVENTORY_KAFKA_ENABLED` | `false` | Enables the ADR-0044 event pipeline (outbox drain, commands listener, manifests) |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka brokers for the domain-event channel |
 
+## Multitenancy (ADR-0062, WS3 wave 10)
+
+This module runs on the ADR-0062 runtime: it depends on `pos-tenancy-common`, every scoped entity extends `TenantScopedEntity` (`VehicleEntity` carries it for the
+single-table vehicle hierarchy), and the global `event_outbox` (listed in
+`src/main/resources/db/tenancy-global-tables.txt`) carries `@TenantGlobal`. The request tenant is
+bound by `TenantContextFilter` from `X-Tenant-Id` (the gateway injects it from the token's `tid`), the Kafka tenant by `TenantRecordInterceptor` from the `tenantId` record header on the
+command consumer, and every
+connection checkout binds `app.current_tenant` for row-level security. `pos.tenancy.default-tenant-id` still binds
+the alpha default tenant on every unbound path.
+
+The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_DATASOURCE_USERNAME`
+/ `POS_APP_PASSWORD`); Flyway alone uses the owner credential (`SPRING_FLYWAY_USER` /
+`SPRING_FLYWAY_PASSWORD`, `FlywayConfig`).
+
+The outbox row carries the producing tenant as data (`tenant_id`, stamped from the bound tenant by
+`OutboxEventWriter`, added by `V2__event_outbox_tenant_id.sql`); `OutboxPublisher.publishPending` and
+`ManifestPublisher.publishDueManifest` are platform-scoped (they drain and summarise the global `event_outbox`;
+per-tenant manifests are plan WS8). There are no native queries.
+
+Proof: `TenantIsolationIT` (tenant A's `vehicle` row is invisible to tenant B and to an unbound
+connection, through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every
+non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is
+`pos_app` with no bypass), both on Testcontainers Postgres (`./mvnw -pl pos-vehicle-inventory -am verify`).
+
 ## Dependencies
 
 - `pos-security-common` — JWT-based security filter

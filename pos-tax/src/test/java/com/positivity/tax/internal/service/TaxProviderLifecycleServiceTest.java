@@ -11,6 +11,10 @@ import com.positivity.tax.common.enums.TaxProviderTransactionStatus;
 import com.positivity.tax.internal.entity.TaxProviderTransaction;
 import com.positivity.tax.internal.exception.TaxCalculationException;
 import com.positivity.tax.internal.repository.TaxProviderTransactionRepository;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantIterator;
+import com.positivity.tenancy.TenantResolver;
+import com.positivity.tenancy.testing.TenantTestSupport;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.util.UUID;
@@ -23,6 +27,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Story T6 / decision D-T3: the lifecycle service records commit/void rows, is
@@ -54,6 +59,12 @@ class TaxProviderLifecycleServiceTest {
     @Autowired
     private TaxProviderTransactionRepository repository;
 
+    @Autowired
+    private TenantIterator tenantIterator;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     private ControllableProvider provider;
     private TaxProviderLifecycleService service;
 
@@ -65,8 +76,10 @@ class TaxProviderLifecycleServiceTest {
         when(selector.select()).thenReturn(provider);
         ObjectProvider<MeterRegistry> meterRegistry = mock(ObjectProvider.class);
         when(meterRegistry.getIfAvailable()).thenReturn(null);
-        TaxProviderTransactionResolver resolver = new TaxProviderTransactionResolver(repository, Clock.systemUTC());
-        service = new TaxProviderLifecycleService(selector, repository, resolver, meterRegistry);
+        TaxProviderTransactionResolver resolver =
+                new TaxProviderTransactionResolver(repository, Clock.systemUTC(), tenantResolver());
+        service = new TaxProviderLifecycleService(
+                selector, repository, resolver, meterRegistry, tenantIterator, transactionManager);
     }
 
     @Test
@@ -183,5 +196,12 @@ class TaxProviderLifecycleServiceTest {
         public TaxProviderTransactionResult voidTransaction(@NonNull UUID referenceId) {
             return new TaxProviderTransactionResult(referenceId, TaxProviderTransactionStatus.VOIDED, "ext-123", "ok");
         }
+    }
+
+    /** Resolves the alpha default tenant, as an unbound path does at runtime (ADR-0062). */
+    private static TenantResolver tenantResolver() {
+        TenancyProperties tenancy = new TenancyProperties();
+        tenancy.setDefaultTenantId(TenantTestSupport.TENANT_A);
+        return new TenantResolver(tenancy);
     }
 }

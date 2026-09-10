@@ -2,6 +2,7 @@ package com.positivity.people.internal.entity;
 
 import com.positivity.people.internal.enums.ApprovalStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -23,7 +24,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(
         name = "timekeeping_entry",
         uniqueConstraints = {@UniqueConstraint(columnNames = {"tenant_id", "source_system", "source_session_id"})})
-public class TimekeepingEntry {
+public class TimekeepingEntry extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

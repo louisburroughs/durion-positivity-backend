@@ -16,13 +16,13 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * the container's superuser owns the schema and runs Flyway; the application pool connects as the
  * shared non-owner {@code pos_app} role, created here with the same grants {@code
  * postgres/init-tenancy.sh} makes. The runtime is strict ({@code pg} profile): nothing binds a
- * tenant unless the test does. The {@code test} profile stays active alongside it because
- * {@code AuditPayloadCipher} refuses an ephemeral key under any other profile set.
+ * tenant unless the test does. The profile carries a fixed test key for
+ * {@code AuditPayloadCipher}, which accepts an ephemeral key only when every active profile is dev or test.
  *
  * <p>Requires Docker.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@ActiveProfiles({"pg", "test"})
+@ActiveProfiles("pg")
 public abstract class PostgresTenancyTestBase {
 
     static final String APP_ROLE = "pos_app";

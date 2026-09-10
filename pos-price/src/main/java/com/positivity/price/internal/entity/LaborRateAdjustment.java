@@ -3,6 +3,7 @@ package com.positivity.price.internal.entity;
 import com.positivity.price.internal.enums.LaborRateAdjustmentType;
 import com.positivity.price.internal.enums.ServiceOperationCategory;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -40,7 +41,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         indexes = {
             @Index(name = "ix_lra_scope", columnList = "location_id,operation_category,effective_from,effective_to")
         })
-public class LaborRateAdjustment {
+public class LaborRateAdjustment extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

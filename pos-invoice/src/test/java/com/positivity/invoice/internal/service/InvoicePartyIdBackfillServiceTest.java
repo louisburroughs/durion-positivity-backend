@@ -1,17 +1,23 @@
 package com.positivity.invoice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.invoice.internal.repository.InvoiceRepository;
+import com.positivity.tenancy.StaticTenantRegistry;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantIterator;
+import com.positivity.tenancy.testing.TenantTestSupport;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Unit tests for {@link InvoicePartyIdBackfillService} (#921): each run delegates to exactly
@@ -25,8 +31,19 @@ class InvoicePartyIdBackfillServiceTest {
     @Mock
     private InvoiceRepository invoiceRepository;
 
-    @InjectMocks
     private InvoicePartyIdBackfillService invoicePartyIdBackfillService;
+
+    @BeforeEach
+    void createService() {
+        // One active tenant, the alpha default, for the per-tenant sweep (ADR-0062); the transaction
+        // manager is a mock, so the TransactionTemplate just runs the body.
+        TenancyProperties tenancy = new TenancyProperties();
+        tenancy.setDefaultTenantId(TenantTestSupport.TENANT_A);
+        invoicePartyIdBackfillService = new InvoicePartyIdBackfillService(
+                invoiceRepository,
+                new TenantIterator(new StaticTenantRegistry(tenancy)),
+                mock(PlatformTransactionManager.class));
+    }
 
     /** Rows patched: the run executes the single bulk UPDATE and completes without error. */
     @Test

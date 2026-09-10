@@ -2,6 +2,7 @@ package com.positivity.marketing.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -36,7 +37,7 @@ import lombok.NoArgsConstructor;
 @Table(
         name = "ext_suppression",
         indexes = {@Index(name = "idx_ext_suppression_party", columnList = "party_id")})
-public class SuppressionReplica {
+public class SuppressionReplica extends TenantScopedEntity {
 
     /** {@code CHANNEL:addressHash} — the owner's natural key, carried verbatim. */
     @Id

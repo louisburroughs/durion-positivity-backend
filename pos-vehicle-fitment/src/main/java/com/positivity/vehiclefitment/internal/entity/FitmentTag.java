@@ -1,6 +1,7 @@
 package com.positivity.vehiclefitment.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -26,6 +27,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * Each tag is a key-value pair associated with a vehicle applicability hint.
  */
 @Entity
+@TenantGlobal(
+        reason = "fitment reference data shared by every tenant (ADR-0062 section 5, db/tenancy-global-tables.txt)")
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "fitment_tags")
 @Data

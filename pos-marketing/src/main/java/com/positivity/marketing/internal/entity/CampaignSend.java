@@ -3,6 +3,7 @@ package com.positivity.marketing.internal.entity;
 import com.positivity.marketing.internal.enums.CampaignChannel;
 import com.positivity.marketing.internal.enums.SendStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -45,7 +46,7 @@ import lombok.NoArgsConstructor;
             @Index(name = "idx_campaign_send_campaign", columnList = "campaign_id, status"),
             @Index(name = "idx_campaign_send_provider_message", columnList = "provider_message_id")
         })
-public class CampaignSend {
+public class CampaignSend extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

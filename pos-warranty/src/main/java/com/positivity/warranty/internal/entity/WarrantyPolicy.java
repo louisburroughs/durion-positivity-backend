@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.warranty.internal.enums.AppliesToType;
 import com.positivity.warranty.internal.enums.CoverageType;
 import com.positivity.warranty.internal.enums.ProrationMethod;
@@ -47,7 +48,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_wpolicy_coverage_type", columnList = "coverage_type")
         })
 @EntityListeners(AuditingEntityListener.class)
-public class WarrantyPolicy {
+public class WarrantyPolicy extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

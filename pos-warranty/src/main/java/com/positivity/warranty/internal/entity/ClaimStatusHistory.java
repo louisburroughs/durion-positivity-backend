@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.warranty.internal.enums.ClaimStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -31,7 +32,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @Table(name = "claim_status_history", indexes = @Index(name = "idx_chistory_claim", columnList = "claim_id"))
 @EntityListeners(AuditingEntityListener.class)
-public class ClaimStatusHistory {
+public class ClaimStatusHistory extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

@@ -3,6 +3,7 @@ package com.positivity.people.internal.config;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.people.internal.entity.OutboxEvent;
 import com.positivity.people.internal.repository.OutboxEventRepository;
+import com.positivity.tenancy.TenantResolver;
 import java.time.Clock;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class OutboxEventWriter {
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final OutboxEventRepository outboxEventRepository;
+    private final TenantResolver tenantResolver;
 
     /**
      * Queue an envelope for publication as part of the current transaction. Must be called inside
@@ -38,6 +40,7 @@ public class OutboxEventWriter {
     @Transactional(propagation = Propagation.MANDATORY)
     public void publish(@NonNull String topic, @NonNull DomainEventEnvelope<?> envelope) {
         OutboxEvent event = OutboxEvent.builder()
+                .tenantId(tenantResolver.require())
                 .topic(topic)
                 .recordKey(envelope.recordKey())
                 .payload(serialize(envelope))
@@ -55,6 +58,7 @@ public class OutboxEventWriter {
     @Transactional(propagation = Propagation.MANDATORY)
     public void publishRaw(@NonNull String topic, @NonNull String recordKey, @NonNull String message) {
         OutboxEvent event = OutboxEvent.builder()
+                .tenantId(tenantResolver.require())
                 .topic(topic)
                 .recordKey(recordKey)
                 .payload(message)

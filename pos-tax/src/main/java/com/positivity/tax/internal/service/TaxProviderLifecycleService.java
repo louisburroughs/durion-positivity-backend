@@ -4,6 +4,7 @@ import com.positivity.tax.common.dto.TaxProviderTransactionResult;
 import com.positivity.tax.common.enums.TaxProviderTransactionStatus;
 import com.positivity.tax.internal.entity.TaxProviderTransaction;
 import com.positivity.tax.internal.repository.TaxProviderTransactionRepository;
+import com.positivity.tenancy.TenantIterator;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
@@ -14,7 +15,9 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Owns the provider tax-document lifecycle log (story T6, decision D-T3).
@@ -43,12 +46,18 @@ public class TaxProviderLifecycleService {
     private final TaxProviderSelector selector;
     private final TaxProviderTransactionRepository repository;
     private final TaxProviderTransactionResolver resolver;
+    private final TenantIterator tenantIterator;
+    private final TransactionTemplate transaction;
 
     public TaxProviderLifecycleService(
             TaxProviderSelector selector,
             TaxProviderTransactionRepository repository,
             TaxProviderTransactionResolver resolver,
-            ObjectProvider<MeterRegistry> meterRegistry) {
+            ObjectProvider<MeterRegistry> meterRegistry,
+            TenantIterator tenantIterator,
+            PlatformTransactionManager transactionManager) {
+        this.tenantIterator = tenantIterator;
+        this.transaction = new TransactionTemplate(transactionManager);
         this.selector = selector;
         this.repository = repository;
         this.resolver = resolver;
@@ -154,9 +163,17 @@ public class TaxProviderLifecycleService {
      * Scheduled re-commit job (D-T3): re-attempt commit for every PENDING_COMMIT row and
      * promote it to COMMITTED when the provider recovers. Fixed-delay MVP.
      */
+    /**
+     * Per tenant (ADR-0062 §3): the lifecycle rows are tenant-scoped, so the re-commit sweep runs
+     * once per active tenant with the transaction opened inside the binding.
+     */
     @Scheduled(fixedDelayString = "${tax.provider.recommit.fixed-delay-ms:60000}")
-    @Transactional
     public void recommitPending() {
+        tenantIterator.forEachActiveTenant(
+                tenantId -> transaction.executeWithoutResult(status -> recommitPendingForTenant()));
+    }
+
+    void recommitPendingForTenant() {
         List<TaxProviderTransaction> pending = repository.findByStatus(TaxProviderTransactionStatus.PENDING_COMMIT);
         if (pending.isEmpty()) {
             return;

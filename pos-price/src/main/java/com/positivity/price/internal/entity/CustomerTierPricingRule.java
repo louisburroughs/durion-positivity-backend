@@ -1,6 +1,7 @@
 package com.positivity.price.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -32,7 +33,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
                     name = "idx_tier_rule_product_tier_effective",
                     columnList = "product_id,customer_tier_id,effective_from,effective_to")
         })
-public class CustomerTierPricingRule {
+public class CustomerTierPricingRule extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

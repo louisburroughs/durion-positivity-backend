@@ -2,6 +2,7 @@ package com.positivity.people.internal.entity;
 
 import com.positivity.people.internal.enums.AssignmentTerminationPolicy;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -23,7 +24,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(name = "employee_offboarding_retry_queue")
 @Getter
 @Setter
-public class EmployeeOffboardingRetry {
+public class EmployeeOffboardingRetry extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

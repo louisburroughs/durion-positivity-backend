@@ -8,6 +8,7 @@ import com.positivity.price.internal.enums.EvaluationContext;
 import com.positivity.price.internal.enums.RestrictionDecision;
 import com.positivity.price.internal.exception.RestrictionServiceUnavailableException;
 import com.positivity.price.internal.repository.RestrictionRuleRepository;
+import com.positivity.tenancy.TenantContext;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -41,9 +42,15 @@ public class RestrictionEvaluationServiceImpl implements RestrictionEvaluationSe
     }
 
     private RestrictionEvaluationResult evaluateItem(RestrictionEvaluationItem item) {
+        // The evaluation runs on a virtual thread, which does not inherit the caller's tenant binding
+        // (ADR-0062 §3): re-bind the request tenant so the rule lookup stays the caller's.
+        UUID tenantId = TenantContext.current().orElse(null);
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
             CompletableFuture<DecisionWithRules> future = CompletableFuture.supplyAsync(
-                            () -> resolveDecision(item), executor)
+                            () -> tenantId == null
+                                    ? resolveDecision(item)
+                                    : TenantContext.callAs(tenantId, () -> resolveDecision(item)),
+                            executor)
                     .orTimeout(evaluationTimeoutMs, TimeUnit.MILLISECONDS);
             try {
                 DecisionWithRules dwr = future.join();

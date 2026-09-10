@@ -2,6 +2,7 @@ package com.positivity.marketing.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -32,7 +33,7 @@ import lombok.NoArgsConstructor;
 @Table(
         name = "campaign_attribution",
         indexes = {@Index(name = "idx_campaign_attribution_campaign", columnList = "campaign_id")})
-public class CampaignAttribution {
+public class CampaignAttribution extends TenantScopedEntity {
 
     @Id
     @Column(name = "redemption_id", columnDefinition = "UUID", nullable = false, updatable = false)

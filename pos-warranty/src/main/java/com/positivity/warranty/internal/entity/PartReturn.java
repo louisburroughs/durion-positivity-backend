@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.warranty.internal.enums.PartReturnDisposition;
 import com.positivity.warranty.internal.enums.PartReturnStatus;
 import jakarta.persistence.Column;
@@ -42,7 +43,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_preturn_status", columnList = "status")
         })
 @EntityListeners(AuditingEntityListener.class)
-public class PartReturn {
+public class PartReturn extends TenantScopedEntity {
 
     @Id
     @GeneratedValue
