@@ -10,6 +10,7 @@ import com.positivity.marketing.internal.enums.SendStatus;
 import com.positivity.marketing.internal.repository.CampaignRepository;
 import com.positivity.marketing.internal.repository.CampaignSendRepository;
 import com.positivity.marketing.internal.repository.MessageTemplateRepository;
+import com.positivity.tenancy.TenantIterator;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HashMap;
@@ -23,7 +24,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Drains queued recipients and delivers them through the transport port (Story #1149).
@@ -52,6 +54,8 @@ public class CampaignSendWorker {
     private final MarketingFactPublisher factPublisher;
     private final int batchSize;
     private final int maxAttempts;
+    private final TenantIterator tenantIterator;
+    private final TransactionTemplate transaction;
 
     public CampaignSendWorker(
             Clock clock,
@@ -63,7 +67,11 @@ public class CampaignSendWorker {
             TemplateRenderService renderService,
             MarketingFactPublisher factPublisher,
             @Value("${pos.marketing.send.batch-size:100}") int batchSize,
-            @Value("${pos.marketing.send.max-attempts:3}") int maxAttempts) {
+            @Value("${pos.marketing.send.max-attempts:3}") int maxAttempts,
+            TenantIterator tenantIterator,
+            PlatformTransactionManager transactionManager) {
+        this.tenantIterator = tenantIterator;
+        this.transaction = new TransactionTemplate(transactionManager);
         this.clock = clock;
         this.sendRepository = sendRepository;
         this.campaignRepository = campaignRepository;
@@ -76,9 +84,16 @@ public class CampaignSendWorker {
         this.maxAttempts = maxAttempts;
     }
 
+    /**
+     * Per tenant (ADR-0062 §3): sends, campaigns and templates are tenant-scoped, so the drain runs
+     * once per active tenant with the transaction opened inside the binding.
+     */
     @Scheduled(fixedDelayString = "${pos.marketing.send.poll-delay-ms:5000}")
-    @Transactional
     public void drain() {
+        tenantIterator.forEachActiveTenant(tenantId -> transaction.executeWithoutResult(status -> drainForTenant()));
+    }
+
+    void drainForTenant() {
         List<CampaignSend> pending =
                 sendRepository.findByStatusOrderByQueuedAtAsc(SendStatus.PENDING, PageRequest.of(0, batchSize));
         if (pending.isEmpty()) {

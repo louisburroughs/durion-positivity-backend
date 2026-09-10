@@ -12,6 +12,7 @@ import com.positivity.tax.internal.entity.TaxProviderTransaction;
 import com.positivity.tax.internal.exception.TaxCalculationException;
 import com.positivity.tax.internal.repository.TaxProviderTransactionRepository;
 import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantIterator;
 import com.positivity.tenancy.TenantResolver;
 import com.positivity.tenancy.testing.TenantTestSupport;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -26,6 +27,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Story T6 / decision D-T3: the lifecycle service records commit/void rows, is
@@ -57,6 +59,12 @@ class TaxProviderLifecycleServiceTest {
     @Autowired
     private TaxProviderTransactionRepository repository;
 
+    @Autowired
+    private TenantIterator tenantIterator;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     private ControllableProvider provider;
     private TaxProviderLifecycleService service;
 
@@ -70,7 +78,8 @@ class TaxProviderLifecycleServiceTest {
         when(meterRegistry.getIfAvailable()).thenReturn(null);
         TaxProviderTransactionResolver resolver =
                 new TaxProviderTransactionResolver(repository, Clock.systemUTC(), tenantResolver());
-        service = new TaxProviderLifecycleService(selector, repository, resolver, meterRegistry);
+        service = new TaxProviderLifecycleService(
+                selector, repository, resolver, meterRegistry, tenantIterator, transactionManager);
     }
 
     @Test
