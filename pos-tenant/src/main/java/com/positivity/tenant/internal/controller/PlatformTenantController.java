@@ -9,6 +9,8 @@ import com.positivity.tenant.internal.security.TenantPermissions;
 import com.positivity.tenant.internal.service.TenantService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -41,11 +43,22 @@ public class PlatformTenantController {
 
     private final TenantService tenantService;
 
+    private static final String TENANT_CREATE_EXAMPLE = """
+            {"slug":"acme-tire","displayName":"Acme Tire & Auto",
+             "accountId":"01990000-0000-7000-8000-00000000a001","cell":"us-east-1",
+             "initialAdminEmail":"owner@acme.example"}
+            """;
+
+    private static final String TENANT_UPDATE_EXAMPLE = """
+            {"displayName":"Acme Tire & Auto Group","cell":"us-east-2"}
+            """;
+
     @Operation(operationId = "createTenant", summary = "Register a Tenant", description = """
             Registers a tenant under an existing account in status PENDING and publishes tenant.created on \
             tenant.events.v1; pos-security-service provisions the role template and the initial administrator \
             named by initialAdminEmail, then answers tenant.provisioned, which moves the tenant to ACTIVE.
-            Use this tool once per customer tenancy; use createAccount first when the owning account does not exist.
+            Use this tool once per customer tenancy, after createAccount when the owning account does not exist; do not use \
+            it to change an existing tenant, use updateTenant or the lifecycle operations instead.
             Preconditions: the account exists and the slug is not taken.
             Required inputs: slug, displayName, accountId and initialAdminEmail; cell is optional.
             Emits a TENANT_CREATE event.
@@ -60,13 +73,27 @@ public class PlatformTenantController {
             name = "bearerAuth",
             scopes = {"platform:tenant:create"})
     @PostMapping
-    public ResponseEntity<TenantResponse> create(@Valid @RequestBody TenantCreateRequest request) {
+    public ResponseEntity<TenantResponse> create(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Tenant to register: slug, display name, owning account and the initial administrator.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Register Acme",
+                                                            value = TENANT_CREATE_EXAMPLE)))
+                    @Valid
+                    @RequestBody
+                    TenantCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(tenantService.create(request));
     }
 
     @Operation(operationId = "listTenants", summary = "List Tenants", description = """
             Lists every tenant in the registry, oldest first, optionally filtered by lifecycle status.
-            Use this tool to find a tenant id or slug; use getTenant for one tenant's full record.
+            Use this tool to find a tenant id or slug; do not use it for one tenant's full record, use getTenant instead.
             Preconditions: none beyond the platform:tenant:read authority.
             Required inputs: none; status is an optional filter (PENDING, ACTIVE, SUSPENDED, DECOMMISSIONED).
             Emits a TENANT_LIST event.
@@ -87,7 +114,7 @@ public class PlatformTenantController {
 
     @Operation(operationId = "getTenant", summary = "Get a Tenant", description = """
             Returns one tenant's registry record, including its account, cell and lifecycle timestamps.
-            Use this tool when the tenant id is known; use listTenants to find it.
+            Use this tool when the tenant id is known; do not use it to search by slug or status, use listTenants instead.
             Preconditions: the tenant exists.
             Required inputs: id (UUID) as a path parameter.
             Emits a TENANT_GET event.
@@ -108,8 +135,8 @@ public class PlatformTenantController {
     @Operation(operationId = "updateTenant", summary = "Update a Tenant", description = """
             Changes a tenant's display name or cell and publishes tenant.updated; slug, account and status are \
             never changed here.
-            Use this tool for descriptive edits; use suspendTenant, reactivateTenant or decommissionTenant to \
-            change status.
+            Use this tool for descriptive edits; do not use it to change status, use suspendTenant, reactivateTenant or \
+            decommissionTenant instead.
             Preconditions: the tenant exists and is not DECOMMISSIONED.
             Required inputs: id (UUID) as a path parameter and a body with displayName and/or cell; a null field \
             leaves the value unchanged.
@@ -126,14 +153,27 @@ public class PlatformTenantController {
             scopes = {"platform:tenant:update"})
     @PatchMapping("/{id}")
     public ResponseEntity<TenantResponse> update(
-            @PathVariable UUID id, @Valid @RequestBody TenantUpdateRequest request) {
+            @PathVariable UUID id,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Fields to change; a null field leaves the value unchanged.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Rename and move",
+                                                            value = TENANT_UPDATE_EXAMPLE)))
+                    @Valid
+                    @RequestBody
+                    TenantUpdateRequest request) {
         return ResponseEntity.ok(tenantService.update(id, request));
     }
 
     @Operation(operationId = "suspendTenant", summary = "Suspend a Tenant", description = """
             Moves an ACTIVE tenant to SUSPENDED and publishes tenant.suspended; logins for the tenant are refused \
             until reactivateTenant.
-            Use this tool for non-payment or abuse holds; use decommissionTenant for a permanent end.
+            Use this tool for non-payment or abuse holds; do not use it for a permanent end, use decommissionTenant instead.
             Preconditions: the tenant is ACTIVE.
             Required inputs: id (UUID) as a path parameter; no body.
             Emits a TENANT_SUSPEND event.
@@ -154,8 +194,8 @@ public class PlatformTenantController {
 
     @Operation(operationId = "reactivateTenant", summary = "Reactivate a Tenant", description = """
             Moves a SUSPENDED tenant back to ACTIVE and publishes tenant.reactivated.
-            Use this tool to lift a hold placed by suspendTenant; a PENDING tenant becomes ACTIVE through \
-            provisioning, never through this operation.
+            Use this tool to lift a hold placed by suspendTenant; do not use it on a PENDING tenant, which becomes ACTIVE \
+            through tenant.provisioned instead.
             Preconditions: the tenant is SUSPENDED.
             Required inputs: id (UUID) as a path parameter; no body.
             Emits a TENANT_REACTIVATE event.
@@ -177,7 +217,7 @@ public class PlatformTenantController {
     @Operation(operationId = "decommissionTenant", summary = "Decommission a Tenant", description = """
             Moves a tenant to the terminal DECOMMISSIONED status and publishes tenant.decommissioned; the tenant \
             can never be reactivated or edited again.
-            Use this tool when a tenancy ends; use suspendTenant for a reversible hold.
+            Use this tool when a tenancy ends; do not use it for a reversible hold, use suspendTenant instead.
             Preconditions: the tenant is not already DECOMMISSIONED.
             Required inputs: id (UUID) as a path parameter; no body.
             Emits a TENANT_DECOMMISSION event.

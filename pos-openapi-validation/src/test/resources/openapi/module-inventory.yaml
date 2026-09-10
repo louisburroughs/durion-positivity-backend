@@ -20,6 +20,9 @@ modules:
   pos-location:
     mode: STRICT
     annotationDepth: STRICT
+  pos-tenant:
+    mode: STRICT
+    annotationDepth: STRICT
   pos-people:
     mode: STRICT
     annotationDepth: STRICT
