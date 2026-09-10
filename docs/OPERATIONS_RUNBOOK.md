@@ -67,6 +67,17 @@ Two workflows deliver changes to the alpha EC2 box; which one runs depends on wh
   it, but it also remains a full-rebuild trigger in `build-push-ecr.yml` because it carries
   `build:` contexts — expect both workflows to run on a root-compose change (they converge on
   the committed state).
+- **Schema reset** (ADR-0062 alpha): while the platform is in alpha, Flyway baselines are edited
+  in place rather than migrated (`docs/TENANCY_SCHEMA.md`), so a box whose databases predate a
+  baseline change fails validation on the first recreated service (`checksum mismatch for
+  migration version 1`, run 34529050551). Dispatch `build-push-ecr.yml` on `main` with
+  `deploy_alpha=true` **and** `reset_alpha_databases=true`: the deploy stops the backend tier,
+  drops every database named in `postgres/init-databases.sql` `WITH (FORCE)`, recreates it, re-runs
+  the `pos_app` grants and starts the tiers, so every service rebuilds its schema from
+  `V1__baseline_<module>.sql` plus seeds. All alpha data is lost; the automatic promotion path
+  and the config-only sync never reset (the script refuses `RESET_DATABASES=true` on
+  `--config-only`). Procedure and verification: `docs/runbooks/flyway-baseline-reset.md`,
+  "Alpha Cutover". Covered by `scripts/tests/deploy-backend-reset-databases-selftest.sh`.
 
 Both paths pass the committed files' sha256 digests (`PROD_OVERRIDE_SHA256`,
 `BASE_COMPOSE_SHA256`) into `deploy-backend.sh`, which refuses to compose against an on-box file

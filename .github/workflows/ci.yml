@@ -200,6 +200,14 @@ jobs:
         # self-test drives the real script against a stubbed Docker.
         run: bash scripts/tests/deploy-backend-postgres-image-selftest.sh
 
+      - name: Verify the full deploy's database reset
+        # RESET_DATABASES=true drops every backend database on alpha so Flyway rebuilds each
+        # from its V1 baseline (the "Alpha Cutover" of docs/runbooks/flyway-baseline-reset.md
+        # as a build-push-ecr dispatch input). Destructive, so both sides of the contract are
+        # driven against a stubbed Docker: off by default, refused outside a full deploy, and
+        # when on, stop the tier, drop, recreate, redeploy, in that order.
+        run: bash scripts/tests/deploy-backend-reset-databases-selftest.sh
+
       - name: Verify the deploy's pre-pull disk reclaim
         # The periodic prune is the last line of deploy-backend.sh, so it never runs on a
         # deploy that failed. When alpha filled up mid-pull that turned one failure into a

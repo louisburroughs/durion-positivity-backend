@@ -5,6 +5,16 @@ set -euo pipefail
 #   deploy-backend.sh <GITHUB_SHA>     full deploy: retag, pull, force-recreate the stack
 #   deploy-backend.sh --config-only    apply the on-box compose files to the running stack
 #
+# RESET_DATABASES=true (full deploy only) drops every backend database named in
+# postgres/init-databases.sql before the reconcile step recreates it, so Flyway rebuilds each
+# schema from its V1 baseline. This is the alpha schema reset of
+# docs/runbooks/flyway-baseline-reset.md ("Alpha Cutover") as a deploy option: while the
+# platform is in alpha, baselines are edited in place rather than migrated (docs/TENANCY_SCHEMA.md),
+# and a box whose databases predate a baseline change fails Flyway validation on the first
+# recreated service (run 34529050551). All alpha data is lost; nothing outside the pos_* databases
+# is touched. Driven from build-push-ecr.yml's `reset_alpha_databases` dispatch input, never from
+# the automatic promotion path.
+#
 # --config-only (#1457) is the delivery path for compose-file changes that need no image
 # build: sync-alpha-config pulls the committed files from S3 and runs this mode, and
 # `docker compose up -d` WITHOUT --force-recreate then recreates exactly the containers
@@ -20,6 +30,22 @@ fi
 if [[ "${MODE}" == "full" ]]; then
   GITHUB_SHA="${1:?GITHUB_SHA argument required}"
   IMAGE_TAG="sha-${GITHUB_SHA::7}"
+fi
+
+# Only the literal `true` resets; anything else is a typo that must not be read as either
+# answer. Refused up front in config-only mode: that mode recreates only the containers
+# whose config changed, so the running services would be left on dropped databases.
+RESET_DATABASES="${RESET_DATABASES:-false}"
+case "${RESET_DATABASES}" in
+  true|false) ;;
+  *)
+    echo "RESET_DATABASES must be 'true' or 'false' (got '${RESET_DATABASES}')." >&2
+    exit 1
+    ;;
+esac
+if [[ "${RESET_DATABASES}" == "true" && "${MODE}" != "full" ]]; then
+  echo "RESET_DATABASES=true is only valid for a full deploy (deploy-backend.sh <GITHUB_SHA>), not --config-only." >&2
+  exit 1
 fi
 
 ALPHA_ROOT="${ALPHA_ROOT:-/opt/durion/alpha}"
@@ -365,10 +391,76 @@ reclaim_disk_before_pull() {
   return 0
 }
 
+# The databases the deploy owns: every `CREATE DATABASE` line of init-databases.sql. Names are
+# constrained to [A-Za-z0-9_]+ by the sed pattern, so interpolation into SQL is safe.
+managed_databases() {
+  sed -nE 's/^CREATE DATABASE ([A-Za-z0-9_]+);$/\1/p' "${BACKEND_DIR}/postgres/init-databases.sql"
+}
+
+# Starts postgres if needed and blocks until it accepts connections. $1 names the caller's
+# step for the abort message.
+ensure_postgres_ready() {
+  local purpose="$1"
+  echo "Ensuring postgres is up for ${purpose}"
+  docker compose "${COMPOSE_ARGS[@]}" up -d --no-build postgres
+
+  local attempt
+  for attempt in $(seq 1 60); do
+    if docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+        sh -c 'pg_isready -q -U "${POSTGRES_USER}"'; then
+      return 0
+    fi
+    if [[ "${attempt}" -eq 60 ]]; then
+      echo "postgres did not become ready within 60s; aborting before ${purpose}." >&2
+      return 1
+    fi
+    sleep 1
+  done
+}
+
+# RESET_DATABASES=true: the alpha schema reset (see the header). Runs right before
+# reconcile_databases, which then recreates every dropped database and re-grants pos_app, so
+# the services that come up below build their schemas from V1. The backend tier is stopped
+# first: a running service would reconnect into the drop window, and the DROP would either
+# wait on its pool or, WITH (FORCE), kill sessions mid-transaction. The full deploy
+# force-recreates every one of these containers afterwards, so stopping them costs nothing
+# it was not already going to spend.
+reset_databases() {
+  local init_sql="${BACKEND_DIR}/postgres/init-databases.sql"
+  if [[ ! -f "${init_sql}" ]]; then
+    echo "RESET_DATABASES=true but ${init_sql} not found; refusing to guess which databases to drop." >&2
+    return 1
+  fi
+
+  local dbs db
+  mapfile -t dbs < <(managed_databases)
+  if [[ ${#dbs[@]} -eq 0 ]]; then
+    echo "RESET_DATABASES=true but ${init_sql} names no databases; nothing to drop." >&2
+    return 1
+  fi
+
+  echo "RESET_DATABASES=true: dropping ${#dbs[@]} backend databases so Flyway rebuilds each from its V1 baseline (all alpha data is lost)"
+  echo "Stopping backend services before the reset: ${BACKEND_SERVICES[*]}"
+  docker compose "${COMPOSE_ARGS[@]}" stop "${BACKEND_SERVICES[@]}"
+
+  ensure_postgres_ready "the database reset"
+
+  # Same stdin discipline as reconcile_databases: the list is read before the loop and every
+  # exec gets </dev/null. IF EXISTS keeps a database that was never created (a service added
+  # since the last deploy) from failing the reset; WITH (FORCE) terminates any session that
+  # still holds the database (a container stopped above but not yet gone, a psql left open).
+  for db in "${dbs[@]}"; do
+    [[ -n "${db}" ]] || continue
+    echo "Dropping database: ${db}"
+    docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+      sh -c 'psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER}" -d postgres -c "DROP DATABASE IF EXISTS '"${db}"' WITH (FORCE);"' </dev/null
+  done
+  echo "Dropped ${#dbs[@]} databases; the reconcile step recreates them"
+}
+
 # postgres/init-databases.sql only runs on fresh volume initialization, so databases
 # added after the alpha volume was first created never come into existence. Reconcile:
-# parse the CREATE DATABASE lines and create any database that is missing. Names are
-# constrained to [A-Za-z0-9_]+ by the sed pattern, so interpolation into SQL is safe.
+# parse the CREATE DATABASE lines and create any database that is missing.
 reconcile_databases() {
   local init_sql="${BACKEND_DIR}/postgres/init-databases.sql"
   if [[ ! -f "${init_sql}" ]]; then
@@ -376,28 +468,14 @@ reconcile_databases() {
     return 0
   fi
 
-  echo "Ensuring postgres is up for database reconciliation"
-  docker compose "${COMPOSE_ARGS[@]}" up -d --no-build postgres
-
-  local attempt
-  for attempt in $(seq 1 60); do
-    if docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
-        sh -c 'pg_isready -q -U "${POSTGRES_USER}"'; then
-      break
-    fi
-    if [[ "${attempt}" -eq 60 ]]; then
-      echo "postgres did not become ready within 60s; aborting before database reconciliation." >&2
-      return 1
-    fi
-    sleep 1
-  done
+  ensure_postgres_ready "database reconciliation"
 
   # Read the full list before the loop: `docker compose exec` attaches the container
   # to the loop's stdin and drains it, so a `while read` fed by process substitution
   # silently stops after the first database. The execs also get </dev/null so they
   # can never consume anything meant for the shell.
   local dbs db exists
-  mapfile -t dbs < <(sed -nE 's/^CREATE DATABASE ([A-Za-z0-9_]+);$/\1/p' "${init_sql}")
+  mapfile -t dbs < <(managed_databases)
   echo "Reconciling ${#dbs[@]} databases from init-databases.sql"
   for db in "${dbs[@]}"; do
     [[ -n "${db}" ]] || continue
@@ -767,6 +845,9 @@ docker compose "${COMPOSE_ARGS[@]}" run --rm --no-deps kafka-topic-init
 echo "Starting Kafka exporter"
 docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --force-recreate kafka-exporter
 
+if [[ "${RESET_DATABASES}" == "true" ]]; then
+  reset_databases
+fi
 reconcile_databases
 
 echo "Pulling backend services: ${BACKEND_SERVICES[*]}"
