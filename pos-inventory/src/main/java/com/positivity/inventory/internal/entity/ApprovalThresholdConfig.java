@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.entity;
 import com.positivity.inventory.internal.enums.ApprovalFlowType;
 import com.positivity.inventory.internal.enums.ApprovalTier;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -36,7 +37,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @AllArgsConstructor
 @Builder
 @EntityListeners(AuditingEntityListener.class)
-public class ApprovalThresholdConfig {
+public class ApprovalThresholdConfig extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

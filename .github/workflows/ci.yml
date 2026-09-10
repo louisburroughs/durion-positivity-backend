@@ -369,7 +369,17 @@ jobs:
                       for node in tc.findall(kind):
                           print(f"{kind.upper()}: {tc.get('classname')}.{tc.get('name')}")
                           print(f"  message: {node.get('message', '')[:500]}")
-                          print((node.text or '')[:3000])
+                          body = node.text or ''
+                          print(body[:3000])
+                          # A context-load failure buries its root cause under thousands of
+                          # framework frames: surface every "Caused by" so the tail names it.
+                          causes = []
+                          for line in body.splitlines():
+                              line = line.strip()
+                              if line.startswith('Caused by:') and line[:300] not in causes:
+                                  causes.append(line[:300])
+                          for cause in causes[:10]:
+                              print(f"  {cause}")
               print("::endgroup::")
           EOF
 

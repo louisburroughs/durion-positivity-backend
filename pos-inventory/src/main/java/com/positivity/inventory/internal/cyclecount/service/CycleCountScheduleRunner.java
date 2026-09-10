@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.cyclecount.service;
 
 import com.positivity.inventory.internal.dto.cyclecount.schedule.CycleCountScheduleRunResultResponse;
+import com.positivity.tenancy.TenantIterator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -23,12 +24,19 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(prefix = "pos.inventory.cycle-count.schedule", name = "enabled", havingValue = "true")
 public class CycleCountScheduleRunner {
 
+    /** ADR-0062 section 3: the pass runs once per active tenant, bound for the duration. */
+    private final TenantIterator tenantIterator;
+
     private final CycleCountScheduleService cycleCountScheduleService;
 
     @Scheduled(
             fixedDelayString = "${pos.inventory.cycle-count.schedule.interval-ms:3600000}",
             initialDelayString = "${pos.inventory.cycle-count.schedule.initial-delay-ms:600000}")
     public void runScheduledPass() {
+        tenantIterator.forEachActiveTenant(tenantId -> runPassForTenant());
+    }
+
+    private void runPassForTenant() {
         try {
             CycleCountScheduleRunResultResponse result = cycleCountScheduleService.runDueSchedules();
             log.info(

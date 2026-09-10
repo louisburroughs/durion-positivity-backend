@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -32,7 +33,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ExtPurchaseOrderLineReplica {
+public class ExtPurchaseOrderLineReplica extends TenantScopedEntity {
 
     @Id
     @Column(name = "line_id", nullable = false)

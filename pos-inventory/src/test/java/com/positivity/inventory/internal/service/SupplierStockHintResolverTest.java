@@ -17,6 +17,9 @@ import com.positivity.inventory.internal.enums.SupplierHintIdentityKind;
 import com.positivity.inventory.internal.enums.SupplierHintResolutionStatus;
 import com.positivity.inventory.internal.repository.ExtProductCodeReplicaRepository;
 import com.positivity.inventory.internal.repository.SupplierStockHintRepository;
+import com.positivity.tenancy.StaticTenantRegistry;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantIterator;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -50,7 +53,10 @@ class SupplierStockHintResolverTest {
 
     @BeforeEach
     void setUp() {
-        resolver = new SupplierStockHintResolver(hints, productCodes, properties, TEST_CLOCK);
+        TenancyProperties tenancy = new TenancyProperties();
+        tenancy.setDefaultTenantId(UUID.fromString("01900000-0000-7000-8000-000000000001"));
+        resolver = new SupplierStockHintResolver(
+                new TenantIterator(new StaticTenantRegistry(tenancy)), hints, productCodes, properties, TEST_CLOCK);
     }
 
     private static SupplierStockHint pending(String ean) {

@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -24,7 +25,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Entity
 @Table(name = "ext_workorder_part")
-public class ExtWorkorderPartReplica {
+public class ExtWorkorderPartReplica extends TenantScopedEntity {
 
     @Id
     @Column(name = "workorder_line_id", nullable = false)

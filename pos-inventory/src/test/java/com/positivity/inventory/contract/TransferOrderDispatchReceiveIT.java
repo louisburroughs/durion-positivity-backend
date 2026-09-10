@@ -24,6 +24,7 @@ import com.positivity.inventory.internal.service.ExpectedSupplyService;
 import com.positivity.inventory.internal.service.LedgerPostingService;
 import com.positivity.inventory.internal.service.StockSummaryDriftVerifier;
 import com.positivity.inventory.internal.service.StockSummaryRebuildService;
+import com.positivity.tenancy.TenantResolver;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -58,8 +59,11 @@ class TransferOrderDispatchReceiveIT extends BaseContractIntegrationTest {
     static class OutboxTestConfig {
         @Bean
         OutboxEventWriter outboxEventWriter(
-                Clock clock, ObjectMapper objectMapper, OutboxEventRepository outboxEventRepository) {
-            return new OutboxEventWriter(clock, objectMapper, outboxEventRepository);
+                Clock clock,
+                ObjectMapper objectMapper,
+                OutboxEventRepository outboxEventRepository,
+                TenantResolver tenantResolver) {
+            return new OutboxEventWriter(clock, objectMapper, outboxEventRepository, tenantResolver);
         }
     }
 

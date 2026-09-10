@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.service.LotExpiryScanService.LotExpiryScanResult;
+import com.positivity.tenancy.TenantIterator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -23,12 +24,19 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(prefix = "pos.inventory.lot.expiry-scan", name = "enabled", havingValue = "true")
 public class LotExpiryScheduler {
 
+    /** ADR-0062 section 3: the pass runs once per active tenant, bound for the duration. */
+    private final TenantIterator tenantIterator;
+
     private final LotExpiryScanService lotExpiryScanService;
 
     @Scheduled(
             fixedDelayString = "${pos.inventory.lot.expiry-scan.interval-ms:86400000}",
             initialDelayString = "${pos.inventory.lot.expiry-scan.initial-delay-ms:600000}")
     public void runScheduledScan() {
+        tenantIterator.forEachActiveTenant(tenantId -> runScanForTenant());
+    }
+
+    private void runScanForTenant() {
         try {
             LotExpiryScanResult result = lotExpiryScanService.runExpiryScan();
             log.info(

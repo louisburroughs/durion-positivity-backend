@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.entity;
 import com.positivity.inventory.internal.enums.PurchaseSuggestionStatus;
 import com.positivity.inventory.internal.enums.SuggestedVendorType;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -48,7 +49,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class PurchaseSuggestion {
+public class PurchaseSuggestion extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

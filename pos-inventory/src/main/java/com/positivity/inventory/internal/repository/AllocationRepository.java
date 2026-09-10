@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.repository;
 import com.positivity.inventory.internal.entity.AllocationEntity;
 import com.positivity.inventory.internal.entity.ReservationEntity;
 import com.positivity.inventory.internal.enums.AllocationState;
+import com.positivity.tenancy.TenantAudited;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -76,6 +77,9 @@ public interface AllocationRepository extends JpaRepository<AllocationEntity, UU
                                               WHERE CAST(a.allocation_id AS VARCHAR) = l.source_transaction_id))
                           AND l.created_qty <> l.released_qty
                         """, nativeQuery = true)
+    @TenantAudited(
+            reason =
+                    "reads inventory_allocation and inventory_stock_summary, both tenant-scoped under row-level security; runs per tenant from AllocationConsistencyVerifier")
     List<AllocationConsistencyRow> findConsistencyViolations(
             @Param("created") String created, @Param("released") String released);
 

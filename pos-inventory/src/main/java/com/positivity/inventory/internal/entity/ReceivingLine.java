@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.entity;
 
 import com.positivity.inventory.internal.enums.ReceivingLineStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -35,7 +36,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @EntityListeners(AuditingEntityListener.class)
 @ToString(exclude = "session")
 @EqualsAndHashCode(exclude = "session")
-public class ReceivingLine {
+public class ReceivingLine extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

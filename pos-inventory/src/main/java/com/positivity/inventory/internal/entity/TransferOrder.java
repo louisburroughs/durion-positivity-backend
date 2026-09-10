@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.entity;
 import com.positivity.inventory.internal.enums.TransferOrderStatus;
 import com.positivity.inventory.internal.enums.TransferShortCloseDisposition;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -56,7 +57,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @NoArgsConstructor
 @AllArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
-public class TransferOrder {
+public class TransferOrder extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

@@ -33,7 +33,10 @@ class TenancyArchitectureTest {
 
     /** Root packages of the modules retrofitted so far (plan WS1 pilot, then WS3 waves). */
     static final String[] ADOPTED_MODULES = {
-        "com.positivity.location..", "com.positivity.tenant..", "com.positivity.securityservice.."
+        "com.positivity.location..",
+        "com.positivity.tenant..",
+        "com.positivity.securityservice..",
+        "com.positivity.inventory.."
     };
 
     private static final String ENTITY_ANNOTATION = "jakarta.persistence.Entity";

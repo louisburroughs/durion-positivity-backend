@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.entity;
 
 import com.positivity.inventory.internal.enums.MeasurementMethod;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -37,7 +38,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @Table(name = "count_entry")
 @EntityListeners(AuditingEntityListener.class)
-public class CountEntry {
+public class CountEntry extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

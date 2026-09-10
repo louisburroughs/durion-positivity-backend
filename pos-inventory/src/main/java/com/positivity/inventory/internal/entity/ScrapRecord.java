@@ -5,6 +5,7 @@ import com.positivity.inventory.internal.enums.ScrapCostSource;
 import com.positivity.inventory.internal.enums.ScrapReasonCode;
 import com.positivity.inventory.internal.enums.ScrapStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -50,7 +51,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @AllArgsConstructor
 @Builder
 @EntityListeners(AuditingEntityListener.class)
-public class ScrapRecord {
+public class ScrapRecord extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

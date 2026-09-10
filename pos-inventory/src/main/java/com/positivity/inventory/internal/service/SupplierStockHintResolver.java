@@ -6,6 +6,7 @@ import com.positivity.inventory.internal.entity.SupplierStockHint;
 import com.positivity.inventory.internal.enums.SupplierHintResolutionStatus;
 import com.positivity.inventory.internal.repository.ExtProductCodeReplicaRepository;
 import com.positivity.inventory.internal.repository.SupplierStockHintRepository;
+import com.positivity.tenancy.TenantIterator;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -50,6 +51,9 @@ public class SupplierStockHintResolver {
     private static final String EAN = "EAN";
     private static final String RESOLVED_BY = "catalog:EAN";
 
+    /** ADR-0062 section 3: the pass runs once per active tenant, bound for the duration. */
+    private final TenantIterator tenantIterator;
+
     private final SupplierStockHintRepository hintRepository;
     private final ExtProductCodeReplicaRepository productCodeReplicaRepository;
     private final SupplierStockHintProperties properties;
@@ -59,6 +63,10 @@ public class SupplierStockHintResolver {
             fixedDelayString = "${pos.inventory.supplier-hints.resolution.interval-ms:300000}",
             initialDelayString = "${pos.inventory.supplier-hints.resolution.initial-delay-ms:60000}")
     public void resolvePending() {
+        tenantIterator.forEachActiveTenant(tenantId -> resolvePendingForTenant());
+    }
+
+    private void resolvePendingForTenant() {
         try {
             ResolutionPassResult result = runResolutionPass();
             if (result.attempted() > 0) {

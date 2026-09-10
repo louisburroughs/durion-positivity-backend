@@ -794,8 +794,11 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_inventory_db
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      # ADR-0062 (plan WS3): the pool is the non-owner pos_app role; Flyway alone uses the owner.
+      SPRING_DATASOURCE_USERNAME: pos_app
+      SPRING_DATASOURCE_PASSWORD: ${POS_APP_PASSWORD:-${POSTGRES_PASSWORD}}
+      SPRING_FLYWAY_USER: ${POSTGRES_USER}
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       # ADR-0044 #892: location replica feed from location.events.v1.
       # On by default since the warranty rollout (#927): also consumes

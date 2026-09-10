@@ -4,6 +4,7 @@ import com.positivity.inventory.internal.enums.EntryMethod;
 import com.positivity.inventory.internal.enums.ReceivingSessionStatus;
 import com.positivity.inventory.internal.enums.SourceDocumentType;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -34,7 +35,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @AllArgsConstructor
 @Builder
 @EntityListeners(AuditingEntityListener.class)
-public class ReceivingSession {
+public class ReceivingSession extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

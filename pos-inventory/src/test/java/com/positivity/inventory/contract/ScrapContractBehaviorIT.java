@@ -22,6 +22,7 @@ import com.positivity.inventory.internal.repository.InventoryStockSummaryReposit
 import com.positivity.inventory.internal.repository.OutboxEventRepository;
 import com.positivity.inventory.internal.repository.ScrapRecordRepository;
 import com.positivity.inventory.internal.service.LedgerPostingService;
+import com.positivity.tenancy.TenantResolver;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.util.List;
@@ -55,8 +56,11 @@ class ScrapContractBehaviorIT extends BaseContractIntegrationTest {
     static class OutboxTestConfig {
         @Bean
         OutboxEventWriter outboxEventWriter(
-                Clock clock, ObjectMapper objectMapper, OutboxEventRepository outboxEventRepository) {
-            return new OutboxEventWriter(clock, objectMapper, outboxEventRepository);
+                Clock clock,
+                ObjectMapper objectMapper,
+                OutboxEventRepository outboxEventRepository,
+                TenantResolver tenantResolver) {
+            return new OutboxEventWriter(clock, objectMapper, outboxEventRepository, tenantResolver);
         }
     }
 

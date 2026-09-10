@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.entity;
 
 import com.positivity.inventory.internal.enums.CycleCountPlanStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -39,7 +40,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @AllArgsConstructor
 @Builder
 @EntityListeners(AuditingEntityListener.class)
-public class CycleCountPlan {
+public class CycleCountPlan extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

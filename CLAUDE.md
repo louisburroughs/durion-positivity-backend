@@ -81,7 +81,7 @@ pos-api-gateway  (JWT validation, path rewrite /{domain}/vN/.., permission bitse
   add-a-table checklist: `docs/TENANCY_SCHEMA.md`. The runtime is `pos-tenancy-common` (WS1: `TenantContext`,
   `TenantContextFilter`, `TenantRecordInterceptor`, `TenantAwareDataSource`, `TenantScopedEntity`, `@TenantGlobal`,
   `@PlatformScoped`, `TenantIterator`), adopted module by module (`pos-location`, `pos-tenant`,
-  `pos-security-service` so far) and enforced by `pos-archunit`'s `TenancyArchitectureTest` for the modules in
+  `pos-security-service`, `pos-inventory` so far; WS3 waves continue largest first) and enforced by `pos-archunit`'s `TenancyArchitectureTest` for the modules in
   `ADOPTED_MODULES`. `pos-tenant` (WS2a) owns the
   registry and publishes `tenant.events.v1`; its rows all belong to the platform tenant
   (`PlatformTenant.ID`), the one place application code binds a tenant itself. `pos-security-service` (WS2b)
