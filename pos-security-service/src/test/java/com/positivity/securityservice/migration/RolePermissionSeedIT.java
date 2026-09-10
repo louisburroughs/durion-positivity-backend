@@ -351,7 +351,8 @@ class RolePermissionSeedIT {
         jdbc().update("INSERT INTO role_assignments (id, user_id, role_id, effective_start_date, created_at, "
                 + "created_by) "
                 + "SELECT gen_random_uuid(), u.id, r.id, NOW(), NOW(), 'test' FROM users u, roles r "
-                + "WHERE u.username = 'ungranted.user' AND r.name = 'IT_UNGRANTED_ROLE'");
+                + "WHERE u.username = 'ungranted.user' AND r.name = 'IT_UNGRANTED_ROLE' "
+                + "AND u.tenant_id = app_current_tenant() AND r.tenant_id = app_current_tenant()");
 
         assertThat(effectivePermissionsOf("ungranted.user")).isEmpty();
     }
@@ -366,7 +367,8 @@ class RolePermissionSeedIT {
                         "INSERT INTO role_assignments (id, user_id, role_id, effective_start_date, created_at, "
                                 + "created_by) "
                                 + "SELECT gen_random_uuid(), u.id, r.id, NOW(), NOW(), 'test' FROM users u, roles r "
-                                + "WHERE u.username = ? AND r.name = ?",
+                                + "WHERE u.username = ? AND r.name = ? "
+                                + "AND u.tenant_id = app_current_tenant() AND r.tenant_id = app_current_tenant()",
                         username,
                         roleName);
     }
