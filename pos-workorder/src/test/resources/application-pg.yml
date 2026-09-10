@@ -5,6 +5,10 @@
 spring:
   application:
     name: pos-workorder-pg-test
+  datasource:
+    # The test-classpath application.yml (H2) shadows the main one and pins the H2 driver; the
+    # Postgres profile must name its driver or Hikari refuses the container's jdbc:postgresql URL.
+    driver-class-name: org.postgresql.Driver
   autoconfigure:
     exclude: org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
   jpa:
