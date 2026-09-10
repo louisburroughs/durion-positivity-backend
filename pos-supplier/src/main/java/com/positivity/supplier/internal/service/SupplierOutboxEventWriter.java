@@ -39,12 +39,15 @@ public class SupplierOutboxEventWriter {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void publish(@NonNull String topic, @NonNull DomainEventEnvelope<?> envelope) {
+        // The envelope carries the tenant the row and the Kafka header carry (ADR-0062 §3); an
+        // envelope built for another tenant is refused rather than re-labelled.
+        DomainEventEnvelope<?> stamped = envelope.stampedWith(tenantResolver.require());
         SupplierOutboxEventEntity row = SupplierOutboxEventEntity.builder()
-                .tenantId(tenantResolver.require())
+                .tenantId(stamped.requireTenantId())
                 .topic(topic)
                 .recordKey(envelope.aggregateId().toString())
                 .eventType(envelope.eventType())
-                .payload(serialize(envelope))
+                .payload(serialize(stamped))
                 .build();
         outboxRepository.save(row);
         log.debug(

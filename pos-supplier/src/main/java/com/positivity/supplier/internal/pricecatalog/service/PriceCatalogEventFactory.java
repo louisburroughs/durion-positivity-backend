@@ -106,6 +106,8 @@ final class PriceCatalogEventFactory {
                 aggregateVersion,
                 occurredAt,
                 "pos-supplier",
+                // tenantId: stamped by the outbox writer from the bound tenant (ADR-0062 §3)
+                null,
                 manifest.getCorrelationId(),
                 manifest.getCreatedBy(),
                 payload);
