@@ -163,4 +163,16 @@ class TenantContextFilterTest {
                 .isInstanceOf(IllegalStateException.class);
         assertThat(TenantContext.current()).isEmpty();
     }
+
+    @Test
+    void nullUnenforcedPathsMeansNothingIsExempt() throws Exception {
+        TenancyProperties properties = new TenancyProperties();
+        properties.setUnenforcedPaths(null);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter(properties).doFilter(new MockHttpServletRequest("POST", "/v1/auth/login"), response, chain);
+
+        assertThat(properties.getUnenforcedPaths()).isEmpty();
+        assertThat(response.getStatus()).as("fail closed, not a 500").isEqualTo(401);
+    }
 }

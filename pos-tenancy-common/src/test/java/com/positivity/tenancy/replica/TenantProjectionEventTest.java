@@ -61,4 +61,19 @@ class TenantProjectionEventTest {
         assertThat(parse("{\"eventId\":\"e6\",\"eventType\":\"location.bay.updated\",\"payload\":{}}"))
                 .isEmpty();
     }
+
+    @Test
+    void aggregateVersionIsRequiredAndNumeric() {
+        String payload = "\"payload\":{\"tenantId\":\"%s\",\"slug\":\"acme\",\"status\":\"ACTIVE\"}".formatted(TENANT);
+        assertThat(parse("{\"eventId\":\"e6\",\"eventType\":\"tenant.updated\"," + payload + "}"))
+                .as("a fact without a version cannot be ordered against the replica")
+                .isEmpty();
+        assertThat(parse("{\"eventId\":\"e7\",\"eventType\":\"tenant.updated\",\"aggregateVersion\":\"7\"," + payload
+                        + "}"))
+                .as("a string is not a version")
+                .isEmpty();
+        assertThat(parse("{\"eventId\":\"e8\",\"eventType\":\"tenant.updated\",\"aggregateVersion\":-1," + payload
+                        + "}"))
+                .isEmpty();
+    }
 }

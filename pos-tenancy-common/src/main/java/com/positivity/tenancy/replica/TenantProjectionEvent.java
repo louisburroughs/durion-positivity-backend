@@ -66,11 +66,14 @@ public record TenantProjectionEvent(
             return Optional.empty();
         }
         JsonNode version = root.path("aggregateVersion");
-        long aggregateVersion = version.isNumber() ? version.longValue() : 0L;
+        if (!version.isIntegralNumber() || version.longValue() < 0) {
+            // The version guard is what keeps a replica monotonic; a fact without one cannot be ordered.
+            return Optional.empty();
+        }
         return Optional.of(new TenantProjectionEvent(
                 eventId,
                 eventType,
-                aggregateVersion,
+                version.longValue(),
                 tenantId,
                 slug,
                 payload.path("displayName").stringValue(null),

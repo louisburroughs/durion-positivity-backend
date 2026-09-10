@@ -75,6 +75,7 @@ public class SecurityGatewayConfig {
     private static final String JWT_HEADER_ALG = "alg";
     private static final String CLAIM_PERMISSION_VERSION = "perm_ver";
     private static final String CLAIM_TENANT_ID = "tid";
+    private static final String LOGIN_PATH_SEGMENT = "/login";
     private static final Pattern TENANT_SLUG = Pattern.compile("^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])$");
     private static final String CLAIM_ROLES = "roles";
     private static final String CLAIM_LOC_FIN_BITS = "loc_fin_bits";
@@ -440,7 +441,7 @@ public class SecurityGatewayConfig {
      * and leaves resolution to the login body.
      */
     private ServerWebExchange withTenantSlugFromHost(AuthRequestContext context) {
-        if (!isAuthPath(context.path())) {
+        if (!isLoginPath(context.path())) {
             return context.exchange();
         }
         Optional<String> slug = tenantSlugFromHost(context.request());
@@ -472,8 +473,17 @@ public class SecurityGatewayConfig {
         if (!bareHost.endsWith(normalizedSuffix) || bareHost.length() <= normalizedSuffix.length()) {
             return Optional.empty();
         }
-        String label = bareHost.substring(0, bareHost.length() - normalizedSuffix.length());
+        String prefix = bareHost.substring(0, bareHost.length() - normalizedSuffix.length());
+        // The tenant is the first label; anything between it and the suffix (acme.dev.<suffix>)
+        // is environment routing, not tenant identity.
+        int dot = prefix.indexOf('.');
+        String label = dot < 0 ? prefix : prefix.substring(0, dot);
         return TENANT_SLUG.matcher(label).matches() ? Optional.of(label) : Optional.empty();
+    }
+
+    /** The credential login route only: the one public auth path whose body names a tenant. */
+    private boolean isLoginPath(String path) {
+        return isAuthPath(path) && path.endsWith(LOGIN_PATH_SEGMENT);
     }
 
     private boolean isAuthPath(String path) {

@@ -326,6 +326,31 @@ class SecurityGatewayConfigTest {
     }
 
     @Test
+    void loginRoute_takesTheFirstHostLabelOnly() {
+        HttpHeaders headers = forward(
+                tenantHostProperties(),
+                MockServerHttpRequest.post("/v1/auth/login")
+                        .header(HttpHeaders.HOST, "acme-tire.dev.durionpos.org:8443")
+                        .build());
+
+        assertThat(headers.getFirst("X-Tenant-Slug"))
+                .as("environment labels between the tenant and the suffix are routing, not identity")
+                .isEqualTo("acme-tire");
+    }
+
+    @Test
+    void otherAuthPaths_neverCarryTheSlug() {
+        HttpHeaders headers = forward(
+                tenantHostProperties(),
+                MockServerHttpRequest.get("/v1/auth/validate")
+                        .header(HttpHeaders.HOST, "acme-tire.durionpos.org")
+                        .header("X-Tenant-Slug", "forged")
+                        .build());
+
+        assertThat(headers.getFirst("X-Tenant-Slug")).isNull();
+    }
+
+    @Test
     void nonLoginPublicPath_neverCarriesTheSlug() {
         HttpHeaders headers = forward(
                 tenantHostProperties(),

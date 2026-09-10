@@ -153,12 +153,16 @@ public class JwtServiceImpl implements JwtService {
      * The tenant a token was issued for: its {@code tid} claim, or (only while pre-WS2b tokens are
      * still in circulation) the bound or transitional default tenant.
      *
-     * @throws IllegalArgumentException when the claim is present but not a UUID
+     * @throws IllegalArgumentException when the claim is present but not a UUID, or absent while no
+     *     tenant is bound and the module runs strict (the token is then simply invalid, not a 500)
      */
     private UUID tenantOf(Claims claims) {
         String tid = claims.get(TID, String.class);
         if (tid == null || tid.isBlank()) {
-            return tenantResolver.require();
+            return tenantResolver
+                    .resolve()
+                    .orElseThrow(() ->
+                            new IllegalArgumentException("Token carries no tid and no tenant is bound (strict mode)"));
         }
         return UUID.fromString(tid);
     }

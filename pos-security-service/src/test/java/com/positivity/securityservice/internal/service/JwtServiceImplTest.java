@@ -433,6 +433,42 @@ class JwtServiceImplTest {
     }
 
     @Test
+    @DisplayName("a token without tid is invalid, not a 500, when the module is strict and nothing is bound")
+    void validateToken_noTidStrictUnbound_returnsFalse() {
+        JwtServiceImpl strict = new JwtServiceImpl(
+                TEST_CLOCK,
+                jwtTokenRepository,
+                roleAuthorityService,
+                userService,
+                tokenRevocationManager,
+                userDetailsService,
+                staffingAssignmentProjectionService,
+                new TenantResolver(new TenancyProperties()));
+        ReflectionTestUtils.setField(strict, "jwtSecret", "this-is-a-long-test-secret-key-with-at-least-32-chars");
+        ReflectionTestUtils.invokeMethod(strict, "initializeSecretKey");
+        SecretKey key = (SecretKey) ReflectionTestUtils.getField(strict, "secretKey");
+        String legacy = Jwts.builder()
+                .subject("alice")
+                .id("legacy-jti")
+                .issuer("pos-security-service")
+                .audience()
+                .add("api-gateway")
+                .and()
+                .issuedAt(Date.from(Instant.now(TEST_CLOCK)))
+                .expiration(Date.from(Instant.now(TEST_CLOCK).plusSeconds(300)))
+                .claim(JwtService.UID, TEST_USER_ID.toString())
+                .signWith(key)
+                .compact();
+        org.mockito.Mockito.lenient()
+                .when(tokenRevocationManager.isRevoked("legacy-jti"))
+                .thenReturn(false);
+
+        assertThat(strict.validateToken(legacy)).isFalse();
+        assertThat(strict.validateRefreshToken(legacy)).isFalse();
+        verify(jwtTokenRepository, org.mockito.Mockito.never()).findByToken(anyString());
+    }
+
+    @Test
     @DisplayName("refresh token includes expected issuer and audience claims")
     void refreshToken_containsExpectedIssuerAndAudience() {
         JwtService.TokenPair pair = sut.generateTokenPair("alice", TEST_USER_ID, null, Set.of("ADMIN"));

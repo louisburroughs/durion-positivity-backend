@@ -72,7 +72,8 @@ public class TenancyProperties {
     }
 
     public void setUnenforcedPaths(List<String> unenforcedPaths) {
-        this.unenforcedPaths = unenforcedPaths;
+        // Null is "nothing exempt": the filter stays fail-closed rather than failing on the list.
+        this.unenforcedPaths = unenforcedPaths == null ? new ArrayList<>() : unenforcedPaths;
     }
 
     public Datasource getDatasource() {
