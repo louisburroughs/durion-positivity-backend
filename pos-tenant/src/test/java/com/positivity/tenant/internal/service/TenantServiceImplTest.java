@@ -121,6 +121,30 @@ class TenantServiceImplTest {
     }
 
     @Test
+    @DisplayName("any other integrity failure surfaces as itself, never as a slug conflict")
+    void createRethrowsOtherIntegrityFailures() {
+        when(accounts.existsById(ACCOUNT)).thenReturn(true);
+        when(tenants.existsBySlug("acme")).thenReturn(false);
+        doThrow(new DataIntegrityViolationException("null value in column \"display_name\""))
+                .when(tenants)
+                .saveAndFlush(any());
+
+        assertThatThrownBy(() -> service.create(createRequest())).isInstanceOf(DataIntegrityViolationException.class);
+        verifyNoInteractions(facts);
+    }
+
+    @Test
+    @DisplayName("the slug constraint is recognised anywhere in the cause chain")
+    void slugCollisionIsDetectedThroughTheCauseChain() {
+        DataIntegrityViolationException nested = new DataIntegrityViolationException(
+                "could not execute statement",
+                new RuntimeException("duplicate key value violates unique constraint \"tenant_slug_key\""));
+        assertThat(TenantServiceImpl.isSlugCollision(nested)).isTrue();
+        assertThat(TenantServiceImpl.isSlugCollision(new DataIntegrityViolationException("fk_tenant_account")))
+                .isFalse();
+    }
+
+    @Test
     void updateChangesDescriptorsAndPublishesUpdated() {
         TenantEntity tenant = existing(TenantStatus.ACTIVE);
 

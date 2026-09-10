@@ -13,6 +13,7 @@ import com.positivity.tenant.internal.repository.TenantRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class TenantServiceImpl implements TenantService {
+
+    static final String SLUG_CONSTRAINT = "tenant_slug_key";
 
     private final TenantRepository tenantRepository;
     private final AccountRepository accountRepository;
@@ -57,7 +60,10 @@ public class TenantServiceImpl implements TenantService {
         try {
             saved = tenantRepository.saveAndFlush(tenant);
         } catch (DataIntegrityViolationException e) {
-            throw new DuplicateResourceException("Tenant slug already taken: " + request.getSlug());
+            if (isSlugCollision(e)) {
+                throw new DuplicateResourceException("Tenant slug already taken: " + request.getSlug());
+            }
+            throw e;
         }
         factPublisher.tenantCreated(saved);
         log.info("Registered tenant id={} slug={} account={}", saved.getId(), saved.getSlug(), saved.getAccountId());
@@ -154,6 +160,20 @@ public class TenantServiceImpl implements TenantService {
         TenantEntity saved = tenantRepository.saveAndFlush(tenant);
         factPublisher.tenantUpdated(saved);
         log.info("Tenant id={} slug={} is ACTIVE", saved.getId(), saved.getSlug());
+    }
+
+    /**
+     * Only the tenant-scoped slug key ({@code tenant_slug_key} in the baseline) is a "slug taken"
+     * conflict; any other integrity failure is a bug and must surface as such.
+     */
+    static boolean isSlugCollision(DataIntegrityViolationException e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            String message = t.getMessage();
+            if (message != null && message.toLowerCase(Locale.ROOT).contains(SLUG_CONSTRAINT)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private TenantEntity transition(UUID tenantId, TenantStatus target) {

@@ -18,7 +18,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * Every table not whitelisted in {@code db/tenancy-global-tables.txt} carries the tenancy schema
- * (ADR-0062 §2), every whitelisted table carries none of it, and the application connects as the
+ * (ADR-0062 §2), every whitelisted table has no policy and no RLS (it may still carry {@code tenant_id}
+ * as plain data, as the outbox does), and the application connects as the
  * non-owner {@code pos_app} role with no bypass (plan R-B7, and the first risk in the plan's table).
  */
 @DisplayName("Tenancy schema conformance (ADR-0062)")
