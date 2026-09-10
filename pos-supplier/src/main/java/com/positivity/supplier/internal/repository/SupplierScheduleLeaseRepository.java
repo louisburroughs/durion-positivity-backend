@@ -1,6 +1,7 @@
 package com.positivity.supplier.internal.repository;
 
 import com.positivity.supplier.internal.entity.SupplierScheduleLeaseEntity;
+import com.positivity.tenancy.TenantAudited;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -82,6 +83,9 @@ import org.springframework.data.repository.query.Param;
  * read from the database. {@code last_run_started_at} stays on database time for the same reason as
  * the heartbeat — it records when a real process actually began work.
  */
+@TenantAudited(
+        reason = "the lease UPDATE/COUNT statements name no tenant: every sweep that runs them is per-tenant"
+                + " (TenantIterator), so row-level security confines each to the bound tenant's leases")
 public interface SupplierScheduleLeaseRepository extends JpaRepository<SupplierScheduleLeaseEntity, UUID> {
 
     /**

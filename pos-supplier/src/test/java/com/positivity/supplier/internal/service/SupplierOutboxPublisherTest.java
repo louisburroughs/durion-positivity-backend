@@ -2,27 +2,29 @@ package com.positivity.supplier.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.supplier.internal.entity.SupplierOutboxEventEntity;
 import com.positivity.supplier.internal.repository.SupplierOutboxEventRepository;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
+import com.positivity.tenancy.testing.TenantTestSupport;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.InOrder;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
@@ -53,12 +55,46 @@ class SupplierOutboxPublisherTest {
 
     private static SupplierOutboxEventEntity pendingEvent(String topic) {
         return SupplierOutboxEventEntity.builder()
+                .tenantId(TenantTestSupport.TENANT_A)
                 .topic(topic)
                 .recordKey("key-1")
                 .eventType("SUPPLIER_TEST_EVENT")
                 .payload("{}")
                 .attempts(0)
                 .build();
+    }
+
+    /**
+     * Stubs the broker per topic: the publisher sends one {@link ProducerRecord} per row, so the
+     * stub answers by the record's topic and the assertions read the captured records back
+     * (topic, key, payload and the producing tenant on the {@code tenantId} header, ADR-0062 §3).
+     */
+    @SafeVarargs
+    private final void brokerAnswers(Map.Entry<String, CompletableFuture<SendResult<String, String>>>... byTopic) {
+        Map<String, CompletableFuture<SendResult<String, String>>> outcomes = Map.ofEntries(byTopic);
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenAnswer(invocation -> {
+            ProducerRecord<String, String> record = invocation.getArgument(0);
+            CompletableFuture<SendResult<String, String>> outcome = outcomes.get(record.topic());
+            if (outcome == null) {
+                throw new AssertionError("unexpected send to topic " + record.topic());
+            }
+            return outcome;
+        });
+    }
+
+    private List<ProducerRecord<String, String>> sentRecords() {
+        ArgumentCaptor<ProducerRecord<String, String>> sent = ArgumentCaptor.captor();
+        verify(kafkaTemplate, atLeast(0)).send(sent.capture());
+        return sent.getAllValues();
+    }
+
+    private static void assertSent(ProducerRecord<String, String> record, String topic) {
+        assertThat(record.topic()).isEqualTo(topic);
+        assertThat(record.key()).isEqualTo("key-1");
+        assertThat(record.value()).isEqualTo("{}");
+        assertThat(TenantKafkaHeaders.read(record.headers()))
+                .as("the producing tenant rides on the record header (ADR-0062)")
+                .contains(TenantTestSupport.TENANT_A);
     }
 
     @SuppressWarnings("unchecked")
@@ -75,7 +111,7 @@ class SupplierOutboxPublisherTest {
 
         publisher.publishPending();
 
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
         verify(repository, never()).save(any());
     }
 
@@ -86,7 +122,7 @@ class SupplierOutboxPublisherTest {
         event.setAttempts(2);
         event.setLastError("previous failure");
         when(repository.findTop100ByPublishedAtIsNullOrderByIdAsc()).thenReturn(List.of(event));
-        when(kafkaTemplate.send("supplier.events.v1", "key-1", "{}")).thenReturn(acknowledged());
+        brokerAnswers(Map.entry("supplier.events.v1", acknowledged()));
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         SupplierOutboxPublisher publisher =
                 new SupplierOutboxPublisher(repository, kafkaTemplate, clock, provider(registry));
@@ -98,6 +134,9 @@ class SupplierOutboxPublisherTest {
         assertThat(event.getLastError()).isNull();
         verify(repository).save(event);
         assertThat(registry.get("supplier.outbox.published").counter().count()).isEqualTo(1.0);
+        List<ProducerRecord<String, String>> sent = sentRecords();
+        assertThat(sent).hasSize(1);
+        assertSent(sent.get(0), "supplier.events.v1");
     }
 
     @Test
@@ -106,7 +145,7 @@ class SupplierOutboxPublisherTest {
         SupplierOutboxEventEntity first = pendingEvent("topic-a");
         SupplierOutboxEventEntity second = pendingEvent("topic-b");
         when(repository.findTop100ByPublishedAtIsNullOrderByIdAsc()).thenReturn(List.of(first, second));
-        when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(acknowledged());
+        brokerAnswers(Map.entry("topic-a", acknowledged()), Map.entry("topic-b", acknowledged()));
         SupplierOutboxPublisher publisher =
                 new SupplierOutboxPublisher(repository, kafkaTemplate, clock, noMeterRegistry());
 
@@ -116,10 +155,10 @@ class SupplierOutboxPublisherTest {
         assertThat(second.getPublishedAt()).isEqualTo(NOW);
         // times(2) alone would not catch topic-b going out before topic-a -- pin the exact
         // sequence with InOrder, which is the property "in order" actually promises.
-        InOrder inOrder = inOrder(kafkaTemplate);
-        inOrder.verify(kafkaTemplate).send("topic-a", "key-1", "{}");
-        inOrder.verify(kafkaTemplate).send("topic-b", "key-1", "{}");
-        inOrder.verifyNoMoreInteractions();
+        List<ProducerRecord<String, String>> sent = sentRecords();
+        assertThat(sent).hasSize(2);
+        assertSent(sent.get(0), "topic-a");
+        assertSent(sent.get(1), "topic-b");
     }
 
     @Test
@@ -129,7 +168,7 @@ class SupplierOutboxPublisherTest {
         when(repository.findTop100ByPublishedAtIsNullOrderByIdAsc()).thenReturn(List.of(event));
         CompletableFuture<SendResult<String, String>> failed = new CompletableFuture<>();
         failed.completeExceptionally(new RuntimeException("broker unavailable"));
-        when(kafkaTemplate.send("supplier.events.v1", "key-1", "{}")).thenReturn(failed);
+        brokerAnswers(Map.entry("supplier.events.v1", failed));
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         SupplierOutboxPublisher publisher =
                 new SupplierOutboxPublisher(repository, kafkaTemplate, clock, provider(registry));
@@ -152,14 +191,15 @@ class SupplierOutboxPublisherTest {
         when(repository.findTop100ByPublishedAtIsNullOrderByIdAsc()).thenReturn(List.of(stuck, later));
         CompletableFuture<SendResult<String, String>> failed = new CompletableFuture<>();
         failed.completeExceptionally(new RuntimeException("broker unavailable"));
-        when(kafkaTemplate.send("topic-a", "key-1", "{}")).thenReturn(failed);
+        brokerAnswers(Map.entry("topic-a", failed));
         SupplierOutboxPublisher publisher =
                 new SupplierOutboxPublisher(repository, kafkaTemplate, clock, noMeterRegistry());
 
         publisher.publishPending();
 
-        verify(kafkaTemplate, times(1)).send(anyString(), anyString(), anyString());
-        verify(kafkaTemplate, never()).send("topic-b", "key-1", "{}");
+        List<ProducerRecord<String, String>> sent = sentRecords();
+        assertThat(sent).as("the batch stops at the stuck row").hasSize(1);
+        assertSent(sent.get(0), "topic-a");
         assertThat(later.getPublishedAt()).isNull();
         assertThat(later.getAttempts()).isZero();
     }
@@ -172,7 +212,7 @@ class SupplierOutboxPublisherTest {
         String longMessage = "x".repeat(2500);
         CompletableFuture<SendResult<String, String>> failed = new CompletableFuture<>();
         failed.completeExceptionally(new RuntimeException(longMessage));
-        when(kafkaTemplate.send("supplier.events.v1", "key-1", "{}")).thenReturn(failed);
+        brokerAnswers(Map.entry("supplier.events.v1", failed));
         SupplierOutboxPublisher publisher =
                 new SupplierOutboxPublisher(repository, kafkaTemplate, clock, noMeterRegistry());
 
@@ -198,7 +238,7 @@ class SupplierOutboxPublisherTest {
                 throw new java.util.concurrent.TimeoutException();
             }
         };
-        when(kafkaTemplate.send("supplier.events.v1", "key-1", "{}")).thenReturn(timingOut);
+        brokerAnswers(Map.entry("supplier.events.v1", timingOut));
         SupplierOutboxPublisher publisher =
                 new SupplierOutboxPublisher(repository, kafkaTemplate, clock, noMeterRegistry());
 
@@ -218,7 +258,7 @@ class SupplierOutboxPublisherTest {
                 throw new InterruptedException("interrupted mid-send");
             }
         };
-        when(kafkaTemplate.send("supplier.events.v1", "key-1", "{}")).thenReturn(interrupting);
+        brokerAnswers(Map.entry("supplier.events.v1", interrupting));
         SupplierOutboxPublisher publisher =
                 new SupplierOutboxPublisher(repository, kafkaTemplate, clock, noMeterRegistry());
 
@@ -234,7 +274,7 @@ class SupplierOutboxPublisherTest {
     void worksWithNoMeterRegistryAvailable() {
         SupplierOutboxEventEntity event = pendingEvent("supplier.events.v1");
         when(repository.findTop100ByPublishedAtIsNullOrderByIdAsc()).thenReturn(List.of(event));
-        when(kafkaTemplate.send("supplier.events.v1", "key-1", "{}")).thenReturn(acknowledged());
+        brokerAnswers(Map.entry("supplier.events.v1", acknowledged()));
         SupplierOutboxPublisher publisher =
                 new SupplierOutboxPublisher(repository, kafkaTemplate, clock, noMeterRegistry());
 

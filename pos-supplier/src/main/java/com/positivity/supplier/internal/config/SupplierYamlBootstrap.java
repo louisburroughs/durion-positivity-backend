@@ -26,6 +26,7 @@ import com.positivity.supplier.internal.service.AuthReferenceRules;
 import com.positivity.supplier.internal.service.SecretSchemeRegistry;
 import com.positivity.supplier.internal.service.model.AuthConfigRequest;
 import com.positivity.supplier.internal.service.model.SupplierAuthType;
+import com.positivity.tenancy.TenantIterator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -43,7 +44,9 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Startup YAML reconciliation (ADR-0050 §6): on <em>every</em> startup the
@@ -87,10 +90,19 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
     /** Supplies the legal secret-reference scheme allowlist (ADR-0050 §4). */
     private final SecretSchemeRegistry secretSchemeRegistry;
 
+    private final TenantIterator tenantIterator;
+    private final PlatformTransactionManager transactionManager;
+
+    /**
+     * Reconciles the YAML profiles into every active tenant (ADR-0062 §3): the profile tables are
+     * tenant-scoped, and the transaction is opened inside each binding rather than by a
+     * {@code @Transactional} runner that would start it before any tenant is bound.
+     */
     @Override
-    @Transactional
     public void run(@NonNull ApplicationArguments args) {
-        reconcile(properties);
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        tenantIterator.forEachActiveTenant(
+                tenantId -> transaction.executeWithoutResult(status -> reconcile(properties)));
     }
 
     /**

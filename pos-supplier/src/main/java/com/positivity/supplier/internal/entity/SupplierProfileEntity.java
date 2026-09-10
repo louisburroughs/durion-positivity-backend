@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.entity;
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.supplier.internal.enums.ProfileSourceOfTruth;
 import com.positivity.supplier.internal.enums.RetryBackoff;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -41,7 +42,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @Table(name = "supplier_profile")
 @EntityListeners(AuditingEntityListener.class)
-public class SupplierProfileEntity {
+public class SupplierProfileEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

@@ -17,6 +17,7 @@ import com.positivity.supplier.internal.registry.SupplierCodecs;
 import com.positivity.supplier.internal.repository.SupplierWorkorderAuthorizationRepository;
 import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
+import com.positivity.tenancy.TenantIterator;
 import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
@@ -69,6 +70,8 @@ public class WorkorderAuthorizationPoller {
      */
     private final Duration pendingTimeout;
 
+    private final TenantIterator tenantIterator;
+
     public WorkorderAuthorizationPoller(
             SupplierWorkorderAuthorizationRepository authorizationRepository,
             SupplierProfileResolver profileResolver,
@@ -77,7 +80,9 @@ public class WorkorderAuthorizationPoller {
             WorkorderAuthorizationTransactions transactions,
             Clock clock,
             @Value("${pos.supplier.workorderauth.poll-batch-size:50}") int batchSize,
-            @Value("${pos.supplier.workorderauth.pending-timeout:PT24H}") Duration pendingTimeout) {
+            @Value("${pos.supplier.workorderauth.pending-timeout:PT24H}") Duration pendingTimeout,
+            TenantIterator tenantIterator) {
+        this.tenantIterator = tenantIterator;
         this.authorizationRepository = authorizationRepository;
         this.profileResolver = profileResolver;
         this.adapterRegistry = adapterRegistry;
@@ -91,6 +96,10 @@ public class WorkorderAuthorizationPoller {
     /** Polls undecided authorizations, least recently polled first. */
     @Scheduled(fixedDelayString = "${pos.supplier.workorderauth.poll-interval-ms:120000}")
     public void pollPendingAuthorizations() {
+        tenantIterator.forEachActiveTenant(tenantId -> pollPendingAuthorizationsForTenant());
+    }
+
+    void pollPendingAuthorizationsForTenant() {
         List<SupplierWorkorderAuthorizationEntity> pending =
                 authorizationRepository.findAwaitingPoll(WorkorderAuthorizationStatus.PENDING, Limit.of(batchSize));
 

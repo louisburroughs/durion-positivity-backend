@@ -9,6 +9,7 @@ import com.positivity.supplier.internal.repository.PriceCatalogImportRepository;
 import com.positivity.supplier.internal.repository.SupplierEndpointBindingRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.service.SupplierScheduleCoordinator;
+import com.positivity.tenancy.TenantIterator;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -57,10 +58,15 @@ public class PriceCatalogScheduler {
     private final SupplierScheduleCoordinator scheduleCoordinator;
     private final PriceCatalogImporter importService;
     private final Clock clock;
+    private final TenantIterator tenantIterator;
 
     /** Polls due bindings. Each due binding runs at most once per tick, on at most one instance. */
     @Scheduled(fixedDelayString = "${pos.supplier.pricat.poll-interval-ms:60000}")
     public void runDueImports() {
+        tenantIterator.forEachActiveTenant(tenantId -> runDueImportsForTenant());
+    }
+
+    void runDueImportsForTenant() {
         Instant now = Instant.now(clock);
         for (SupplierEndpointBindingEntity binding :
                 bindingRepository.findByCapabilityAndEnabledTrueAndScheduleCronIsNotNull(

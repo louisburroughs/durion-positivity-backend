@@ -2,6 +2,7 @@ package com.positivity.supplier.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.supplier.internal.enums.PriceCatalogMatchMethod;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -53,7 +54,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
                     columnList = "vendor_profile_id, matched_product_id, country_code, currency, effective_from"),
             @Index(name = "idx_spricat_entry_ean", columnList = "vendor_profile_id, article_ean")
         })
-public class PriceCatalogEntryEntity {
+public class PriceCatalogEntryEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

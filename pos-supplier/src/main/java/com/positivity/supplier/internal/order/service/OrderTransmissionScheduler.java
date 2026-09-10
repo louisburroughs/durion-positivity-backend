@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.order.service;
 import com.positivity.supplier.internal.entity.SupplierTransmissionIntentEntity;
 import com.positivity.supplier.internal.enums.TransmissionAttemptState;
 import com.positivity.supplier.internal.repository.SupplierTransmissionIntentRepository;
+import com.positivity.tenancy.TenantIterator;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -48,6 +49,7 @@ public class OrderTransmissionScheduler {
     private final OrderStatusQueryRunner statusQueryRunner;
     private final TransmissionStateWriter stateWriter;
     private final Clock clock;
+    private final TenantIterator tenantIterator;
 
     /**
      * How long an intent may sit mid-flight before a human is asked to look. Bounded because the
@@ -71,6 +73,10 @@ public class OrderTransmissionScheduler {
     /** Sends orders waiting in {@code PENDING}, oldest first. */
     @Scheduled(fixedDelayString = "${pos.supplier.order.dispatch-poll-interval-ms:5000}")
     public void dispatchPending() {
+        tenantIterator.forEachActiveTenant(tenantId -> dispatchPendingForTenant());
+    }
+
+    void dispatchPendingForTenant() {
         List<SupplierTransmissionIntentEntity> pending =
                 intentRepository.findTop50ByAttemptStateOrderByTransmissionIntentIdAsc(
                         TransmissionAttemptState.PENDING);
@@ -97,6 +103,10 @@ public class OrderTransmissionScheduler {
      */
     @Scheduled(fixedDelayString = "${pos.supplier.order.recovery-poll-interval-ms:60000}")
     public void recoverInFlight() {
+        tenantIterator.forEachActiveTenant(tenantId -> recoverInFlightForTenant());
+    }
+
+    void recoverInFlightForTenant() {
         Instant now = Instant.now(clock);
         for (SupplierTransmissionIntentEntity intent :
                 intentRepository.findByAttemptState(TransmissionAttemptState.DISPATCHING)) {
@@ -135,6 +145,10 @@ public class OrderTransmissionScheduler {
      */
     @Scheduled(fixedDelayString = "${pos.supplier.order.status-poll-interval-ms:60000}")
     public void pollOrderStatus() {
+        tenantIterator.forEachActiveTenant(tenantId -> pollOrderStatusForTenant());
+    }
+
+    void pollOrderStatusForTenant() {
         Instant now = Instant.now(clock);
         for (SupplierTransmissionIntentEntity intent :
                 intentRepository.findDueForStatusPolling(PageRequest.of(0, STATUS_POLL_BATCH_SIZE))) {

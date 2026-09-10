@@ -2,6 +2,8 @@ package com.positivity.supplier.internal.service;
 
 import com.positivity.supplier.internal.entity.SupplierOutboxEventEntity;
 import com.positivity.supplier.internal.repository.SupplierOutboxEventRepository;
+import com.positivity.tenancy.PlatformScoped;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -61,6 +63,9 @@ public class SupplierOutboxPublisher {
     }
 
     /** Publishes pending rows in id order, stopping at the first failure to preserve ordering. */
+    @PlatformScoped(
+            reason = "drains the global supplier_event_outbox for every tenant; each row carries its producing"
+                    + " tenant, which goes on the Kafka record header")
     @Scheduled(fixedDelayString = "${pos.supplier.outbox.poll-interval-ms:1000}")
     public void publishPending() {
         List<SupplierOutboxEventEntity> pending = outboxRepository.findTop100ByPublishedAtIsNullOrderByIdAsc();
@@ -74,7 +79,8 @@ public class SupplierOutboxPublisher {
     private boolean publish(SupplierOutboxEventEntity event) {
         try {
             kafkaTemplate
-                    .send(event.getTopic(), event.getRecordKey(), event.getPayload())
+                    .send(TenantKafkaHeaders.record(
+                            event.getTopic(), event.getRecordKey(), event.getPayload(), event.getTenantId()))
                     .get(sendTimeoutMs, TimeUnit.MILLISECONDS);
             event.setPublishedAt(Instant.now(clock));
             event.setAttempts(0);

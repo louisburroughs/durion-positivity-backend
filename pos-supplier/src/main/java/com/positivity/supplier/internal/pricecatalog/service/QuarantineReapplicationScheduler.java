@@ -2,6 +2,7 @@ package com.positivity.supplier.internal.pricecatalog.service;
 
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
+import com.positivity.tenancy.TenantIterator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -36,10 +37,15 @@ public class QuarantineReapplicationScheduler {
 
     private final SupplierProfileRepository profileRepository;
     private final QuarantineReapplier reapplicationService;
+    private final TenantIterator tenantIterator;
 
     /** Re-applies each enabled profile's quarantine; one failure never stops the other profiles. */
     @Scheduled(cron = "${pos.supplier.pricat.reapply-cron:0 15 * * * *}")
     public void sweep() {
+        tenantIterator.forEachActiveTenant(tenantId -> sweepForTenant());
+    }
+
+    void sweepForTenant() {
         for (SupplierProfileEntity profile : profileRepository.findAll()) {
             if (!profile.isEnabled()) {
                 continue;

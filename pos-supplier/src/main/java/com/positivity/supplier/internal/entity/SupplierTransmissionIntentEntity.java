@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.entity;
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.supplier.internal.domain.model.SupplierPurchaseOrder;
 import com.positivity.supplier.internal.enums.TransmissionAttemptState;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -75,7 +76,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             // least-recently-asked. An index on (flag, vendor_profile_id) would support neither.
             @Index(name = "idx_stintent_polling", columnList = "status_polling_active, last_polled_at")
         })
-public class SupplierTransmissionIntentEntity {
+public class SupplierTransmissionIntentEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

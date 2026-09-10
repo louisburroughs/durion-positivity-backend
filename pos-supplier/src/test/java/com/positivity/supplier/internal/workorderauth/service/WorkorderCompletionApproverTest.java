@@ -26,6 +26,10 @@ import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedPartyAccounts;
 import com.positivity.supplier.internal.spi.ExchangeOutcome;
+import com.positivity.tenancy.StaticTenantRegistry;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantIterator;
+import com.positivity.tenancy.testing.TenantTestSupport;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -84,7 +88,8 @@ class WorkorderCompletionApproverTest {
                 adapterRegistry,
                 baseClient,
                 new WorkorderApprovalRecorder(authorizationRepository, Clock.fixed(NOW, ZoneOffset.UTC), MAX_ATTEMPTS),
-                50);
+                50,
+                singleTenant());
 
         when(profileResolver.resolveBinding(any(), any())).thenReturn(binding());
         when(adapterRegistry.resolve(any(), any(), any()))
@@ -261,5 +266,12 @@ class WorkorderCompletionApproverTest {
         SupplierAccountEntity billing = new SupplierAccountEntity();
         billing.setAccountNumber("SP01234");
         return new ResolvedPartyAccounts(billing, billing);
+    }
+
+    /** One active tenant, the alpha default, for the per-tenant scheduled sweep (ADR-0062). */
+    private static TenantIterator singleTenant() {
+        TenancyProperties tenancy = new TenancyProperties();
+        tenancy.setDefaultTenantId(TenantTestSupport.TENANT_A);
+        return new TenantIterator(new StaticTenantRegistry(tenancy));
     }
 }

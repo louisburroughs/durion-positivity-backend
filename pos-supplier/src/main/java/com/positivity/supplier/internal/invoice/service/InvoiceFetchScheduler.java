@@ -9,6 +9,7 @@ import com.positivity.supplier.internal.repository.SupplierEndpointBindingReposi
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.repository.SupplierScheduleLeaseRepository;
 import com.positivity.supplier.internal.service.SupplierScheduleCoordinator;
+import com.positivity.tenancy.TenantIterator;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -76,6 +77,8 @@ public class InvoiceFetchScheduler {
      */
     private final Duration initialLookback;
 
+    private final TenantIterator tenantIterator;
+
     public InvoiceFetchScheduler(
             SupplierEndpointBindingRepository bindingRepository,
             SupplierProfileRepository profileRepository,
@@ -84,7 +87,9 @@ public class InvoiceFetchScheduler {
             InvoiceFetchRunner fetchRunner,
             Clock clock,
             @Value("${pos.supplier.invoice.window-overlap:P2D}") Duration overlap,
-            @Value("${pos.supplier.invoice.initial-lookback:P30D}") Duration initialLookback) {
+            @Value("${pos.supplier.invoice.initial-lookback:P30D}") Duration initialLookback,
+            TenantIterator tenantIterator) {
+        this.tenantIterator = tenantIterator;
         this.bindingRepository = bindingRepository;
         this.profileRepository = profileRepository;
         this.leaseRepository = leaseRepository;
@@ -98,6 +103,10 @@ public class InvoiceFetchScheduler {
     /** Polls due bindings. Each runs at most once per tick, on at most one instance. */
     @Scheduled(fixedDelayString = "${pos.supplier.invoice.poll-interval-ms:300000}")
     public void runDueFetches() {
+        tenantIterator.forEachActiveTenant(tenantId -> runDueFetchesForTenant());
+    }
+
+    void runDueFetchesForTenant() {
         Instant now = Instant.now(clock);
         for (SupplierEndpointBindingEntity binding :
                 bindingRepository.findByCapabilityAndEnabledTrueAndScheduleCronIsNotNull(

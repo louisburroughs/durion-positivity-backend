@@ -4,6 +4,7 @@ import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.enums.PriceCatalogErrorCode;
 import com.positivity.supplier.internal.enums.PriceCatalogImportStatus;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -51,7 +52,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_spricat_import_status", columnList = "status"),
             @Index(name = "idx_spricat_import_correlation", columnList = "correlation_id")
         })
-public class PriceCatalogImportEntity {
+public class PriceCatalogImportEntity extends TenantScopedEntity {
 
     /** Import-manifest identity (UUIDv7); the event aggregate id and Kafka record key. */
     @Id

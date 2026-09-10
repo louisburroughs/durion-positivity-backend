@@ -10,6 +10,7 @@ import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.entity.ExchangeAuditEntity;
 import com.positivity.supplier.internal.enums.PayloadCaptureLevel;
 import com.positivity.supplier.internal.repository.ExchangeAuditRepository;
+import com.positivity.tenancy.TenantIterator;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -20,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * The retention purge (ADR-0050 §7): payload content expires, the metadata trail does not.
@@ -52,6 +54,12 @@ class ExchangeAuditRetentionJobTest {
     @Autowired
     private jakarta.persistence.EntityManager entityManager;
 
+    @Autowired
+    private TenantIterator tenantIterator;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     /**
      * Detaches everything before reading back.
      *
@@ -66,7 +74,8 @@ class ExchangeAuditRetentionJobTest {
     }
 
     private ExchangeAuditRetentionJob job() {
-        return new ExchangeAuditRetentionJob(auditRepository, FIXED, Duration.ofDays(400));
+        return new ExchangeAuditRetentionJob(
+                auditRepository, FIXED, Duration.ofDays(400), tenantIterator, transactionManager);
     }
 
     private UUID seed(Instant startedAt) {
@@ -144,12 +153,14 @@ class ExchangeAuditRetentionJobTest {
 
     @Test
     void refusesANonPositiveRetentionWindowAtStartup() {
-        assertThatThrownBy(() -> new ExchangeAuditRetentionJob(auditRepository, FIXED, Duration.ZERO))
+        assertThatThrownBy(() -> new ExchangeAuditRetentionJob(
+                        auditRepository, FIXED, Duration.ZERO, tenantIterator, transactionManager))
                 .as("a zero window would purge everything on the next tick, including exchanges still"
                         + " under investigation")
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("must be positive");
-        assertThatThrownBy(() -> new ExchangeAuditRetentionJob(auditRepository, FIXED, Duration.ofDays(-1)))
+        assertThatThrownBy(() -> new ExchangeAuditRetentionJob(
+                        auditRepository, FIXED, Duration.ofDays(-1), tenantIterator, transactionManager))
                 .isInstanceOf(IllegalStateException.class);
     }
 }

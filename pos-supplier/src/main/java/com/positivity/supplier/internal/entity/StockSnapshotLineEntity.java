@@ -1,6 +1,7 @@
 package com.positivity.supplier.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -38,7 +39,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_sstock_line_snapshot", columnList = "snapshot_id"),
             @Index(name = "idx_sstock_line_ean", columnList = "vendor_profile_id, article_ean")
         })
-public class StockSnapshotLineEntity {
+public class StockSnapshotLineEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

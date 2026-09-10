@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.mktcat.service;
 import com.positivity.supplier.internal.domain.model.SupplierRef;
 import com.positivity.supplier.internal.entity.SupplierMktCatVariantEntity;
 import com.positivity.supplier.internal.repository.SupplierMktCatVariantRepository;
+import com.positivity.tenancy.TenantIterator;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -35,11 +36,14 @@ public class MktCatImageRetryRunner {
     private final SupplierMktCatVariantRepository variantRepository;
     private final MktCatImporter importer;
     private final int batchSize;
+    private final TenantIterator tenantIterator;
 
     public MktCatImageRetryRunner(
             SupplierMktCatVariantRepository variantRepository,
             MktCatImporter importer,
-            @Value("${pos.supplier.mktcat.image-retry-batch-size:25}") int batchSize) {
+            @Value("${pos.supplier.mktcat.image-retry-batch-size:25}") int batchSize,
+            TenantIterator tenantIterator) {
+        this.tenantIterator = tenantIterator;
         this.variantRepository = variantRepository;
         this.importer = importer;
         this.batchSize = batchSize;
@@ -48,6 +52,10 @@ public class MktCatImageRetryRunner {
     /** Re-imports variants whose artwork is still missing, least recently touched first. */
     @Scheduled(fixedDelayString = "${pos.supplier.mktcat.image-retry-interval-ms:1800000}")
     public void retryUnresolvedImages() {
+        tenantIterator.forEachActiveTenant(tenantId -> retryUnresolvedImagesForTenant());
+    }
+
+    void retryUnresolvedImagesForTenant() {
         List<SupplierMktCatVariantEntity> pending =
                 variantRepository.findByHasUnresolvedImagesTrueOrderByUpdatedAtAsc(Limit.of(batchSize));
         if (pending.isEmpty()) {
