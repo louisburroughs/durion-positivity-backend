@@ -12,10 +12,12 @@
     <description>ADR-0062 tenancy runtime: tenant context, connection binding, Hibernate resolver, Kafka propagation, classification annotations</description>
     <packaging>jar</packaging>
     <properties>
-        <!-- Coverage floors set a few points under the first measured baseline (plan Phase 4);
-             regenerate with scripts/update-coverage-floors.sh from a -DskipITs run. -->
-        <jacoco.line.min>0.80</jacoco.line.min>
-        <jacoco.branch.min>0.60</jacoco.branch.min>
+        <!-- Coverage ratchet: measured 94.1% line / 78.1% branch by the gate's own
+             command, `verify -DskipITs` (docs/TEST_COVERAGE_IMPROVEMENT_PLAN.md §6.1).
+             Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
+             IT-inclusive measurement describes coverage the gate cannot see. -->
+        <jacoco.line.min>0.91</jacoco.line.min>
+        <jacoco.branch.min>0.75</jacoco.branch.min>
     </properties>
     <dependencies>
         <dependency>
