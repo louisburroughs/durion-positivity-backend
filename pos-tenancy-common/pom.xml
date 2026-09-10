@@ -80,6 +80,12 @@
             <artifactId>pos-shared-dtos</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- RemoteTenantRegistry gauges (tenancy.registry.*); optional so a module without Micrometer is unaffected -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+            <optional>true</optional>
+        </dependency>
         <!-- Spring cache KeyGenerator -->
         <dependency>
             <groupId>org.springframework</groupId>
