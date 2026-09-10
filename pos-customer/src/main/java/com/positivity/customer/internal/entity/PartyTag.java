@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -37,7 +38,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(
         name = "party_tag",
         indexes = {@Index(name = "idx_party_tag_category", columnList = "category")})
-public class PartyTag {
+public class PartyTag extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

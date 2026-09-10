@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -37,7 +38,7 @@ import org.jspecify.annotations.Nullable;
             @Index(name = "idx_service_history_party", columnList = "party_id, completed_at DESC"),
             @Index(name = "idx_service_history_vehicle", columnList = "vehicle_id, completed_at DESC")
         })
-public class ServiceHistory {
+public class ServiceHistory extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

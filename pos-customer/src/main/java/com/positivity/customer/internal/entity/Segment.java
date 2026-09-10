@@ -3,6 +3,7 @@ package com.positivity.customer.internal.entity;
 import com.positivity.customer.internal.enums.AudienceType;
 import com.positivity.customer.internal.enums.SegmentType;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -40,7 +41,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(
         name = "segment",
         indexes = {@Index(name = "idx_segment_audience_type", columnList = "audience_type")})
-public class Segment {
+public class Segment extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

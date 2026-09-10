@@ -2,6 +2,7 @@ package com.positivity.customer.internal.entity;
 
 import com.positivity.customer.internal.enums.PartyRelationshipRole;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -60,7 +61,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         })
 @EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Relationship between a commercial account and an individual with roles")
-public class PartyRelationship {
+public class PartyRelationship extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

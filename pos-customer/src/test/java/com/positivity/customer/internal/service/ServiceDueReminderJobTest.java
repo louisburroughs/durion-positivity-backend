@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.service;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -18,6 +19,9 @@ import com.positivity.customer.internal.enums.FollowUpType;
 import com.positivity.customer.internal.repository.ExtVehicleCarePreferenceRepository;
 import com.positivity.customer.internal.repository.FollowUpTaskRepository;
 import com.positivity.customer.internal.repository.ServiceHistoryRepository;
+import com.positivity.tenancy.StaticTenantRegistry;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantIterator;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -52,7 +56,14 @@ class ServiceDueReminderJobTest {
 
     @BeforeEach
     void setUp() {
-        job = new ServiceDueReminderJob(TEST_CLOCK, serviceHistory, followUps, carePreferences);
+        TenancyProperties tenancy = new TenancyProperties();
+        tenancy.setDefaultTenantId(TENANT_A);
+        job = new ServiceDueReminderJob(
+                TEST_CLOCK,
+                serviceHistory,
+                followUps,
+                carePreferences,
+                new TenantIterator(new StaticTenantRegistry(tenancy)));
         when(carePreferences.findAllById(any())).thenReturn(List.of());
     }
 

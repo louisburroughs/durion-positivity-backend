@@ -5,6 +5,7 @@ import com.positivity.customer.internal.enums.MarketingChannel;
 import com.positivity.customer.internal.enums.MarketingConsent;
 import com.positivity.customer.internal.enums.OptOutReason;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -38,7 +39,7 @@ import lombok.NoArgsConstructor;
             @Index(name = "idx_consent_event_party", columnList = "party_id, occurred_at"),
             @Index(name = "idx_consent_event_occurred", columnList = "occurred_at")
         })
-public class ConsentEvent {
+public class ConsentEvent extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

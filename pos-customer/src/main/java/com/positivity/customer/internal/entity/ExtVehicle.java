@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -26,7 +27,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Entity
 @Table(name = "ext_vehicle")
-public class ExtVehicle {
+public class ExtVehicle extends TenantScopedEntity {
 
     @Id
     @Column(name = "vehicle_id", columnDefinition = "UUID", nullable = false, updatable = false)

@@ -4,6 +4,7 @@ import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.AccountTier;
 import com.positivity.customer.internal.enums.LifecycleStage;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -41,7 +42,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Inheritance(strategy = InheritanceType.TABLE_PER_CLASS)
 @EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Abstract base class for an individual customer (person). Use CommercialParty for organizations.")
-public abstract class AbstractParty implements Party {
+public abstract class AbstractParty extends TenantScopedEntity implements Party {
     @Id
     @GeneratedValue
     @UUIDv7Id

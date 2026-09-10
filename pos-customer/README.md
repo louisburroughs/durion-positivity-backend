@@ -53,9 +53,43 @@ CRM service for the Durion Positivity ETSMS platform. Manages the customer party
 | `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL    |
 | `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
 
+## Multitenancy (ADR-0062, WS3 wave 6)
+
+This module runs on the ADR-0062 runtime: it depends on `pos-tenancy-common`, every scoped entity
+extends `TenantScopedEntity` (`AbstractParty` carries it for both party subclasses), and the two global tables
+(`event_outbox`, `processed_events`, listed in `src/main/resources/db/tenancy-global-tables.txt`) carry
+`@TenantGlobal`. The request tenant is bound by `TenantContextFilter` from `X-Tenant-Id` (the gateway injects
+it from the token's `tid`), the Kafka tenant by `TenantRecordInterceptor` from the `tenantId` record header on
+every one of the module's consumers, and every connection checkout binds `app.current_tenant` for row-level
+security. `pos.tenancy.default-tenant-id` still binds the alpha default tenant on every unbound path (tokens
+issued before `tid`, records without the header).
+
+The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_DATASOURCE_USERNAME`
+/ `POS_APP_PASSWORD`); Flyway alone uses the owner credential (`SPRING_FLYWAY_USER` /
+`SPRING_FLYWAY_PASSWORD`, `FlywayConfig`).
+
+The outbox row carries the producing tenant as data (`tenant_id`, stamped from the bound tenant by both
+`OutboxEventWriter` methods):
+
+| Job | Classification | Why |
+| --- | --- | --- |
+| `OutboxPublisher.publishPending` | platform-scoped | Drains `event_outbox`; each row's `tenant_id` becomes the record header |
+| `ManifestPublisher.publishDueManifest` | platform-scoped | Summarises `event_outbox` per window across tenants; per-tenant manifests are plan WS8 |
+| `ServiceDueReminderJob.generateReminders` | per-tenant | `service_history` and `follow_up_task` are scoped; one run per tenant of the registry |
+
+The one native query, `CommercialPartyRepository`'s `nextval('commercial_party_customer_number_seq')`, carries
+`@TenantAudited`: it reads a platform-wide sequence, not a table.
+
+Proof: `TenantIsolationIT` (tenant A's `party_tag` row is invisible to tenant B and to an unbound
+connection, through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every
+non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is
+`pos_app` with no bypass), both on Testcontainers Postgres (`./mvnw -pl pos-customer -am verify`), next to the
+existing `FlywayMigrationIT` and `CommercialCustomerNumberIT` on the same strict `pg` profile.
+
 ## Dependencies
 
 - `pos-security-common` — JWT-based security filter
+- `pos-tenancy-common` — ADR-0062 tenant context, connection binding, Hibernate resolver, Kafka propagation
 - `pos-events` — `@EmitEvent` annotation and event registration
 - `pos-shared-dtos` — shared vehicle DTOs
 - `pos-domain-events` — ADR-0044 envelope, topics, and versioned payload contracts
@@ -63,7 +97,10 @@ CRM service for the Durion Positivity ETSMS platform. Manages the customer party
 
 ## Database
 
-Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`.
+Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`: `V1__baseline_customer.sql` (the
+2026-09-09 flattened baseline with the tenancy schema on every scoped table), `V2__event_outbox_tenant_id.sql`
+(`tenant_id` as data on the global outbox table, see Multitenancy above) and the repeatable operational seed, which
+binds the alpha default tenant for its own transaction.
 
 ## Development
 

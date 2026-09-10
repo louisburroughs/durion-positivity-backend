@@ -2,17 +2,14 @@
 # Testcontainers Postgres, with Hibernate ddl-auto=validate. This executes migrations
 # and cross-service-shaped seed SQL in CI (issue #684 process follow-up), catching the
 # class of breakages that H2 + flyway-disabled tests miss (e.g. seed/column drift).
-# The datasource is supplied at runtime by @ServiceConnection (no static URL here).
+# The datasource is supplied at runtime: PostgresTenancyTestBase connects the pool as pos_app with Flyway on
+# the owner (@DynamicPropertySource); FlywayMigrationIT and CommercialCustomerNumberIT use @ServiceConnection
+# as the owner. Tenancy is strict (nothing binds a tenant unless the test does; ADR-0062).
 spring:
-  datasource:
-    hikari:
-      # Transitional tenant binding (ADR-0062): every scoped table defaults tenant_id from this
-      # session setting and hides rows without it. Replaced by TenantAwareDataSource in plan WS1.
-      connection-init-sql: "SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', false)"
   application:
     name: pos-customer-pg-test
   autoconfigure:
-    exclude: org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+    exclude: org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
@@ -40,5 +37,11 @@ logging:
     com.positivity: INFO
 
 pos:
+  tenancy:
+    # strict: nothing binds a tenant unless the test does
+    default-tenant-id:
+  customer:
+    kafka:
+      enabled: false
   people:
     allow-local-fallback: true
