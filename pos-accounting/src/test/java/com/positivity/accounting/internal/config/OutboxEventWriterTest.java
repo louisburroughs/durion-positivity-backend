@@ -88,9 +88,43 @@ class OutboxEventWriterTest {
         assertThat(json.path("schemaVersion").intValue()).isEqualTo(1);
         assertThat(json.path("aggregateId").stringValue()).isEqualTo(INVOICE_ID.toString());
         assertThat(json.path("sourceService").stringValue()).isEqualTo("pos-accounting");
+        assertThat(json.path("tenantId").stringValue())
+                .as("the envelope carries the tenant the row carries (ADR-0062 §3)")
+                .isEqualTo(TENANT.toString());
+        assertThat(saved.getTenantId()).isEqualTo(TENANT);
         assertThat(json.path("payload").path("journalEntryId").stringValue()).isEqualTo(JOURNAL_ENTRY_ID.toString());
         assertThat(json.path("payload").path("postingKind").stringValue()).isEqualTo("POSTED");
         assertThat(json.path("payload").path("invoiceId").stringValue()).isEqualTo(INVOICE_ID.toString());
+    }
+
+    @Test
+    @DisplayName("an envelope built for another tenant is refused, not re-labelled")
+    void envelopeForAnotherTenantIsRefused() {
+        UUID otherTenant = UUID.fromString("01900000-0000-7000-8000-000000000002");
+        DomainEventEnvelope<InvoiceGlPostedV1> foreign = envelope().withTenantId(otherTenant);
+
+        assertThatExceptionOfType(IllegalStateException.class)
+                .isThrownBy(() -> writer.publish("accounting.events.v1", foreign))
+                .withMessageContaining(otherTenant.toString())
+                .withMessageContaining(TENANT.toString());
+
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("an envelope already carrying the bound tenant is written as is")
+    void envelopeAlreadyStampedIsAccepted() {
+        DomainEventEnvelope<InvoiceGlPostedV1> stamped = envelope().withTenantId(TENANT);
+
+        writer.publish("accounting.events.v1", stamped);
+
+        ArgumentCaptor<KafkaOutboxEvent> row = ArgumentCaptor.forClass(KafkaOutboxEvent.class);
+        verify(repository).save(row.capture());
+        assertThat(objectMapper
+                        .readTree(row.getValue().getPayload())
+                        .path("tenantId")
+                        .stringValue())
+                .isEqualTo(TENANT.toString());
     }
 
     @Test
