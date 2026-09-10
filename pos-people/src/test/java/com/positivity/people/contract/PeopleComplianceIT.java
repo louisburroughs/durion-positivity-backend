@@ -1,5 +1,6 @@
 package com.positivity.people.contract;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -19,9 +20,11 @@ class PeopleComplianceIT extends BaseIntegrationTest {
 
     private void seedEmployee(UUID personId, String status, String statusEffectiveAt) {
         jdbcTemplate.update(
-                "INSERT INTO employee (id, person_id, status, status_effective_at, created_at, updated_at) "
-                        + "VALUES (?, ?, ?, CAST(? AS TIMESTAMP WITH TIME ZONE), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                "INSERT INTO employee "
+                        + "(id, tenant_id, person_id, status, status_effective_at, created_at, updated_at) "
+                        + "VALUES (?, ?, ?, ?, CAST(? AS TIMESTAMP WITH TIME ZONE), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 UUID.randomUUID(),
+                TENANT_A,
                 personId,
                 status,
                 statusEffectiveAt);
@@ -30,9 +33,10 @@ class PeopleComplianceIT extends BaseIntegrationTest {
     private void seedLink(UUID linkId, UUID personId, String username, String status) {
         jdbcTemplate.update(
                 "INSERT INTO ext_people_contact_user_link "
-                        + "(link_id, person_id, username, status, aggregate_version, updated_at) "
-                        + "VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)",
+                        + "(link_id, tenant_id, person_id, username, status, aggregate_version, updated_at) "
+                        + "VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)",
                 linkId,
+                TENANT_A,
                 personId,
                 username,
                 status);

@@ -1,5 +1,6 @@
 package com.positivity.people.contract;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -27,7 +28,9 @@ class TimekeepingApprovalContractIT extends BaseIntegrationTest {
     private static final String TIMEKEEPING_AUTHORITIES =
             "people:timekeeping:view,people:timekeeping:approve,people:timekeeping:reject";
 
-    private static final UUID TENANT_ID = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001");
+    /** The alpha default tenant the H2 test context binds on every unbound path (ADR-0062). */
+    private static final UUID TENANT_ID = TENANT_A;
+
     private static final UUID PERSON_ID = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000001");
 
     @Autowired
