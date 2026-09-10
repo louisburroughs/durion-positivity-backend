@@ -10,6 +10,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.tenancy.StaticTenantRegistry;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantIterator;
+import com.positivity.tenancy.testing.TenantTestSupport;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -70,7 +74,7 @@ class ToolPriorityTuningServiceTest {
 
     private ToolPriorityTuningService newService(String mode, String legacyEnabled, Path evalPath) {
         return new ToolPriorityTuningService(
-                jdbcTemplate, clock, meterRegistry, mode, legacyEnabled, evalPath.toString(), 48L);
+                jdbcTemplate, clock, meterRegistry, mode, legacyEnabled, evalPath.toString(), 48L, singleTenant());
     }
 
     private Path passingFreshEval() throws IOException {
@@ -321,5 +325,12 @@ class ToolPriorityTuningServiceTest {
         service.tuneToolPriorities();
 
         verify(jdbcTemplate, never()).update(anyString(), any(), any(), any());
+    }
+
+    /** One active tenant, the alpha default, for the per-tenant sweep (ADR-0062). */
+    private static TenantIterator singleTenant() {
+        TenancyProperties tenancy = new TenancyProperties();
+        tenancy.setDefaultTenantId(TenantTestSupport.TENANT_A);
+        return new TenantIterator(new StaticTenantRegistry(tenancy));
     }
 }

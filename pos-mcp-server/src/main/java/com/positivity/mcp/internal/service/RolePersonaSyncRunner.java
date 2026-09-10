@@ -1,5 +1,6 @@
 package com.positivity.mcp.internal.service;
 
+import com.positivity.tenancy.PlatformScoped;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -39,6 +40,9 @@ public class RolePersonaSyncRunner implements ApplicationRunner {
      * <p>Bounds staleness for the case the on-miss fetch cannot see: a persona edited on a role that
      * is already in the snapshot never misses, so without this it would not land until a restart.
      */
+    @PlatformScoped(
+            reason = "refreshes the platform role personas (system_prompt, a global table) from the security"
+                    + " service; nothing tenant-scoped is read or written")
     @Scheduled(
             initialDelayString = "${mcp.role-persona.refresh-interval:PT15M}",
             fixedDelayString = "${mcp.role-persona.refresh-interval:PT15M}")

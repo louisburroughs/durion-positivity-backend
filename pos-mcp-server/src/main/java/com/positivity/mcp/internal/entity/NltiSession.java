@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.entity;
 
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -23,7 +24,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "nlti_session")
-public class NltiSession {
+public class NltiSession extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

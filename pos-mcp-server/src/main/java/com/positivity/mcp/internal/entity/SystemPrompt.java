@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -18,6 +19,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Data
 @NoArgsConstructor
 @Entity
+@TenantGlobal(reason = "platform prompt catalog (db/tenancy-global-tables.txt)")
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "system_prompt")
 public class SystemPrompt {

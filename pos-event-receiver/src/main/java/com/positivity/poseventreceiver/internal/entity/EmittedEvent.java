@@ -1,6 +1,7 @@
 package com.positivity.poseventreceiver.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -25,7 +26,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "emitted_event")
-public class EmittedEvent {
+public class EmittedEvent extends TenantScopedEntity {
     @Id
     @GeneratedValue
     @UUIDv7Id

@@ -41,6 +41,30 @@ Central event aggregation and storage service for the Durion Positivity ETSMS pl
 | `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL                    |
 | `EUREKA_SERVER_URL`     | required | Eureka service discovery URL                 |
 
+## Multitenancy (ADR-0062, WS3 wave 13)
+
+This module runs on the ADR-0062 runtime: it depends on `pos-tenancy-common`; `EmittedEvent` (the
+`emitted_event` hypertable) extends `TenantScopedEntity`, while the event-type registry (`event_type`,
+`preregistered_event`, listed in `src/main/resources/db/tenancy-global-tables.txt`) and the
+`emitted_event_hourly` continuous aggregate (platform-wide hourly statistics; per-tenant observability is plan
+WS6) carry `@TenantGlobal`. The request tenant is bound by `TenantContextFilter` from `X-Tenant-Id` (the gateway
+injects it from the token's `tid` on every `/event-receiver/**` call), and every connection checkout binds
+`app.current_tenant` for row-level security. `pos.tenancy.default-tenant-id` still binds the alpha default tenant
+on every unbound path.
+
+The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_DATASOURCE_USERNAME`
+/ `POS_APP_PASSWORD`); Flyway alone uses the owner credential (`SPRING_FLYWAY_USER` /
+`SPRING_FLYWAY_PASSWORD`, `FlywayConfig`), which the TimescaleDB steps in `V2` need anyway.
+
+Ingest is batched: `EventDaoImpl` captures the request's tenant with each queued event, and the one scheduled
+job, `flushEventBatch`, is platform-scoped because it drains the batch for every tenant and saves each group
+under the tenant it was queued with (`EventDaoImplTenantTest`). There are no native queries.
+
+Proof: `TenantIsolationIT` (tenant A's `emitted_event` row is invisible to tenant B and to an unbound
+connection, through the repository and through raw SQL, on the hypertable) and `TenancySchemaConformanceIT`
+(every non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool
+is `pos_app` with no bypass), both on a Testcontainers TimescaleDB (`./mvnw -pl pos-event-receiver -am verify`).
+
 ## Dependencies
 
 No internal `pos-*` module dependencies (avoids circular dependency with `pos-security-service`).

@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.discovery;
 
 import com.positivity.mcp.internal.config.ToolEmbeddingInitializer;
 import com.positivity.mcp.internal.discovery.service.ToolRegistrationService;
+import com.positivity.tenancy.PlatformScoped;
 import java.time.Duration;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -47,6 +48,9 @@ public class DiscoveryRefreshScheduler {
     // Separate initial delay (#1643 review): the first self-heal matters most right after a restart —
     // i.e. right after the deploys that cause stale Eureka routes — so it should not wait a full
     // 30-minute alpha interval. Default 5 min.
+    @PlatformScoped(
+            reason = "refreshes the platform tool catalog (mcp_tool and its embeddings), global tables shared by"
+                    + " every tenant; nothing tenant-scoped is read or written")
     @Scheduled(
             fixedDelayString = "${mcp.server.discovery-refresh.interval-ms:300000}",
             initialDelayString = "${mcp.server.discovery-refresh.initial-delay-ms:300000}")
