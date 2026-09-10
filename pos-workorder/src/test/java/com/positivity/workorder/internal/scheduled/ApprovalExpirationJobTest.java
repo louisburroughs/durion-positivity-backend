@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.scheduled;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -8,7 +9,6 @@ import com.positivity.tenancy.StaticTenantRegistry;
 import com.positivity.tenancy.TenancyProperties;
 import com.positivity.tenancy.TenantIterator;
 import com.positivity.workorder.internal.service.EstimateService;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -26,7 +26,7 @@ class ApprovalExpirationJobTest {
         when(estimateService.expirePendingApprovals()).thenReturn(3);
 
         TenancyProperties tenancy = new TenancyProperties();
-        tenancy.setDefaultTenantId(UUID.fromString("01900000-0000-7000-8000-000000000001"));
+        tenancy.setDefaultTenantId(TENANT_A);
         new ApprovalExpirationJob(estimateService, new TenantIterator(new StaticTenantRegistry(tenancy)))
                 .expirePendingApprovals();
 

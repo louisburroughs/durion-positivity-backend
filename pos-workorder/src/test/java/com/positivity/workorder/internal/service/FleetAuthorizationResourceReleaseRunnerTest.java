@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -68,7 +69,7 @@ class FleetAuthorizationResourceReleaseRunnerTest {
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 Duration.ofHours(4));
         TenancyProperties tenancy = new TenancyProperties();
-        tenancy.setDefaultTenantId(UUID.fromString("01900000-0000-7000-8000-000000000001"));
+        tenancy.setDefaultTenantId(TENANT_A);
         runner = new FleetAuthorizationResourceReleaseRunner(
                 authorizationRepository,
                 releaser,

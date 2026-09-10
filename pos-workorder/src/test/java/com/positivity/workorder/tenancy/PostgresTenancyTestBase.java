@@ -10,8 +10,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * A Postgres 16 container laid out the way Compose and the alpha host are (ADR-0062 §3, layer 2):
@@ -22,7 +20,6 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  *
  * <p>Requires Docker.
  */
-@Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("pg")
 public abstract class PostgresTenancyTestBase {
@@ -31,10 +28,13 @@ public abstract class PostgresTenancyTestBase {
     static final String APP_PASSWORD = "pos_app-test-only";
 
     /**
-     * Started by the Testcontainers extension, not a static initializer: test discovery (the ArchUnit
-     * engine scans every test class) must not need Docker.
+     * One container for the whole test JVM, started lazily from {@link #datasource} (so test
+     * discovery, which loads every test class, never needs Docker) and never stopped by a test
+     * class: the Spring context these tests share is cached across classes, and it holds this
+     * container's port. A per-class Testcontainers-managed container would be stopped after the
+     * first class while the second reused the cached context against it. Ryuk reaps the container
+     * at JVM exit.
      */
-    @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
 
     private static volatile boolean roleCreated;
@@ -72,6 +72,9 @@ public abstract class PostgresTenancyTestBase {
     /** Runs once the container is up and before the Spring context starts, so the role exists for Flyway and the pool. */
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {
+        if (!POSTGRES.isRunning()) {
+            POSTGRES.start();
+        }
         ensureApplicationRole();
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", () -> APP_ROLE);
