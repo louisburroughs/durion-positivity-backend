@@ -2,13 +2,15 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import com.positivity.tenancy.TenantIterator;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Scheduled report-only drift check for the stock summary read model (issue
@@ -24,16 +26,33 @@ public class StockSummaryDriftVerifier {
     private final InventoryStockSummaryRepository summaryRepository;
     private final Counter driftCounter;
 
-    public StockSummaryDriftVerifier(InventoryStockSummaryRepository summaryRepository, MeterRegistry meterRegistry) {
+    /** ADR-0062 section 3: verified once per active tenant, each pass in its own read-only transaction. */
+    private final TenantIterator tenantIterator;
+
+    private final TransactionTemplate readOnlyTransaction;
+
+    public StockSummaryDriftVerifier(
+            InventoryStockSummaryRepository summaryRepository,
+            MeterRegistry meterRegistry,
+            TenantIterator tenantIterator,
+            PlatformTransactionManager transactionManager) {
         this.summaryRepository = summaryRepository;
+        this.tenantIterator = tenantIterator;
+        this.readOnlyTransaction = new TransactionTemplate(transactionManager);
+        this.readOnlyTransaction.setReadOnly(true);
         this.driftCounter = meterRegistry.counter("inventory.stock_summary.drift.total");
     }
 
     @Scheduled(
             fixedDelayString = "${pos.inventory.stock-summary.verify-interval-ms:3600000}",
             initialDelayString = "${pos.inventory.stock-summary.verify-initial-delay-ms:600000}")
-    @Transactional(readOnly = true)
     public void verifyScheduled() {
+        // The transaction opens inside the tenant binding, so its connection carries the tenant.
+        tenantIterator.forEachActiveTenant(
+                tenantId -> readOnlyTransaction.executeWithoutResult(status -> verifyForTenant()));
+    }
+
+    private void verifyForTenant() {
         try {
             verify();
         } catch (Exception ex) {

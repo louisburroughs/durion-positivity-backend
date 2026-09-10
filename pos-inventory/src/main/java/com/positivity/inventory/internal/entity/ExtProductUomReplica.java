@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -32,7 +33,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @IdClass(ExtProductUomReplica.Key.class)
 @Table(name = "ext_product_uom")
-public class ExtProductUomReplica {
+public class ExtProductUomReplica extends TenantScopedEntity {
 
     @Id
     @Column(name = "product_id", nullable = false)

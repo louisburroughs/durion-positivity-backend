@@ -4,6 +4,7 @@ import com.positivity.inventory.internal.entity.InventoryStockSummary;
 import com.positivity.inventory.internal.enums.InventorySerialStatus;
 import com.positivity.inventory.internal.repository.InventorySerialUnitRepository;
 import com.positivity.inventory.internal.repository.InventoryStockSummaryRepository;
+import com.positivity.tenancy.TenantIterator;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
@@ -11,7 +12,8 @@ import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Scheduled report-only reconciliation of serial-derived on-hand against the
@@ -38,11 +40,21 @@ public class SerialUnitOnHandVerifier {
     private final InventoryStockSummaryRepository summaryRepository;
     private final Counter driftCounter;
 
+    /** ADR-0062 section 3: verified once per active tenant, each pass in its own read-only transaction. */
+    private final TenantIterator tenantIterator;
+
+    private final TransactionTemplate readOnlyTransaction;
+
     public SerialUnitOnHandVerifier(
             InventorySerialUnitRepository serialRepository,
             InventoryStockSummaryRepository summaryRepository,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            TenantIterator tenantIterator,
+            PlatformTransactionManager transactionManager) {
         this.serialRepository = serialRepository;
+        this.tenantIterator = tenantIterator;
+        this.readOnlyTransaction = new TransactionTemplate(transactionManager);
+        this.readOnlyTransaction.setReadOnly(true);
         this.summaryRepository = summaryRepository;
         this.driftCounter = meterRegistry.counter("inventory.serial_unit.drift.total");
     }
@@ -50,8 +62,13 @@ public class SerialUnitOnHandVerifier {
     @Scheduled(
             fixedDelayString = "${pos.inventory.serial-unit.verify-interval-ms:3600000}",
             initialDelayString = "${pos.inventory.serial-unit.verify-initial-delay-ms:600000}")
-    @Transactional(readOnly = true)
     public void verifyScheduled() {
+        // The transaction opens inside the tenant binding, so its connection carries the tenant.
+        tenantIterator.forEachActiveTenant(
+                tenantId -> readOnlyTransaction.executeWithoutResult(status -> verifyForTenant()));
+    }
+
+    private void verifyForTenant() {
         try {
             verify();
         } catch (Exception ex) {

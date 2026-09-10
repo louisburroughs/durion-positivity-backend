@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -29,7 +30,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @IdClass(ExtLocationParentReplica.Key.class)
 @Table(name = "ext_location_parent")
-public class ExtLocationParentReplica {
+public class ExtLocationParentReplica extends TenantScopedEntity {
 
     @Id
     @Column(name = "child_id", nullable = false)

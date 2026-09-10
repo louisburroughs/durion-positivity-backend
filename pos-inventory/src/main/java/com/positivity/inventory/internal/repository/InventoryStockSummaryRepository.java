@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.repository;
 
 import com.positivity.inventory.internal.entity.InventoryStockSummary;
+import com.positivity.tenancy.TenantAudited;
 import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -129,6 +130,9 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
                       AND l.expiration_date IS NOT NULL
                       AND l.expiration_date < :today
                     """, nativeQuery = true)
+    @TenantAudited(
+            reason =
+                    "reads tenant-scoped stock, lot and allocation tables only; row-level security binds every row to the tenant the request or the per-tenant scheduler bound")
     BigDecimal sumExpiredActiveLotOnHand(
             @Param("stockItemId") String stockItemId,
             @Param("locationId") UUID locationId,
@@ -152,6 +156,9 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
                       AND l.expiration_date >= :today
                     GROUP BY s.location_id
                     """, nativeQuery = true)
+    @TenantAudited(
+            reason =
+                    "reads tenant-scoped stock, lot and allocation tables only; row-level security binds every row to the tenant the request or the per-tenant scheduler bound")
     List<LocationExpiry> earliestExpiryByLocation(
             @Param("stockItemId") String stockItemId,
             @Param("locationIds") Collection<UUID> locationIds,
@@ -169,6 +176,9 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
                       AND l.expiration_date IS NOT NULL
                       AND l.expiration_date >= :today
                     """, nativeQuery = true)
+    @TenantAudited(
+            reason =
+                    "reads tenant-scoped stock, lot and allocation tables only; row-level security binds every row to the tenant the request or the per-tenant scheduler bound")
     boolean hasExpiryData(@Param("stockItemId") String stockItemId, @Param("today") LocalDate today);
 
     /** One location's earliest lot expiry (native projection for the FEFO provider). */
@@ -418,6 +428,9 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
                           AND (s.on_hand <> 0 OR s.allocated <> 0 OR s.reserved <> 0 OR s.atp <> 0
                                OR s.in_transit_qty <> 0)
                         """, nativeQuery = true)
+    @TenantAudited(
+            reason =
+                    "reads tenant-scoped stock, lot and allocation tables only; row-level security binds every row to the tenant the request or the per-tenant scheduler bound")
     List<DriftRow> findDriftRows(
             @Param("onHandTypes") Collection<String> onHandTypes,
             @Param("allocationCreated") String allocationCreated,
@@ -495,6 +508,9 @@ public interface InventoryStockSummaryRepository extends JpaRepository<Inventory
                         LEFT JOIN ledger l ON l.location_id IS NOT DISTINCT FROM s.location_id
                         WHERE l.outstanding IS NULL AND s.allocated <> 0
                         """, nativeQuery = true)
+    @TenantAudited(
+            reason =
+                    "reads tenant-scoped stock, lot and allocation tables only; row-level security binds every row to the tenant the request or the per-tenant scheduler bound")
     List<AllocatedDriftRow> findAllocatedDriftByLocation(
             @Param("created") String created, @Param("released") String released);
 

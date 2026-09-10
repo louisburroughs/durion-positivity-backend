@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.entity;
 
 import com.positivity.inventory.internal.enums.StorageCompatibilityMatchLevel;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -33,7 +34,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Entity
 @Table(name = "storage_compatibility")
-public class StorageCompatibility {
+public class StorageCompatibility extends TenantScopedEntity {
 
     @Id
     @Column(name = "compatibility_id", nullable = false)

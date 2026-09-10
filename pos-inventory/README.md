@@ -401,9 +401,44 @@ What that costs is a constraint on the rollout, and it is stated rather than mit
 | `POS_INVENTORY_SKU_CATEGORY_RESOLVE_FROM_REPLICA`    | `false`  | Resolve the `SkuCategoryProvider` SPI from the catalog replica. Off by default — enabling it makes the `SKU_CATEGORY` scope of `sku_cost_method_config` and of `sourcing_strategy_config` reachable, changing both costing method and sourcing strategy for matching SKUs. Audit first with `GET /v1/inventory/valuation/methods/sku-category-impact` (valid while the flag is off), then follow "SKU_CATEGORY costing and sourcing cut-over (#1535)" in `docs/OPERATIONS_RUNBOOK.md`. Putaway does not use this SPI. |
 | `POS_INVENTORY_SKU_CATEGORY_IMPACT_SKU_CAP`          | `5000`   | Maximum products the SKU_CATEGORY impact report scans. Past this it sets `truncated: true` rather than silently shortening; raise it and re-run. |
 
+## Multitenancy (ADR-0062, WS3 wave 1)
+
+This module runs on the ADR-0062 runtime: it depends on `pos-tenancy-common`, every scoped entity
+extends `TenantScopedEntity`, and the two global tables (`event_outbox`, `processed_events`, listed in
+`src/main/resources/db/tenancy-global-tables.txt`) carry `@TenantGlobal`. The request tenant is bound
+by `TenantContextFilter` from `X-Tenant-Id` (the gateway injects it from the token's `tid`), the Kafka
+tenant by `TenantRecordInterceptor` from the `tenantId` record header, and every connection checkout
+binds `app.current_tenant` for row-level security. `pos.tenancy.default-tenant-id` still binds the alpha
+default tenant on every unbound path (tokens issued before `tid`, records without the header).
+
+The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_DATASOURCE_USERNAME`
+/ `POS_APP_PASSWORD`); Flyway alone uses the owner credential (`SPRING_FLYWAY_USER` /
+`SPRING_FLYWAY_PASSWORD`, `FlywayConfig`).
+
+Platform-scoped schedulers (run with no tenant bound; touch only global tables):
+
+| Job | Why |
+| --- | --- |
+| `OutboxPublisher.publishPending` | Drains `event_outbox`; each row's `tenant_id` becomes the record header |
+| `ManifestPublisher.publishDueManifest` | Summarises `event_outbox` per window across tenants; per-tenant manifests are plan WS8 |
+
+Per-tenant schedulers run once per tenant of the registry (`TenantIterator.forEachActiveTenant`; the
+static registry lists the default tenant until the `ext_tenant` replica lands per module): the cycle-count
+schedule pass, the lot expiry scan, the replenishment scan, the supplier stock-hint resolution pass, and the
+three report-only verifiers (stock summary drift, serial unit on-hand, allocation consistency), each of whose
+passes opens its read-only transaction inside the tenant binding. The six native queries
+(`AllocationRepository`, `InventoryStockSummaryRepository`) carry `@TenantAudited`: they read scoped tables
+only, and row-level security binds their rows to the tenant.
+
+Proof: `TenantIsolationIT` (tenant A's `replenishment_policy` row is invisible to tenant B and to an
+unbound connection, through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every
+non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is
+`pos_app` with no bypass), both on Testcontainers Postgres (`./mvnw -pl pos-inventory verify`).
+
 ## Dependencies
 
 - `pos-security-common` — JWT-based security filter
+- `pos-tenancy-common` — ADR-0062 tenant context, connection binding, Hibernate resolver, Kafka propagation
 - `pos-events` — `@EmitEvent` annotation and event registration
 - `pos-shared-dtos` — shared DTOs
 - `pos-bulk-ingest-lib` — bulk-ingest base controller

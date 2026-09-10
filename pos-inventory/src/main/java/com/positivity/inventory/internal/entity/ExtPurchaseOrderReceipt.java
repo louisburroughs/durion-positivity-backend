@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -28,7 +29,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ExtPurchaseOrderReceipt {
+public class ExtPurchaseOrderReceipt extends TenantScopedEntity {
 
     @Id
     @Column(name = "purchase_order_id", nullable = false)

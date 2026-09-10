@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.entity;
 import com.positivity.inventory.internal.enums.CostingMethod;
 import com.positivity.inventory.internal.enums.CostingScopeType;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -44,7 +45,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @AllArgsConstructor
 @Builder
 @EntityListeners(AuditingEntityListener.class)
-public class CostingMethodConfig {
+public class CostingMethodConfig extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

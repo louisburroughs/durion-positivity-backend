@@ -1,6 +1,7 @@
 package com.positivity.inventory.internal.replenishment.service;
 
 import com.positivity.inventory.internal.dto.replenishment.ReplenishmentScanResultResponse;
+import com.positivity.tenancy.TenantIterator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -23,12 +24,19 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(prefix = "pos.inventory.replenishment.scan", name = "enabled", havingValue = "true")
 public class ReplenishmentScanScheduler {
 
+    /** ADR-0062 section 3: the pass runs once per active tenant, bound for the duration. */
+    private final TenantIterator tenantIterator;
+
     private final ReplenishmentService replenishmentService;
 
     @Scheduled(
             fixedDelayString = "${pos.inventory.replenishment.scan.interval-ms:3600000}",
             initialDelayString = "${pos.inventory.replenishment.scan.initial-delay-ms:600000}")
     public void runScheduledScan() {
+        tenantIterator.forEachActiveTenant(tenantId -> runScanForTenant());
+    }
+
+    private void runScanForTenant() {
         try {
             ReplenishmentScanResultResponse result = replenishmentService.runBatchReplenishmentScan();
             log.info(

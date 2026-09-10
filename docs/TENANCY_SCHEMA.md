@@ -80,7 +80,12 @@ library still connect as the owner role, which `postgres/init-tenancy.sh` gives 
 through `ALTER ROLE ... SET app.current_tenant`; adopted modules connect as `pos_app`
 (`SPRING_DATASOURCE_USERNAME=pos_app`, `POS_APP_PASSWORD`) with Flyway on the owner credential
 (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`). Adopted so far: `pos-location`, `pos-tenant`,
-`pos-security-service`.
+`pos-security-service`, `pos-inventory` (WS3 wave 1; the remaining modules follow largest first).
+
+**Per-tenant schedulers and transactions.** A job wrapped in `TenantIterator.forEachActiveTenant`
+must open its transaction inside the binding: a `@Transactional` scheduled method checks its
+connection out before the iterator binds a tenant, so the work runs unbound. Use a
+`TransactionTemplate` inside the per-tenant lambda (the pos-inventory verifiers are the example).
 
 **Where the tenant comes from (WS2b).** `pos-security-service` resolves it once, at login: the gateway
 derives `X-Tenant-Slug` from the request host when `auth.tenant-host-suffix` is set (an inbound copy is
