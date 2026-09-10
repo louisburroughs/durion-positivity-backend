@@ -1,0 +1,169 @@
+package com.positivity.securityservice.internal.service;
+
+import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.domainevents.tenant.TenantProvisionedV1;
+import com.positivity.securityservice.internal.config.OutboxEventWriter;
+import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.securityservice.internal.repository.PermissionRepository;
+import com.positivity.securityservice.internal.repository.RoleRepository;
+import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.tenancy.TenantContext;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Provisions a new tenant on {@code tenant.created} (ADR-0062 §7, plan WS2b part 2): applies the
+ * platform role template, creates the initial administrator named in the create request, writes
+ * the first {@code role_assignments} row, and answers {@code tenant.provisioned}, which moves the
+ * tenant to {@code ACTIVE} in pos-tenant.
+ *
+ * <p>Runs under the new tenant's binding, which the caller establishes
+ * ({@code TenantContext.runAs(tenantId, ...)}); every row written here is that tenant's under
+ * row-level security. Idempotent on tenant: a role or user that already exists is left alone, so a
+ * redelivered event or a retry after a partial failure converges. The answer is emitted on every
+ * successful run, and pos-tenant's handler is idempotent on tenant id.
+ *
+ * <p>The administrator's password is generated and discarded (never returned, logged or
+ * persisted in plaintext), exactly as for bulk-provisioned users: the first credential reaches
+ * the administrator through a password reset, not through this event.
+ */
+@Slf4j
+@Service
+public class TenantProvisioningService {
+
+    /** Actor recorded on the rows provisioning writes. */
+    static final String ACTOR = "tenant-provisioning";
+
+    /** The template role the initial administrator holds. */
+    static final String INITIAL_ADMIN_ROLE = "ADMIN";
+
+    private static final String SOURCE = "pos-security-service";
+
+    private final RoleRepository roleRepository;
+    private final PermissionRepository permissionRepository;
+    private final UserRepository userRepository;
+    private final UserService userService;
+    private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
+    private final Clock clock;
+    private final String tenantEventsTopic;
+
+    public TenantProvisioningService(
+            RoleRepository roleRepository,
+            PermissionRepository permissionRepository,
+            UserRepository userRepository,
+            UserService userService,
+            ObjectProvider<OutboxEventWriter> outboxEventWriter,
+            Clock clock,
+            @Value("${pos.security-service.kafka.tenant-events-topic:tenant.events.v1}") String tenantEventsTopic) {
+        this.roleRepository = roleRepository;
+        this.permissionRepository = permissionRepository;
+        this.userRepository = userRepository;
+        this.userService = userService;
+        this.outboxEventWriter = outboxEventWriter;
+        this.clock = clock;
+        this.tenantEventsTopic = tenantEventsTopic;
+    }
+
+    /** What one run did; a redelivery reports zeros. */
+    public record Outcome(int rolesCreated, boolean administratorCreated) {}
+
+    /**
+     * @param tenantId the tenant being provisioned; must be the bound tenant
+     * @param initialAdminEmail username of the first administrator (the create request's email)
+     * @param template the platform role template, read under the platform binding
+     * @throws IllegalStateException when the binding is not {@code tenantId}, or the template
+     *     carries no {@value #INITIAL_ADMIN_ROLE} role to give the administrator
+     */
+    @Transactional
+    public @NonNull Outcome provision(
+            @NonNull UUID tenantId, @NonNull String initialAdminEmail, @NonNull List<RoleTemplateEntry> template) {
+        if (!tenantId.equals(TenantContext.require())) {
+            throw new IllegalStateException("Provisioning of tenant " + tenantId + " must run under its own binding");
+        }
+        if (template.stream().noneMatch(entry -> INITIAL_ADMIN_ROLE.equals(entry.name()))) {
+            throw new IllegalStateException("The platform role template has no " + INITIAL_ADMIN_ROLE
+                    + " role; nothing to give the administrator");
+        }
+
+        int created = 0;
+        for (RoleTemplateEntry entry : template) {
+            if (roleRepository.existsByName(entry.name())) {
+                continue;
+            }
+            roleRepository.save(fromTemplate(entry));
+            created++;
+        }
+
+        boolean administratorCreated = false;
+        if (!userRepository.existsByUsername(initialAdminEmail)) {
+            userService.createUserWithGeneratedPassword(initialAdminEmail, Set.of(INITIAL_ADMIN_ROLE));
+            administratorCreated = true;
+        }
+
+        emitProvisioned(tenantId);
+        log.info(
+                "Provisioned tenant {}: {} template role(s) created, administrator {} {}",
+                tenantId,
+                created,
+                initialAdminEmail,
+                administratorCreated ? "created" : "already present");
+        return new Outcome(created, administratorCreated);
+    }
+
+    private Role fromTemplate(RoleTemplateEntry entry) {
+        Role role = new Role();
+        role.setName(entry.name());
+        role.setDescription(entry.description());
+        role.setTemplateKey(entry.templateKey());
+        role.setPersonaTitle(entry.personaTitle());
+        role.setPersonaFocus(entry.personaFocus());
+        role.setPersonaTone(entry.personaTone());
+        role.setMcpPersonaRank(entry.mcpPersonaRank());
+        role.setMcpPersonaEligible(entry.mcpPersonaEligible());
+        role.setLocationScope(entry.locationScope());
+        role.setLocationHierarchy(entry.locationHierarchy());
+        role.setCreatedAt(Instant.now(clock));
+        role.setCreatedBy(ACTOR);
+        for (String permissionName : entry.permissionNames()) {
+            // The catalog is global (ADR-0062 §6), so a name that does not resolve is a template
+            // ahead of the registered catalog, not a tenant problem: skip it and say so.
+            permissionRepository
+                    .findByName(permissionName)
+                    .ifPresentOrElse(
+                            role.getPermissions()::add,
+                            () -> log.warn(
+                                    "Template role {} grants unknown permission {}; skipped",
+                                    entry.name(),
+                                    permissionName));
+        }
+        return role;
+    }
+
+    private void emitProvisioned(UUID tenantId) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            log.warn("Kafka is disabled; tenant.provisioned for {} is not queued", tenantId);
+            return;
+        }
+        DomainEventEnvelope<TenantProvisionedV1> envelope = DomainEventEnvelope.of(
+                TenantProvisionedV1.EVENT_TYPE,
+                TenantProvisionedV1.SCHEMA_VERSION,
+                tenantId,
+                0L,
+                SOURCE,
+                null,
+                ACTOR,
+                new TenantProvisionedV1(tenantId),
+                clock);
+        writer.publish(tenantEventsTopic, envelope);
+    }
+}

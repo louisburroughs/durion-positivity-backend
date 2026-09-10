@@ -87,8 +87,11 @@ pos-api-gateway  (JWT validation, path rewrite /{domain}/vN/.., permission bitse
   (`PlatformTenant.ID`), the one place application code binds a tenant itself. `pos-security-service` (WS2b)
   resolves the tenant at login (`X-Tenant-Slug` from the request host, else the form's `tenantSlug`, against its
   `ext_tenant` replica of `tenant.events.v1`), puts it on both tokens as `tid`, and the gateway turns `tid` into
-  `X-Tenant-Id` on every authenticated request (an inbound copy is always replaced). Still pending from WS2b: the
-  provisioning handler (role template, first admin, `tenant.provisioned`) and `ROLE_PLATFORM_ADMIN`. Until every
+  `X-Tenant-Id` on every authenticated request (an inbound copy is always replaced). On `tenant.created` it
+  provisions the tenant: copies the platform role template (the platform tenant's `template_key` roles, seeded by
+  `R__seed_tenant_template.sql`), creates the first administrator, and answers `tenant.provisioned`; template roles
+  reject delete (409 `ROLE_TEMPLATE_IMMUTABLE`). `PLATFORM_ADMIN` / `admin.platform` live in the platform tenant and
+  are the only holders of `platform:*` (never grant those to a tenant role). Until every
   token carries `tid`, `pos.tenancy.default-tenant-id` binds the alpha default tenant (the platform tenant in
   `pos-tenant`) on every unbound path, and modules not yet adopted connect as the owner role, which carries the
   same default (`postgres/init-tenancy.sh`). Never add an `organizationId` field (it is a

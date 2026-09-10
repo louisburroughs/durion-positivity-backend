@@ -332,6 +332,18 @@ for role, perm in re.findall(r"\(\s*'([A-Z][A-Z_]+)'\s*,\s*'(" + PERM_RE + r")'\
     grants[perm].add(role)
     role_perms[role].add(perm)
 
+# Third source (ADR-0062 section 7, plan WS2b): the platform tenant's bootstrap seed grants the
+# platform:* families to PLATFORM_ADMIN, which exists in the platform tenant only.
+platform_seed_path = (
+    root / "pos-security-service/src/main/resources/db/migration/R__seed_tenant_template.sql"
+)
+if platform_seed_path.exists():
+    for role, perm in re.findall(
+        r"\(\s*'([A-Z][A-Z_]+)'\s*,\s*'(" + PERM_RE + r")'\s*\)", platform_seed_path.read_text()
+    ):
+        grants[perm].add(role)
+        role_perms[role].add(perm)
+
 # Named distinctly: `baseline_path` is already this script's --baseline gate file.
 bulk_grants_path = root / "scripts/fixtures/seed/alpha/security/role-permissions.csv"
 if bulk_grants_path.exists():

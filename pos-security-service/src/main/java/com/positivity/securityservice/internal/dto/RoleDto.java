@@ -26,6 +26,13 @@ public class RoleDto {
             requiredMode = NOT_REQUIRED)
     String description;
 
+    @Schema(
+            description = "ADR-0062: key of the platform template role this role was provisioned from (its"
+                    + " canonical name); null for a custom role. Template roles cannot be deleted.",
+            example = "ADMIN",
+            nullable = true)
+    String templateKey;
+
     @Schema(description = "Permissions granted to the role", requiredMode = NOT_REQUIRED)
     Set<PermissionDto> permissions;
 

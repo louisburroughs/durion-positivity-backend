@@ -299,6 +299,22 @@ class RoleManagementServiceTest {
         verify(roleRepository).deleteById(ROLE_ID);
     }
 
+    @Test
+    @DisplayName("deleteRole() refuses a role provisioned from the platform template (ADR-0062 section 6)")
+    void deleteRole_templateRoleIsImmutable() {
+        Role role = new Role();
+        role.setId(ROLE_ID);
+        role.setName("ADMIN");
+        role.setTemplateKey("ADMIN");
+        when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> sut.deleteRole(ROLE_ID))
+                .isInstanceOf(com.positivity.securityservice.internal.exception.TemplateRoleImmutableException.class)
+                .hasMessageContaining("ADMIN");
+
+        verify(roleRepository, org.mockito.Mockito.never()).deleteById(any());
+    }
+
     // ── AC: Assign permission to role ─────────────────────────────────────────
 
     @Nested

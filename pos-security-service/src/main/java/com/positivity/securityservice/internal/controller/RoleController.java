@@ -653,12 +653,18 @@ public class RoleController {
                     the role lose it immediately.
                     Required inputs: id (UUID) as a path parameter.
                     Emits a SECURITY_ROLE_DELETE event.
-                    Returns 404 when the role does not exist.
+                    Returns 404 when the role does not exist and 409 with code ROLE_TEMPLATE_IMMUTABLE when the \
+                    role was provisioned from the platform role template (templateKey set): canonical roles keep \
+                    their name for the life of the tenant; change their grants instead.
                     """)
     @ApiResponse(responseCode = "204", description = "Role deleted")
     @ApiResponse(
             responseCode = "404",
             description = "Role not found",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "ROLE_TEMPLATE_IMMUTABLE: the role was provisioned from the platform template",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> deleteRole(@PathVariable UUID id) {
         roleManagementService.deleteRole(id);

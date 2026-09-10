@@ -92,6 +92,14 @@ gateway injects `X-Tenant-Id` from `tid` on every authenticated request and reje
 (401, `malformed_tid`). A module lists paths that must run unbound in strict mode (login, refresh) in
 `pos.tenancy.unenforced-paths`.
 
+**Provisioning and the role template (WS2b part 2).** The platform tenant holds the role template as data:
+`roles.template_key` marks a template role, and `R__seed_tenant_template.sql` copies the Flyway floor roles,
+their grants and their location scope from alpha into the platform tenant (two bindings in one migration
+transaction, through temp tables). On `tenant.created`, `pos-security-service` reads that template as the
+platform tenant and applies it as the new tenant, creates the initial administrator, and answers
+`tenant.provisioned`. `PLATFORM_ADMIN` and `admin.platform` exist in the platform tenant only and are the
+sole holders of `platform:*`; the alpha `ADMIN` lost those grants. A template role rejects delete.
+
 | Where | Binding |
 | --- | --- |
 | Flyway seeds | Each seed file opens with `SELECT set_config('app.current_tenant', '<alpha default tenant>', true)`, transaction-local to the migration. |

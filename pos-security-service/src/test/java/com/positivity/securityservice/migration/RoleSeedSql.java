@@ -30,11 +30,19 @@ final class RoleSeedSql {
     private RoleSeedSql() {}
 
     /** Every role row inserted by any {@code .sql} file in the directory, keyed by column name. */
+    /**
+     * The platform tenant's bootstrap (ADR-0062 section 7, plan WS2b): PLATFORM_ADMIN and the
+     * template copies belong to another tenant, not to the alpha role set these tests govern.
+     */
+    static final String PLATFORM_TENANT_SEED = "R__seed_tenant_template.sql";
+
     static List<Map<String, String>> rows(Path migrations) throws IOException {
         List<Map<String, String>> rows = new ArrayList<>();
         try (var files = Files.list(migrations)) {
-            for (Path file :
-                    files.filter(p -> p.toString().endsWith(".sql")).sorted().toList()) {
+            for (Path file : files.filter(p -> p.toString().endsWith(".sql"))
+                    .filter(p -> !p.getFileName().toString().equals(PLATFORM_TENANT_SEED))
+                    .sorted()
+                    .toList()) {
                 rows.addAll(parse(Files.readString(file, StandardCharsets.UTF_8)));
             }
         }
