@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
@@ -40,7 +41,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
                     name = "uk_reversal_original_application",
                     columnNames = "original_payment_application_id")
         })
-public class PaymentApplicationReversal {
+public class PaymentApplicationReversal extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

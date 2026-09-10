@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.entity;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -63,7 +64,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_ap_payment_status", columnList = "status"),
             @Index(name = "idx_ap_payment_date", columnList = "payment_date")
         })
-public class APPayment {
+public class APPayment extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

@@ -1,7 +1,7 @@
 package com.positivity.accounting.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.entity.KafkaOutboxEvent;
 import com.positivity.accounting.internal.repository.KafkaOutboxEventRepository;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -18,9 +19,11 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
@@ -33,6 +36,7 @@ import org.springframework.test.util.ReflectionTestUtils;
  */
 @DisplayName("pos-accounting OutboxPublisher — outbox drain contract")
 class OutboxPublisherTest {
+    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
 
     private static final Instant NOW = Instant.parse("2026-07-08T12:00:00Z");
     private static final Clock TEST_CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
@@ -63,6 +67,7 @@ class OutboxPublisherTest {
     private KafkaOutboxEvent event(String key) {
         return KafkaOutboxEvent.builder()
                 .id(UUID.randomUUID())
+                .tenantId(TENANT)
                 .topic("accounting.events.v1")
                 .recordKey(key)
                 .payload("{\"eventId\":\"" + key + "\"}")
@@ -73,13 +78,12 @@ class OutboxPublisherTest {
     }
 
     private void brokerAcknowledges() {
-        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+        when(kafkaTemplate.send(any(ProducerRecord.class)))
                 .thenReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
     }
 
     private void brokerFailsWith(Throwable failure) {
-        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
-                .thenReturn(CompletableFuture.failedFuture(failure));
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.failedFuture(failure));
     }
 
     private double counter(String name) {
@@ -96,7 +100,14 @@ class OutboxPublisherTest {
 
         publisher.publishPending();
 
-        verify(kafkaTemplate).send("accounting.events.v1", "k1", row.getPayload());
+        ArgumentCaptor<ProducerRecord<String, String>> sent = ArgumentCaptor.captor();
+        verify(kafkaTemplate).send(sent.capture());
+        assertThat(sent.getValue().topic()).isEqualTo("accounting.events.v1");
+        assertThat(sent.getValue().key()).isEqualTo("k1");
+        assertThat(sent.getValue().value()).isEqualTo(row.getPayload());
+        assertThat(TenantKafkaHeaders.read(sent.getValue().headers()))
+                .as("the row's tenant travels on the record header (ADR-0062)")
+                .contains(TENANT);
         assertThat(row.getPublishedAt()).isEqualTo(NOW);
         assertThat(row.getAttempts()).isZero();
         assertThat(row.getLastError()).isNull();
@@ -114,7 +125,7 @@ class OutboxPublisherTest {
 
         publisher.publishPending();
 
-        verify(kafkaTemplate, times(2)).send(anyString(), anyString(), anyString());
+        verify(kafkaTemplate, times(2)).send(any(ProducerRecord.class));
         assertThat(first.getPublishedAt()).isEqualTo(NOW);
         assertThat(second.getPublishedAt()).isEqualTo(NOW);
         assertThat(counter("accounting.outbox.published")).isEqualTo(2d);
@@ -135,8 +146,11 @@ class OutboxPublisherTest {
         assertThat(first.getLastError()).contains("broker down");
         verify(repository).save(first);
 
-        verify(kafkaTemplate, times(1)).send(anyString(), anyString(), anyString());
-        verify(kafkaTemplate).send("accounting.events.v1", "k1", first.getPayload());
+        verify(kafkaTemplate, times(1)).send(any(ProducerRecord.class));
+        ArgumentCaptor<ProducerRecord<String, String>> sent = ArgumentCaptor.captor();
+        verify(kafkaTemplate).send(sent.capture());
+        assertThat(sent.getValue().key()).isEqualTo("k1");
+        assertThat(sent.getValue().value()).isEqualTo(first.getPayload());
         assertThat(second.getAttempts()).isEqualTo(2);
         assertThat(second.getPublishedAt()).isNull();
         assertThat(counter("accounting.outbox.publish.failures")).isEqualTo(1d);
@@ -147,7 +161,7 @@ class OutboxPublisherTest {
     void recordsClassNameWhenFailureMessageIsNull() {
         KafkaOutboxEvent row = event("k1");
         when(repository.findTop100ByPublishedAtIsNullOrderByIdAsc()).thenReturn(List.of(row));
-        when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenThrow(new IllegalStateException());
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new IllegalStateException());
 
         publisher.publishPending();
 
@@ -175,7 +189,7 @@ class OutboxPublisherTest {
 
         publisher.publishPending();
 
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
         verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 

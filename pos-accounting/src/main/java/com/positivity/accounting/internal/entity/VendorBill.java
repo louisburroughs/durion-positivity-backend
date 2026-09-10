@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -57,7 +58,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_vendor_bill_origin_event", columnList = "origin_event_id"),
             @Index(name = "idx_vendor_bill_po", columnList = "purchase_order_id")
         })
-public class VendorBill {
+public class VendorBill extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

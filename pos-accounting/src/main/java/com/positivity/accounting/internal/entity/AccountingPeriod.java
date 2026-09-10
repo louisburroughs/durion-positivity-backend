@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.entity;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -52,7 +53,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         name = "accounting_period",
         uniqueConstraints = {@UniqueConstraint(name = "uq_accounting_period_code", columnNames = "period_code")},
         indexes = {@Index(name = "idx_accounting_period_status", columnList = "status")})
-public class AccountingPeriod {
+public class AccountingPeriod extends TenantScopedEntity {
 
     private static final String SYSTEM = "SYSTEM";
 

@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -54,7 +55,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_accounting_event_org_status", columnList = "organization_id, status"),
             @Index(name = "idx_accounting_event_source_system", columnList = "source_system")
         })
-public class AccountingEvent {
+public class AccountingEvent extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

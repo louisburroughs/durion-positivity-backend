@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.entity;
 import com.positivity.accounting.internal.enums.FeeRepresentation;
 import com.positivity.accounting.internal.enums.MatchReferenceField;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -34,7 +35,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @AllArgsConstructor
 @Builder
 @Table(name = "ext_payment_settlement_config")
-public class ExtPaymentSettlementConfig {
+public class ExtPaymentSettlementConfig extends TenantScopedEntity {
 
     @Id
     @Column(name = "provider_code", length = 64, nullable = false, updatable = false)

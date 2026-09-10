@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.PostingRuleSetState;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
@@ -46,7 +47,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_posting_rule_version_set", columnList = "posting_rule_set_id"),
             @Index(name = "idx_posting_rule_version_state", columnList = "state")
         })
-public class PostingRuleVersion {
+public class PostingRuleVersion extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

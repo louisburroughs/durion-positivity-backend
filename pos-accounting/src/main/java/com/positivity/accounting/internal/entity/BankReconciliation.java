@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.entity;
 import com.positivity.accounting.internal.enums.ReconciliationStatus;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -63,7 +64,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_bank_reconciliation_account", columnList = "gl_account_id"),
             @Index(name = "idx_bank_reconciliation_status", columnList = "status")
         })
-public class BankReconciliation {
+public class BankReconciliation extends TenantScopedEntity {
 
     private static final String SYSTEM = "SYSTEM";
 

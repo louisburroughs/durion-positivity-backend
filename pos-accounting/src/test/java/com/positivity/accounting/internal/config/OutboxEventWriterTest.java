@@ -12,6 +12,8 @@ import com.positivity.accounting.internal.entity.KafkaOutboxEvent;
 import com.positivity.accounting.internal.repository.KafkaOutboxEventRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.accounting.InvoiceGlPostedV1;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantResolver;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -33,12 +35,20 @@ class OutboxEventWriterTest {
 
     private static final Instant NOW = Instant.parse("2026-07-08T12:00:00Z");
     private static final Clock TEST_CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
+    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
     private static final UUID INVOICE_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID JOURNAL_ENTRY_ID = UUID.fromString("00000000-0000-0000-0000-00000000000e");
 
     private final KafkaOutboxEventRepository repository = mock(KafkaOutboxEventRepository.class);
     private final ObjectMapper objectMapper = JsonMapper.builder().build();
-    private final OutboxEventWriter writer = new OutboxEventWriter(objectMapper, repository);
+    private final TenantResolver tenantResolver = tenantResolver();
+    private final OutboxEventWriter writer = new OutboxEventWriter(objectMapper, repository, tenantResolver);
+
+    private static TenantResolver tenantResolver() {
+        TenancyProperties tenancy = new TenancyProperties();
+        tenancy.setDefaultTenantId(TENANT);
+        return new TenantResolver(tenancy);
+    }
 
     private DomainEventEnvelope<InvoiceGlPostedV1> envelope() {
         return DomainEventEnvelope.of(
@@ -88,7 +98,7 @@ class OutboxEventWriterTest {
     void serializationFailureWritesNothing() {
         ObjectMapper failing = mock(ObjectMapper.class);
         when(failing.writeValueAsString(any())).thenThrow(new IllegalArgumentException("boom"));
-        OutboxEventWriter failingWriter = new OutboxEventWriter(failing, repository);
+        OutboxEventWriter failingWriter = new OutboxEventWriter(failing, repository, tenantResolver);
 
         assertThatExceptionOfType(IllegalStateException.class)
                 .isThrownBy(() -> failingWriter.publish("accounting.events.v1", envelope()))

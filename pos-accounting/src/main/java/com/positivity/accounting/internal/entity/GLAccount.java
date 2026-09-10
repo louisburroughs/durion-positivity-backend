@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.entity;
 import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -61,7 +62,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_activation_date", columnList = "activation_date"),
             @Index(name = "idx_deactivation_date", columnList = "deactivation_date")
         })
-public class GLAccount implements Persistable<UUID> {
+public class GLAccount extends TenantScopedEntity implements Persistable<UUID> {
 
     /**
      * Transient flag used by Spring Data JPA to distinguish new entities from

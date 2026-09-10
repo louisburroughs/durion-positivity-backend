@@ -11,6 +11,8 @@ import com.positivity.accounting.internal.dto.SettlementGLPostingEvent;
 import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus;
 import com.positivity.accounting.internal.repository.EventOutboxRepository;
+import com.positivity.tenancy.PlatformScoped;
+import com.positivity.tenancy.TenantContext;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -79,6 +81,9 @@ public class OutboxProcessor {
      * Implements retry logic with exponential backoff.
      */
     @Scheduled(fixedRate = 5000, initialDelay = 10000)
+    @PlatformScoped(
+            reason = "polls event_outbox, a global table, for every tenant; each row's tenant_id is bound before its"
+                    + " event is dispatched, so the GL-posting handlers write that tenant's rows (ADR-0062 section 3)")
     public void processPendingEvents() {
         try {
             Instant retryThreshold = Instant.now(clock).minus(RETRY_DELAY);
@@ -93,7 +98,7 @@ public class OutboxProcessor {
             log.debug("Processing {} pending outbox events", pendingEvents.size());
 
             for (EventOutbox outbox : pendingEvents) {
-                processEvent(outbox);
+                TenantContext.runAs(outbox.getTenantId(), () -> processEvent(outbox));
             }
 
         } catch (Exception e) {
@@ -168,6 +173,7 @@ public class OutboxProcessor {
      * Runs daily at 2 AM. Deletes events published more than 30 days ago.
      */
     @Scheduled(cron = "0 0 2 * * *")
+    @PlatformScoped(reason = "deletes published rows of event_outbox, a global table, across every tenant")
     public void cleanupOldEvents() {
         try {
             Instant thirtyDaysAgo = Instant.now(clock).minus(Duration.ofDays(30));

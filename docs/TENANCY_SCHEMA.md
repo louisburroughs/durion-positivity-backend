@@ -80,7 +80,8 @@ library still connect as the owner role, which `postgres/init-tenancy.sh` gives 
 through `ALTER ROLE ... SET app.current_tenant`; adopted modules connect as `pos_app`
 (`SPRING_DATASOURCE_USERNAME=pos_app`, `POS_APP_PASSWORD`) with Flyway on the owner credential
 (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`). Adopted so far: `pos-location`, `pos-tenant`,
-`pos-security-service`, `pos-inventory` (WS3 wave 1; the remaining modules follow largest first).
+`pos-security-service`, `pos-inventory` (WS3 wave 1), `pos-accounting` (wave 2; the remaining modules follow largest
+first).
 
 **Per-tenant schedulers and transactions.** A job wrapped in `TenantIterator.forEachActiveTenant`
 must open its transaction inside the binding: a `@Transactional` scheduled method checks its

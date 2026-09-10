@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.enums.JournalEntryType;
 import com.positivity.accounting.internal.enums.ManualJEReasonCode;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -67,7 +68,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_journal_entry_source_event", columnList = "source_event_id"),
             @Index(name = "idx_journal_entry_posted_at", columnList = "posted_at")
         })
-public class JournalEntry {
+public class JournalEntry extends TenantScopedEntity {
 
     private static final String SYSTEM = "SYSTEM";
 

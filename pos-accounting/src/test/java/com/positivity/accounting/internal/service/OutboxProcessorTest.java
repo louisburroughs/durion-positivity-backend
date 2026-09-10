@@ -60,6 +60,7 @@ class OutboxProcessorTest {
     private UUID outboxId;
     private UUID eventId;
     private EventOutbox testOutbox;
+    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
 
     @BeforeEach
     void setUp() throws Exception {
@@ -70,6 +71,7 @@ class OutboxProcessorTest {
         processor = new OutboxProcessor(clock, outboxRepository, outboxService, eventPublisher, objectMapper);
 
         testOutbox = new EventOutbox();
+        testOutbox.setTenantId(TENANT);
         testOutbox.setOutboxId(outboxId);
         testOutbox.setEventId(eventId);
         testOutbox.setStatus(OutboxStatus.PENDING);

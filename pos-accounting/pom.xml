@@ -179,6 +179,12 @@
             <artifactId>pos-events</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- ADR-0062 (plan WS3): tenant context, connection binding, Hibernate resolver, Kafka propagation -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-tenancy-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <!-- Security Common (Gateway Authentication) -->
         <dependency>

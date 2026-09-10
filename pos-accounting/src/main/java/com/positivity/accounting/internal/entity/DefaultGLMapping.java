@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -55,7 +56,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_default_gl_mapping_event_type", columnList = "event_type, organization_id"),
             @Index(name = "idx_default_gl_mapping_active", columnList = "active")
         })
-public class DefaultGLMapping {
+public class DefaultGLMapping extends TenantScopedEntity {
     private static final String SYSTEM_SOURCE = "SYSTEM";
 
     @EqualsAndHashCode.Include

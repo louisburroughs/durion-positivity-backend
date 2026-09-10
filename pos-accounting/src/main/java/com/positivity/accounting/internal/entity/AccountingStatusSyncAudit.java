@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.AccountingStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -39,7 +40,7 @@ import org.hibernate.annotations.Immutable;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AccountingStatusSyncAudit {
+public class AccountingStatusSyncAudit extends TenantScopedEntity {
 
     @Id
     @UUIDv7Id

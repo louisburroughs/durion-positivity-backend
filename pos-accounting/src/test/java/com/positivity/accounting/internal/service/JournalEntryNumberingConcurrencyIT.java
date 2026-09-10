@@ -62,12 +62,6 @@ class JournalEntryNumberingConcurrencyIT {
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        // Transitional tenant binding (ADR-0062 section 9): this module has not adopted the tenancy
-        // runtime yet, so the pool binds the alpha default tenant the way init-tenancy.sh does for the
-        // owner role; every scoped table defaults tenant_id from it.
-        registry.add(
-                "spring.datasource.hikari.connection-init-sql",
-                () -> "SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', false)");
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");

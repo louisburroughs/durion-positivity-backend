@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus;
 import com.positivity.accounting.internal.repository.EventOutboxRepository;
+import com.positivity.tenancy.TenantResolver;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
@@ -29,6 +30,7 @@ public class OutboxServiceImpl implements OutboxService {
 
     private final EventOutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
+    private final TenantResolver tenantResolver;
 
     /**
      * Persists an event to the outbox for eventual publication.
@@ -56,7 +58,8 @@ public class OutboxServiceImpl implements OutboxService {
         try {
             String payload = objectMapper.writeValueAsString(event);
 
-            EventOutbox outbox = EventOutbox.create(eventId, aggregateType, aggregateId, eventType, payload);
+            EventOutbox outbox = EventOutbox.create(
+                    tenantResolver.require(), eventId, aggregateType, aggregateId, eventType, payload);
 
             EventOutbox saved = outboxRepository.save(outbox);
 

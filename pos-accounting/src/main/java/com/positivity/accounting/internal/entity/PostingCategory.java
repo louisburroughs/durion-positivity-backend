@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
@@ -32,7 +33,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(
         name = "posting_category",
         indexes = {@Index(name = "idx_category_name", columnList = "category_name")})
-public class PostingCategory {
+public class PostingCategory extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

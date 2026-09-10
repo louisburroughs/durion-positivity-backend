@@ -36,7 +36,8 @@ class TenancyArchitectureTest {
         "com.positivity.location..",
         "com.positivity.tenant..",
         "com.positivity.securityservice..",
-        "com.positivity.inventory.."
+        "com.positivity.inventory..",
+        "com.positivity.accounting.."
     };
 
     private static final String ENTITY_ANNOTATION = "jakarta.persistence.Entity";

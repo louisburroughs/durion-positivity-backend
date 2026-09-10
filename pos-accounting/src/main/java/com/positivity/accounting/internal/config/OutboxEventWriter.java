@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.config;
 import com.positivity.accounting.internal.entity.KafkaOutboxEvent;
 import com.positivity.accounting.internal.repository.KafkaOutboxEventRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.tenancy.TenantResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -30,6 +31,7 @@ public class OutboxEventWriter {
 
     private final ObjectMapper objectMapper;
     private final KafkaOutboxEventRepository outboxEventRepository;
+    private final TenantResolver tenantResolver;
 
     /**
      * Queue an envelope for publication as part of the current transaction. Must be called inside
@@ -38,6 +40,7 @@ public class OutboxEventWriter {
     @Transactional(propagation = Propagation.MANDATORY)
     public void publish(@NonNull String topic, @NonNull DomainEventEnvelope<?> envelope) {
         KafkaOutboxEvent event = KafkaOutboxEvent.builder()
+                .tenantId(tenantResolver.require())
                 .topic(topic)
                 .recordKey(envelope.recordKey())
                 .payload(serialize(envelope))

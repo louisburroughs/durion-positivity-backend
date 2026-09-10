@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.AssignedIdentifier;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -30,7 +31,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 @Table(name = "ext_invoice_payment_reversal")
-public class ExtInvoicePaymentReversal {
+public class ExtInvoicePaymentReversal extends TenantScopedEntity {
 
     @Id
     @AssignedIdentifier("pos-invoice's RefundRecord id, carried on payment.payment.reversed; minting one here"

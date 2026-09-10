@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.tenancy.TenantAudited;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -232,6 +233,8 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
      *
      * @return Next sequence value for bill number generation
      */
+    @TenantAudited(
+            reason = "reads a sequence, not a table: bill numbers are unique platform-wide and carry no tenant data")
     @Query(value = "SELECT nextval('bill_number_seq')", nativeQuery = true)
     long getNextBillSequence();
 }

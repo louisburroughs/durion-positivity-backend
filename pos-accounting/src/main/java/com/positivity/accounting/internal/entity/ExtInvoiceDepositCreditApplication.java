@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -37,7 +38,7 @@ import lombok.NoArgsConstructor;
                 @UniqueConstraint(
                         name = "uk_ext_invoice_deposit_credit_application_pair",
                         columnNames = {"deposit_credit_id", "invoice_id"}))
-public class ExtInvoiceDepositCreditApplication {
+public class ExtInvoiceDepositCreditApplication extends TenantScopedEntity {
 
     @Id
     @GeneratedValue
