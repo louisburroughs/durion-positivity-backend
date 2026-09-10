@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.service;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.supplier.internal.entity.SupplierOutboxEventEntity;
 import com.positivity.supplier.internal.repository.SupplierOutboxEventRepository;
+import com.positivity.tenancy.TenantResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -27,6 +28,7 @@ public class SupplierOutboxEventWriter {
 
     private final ObjectMapper objectMapper;
     private final SupplierOutboxEventRepository outboxRepository;
+    private final TenantResolver tenantResolver;
 
     /**
      * Queues one envelope for publication.
@@ -38,6 +40,7 @@ public class SupplierOutboxEventWriter {
     @Transactional(propagation = Propagation.MANDATORY)
     public void publish(@NonNull String topic, @NonNull DomainEventEnvelope<?> envelope) {
         SupplierOutboxEventEntity row = SupplierOutboxEventEntity.builder()
+                .tenantId(tenantResolver.require())
                 .topic(topic)
                 .recordKey(envelope.aggregateId().toString())
                 .eventType(envelope.eventType())

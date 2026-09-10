@@ -546,6 +546,41 @@ onto another is a silent bug:
 
 ---
 
+## Multitenancy (ADR-0062, WS3 wave 7)
+
+This module runs on the ADR-0062 runtime: it depends on `pos-tenancy-common`, every scoped entity
+extends `TenantScopedEntity`, and the two global tables listed in
+`src/main/resources/db/tenancy-global-tables.txt` (`processed_events`, `supplier_event_outbox`) carry
+`@TenantGlobal`. The request tenant is bound by `TenantContextFilter` from `X-Tenant-Id` (the gateway
+injects it from the token's `tid`), the Kafka tenant by `TenantRecordInterceptor` from the `tenantId` record
+header on all three consumers (catalog facts, workorder events, supplier commands), and every connection
+checkout binds `app.current_tenant` for row-level security. `pos.tenancy.default-tenant-id` still binds the
+alpha default tenant on every unbound path (tokens issued before `tid`, records without the header).
+
+The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_DATASOURCE_USERNAME`
+/ `POS_APP_PASSWORD`); Flyway alone uses the owner credential (`SPRING_FLYWAY_USER` /
+`SPRING_FLYWAY_PASSWORD`, `FlywayConfig`, which also honours `spring.flyway.locations` for the H2 chain).
+
+The outbox row carries the producing tenant as data (`tenant_id`, stamped from the bound tenant by
+`SupplierOutboxEventWriter`, added by `V2__supplier_event_outbox_tenant_id.sql`); `SupplierOutboxPublisher`
+is the one platform-scoped job (it drains the global outbox and puts each row's `tenant_id` on the record
+header). Every other scheduled sweep is per tenant through `TenantIterator.forEachActiveTenant`: the
+MKCAT, PRICAT, stock-report and invoice schedulers, the MKCAT image retry, the quarantine re-application,
+the three order-transmission polls, the two workorder-authorization polls, and the exchange-audit purge
+(which opens its transaction inside the binding). `SupplierYamlBootstrap` reconciles the YAML profiles into
+every active tenant the same way. The stock-availability fan-out re-binds the request tenant on each
+virtual-thread leg, since virtual threads do not inherit the binding. The schedule-lease UPDATE/COUNT
+statements are native and carry `@TenantAudited`: they name no tenant because the sweeps that run them are
+per tenant, so row-level security confines each to the bound tenant's leases.
+
+The H2 slices (`db/h2-migration`, `V21__tenancy.sql`) carry `tenant_id` with a fixed default standing in
+for `app_current_tenant()`; they run as the alpha default tenant and prove nothing about isolation.
+
+Proof: `TenantIsolationIT` (tenant A's `ext_product_code` row is invisible to tenant B and to an unbound
+connection, through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every
+non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is
+`pos_app` with no bypass), both on Testcontainers Postgres (`./mvnw -pl pos-supplier -am verify`).
+
 ## Working on this module
 
 Java 25 is required (`.sdkmanrc`; the enforcer fails the build otherwise).

@@ -4,6 +4,7 @@ import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.enums.PayloadCaptureLevel;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
@@ -67,7 +68,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_saudit_started_at", columnList = "started_at")
         })
 @EntityListeners(AuditingEntityListener.class)
-public class ExchangeAuditEntity {
+public class ExchangeAuditEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

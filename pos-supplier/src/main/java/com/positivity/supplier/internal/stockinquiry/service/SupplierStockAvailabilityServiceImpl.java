@@ -16,6 +16,7 @@ import com.positivity.supplier.internal.repository.SupplierEndpointBindingReposi
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.stockinquiry.service.model.StockAvailabilityView;
 import com.positivity.supplier.service.model.StockInquiryResponse;
+import com.positivity.tenancy.TenantContext;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -193,9 +194,17 @@ public class SupplierStockAvailabilityServiceImpl implements SupplierStockAvaila
     private List<StockAvailabilityView.VendorAvailability> fanOut(
             List<SupplierProfileEntity> vendors, String articleCode, UUID deliveryLocationId, int quantity) {
 
+        // The legs run on the executor's virtual threads, which do not inherit the caller's tenant
+        // binding (ADR-0062 §3): each leg re-binds the request tenant, so its exchange-audit rows and
+        // cache reads stay the caller's.
+        UUID tenantId = TenantContext.current().orElse(null);
         List<Callable<StockAvailabilityView.VendorAvailability>> tasks = new ArrayList<>(vendors.size());
         for (SupplierProfileEntity vendor : vendors) {
-            tasks.add(() -> queryOneVendor(vendor, articleCode, deliveryLocationId, quantity));
+            tasks.add(
+                    tenantId == null
+                            ? () -> queryOneVendor(vendor, articleCode, deliveryLocationId, quantity)
+                            : () -> TenantContext.callAs(
+                                    tenantId, () -> queryOneVendor(vendor, articleCode, deliveryLocationId, quantity)));
         }
 
         List<Future<StockAvailabilityView.VendorAvailability>> futures;

@@ -1,6 +1,7 @@
 package com.positivity.supplier.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -43,7 +44,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(
         name = "supplier_transmission_line",
         indexes = {@Index(name = "idx_stline_intent", columnList = "transmission_intent_id, line_number")})
-public class SupplierTransmissionLineEntity {
+public class SupplierTransmissionLineEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

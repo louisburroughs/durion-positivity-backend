@@ -1,6 +1,7 @@
 package com.positivity.supplier.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -44,7 +45,7 @@ import org.jspecify.annotations.Nullable;
 @Entity
 @Immutable
 @Table(name = "supplier_exchange_audit")
-public class ExchangeAuditRawPayloadEntity {
+public class ExchangeAuditRawPayloadEntity extends TenantScopedEntity {
 
     /**
      * Shared identity with {@link ExchangeAuditEntity}; never generated here — this mapping only reads.

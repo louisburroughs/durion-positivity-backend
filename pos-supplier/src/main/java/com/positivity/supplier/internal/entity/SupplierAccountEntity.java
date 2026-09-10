@@ -2,6 +2,7 @@ package com.positivity.supplier.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.supplier.internal.enums.SupplierAccountRole;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -53,7 +54,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
                     columnNames = {"vendor_profile_id", "role", "delivery_location_id"})
         })
 @EntityListeners(AuditingEntityListener.class)
-public class SupplierAccountEntity {
+public class SupplierAccountEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

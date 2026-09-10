@@ -1,6 +1,7 @@
 package com.positivity.supplier.internal.entity;
 
 import com.positivity.shared.id.AssignedIdentifier;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -42,7 +43,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(
         name = "ext_product_code",
         indexes = {@Index(name = "idx_ext_product_code_lookup", columnList = "code_type, code")})
-public class ExtProductCodeReplica {
+public class ExtProductCodeReplica extends TenantScopedEntity {
 
     @Id
     @AssignedIdentifier("pos-catalog's product id; this table is a replica, so minting an id here"

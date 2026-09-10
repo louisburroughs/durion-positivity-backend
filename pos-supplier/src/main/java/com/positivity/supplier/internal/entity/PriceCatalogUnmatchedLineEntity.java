@@ -2,6 +2,7 @@ package com.positivity.supplier.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.supplier.internal.enums.UnmatchedLineReason;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -48,7 +49,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_spricat_unmatched_open", columnList = "vendor_profile_id, resolved_at"),
             @Index(name = "idx_spricat_unmatched_reason", columnList = "reason")
         })
-public class PriceCatalogUnmatchedLineEntity {
+public class PriceCatalogUnmatchedLineEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

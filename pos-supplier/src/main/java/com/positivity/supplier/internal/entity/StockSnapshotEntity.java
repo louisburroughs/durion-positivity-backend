@@ -1,6 +1,7 @@
 package com.positivity.supplier.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -44,7 +45,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_sstock_snapshot_status", columnList = "status"),
             @Index(name = "idx_sstock_snapshot_correlation", columnList = "correlation_id")
         })
-public class StockSnapshotEntity {
+public class StockSnapshotEntity extends TenantScopedEntity {
 
     /** Snapshot identity (UUIDv7); the event aggregate id and Kafka record key. */
     @Id

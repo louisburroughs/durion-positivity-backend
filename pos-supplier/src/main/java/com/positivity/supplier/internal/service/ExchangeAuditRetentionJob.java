@@ -1,6 +1,7 @@
 package com.positivity.supplier.internal.service;
 
 import com.positivity.supplier.internal.repository.ExchangeAuditRepository;
+import com.positivity.tenancy.TenantIterator;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -11,7 +12,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Retention purge for exchange-audit payloads (ADR-0050 §7): past the retention window the
@@ -55,11 +57,17 @@ public class ExchangeAuditRetentionJob {
     private final ExchangeAuditRepository auditRepository;
     private final Clock clock;
     private final Duration retention;
+    private final TenantIterator tenantIterator;
+    private final TransactionTemplate transaction;
 
     public ExchangeAuditRetentionJob(
             @NonNull ExchangeAuditRepository auditRepository,
             @NonNull Clock clock,
-            @Value("${pos.supplier.audit.retention:P400D}") Duration retention) {
+            @Value("${pos.supplier.audit.retention:P400D}") Duration retention,
+            @NonNull TenantIterator tenantIterator,
+            @NonNull PlatformTransactionManager transactionManager) {
+        this.tenantIterator = Objects.requireNonNull(tenantIterator, "tenantIterator");
+        this.transaction = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager"));
         this.auditRepository = Objects.requireNonNull(auditRepository, "auditRepository");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.retention = Objects.requireNonNull(retention, "retention");
@@ -76,9 +84,18 @@ public class ExchangeAuditRetentionJob {
      * <p>Runs daily by default rather than hourly: the window is 400 days, so purge latency of a day
      * is immaterial, and a large first run is better amortised outside business hours.
      */
+    /**
+     * Per tenant (ADR-0062 §3): the audit table is tenant-scoped, so the purge runs once per active
+     * tenant with the transaction opened inside the binding (a {@code @Transactional} tick would open
+     * it before the tenant is bound).
+     */
     @Scheduled(cron = "${pos.supplier.audit.purge-cron:0 30 3 * * *}")
-    @Transactional
     public void purgeExpiredPayloads() {
+        tenantIterator.forEachActiveTenant(
+                tenantId -> transaction.executeWithoutResult(status -> purgeExpiredPayloadsForTenant()));
+    }
+
+    void purgeExpiredPayloadsForTenant() {
         Instant now = Instant.now(clock);
         Instant cutoff = now.minus(retention);
         long candidates = auditRepository.countPurgeableOlderThan(cutoff);

@@ -5,6 +5,7 @@ import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.enums.PayloadCaptureLevel;
 import com.positivity.supplier.internal.enums.RedactionClassification;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -59,7 +60,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
                     columnNames = {"vendor_profile_id", "capability"})
         })
 @EntityListeners(AuditingEntityListener.class)
-public class SupplierEndpointBindingEntity {
+public class SupplierEndpointBindingEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

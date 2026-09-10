@@ -17,6 +17,10 @@ import com.positivity.supplier.internal.repository.SupplierEndpointBindingReposi
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.repository.SupplierScheduleLeaseRepository;
 import com.positivity.supplier.internal.service.SupplierScheduleCoordinator;
+import com.positivity.tenancy.StaticTenantRegistry;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantIterator;
+import com.positivity.tenancy.testing.TenantTestSupport;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -81,7 +85,8 @@ class InvoiceFetchSchedulerTest {
                 fetchRunner,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 OVERLAP,
-                INITIAL_LOOKBACK);
+                INITIAL_LOOKBACK,
+                singleTenant());
 
         SupplierEndpointBindingEntity binding = newBinding();
         when(bindingRepository.findByCapabilityAndEnabledTrueAndScheduleCronIsNotNull(SupplierCapability.INVOICE_FETCH))
@@ -311,5 +316,12 @@ class InvoiceFetchSchedulerTest {
         // Failing closed rather than open: a misconfigured cron that fired every tick would hammer
         // a vendor, and the log line is what an operator has to notice instead.
         verify(fetchRunner, never()).fetchWindow(any(), any(), any());
+    }
+
+    /** One active tenant, the alpha default, for the per-tenant scheduled sweep (ADR-0062). */
+    private static TenantIterator singleTenant() {
+        TenancyProperties tenancy = new TenancyProperties();
+        tenancy.setDefaultTenantId(TenantTestSupport.TENANT_A);
+        return new TenantIterator(new StaticTenantRegistry(tenancy));
     }
 }

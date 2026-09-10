@@ -4,6 +4,7 @@ import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.enums.AuditAccessKind;
 import com.positivity.supplier.internal.enums.AuditPayloadOutcome;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -47,7 +48,7 @@ import lombok.NoArgsConstructor;
             @Index(name = "idx_saccess_accessed_at", columnList = "accessed_at"),
             @Index(name = "idx_saccess_correlation", columnList = "correlation_id")
         })
-public class AuditAccessEntity {
+public class AuditAccessEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

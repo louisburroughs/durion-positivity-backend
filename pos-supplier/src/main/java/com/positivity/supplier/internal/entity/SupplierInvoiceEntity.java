@@ -1,6 +1,7 @@
 package com.positivity.supplier.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -43,7 +44,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class SupplierInvoiceEntity {
+public class SupplierInvoiceEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

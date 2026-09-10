@@ -2,6 +2,7 @@ package com.positivity.supplier.internal.entity;
 
 import com.positivity.shared.id.AssignedIdentifier;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -59,7 +60,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         name = "supplier_schedule_lease",
         indexes = {@Index(name = "idx_slease_leased_until", columnList = "leased_until")})
 @EntityListeners(AuditingEntityListener.class)
-public class SupplierScheduleLeaseEntity {
+public class SupplierScheduleLeaseEntity extends TenantScopedEntity {
 
     /**
      * The binding this lease governs. Also the primary key: one lease per binding, by construction.

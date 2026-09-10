@@ -31,6 +31,7 @@ import com.positivity.supplier.internal.repository.SupplierEndpointBindingReposi
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.service.EnvSecretReferenceResolver;
 import com.positivity.supplier.internal.service.SecretSchemeRegistry;
+import com.positivity.tenancy.TenantIterator;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +40,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Reconciliation semantics of {@link SupplierYamlBootstrap} (ADR-0050 §6): create on first
@@ -76,6 +78,12 @@ class SupplierYamlBootstrapTest {
     @Autowired
     private SupplierEndpointBindingRepository bindingRepository;
 
+    @Autowired
+    private TenantIterator tenantIterator;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     private SupplierYamlBootstrap bootstrap;
 
     @BeforeEach
@@ -86,7 +94,9 @@ class SupplierYamlBootstrapTest {
                 authConfigRepository,
                 accountRepository,
                 bindingRepository,
-                new SecretSchemeRegistry(List.of(new EnvSecretReferenceResolver())));
+                new SecretSchemeRegistry(List.of(new EnvSecretReferenceResolver())),
+                tenantIterator,
+                transactionManager);
     }
 
     @Test

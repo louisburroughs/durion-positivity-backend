@@ -16,6 +16,7 @@ import com.positivity.supplier.internal.registry.SupplierCodecs;
 import com.positivity.supplier.internal.repository.SupplierWorkorderAuthorizationRepository;
 import com.positivity.supplier.internal.service.SupplierProfileResolver;
 import com.positivity.supplier.internal.service.SupplierProfileResolver.ResolvedBinding;
+import com.positivity.tenancy.TenantIterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -64,13 +65,17 @@ public class WorkorderCompletionApprover {
     /** How many outstanding approvals one tick will attempt. */
     private final int batchSize;
 
+    private final TenantIterator tenantIterator;
+
     public WorkorderCompletionApprover(
             SupplierWorkorderAuthorizationRepository authorizationRepository,
             SupplierProfileResolver profileResolver,
             AdapterRegistry adapterRegistry,
             SupplierBaseClient baseClient,
             WorkorderApprovalRecorder approvalRecorder,
-            @Value("${pos.supplier.workorderauth.approval-batch-size:50}") int batchSize) {
+            @Value("${pos.supplier.workorderauth.approval-batch-size:50}") int batchSize,
+            TenantIterator tenantIterator) {
+        this.tenantIterator = tenantIterator;
         this.authorizationRepository = authorizationRepository;
         this.profileResolver = profileResolver;
         this.adapterRegistry = adapterRegistry;
@@ -111,6 +116,10 @@ public class WorkorderCompletionApprover {
     /** Attempts outstanding approvals, oldest first. */
     @Scheduled(fixedDelayString = "${pos.supplier.workorderauth.approval-interval-ms:300000}")
     public void approveOutstanding() {
+        tenantIterator.forEachActiveTenant(tenantId -> approveOutstandingForTenant());
+    }
+
+    void approveOutstandingForTenant() {
         List<SupplierWorkorderAuthorizationEntity> outstanding =
                 authorizationRepository.findByApprovalStatusOrderByUpdatedAtAsc(
                         WorkorderApprovalStatus.PENDING, Limit.of(batchSize));

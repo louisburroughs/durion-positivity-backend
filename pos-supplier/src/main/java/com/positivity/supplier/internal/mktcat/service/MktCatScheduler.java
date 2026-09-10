@@ -9,6 +9,7 @@ import com.positivity.supplier.internal.repository.SupplierEndpointBindingReposi
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.repository.SupplierScheduleLeaseRepository;
 import com.positivity.supplier.internal.service.SupplierScheduleCoordinator;
+import com.positivity.tenancy.TenantIterator;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -51,10 +52,15 @@ public class MktCatScheduler {
     private final SupplierScheduleCoordinator scheduleCoordinator;
     private final MktCatImporter importer;
     private final Clock clock;
+    private final TenantIterator tenantIterator;
 
     /** Polls catalogue bindings that are due. Each runs at most once per tick, on one instance. */
     @Scheduled(fixedDelayString = "${pos.supplier.mktcat.poll-interval-ms:900000}")
     public void runDueSweeps() {
+        tenantIterator.forEachActiveTenant(tenantId -> runDueSweepsForTenant());
+    }
+
+    void runDueSweepsForTenant() {
         Instant now = Instant.now(clock);
         for (SupplierEndpointBindingEntity binding :
                 bindingRepository.findByCapabilityAndEnabledTrueAndScheduleCronIsNotNull(

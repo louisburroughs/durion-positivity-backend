@@ -1,6 +1,7 @@
 package com.positivity.supplier.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -30,6 +31,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
+@TenantGlobal(
+        reason = "transactional outbox drained by the platform-scoped SupplierOutboxPublisher across every"
+                + " tenant; the producing tenant travels as data in tenant_id (db/tenancy-global-tables.txt)")
 @EntityListeners(AuditingEntityListener.class)
 @Table(
         name = "supplier_event_outbox",
@@ -41,6 +45,10 @@ public class SupplierOutboxEventEntity {
     @UUIDv7Id
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
+
+    /** The producing tenant (ADR-0062 §3): stamped from the bound tenant on write, put on the Kafka record header on publish. */
+    @Column(name = "tenant_id", nullable = false, updatable = false)
+    private UUID tenantId;
 
     @Column(name = "topic", nullable = false, length = 255)
     private String topic;
