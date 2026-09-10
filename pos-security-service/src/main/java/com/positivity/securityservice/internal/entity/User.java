@@ -2,6 +2,7 @@ package com.positivity.securityservice.internal.entity;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
@@ -17,7 +18,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "users")
-public class User {
+public class User extends TenantScopedEntity {
     @Id
     @GeneratedValue
     @UUIDv7Id

@@ -76,6 +76,15 @@ springdoc:
 
   default-produces-media-type: application/json
 pos:
+  # ADR-0062 section 9, transitional: every unbound path (a request the gateway has not yet stamped with
+  # X-Tenant-Id, a record without the tenant header, a scheduler) runs as the alpha default tenant.
+  # Unset it (POS_TENANCY_DEFAULT_TENANT_ID=) once every client sends a tenant: the runtime is then
+  # strict and an unbound request is a 401. /v1/auth/** binds the tenant itself (login slug, refresh
+  # token tid claim), so the filter never refuses it for lack of a header.
+  tenancy:
+    default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000001}
+    unenforced-paths:
+      - /v1/auth/
   customer:
     service-id: ${POS_CUSTOMER_SERVICE_ID:customer}
   security-service:
@@ -106,6 +115,10 @@ pos:
       # Role persona facts consumed by pos-mcp-server so a persona edit reaches the assistant
       # without waiting for its scheduled pull (#1613).
       security-events-topic: ${POS_SECURITY_EVENTS_TOPIC:security.events.v1}
+      # ADR-0062 section 7 (plan WS2b): tenant.events.v1 feeds the global ext_tenant replica that
+      # login resolves slugs from and GET /v1/tenants/me answers from.
+      tenant-events-topic: ${POS_SECURITY_TENANT_EVENTS_TOPIC:tenant.events.v1}
+      tenant-events-consumer-group: ${POS_SECURITY_TENANT_EVENTS_CONSUMER_GROUP:pos-security-tenant-events}
     location-scope:
       # ADR-0061 §2: assertion that the hierarchy was modelled correctly, not a size limit.
       # A person whose effective assigned-node set exceeds this is logged at WARN and counted

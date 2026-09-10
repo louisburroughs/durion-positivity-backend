@@ -52,6 +52,14 @@ public class GatewayAuthProperties {
      */
     private String strippedAuthPathPrefix;
 
+    /**
+     * Host suffix that identifies a tenant by subdomain, e.g. {@code .durionpos.org}: a request to
+     * {@code acme.durionpos.org} on the login route is forwarded with {@code X-Tenant-Slug: acme}
+     * (ADR-0062 §3, plan WS2b). Blank disables the derivation; the client may still send
+     * {@code tenantSlug} in the login body.
+     */
+    private String tenantHostSuffix = "";
+
     public boolean isTokenIdentityRequired() {
         return tokenIdentityRequired;
     }
@@ -106,5 +114,13 @@ public class GatewayAuthProperties {
 
     public void setStrippedAuthPathPrefix(String strippedAuthPathPrefix) {
         this.strippedAuthPathPrefix = strippedAuthPathPrefix;
+    }
+
+    public String getTenantHostSuffix() {
+        return tenantHostSuffix;
+    }
+
+    public void setTenantHostSuffix(String tenantHostSuffix) {
+        this.tenantHostSuffix = tenantHostSuffix == null ? "" : tenantHostSuffix;
     }
 }

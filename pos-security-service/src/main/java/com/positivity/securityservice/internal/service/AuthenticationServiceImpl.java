@@ -6,6 +6,7 @@ import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.security.service.JwtService;
+import com.positivity.tenancy.TenantContext;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
@@ -14,6 +15,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AccountExpiredException;
@@ -62,6 +64,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final LockoutService lockoutService;
     private final UserRepository userRepository;
     private final UserService userService;
+    private final LoginTenantResolver loginTenantResolver;
     private final Counter authSuccessCounter;
     private final Counter badCredentialsCounter;
     private final Counter accountLockedCounter;
@@ -75,12 +78,14 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             LockoutService lockoutService,
             UserRepository userRepository,
             UserService userService,
+            LoginTenantResolver loginTenantResolver,
             MeterRegistry meterRegistry) {
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
         this.lockoutService = lockoutService;
         this.userRepository = userRepository;
         this.userService = userService;
+        this.loginTenantResolver = loginTenantResolver;
         this.authSuccessCounter = Counter.builder(COUNTER_AUTH_SUCCESS).register(meterRegistry);
         this.badCredentialsCounter = Counter.builder(COUNTER_AUTH_FAILURE)
                 .tag(TAG_REASON, REASON_BAD_CREDENTIALS)
@@ -102,6 +107,20 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     @Override
     @NonNull
     public TokenPairResponse login(@NonNull LoginRequest request) {
+        return login(request, null);
+    }
+
+    @Override
+    @NonNull
+    public TokenPairResponse login(@NonNull LoginRequest request, @Nullable String tenantSlugHeader) {
+        // ADR-0062 §3: resolve the tenant before touching users; an unknown or inactive slug is
+        // indistinguishable from a bad password. The login route is exempt from the tenant
+        // filter's refusal (pos.tenancy.unenforced-paths) precisely so this can bind it.
+        UUID tenantId = loginTenantResolver.resolve(tenantSlugHeader, request.tenantSlug());
+        return TenantContext.callAs(tenantId, () -> loginBound(request));
+    }
+
+    private TokenPairResponse loginBound(LoginRequest request) {
         log.debug("Login attempt received for username={}", request.username());
         // Pre-flight: resolve userId for lockout bookkeeping. If the user is not
         // found in the repository (e.g. unknown username), skip lockout checks —

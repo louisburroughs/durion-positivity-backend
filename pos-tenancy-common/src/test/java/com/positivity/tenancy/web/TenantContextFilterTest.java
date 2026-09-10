@@ -10,6 +10,7 @@ import jakarta.servlet.FilterChain;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
@@ -45,6 +46,27 @@ class TenantContextFilterTest {
 
         assertThat(seen.get()).isEqualTo(A);
         assertThat(TenantContext.current()).isEmpty();
+    }
+
+    @Test
+    void configuredUnenforcedPathsPassUnboundInStrictMode() throws Exception {
+        TenancyProperties properties = new TenancyProperties();
+        properties.setUnenforcedPaths(List.of("/v1/auth/"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter(properties).doFilter(new MockHttpServletRequest("POST", "/v1/auth/login"), response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(seen.get())
+                .as("nothing bound; the module resolves the tenant itself")
+                .isNull();
+
+        MockHttpServletRequest withHeader = new MockHttpServletRequest("POST", "/v1/auth/login");
+        withHeader.addHeader(TenantHeaders.HTTP_TENANT_ID, A.toString());
+        filter(properties).doFilter(withHeader, new MockHttpServletResponse(), chain);
+        assertThat(seen.get())
+                .as("a header on an unenforced path is still bound")
+                .isEqualTo(A);
     }
 
     @Test
@@ -140,5 +162,17 @@ class TenantContextFilterTest {
                         () -> filter(new TenancyProperties()).doFilter(request, new MockHttpServletResponse(), failing))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(TenantContext.current()).isEmpty();
+    }
+
+    @Test
+    void nullUnenforcedPathsMeansNothingIsExempt() throws Exception {
+        TenancyProperties properties = new TenancyProperties();
+        properties.setUnenforcedPaths(null);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter(properties).doFilter(new MockHttpServletRequest("POST", "/v1/auth/login"), response, chain);
+
+        assertThat(properties.getUnenforcedPaths()).isEmpty();
+        assertThat(response.getStatus()).as("fail closed, not a 500").isEqualTo(401);
     }
 }

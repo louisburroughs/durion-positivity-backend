@@ -8,7 +8,9 @@ import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import com.positivity.securityservice.internal.service.AuthenticationService;
 import com.positivity.securityservice.internal.service.SelfRegistrationService;
 import com.positivity.shared.error.ApiError;
+import com.positivity.tenancy.TenantHeaders;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -20,6 +22,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -76,6 +79,8 @@ public class AuthController {
     @PostMapping("/login")
     @PreAuthorize("permitAll()")
     public ResponseEntity<TokenPairResponse> login(
+            @Parameter(hidden = true) @RequestHeader(value = TenantHeaders.HTTP_TENANT_SLUG, required = false)
+                    String tenantSlugHeader,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description = "Credentials of the user signing in.",
                             required = true,
@@ -88,7 +93,7 @@ public class AuthController {
                     @Valid
                     @RequestBody
                     LoginRequest request) {
-        return ResponseEntity.ok(authenticationService.login(request));
+        return ResponseEntity.ok(authenticationService.login(request, tenantSlugHeader));
     }
 
     @Operation(operationId = "selfRegisterUser", summary = "Self-Register a New Customer Account", description = """

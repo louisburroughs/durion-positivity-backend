@@ -318,7 +318,8 @@ those claims.
 
 ## API Endpoints
 
-- `POST /v1/auth/login` — authenticate and receive JWT
+- `POST /v1/auth/login` — authenticate and receive JWT (tenant from `X-Tenant-Slug` or the form's `tenantSlug`, ADR-0062 §3)
+- `GET /v1/tenants/me` — the caller's tenant (`tid`) as the `ext_tenant` replica knows it; 404 while the replica is behind
 - `GET /v1/auth/validate` — validate a JWT
 - `GET /v1/auth/subject` — extract subject from JWT
 - `GET /v1/permissions/catalog-version` — active catalog version (public)
@@ -476,15 +477,37 @@ committed spec against the controllers' declarations and fails on drift in eithe
 | `pos.security-service.kafka.people-events-topic` | `people.events.v1` | Staffing-assignment facts feeding the assigned-node read model (ADR-0061 §1) |
 | `pos.security-service.kafka.people-manifest-topic` | `people.manifest.v1` | Reconciliation manifests for that read model; drift requests a replay on `people-commands-topic` |
 | `pos.security-service.location-scope.assigned-node-cap` | `8` | Assigned-node count above which `security.location-scope.assigned-nodes.cap-exceeded` fires (WARN + metric, never truncated) |
+| `pos.security-service.kafka.tenant-events-topic` | `tenant.events.v1` | Tenant registry facts (pos-tenant, ADR-0062 §7) feeding the `ext_tenant` replica |
+| `pos.tenancy.default-tenant-id` | alpha default tenant | Transitional binding for unbound requests and pre-WS2b tokens without `tid`; empty means strict |
+| `pos.tenancy.unenforced-paths` | `/v1/auth/` | Paths that run unbound even in strict mode (login resolves the tenant itself) |
 
 ## Dependencies
 
 - `pos-security-common` — shared security constants and filter
 - `pos-events` — `@EmitEvent` annotation and event registration
+- `pos-tenancy-common` — tenant binding, `TenantScopedEntity`, `@TenantGlobal`, Kafka tenant header (ADR-0062)
 
 ## Database
 
 Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`. Seed admin password hash is injected as a Flyway placeholder; never commit real hashes in SQL files.
+
+## Tenancy (ADR-0062, WS2b)
+
+Every row but the global tables (`ext_tenant`, `permissions`, `processed_events`, `event_outbox`; see
+`db/tenancy-global-tables.txt`) belongs to a tenant and is read under row-level security as `pos_app`, with
+Flyway on the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`). Usernames are unique per tenant.
+
+- **Login resolves the tenant first** (`LoginTenantResolver`): the gateway's `X-Tenant-Slug` (derived from the
+  request host, never trusted from the client), else the form's `tenantSlug`, looked up in `ext_tenant`; an
+  unknown or inactive slug is the same 401 as a bad password. No slug at all binds the transitional default.
+  The user lookup, lockout bookkeeping and token issue then run under that tenant.
+- **Both tokens carry `tid`.** Token validation and the refresh exchange bind the token's own `tid` around
+  their lookups, so a refresh cannot change tenant. The gateway injects `X-Tenant-Id` from `tid`.
+- **`ext_tenant`** is the replica of pos-tenant's `tenant.events.v1` projection (`TenantEventsListener`,
+  idempotent through `processed_events`, monotonic on `aggregateVersion`). `ExtTenantRegistry` serves it as
+  the module's `TenantRegistry`, and `GET /v1/tenants/me` reads it for the caller.
+- **Still to come (WS2b, second PR):** the `tenant.created` provisioning handler (role template copy, first
+  admin, `tenant.provisioned`) and the `ROLE_PLATFORM_ADMIN` template that takes the `platform:*` grants off `ADMIN`.
 
 `ext_people_staffing_assignment` is a read model of pos-people's `employee_location_assignment` (ADR-0061 §1): one row per assignment keyed by `assignment_id`, storing the assigned location node *verbatim* (shop or District/Region/HQ — never expanded), `is_primary`, `status` (`ACTIVE`/`ENDED`, ended rows are kept), and effective dates. Written only by `PeopleEventsListener`; read through `StaffingAssignmentProjectionService` ("nodes effective on date D", "earliest `effective_to`").
 

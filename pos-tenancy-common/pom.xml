@@ -67,6 +67,12 @@
             <artifactId>jackson-databind</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- Jackson 3 tree model for the ext_tenant projection parser (TenantProjectionEvent); optional like Jackson 2 -->
+        <dependency>
+            <groupId>tools.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <optional>true</optional>
+        </dependency>
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-shared-dtos</artifactId>

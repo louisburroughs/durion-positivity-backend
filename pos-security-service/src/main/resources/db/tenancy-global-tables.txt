@@ -1,6 +1,7 @@
 # pos-security-service: tables with no tenant_id and no row-level-security policy (ADR-0062 section 5).
 # Format: <table>  # <reason>. Every other table in this module is tenant-scoped.
 # TenancySchemaConformanceIT (plan WS1) reads this file.
+ext_tenant  # public tenant projection fed by tenant.events.v1 (ADR-0062 section 5); login resolves slugs before any tenant is bound
 event_outbox  # transactional outbox; the unbound poller publishes every tenant's rows (tenant_id carried as data)
 permissions  # permission catalog is global and code-first (ADR-0062 section 6, ADR-0040)
 processed_events  # consumer idempotency ledger keyed by eventId; checked before the tenant is bound

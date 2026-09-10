@@ -74,12 +74,16 @@ public class SecurityGatewayConfig {
     private static final String HEADER_X_TENANT_SLUG = "X-Tenant-Slug";
     private static final String JWT_HEADER_ALG = "alg";
     private static final String CLAIM_PERMISSION_VERSION = "perm_ver";
+    private static final String CLAIM_TENANT_ID = "tid";
+    private static final String LOGIN_PATH_SEGMENT = "/login";
+    private static final Pattern TENANT_SLUG = Pattern.compile("^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])$");
     private static final String CLAIM_ROLES = "roles";
     private static final String CLAIM_LOC_FIN_BITS = "loc_fin_bits";
     private static final String CLAIM_LOC_OTH_BITS = "loc_oth_bits";
     private static final String CLAIM_LOC_SCOPE = "loc_scope";
     private static final String LOG_JWT_AUTH_REJECTED = "JWT auth rejected path={} reason={} jti={}";
     private static final String METRIC_AUTH_HEADER_STRIP_COUNT = "auth.header.strip.count";
+    private static final String METRIC_AUTH_TENANT_CLAIM_MISSING = "auth.tenant.claim.missing";
     private static final String METRIC_AUTH_LEGACY_DECODE_COUNT = "auth.legacy.decode.count";
     private static final String METRIC_AUTH_PERMISSION_CATALOG_UNKNOWN = "auth.perm.catalog.version.unknown";
     private static final String METRIC_AUTH_PERMISSION_DECODE_FAILURE = "auth.perm.decode.failure";
@@ -208,7 +212,7 @@ public class SecurityGatewayConfig {
 
     private Mono<Void> authenticateRequest(AuthRequestContext context, GatewayFilterChain chain) {
         if (isPublicPath(context.path())) {
-            return chain.filter(context.exchange());
+            return chain.filter(withTenantSlugFromHost(context));
         }
 
         Optional<String> token = extractBearerToken(context.request());
@@ -348,6 +352,11 @@ public class SecurityGatewayConfig {
             return Optional.empty();
         }
 
+        Optional<String> tenantId = resolveTenantId(claims, context, jti);
+        if (tenantId.isEmpty()) {
+            return Optional.empty();
+        }
+
         Optional<String> legacyAuthoritiesHeader = resolveLegacyAuthoritiesHeader(claims, context, jti);
         String rolesHeader = resolveRolesHeader(claims);
         if (legacyAuthoritiesHeader.isPresent()) {
@@ -358,7 +367,8 @@ public class SecurityGatewayConfig {
                     legacyAuthoritiesHeader.get(), // CSV from legacy authorities claim
                     rolesHeader,
                     LocationScopeHeaders.ABSENT, // legacy tokens predate the scope claims
-                    jti));
+                    jti,
+                    tenantId.get().isEmpty() ? null : tenantId.get()));
         }
 
         Integer permVer = claims.get(CLAIM_PERMISSION_VERSION, Integer.class);
@@ -392,7 +402,94 @@ public class SecurityGatewayConfig {
                 "", // no legacy CSV for new tokens
                 rolesHeader,
                 locationScopeHeaders.get(),
-                jti));
+                jti,
+                tenantId.get().isEmpty() ? null : tenantId.get()));
+    }
+
+    /**
+     * The {@code tid} claim (ADR-0062 §3, ADR-0040 §2 amendment): the tenant every downstream row
+     * is read and written under, forwarded verbatim as {@code X-Tenant-Id}. A malformed value is
+     * rejected like any other bad claim; an absent one is tolerated only while pre-WS2b tokens are
+     * still in circulation (the issuer stamps it on every token now) and yields an empty string, so
+     * downstream falls back to its transitional default rather than a forged header.
+     */
+    private Optional<String> resolveTenantId(Claims claims, AuthRequestContext context, String jti) {
+        Object raw = claims.get(CLAIM_TENANT_ID);
+        if (raw == null) {
+            incrementTaggedCounter(METRIC_AUTH_TENANT_CLAIM_MISSING, REJECTION_REASON_TAG, "no_tid");
+            return Optional.of("");
+        }
+        try {
+            return Optional.of(UUID.fromString(String.valueOf(raw)).toString());
+        } catch (IllegalArgumentException ex) {
+            rejectAuthentication(
+                    context,
+                    METRIC_AUTH_TOKEN_VALIDATION_FAILURE,
+                    REJECTION_REASON_TAG,
+                    "malformed_tid",
+                    "malformed_tid",
+                    jti);
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * On the public login route, derive {@code X-Tenant-Slug} from the {@code Host} header when
+     * {@code auth.tenant-host-suffix} is configured (ADR-0062 §3, plan WS2b): {@code
+     * acme.durionpos.org} becomes {@code acme}. Any inbound copy of the header was already stripped;
+     * a host that does not match the suffix, or a label that is not a valid slug, forwards nothing
+     * and leaves resolution to the login body.
+     */
+    private ServerWebExchange withTenantSlugFromHost(AuthRequestContext context) {
+        if (!isLoginPath(context.path())) {
+            return context.exchange();
+        }
+        Optional<String> slug = tenantSlugFromHost(context.request());
+        if (slug.isEmpty()) {
+            return context.exchange();
+        }
+        ServerHttpRequest withSlug = context.request()
+                .mutate()
+                .headers(headers -> headers.set(HEADER_X_TENANT_SLUG, slug.get()))
+                .build();
+        return context.exchange().mutate().request(withSlug).build();
+    }
+
+    private Optional<String> tenantSlugFromHost(ServerHttpRequest request) {
+        String suffix = authProperties.getTenantHostSuffix();
+        if (!StringUtils.hasText(suffix)) {
+            return Optional.empty();
+        }
+        String host = request.getHeaders().getFirst(HttpHeaders.HOST);
+        if (!StringUtils.hasText(host)) {
+            host = request.getURI().getHost();
+        }
+        if (!StringUtils.hasText(host)) {
+            return Optional.empty();
+        }
+        int colon = host.indexOf(':');
+        String bareHost = (colon > 0 ? host.substring(0, colon) : host).toLowerCase(java.util.Locale.ROOT);
+        String normalizedSuffix = suffix.trim().toLowerCase(java.util.Locale.ROOT);
+        if (!bareHost.endsWith(normalizedSuffix) || bareHost.length() <= normalizedSuffix.length()) {
+            return Optional.empty();
+        }
+        String prefix = bareHost.substring(0, bareHost.length() - normalizedSuffix.length());
+        // The tenant is the first label; anything between it and the suffix (acme.dev.<suffix>)
+        // is environment routing, not tenant identity.
+        int dot = prefix.indexOf('.');
+        String label = dot < 0 ? prefix : prefix.substring(0, dot);
+        return TENANT_SLUG.matcher(label).matches() ? Optional.of(label) : Optional.empty();
+    }
+
+    /** The credential login route only: the one public auth path whose body names a tenant. */
+    private boolean isLoginPath(String path) {
+        return isAuthPath(path) && path.endsWith(LOGIN_PATH_SEGMENT);
+    }
+
+    private boolean isAuthPath(String path) {
+        return isPathMatch(path, authProperties.getAuthPathRoot(), authProperties.getAuthPathPrefix())
+                || isPathMatch(
+                        path, authProperties.getStrippedAuthPathRoot(), authProperties.getStrippedAuthPathPrefix());
     }
 
     /**
@@ -594,6 +691,9 @@ public class SecurityGatewayConfig {
                     } else {
                         headers.remove(HEADER_X_ROLES);
                     }
+                    // ADR-0062 §3: the tenant travels only as the validated tid claim; an absent
+                    // claim removes the header so no inbound copy can survive.
+                    setOrRemove(headers, HEADER_X_TENANT_ID, identity.tenantId());
                     // Present-but-empty bitsets are forwarded as empty headers on purpose; an
                     // absent claim removes the header so no inbound copy can survive.
                     setOrRemove(
@@ -917,6 +1017,10 @@ public class SecurityGatewayConfig {
             String path,
             InboundIdentityHeaders inboundHeaders) {}
 
+    /**
+     * @param tenantId the validated {@code tid} claim (ADR-0062 §3), forwarded as
+     *     {@code X-Tenant-Id}; {@code null} only for a legacy token that predates the claim
+     */
     private record AuthenticatedIdentity(
             String subject,
             String userId,
@@ -924,5 +1028,6 @@ public class SecurityGatewayConfig {
             String legacyAuthoritiesHeader,
             String rolesHeader,
             LocationScopeHeaders locationScope,
-            String jti) {}
+            String jti,
+            @Nullable String tenantId) {}
 }

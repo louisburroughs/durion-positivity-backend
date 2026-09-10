@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -10,10 +11,13 @@ import com.positivity.securityservice.internal.dto.LoginRequest;
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.security.service.JwtService;
 import com.positivity.securityservice.internal.security.service.JwtService.TokenPair;
+import com.positivity.tenancy.TenantContext;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -93,8 +97,24 @@ class AuthMetricsTest {
     @Spy
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
 
+    /** ADR-0062 §3: login resolves the tenant first; answers the transitional default here. */
+    @Mock
+    private LoginTenantResolver loginTenantResolver;
+
     @InjectMocks
     private AuthenticationServiceImpl sut;
+
+    @BeforeEach
+    void resolveTheDefaultTenant() {
+        lenient()
+                .when(loginTenantResolver.resolve(any(), any()))
+                .thenReturn(UUID.fromString("01900000-0000-7000-8000-000000000001"));
+    }
+
+    @AfterEach
+    void clearTenant() {
+        TenantContext.clear();
+    }
 
     // ---------------------------------------------------------------
     // Shared helpers

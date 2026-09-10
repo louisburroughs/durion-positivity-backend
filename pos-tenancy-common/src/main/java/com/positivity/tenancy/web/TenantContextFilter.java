@@ -31,7 +31,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * {@code tid} claim, plan WS2b), else the transitional default tenant. When neither applies and
  * {@code pos.tenancy.enforce} is on, the request is refused with a 401 {@link ApiError} (code
  * {@value #ERROR_CODE}) rather than reaching a handler unscoped; a malformed header is refused the
- * same way. Infrastructure paths (actuator, OpenAPI) are never refused, only bound when possible.
+ * same way. Infrastructure paths (actuator, OpenAPI) and the module's own {@code
+ * pos.tenancy.unenforced-paths} are never refused, only bound when possible.
  */
 public class TenantContextFilter extends OncePerRequestFilter {
 
@@ -91,12 +92,17 @@ public class TenantContextFilter extends OncePerRequestFilter {
         }
     }
 
-    private static boolean isUnenforced(@Nullable String path) {
+    private boolean isUnenforced(@Nullable String path) {
         if (path == null) {
             return false;
         }
         for (String prefix : UNENFORCED_PREFIXES) {
             if (path.startsWith(prefix)) {
+                return true;
+            }
+        }
+        for (String prefix : properties.getUnenforcedPaths()) {
+            if (prefix != null && !prefix.isBlank() && path.startsWith(prefix.trim())) {
                 return true;
             }
         }

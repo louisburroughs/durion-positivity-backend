@@ -2,6 +2,8 @@ package com.positivity.securityservice.internal.config;
 
 import com.positivity.securityservice.internal.entity.OutboxEvent;
 import com.positivity.securityservice.internal.repository.OutboxEventRepository;
+import com.positivity.tenancy.PlatformScoped;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -62,6 +64,9 @@ public class OutboxPublisher {
     }
 
     @Scheduled(fixedDelayString = "${pos.security-service.outbox.poll-interval-ms:1000}")
+    @PlatformScoped(
+            reason =
+                    "drains event_outbox, a global table; each row carries its own tenant, stamped on the record header")
     public void publishPending() {
         List<OutboxEvent> pending = outboxEventRepository.findTop100ByPublishedAtIsNullOrderByIdAsc();
         for (OutboxEvent event : pending) {
@@ -75,7 +80,8 @@ public class OutboxPublisher {
     private boolean publish(OutboxEvent event) {
         try {
             kafkaTemplate
-                    .send(event.getTopic(), event.getRecordKey(), event.getPayload())
+                    .send(TenantKafkaHeaders.record(
+                            event.getTopic(), event.getRecordKey(), event.getPayload(), event.getTenantId()))
                     .get(sendTimeoutMs, TimeUnit.MILLISECONDS);
             event.setPublishedAt(Instant.now(clock));
             event.setAttempts(0);

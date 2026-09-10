@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.entity;
 import com.positivity.securityservice.internal.enums.LocationHierarchy;
 import com.positivity.securityservice.internal.enums.LocationScope;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.HashSet;
@@ -20,7 +21,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "roles")
-public class Role {
+public class Role extends TenantScopedEntity {
     @Id
     @GeneratedValue
     @UUIDv7Id

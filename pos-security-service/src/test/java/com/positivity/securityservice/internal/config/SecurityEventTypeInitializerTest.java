@@ -95,7 +95,7 @@ class SecurityEventTypeInitializerTest {
         void securityEventTypes_definesExactly37Types() {
             assertThat(EventTypes.all())
                     .as("SecurityEventTypes.all() must define exactly 37 event type registrations")
-                    .hasSize(37);
+                    .hasSize(38);
         }
 
         @Test

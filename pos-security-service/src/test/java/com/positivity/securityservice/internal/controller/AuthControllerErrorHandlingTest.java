@@ -97,7 +97,8 @@ class AuthControllerErrorHandlingTest {
     @DisplayName(
             "login with valid credentials but no roles answers 403 USER_HAS_NO_ROLES with nextAction and correlation id")
     void loginWithNoRolesAnswers403UserHasNoRolesWithNextActionAndCorrelationId() throws Exception {
-        when(authenticationService.login(any())).thenThrow(new NoRolesAssignedException("User has no roles assigned"));
+        when(authenticationService.login(any(), any()))
+                .thenThrow(new NoRolesAssignedException("User has no roles assigned"));
 
         mockMvc.perform(post("/v1/auth/login")
                         .header("X-Correlation-Id", CORRELATION_ID)
@@ -114,7 +115,7 @@ class AuthControllerErrorHandlingTest {
     @Test
     @DisplayName("login with bad credentials answers 401 INVALID_CREDENTIALS with the echoed correlation id")
     void loginWithBadCredentialsAnswers401InvalidCredentialsWithCorrelationId() throws Exception {
-        when(authenticationService.login(any())).thenThrow(new BadCredentialsException("bad password"));
+        when(authenticationService.login(any(), any())).thenThrow(new BadCredentialsException("bad password"));
 
         mockMvc.perform(post("/v1/auth/login")
                         .header("X-Correlation-Id", CORRELATION_ID)
@@ -129,7 +130,7 @@ class AuthControllerErrorHandlingTest {
     @Test
     @DisplayName("login against a locked account answers 401 ACCOUNT_LOCKED with the echoed correlation id")
     void loginWithLockedAccountAnswers401AccountLockedWithCorrelationId() throws Exception {
-        when(authenticationService.login(any())).thenThrow(new LockedException("Account locked"));
+        when(authenticationService.login(any(), any())).thenThrow(new LockedException("Account locked"));
 
         mockMvc.perform(post("/v1/auth/login")
                         .header("X-Correlation-Id", CORRELATION_ID)

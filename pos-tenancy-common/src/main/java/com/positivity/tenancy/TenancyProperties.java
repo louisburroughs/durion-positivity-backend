@@ -32,6 +32,15 @@ public class TenancyProperties {
     /** Tenants a {@link TenantIterator} visits until the {@code ext_tenant} replica exists (plan WS2a). */
     private List<UUID> tenants = new ArrayList<>();
 
+    /**
+     * Request path prefixes the {@code TenantContextFilter} never refuses for lack of a tenant, on
+     * top of the infrastructure paths it always exempts (actuator, OpenAPI). A module that binds the
+     * tenant itself on some paths lists them here: pos-security-service resolves the tenant for
+     * {@code /v1/auth/**} from the login slug or the refresh token's {@code tid} claim (plan WS2b).
+     * A tenant header on such a path is still bound when present.
+     */
+    private List<String> unenforcedPaths = new ArrayList<>();
+
     private final Datasource datasource = new Datasource();
 
     public Optional<UUID> getDefaultTenantId() {
@@ -56,6 +65,15 @@ public class TenancyProperties {
 
     public void setTenants(List<UUID> tenants) {
         this.tenants = tenants;
+    }
+
+    public List<String> getUnenforcedPaths() {
+        return unenforcedPaths;
+    }
+
+    public void setUnenforcedPaths(List<String> unenforcedPaths) {
+        // Null is "nothing exempt": the filter stays fail-closed rather than failing on the list.
+        this.unenforcedPaths = unenforcedPaths == null ? new ArrayList<>() : unenforcedPaths;
     }
 
     public Datasource getDatasource() {

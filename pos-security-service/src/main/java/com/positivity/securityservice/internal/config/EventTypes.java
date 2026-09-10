@@ -16,10 +16,14 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the security module.
-     * Total: 37 event types.
+     * Total: 38 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
+                // TenantController - 1 event (ADR-0062 section 7)
+                EventTypeRegistration.fastRead("SECURITY_TENANT_ME_GET", "Read the caller's tenant from ext_tenant")
+                        .build(),
+
                 // AuthController - 2 events
                 EventTypeRegistration.write("SECURITY_AUTH_LOGIN", "User login via /v1/auth/login")
                         .build(),

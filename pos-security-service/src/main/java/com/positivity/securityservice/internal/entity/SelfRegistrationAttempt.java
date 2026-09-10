@@ -2,6 +2,7 @@ package com.positivity.securityservice.internal.entity;
 
 import com.positivity.securityservice.internal.enums.SelfRegistrationAttemptStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -23,7 +24,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(name = "self_registration_attempts")
 @Getter
 @Setter
-public class SelfRegistrationAttempt {
+public class SelfRegistrationAttempt extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

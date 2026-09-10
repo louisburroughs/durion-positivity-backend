@@ -11,6 +11,8 @@ import com.positivity.securityservice.internal.exception.SecurityValidationExcep
 import com.positivity.securityservice.internal.repository.JwtTokenRepository;
 import com.positivity.securityservice.internal.security.service.JwtService;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.TenantResolver;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
@@ -77,6 +79,7 @@ public class JwtServiceImpl implements JwtService {
     private final TokenRevocationManager tokenRevocationManager;
     private final UserDetailsService userDetailsService;
     private final StaffingAssignmentProjectionService staffingAssignmentProjectionService;
+    private final TenantResolver tenantResolver;
 
     @Value("${security.jwt.secret}")
     private String jwtSecret;
@@ -128,7 +131,8 @@ public class JwtServiceImpl implements JwtService {
                 return false;
             }
 
-            Optional<JwtToken> stored = jwtTokenRepository.findByToken(token);
+            Optional<JwtToken> stored =
+                    TenantContext.callAs(tenantOf(claims), () -> jwtTokenRepository.findByToken(token));
             if (stored.isEmpty()) {
                 log.debug("Token validation failed: token not found in database. jti={}", jti);
                 return false;
@@ -143,6 +147,24 @@ public class JwtServiceImpl implements JwtService {
                     e.getClass().getSimpleName());
             return false;
         }
+    }
+
+    /**
+     * The tenant a token was issued for: its {@code tid} claim, or (only while pre-WS2b tokens are
+     * still in circulation) the bound or transitional default tenant.
+     *
+     * @throws IllegalArgumentException when the claim is present but not a UUID, or absent while no
+     *     tenant is bound and the module runs strict (the token is then simply invalid, not a 500)
+     */
+    private UUID tenantOf(Claims claims) {
+        String tid = claims.get(TID, String.class);
+        if (tid == null || tid.isBlank()) {
+            return tenantResolver
+                    .resolve()
+                    .orElseThrow(() ->
+                            new IllegalArgumentException("Token carries no tid and no tenant is bound (strict mode)"));
+        }
+        return UUID.fromString(tid);
     }
 
     @Override
@@ -357,6 +379,9 @@ public class JwtServiceImpl implements JwtService {
         if (roleClaims.isEmpty()) {
             throw new SecurityValidationException("Roles cannot be blank");
         }
+        // ADR-0062 §3: the tenant the login (or the internal caller) is bound to; a token never
+        // names a tenant the issuing request did not run under.
+        UUID tenantId = tenantResolver.require();
 
         // ADR-0061 §2: the scope bitsets are composed per role, so a permission an ALL role grants
         // stays global even when a LOCATION role grants it too. perm_bits above is untouched.
@@ -383,6 +408,7 @@ public class JwtServiceImpl implements JwtService {
                 .add(AUDIENCE)
                 .and()
                 .claim(UID, userId.toString())
+                .claim(TID, tenantId.toString())
                 .claim(USERNAME, username)
                 .claim(ROLES, roleClaims)
                 .claim(PERM_BITS, permBits)
@@ -410,6 +436,7 @@ public class JwtServiceImpl implements JwtService {
                 .add(AUDIENCE)
                 .and()
                 .claim(UID, userId.toString())
+                .claim(TID, tenantId.toString())
                 .claim("type", "refresh")
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(refreshExpiry))
@@ -454,7 +481,8 @@ public class JwtServiceImpl implements JwtService {
                 return false;
             }
 
-            Optional<JwtToken> stored = jwtTokenRepository.findByRefreshToken(refreshToken);
+            Optional<JwtToken> stored =
+                    TenantContext.callAs(tenantOf(claims), () -> jwtTokenRepository.findByRefreshToken(refreshToken));
             if (stored.isEmpty()) {
                 log.debug("Refresh token validation failed: token not found in database. jti={}", jti);
                 return false;
@@ -473,6 +501,18 @@ public class JwtServiceImpl implements JwtService {
 
     @Override
     public TokenPair refreshAccessToken(@NonNull String refreshToken) {
+        // ADR-0062 §3: a refresh exchange cannot change tenant. The whole exchange, lookups and
+        // the new pair alike, runs under the tenant the refresh token was issued for.
+        UUID tenantId;
+        try {
+            tenantId = tenantOf(getClaims(refreshToken));
+        } catch (JwtException | IllegalArgumentException e) {
+            throw new SecurityValidationException("Invalid refresh token");
+        }
+        return TenantContext.callAs(tenantId, () -> refreshAccessTokenBound(refreshToken));
+    }
+
+    private TokenPair refreshAccessTokenBound(String refreshToken) {
         if (!validateRefreshToken(refreshToken)) {
             throw new SecurityValidationException("Invalid refresh token");
         }

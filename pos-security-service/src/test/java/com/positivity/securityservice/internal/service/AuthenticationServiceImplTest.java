@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -16,12 +17,15 @@ import com.positivity.securityservice.internal.exception.NoRolesAssignedExceptio
 import com.positivity.securityservice.internal.repository.UserRepository;
 import com.positivity.securityservice.internal.security.service.JwtService;
 import com.positivity.securityservice.internal.security.service.JwtService.TokenPair;
+import com.positivity.tenancy.TenantContext;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -129,6 +133,10 @@ class AuthenticationServiceImplTest {
     @Mock
     private UserService userService;
 
+    /** ADR-0062 §3: login binds the tenant the resolver returns before it touches users. */
+    @Mock
+    private LoginTenantResolver loginTenantResolver;
+
     /**
      * Real {@code SimpleMeterRegistry} so the {@code AuthenticationServiceImpl}
      * constructor can initialize its cached Counters without NPE.
@@ -139,6 +147,18 @@ class AuthenticationServiceImplTest {
 
     @InjectMocks
     private AuthenticationServiceImpl sut;
+
+    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
+
+    @BeforeEach
+    void resolveTheDefaultTenant() {
+        lenient().when(loginTenantResolver.resolve(any(), any())).thenReturn(TENANT);
+    }
+
+    @AfterEach
+    void clearTenant() {
+        TenantContext.clear();
+    }
 
     /**
      * Any one authority: since #1725 (ADR-0017 §2 question 1) login() refuses an account with no
