@@ -30,7 +30,7 @@ public class EventDaoImpl implements EventDao {
     private final EmittedEventRepository emittedRepo;
     private final EventTypeRepository eventTypeRepo;
 
-    /** Thread-safe queue for batching emitted events */
+    /** Resolves the tenant of the request an event arrives under (bound by the tenancy filter). */
     private final TenantResolver tenantResolver;
 
     /**
@@ -39,13 +39,14 @@ public class EventDaoImpl implements EventDao {
      */
     record QueuedEvent(UUID tenantId, EmittedEvent event) {}
 
+    /** Thread-safe queue for batching emitted events. */
     private final ConcurrentLinkedQueue<QueuedEvent> eventBatch = new ConcurrentLinkedQueue<>();
 
     public EventDaoImpl(
-            PreregisteredEventRepository preregRepo,
-            EmittedEventRepository emittedRepo,
-            EventTypeRepository eventTypeRepo,
-            TenantResolver tenantResolver) {
+            @NonNull PreregisteredEventRepository preregRepo,
+            @NonNull EmittedEventRepository emittedRepo,
+            @NonNull EventTypeRepository eventTypeRepo,
+            @NonNull TenantResolver tenantResolver) {
         this.tenantResolver = tenantResolver;
         this.preregRepo = preregRepo;
         this.emittedRepo = emittedRepo;
