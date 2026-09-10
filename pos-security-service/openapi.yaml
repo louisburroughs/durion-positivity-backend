@@ -2524,7 +2524,7 @@ paths:
 
         Emits a SECURITY_ROLE_DELETE event.
 
-        Returns 404 when the role does not exist.
+        Returns 404 when the role does not exist and 409 with code ROLE_TEMPLATE_IMMUTABLE when the role was provisioned from the platform role template (templateKey set): canonical roles keep their name for the life of the tenant; change their grants instead.
 
         '
       operationId: deleteRole
@@ -2562,6 +2562,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Role not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'ROLE_TEMPLATE_IMMUTABLE: the role was provisioned from the platform template'
       security:
       - bearerAuth:
         - security:role:delete
@@ -5731,6 +5737,12 @@ components:
           description: 'MCP persona slot: how to speak to the caller'
           example: decisive, operational, and management-ready
           type: string
+        templateKey:
+          description: 'ADR-0062: key of the platform template role this role was provisioned from (its canonical name); null for a custom role. Template roles cannot be deleted.'
+          example: ADMIN
+          type:
+          - string
+          - 'null'
       required:
       - id
       - name

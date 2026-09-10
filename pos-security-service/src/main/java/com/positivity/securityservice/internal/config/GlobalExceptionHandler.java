@@ -12,6 +12,7 @@ import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationReviewCaseNotFoundException;
+import com.positivity.securityservice.internal.exception.TemplateRoleImmutableException;
 import com.positivity.securityservice.internal.exception.TokenUserIdMissingException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.shared.error.ApiError;
@@ -477,6 +478,22 @@ public class GlobalExceptionHandler {
         log.warn("Duplicate role name (correlationId={}): {}", correlationId, ex.getMessage());
 
         return respond(HttpStatus.CONFLICT, "DUPLICATE_ROLE_NAME", ex.getMessage(), correlationId);
+    }
+
+    /**
+     * A template role rejects delete (ADR-0062 §6).
+     *
+     * **HTTP Status:** 409 Conflict
+     */
+    @ExceptionHandler(TemplateRoleImmutableException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ResponseEntity<ApiError> handleTemplateRoleImmutableException(
+            TemplateRoleImmutableException ex, WebRequest request) {
+
+        String correlationId = extractCorrelationId(request);
+        log.warn("Template role delete refused (correlationId={}): {}", correlationId, ex.getMessage());
+
+        return respond(HttpStatus.CONFLICT, "ROLE_TEMPLATE_IMMUTABLE", ex.getMessage(), correlationId);
     }
 
     /**

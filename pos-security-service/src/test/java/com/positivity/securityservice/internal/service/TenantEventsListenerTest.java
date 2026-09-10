@@ -13,11 +13,16 @@ import com.positivity.securityservice.internal.entity.ExtTenant;
 import com.positivity.securityservice.internal.entity.ProcessedEvent;
 import com.positivity.securityservice.internal.repository.ExtTenantRepository;
 import com.positivity.securityservice.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.PlatformTenant;
+import com.positivity.tenancy.TenantContext;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -33,7 +38,90 @@ class TenantEventsListenerTest {
     private final ProcessedEventRepository processed = mock(ProcessedEventRepository.class);
     private final TenantEventsListener.TenantReplicaApplier applier =
             new TenantEventsListener.TenantReplicaApplier(extTenants, processed, Clock.fixed(NOW, ZoneOffset.UTC));
-    private final TenantEventsListener listener = new TenantEventsListener(new ObjectMapper(), applier);
+    private final RoleTemplateService roleTemplateService = mock(RoleTemplateService.class);
+    private final TenantProvisioningService provisioningService = mock(TenantProvisioningService.class);
+    private final TenantEventsListener listener =
+            new TenantEventsListener(new ObjectMapper(), applier, roleTemplateService, provisioningService);
+
+    @AfterEach
+    void clearTenant() {
+        TenantContext.clear();
+    }
+
+    private static String created(String id, String email) {
+        return """
+                {"eventId":"%s","eventType":"tenant.created","schemaVersion":1,"aggregateId":"%s","aggregateVersion":1,
+                 "occurredAtUtc":"2026-09-10T12:00:00Z","sourceService":"pos-tenant",
+                 "payload":{"tenantId":"%s","slug":"acme","displayName":"Acme","status":"PENDING"%s}}
+                """.formatted(id, TENANT, TENANT, email == null ? "" : ",\"initialAdminEmail\":\"" + email + "\"");
+    }
+
+    @Test
+    @DisplayName("tenant.created provisions: template read as platform, applied as the new tenant, then recorded")
+    void createdProvisionsTheTenant() {
+        when(processed.existsById("c1")).thenReturn(false);
+        when(extTenants.findById(TENANT)).thenReturn(Optional.empty());
+        List<RoleTemplateEntry> template = List.of();
+        AtomicReference<UUID> snapshotTenant = new AtomicReference<>();
+        AtomicReference<UUID> provisionTenant = new AtomicReference<>();
+        when(roleTemplateService.snapshot()).thenAnswer(inv -> {
+            snapshotTenant.set(TenantContext.require());
+            return template;
+        });
+        when(provisioningService.provision(any(), any(), any())).thenAnswer(inv -> {
+            provisionTenant.set(TenantContext.require());
+            return new TenantProvisioningService.Outcome(6, true);
+        });
+
+        listener.onEvent(created("c1", "owner@acme.example"));
+
+        assertThat(snapshotTenant.get()).isEqualTo(PlatformTenant.ID);
+        assertThat(provisionTenant.get()).isEqualTo(TENANT);
+        verify(provisioningService).provision(TENANT, "owner@acme.example", template);
+        verify(extTenants).save(any(ExtTenant.class));
+        verify(processed).save(any(ProcessedEvent.class));
+        assertThat(TenantContext.isBound()).as("bindings restored").isFalse();
+    }
+
+    @Test
+    @DisplayName("no provisioning on a redelivery or on other facts")
+    void provisioningIsGuarded() {
+        when(processed.existsById("c2")).thenReturn(true);
+        listener.onEvent(created("c2", "owner@acme.example"));
+
+        when(processed.existsById("u1")).thenReturn(false);
+        when(extTenants.findById(TENANT)).thenReturn(Optional.empty());
+        listener.onEvent(event("u1", "tenant.updated", 2, "ACTIVE"));
+
+        verify(provisioningService, never()).provision(any(), any(), any());
+        verify(roleTemplateService, never()).snapshot();
+        verify(processed, org.mockito.Mockito.times(1)).save(any(ProcessedEvent.class));
+    }
+
+    @Test
+    @DisplayName("tenant.created without the administrator's email fails and is not recorded")
+    void createdWithoutEmailIsAContractViolation() {
+        when(processed.existsById("c3")).thenReturn(false);
+
+        assertThatThrownBy(() -> listener.onEvent(created("c3", null)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("initialAdminEmail");
+
+        verify(provisioningService, never()).provision(any(), any(), any());
+        verify(processed, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("a provisioning failure is not recorded, so the fact is redelivered")
+    void provisioningFailureIsNotRecorded() {
+        when(processed.existsById("c4")).thenReturn(false);
+        when(roleTemplateService.snapshot()).thenReturn(List.of());
+        when(provisioningService.provision(any(), any(), any())).thenThrow(new IllegalStateException("template"));
+
+        assertThatThrownBy(() -> listener.onEvent(created("c4", "owner@acme.example")))
+                .isInstanceOf(IllegalStateException.class);
+        verify(processed, never()).save(any());
+    }
 
     private static String event(String id, String type, long version, String status) {
         return """
@@ -49,7 +137,7 @@ class TenantEventsListenerTest {
         when(processed.existsById("e1")).thenReturn(false);
         when(extTenants.findById(TENANT)).thenReturn(Optional.empty());
 
-        listener.onEvent(event("e1", "tenant.created", 1, "PENDING"));
+        listener.onEvent(created("e1", "owner@acme.example"));
 
         ArgumentCaptor<ExtTenant> saved = ArgumentCaptor.forClass(ExtTenant.class);
         verify(extTenants).save(saved.capture());

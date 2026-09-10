@@ -1,12 +1,16 @@
 package com.positivity.securityservice.internal.service;
 
+import com.positivity.domainevents.tenant.TenantEventTypes;
 import com.positivity.securityservice.internal.entity.ExtTenant;
 import com.positivity.securityservice.internal.entity.ProcessedEvent;
 import com.positivity.securityservice.internal.repository.ExtTenantRepository;
 import com.positivity.securityservice.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.PlatformTenant;
+import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.replica.TenantProjectionEvent;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,12 +30,15 @@ import tools.jackson.databind.ObjectMapper;
  * by tenant id, guarded by the envelope's {@code aggregateVersion} so an older fact never overwrites
  * a newer row. {@code tenant.provisioned} carries no projection and is recorded and skipped.
  *
- * <p>Provisioning of a new tenant on {@code tenant.created} (role template, initial administrator,
- * the {@code tenant.provisioned} answer) is the second WS2b delivery and is not done here yet.
+ * <p>{@code tenant.created} also provisions the new tenant (ADR-0062 §7): the platform role
+ * template is read under the platform binding and applied, with the initial administrator, under
+ * the new tenant's binding by {@link TenantProvisioningService}, which answers
+ * {@code tenant.provisioned}. Provisioning runs first, in its own transaction; the replica apply
+ * then records the event, so a failure between the two redelivers into an idempotent provisioner.
  * Idempotent through {@code processed_events} in the apply transaction; transient database errors
- * rethrow for container retry and dead-lettering (ADR-0044 §4). Both tables are global, so the
- * tenant the record interceptor bound (the platform tenant, since pos-tenant's rows are platform
- * rows) is irrelevant to the write.
+ * rethrow for container retry and dead-lettering (ADR-0044 §4). The replica tables are global, so
+ * the tenant the record interceptor bound (the platform tenant, since pos-tenant's rows are
+ * platform rows) is irrelevant to that write.
  */
 @Slf4j
 @Component
@@ -42,10 +49,18 @@ public class TenantEventsListener {
 
     private final ObjectMapper objectMapper;
     private final TenantReplicaApplier applier;
+    private final RoleTemplateService roleTemplateService;
+    private final TenantProvisioningService provisioningService;
 
-    public TenantEventsListener(ObjectMapper objectMapper, TenantReplicaApplier applier) {
+    public TenantEventsListener(
+            ObjectMapper objectMapper,
+            TenantReplicaApplier applier,
+            RoleTemplateService roleTemplateService,
+            TenantProvisioningService provisioningService) {
         this.objectMapper = objectMapper;
         this.applier = applier;
+        this.roleTemplateService = roleTemplateService;
+        this.provisioningService = provisioningService;
     }
 
     @KafkaListener(
@@ -67,11 +82,32 @@ public class TenantEventsListener {
         }
         Optional<TenantProjectionEvent> projection = TenantProjectionEvent.parse(root);
         try {
+            if (projection.isPresent()
+                    && TenantEventTypes.CREATED.equals(projection.get().eventType())
+                    && !applier.isApplied(eventId)) {
+                provision(
+                        projection.get(),
+                        root.path("payload").path("initialAdminEmail").stringValue(null));
+            }
             applier.apply(eventId, projection.orElse(null));
         } catch (TransientDataAccessException e) {
             // Let the container error handler retry with backoff and route to {topic}.dlq.
             throw e;
         }
+    }
+
+    private void provision(TenantProjectionEvent created, String initialAdminEmail) {
+        if (initialAdminEmail == null || initialAdminEmail.isBlank()) {
+            // The contract requires it (TenantCreatedV1). tenant.created is a one-time fact, so
+            // recording it without provisioning would leave the tenant PENDING for good: fail
+            // instead, so the record retries and dead-letters where the violation is visible.
+            throw new IllegalStateException(
+                    "tenant.created for " + created.tenantId() + " carries no initialAdminEmail; not provisioned");
+        }
+        List<RoleTemplateEntry> template = TenantContext.callAs(PlatformTenant.ID, roleTemplateService::snapshot);
+        TenantContext.runAs(
+                created.tenantId(),
+                () -> provisioningService.provision(created.tenantId(), initialAdminEmail, template));
     }
 
     /**
@@ -85,6 +121,11 @@ public class TenantEventsListener {
         private final ExtTenantRepository extTenantRepository;
         private final ProcessedEventRepository processedEventRepository;
         private final Clock clock;
+
+        @Transactional(readOnly = true)
+        public boolean isApplied(@NonNull String eventId) {
+            return processedEventRepository.existsById(eventId);
+        }
 
         @Transactional
         public void apply(@NonNull String eventId, TenantProjectionEvent projection) {

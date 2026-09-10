@@ -35,5 +35,6 @@ pos-security-service/R__seed_reference_security.sql tier1
 pos-security-service/R__seed_role_location_scope.sql tier1
 pos-security-service/R__seed_role_permissions.sql tier1
 pos-security-service/R__seed_security_operational_data.sql tier2
+pos-security-service/R__seed_tenant_template.sql tier1
 pos-shop-manager/R__seed_shop_manager_mechanics.sql tier2
 pos-vehicle-inventory/R__seed_vehicle_inventory_operational_data.sql tier2

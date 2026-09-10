@@ -104,6 +104,14 @@ public class Role extends TenantScopedEntity {
     @Column(name = "location_hierarchy", nullable = false, length = 16)
     private LocationHierarchy locationHierarchy = LocationHierarchy.OTHER;
 
+    /**
+     * ADR-0062 §6: key of the platform template role this row was provisioned from (its canonical
+     * name), or {@code null} for a custom role. A template role rejects delete for the life of the
+     * tenant; its grants may still change.
+     */
+    @Column(name = "template_key", length = 255, updatable = false)
+    private String templateKey;
+
     @CreatedDate
     @Column(nullable = false)
     private Instant createdAt;

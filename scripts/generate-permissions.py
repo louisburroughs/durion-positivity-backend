@@ -73,6 +73,13 @@ SEED_SQL_RELPATH = (
     "pos-security-service/src/main/resources/db/migration/R__seed_role_permissions.sql"
 )
 ROLE_PERMISSIONS_CSV_RELPATH = "scripts/fixtures/seed/alpha/security/role-permissions.csv"
+# Third source (ADR-0062 section 7, plan WS2b): the platform tenant's bootstrap seed grants the
+# platform:* families to PLATFORM_ADMIN, a role that exists in the platform tenant only. Read
+# for reachability; never written by --sync (a platform permission is a hand edit there).
+PLATFORM_SEED_SQL_RELPATH = (
+    "pos-security-service/src/main/resources/db/migration/R__seed_tenant_template.sql"
+)
+PLATFORM_DOMAIN = "platform"
 
 # The only roles the repeatable seed may grant to (#1613 D8): the
 # ADMIN / SYSTEM_ADMINISTRATOR bootstrap floor plus the four checksum-frozen roles
@@ -766,13 +773,28 @@ def parse_baseline_grants(root: Path) -> dict[str, list[str]]:
     return grants
 
 
+def parse_platform_seed_grants(root: Path) -> dict[str, set[str]]:
+    """role → permissions granted by the platform tenant's bootstrap seed (grant tuples only)."""
+    seed_path = root / PLATFORM_SEED_SQL_RELPATH
+    grants: dict[str, set[str]] = {}
+    if not seed_path.exists():
+        return grants
+    for line in seed_path.read_text(encoding="utf-8").split("\n"):
+        key = _grant_row_key(line)
+        if key:
+            grants.setdefault(key[0], set()).add(key[1])
+    return grants
+
+
 def all_granted_permissions(root: Path) -> set[str]:
-    """Every permission reachable from either grant source."""
+    """Every permission reachable from any grant source."""
     granted: set[str] = set()
     for permissions in parse_seed_grants(root).values():
         granted |= permissions
     for permissions in parse_baseline_grants(root).values():
         granted |= set(permissions)
+    for permissions in parse_platform_seed_grants(root).values():
+        granted |= permissions
     return granted
 
 
@@ -786,6 +808,12 @@ def resolve_grant_roles(
     permission — that decision is per-permission and reviewed in the module that owns it.
     Otherwise the run-wide --grant values apply, and ADMIN is the fallback.
     """
+    if permission.split(":", 1)[0] == PLATFORM_DOMAIN:
+        raise ValueError(
+            f"Refusing to grant {permission} through the alpha grant sources: platform:* belongs "
+            f"to PLATFORM_ADMIN in the platform tenant only (ADR-0062 section 7). Add the grant "
+            f"tuple by hand to {PLATFORM_SEED_SQL_RELPATH}."
+        )
     declared = manifest_grants.get(permission)
     if declared:
         roles = sorted(set(declared))
@@ -1143,8 +1171,9 @@ def main() -> None:
             if ungranted:
                 print(
                     f"\nERROR: {len(ungranted)} permission(s) have a PermissionCode bit and a "
-                    "@PreAuthorize but are granted in neither R__seed_role_permissions.sql nor "
-                    "the alpha role baseline — every endpoint behind them is unreachable:",
+                    "@PreAuthorize but are granted in neither R__seed_role_permissions.sql, "
+                    "the alpha role baseline, nor the platform tenant seed — every endpoint "
+                    "behind them is unreachable:",
                     file=sys.stderr,
                 )
                 for p in ungranted:

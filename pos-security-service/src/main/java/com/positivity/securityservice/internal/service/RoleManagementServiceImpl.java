@@ -19,6 +19,7 @@ import com.positivity.securityservice.internal.exception.DuplicateRoleNameExcept
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
+import com.positivity.securityservice.internal.exception.TemplateRoleImmutableException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
@@ -358,6 +359,11 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     public void deleteRole(@NonNull UUID id) {
         Role role =
                 roleRepository.findById(id).orElseThrow(() -> new RoleNotFoundException(ROLE_NOT_FOUND_PREFIX + id));
+        if (role.getTemplateKey() != null) {
+            // ADR-0062 §6: the canonical names are immutable per tenant; the frontend gates
+            // navigation on them. Grants may change, the row may not go.
+            throw new TemplateRoleImmutableException(role.getName(), role.getTemplateKey());
+        }
         role.getPermissions().clear();
         roleRepository.save(role);
         roleAssignmentRepository.deleteByRole_Id(id);
@@ -467,6 +473,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 .id(role.getId())
                 .name(role.getName())
                 .description(role.getDescription())
+                .templateKey(role.getTemplateKey())
                 .permissions(role.getPermissions().stream()
                         .map(this::toPermissionDto)
                         .collect(Collectors.toSet()))

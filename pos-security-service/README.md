@@ -472,7 +472,7 @@ committed spec against the controllers' declarations and fails on drift in eithe
 | ----------------------------------- | ------------ | ------------------------------------- |
 | `SPRING_DATASOURCE_URL`             | required     | PostgreSQL connection URL             |
 | `EUREKA_SERVER_URL`                 | required     | Eureka service discovery URL          |
-| `SECURITY_SEED_ADMIN_PASSWORD_HASH` | required     | BCrypt hash for seed admin user       |
+| `SECURITY_SEED_ADMIN_PASSWORD_HASH` | required     | BCrypt hash for the seed admins (`admin.alpha`, `admin.platform`) |
 | `security.lockout.threshold`        | configurable | Failed login threshold before lockout |
 | `pos.security-service.kafka.people-events-topic` | `people.events.v1` | Staffing-assignment facts feeding the assigned-node read model (ADR-0061 §1) |
 | `pos.security-service.kafka.people-manifest-topic` | `people.manifest.v1` | Reconciliation manifests for that read model; drift requests a replay on `people-commands-topic` |
@@ -506,8 +506,23 @@ Flyway on the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`)
 - **`ext_tenant`** is the replica of pos-tenant's `tenant.events.v1` projection (`TenantEventsListener`,
   idempotent through `processed_events`, monotonic on `aggregateVersion`). `ExtTenantRegistry` serves it as
   the module's `TenantRegistry`, and `GET /v1/tenants/me` reads it for the caller.
-- **Still to come (WS2b, second PR):** the `tenant.created` provisioning handler (role template copy, first
-  admin, `tenant.provisioned`) and the `ROLE_PLATFORM_ADMIN` template that takes the `platform:*` grants off `ADMIN`.
+- **Provisioning (`tenant.created`).** `TenantEventsListener` reads the platform role template under the platform
+  binding (`RoleTemplateService`) and applies it under the new tenant's binding (`TenantProvisioningService`):
+  one role per template entry (name, description, MCP persona, ADR-0061 location scope, permission grants,
+  `template_key`), the initial administrator named by `initialAdminEmail` on `ADMIN` with a generated, discarded
+  password, the first `role_assignments` row, then `tenant.provisioned` through the outbox, which moves the
+  tenant to `ACTIVE` in pos-tenant. Idempotent on tenant: existing roles and users are left alone, so a
+  redelivery converges. The administrator's first credential is not carried by any event; until a reset or
+  invite flow exists, an operator sets it through `PUT /v1/users/{id}` from inside that tenant.
+- **Role template and platform tenant** (`R__seed_tenant_template.sql`, tier 1). The six Flyway floor roles
+  (`ADMIN`, `SYSTEM_ADMINISTRATOR`, `DISPATCHER`, `SHOP_MANAGER`, `SELF_SERVICE_CUSTOMER`, `CONTROLLER`) carry
+  `template_key` in alpha and are copied, grants and scope included, into the platform tenant as the template.
+  Roles the alpha bulk loader adds later (`roles.csv`) are not in the template yet (WS8 runs the loader against
+  the platform tenant). A template role rejects delete for the life of its tenant (409 `ROLE_TEMPLATE_IMMUTABLE`);
+  its grants may change and custom roles (`template_key` null) are unrestricted.
+- **`PLATFORM_ADMIN` / `admin.platform`** exist in the platform tenant only and hold the `platform:tenant:*` and
+  `platform:account:*` families; alpha's `ADMIN` no longer does. `generate-permissions.sh --sync` refuses to grant
+  a `platform:*` permission through the alpha sources: add the tuple to the platform seed by hand.
 
 `ext_people_staffing_assignment` is a read model of pos-people's `employee_location_assignment` (ADR-0061 §1): one row per assignment keyed by `assignment_id`, storing the assigned location node *verbatim* (shop or District/Region/HQ — never expanded), `is_primary`, `status` (`ACTIVE`/`ENDED`, ended rows are kept), and effective dates. Written only by `PeopleEventsListener`; read through `StaffingAssignmentProjectionService` ("nodes effective on date D", "earliest `effective_to`").
 

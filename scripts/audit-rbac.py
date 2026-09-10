@@ -324,13 +324,38 @@ for oapi in sorted(root.glob("pos-*/openapi.yaml")):
 # catalog there and the gated checks ask "is this code granted to ANY role". It would have been
 # wrong for every per-role question, and would have gone quietly wrong the first time a code was
 # granted only to an operational role. Both are read here (#1612).
+
+
+def strip_sql_comments(src):
+    """Blank out `-- ...` line comments, preserving offsets and newlines.
+
+    The grant sources are scanned by regex, and a seed's prose quotes grant tuples as
+    examples; a commented-out tuple must not count as a grant (the SQL counterpart of
+    strip_comments above).
+    """
+    return re.sub(r"--[^\n]*", lambda m: " " * len(m.group(0)), src)
+
+
 seed_path = root / "pos-security-service/src/main/resources/db/migration/R__seed_role_permissions.sql"
-seed = seed_path.read_text()
+seed = strip_sql_comments(seed_path.read_text())
 grants = collections.defaultdict(set)      # perm -> roles
 role_perms = collections.defaultdict(set)  # role -> perms
 for role, perm in re.findall(r"\(\s*'([A-Z][A-Z_]+)'\s*,\s*'(" + PERM_RE + r")'\s*\)", seed):
     grants[perm].add(role)
     role_perms[role].add(perm)
+
+# Third source (ADR-0062 section 7, plan WS2b): the platform tenant's bootstrap seed grants the
+# platform:* families to PLATFORM_ADMIN, which exists in the platform tenant only.
+platform_seed_path = (
+    root / "pos-security-service/src/main/resources/db/migration/R__seed_tenant_template.sql"
+)
+if platform_seed_path.exists():
+    for role, perm in re.findall(
+        r"\(\s*'([A-Z][A-Z_]+)'\s*,\s*'(" + PERM_RE + r")'\s*\)",
+        strip_sql_comments(platform_seed_path.read_text()),
+    ):
+        grants[perm].add(role)
+        role_perms[role].add(perm)
 
 # Named distinctly: `baseline_path` is already this script's --baseline gate file.
 bulk_grants_path = root / "scripts/fixtures/seed/alpha/security/role-permissions.csv"

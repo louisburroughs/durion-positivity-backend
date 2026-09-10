@@ -25,6 +25,12 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
     boolean existsByNameIgnoreCase(String name);
 
     /**
+     * The bound tenant's template roles (ADR-0062 §6). Read under the platform binding this is
+     * the role template every new tenant is provisioned from.
+     */
+    List<Role> findByTemplateKeyIsNotNullOrderByNameAsc();
+
+    /**
      * Names of every permission granted to the given roles through {@code role_permissions}.
      *
      * <p>Backs JWT authority resolution, so it is deliberately a projection rather than a

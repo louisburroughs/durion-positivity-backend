@@ -21,6 +21,7 @@ import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationReviewCaseNotFoundException;
+import com.positivity.securityservice.internal.exception.TemplateRoleImmutableException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.shared.error.ApiError;
 import jakarta.persistence.EntityNotFoundException;
@@ -700,6 +701,28 @@ class GlobalExceptionHandlerTest {
     }
 
     // ---------------------------------------------------------------
+    // handleTemplateRoleImmutableException (ADR-0062 section 6)
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleTemplateRoleImmutableException")
+    class HandleTemplateRoleImmutableException {
+
+        @Test
+        @DisplayName("returns 409 ROLE_TEMPLATE_IMMUTABLE")
+        void returns409RoleTemplateImmutable() {
+            TemplateRoleImmutableException ex = new TemplateRoleImmutableException("ADMIN", "ADMIN");
+
+            ResponseEntity<ApiError> response = sut.handleTemplateRoleImmutableException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("ROLE_TEMPLATE_IMMUTABLE");
+            assertThat(response.getBody().message()).contains("ADMIN");
+        }
+    }
+
+    // ---------------------------------------------------------------
     // handleDuplicateRoleNameException
     // ---------------------------------------------------------------
 
@@ -991,6 +1014,9 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleDuplicateRoleNameException", (HandlerInvocation)
                             request -> handler.handleDuplicateRoleNameException(
                                     new DuplicateRoleNameException("Role 'ADMIN' already exists"), request)),
+                    Named.of("handleTemplateRoleImmutableException", (HandlerInvocation)
+                            request -> handler.handleTemplateRoleImmutableException(
+                                    new TemplateRoleImmutableException("ADMIN", "ADMIN"), request)),
                     Named.of("handleDuplicateUsernameException", (HandlerInvocation)
                             request -> handler.handleDuplicateUsernameException(
                                     new DuplicateUsernameException("Username already exists"), request)),
