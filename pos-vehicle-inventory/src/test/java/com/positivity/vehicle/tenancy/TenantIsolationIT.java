@@ -58,7 +58,7 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                     .as("Hibernate filter hides the other tenant's row")
                     .isEmpty();
             assertThat(countById(jdbc, id)).as("RLS hides it from raw SQL too").isZero();
-            assertThat(jdbc.update("UPDATE vehicle SET make = 'Hijacked' WHERE id = ?", id))
+            assertThat(jdbc.update("UPDATE vehicle_entity SET make = 'Hijacked' WHERE id = ?", id))
                     .as("RLS makes the row unreachable for UPDATE")
                     .isZero();
         });
@@ -66,7 +66,7 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
         // Unbound: the pool RESETs app.current_tenant, so pos_app sees an empty table and cannot insert.
         assertThat(countById(jdbc, id)).isZero();
         assertThatThrownBy(() -> jdbc.update(
-                        "INSERT INTO vehicle (id, vehicle_type, make, model, model_year, vin, created_at, updated_at)"
+                        "INSERT INTO vehicle_entity (id, vehicle_type, make, model, model_year, vin, created_at, updated_at)"
                                 + " VALUES (?, 'CAR', 'Nobody', 'None', 2020, 'VIN0', now(), now())",
                         UUID.randomUUID()))
                 .as("no tenant bound: the NOT NULL default is NULL and the policy's WITH CHECK refuses the row")
@@ -89,7 +89,7 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
     }
 
     private static int countById(JdbcTemplate jdbc, UUID id) {
-        Integer count = jdbc.queryForObject("SELECT count(*) FROM vehicle WHERE id = ?", Integer.class, id);
+        Integer count = jdbc.queryForObject("SELECT count(*) FROM vehicle_entity WHERE id = ?", Integer.class, id);
         return count == null ? 0 : count;
     }
 }

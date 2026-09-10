@@ -27,8 +27,9 @@ pos:
     audit:
       encryption:
         # AuditPayloadCipher requires a real key under any profile set that is not entirely dev/test
-        # (ADR-0050 §7): a fixed 32-byte test key, not a secret, so the pg profile stands alone.
-        key: cGctdGVzdC1vbmx5LWtleS1wZy10ZXN0LW9ubHkta2V5MQ==
+        # (ADR-0050 §7): a fixed test key, not a secret, so the pg profile stands alone. It must
+        # decode to exactly 32 bytes (AES-256) or the cipher refuses to start.
+        key: cGctdGVzdC1vbmx5LWtleS1wZy10ZXN0LW9ubHkta2U=
         key-id: pg-test
 
 eureka:
