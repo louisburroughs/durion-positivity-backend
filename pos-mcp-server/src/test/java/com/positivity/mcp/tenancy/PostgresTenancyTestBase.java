@@ -22,7 +22,10 @@ import org.testcontainers.utility.DockerImageName;
  * <p>Requires Docker.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@ActiveProfiles("pg")
+// "test" first, "pg" last so the Postgres profile wins every key both define: "test" keeps the LLM,
+// embedding and tool-registry beans out of the context (they are @Profile("!test") or "alpha") the
+// way every other pos-mcp-server integration test does; "pg" supplies the real chain and dialect.
+@ActiveProfiles({"test", "pg"})
 public abstract class PostgresTenancyTestBase {
 
     static final String APP_ROLE = "pos_app";

@@ -159,6 +159,7 @@ class RolePermissionSeedIT {
                                 "INSERT INTO role_permissions (role_id, permission_id) "
                                         + "SELECT r.id, p.id FROM roles r, permissions p "
                                         + "WHERE r.name = ? AND p.name = ? "
+                                        + "AND r.tenant_id = app_current_tenant() "
                                         + "ON CONFLICT DO NOTHING",
                                 row[0],
                                 code.trim());
@@ -380,14 +381,17 @@ class RolePermissionSeedIT {
         // this container gives us. The unit-level baseline test cannot see it: V3 still
         // lists both names, so they still look creatable from a static parse.
         assertThat(jdbc().queryForList(
-                                "SELECT name FROM roles WHERE name IN ('SECURITY_ADMIN', 'READ_ONLY_SCHEDULER')",
+                                "SELECT name FROM roles WHERE name IN ('SECURITY_ADMIN', 'READ_ONLY_SCHEDULER') "
+                                        + "AND tenant_id = app_current_tenant()",
                                 String.class))
                 .as("V3-seeded candidate roles must not survive V23")
                 .isEmpty();
 
         // The siblings from the same V3 batch were ratified and must remain.
         assertThat(jdbc().queryForList(
-                                "SELECT name FROM roles WHERE name IN ('DISPATCHER', 'SHOP_MANAGER')", String.class))
+                                "SELECT name FROM roles WHERE name IN ('DISPATCHER', 'SHOP_MANAGER') "
+                                        + "AND tenant_id = app_current_tenant()",
+                                String.class))
                 .as("the ratified half of the V3 candidate batch")
                 .containsExactlyInAnyOrder("DISPATCHER", "SHOP_MANAGER");
     }
@@ -426,7 +430,7 @@ class RolePermissionSeedIT {
                         "SELECT p.name FROM roles r "
                                 + "JOIN role_permissions rp ON rp.role_id = r.id "
                                 + "JOIN permissions p ON p.id = rp.permission_id "
-                                + "WHERE r.name = ?",
+                                + "WHERE r.name = ? AND r.tenant_id = app_current_tenant()",
                         String.class,
                         roleName);
     }
@@ -446,7 +450,8 @@ class RolePermissionSeedIT {
     }
 
     private int totalGrants() {
-        Integer count = jdbc().queryForObject("SELECT count(*) FROM role_permissions", Integer.class);
+        Integer count = jdbc().queryForObject(
+                        "SELECT count(*) FROM role_permissions WHERE tenant_id = app_current_tenant()", Integer.class);
         return count == null ? 0 : count;
     }
 }
