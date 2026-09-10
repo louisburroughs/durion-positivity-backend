@@ -10,6 +10,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
 
 /**
  * A Postgres 16 container laid out the way Compose and the alpha host are (ADR-0062 §3, layer 2):
@@ -35,7 +36,9 @@ public abstract class PostgresTenancyTestBase {
      * first class while the second reused the cached context against it. Ryuk reaps the container
      * at JVM exit.
      */
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    /** pgvector, not plain Postgres: the baseline creates the vector extension for the embedding columns. */
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(
+            DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres"));
 
     private static volatile boolean roleCreated;
 

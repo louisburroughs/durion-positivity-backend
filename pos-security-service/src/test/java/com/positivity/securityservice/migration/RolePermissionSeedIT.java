@@ -139,7 +139,7 @@ class RolePermissionSeedIT {
             jdbc().update(
                             "INSERT INTO roles (id, name, description, created_at, created_by) "
                                     + "VALUES (gen_random_uuid(), ?, ?, NOW(), 'baseline-load-it') "
-                                    + "ON CONFLICT (name) DO NOTHING",
+                                    + "ON CONFLICT (tenant_id, name) DO NOTHING",
                             row[0],
                             row.length > 1 ? row[1] : row[0]);
         }
