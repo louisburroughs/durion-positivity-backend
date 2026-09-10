@@ -101,6 +101,17 @@ public final class GatewaySecurityConstants {
     public static final String HEADER_TOKEN = "X-Token";
 
     /**
+     * Tenant of the authenticated caller, injected by the gateway from the JWT {@code tid} claim and
+     * stripped from inbound traffic (ADR-0062 §3). Bound by {@code TenantContextFilter} in
+     * {@code pos-tenancy-common}; the literal is duplicated here rather than imported so this
+     * library stays independent of the tenancy runtime.
+     */
+    public static final String HEADER_TENANT_ID = "X-Tenant-Id";
+
+    /** Tenant slug the gateway derives from the {@code Host} header for the login route only (ADR-0062 §3). */
+    public static final String HEADER_TENANT_SLUG = "X-Tenant-Slug";
+
+    /**
      * Default anonymous user when no authentication is present.
      */
     public static final String ANONYMOUS_USER = "anonymous";

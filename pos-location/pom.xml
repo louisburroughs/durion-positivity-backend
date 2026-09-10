@@ -141,6 +141,13 @@
             <artifactId>pos-security-common</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- ADR-0062 tenancy runtime (WS1 pilot): tenant context, connection binding, Hibernate resolver,
+             Kafka propagation, classification annotations -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-tenancy-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-bulk-ingest-lib</artifactId>
@@ -151,6 +158,22 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Testcontainers Postgres for the tenancy isolation and schema-conformance ITs (plan R-B7) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-postgresql</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

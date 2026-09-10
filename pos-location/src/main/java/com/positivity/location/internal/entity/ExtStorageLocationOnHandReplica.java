@@ -1,6 +1,7 @@
 package com.positivity.location.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -30,7 +31,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "ext_storage_location_on_hand")
-public class ExtStorageLocationOnHandReplica {
+public class ExtStorageLocationOnHandReplica extends TenantScopedEntity {
 
     @Id
     @Column(name = "storage_location_id", nullable = false)

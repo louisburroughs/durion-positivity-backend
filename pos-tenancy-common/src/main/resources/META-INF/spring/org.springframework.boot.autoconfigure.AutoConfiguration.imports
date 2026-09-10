@@ -1,0 +1,5 @@
+com.positivity.tenancy.autoconfigure.TenancyAutoConfiguration
+com.positivity.tenancy.autoconfigure.TenancyDataSourceAutoConfiguration
+com.positivity.tenancy.autoconfigure.TenancyHibernateAutoConfiguration
+com.positivity.tenancy.autoconfigure.TenancyKafkaAutoConfiguration
+com.positivity.tenancy.autoconfigure.TenancyWebAutoConfiguration

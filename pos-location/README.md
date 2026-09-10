@@ -213,9 +213,36 @@ permanently.
 | `pos.location.fact-backfill.page-size` | `500` | Rows per transaction when backfilling bay/mobile-unit facts |
 | `pos.location.fact-backfill.max-rows-per-run` | `20000` | Rows per backfill command before it stops and reports a resume cursor |
 
+## Multitenancy (ADR-0062, WS1 pilot)
+
+This module is the pilot for the ADR-0062 runtime: it depends on `pos-tenancy-common`, every
+scoped entity extends `TenantScopedEntity`, and the two global tables (`event_outbox`,
+`processed_events`, listed in `src/main/resources/db/tenancy-global-tables.txt`) carry
+`@TenantGlobal`. The request tenant is bound by `TenantContextFilter` from `X-Tenant-Id`, the
+Kafka tenant by `TenantRecordInterceptor` from the `tenantId` record header, and every connection
+checkout binds `app.current_tenant` for row-level security. Until plan WS2b delivers the JWT `tid`
+claim, `pos.tenancy.default-tenant-id` binds the alpha default tenant on every unbound path.
+
+The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_DATASOURCE_USERNAME`
+/ `POS_APP_PASSWORD`); Flyway alone uses the owner credential (`SPRING_FLYWAY_USER` /
+`SPRING_FLYWAY_PASSWORD`).
+
+Platform-scoped schedulers (run with no tenant bound; touch only global tables):
+
+| Job | Why |
+| --- | --- |
+| `OutboxPublisher.publishPending` | Drains `event_outbox`; each row's `tenant_id` becomes the record header |
+| `ManifestPublisher.publishDueManifest` | Summarises `event_outbox` per window across tenants; per-tenant manifests are plan WS8 |
+
+Proof: `TenantIsolationIT` (tenant A's row is invisible to tenant B and to an unbound connection,
+through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every non-whitelisted
+table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is
+`pos_app` with no bypass), both on Testcontainers Postgres (`./mvnw -pl pos-location verify`).
+
 ## Dependencies
 
 - `pos-security-common` — JWT-based security filter
+- `pos-tenancy-common` — ADR-0062 tenant context, connection binding, Hibernate resolver, Kafka propagation
 - `pos-events` — `@EmitEvent` annotation and event registration
 - `pos-bulk-ingest-lib` — bulk-ingest base controller
 

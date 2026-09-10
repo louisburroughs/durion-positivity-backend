@@ -29,6 +29,13 @@
                 <version>${project.version}</version>
             </dependency>
 
+            <!-- ADR-0062 tenancy runtime (tenant context, connection binding, Hibernate resolver) -->
+            <dependency>
+                <groupId>com.positivity</groupId>
+                <artifactId>pos-tenancy-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
             <!-- Shared Web MVC Concerns (Global Exception Handling) -->
             <dependency>
                 <groupId>com.positivity</groupId>

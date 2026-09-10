@@ -1,6 +1,7 @@
 package com.positivity.location.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -21,6 +22,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * same transaction as the business state change and drained by {@code OutboxPublisher}.
  */
 @Entity
+@TenantGlobal(
+        reason =
+                "transactional outbox; the unbound poller publishes every tenant's rows and reads the tenant from the row")
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @NoArgsConstructor
@@ -33,6 +37,14 @@ public class OutboxEvent {
     @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
+
+    /**
+     * Producing tenant, carried as plain data (ADR-0062 §3): the poller runs with no tenant bound and
+     * stamps this on the Kafka record header, so the consumer's interceptor binds it before the
+     * listener runs. Never a discriminator here: the table is global.
+     */
+    @Column(name = "tenant_id", nullable = false, updatable = false)
+    private UUID tenantId;
 
     @Column(nullable = false)
     private String topic;
