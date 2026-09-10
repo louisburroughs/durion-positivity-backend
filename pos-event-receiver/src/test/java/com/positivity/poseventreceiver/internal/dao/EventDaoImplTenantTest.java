@@ -4,6 +4,7 @@ import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_B;
 import static com.positivity.tenancy.testing.TenantTestSupport.asTenant;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -14,26 +15,26 @@ import com.positivity.poseventreceiver.internal.repository.EventTypeRepository;
 import com.positivity.poseventreceiver.internal.repository.PreregisteredEventRepository;
 import com.positivity.tenancy.TenancyProperties;
 import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.TenantContextMissingException;
 import com.positivity.tenancy.TenantResolver;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * The batch flush runs on the scheduler thread with no tenant bound (ADR-0062 §3): every event must
- * be saved under the tenant it arrived with, not under whatever the flushing thread resolves.
+ * {@code emitted_event} has no row-level security (ADR-0062 exception: TimescaleDB compression and
+ * continuous aggregates exclude it), so the {@code tenant_id} column stamped at enqueue time is a
+ * row's only tenant. Every queued event must carry the tenant of the request it arrived with, and
+ * the unbound batch flush must write it unchanged.
  */
-@DisplayName("EventDaoImpl — batch flush keeps each event's tenant")
+@DisplayName("EventDaoImpl — every queued event carries its request's tenant")
 class EventDaoImplTenantTest {
 
     private final EmittedEventRepository emittedRepo = mock(EmittedEventRepository.class);
-    private final Map<UUID, List<String>> savedByTenant = new ConcurrentHashMap<>();
+    private final List<EmittedEvent> saved = new ArrayList<>();
 
     @AfterEach
     void clear() {
@@ -41,20 +42,13 @@ class EventDaoImplTenantTest {
     }
 
     @Test
-    void flushSavesEveryEventUnderTheTenantItWasQueuedWith() {
+    void flushWritesEveryEventWithTheTenantItWasQueuedUnder() {
         when(emittedRepo.saveAll(anyList())).thenAnswer(invocation -> {
             List<EmittedEvent> batch = invocation.getArgument(0);
-            UUID bound = TenantContext.require();
-            batch.forEach(event -> savedByTenant
-                    .computeIfAbsent(bound, id -> new ArrayList<>())
-                    .add(event.getId()));
+            saved.addAll(batch);
             return batch;
         });
-        EventDaoImpl dao = new EventDaoImpl(
-                mock(PreregisteredEventRepository.class),
-                emittedRepo,
-                mock(EventTypeRepository.class),
-                new TenantResolver(new TenancyProperties()));
+        EventDaoImpl dao = dao();
 
         asTenant(TENANT_A, () -> dao.saveEmittedEvent(event("A_ONE")));
         asTenant(TENANT_B, () -> dao.saveEmittedEvent(event("B_ONE")));
@@ -63,11 +57,32 @@ class EventDaoImplTenantTest {
         // Unbound, as the scheduler thread is.
         dao.flushEventBatch();
 
-        assertThat(savedByTenant.get(TENANT_A)).containsExactly("A_ONE", "A_TWO");
-        assertThat(savedByTenant.get(TENANT_B)).containsExactly("B_ONE");
+        assertThat(saved)
+                .extracting(EmittedEvent::getId, EmittedEvent::getTenantId)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("A_ONE", TENANT_A),
+                        org.assertj.core.groups.Tuple.tuple("B_ONE", TENANT_B),
+                        org.assertj.core.groups.Tuple.tuple("A_TWO", TENANT_A));
         assertThat(TenantContext.isBound())
                 .as("the flush leaves no binding behind")
                 .isFalse();
+    }
+
+    @Test
+    void anEventFromAnUnboundRequestIsRefusedRatherThanQueuedWithoutATenant() {
+        EventDaoImpl dao = dao();
+
+        assertThatThrownBy(() -> dao.saveEmittedEvent(event("NOBODY")))
+                .as("strict tenancy: no default tenant, no binding, no row")
+                .isInstanceOf(TenantContextMissingException.class);
+    }
+
+    private EventDaoImpl dao() {
+        return new EventDaoImpl(
+                mock(PreregisteredEventRepository.class),
+                emittedRepo,
+                mock(EventTypeRepository.class),
+                new TenantResolver(new TenancyProperties()));
     }
 
     private static EmittedEvent event(String id) {

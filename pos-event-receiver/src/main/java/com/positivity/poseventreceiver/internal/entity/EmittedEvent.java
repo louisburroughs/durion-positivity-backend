@@ -1,7 +1,7 @@
 package com.positivity.poseventreceiver.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
-import com.positivity.tenancy.TenantScopedEntity;
+import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -19,14 +19,23 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * Entity representing an emitted event stored in the database.
  * Captures event execution metrics including timing and API version.
+ *
+ * <p>Exempt from row-level security (ADR-0062 exception, decided 2026-09-10): TimescaleDB refuses
+ * compression and continuous aggregates on a hypertable with row security, and this stream keeps
+ * both. Isolation rests on the {@code tenant_id} data column instead: {@code EventDaoImpl} stamps
+ * it from the bound request on every row, and every query in {@code EmittedEventRepository} names
+ * it. Never query this table without the tenant predicate.
  */
+@TenantGlobal(
+        reason = "TimescaleDB hypertable: compression and the hourly continuous aggregate exclude row security;"
+                + " tenant_id is a data column stamped on every row and named in every query")
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "emitted_event")
-public class EmittedEvent extends TenantScopedEntity {
+public class EmittedEvent {
     @Id
     @GeneratedValue
     @UUIDv7Id
@@ -59,6 +68,10 @@ public class EmittedEvent extends TenantScopedEntity {
      */
     @Column(name = "entity_id")
     private String entityId;
+
+    /** Producing tenant (ADR-0062): stamped by {@code EventDaoImpl} from the bound request. */
+    @Column(name = "tenant_id", nullable = false, updatable = false)
+    private UUID tenantId;
 
     public EmittedEvent(
             String id, String apiVersion, long timestamp, long elapsedMs, Instant publishedAt, String entityId) {

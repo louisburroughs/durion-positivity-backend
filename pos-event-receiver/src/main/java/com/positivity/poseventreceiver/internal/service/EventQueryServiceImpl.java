@@ -4,6 +4,7 @@ import com.positivity.poseventreceiver.internal.dto.EmittedEventResponse;
 import com.positivity.poseventreceiver.internal.dto.PagedResponse;
 import com.positivity.poseventreceiver.internal.entity.EmittedEvent;
 import com.positivity.poseventreceiver.internal.repository.EmittedEventRepository;
+import com.positivity.tenancy.TenantResolver;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -30,6 +31,7 @@ public class EventQueryServiceImpl implements EventQueryService {
 
     private final EmittedEventRepository emittedEventRepository;
     private final Clock clock;
+    private final TenantResolver tenantResolver;
 
     @Override
     public @NonNull PagedResponse<EmittedEventResponse> findByEntity(
@@ -45,8 +47,8 @@ public class EventQueryServiceImpl implements EventQueryService {
         }
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "publishedAt"));
-        Page<EmittedEvent> result =
-                emittedEventRepository.findByEntityIdAndPublishedAtGreaterThanEqual(entityId, resolvedSince, pageable);
+        Page<EmittedEvent> result = emittedEventRepository.findByTenantIdAndEntityIdAndPublishedAtGreaterThanEqual(
+                tenantResolver.require(), entityId, resolvedSince, pageable);
         log.debug(
                 "Queried events for entityId(mask)={}, since={}, page={}, size={}: {} of {} total",
                 maskForLog(entityId),

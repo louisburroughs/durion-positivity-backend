@@ -31,9 +31,12 @@ public class FlywayConfig {
             @Value("${spring.flyway.user:}") String flywayUser,
             @Value("${spring.flyway.password:}") String flywayPassword,
             @Value("${spring.datasource.url:}") String datasourceUrl,
-            @Value("${spring.flyway.locations:classpath:db/migration}") String[] locations) {
-        // Honours spring.flyway.locations: the H2 slices point it at db/h2-migration (see its README).
-        FluentConfiguration configuration = Flyway.configure().locations(locations);
+            @Value("${spring.flyway.locations:classpath:db/migration}") String[] locations,
+            @Value("${spring.flyway.out-of-order:false}") boolean outOfOrder) {
+        // Honours spring.flyway.locations, as Boot's auto-configuration would; out-of-order lets
+        // V1_1 (emitted_event without row security) land on a database that already carries V2.
+        FluentConfiguration configuration =
+                Flyway.configure().locations(locations).outOfOrder(outOfOrder);
         if (flywayUser != null && !flywayUser.isBlank()) {
             String url = flywayUrl == null || flywayUrl.isBlank() ? datasourceUrl : flywayUrl;
             configuration = configuration.dataSource(url, flywayUser, flywayPassword);
