@@ -54,6 +54,7 @@ class EventListenerConfigTest {
         context.refresh();
 
         assertThatCode(() -> config.startKafkaListeners(readyEvent())).doesNotThrowAnyException();
+        verify(registry).start();
     }
 
     private ApplicationReadyEvent readyEvent() {
