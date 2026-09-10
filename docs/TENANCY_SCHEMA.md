@@ -79,7 +79,18 @@ not yet stamp the header. Unset it and the module is strict. Modules that have n
 library still connect as the owner role, which `postgres/init-tenancy.sh` gives the same default
 through `ALTER ROLE ... SET app.current_tenant`; adopted modules connect as `pos_app`
 (`SPRING_DATASOURCE_USERNAME=pos_app`, `POS_APP_PASSWORD`) with Flyway on the owner credential
-(`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`). Adopted so far: `pos-location`.
+(`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`). Adopted so far: `pos-location`, `pos-tenant`,
+`pos-security-service`.
+
+**Where the tenant comes from (WS2b).** `pos-security-service` resolves it once, at login: the gateway
+derives `X-Tenant-Slug` from the request host when `auth.tenant-host-suffix` is set (an inbound copy is
+always replaced), the login form may carry `tenantSlug`, and the slug is looked up in the service's
+`ext_tenant` replica of `tenant.events.v1`; an unknown or inactive slug is a plain 401
+`INVALID_CREDENTIALS`, and no slug at all falls back to the transitional default. Both tokens carry
+the tenant as `tid`; a refresh exchange runs under the refresh token's `tid` and cannot change it. The
+gateway injects `X-Tenant-Id` from `tid` on every authenticated request and rejects a malformed claim
+(401, `malformed_tid`). A module lists paths that must run unbound in strict mode (login, refresh) in
+`pos.tenancy.unenforced-paths`.
 
 | Where | Binding |
 | --- | --- |

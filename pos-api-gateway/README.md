@@ -48,6 +48,7 @@ Discovery locator is disabled; only explicitly configured routes are exposed. `p
 | `pos.gateway.security.allowed-jwt-algorithms`       | `HS256`                     | Permitted JWT `alg` values                             |
 | `auth.token-identity-required`                      | `false`                     | Reject tokens missing `perm_bits` claim                |
 | `auth.strip-inbound-identity-headers`               | `true`                      | Strip inbound `X-User`, `X-User-Id`, `X-Authorities`, `X-Perm-Bits`, `X-Perm-Ver`, `X-Roles`, `X-Loc-Fin-Bits`, `X-Loc-Oth-Bits`, `X-Loc-Scope` |
+| `auth.tenant-host-suffix`                           | empty                       | When set (e.g. `.durionpos.org`), the login route gets `X-Tenant-Slug` from the request host's first label (`acme.durionpos.org` → `acme`); an inbound copy is always dropped (ADR-0062 §3) |
 | `auth.auth-path-root`                               | `/security-service/v1/auth` | Public auth path that bypasses JWT checks              |
 | `pos.gateway.security.revocation-check.enabled`     | `true`                      | Consult the revocation key space on every authenticated request |
 | `pos.gateway.security.revocation-check.timeout`     | `150ms`                     | Ceiling on one lookup; on timeout the request is forwarded unchecked |

@@ -71,6 +71,12 @@ public interface JwtService {
      * assigned node could be resolved (ADR-0061 §2). Never {@code "ALL"}, never a bare list.
      */
     public static final String LOC_SCOPE = "loc_scope";
+
+    /**
+     * Tenant id claim (ADR-0062 §3, ADR-0040 §2 amendment): required on access and refresh tokens;
+     * the gateway injects {@code X-Tenant-Id} from it and a refresh exchange cannot change tenant.
+     */
+    public static final String TID = "tid";
     /**
      * Discriminator value of the {@link #LOC_SCOPE} object. Deliberate: a denser node encoding can
      * be introduced under a new value without a {@code CATALOG_VERSION} bump.

@@ -2,6 +2,7 @@ package com.positivity.securityservice.internal.entity;
 
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantGlobal;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.*;
 import java.time.Instant;
@@ -20,6 +21,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Data
 @NoArgsConstructor
 @Entity
+@TenantGlobal(reason = "permission catalog is global and code-first (ADR-0062 section 6, ADR-0040)")
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "permissions", uniqueConstraints = @UniqueConstraint(columnNames = "name"))
 public class Permission {

@@ -21,6 +21,8 @@ import com.positivity.securityservice.internal.enums.PermissionCode;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.repository.JwtTokenRepository;
 import com.positivity.securityservice.internal.security.service.JwtService;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantResolver;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import java.nio.charset.StandardCharsets;
@@ -104,7 +106,8 @@ class JwtServiceImplLocationScopeTest {
                 userService,
                 tokenRevocationManager,
                 userDetailsService,
-                projection);
+                projection,
+                tenantResolver());
         ReflectionTestUtils.setField(sut, "jwtSecret", "this-is-a-long-test-secret-key-with-at-least-32-chars");
         ReflectionTestUtils.invokeMethod(sut, "initializeSecretKey");
 
@@ -652,5 +655,11 @@ class JwtServiceImplLocationScopeTest {
         public Instant instant() {
             return instant;
         }
+    }
+
+    private static TenantResolver tenantResolver() {
+        TenancyProperties properties = new TenancyProperties();
+        properties.setDefaultTenantId(UUID.fromString("01900000-0000-7000-8000-000000000001"));
+        return new TenantResolver(properties);
     }
 }

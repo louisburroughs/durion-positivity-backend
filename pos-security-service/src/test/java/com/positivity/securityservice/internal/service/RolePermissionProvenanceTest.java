@@ -61,6 +61,9 @@ class RolePermissionProvenanceTest {
     @Autowired
     private PermissionRepository permissionRepository;
 
+    /** The transitional default tenant (ADR-0062); the raw row must carry one like any other. */
+    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
+
     private JdbcTemplate jdbc;
     private UUID roleId;
 
@@ -69,8 +72,10 @@ class RolePermissionProvenanceTest {
         jdbc = new JdbcTemplate(dataSource);
         roleId = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO roles (id, name, description, created_at, created_by) VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)",
+                "INSERT INTO roles (id, tenant_id, name, description, created_at, created_by)"
+                        + " VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?)",
                 roleId,
+                TENANT,
                 "TEST_PROVENANCE_" + roleId.toString().substring(0, 8),
                 "provenance test",
                 "RolePermissionProvenanceTest");

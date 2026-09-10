@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -30,7 +31,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "pricing_snapshots")
-public class PricingSnapshot {
+public class PricingSnapshot extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

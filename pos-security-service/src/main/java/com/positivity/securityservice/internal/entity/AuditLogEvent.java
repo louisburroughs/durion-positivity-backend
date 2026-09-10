@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -36,7 +37,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_audit_log_events_actor_id", columnList = "actor_id"),
             @Index(name = "idx_audit_log_events_entity_id", columnList = "entity_id")
         })
-public class AuditLogEvent {
+public class AuditLogEvent extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

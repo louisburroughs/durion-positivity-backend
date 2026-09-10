@@ -203,6 +203,139 @@ class SecurityGatewayConfigTest {
 
     // ── PERM-006 / PERM-007 — local JWT validation & bitset decode ───────────
 
+    // ── ADR-0062 §3 (plan WS2b): tid claim -> X-Tenant-Id, Host -> X-Tenant-Slug on login ──
+
+    private static final String TENANT_ID = "01900000-0000-7000-8000-000000000001";
+
+    private static String buildTenantToken(String tid) {
+        return Jwts.builder()
+                .subject("alice")
+                .issuer(TEST_ISSUER)
+                .audience()
+                .add(TEST_AUDIENCE)
+                .and()
+                .claim("uid", "u1")
+                .claim("perm_bits", encodePermBits(116))
+                .claim("perm_ver", GatewayPermissionCatalog.CATALOG_VERSION)
+                .claim("tid", tid)
+                .expiration(new Date(System.currentTimeMillis() + 3_600_000))
+                .signWith(TEST_KEY)
+                .compact();
+    }
+
+    private static GatewayAuthProperties tenantHostProperties() {
+        GatewayAuthProperties properties = new GatewayAuthProperties();
+        properties.setStrippedAuthPathRoot("/v1/auth");
+        properties.setStrippedAuthPathPrefix("/v1/auth/");
+        properties.setAuthPathRoot("/security-service/v1/auth");
+        properties.setAuthPathPrefix("/security-service/v1/auth/");
+        properties.setTenantHostSuffix(".durionpos.org");
+        return properties;
+    }
+
+    private static HttpHeaders forward(GatewayAuthProperties properties, MockServerHttpRequest request) {
+        GlobalFilter filter = new SecurityGatewayConfig(
+                        TEST_SECRET, false, Set.of("HS256"), properties, new SimpleMeterRegistry())
+                .authFilter();
+        AtomicReference<HttpHeaders> downstreamHeaders = new AtomicReference<>();
+        GatewayFilterChain chain = ex -> {
+            downstreamHeaders.set(ex.getRequest().getHeaders());
+            return Mono.empty();
+        };
+        filter.filter(MockServerWebExchange.from(request), chain).block();
+        return downstreamHeaders.get();
+    }
+
+    @Test
+    void tidClaim_isForwardedAsXTenantId_andInboundCopyIsReplaced() {
+        HttpHeaders headers = forward(
+                new GatewayAuthProperties(),
+                MockServerHttpRequest.get("/people/v1/employees")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + buildTenantToken(TENANT_ID))
+                        .header("X-Tenant-Id", "01900000-0000-7000-8000-000000000002")
+                        .build());
+
+        assertThat(headers).isNotNull();
+        assertThat(headers.getFirst("X-Tenant-Id")).isEqualTo(TENANT_ID);
+    }
+
+    @Test
+    void tokenWithoutTid_forwardsNoTenantHeader() {
+        String permBits = encodePermBits(116);
+        HttpHeaders headers = forward(
+                new GatewayAuthProperties(),
+                MockServerHttpRequest.get("/people/v1/employees")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer "
+                                        + buildToken("alice", "u1", permBits, GatewayPermissionCatalog.CATALOG_VERSION))
+                        .header("X-Tenant-Id", "01900000-0000-7000-8000-000000000002")
+                        .build());
+
+        assertThat(headers).isNotNull();
+        assertThat(headers.getFirst("X-Tenant-Id"))
+                .as("stripped, never forged from the inbound copy")
+                .isNull();
+    }
+
+    @Test
+    void malformedTid_isRejected() {
+        GlobalFilter filter = new SecurityGatewayConfig(
+                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                .authFilter();
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/people/v1/employees")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + buildTenantToken("not-a-uuid"))
+                .build());
+
+        filter.filter(exchange, ignored -> Mono.empty()).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void loginRoute_derivesXTenantSlugFromHost() {
+        HttpHeaders headers = forward(
+                tenantHostProperties(),
+                MockServerHttpRequest.post("/v1/auth/login")
+                        .header(HttpHeaders.HOST, "acme-tire.durionpos.org")
+                        .header("X-Tenant-Slug", "forged")
+                        .build());
+
+        assertThat(headers).isNotNull();
+        assertThat(headers.getFirst("X-Tenant-Slug")).isEqualTo("acme-tire");
+    }
+
+    @Test
+    void loginRoute_withoutMatchingHost_forwardsNoSlug() {
+        HttpHeaders fromOtherHost = forward(
+                tenantHostProperties(),
+                MockServerHttpRequest.post("/v1/auth/login")
+                        .header(HttpHeaders.HOST, "localhost:8080")
+                        .header("X-Tenant-Slug", "forged")
+                        .build());
+        assertThat(fromOtherHost.getFirst("X-Tenant-Slug")).isNull();
+
+        GatewayAuthProperties noSuffix = tenantHostProperties();
+        noSuffix.setTenantHostSuffix("");
+        HttpHeaders suffixDisabled = forward(
+                noSuffix,
+                MockServerHttpRequest.post("/v1/auth/login")
+                        .header(HttpHeaders.HOST, "acme-tire.durionpos.org")
+                        .build());
+        assertThat(suffixDisabled.getFirst("X-Tenant-Slug")).isNull();
+    }
+
+    @Test
+    void nonLoginPublicPath_neverCarriesTheSlug() {
+        HttpHeaders headers = forward(
+                tenantHostProperties(),
+                MockServerHttpRequest.get("/actuator/health")
+                        .header(HttpHeaders.HOST, "acme-tire.durionpos.org")
+                        .build());
+
+        assertThat(headers.getFirst("X-Tenant-Slug")).isNull();
+    }
+
     /**
      * Valid token with people permission bits is forwarded with X-Perm-Bits header.
      */

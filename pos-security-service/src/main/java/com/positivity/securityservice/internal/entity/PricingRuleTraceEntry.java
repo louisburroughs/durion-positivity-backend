@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -30,7 +31,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "pricing_rule_trace_entries")
-public class PricingRuleTraceEntry {
+public class PricingRuleTraceEntry extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

@@ -74,19 +74,24 @@ pos-api-gateway  (JWT validation, path rewrite /{domain}/vN/.., permission bitse
      └── pos-event-receiver (event ingestion hub, shared-secret auth, not public)
 ```
 
-- **Multitenancy (ADR-0062, accepted 2026-09-09; schema in place, runtime binding pending).** Every persisting
+- **Multitenancy (ADR-0062, accepted 2026-09-09; schema in place, runtime landing module by module).** Every persisting
   module's Flyway history is one flattened baseline (`V1__baseline_<module>.sql`, 2026-09-09) that already carries
   the tenancy schema: `tenant_id` on every scoped table under Postgres row-level security, unique constraints and
   foreign keys scoped by tenant, and a per-module `db/tenancy-global-tables.txt` whitelist. Conventions and the
   add-a-table checklist: `docs/TENANCY_SCHEMA.md`. The runtime is `pos-tenancy-common` (WS1: `TenantContext`,
   `TenantContextFilter`, `TenantRecordInterceptor`, `TenantAwareDataSource`, `TenantScopedEntity`, `@TenantGlobal`,
-  `@PlatformScoped`, `TenantIterator`), adopted module by module (`pos-location` first) and enforced by
-  `pos-archunit`'s `TenancyArchitectureTest` for the modules in `ADOPTED_MODULES`. `pos-tenant` (WS2a) owns the
+  `@PlatformScoped`, `TenantIterator`), adopted module by module (`pos-location`, `pos-tenant`,
+  `pos-security-service` so far) and enforced by `pos-archunit`'s `TenancyArchitectureTest` for the modules in
+  `ADOPTED_MODULES`. `pos-tenant` (WS2a) owns the
   registry and publishes `tenant.events.v1`; its rows all belong to the platform tenant
-  (`PlatformTenant.ID`), the one place application code binds a tenant itself. Not yet present: the JWT `tid`
-  claim and `X-Tenant-Id` injection (WS2b). Until then `pos.tenancy.default-tenant-id` binds the alpha default
-  tenant (the platform tenant in `pos-tenant`) on every unbound path, and modules not yet adopted connect as the
-  owner role, which carries the same default (`postgres/init-tenancy.sh`). Never add an `organizationId` field (it is a
+  (`PlatformTenant.ID`), the one place application code binds a tenant itself. `pos-security-service` (WS2b)
+  resolves the tenant at login (`X-Tenant-Slug` from the request host, else the form's `tenantSlug`, against its
+  `ext_tenant` replica of `tenant.events.v1`), puts it on both tokens as `tid`, and the gateway turns `tid` into
+  `X-Tenant-Id` on every authenticated request (an inbound copy is always replaced). Still pending from WS2b: the
+  provisioning handler (role template, first admin, `tenant.provisioned`) and `ROLE_PLATFORM_ADMIN`. Until every
+  token carries `tid`, `pos.tenancy.default-tenant-id` binds the alpha default tenant (the platform tenant in
+  `pos-tenant`) on every unbound path, and modules not yet adopted connect as the owner role, which carries the
+  same default (`postgres/init-tenancy.sh`). Never add an `organizationId` field (it is a
   remnant). Plan:
   `../durion/docs/architecture/plans/adr-0023-suppression-postgres-multitenancy-plan.md`.
 

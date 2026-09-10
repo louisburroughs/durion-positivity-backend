@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -38,7 +39,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Entity
 @Table(name = "ext_people_staffing_assignment")
-public class ExtStaffingAssignmentReplica {
+public class ExtStaffingAssignmentReplica extends TenantScopedEntity {
 
     /** Status value of an assignment that currently contributes to the person's node set. */
     public static final String STATUS_ACTIVE = "ACTIVE";

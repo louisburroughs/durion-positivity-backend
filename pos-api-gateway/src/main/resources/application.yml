@@ -240,6 +240,10 @@ auth:
   auth-path-prefix: /security-service/v1/auth/
   stripped-auth-path-root: /v1/auth
   stripped-auth-path-prefix: /v1/auth/
+  # ADR-0062 section 3 (plan WS2b): a login request to <slug><suffix> is forwarded with X-Tenant-Slug
+  # derived from the Host header, so pos-security-service resolves the tenant before it looks the
+  # user up. Blank disables the derivation; the login body may still carry tenantSlug.
+  tenant-host-suffix: ${AUTH_TENANT_HOST_SUFFIX:}
 
 springdoc:
   api-docs:

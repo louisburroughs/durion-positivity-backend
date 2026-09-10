@@ -21,6 +21,8 @@ import com.positivity.securityservice.internal.exception.NoRolesAssignedExceptio
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.repository.JwtTokenRepository;
 import com.positivity.securityservice.internal.security.service.JwtService;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantResolver;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import java.nio.charset.StandardCharsets;
@@ -82,6 +84,10 @@ class JwtServiceImplTest {
      */
     @Mock
     private StaffingAssignmentProjectionService staffingAssignmentProjectionService;
+
+    /** ADR-0062 §3: the tid claim comes from the bound tenant, here the transitional default. */
+    @Spy
+    private TenantResolver tenantResolver = tenantResolver();
 
     @InjectMocks
     private JwtServiceImpl sut;
@@ -216,7 +222,8 @@ class JwtServiceImplTest {
                 userService,
                 tokenRevocationManager,
                 userDetailsService,
-                staffingAssignmentProjectionService);
+                staffingAssignmentProjectionService,
+                tenantResolver());
         ReflectionTestUtils.setField(fresh, "jwtSecret", "");
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(fresh, "initializeSecretKey"))
@@ -234,7 +241,8 @@ class JwtServiceImplTest {
                 userService,
                 tokenRevocationManager,
                 userDetailsService,
-                staffingAssignmentProjectionService);
+                staffingAssignmentProjectionService,
+                tenantResolver());
         ReflectionTestUtils.setField(fresh, "jwtSecret", "short");
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(fresh, "initializeSecretKey"))
@@ -384,6 +392,44 @@ class JwtServiceImplTest {
         when(tokenRevocationManager.isRevoked(anyString())).thenReturn(true);
 
         assertThat(sut.validateRefreshToken(pair.refreshToken())).isFalse();
+    }
+
+    @Test
+    @DisplayName("both tokens carry the bound tenant as tid (ADR-0062 section 3)")
+    void bothTokens_carryTidOfTheBoundTenant() {
+        UUID other = UUID.fromString("01990000-0000-7000-8000-000000000123");
+        JwtService.TokenPair pair = com.positivity.tenancy.TenantContext.callAs(
+                other, () -> sut.generateTokenPair("alice", TEST_USER_ID, null, Set.of("ADMIN")));
+
+        SecretKey key = (SecretKey) ReflectionTestUtils.getField(sut, "secretKey");
+        for (String token : List.of(pair.accessToken(), pair.refreshToken())) {
+            Claims claims = Jwts.parser()
+                    .verifyWith(key)
+                    .clock(() -> Date.from(Instant.now(TEST_CLOCK)))
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            assertThat(claims.get(JwtService.TID, String.class)).isEqualTo(other.toString());
+        }
+    }
+
+    @Test
+    @DisplayName("a refresh exchange runs under the refresh token's tenant, not the caller's binding")
+    void refreshAccessToken_bindsTheTokensTenant() {
+        UUID other = UUID.fromString("01990000-0000-7000-8000-000000000123");
+        JwtService.TokenPair pair = com.positivity.tenancy.TenantContext.callAs(
+                other, () -> sut.generateTokenPair("alice", TEST_USER_ID, null, Set.of("ADMIN")));
+        org.mockito.Mockito.lenient()
+                .when(jwtTokenRepository.findByRefreshToken(pair.refreshToken()))
+                .thenAnswer(inv -> {
+                    assertThat(com.positivity.tenancy.TenantContext.current()).contains(other);
+                    return Optional.empty();
+                });
+
+        assertThatThrownBy(() -> sut.refreshAccessToken(pair.refreshToken()))
+                .isInstanceOf(SecurityValidationException.class);
+        verify(jwtTokenRepository).findByRefreshToken(pair.refreshToken());
+        assertThat(com.positivity.tenancy.TenantContext.isBound()).isFalse();
     }
 
     @Test
@@ -1086,5 +1132,11 @@ class JwtServiceImplTest {
             UUID extractedPersonId = sut.getPersonIdFromToken(refreshed.accessToken());
             assertThat(extractedPersonId).isEqualTo(personId);
         }
+    }
+
+    private static TenantResolver tenantResolver() {
+        TenancyProperties properties = new TenancyProperties();
+        properties.setDefaultTenantId(UUID.fromString("01900000-0000-7000-8000-000000000001"));
+        return new TenantResolver(properties);
     }
 }

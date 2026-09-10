@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.repository;
 import com.positivity.securityservice.internal.dto.RoleGrantRow;
 import com.positivity.securityservice.internal.dto.RolePersonaDto;
 import com.positivity.securityservice.internal.entity.Role;
+import com.positivity.tenancy.TenantAudited;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -113,6 +114,7 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
      * @return the number of grant rows stamped
      */
     @Modifying(flushAutomatically = true)
+    @TenantAudited(reason = "row-level security scopes role_permissions; role_id resolves within the bound tenant only")
     @Query(
             value = "UPDATE role_permissions SET granted_at = :grantedAt, granted_by = :grantedBy"
                     + " WHERE role_id = :roleId AND permission_id IN (:permissionIds)",

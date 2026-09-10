@@ -215,6 +215,13 @@
             <artifactId>pos-security-common</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- ADR-0062 tenancy runtime (plan WS2b): tenant context, connection binding, Hibernate resolver,
+             Kafka propagation, classification annotations, ext_tenant projection parsing -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-tenancy-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.jspecify</groupId>
             <artifactId>jspecify</artifactId>

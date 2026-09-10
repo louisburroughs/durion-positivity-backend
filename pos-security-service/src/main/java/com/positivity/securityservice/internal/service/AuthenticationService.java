@@ -6,6 +6,7 @@ package com.positivity.securityservice.internal.service;
 import com.positivity.securityservice.internal.dto.LoginRequest;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Public service interface for user authentication.
@@ -29,4 +30,13 @@ public interface AuthenticationService {
      */
     @NonNull
     TokenPairResponse login(@NonNull LoginRequest request);
+
+    /**
+     * Login with the tenant resolved first (ADR-0062 §3): from {@code tenantSlugHeader} (the
+     * gateway's {@code X-Tenant-Slug}), else the request's {@code tenantSlug}, else the bound or
+     * transitional default tenant. The user lookup, lockout bookkeeping and token issue all run
+     * under that tenant.
+     */
+    @NonNull
+    TokenPairResponse login(@NonNull LoginRequest request, @Nullable String tenantSlugHeader);
 }

@@ -18,6 +18,8 @@ tags:
   name: Auth API
 - description: Bulk provision user accounts
   name: User Bulk Ingest API
+- description: The calling user's tenant
+  name: Tenant API
 - description: Asynchronous audit export job management
   name: Audit Exports
 - description: Bulk provision roles with persona metadata
@@ -3166,6 +3168,48 @@ paths:
       - Self-Registration Review API
       x-required-permissions:
       - security:user_account_state:manage
+  /v1/tenants/me:
+    get:
+      description: 'Returns the tenant the caller''s token belongs to (its tid claim) as the security service knows it from the tenant registry''s published projection: id, slug, display name and lifecycle status.
+
+        Use this tool to show the tenant name in the header or to check the tenant is ACTIVE; do not use it to look up another tenant, which only platform staff can do through the pos-tenant registry.
+
+        Preconditions: an authenticated caller whose tenant has been published to the replica.
+
+        Required inputs: none; the tenant comes from the token.
+
+        Emits a SECURITY_TENANT_ME_GET event.
+
+        Returns 200 with the tenant, 401 without a bound tenant and 404 when the replica does not know it yet.
+
+        '
+      operationId: getMyTenant
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantMeResponse'
+          description: Tenant found
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The replica does not know the caller's tenant yet
+      security:
+      - bearerAuth: []
+      summary: Get the Caller's Tenant
+      tags:
+      - Tenant API
+      x-required-permissions:
+      - AUTHENTICATED
   /v1/users:
     get:
       description: 'Returns every user account with its id, username, effective role names, and linked personId.
@@ -5059,6 +5103,11 @@ components:
           description: The user's login password
           minLength: 1
           type: string
+        tenantSlug:
+          description: Slug of the tenant to sign in to; optional when the request host already names it
+          example: acme-tire
+          pattern: ^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])$
+          type: string
         username:
           description: The user's login username
           example: jane.doe
@@ -6028,6 +6077,29 @@ components:
           type: boolean
         unsorted:
           type: boolean
+      type: object
+    TenantMeResponse:
+      description: The calling user's tenant
+      properties:
+        displayName:
+          description: Human-readable name
+          example: Acme Tire & Auto
+          type: string
+        id:
+          description: Tenant id, the token's tid claim
+          format: uuid
+          type: string
+        slug:
+          description: URL-safe unique name
+          example: acme-tire
+          type: string
+        status:
+          description: 'Lifecycle status: PENDING, ACTIVE, SUSPENDED or DECOMMISSIONED'
+          type: string
+      required:
+      - id
+      - slug
+      - status
       type: object
     TokenPairRequest:
       description: Request to generate an access token and refresh token pair
