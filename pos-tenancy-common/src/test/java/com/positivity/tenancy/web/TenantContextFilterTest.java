@@ -91,9 +91,12 @@ class TenantContextFilterTest {
     @Test
     void infrastructurePathsAndUnenforcedModulesProceedUnbound() throws Exception {
         MockHttpServletResponse health = new MockHttpServletResponse();
+        TenantContext.bind(DEFAULT); // a stale binding on the pooled servlet thread
         filter(new TenancyProperties()).doFilter(new MockHttpServletRequest("GET", "/actuator/health"), health, chain);
         assertThat(health.getStatus()).isEqualTo(200);
-        assertThat(seen.get()).isNull();
+        assertThat(seen.get())
+                .as("the stale binding is cleared before the chain runs")
+                .isNull();
 
         TenancyProperties lenient = new TenancyProperties();
         lenient.setEnforce(false);
@@ -104,14 +107,38 @@ class TenantContextFilterTest {
     }
 
     @Test
-    void correlationIdIsEchoedOnRefusal() throws Exception {
+    void correlationIdIsEchoedTrimmedOnRefusal() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/v1/locations");
-        request.addHeader("X-Correlation-Id", "corr-1");
+        request.addHeader("X-Correlation-Id", "  corr-1  ");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         filter(new TenancyProperties()).doFilter(request, response, chain);
 
         assertThat(response.getHeader("X-Correlation-Id")).isEqualTo("corr-1");
         assertThat(response.getContentAsString()).contains("\"correlationId\":\"corr-1\"");
+    }
+
+    @Test
+    void aMintedCorrelationIdIsAUuidV7() throws Exception {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter(new TenancyProperties()).doFilter(new MockHttpServletRequest("GET", "/v1/locations"), response, chain);
+
+        String minted = response.getHeader("X-Correlation-Id");
+        assertThat(UUID.fromString(minted).version()).isEqualTo(7);
+    }
+
+    @Test
+    void aBoundRequestLeavesTheThreadUnboundEvenWhenTheChainThrows() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/v1/locations");
+        request.addHeader(TenantHeaders.HTTP_TENANT_ID, A.toString());
+        FilterChain failing = (req, res) -> {
+            throw new IllegalStateException("handler blew up");
+        };
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> filter(new TenancyProperties()).doFilter(request, new MockHttpServletResponse(), failing))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(TenantContext.current()).isEmpty();
     }
 }

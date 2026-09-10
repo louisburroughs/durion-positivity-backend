@@ -32,6 +32,18 @@ class TenantContextTaskDecoratorTest {
     }
 
     @Test
+    void thePooledThreadIsLeftUnboundAfterTheTask() {
+        Runnable decorated = TenantContext.callAs(A, () -> decorator.decorate(() -> {}));
+        TenantContext.bind(STALE);
+
+        decorated.run();
+
+        assertThat(TenantContext.current())
+                .as("no restore of the worker's stale binding")
+                .isEmpty();
+    }
+
+    @Test
     void anUnboundSubmitterClearsWhateverThePooledThreadCarried() {
         Runnable decorated =
                 decorator.decorate(() -> assertThat(TenantContext.current()).isEmpty());

@@ -2,6 +2,7 @@ package com.positivity.tenancy.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.shared.error.ApiError;
+import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.tenancy.TenancyProperties;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantHeaders;
@@ -67,17 +68,14 @@ public class TenantContextFilter extends OncePerRequestFilter {
             tenant = properties.getDefaultTenantId();
         }
 
-        if (tenant.isEmpty()) {
-            if (properties.isEnforce() && !isUnenforced(request.getRequestURI())) {
-                refuse(request, response, "No tenant bound to the request");
-                return;
-            }
-            TenantContext.clear();
-            chain.doFilter(request, response);
+        if (tenant.isEmpty() && properties.isEnforce() && !isUnenforced(request.getRequestURI())) {
+            refuse(request, response, "No tenant bound to the request");
             return;
         }
 
-        TenantContext.bind(tenant.get());
+        // Bound or not, the thread ends the request unbound: a servlet thread is pooled too.
+        TenantContext.clear();
+        tenant.ifPresent(TenantContext::bind);
         try {
             chain.doFilter(request, response);
         } finally {
@@ -106,10 +104,11 @@ public class TenantContextFilter extends OncePerRequestFilter {
     }
 
     private void refuse(HttpServletRequest request, HttpServletResponse response, String message) throws IOException {
-        String correlationId = request.getHeader(X_CORRELATION_ID);
-        if (correlationId == null || correlationId.isBlank()) {
-            correlationId = UUID.randomUUID().toString();
-        }
+        // Same convention as GlobalApiExceptionHandler: echo a trimmed inbound id, else mint a UUID v7.
+        String inbound = request.getHeader(X_CORRELATION_ID);
+        String correlationId = inbound == null || inbound.isBlank()
+                ? UUIDv7Generator.generate().toString()
+                : inbound.trim();
         log.warn(
                 "{} on {} {} [correlationId={}]", message, request.getMethod(), request.getRequestURI(), correlationId);
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
