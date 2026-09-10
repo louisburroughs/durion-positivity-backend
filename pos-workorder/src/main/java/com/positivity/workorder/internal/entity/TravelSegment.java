@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.workorder.internal.enums.OnBehalfReasonCode;
 import com.positivity.workorder.internal.enums.TravelSegmentStatus;
 import com.positivity.workorder.internal.enums.TravelSegmentType;
@@ -49,7 +50,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @AllArgsConstructor
 @Builder
 @EntityListeners(AuditingEntityListener.class)
-public class TravelSegment {
+public class TravelSegment extends TenantScopedEntity {
     // PK-only reference constructor used by association setters (e.g. TravelSegmentAdjustment);
     // intentionally leaves the other @NonNull persistent columns unset on the reference proxy.
     @SuppressWarnings("java:S2637")

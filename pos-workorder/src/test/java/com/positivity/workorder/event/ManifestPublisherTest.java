@@ -1,5 +1,6 @@
 package com.positivity.workorder.event;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -71,6 +72,7 @@ class ManifestPublisherTest {
 
     private OutboxEvent row(String eventId, String eventType, Instant createdAt) {
         return OutboxEvent.builder()
+                .tenantId(TENANT_A)
                 .id(UUID.randomUUID())
                 .topic("workorder.events.v1")
                 .recordKey(eventId)
@@ -178,6 +180,7 @@ class ManifestPublisherTest {
     @DisplayName("Rows without a parseable eventId are excluded rather than failing the manifest")
     void skipsRowsWithoutEventId() throws Exception {
         OutboxEvent broken = OutboxEvent.builder()
+                .tenantId(TENANT_A)
                 .id(UUID.randomUUID())
                 .topic("workorder.events.v1")
                 .recordKey("k")
@@ -229,6 +232,7 @@ class ManifestPublisherTest {
                 "workorder.work-session.started.v1",
                 WINDOW_START.plusSeconds(60));
         OutboxEvent badJson = OutboxEvent.builder()
+                .tenantId(TENANT_A)
                 .id(UUID.randomUUID())
                 .topic("workorder.events.v1")
                 .recordKey("bad")
@@ -237,6 +241,7 @@ class ManifestPublisherTest {
                 .publishedAt(WINDOW_START.plusSeconds(121))
                 .build();
         OutboxEvent badUuid = OutboxEvent.builder()
+                .tenantId(TENANT_A)
                 .id(UUID.randomUUID())
                 .topic("workorder.events.v1")
                 .recordKey("bad-uuid")

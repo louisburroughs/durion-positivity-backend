@@ -4,6 +4,7 @@ import com.positivity.catalog.internal.enums.ProductLifecycleState;
 import com.positivity.catalog.internal.enums.ProductStatus;
 import com.positivity.catalog.internal.enums.TreadDesignSource;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import java.time.Instant;
@@ -34,7 +35,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         },
         indexes = {@Index(name = "idx_product_manufacturer_part_number", columnList = "manufacturer_part_number")})
 @Schema(description = "Represents a product in the catalog")
-public class ProductEntity implements CatalogItem {
+public class ProductEntity extends TenantScopedEntity implements CatalogItem {
 
     @Id
     @GeneratedValue

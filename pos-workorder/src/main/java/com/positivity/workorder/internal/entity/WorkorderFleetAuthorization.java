@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.workorder.internal.enums.FleetAuthorizationResolution;
 import com.positivity.workorder.internal.enums.FleetAuthorizationStatus;
 import jakarta.persistence.Column;
@@ -57,7 +58,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class WorkorderFleetAuthorization {
+public class WorkorderFleetAuthorization extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

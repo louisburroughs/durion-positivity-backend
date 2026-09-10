@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -7,6 +8,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.tenancy.StaticTenantRegistry;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantIterator;
 import com.positivity.workorder.internal.entity.WorkorderFleetAuthorization;
 import com.positivity.workorder.internal.enums.FleetAuthorizationStatus;
 import com.positivity.workorder.internal.repository.WorkorderFleetAuthorizationRepository;
@@ -64,8 +68,15 @@ class FleetAuthorizationResourceReleaseRunnerTest {
                 technicianAssignmentService,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 Duration.ofHours(4));
+        TenancyProperties tenancy = new TenancyProperties();
+        tenancy.setDefaultTenantId(TENANT_A);
         runner = new FleetAuthorizationResourceReleaseRunner(
-                authorizationRepository, releaser, Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofHours(4), 50);
+                authorizationRepository,
+                releaser,
+                new TenantIterator(new StaticTenantRegistry(tenancy)),
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                Duration.ofHours(4),
+                50);
         when(authorizationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         // The release re-reads by id inside its own transaction, so the mock has to answer that
         // read. Tests that care about the gap between the sweep's query and the write override this

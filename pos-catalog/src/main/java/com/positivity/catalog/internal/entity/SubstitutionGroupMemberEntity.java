@@ -1,6 +1,7 @@
 package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -34,7 +35,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         uniqueConstraints =
                 @UniqueConstraint(name = "uk_substitution_group_member_product", columnNames = "product_id"),
         indexes = @Index(name = "idx_substitution_group_member_group", columnList = "group_id"))
-public class SubstitutionGroupMemberEntity {
+public class SubstitutionGroupMemberEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

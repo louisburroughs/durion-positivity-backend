@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.entity;
 
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -27,7 +28,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Entity
 @Table(name = "ext_catalog_service")
-public class ExtCatalogServiceReplica {
+public class ExtCatalogServiceReplica extends TenantScopedEntity {
 
     @Id
     @Column(name = "service_id", columnDefinition = "UUID")

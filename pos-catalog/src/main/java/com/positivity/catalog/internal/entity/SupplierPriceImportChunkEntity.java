@@ -1,6 +1,7 @@
 package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -39,7 +40,7 @@ import lombok.NoArgsConstructor;
                 @UniqueConstraint(
                         name = "uk_supplier_price_import_chunk",
                         columnNames = {"import_manifest_id", "chunk_sequence"}))
-public class SupplierPriceImportChunkEntity {
+public class SupplierPriceImportChunkEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

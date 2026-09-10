@@ -1,6 +1,7 @@
 package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.AssignedIdentifier;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -24,7 +25,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "labor_guide_import")
-public class LaborGuideImportEntity {
+public class LaborGuideImportEntity extends TenantScopedEntity {
 
     /** Import completeness — a counted fact, never an assumption. */
     public enum Status {

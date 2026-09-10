@@ -2,6 +2,7 @@ package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.AssignedIdentifier;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -43,7 +44,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_supplier_price_import_profile", columnList = "vendor_profile_id"),
             @Index(name = "idx_supplier_price_import_status", columnList = "status")
         })
-public class SupplierPriceImportEntity {
+public class SupplierPriceImportEntity extends TenantScopedEntity {
 
     /** Applying chunks in flight; no completion event seen yet. */
     public static final String STATUS_APPLYING = "APPLYING";

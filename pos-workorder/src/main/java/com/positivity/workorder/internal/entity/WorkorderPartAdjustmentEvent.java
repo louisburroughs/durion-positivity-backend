@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -59,7 +60,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_part_adjustment_workorder", columnList = "workorder_id"),
             @Index(name = "idx_part_adjustment_performed_at", columnList = "performed_at")
         })
-public class WorkorderPartAdjustmentEvent {
+public class WorkorderPartAdjustmentEvent extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

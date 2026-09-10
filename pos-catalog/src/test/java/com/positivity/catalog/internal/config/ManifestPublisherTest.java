@@ -108,6 +108,7 @@ class ManifestPublisherTest {
 
     private static OutboxEvent row(String eventId, String eventType, Instant createdAt) {
         return OutboxEvent.builder()
+                .tenantId(UUID.fromString("01900000-0000-7000-8000-000000000001"))
                 .id(UUID.randomUUID())
                 .topic(EVENTS_TOPIC)
                 .recordKey(eventId)
@@ -212,6 +213,7 @@ class ManifestPublisherTest {
     @DisplayName("excludes a row with no eventId instead of failing the window")
     void skipsRowWithoutEventId() {
         OutboxEvent broken = OutboxEvent.builder()
+                .tenantId(UUID.fromString("01900000-0000-7000-8000-000000000001"))
                 .id(UUID.randomUUID())
                 .topic(EVENTS_TOPIC)
                 .recordKey("k")
@@ -231,6 +233,7 @@ class ManifestPublisherTest {
     @DisplayName("excludes a row whose payload will not parse instead of blocking reconciliation forever")
     void skipsRowWithUnparsablePayload() {
         OutboxEvent broken = OutboxEvent.builder()
+                .tenantId(UUID.fromString("01900000-0000-7000-8000-000000000001"))
                 .id(UUID.randomUUID())
                 .topic(EVENTS_TOPIC)
                 .recordKey("k")

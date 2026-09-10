@@ -3,6 +3,7 @@ package com.positivity.catalog.internal.entity;
 import com.positivity.catalog.internal.enums.ChangeSourceType;
 import com.positivity.catalog.internal.enums.CostType;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -31,7 +32,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_item_cost_audit_item_id", columnList = "item_id"),
             @Index(name = "idx_item_cost_audit_timestamp", columnList = "audit_timestamp")
         })
-public class ItemCostAuditEntity {
+public class ItemCostAuditEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

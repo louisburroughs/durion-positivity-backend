@@ -2,6 +2,7 @@ package com.positivity.catalog.internal.entity;
 
 import com.positivity.catalog.internal.enums.TreadDesignMatchState;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -54,7 +55,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
                 @UniqueConstraint(
                         name = "uk_tread_design_vendor_variant",
                         columnNames = {"vendor_profile_id", "vendor_variant_id"}))
-public class TreadDesignEntity {
+public class TreadDesignEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

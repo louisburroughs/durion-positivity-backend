@@ -1,6 +1,7 @@
 package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -24,7 +25,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Entity
 @Table(name = "ext_product_lead_time")
-public class ExtProductLeadTimeReplica {
+public class ExtProductLeadTimeReplica extends TenantScopedEntity {
 
     @Id
     @Column(name = "product_id", nullable = false)

@@ -1,5 +1,6 @@
 package com.positivity.workorder.event;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.workorder.internal.entity.OutboxEvent;
@@ -29,6 +30,7 @@ class OutboxReplayServiceImplIntegrationTest {
 
     private OutboxEvent save(String key, Instant createdAt, Instant publishedAt, int attempts) {
         return repository.save(OutboxEvent.builder()
+                .tenantId(TENANT_A)
                 .topic("workorder.events.v1")
                 .recordKey(key)
                 .payload("{\"eventId\":\"" + key + "\"}")

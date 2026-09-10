@@ -283,16 +283,54 @@ never everything). Reach is expanded once per request by `LocationHierarchyServi
 | `workorder.kafka.location-events-topic` | `location.events.v1` | Location fact topic feeding the `ext_location`, `ext_bay` and `ext_mobile_unit` replicas |
 | `workorder.kafka.location-events-consumer-group` | `pos-workorder-location-events` | Consumer group for the location fact topic |
 
+## Multitenancy (ADR-0062, WS3 wave 3)
+
+This module runs on the ADR-0062 runtime: it depends on `pos-tenancy-common`, every scoped entity
+extends `TenantScopedEntity`, and the two global tables (`event_outbox`, `processed_events`, listed in
+`src/main/resources/db/tenancy-global-tables.txt`) carry `@TenantGlobal`. The request tenant is bound
+by `TenantContextFilter` from `X-Tenant-Id` (the gateway injects it from the token's `tid`), the Kafka
+tenant by `TenantRecordInterceptor` from the `tenantId` record header on every one of the module's
+consumers, and every connection checkout binds `app.current_tenant` for row-level security.
+`pos.tenancy.default-tenant-id` still binds the alpha default tenant on every unbound path (tokens
+issued before `tid`, records without the header).
+
+The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_DATASOURCE_USERNAME`
+/ `POS_APP_PASSWORD`); Flyway alone uses the owner credential (`SPRING_FLYWAY_USER` /
+`SPRING_FLYWAY_PASSWORD`, `FlywayConfig`).
+
+The outbox row carries the producing tenant as data (`tenant_id`, stamped from the bound tenant by
+`OutboxEventWriter`, which every fact publisher and `KafkaEventRelay` write through):
+
+| Job | Classification | Why |
+| --- | --- | --- |
+| `OutboxPublisher.publishPending` | platform-scoped | Drains `event_outbox`; each row's `tenant_id` becomes the record header |
+| `ManifestPublisher.publishDueManifest` | platform-scoped | Summarises `event_outbox` per window across tenants; per-tenant manifests are plan WS8 |
+| `OutboxPurgeJob.purge` | platform-scoped | Deletes published `event_outbox` rows across tenants |
+| `ApprovalExpirationJob.expirePendingApprovals` | per-tenant | `estimate` is scoped; one sweep per tenant of the registry, the service opening its own transaction inside the binding |
+| `FleetAuthorizationResourceReleaseRunner.releaseOverdue` | per-tenant | `workorder_fleet_authorization` is scoped; one sweep per tenant, each release in its own transaction |
+
+Per-tenant sweeps iterate the static registry (`TenantIterator.forEachActiveTenant`; the default tenant
+until the `ext_tenant` replica lands per module). The module has no native queries.
+
+Proof: `TenantIsolationIT` (tenant A's `approval_configuration` row is invisible to tenant B and to an
+unbound connection, through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every
+non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is
+`pos_app` with no bypass), both on Testcontainers Postgres (`./mvnw -pl pos-workorder -am verify`), next to
+the existing `FlywayMigrationIT` on the same strict `pg` profile.
+
 ## Dependencies
 
 - `pos-security-common` — JWT-based security filter
+- `pos-tenancy-common` — ADR-0062 tenant context, connection binding, Hibernate resolver, Kafka propagation
 - `pos-events` — `@EmitEvent` annotation and event registration
 - `pos-shared-dtos` — invoice generation request DTOs
 - `pos-tax-common` — tax calculation request/response types
 
 ## Database
 
-Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`.
+Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`: `V1__baseline_workorder.sql` (the
+2026-09-09 flattened baseline with the tenancy schema on every scoped table) and `V2__event_outbox_tenant_id.sql`
+(`tenant_id` as data on the global outbox table, see Multitenancy below).
 
 ## Development
 

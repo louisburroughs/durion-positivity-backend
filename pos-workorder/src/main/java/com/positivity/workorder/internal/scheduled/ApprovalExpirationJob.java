@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.scheduled;
 
+import com.positivity.tenancy.TenantIterator;
 import com.positivity.workorder.internal.service.EstimateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Component;
 public class ApprovalExpirationJob {
 
     private final EstimateService estimateService;
+    private final TenantIterator tenantIterator;
 
     /**
      * Check for expired pending approvals and mark them as expired.
@@ -37,6 +39,11 @@ public class ApprovalExpirationJob {
             fixedDelayString = "${workorder.approval-expiration.interval-ms:3600000}",
             initialDelayString = "${workorder.approval-expiration.initial-delay-ms:60000}")
     public void expirePendingApprovals() {
+        tenantIterator.forEachActiveTenant(tenantId -> expirePendingApprovalsForTenant());
+    }
+
+    /** One tenant's sweep; {@code estimate} is a scoped table (ADR-0062) and the service opens its own transaction. */
+    void expirePendingApprovalsForTenant() {
         log.debug("Running approval expiration job");
         int expiredCount = estimateService.expirePendingApprovals();
         log.info("Approval expiration job completed - expired {} estimates", expiredCount);
