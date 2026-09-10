@@ -11,6 +11,9 @@ import com.positivity.poseventreceiver.internal.dto.EmittedEventResponse;
 import com.positivity.poseventreceiver.internal.dto.PagedResponse;
 import com.positivity.poseventreceiver.internal.entity.EmittedEvent;
 import com.positivity.poseventreceiver.internal.repository.EmittedEventRepository;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantResolver;
+import com.positivity.tenancy.testing.TenantTestSupport;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -61,7 +64,10 @@ class EventQueryServiceImplTest {
     @BeforeEach
     void setUp() {
         Clock fixedClock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
-        service = new EventQueryServiceImpl(emittedEventRepository, fixedClock);
+        // The alpha default tenant stands in for the request binding: every query names it.
+        TenancyProperties tenancy = new TenancyProperties();
+        tenancy.setDefaultTenantId(TenantTestSupport.TENANT_A);
+        service = new EventQueryServiceImpl(emittedEventRepository, fixedClock, new TenantResolver(tenancy));
     }
 
     @Nested
@@ -71,14 +77,18 @@ class EventQueryServiceImplTest {
         @Test
         @DisplayName("defaults since to 7 days ago when not supplied")
         void defaultsToSevenDaysAgo() {
-            when(emittedEventRepository.findByEntityIdAndPublishedAtGreaterThanEqual(any(), any(), any()))
+            when(emittedEventRepository.findByTenantIdAndEntityIdAndPublishedAtGreaterThanEqual(
+                            any(), any(), any(), any()))
                     .thenReturn(new PageImpl<>(List.of()));
 
             service.findByEntity("ENTITY-1", null, 0, 50);
 
             verify(emittedEventRepository)
-                    .findByEntityIdAndPublishedAtGreaterThanEqual(
-                            eq("ENTITY-1"), eq(Instant.parse("2026-08-20T12:00:00Z")), any());
+                    .findByTenantIdAndEntityIdAndPublishedAtGreaterThanEqual(
+                            eq(TenantTestSupport.TENANT_A),
+                            eq("ENTITY-1"),
+                            eq(Instant.parse("2026-08-20T12:00:00Z")),
+                            any());
         }
 
         @Test
@@ -95,13 +105,15 @@ class EventQueryServiceImplTest {
         @DisplayName("accepts a since exactly 90 days in the past")
         void acceptsSinceExactly90DaysAgo() {
             Instant exactly90 = FIXED_NOW.minus(java.time.Duration.ofDays(90));
-            when(emittedEventRepository.findByEntityIdAndPublishedAtGreaterThanEqual(any(), any(), any()))
+            when(emittedEventRepository.findByTenantIdAndEntityIdAndPublishedAtGreaterThanEqual(
+                            any(), any(), any(), any()))
                     .thenReturn(new PageImpl<>(List.of()));
 
             service.findByEntity("ENTITY-1", exactly90, 0, 50);
 
             verify(emittedEventRepository)
-                    .findByEntityIdAndPublishedAtGreaterThanEqual(eq("ENTITY-1"), eq(exactly90), any());
+                    .findByTenantIdAndEntityIdAndPublishedAtGreaterThanEqual(
+                            eq(TenantTestSupport.TENANT_A), eq("ENTITY-1"), eq(exactly90), any());
         }
 
         @Test
@@ -117,13 +129,15 @@ class EventQueryServiceImplTest {
         @Test
         @DisplayName("accepts since equal to now")
         void acceptsSinceEqualToNow() {
-            when(emittedEventRepository.findByEntityIdAndPublishedAtGreaterThanEqual(any(), any(), any()))
+            when(emittedEventRepository.findByTenantIdAndEntityIdAndPublishedAtGreaterThanEqual(
+                            any(), any(), any(), any()))
                     .thenReturn(new PageImpl<>(List.of()));
 
             service.findByEntity("ENTITY-1", FIXED_NOW, 0, 50);
 
             verify(emittedEventRepository)
-                    .findByEntityIdAndPublishedAtGreaterThanEqual(eq("ENTITY-1"), eq(FIXED_NOW), any());
+                    .findByTenantIdAndEntityIdAndPublishedAtGreaterThanEqual(
+                            eq(TenantTestSupport.TENANT_A), eq("ENTITY-1"), eq(FIXED_NOW), any());
         }
     }
 
@@ -134,13 +148,15 @@ class EventQueryServiceImplTest {
         @Test
         @DisplayName("delegates with a Pageable sorted publishedAt DESC, honoring page and size")
         void delegatesWithFixedDescendingSort() {
-            when(emittedEventRepository.findByEntityIdAndPublishedAtGreaterThanEqual(any(), any(), any()))
+            when(emittedEventRepository.findByTenantIdAndEntityIdAndPublishedAtGreaterThanEqual(
+                            any(), any(), any(), any()))
                     .thenReturn(new PageImpl<>(List.of(), PageRequest.of(2, 10), 0));
 
             service.findByEntity("ENTITY-1", null, 2, 10);
 
             verify(emittedEventRepository)
-                    .findByEntityIdAndPublishedAtGreaterThanEqual(eq("ENTITY-1"), any(), pageableCaptor.capture());
+                    .findByTenantIdAndEntityIdAndPublishedAtGreaterThanEqual(
+                            eq(TenantTestSupport.TENANT_A), eq("ENTITY-1"), any(), pageableCaptor.capture());
             Pageable captured = pageableCaptor.getValue();
             assertThat(captured.getPageNumber()).isEqualTo(2);
             assertThat(captured.getPageSize()).isEqualTo(10);
@@ -157,7 +173,8 @@ class EventQueryServiceImplTest {
         void mapsEntitiesAndPageMetadata() {
             Instant publishedAt = FIXED_NOW.minusSeconds(120);
             EmittedEvent stored = event("ENTITY-1", publishedAt);
-            when(emittedEventRepository.findByEntityIdAndPublishedAtGreaterThanEqual(any(), any(), any()))
+            when(emittedEventRepository.findByTenantIdAndEntityIdAndPublishedAtGreaterThanEqual(
+                            any(), any(), any(), any()))
                     .thenReturn(new PageImpl<>(List.of(stored), PageRequest.of(0, 50), 1));
 
             PagedResponse<EmittedEventResponse> result = service.findByEntity("ENTITY-1", null, 0, 50);
@@ -178,7 +195,8 @@ class EventQueryServiceImplTest {
         @Test
         @DisplayName("returns an empty page rather than throwing when nothing matches")
         void emptyResultIsAnEmptyPage() {
-            when(emittedEventRepository.findByEntityIdAndPublishedAtGreaterThanEqual(any(), any(), any()))
+            when(emittedEventRepository.findByTenantIdAndEntityIdAndPublishedAtGreaterThanEqual(
+                            any(), any(), any(), any()))
                     .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
 
             PagedResponse<EmittedEventResponse> result = service.findByEntity("NO_SUCH_ENTITY", null, 0, 50);

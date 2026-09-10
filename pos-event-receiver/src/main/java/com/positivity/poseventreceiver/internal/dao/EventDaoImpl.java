@@ -8,13 +8,10 @@ import com.positivity.poseventreceiver.internal.repository.EmittedEventRepositor
 import com.positivity.poseventreceiver.internal.repository.EventTypeRepository;
 import com.positivity.poseventreceiver.internal.repository.PreregisteredEventRepository;
 import com.positivity.tenancy.PlatformScoped;
-import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantResolver;
 import jakarta.annotation.PreDestroy;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -34,13 +31,12 @@ public class EventDaoImpl implements EventDao {
     private final TenantResolver tenantResolver;
 
     /**
-     * Each queued event carries the tenant it arrived under (ADR-0062 §3): the flush runs on the
-     * scheduler thread, unbound, and saves every event under the tenant captured here.
+     * Thread-safe queue for batching emitted events. Each event already carries the tenant it
+     * arrived under (ADR-0062 §3, stamped in {@link #saveEmittedEvent(EmittedEvent)}): the flush
+     * runs on the scheduler thread, unbound, and {@code emitted_event} has no row-level security,
+     * so the stamped column is the row's only tenant.
      */
-    record QueuedEvent(UUID tenantId, EmittedEvent event) {}
-
-    /** Thread-safe queue for batching emitted events. */
-    private final ConcurrentLinkedQueue<QueuedEvent> eventBatch = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<EmittedEvent> eventBatch = new ConcurrentLinkedQueue<>();
 
     public EventDaoImpl(
             @NonNull PreregisteredEventRepository preregRepo,
@@ -60,7 +56,8 @@ public class EventDaoImpl implements EventDao {
 
     @Override
     public EmittedEvent saveEmittedEvent(@NonNull EmittedEvent event) {
-        eventBatch.offer(new QueuedEvent(tenantResolver.require(), event));
+        event.setTenantId(tenantResolver.require());
+        eventBatch.offer(event);
         log.debug("Event queued for batch save: {} (queue size: {})", event.getId(), eventBatch.size());
         return event;
     }
@@ -82,36 +79,28 @@ public class EventDaoImpl implements EventDao {
      * Uses bulk insert for improved performance.
      */
     @PlatformScoped(
-            reason = "drains the in-memory batch for every tenant; each event is saved under the tenant captured"
-                    + " when it was queued, so no row is written unbound")
+            reason = "drains the in-memory batch for every tenant; each row carries the tenant stamped when it was"
+                    + " queued, and emitted_event has no row-level security to bind for")
     @Scheduled(fixedRate = 5000)
     public void flushEventBatch() {
         if (eventBatch.isEmpty()) {
             return;
         }
 
-        Map<UUID, List<EmittedEvent>> byTenant = new LinkedHashMap<>();
-        QueuedEvent queued;
+        List<EmittedEvent> eventsToSave = new ArrayList<>();
+        EmittedEvent queued;
         while ((queued = eventBatch.poll()) != null) {
-            byTenant.computeIfAbsent(queued.tenantId(), id -> new ArrayList<>()).add(queued.event());
+            eventsToSave.add(queued);
         }
 
-        byTenant.forEach((tenantId, eventsToSave) -> {
-            try {
-                List<EmittedEvent> savedEvents =
-                        TenantContext.callAs(tenantId, () -> emittedRepo.saveAll(eventsToSave));
-                log.info("Flushed batch of {} events to database for tenant {}", savedEvents.size(), tenantId);
-            } catch (Exception e) {
-                log.error(
-                        "Failed to flush event batch of size {} for tenant {}: {}",
-                        eventsToSave.size(),
-                        tenantId,
-                        e.getMessage(),
-                        e);
-                // Re-queue failed events for retry, under the same tenant
-                eventsToSave.forEach(event -> eventBatch.add(new QueuedEvent(tenantId, event)));
-            }
-        });
+        try {
+            List<EmittedEvent> savedEvents = emittedRepo.saveAll(eventsToSave);
+            log.info("Flushed batch of {} events to database", savedEvents.size());
+        } catch (Exception e) {
+            log.error("Failed to flush event batch of size {}: {}", eventsToSave.size(), e.getMessage(), e);
+            // Re-queue failed events for retry
+            eventBatch.addAll(eventsToSave);
+        }
     }
 
     /**

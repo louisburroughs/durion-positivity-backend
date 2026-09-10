@@ -3,3 +3,4 @@
 # TenancySchemaConformanceIT (plan WS1) reads this file.
 event_type  # platform event-type registry, registered by every service at startup
 preregistered_event  # platform event-type registry, registered by every service at startup
+emitted_event  # TimescaleDB hypertable: compression and the hourly continuous aggregate exclude row security (ADR-0062 exception, 2026-09-10); tenant_id is a data column stamped on every row and named in every query

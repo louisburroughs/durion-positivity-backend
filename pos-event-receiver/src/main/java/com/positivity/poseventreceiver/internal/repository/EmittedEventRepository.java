@@ -12,14 +12,20 @@ import org.springframework.data.repository.query.Param;
 
 public interface EmittedEventRepository extends JpaRepository<EmittedEvent, UUID> {
 
-    @Query(
-            "SELECT e.id, COUNT(e) FROM EmittedEvent e WHERE e.publishedAt >= :since GROUP BY e.id ORDER BY COUNT(e) DESC")
-    List<Object[]> countByEventTypeIdSince(@Param("since") Instant since);
+    /**
+     * Event counts by type for one tenant. {@code emitted_event} has no row-level security (see
+     * {@link EmittedEvent}), so the tenant predicate here is the isolation.
+     */
+    @Query("SELECT e.id, COUNT(e) FROM EmittedEvent e WHERE e.tenantId = :tenantId AND e.publishedAt >= :since"
+            + " GROUP BY e.id ORDER BY COUNT(e) DESC")
+    List<Object[]> countByEventTypeIdSince(@Param("tenantId") UUID tenantId, @Param("since") Instant since);
 
     /**
      * Entity-indexed event lookup for GET /v1/events (issue #1521). Always bound on
      * publishedAt — the hypertable's partition column — so this never becomes an unbounded
-     * scan; the partial index {@code idx_emitted_event_entity_time} serves exactly this shape.
+     * scan; the partial index {@code idx_emitted_event_entity_time} serves exactly this shape. Bound
+     * on the tenant as well: {@code emitted_event} has no row-level security (see {@link EmittedEvent}).
      */
-    Page<EmittedEvent> findByEntityIdAndPublishedAtGreaterThanEqual(String entityId, Instant since, Pageable pageable);
+    Page<EmittedEvent> findByTenantIdAndEntityIdAndPublishedAtGreaterThanEqual(
+            UUID tenantId, String entityId, Instant since, Pageable pageable);
 }
