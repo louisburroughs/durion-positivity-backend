@@ -4,6 +4,7 @@ import static jakarta.persistence.FetchType.LAZY;
 
 import com.positivity.accounting.internal.enums.InvoiceStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
@@ -48,7 +49,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
                     name = "uk_payment_application_idempotency",
                     columnNames = {"application_request_id", "invoice_id"})
         })
-public class PaymentApplication {
+public class PaymentApplication extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

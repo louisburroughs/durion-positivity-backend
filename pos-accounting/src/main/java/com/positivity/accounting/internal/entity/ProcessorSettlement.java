@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.SettlementStatus;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -38,7 +39,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @AllArgsConstructor
 @Builder
 @Table(name = "processor_settlement")
-public class ProcessorSettlement {
+public class ProcessorSettlement extends TenantScopedEntity {
 
     /** Provider-issued settlement/payout identifier and aggregate id (decision D-10). */
     @Id

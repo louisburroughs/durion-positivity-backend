@@ -2,6 +2,7 @@ package com.positivity.tenancy.hibernate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.TenancyProperties;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantResolver;
@@ -25,8 +26,14 @@ class TenantContextIdentifierResolverTest {
     }
 
     @Test
-    void resolvesTheBoundTenantOrNull() {
-        assertThat(resolver.resolveCurrentTenantIdentifier()).isNull();
+    void resolvesTheBoundTenantOrTheNilTenant() {
+        // Never null: Hibernate refuses a session with no tenant once any entity carries @TenantId, and
+        // the nil tenant matches no row and passes no policy, so an unbound session stays fail-closed.
+        assertThat(resolver.resolveCurrentTenantIdentifier()).isEqualTo(TenantContextIdentifierResolver.NO_TENANT);
+        assertThat(TenantContextIdentifierResolver.NO_TENANT)
+                .isEqualTo(new UUID(0L, 0L))
+                .isNotEqualTo(PlatformTenant.ID);
+        assertThat(resolver.isRoot(TenantContextIdentifierResolver.NO_TENANT)).isFalse();
         TenantContext.bind(A);
         assertThat(resolver.resolveCurrentTenantIdentifier()).isEqualTo(A);
     }

@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -33,7 +34,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_vendor_bill_line_bill", columnList = "vendor_bill_id"),
             @Index(name = "idx_vendor_bill_line_product", columnList = "product_id")
         })
-public class VendorBillLine {
+public class VendorBillLine extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

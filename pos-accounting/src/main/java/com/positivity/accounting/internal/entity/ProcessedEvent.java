@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
+import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -20,6 +21,7 @@ import lombok.NoArgsConstructor;
  * {@code InvoiceManifestListener}. Listeners that do not reconcile leave it {@code null}.
  */
 @Entity
+@TenantGlobal(reason = "consumer idempotency ledger keyed by eventId; checked before the tenant is bound")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

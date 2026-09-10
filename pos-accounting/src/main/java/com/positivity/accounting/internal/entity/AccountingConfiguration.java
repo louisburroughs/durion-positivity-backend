@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -48,7 +49,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(
         name = "accounting_configuration",
         uniqueConstraints = {@UniqueConstraint(name = "uq_accounting_configuration_key", columnNames = "config_key")})
-public class AccountingConfiguration {
+public class AccountingConfiguration extends TenantScopedEntity {
 
     private static final String SYSTEM = "SYSTEM";
 

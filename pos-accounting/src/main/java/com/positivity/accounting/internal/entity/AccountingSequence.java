@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -41,7 +42,7 @@ import lombok.ToString;
 @Table(
         name = "accounting_sequence",
         uniqueConstraints = {@UniqueConstraint(name = "uq_accounting_sequence_scope_key", columnNames = "scope_key")})
-public class AccountingSequence {
+public class AccountingSequence extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

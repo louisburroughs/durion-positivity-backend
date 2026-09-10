@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.entity;
 import com.positivity.accounting.internal.enums.AccountingStatus;
 import com.positivity.accounting.internal.enums.PaymentStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -29,7 +30,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "invoice_status_views")
-public class InvoiceStatusView {
+public class InvoiceStatusView extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.CustomerCreditTransactionType;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -52,7 +53,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_customer_credit_transaction_credit", columnList = "credit_id"),
             @Index(name = "idx_customer_credit_transaction_invoice", columnList = "invoice_id")
         })
-public class CustomerCreditTransaction {
+public class CustomerCreditTransaction extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

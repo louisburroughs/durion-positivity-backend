@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -58,7 +59,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_credit_memo_posted_timestamp", columnList = "posted_timestamp"),
             @Index(name = "uq_credit_memo_reference", columnList = "credit_memo_reference", unique = true)
         })
-public class CreditMemo {
+public class CreditMemo extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

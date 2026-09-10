@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -38,7 +39,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(
         name = "ext_invoice_tax",
         indexes = {@Index(name = "idx_ext_invoice_tax_invoice", columnList = "invoice_id")})
-public class ExtInvoiceTax {
+public class ExtInvoiceTax extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

@@ -1,0 +1,43 @@
+# Testcontainers Postgres profile (ADR-0062, plan R-B7): the real Flyway chain, Hibernate validate,
+# the pool as pos_app (PostgresTenancyTestBase), strict tenancy. The datasource is supplied at
+# runtime by @DynamicPropertySource.
+spring:
+  application:
+    name: pos-accounting-pg-test
+  autoconfigure:
+    exclude: org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  cloud:
+    discovery:
+      enabled: false
+
+pos:
+  tenancy:
+    # strict: nothing binds a tenant unless the test does
+    default-tenant-id:
+  accounting:
+    kafka:
+      enabled: false
+
+eureka:
+  client:
+    enabled: false
+
+logging:
+  level:
+    org.hibernate.SQL: warn
+
+# Required by the module's configuration even when nothing posts a credit memo or charges a card.
+pos.accounting.credit-memo:
+  revenue-account-id: "01234567-89ab-cdef-0123-456789abcdef"
+  tax-payable-account-id: "fedcba98-7654-3210-fedc-ba9876543210"
+  ar-account-id: "11111111-2222-3333-4444-555555555555"
+stripe:
+  api-key: "sk_test_dummy_key_for_tenancy_its"
+  connect-account: ""

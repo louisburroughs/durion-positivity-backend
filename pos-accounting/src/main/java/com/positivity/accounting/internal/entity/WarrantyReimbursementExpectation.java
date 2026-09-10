@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -31,7 +32,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @AllArgsConstructor
 @Builder(toBuilder = true)
 @Table(name = "warranty_reimbursement_expectation")
-public class WarrantyReimbursementExpectation {
+public class WarrantyReimbursementExpectation extends TenantScopedEntity {
 
     /** Status while the credit is still awaited (set on {@code warranty.reimbursement.submitted}). */
     public static final String STATUS_EXPECTED = "EXPECTED";

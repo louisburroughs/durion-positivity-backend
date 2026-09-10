@@ -63,7 +63,7 @@ A module that depends on `pos-tenancy-common` gets the ADR-0062 runtime by auto-
 | Kafka record | `TenantRecordInterceptor` | Binds from the `tenantId` record header before the `@KafkaListener` runs and clears after. Producers stamp the header with `TenantKafkaHeaders.record(...)`; the outbox row carries `tenant_id` as data for the unbound poller. |
 | Scheduled job | `TenantIterator.forEachActiveTenant(...)` or `@PlatformScoped` | Per-tenant jobs bind each active tenant in turn (from `TenantRegistry`, `pos.tenancy.tenants` until the `ext_tenant` replica exists); platform jobs run unbound and touch only global tables. |
 | Connection | `TenantAwareDataSource` | Every checkout runs `set_config('app.current_tenant', ?, false)` with the resolved tenant, or `RESET` when none; `close()` resets again. PostgreSQL only (pass-through on H2). |
-| Hibernate | `TenantContextIdentifierResolver` | `@TenantId` on `TenantScopedEntity` gets the same tenant: stamped on persist, appended to every query, mismatches rejected. `isRoot` is never true. |
+| Hibernate | `TenantContextIdentifierResolver` | `@TenantId` on `TenantScopedEntity` gets the same tenant: stamped on persist, appended to every query, mismatches rejected. `isRoot` is never true. An unbound session resolves to the nil UUID (`NO_TENANT`), never `null`: Hibernate refuses a session with no tenant once any entity carries `@TenantId` (Spring Data could not derive its queries at boot, and a `@PlatformScoped` job could not read a global table), and the nil tenant matches no scoped row and passes no policy. |
 | Executors | `TenantContextTaskDecorator` | `@Async` and `TaskExecutor` work inherits the submitter's tenant. |
 | Cache | `TenantKeyGenerator` | The default `keyGenerator`: every cache key is prefixed with the tenant. |
 
@@ -80,7 +80,8 @@ library still connect as the owner role, which `postgres/init-tenancy.sh` gives 
 through `ALTER ROLE ... SET app.current_tenant`; adopted modules connect as `pos_app`
 (`SPRING_DATASOURCE_USERNAME=pos_app`, `POS_APP_PASSWORD`) with Flyway on the owner credential
 (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`). Adopted so far: `pos-location`, `pos-tenant`,
-`pos-security-service`, `pos-inventory` (WS3 wave 1; the remaining modules follow largest first).
+`pos-security-service`, `pos-inventory` (WS3 wave 1), `pos-accounting` (wave 2; the remaining modules follow largest
+first).
 
 **Per-tenant schedulers and transactions.** A job wrapped in `TenantIterator.forEachActiveTenant`
 must open its transaction inside the binding: a `@Transactional` scheduled method checks its

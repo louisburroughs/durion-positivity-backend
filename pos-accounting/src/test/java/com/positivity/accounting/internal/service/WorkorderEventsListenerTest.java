@@ -11,6 +11,9 @@ import static org.mockito.Mockito.when;
 import com.positivity.accounting.internal.entity.InvoiceRegenerationRequest;
 import com.positivity.accounting.internal.repository.InvoiceRegenerationRequestRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.StaticTenantRegistry;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantIterator;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -42,11 +45,20 @@ class WorkorderEventsListenerTest {
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final InvoiceRegenerationRequestRepository requests = mock(InvoiceRegenerationRequestRepository.class);
 
+    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
+
     private WorkorderEventsListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new WorkorderEventsListener(TEST_CLOCK, new ObjectMapper(), processedEvents, requests);
+        TenancyProperties tenancy = new TenancyProperties();
+        tenancy.setDefaultTenantId(TENANT);
+        listener = new WorkorderEventsListener(
+                TEST_CLOCK,
+                new ObjectMapper(),
+                processedEvents,
+                requests,
+                new TenantIterator(new StaticTenantRegistry(tenancy)));
     }
 
     private String updatedEvent(String eventId, UUID invoiceId, String updatedAt) {

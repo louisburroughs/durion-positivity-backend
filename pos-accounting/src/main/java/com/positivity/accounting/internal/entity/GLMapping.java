@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -47,7 +48,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_gl_mapping_gl_account", columnList = "gl_account_id"),
             @Index(name = "idx_gl_mapping_source_code", columnList = "source_system, external_code")
         })
-public class GLMapping {
+public class GLMapping extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

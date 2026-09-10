@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.ReprocessingOutcome;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -55,7 +56,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_reprocessing_attempted_at", columnList = "attempted_at"),
             @Index(name = "idx_reprocessing_outcome", columnList = "outcome")
         })
-public class ReprocessingAttemptHistory {
+public class ReprocessingAttemptHistory extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

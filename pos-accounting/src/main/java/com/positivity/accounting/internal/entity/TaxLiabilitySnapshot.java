@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.entity;
 import com.positivity.accounting.internal.enums.TaxLiabilitySnapshotStatus;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -52,7 +53,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(
         name = "tax_liability_snapshot",
         indexes = {@Index(name = "idx_tax_liability_snapshot_period_code", columnList = "period_code")})
-public class TaxLiabilitySnapshot {
+public class TaxLiabilitySnapshot extends TenantScopedEntity {
 
     private static final String SYSTEM = "SYSTEM";
 

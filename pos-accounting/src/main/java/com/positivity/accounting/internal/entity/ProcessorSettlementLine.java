@@ -4,6 +4,7 @@ import com.positivity.accounting.internal.enums.MatchedPaymentType;
 import com.positivity.accounting.internal.enums.SettlementLineMatchStatus;
 import com.positivity.accounting.internal.enums.SettlementLineType;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -36,7 +37,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @AllArgsConstructor
 @Builder
 @Table(name = "processor_settlement_line")
-public class ProcessorSettlementLine {
+public class ProcessorSettlementLine extends TenantScopedEntity {
 
     @Id
     @Column(name = "line_id", columnDefinition = "UUID", nullable = false, updatable = false)

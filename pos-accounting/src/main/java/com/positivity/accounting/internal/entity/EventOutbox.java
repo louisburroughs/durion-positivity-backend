@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -42,6 +43,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
 @Entity
+@TenantGlobal(
+        reason = "in-process transactional outbox drained by the unbound OutboxProcessor for every tenant; tenant_id"
+                + " carried as data and bound before each event is dispatched")
 @EntityListeners(AuditingEntityListener.class)
 @Table(
         name = "event_outbox",
@@ -58,6 +62,13 @@ public class EventOutbox {
     @UUIDv7Id
     @Column(name = "outbox_id", nullable = false, columnDefinition = "UUID")
     private UUID outboxId;
+
+    /**
+     * The producing tenant, carried as data (the table is global): {@code OutboxProcessor} binds it
+     * before dispatching the event so the handlers write the tenant's own rows.
+     */
+    @Column(name = "tenant_id", nullable = false, updatable = false)
+    private UUID tenantId;
 
     /**
      * Event UUID - serves as idempotency key for duplicate detection.
@@ -138,12 +149,14 @@ public class EventOutbox {
      * Factory method for creating new outbox entries
      */
     public static @NonNull EventOutbox create(
+            @NonNull UUID tenantId,
             @NonNull UUID eventId,
             @NonNull String aggregateType,
             @NonNull UUID aggregateId,
             @NonNull String eventType,
             @NonNull String payload) {
         EventOutbox outbox = new EventOutbox();
+        outbox.tenantId = tenantId;
         outbox.eventId = eventId;
         outbox.aggregateType = aggregateType;
         outbox.aggregateId = aggregateId;

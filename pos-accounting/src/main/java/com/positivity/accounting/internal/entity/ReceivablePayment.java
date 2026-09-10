@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -68,7 +69,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         uniqueConstraints = {
             @UniqueConstraint(name = "uk_receivable_payment_source_event", columnNames = "source_event_id")
         })
-public class ReceivablePayment implements Persistable<UUID> {
+public class ReceivablePayment extends TenantScopedEntity implements Persistable<UUID> {
 
     /**
      * Transient flag used by Spring Data JPA to distinguish new entities from

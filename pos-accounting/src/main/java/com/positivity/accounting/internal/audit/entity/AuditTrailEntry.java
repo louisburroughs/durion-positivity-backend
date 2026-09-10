@@ -7,6 +7,7 @@ import com.positivity.accounting.internal.enums.RefundMethod;
 import com.positivity.accounting.internal.enums.RefundPaymentStatus;
 import com.positivity.accounting.internal.enums.RefundType;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -52,7 +53,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AuditTrailEntry {
+public class AuditTrailEntry extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

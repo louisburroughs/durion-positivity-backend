@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -61,7 +62,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_ap_payment_allocation_payment", columnList = "payment_id"),
             @Index(name = "idx_ap_payment_allocation_bill", columnList = "vendor_bill_id")
         })
-public class APPaymentAllocation {
+public class APPaymentAllocation extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

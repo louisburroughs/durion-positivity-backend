@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus;
 import com.positivity.accounting.internal.repository.EventOutboxRepository;
+import com.positivity.tenancy.TenantResolver;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -36,6 +38,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("OutboxService Unit Tests")
 class OutboxServiceImplTest {
+    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
 
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
@@ -47,6 +50,9 @@ class OutboxServiceImplTest {
 
     @Mock
     private ObjectMapper objectMapper;
+
+    @Mock
+    private TenantResolver tenantResolver;
 
     @InjectMocks
     private OutboxServiceImpl service;
@@ -62,7 +68,9 @@ class OutboxServiceImplTest {
         outboxId = UUID.fromString("00000000-0000-0000-0000-000000000002");
         aggregateId = UUID.fromString("00000000-0000-0000-0000-000000000003");
 
+        lenient().when(tenantResolver.require()).thenReturn(TENANT);
         testOutbox = EventOutbox.create(
+                TENANT,
                 eventId,
                 "APPayment",
                 aggregateId,

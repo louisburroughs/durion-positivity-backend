@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.BankReconciliationLineStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -48,7 +49,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_bank_reconciliation_line_recon", columnList = "reconciliation_id"),
             @Index(name = "idx_bank_reconciliation_line_match", columnList = "match_id")
         })
-public class BankReconciliationLine {
+public class BankReconciliationLine extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

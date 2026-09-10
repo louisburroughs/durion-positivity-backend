@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -45,7 +46,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_mapping_key_category", columnList = "posting_category_id"),
             @Index(name = "idx_mapping_key_name", columnList = "key_name")
         })
-public class MappingKey {
+public class MappingKey extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

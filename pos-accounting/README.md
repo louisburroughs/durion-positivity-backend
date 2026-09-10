@@ -269,33 +269,63 @@ sees that region's shops and no others.
 | `pos.accounting.outbox.send-timeout-ms`             | `10000`              | Broker ack timeout per outbox row (#1843) |
 | `stripe.api-key`                                    | required             | Stripe API key for payment processing    |
 
+## Multitenancy (ADR-0062, WS3 wave 2)
+
+This module runs on the ADR-0062 runtime: it depends on `pos-tenancy-common`, every scoped entity
+extends `TenantScopedEntity`, and the three global tables (`event_outbox`, `kafka_event_outbox`,
+`processed_events`, listed in `src/main/resources/db/tenancy-global-tables.txt`) carry `@TenantGlobal`. The
+request tenant is bound by `TenantContextFilter` from `X-Tenant-Id` (the gateway injects it from the token's
+`tid`), the Kafka tenant by `TenantRecordInterceptor` from the `tenantId` record header on every one of the
+module's consumers, and every connection checkout binds `app.current_tenant` for row-level security.
+`pos.tenancy.default-tenant-id` still binds the alpha default tenant on every unbound path (tokens issued
+before `tid`, records without the header).
+
+The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_DATASOURCE_USERNAME`
+/ `POS_APP_PASSWORD`); Flyway alone uses the owner credential (`SPRING_FLYWAY_USER` /
+`SPRING_FLYWAY_PASSWORD`, `FlywayConfig`).
+
+Both outboxes are global tables whose rows carry the producing tenant as data (`tenant_id`, stamped from the
+bound tenant by `OutboxEventWriter` and `OutboxServiceImpl`):
+
+| Job | Classification | Why |
+| --- | --- | --- |
+| `OutboxPublisher.publishPending` | platform-scoped | Drains `kafka_event_outbox`; each row's `tenant_id` becomes the record header |
+| `OutboxProcessor.processPendingEvents` | platform-scoped | Polls `event_outbox` and binds each row's `tenant_id` before dispatching its Spring event, so the GL-posting handlers write that tenant's journal entries |
+| `OutboxProcessor.cleanupOldEvents` | platform-scoped | Deletes published `event_outbox` rows across tenants |
+| `WorkorderEventsListener.reapExpiredRequests` | per-tenant | `invoice_regeneration_request` is scoped; one pass per tenant of the registry |
+| `DataInitializationServiceImpl` (startup) | per-tenant | Seeds the default override-policy thresholds and refund policy for each tenant of the registry that has none, opening the transaction inside the binding |
+
+Per-tenant passes iterate the static registry (`TenantIterator.forEachActiveTenant`; the default tenant until
+the `ext_tenant` replica lands per module), so a tenant created after startup is seeded on the next start
+(provisioning-time seeding is plan WS8). The two native queries carry `@TenantAudited`:
+`VendorBillRepository.getNextBillNumberSequence` reads a platform-wide sequence, not a table, and
+`AccountingSequenceRepository.findMissingEntryNumbers` reads two scoped tables that row-level security binds to
+the calling tenant.
+
+Proof: `TenantIsolationIT` (tenant A's `override_policy_threshold` row is invisible to tenant B and to an
+unbound connection, through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every
+non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is
+`pos_app` with no bypass), both on Testcontainers Postgres (`./mvnw -pl pos-accounting verify`).
+
 ## Dependencies
 
 - `pos-security-common` — JWT-based security filter
+- `pos-tenancy-common` — ADR-0062 tenant context, connection binding, Hibernate resolver, Kafka propagation
 - `pos-events` — `@EmitEvent` AOP annotation and event registration
 - `pos-shared-dtos` — shared invoice and vehicle DTOs
 
 ## Database
 
-Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`:
+Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration` (the pre-2026-09-09 chain was
+flattened into the baseline for ADR-0062; see `docs/TENANCY_SCHEMA.md`):
 
-- `V1__baseline_accounting_schema.sql` — full schema baseline
-- `V8__je_balance_constraint.sql` — DB-level balance enforcement for POSTED journal entries (per-line CHECKs + deferrable constraint triggers, ±0.0001 tolerance; DRAFT exempt)
-- `V9__accounting_period.sql` — `accounting_period` table with backfill from existing journal-entry months
-- `V10__receivable_payment_version.sql` — optimistic-locking `version` column on `receivable_payment`
-- `V11__gl_account_metadata.sql` — `reconcilable` flag and `account_subtype` column (+ check constraint) on `gl_account`
-- `V12__je_balance_assert_lock.sql` — row-locking rewrite of the V8 balance-assert function, closing a concurrent-writer race on POSTED entries
-- `V13__je_entry_number_sequence.sql` — `accounting_sequence` per-month counter table + nullable unique `entry_number` on `journal_entry` (no backfill)
-- `V14__accounting_configuration_hard_lock.sql` — `accounting_configuration` key/value table backing the org-level `HARD_LOCK_DATE`
-- `V15__accounting_period_version.sql` — optimistic-locking `version` column on `accounting_period`
-- `V19__create_ext_invoice_tax.sql` — read-only replica of pos-invoice's per-line × per-jurisdiction tax breakdown (story T5c)
-- `V20__create_credit_memo_tax.sql` — per-jurisdiction attribution of a credit memo's reversed tax, frozen at creation (issue #996)
-- `V21__customer_credit_lifecycle.sql` — customer-credit consumption model: status + applied/refunded totals + `customer_credit_transaction` draw-downs (issue #992)
-- `V32__ext_invoice_workorder_id_nullable.sql` — drops `ext_invoice.workorder_id NOT NULL`: order-fronted/counter-sale/standalone-billing invoices carry no originating workorder and must still replicate into A/R aging and collections (issue #1651)
-- `V34__create_ext_customer_party.sql` — read-only replica of pos-customer party identity (display name + customer number), fed by `customer.events.v1`; the source of the customer display values on accounting responses (issue #1779)
-- `V35__credit_memo_reference.sql` — `credit_memo.credit_memo_reference` display number (`CM-{YYYYMM}-{n}`), assigned from the `accounting_sequence` counter and backfilled for existing memos (issue #1779)
-- `V36__invoice_gl_posting.sql` — `invoice_gl_posting` (one row per invoice revenue-recognition cycle, at most one open per invoice) and `kafka_event_outbox` (transactional outbox for `accounting.events.v1`) (issue #1843)
-- `R__seed_reference_accounting.sql` — repeatable seed for reference data, including the 9-account COA; also the `INVOICE_REVENUE` posting category / mapping keys (#1843)
+- `V1__baseline_accounting.sql` — full schema baseline with the tenancy schema (`tenant_id`, row-level security,
+  tenant-scoped keys) on every scoped table
+- `V2__seed_accounting.sql` — versioned seed data
+- `V3__outbox_tenant_id.sql` — `tenant_id` as data on the two global outbox tables (`event_outbox`,
+  `kafka_event_outbox`), see Multitenancy below
+- `R__seed_reference_accounting.sql` — repeatable seed for reference data, including the 9-account COA; also the
+  `INVOICE_REVENUE` posting category / mapping keys (#1843)
 
 ## Development
 

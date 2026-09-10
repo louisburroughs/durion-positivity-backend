@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.repository.InvoiceRegenerationRequestR
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.workorder.WorkorderServiceCompletedV1;
 import com.positivity.domainevents.workorder.WorkorderUpdatedV1;
+import com.positivity.tenancy.TenantIterator;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -77,6 +78,7 @@ public class WorkorderEventsListener {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
     private final InvoiceRegenerationRequestRepository invoiceRegenerationRequestRepository;
+    private final TenantIterator tenantIterator;
 
     /**
      * How long a {@code PENDING} regeneration request may go unresolved before {@link
@@ -89,11 +91,13 @@ public class WorkorderEventsListener {
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
-            InvoiceRegenerationRequestRepository invoiceRegenerationRequestRepository) {
+            InvoiceRegenerationRequestRepository invoiceRegenerationRequestRepository,
+            TenantIterator tenantIterator) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
         this.invoiceRegenerationRequestRepository = invoiceRegenerationRequestRepository;
+        this.tenantIterator = tenantIterator;
     }
 
     @KafkaListener(
@@ -235,6 +239,11 @@ public class WorkorderEventsListener {
      */
     @Scheduled(fixedRateString = "${pos.accounting.invoice-regeneration.reap-interval-ms:300000}")
     public void reapExpiredRequests() {
+        tenantIterator.forEachActiveTenant(tenantId -> reapExpiredRequestsForTenant());
+    }
+
+    /** One tenant's pass; {@code invoice_regeneration_request} is a scoped table (ADR-0062). */
+    void reapExpiredRequestsForTenant() {
         Instant cutoff = Instant.now(clock).minus(pendingTtl);
         List<InvoiceRegenerationRequest> expired =
                 invoiceRegenerationRequestRepository.findByStatusAndRequestedAtBefore(

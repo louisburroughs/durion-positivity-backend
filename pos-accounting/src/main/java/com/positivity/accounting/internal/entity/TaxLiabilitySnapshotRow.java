@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -39,7 +40,7 @@ import lombok.ToString;
                     columnNames = {"snapshot_id", "row_order"})
         },
         indexes = {@Index(name = "idx_tax_liability_snapshot_row_snapshot", columnList = "snapshot_id, row_order")})
-public class TaxLiabilitySnapshotRow {
+public class TaxLiabilitySnapshotRow extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

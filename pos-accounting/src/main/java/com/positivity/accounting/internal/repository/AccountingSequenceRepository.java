@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.AccountingSequence;
+import com.positivity.tenancy.TenantAudited;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
@@ -59,6 +60,9 @@ public interface AccountingSequenceRepository extends JpaRepository<AccountingSe
      * @param scopeKey month scope to audit, e.g. {@code JE-202607}
      * @return ascending list of missing sequence numbers; empty when gapless
      */
+    @TenantAudited(
+            reason = "reads accounting_sequence and journal_entry, both scoped tables: row-level security binds each"
+                    + " side to the calling tenant, so the gap scan never sees another tenant's numbers")
     @Query(value = """
                     SELECT gs.n
                     FROM accounting_sequence s

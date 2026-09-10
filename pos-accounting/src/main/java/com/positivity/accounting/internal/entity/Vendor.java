@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.VendorStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -47,7 +48,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(
         name = "ap_vendor",
         indexes = {@Index(name = "idx_ap_vendor_name", columnList = "name")})
-public class Vendor implements Persistable<UUID> {
+public class Vendor extends TenantScopedEntity implements Persistable<UUID> {
 
     /**
      * Transient flag used by Spring Data JPA to distinguish new entities from

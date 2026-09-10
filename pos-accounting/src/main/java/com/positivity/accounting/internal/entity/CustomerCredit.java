@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.entity;
 
 import com.positivity.accounting.internal.enums.CustomerCreditStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -52,7 +53,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_customer_credit_created_at", columnList = "created_at"),
             @Index(name = "idx_customer_credit_status", columnList = "status")
         })
-public class CustomerCredit {
+public class CustomerCredit extends TenantScopedEntity {
 
     /** Currency scale used for the derived open-amount arithmetic. */
     private static final int CURRENCY_SCALE = 2;
