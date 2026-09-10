@@ -17,7 +17,9 @@ set -euo pipefail
 #   3. Refused, before anything on the host is touched, on --config-only (that mode leaves
 #      unchanged containers running, now on dropped databases) and on any value but the
 #      literal `true`/`false` (a typo must not read as either answer).
-#   4. Refused when init-databases.sql is missing: the script does not guess what to drop.
+#   4. Refused when init-databases.sql or init-tenancy.sh is missing: the script neither guesses
+#      what to drop nor recreates databases the pos_app grants cannot follow. The backend images
+#      are pulled before the first DROP, so a pull failure cannot strand a dropped host.
 #
 # Run: bash scripts/tests/deploy-backend-reset-databases-selftest.sh
 
@@ -97,8 +99,11 @@ make_alpha_root() {
   mkdir -p "${root}/backend/postgres" "${root}/backend/observability"
   echo "services: {}" > "${root}/backend/docker-compose.yml"
   echo "services: {}" > "${root}/docker-compose.prod.yml"
-  if [[ "${with_init_sql}" == "yes" ]]; then
+  if [[ "${with_init_sql}" != "no" ]]; then
     printf 'CREATE DATABASE pos_order_db;\nCREATE DATABASE pos_mcp;\n' > "${root}/backend/postgres/init-databases.sql"
+  fi
+  if [[ "${with_init_sql}" != "no-tenancy" ]]; then
+    printf '#!/bin/sh\nexit 0\n' > "${root}/backend/postgres/init-tenancy.sh"
   fi
   printf "      password: 'durion-local-prom-scrape-password'\n" > "${root}/backend/observability/prometheus.yml"
   cat > "${root}/.env" <<'ENVFILE'
@@ -110,7 +115,8 @@ SECURITY_SEED_ADMIN_PASSWORD_HASH='$2b$12$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL
 ENVFILE
 }
 
-# run_case <RESET_DATABASES value or "unset"> <with init-databases.sql: yes|no> <script args...>
+# run_case <RESET_DATABASES value or "unset"> <on-box postgres scripts: yes|no|no-tenancy> <script args...>
+#   yes: init-databases.sql and init-tenancy.sh; no: neither; no-tenancy: init-databases.sql only
 # Sets OUT / RC; the stub's invocation log is $WORK/compose.log.
 #
 # DOCKER_MIN_FREE_GIB=0 keeps the pre-pull reclaim (#1862) out of these cases — left at its
@@ -165,7 +171,9 @@ end_case() {
 
 # First line number in the invocation log matching $1, or empty.
 log_line() {
-  grep -n -- "$1" "${WORK}/compose.log" | head -n1 | cut -d: -f1
+  # No match is a legitimate answer (an empty line), not a failure: under `set -e` and
+  # `pipefail` a bare grep miss would end the self-test before the assertion could report it.
+  { grep -n -m1 -- "$1" "${WORK}/compose.log" || true; } | cut -d: -f1
 }
 
 SHA=b30123cfeedfacedeadbeef0123456789abcdef0
@@ -187,6 +195,7 @@ assert "exits 0" "$([[ ${RC} -eq 0 ]] && echo pass)"
 assert "announces the reset" "$(grep -q 'RESET_DATABASES=true: dropping 2 backend databases' <<< "${OUT}" && echo pass)"
 assert "drops pos_order_db WITH (FORCE)" "$(grep -q 'DROP DATABASE IF EXISTS pos_order_db WITH (FORCE)' "${WORK}/compose.log" && echo pass)"
 assert "drops pos_mcp WITH (FORCE)" "$(grep -q 'DROP DATABASE IF EXISTS pos_mcp WITH (FORCE)' "${WORK}/compose.log" && echo pass)"
+PULL_AT="$(log_line 'compose .* pull .*pos-workorder')"
 STOP_AT="$(log_line 'compose .* stop ')"
 FIRST_DROP_AT="$(log_line 'DROP DATABASE')"
 LAST_DROP_AT="$(grep -n 'DROP DATABASE' "${WORK}/compose.log" | tail -n1 | cut -d: -f1)"
@@ -194,6 +203,7 @@ FIRST_CREATE_AT="$(log_line 'CREATE DATABASE')"
 assert "stops the backend tier" "$([[ -n "${STOP_AT}" ]] && echo pass)"
 assert "stops every backend service, event receiver included" "$(grep 'compose .* stop ' "${WORK}/compose.log" | grep -q 'pos-event-receiver .*pos-workorder' && echo pass)"
 assert "stops before the first DROP" "$([[ -n "${STOP_AT}" && -n "${FIRST_DROP_AT}" && ${STOP_AT} -lt ${FIRST_DROP_AT} ]] && echo pass)"
+assert "pulls the backend images before the first DROP" "$([[ -n "${PULL_AT}" && -n "${FIRST_DROP_AT}" && ${PULL_AT} -lt ${FIRST_DROP_AT} ]] && echo pass)"
 assert "recreates pos_order_db" "$(grep -q 'Creating missing database: pos_order_db' <<< "${OUT}" && echo pass)"
 assert "recreates pos_mcp" "$(grep -q 'Creating missing database: pos_mcp' <<< "${OUT}" && echo pass)"
 assert "every DROP precedes the first CREATE" "$([[ -n "${LAST_DROP_AT}" && -n "${FIRST_CREATE_AT}" && ${LAST_DROP_AT} -lt ${FIRST_CREATE_AT} ]] && echo pass)"
@@ -220,6 +230,14 @@ run_case true no "${SHA}"
 assert "exits non-zero" "$([[ ${RC} -ne 0 ]] && echo pass)"
 assert "names the reason" "$(grep -q 'refusing to guess which databases to drop' <<< "${OUT}" && echo pass)"
 assert "issues no DROP DATABASE" "$(! grep -q 'DROP DATABASE' "${WORK}/compose.log" && echo pass)"
+end_case
+
+echo "case 6: RESET_DATABASES=true without init-tenancy.sh refuses before dropping anything"
+run_case true no-tenancy "${SHA}"
+assert "exits non-zero" "$([[ ${RC} -ne 0 ]] && echo pass)"
+assert "names the reason" "$(grep -q 'no pos_app grants' <<< "${OUT}" && echo pass)"
+assert "issues no DROP DATABASE" "$(! grep -q 'DROP DATABASE' "${WORK}/compose.log" && echo pass)"
+assert "does not stop the backend tier" "$(! grep -q 'compose .* stop ' "${WORK}/compose.log" && echo pass)"
 end_case
 
 echo

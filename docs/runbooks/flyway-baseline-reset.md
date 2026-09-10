@@ -211,9 +211,14 @@ sudo docker compose -f docker-compose.yml -f /opt/durion/alpha/docker-compose.pr
 ```
 
 Repeat for each rebuilt module database, or drop them all at once (the deploy option above
-does the same):
+does the same). Stop the backend tier first and keep it down until the deploy is re-run:
+`WITH (FORCE)` ends the sessions a running service holds, but the service reconnects and races
+Flyway while the database is being recreated.
 
 ```bash
+C="sudo docker compose -f docker-compose.yml -f /opt/durion/alpha/docker-compose.prod.yml --env-file /opt/durion/alpha/.env"
+$C stop $($C ps --services | grep -E '^(pos-|eureka-server)')
+
 sudo docker compose -f docker-compose.yml -f /opt/durion/alpha/docker-compose.prod.yml \
   --env-file /opt/durion/alpha/.env exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d postgres' <<'SQL'
@@ -223,6 +228,12 @@ SQL
 
 then re-run the failed **Deploy Backend to Alpha** job: `reconcile_databases` recreates the
 missing databases before any service starts.
+
+Either way the reset leaves the Kafka volume alone. Consumer groups keep their committed offsets,
+which is right: the events behind them describe rows that no longer exist. The consequence is that
+every event-fed replica (`ext_*` tables) is empty after a reset until its owner republishes: the
+bulk loader, or an owner's `*.outbox.replay-requested` command, is the way to refill them, not a
+Kafka offset reset.
 
 ## Post-Cutover Verification
 

@@ -427,8 +427,15 @@ ensure_postgres_ready() {
 # it was not already going to spend.
 reset_databases() {
   local init_sql="${BACKEND_DIR}/postgres/init-databases.sql"
+  local init_sh="${BACKEND_DIR}/postgres/init-tenancy.sh"
   if [[ ! -f "${init_sql}" ]]; then
     echo "RESET_DATABASES=true but ${init_sql} not found; refusing to guess which databases to drop." >&2
+    return 1
+  fi
+  # reconcile_tenancy_roles only warns when the script is missing; a recreated database without
+  # the pos_app grants would fail every adopted service's health check, so refuse up front.
+  if [[ ! -f "${init_sh}" ]]; then
+    echo "RESET_DATABASES=true but ${init_sh} not found; the recreated databases would carry no pos_app grants. Refusing." >&2
     return 1
   fi
 
@@ -845,13 +852,15 @@ docker compose "${COMPOSE_ARGS[@]}" run --rm --no-deps kafka-topic-init
 echo "Starting Kafka exporter"
 docker compose "${COMPOSE_ARGS[@]}" up -d --no-build --force-recreate kafka-exporter
 
+# The backend images are pulled before the databases are touched: a reset that dropped every
+# database and then failed to pull (ECR, network) would leave the host with nothing to start.
+echo "Pulling backend services: ${BACKEND_SERVICES[*]}"
+docker compose "${COMPOSE_ARGS[@]}" pull --quiet "${BACKEND_SERVICES[@]}"
+
 if [[ "${RESET_DATABASES}" == "true" ]]; then
   reset_databases
 fi
 reconcile_databases
-
-echo "Pulling backend services: ${BACKEND_SERVICES[*]}"
-docker compose "${COMPOSE_ARGS[@]}" pull --quiet "${BACKEND_SERVICES[@]}"
 
 # --wait blocks until every named service is healthy and fails the deploy if one
 # goes unhealthy — a real gate instead of exiting 0 with half the stack down.
