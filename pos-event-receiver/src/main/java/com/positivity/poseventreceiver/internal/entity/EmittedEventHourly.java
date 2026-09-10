@@ -1,6 +1,7 @@
 package com.positivity.poseventreceiver.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -19,6 +20,9 @@ import org.hibernate.annotations.Immutable;
  * emitted_event_hourly.
  */
 @Entity
+@TenantGlobal(
+        reason =
+                "continuous aggregate over emitted_event across every tenant: platform-wide hourly statistics (per-tenant observability is plan WS6)")
 @Immutable
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

@@ -1,6 +1,7 @@
 package com.positivity.poseventreceiver.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
@@ -9,6 +10,8 @@ import jakarta.persistence.Transient;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
+@TenantGlobal(
+        reason = "platform event-type registry, registered by every service at startup (db/tenancy-global-tables.txt)")
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "preregistered_event")
 public class PreregisteredEvent {

@@ -42,6 +42,9 @@ eureka:
 # Shared secret for API authentication (avoids circular dependency with pos-security-service)
 # Set via POS_EVENTS_API_SECRET environment variable in production
 pos:
+  tenancy:
+    # ADR-0062: binds the alpha default tenant on every unbound path until every token carries tid
+    default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000001}
   events:
     api-secret: ${POS_EVENTS_API_SECRET:}
 

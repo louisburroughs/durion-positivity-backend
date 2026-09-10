@@ -1,6 +1,7 @@
 package com.positivity.poseventreceiver.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -21,6 +22,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * for monitoring event execution performance against SLOs.
  */
 @Entity
+@TenantGlobal(
+        reason = "platform event-type registry, registered by every service at startup (db/tenancy-global-tables.txt)")
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "event_type")
 @Data
