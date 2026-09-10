@@ -17,6 +17,11 @@ on:
         required: false
         default: false
         type: boolean
+      reset_alpha_databases:
+        description: "DESTRUCTIVE: drop every backend database on alpha before the deploy so Flyway rebuilds each from its V1 baseline (all alpha data is lost; requires deploy_alpha)"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ecr-push-backend-${{ github.event.workflow_run.head_branch || github.ref }}
@@ -57,6 +62,15 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ env.BUILD_SHA }}
+
+      - name: Refuse a database reset that no deploy would apply
+        # The reset only happens inside deploy-backend.sh, which only the deploy-alpha job
+        # runs. A dispatch that asks for it without deploy_alpha would push images and stop,
+        # and the operator would read the green run as "reset done".
+        if: github.event_name == 'workflow_dispatch' && inputs.reset_alpha_databases && !inputs.deploy_alpha
+        run: |
+          echo "::error::reset_alpha_databases=true needs deploy_alpha=true; nothing was pushed or deployed."
+          exit 1
 
       - name: Detect services to build
         id: detect
@@ -483,6 +497,9 @@ jobs:
           # the key has been provisioned. It rejects a value that differs from the stored one,
           # because silently rotating it orphans every payload sealed with the old key.
           SUPPLIER_AUDIT_ENC_KEY: ${{ secrets.SUPPLIER_AUDIT_ENC_KEY }}
+          # Only a manual dispatch can ask for the alpha schema reset (drop every backend
+          # database, let Flyway rebuild from V1); the automatic promotion path never does.
+          RESET_ALPHA_DATABASES: ${{ github.event_name == 'workflow_dispatch' && inputs.reset_alpha_databases }}
         run: |
           # base64 carries no whitespace, and `openssl rand -base64 32` ends in a newline that a
           # careless `gh secret set` keeps. Left in, it is interpolated raw into the --parameters
@@ -497,10 +514,17 @@ jobs:
           if [[ -n "${SUPPLIER_AUDIT_ENC_KEY}" ]]; then
             SUPPLIER_KEY_ASSIGNMENT="SUPPLIER_AUDIT_ENC_KEY='${SUPPLIER_AUDIT_ENC_KEY}' "
           fi
+          # Same rule for the reset: the variable reaches the host only when the reset was
+          # asked for, so deploy-backend.sh's default (false) is what every other deploy sees.
+          RESET_ASSIGNMENT=""
+          if [[ "${RESET_ALPHA_DATABASES}" == "true" ]]; then
+            echo "::warning::reset_alpha_databases=true: every backend database on alpha is dropped and rebuilt from its V1 baseline by this deploy."
+            RESET_ASSIGNMENT="RESET_DATABASES='true' "
+          fi
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.ALPHA_EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters "{\"commands\":[\"SECURITY_SEED_ADMIN_PASSWORD_HASH='${SECURITY_SEED_ADMIN_PASSWORD_HASH}' ${SUPPLIER_KEY_ASSIGNMENT}PROD_OVERRIDE_SHA256='${{ steps.sums.outputs.prod }}' BASE_COMPOSE_SHA256='${{ steps.sums.outputs.base }}' bash /opt/durion/alpha/scripts/deploy-backend.sh '${{ env.BUILD_SHA }}'\"]}" \
+            --parameters "{\"commands\":[\"SECURITY_SEED_ADMIN_PASSWORD_HASH='${SECURITY_SEED_ADMIN_PASSWORD_HASH}' ${SUPPLIER_KEY_ASSIGNMENT}${RESET_ASSIGNMENT}PROD_OVERRIDE_SHA256='${{ steps.sums.outputs.prod }}' BASE_COMPOSE_SHA256='${{ steps.sums.outputs.base }}' bash /opt/durion/alpha/scripts/deploy-backend.sh '${{ env.BUILD_SHA }}'\"]}" \
             --timeout-seconds 2700 \
             --query "Command.CommandId" --output text)
           echo "SSM Command ID: $COMMAND_ID"

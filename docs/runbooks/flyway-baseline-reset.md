@@ -174,10 +174,26 @@ Run the module against a brand-new database and verify startup succeeds.
 
 ## Alpha Cutover
 
-Once the new baseline image is built and deployed, recreate the affected
-database entirely. Dropping the database also drops `flyway_schema_history`.
+Once the new baseline image is built, recreate the affected databases entirely.
+Dropping a database also drops `flyway_schema_history`, so the next deploy applies
+`V1` and the repeatables from scratch. All alpha data is lost.
 
-Example shape:
+The deploy does this for you. In the Actions tab, run **Build and Push to ECR** on
+`main` with `deploy_alpha=true` and `reset_alpha_databases=true`, or:
+
+```bash
+gh workflow run build-push-ecr.yml --ref main -f deploy_alpha=true -f reset_alpha_databases=true
+```
+
+The deploy (`deployment/alpha/deploy-backend.sh` with `RESET_DATABASES=true`) stops the
+backend tier, drops every database named in `postgres/init-databases.sql`
+`WITH (FORCE)`, recreates each one, re-runs the `pos_app` grants from
+`postgres/init-tenancy.sh`, then starts the tiers as usual. It resets every backend
+database, not just the rebuilt module's: while the platform is in alpha every module's
+baseline is edited in place, so a partial reset only defers the next mismatch. The
+automatic deploy after a green `main` run and the config-only sync never reset.
+
+Manual shape, one database at a time, if the box has to be worked by hand over SSM:
 
 ```bash
 cd /opt/durion/alpha/backend
@@ -194,7 +210,30 @@ sudo docker compose -f docker-compose.yml -f /opt/durion/alpha/docker-compose.pr
   --env-file /opt/durion/alpha/.env up -d --force-recreate pos-accounting
 ```
 
-Repeat for each rebuilt module database.
+Repeat for each rebuilt module database, or drop them all at once (the deploy option above
+does the same). Stop the backend tier first and keep it down until the deploy is re-run:
+`WITH (FORCE)` ends the sessions a running service holds, but the service reconnects and races
+Flyway while the database is being recreated.
+
+```bash
+C="sudo docker compose -f docker-compose.yml -f /opt/durion/alpha/docker-compose.prod.yml --env-file /opt/durion/alpha/.env"
+$C stop $($C ps --services | grep -E '^(pos-|eureka-server)')
+
+sudo docker compose -f docker-compose.yml -f /opt/durion/alpha/docker-compose.prod.yml \
+  --env-file /opt/durion/alpha/.env exec -T postgres \
+  sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d postgres' <<'SQL'
+SELECT format('DROP DATABASE %I WITH (FORCE)', datname) FROM pg_database WHERE datname LIKE 'pos\_%' \gexec
+SQL
+```
+
+then re-run the failed **Deploy Backend to Alpha** job: `reconcile_databases` recreates the
+missing databases before any service starts.
+
+Either way the reset leaves the Kafka volume alone. Consumer groups keep their committed offsets,
+which is right: the events behind them describe rows that no longer exist. The consequence is that
+every event-fed replica (`ext_*` tables) is empty after a reset until its owner republishes: the
+bulk loader, or an owner's `*.outbox.replay-requested` command, is the way to refill them, not a
+Kafka offset reset.
 
 ## Post-Cutover Verification
 
