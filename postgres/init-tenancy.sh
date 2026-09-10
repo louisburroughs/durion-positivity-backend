@@ -13,16 +13,20 @@ set -euo pipefail
 DEFAULT_TENANT_ID=01900000-0000-7000-8000-000000000001
 POS_APP_PASSWORD="${POS_APP_PASSWORD:-$POSTGRES_PASSWORD}"
 
+# The password goes in as a psql variable (:'pw' quotes it as a literal) on standard input: psql
+# interpolates variables in input it reads, not in a -c string, which the server otherwise sees
+# verbatim and rejects at the colon.
 if [ "$(psql -Atq -U "$POSTGRES_USER" -d postgres -c "SELECT 1 FROM pg_roles WHERE rolname = 'pos_app'")" != "1" ]; then
-  psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d postgres -v pw="$POS_APP_PASSWORD" \
-    -c "CREATE ROLE pos_app LOGIN PASSWORD :'pw' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT"
+  psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d postgres -v pw="$POS_APP_PASSWORD" <<'SQL'
+CREATE ROLE pos_app LOGIN PASSWORD :'pw' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT;
+SQL
 fi
 
 # TRANSITIONAL (plan WS1 removes this line)
 psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d postgres \
   -c "ALTER ROLE \"$POSTGRES_USER\" SET app.current_tenant = '$DEFAULT_TENANT_ID'"
 
-for db in $(psql -Atq -U "$POSTGRES_USER" -d postgres -c "SELECT datname FROM pg_database WHERE datname LIKE 'pos_%'"); do
+for db in $(psql -Atq -U "$POSTGRES_USER" -d postgres -c "SELECT datname FROM pg_database WHERE datname LIKE 'pos\\_%'"); do
   psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$db" <<SQL
 GRANT CONNECT ON DATABASE "$db" TO pos_app;
 GRANT USAGE ON SCHEMA public TO pos_app;
