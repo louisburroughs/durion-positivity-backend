@@ -98,10 +98,11 @@ public class TenantEventsListener {
 
     private void provision(TenantProjectionEvent created, String initialAdminEmail) {
         if (initialAdminEmail == null || initialAdminEmail.isBlank()) {
-            // The contract requires it (TenantCreatedV1); without it there is no administrator to
-            // create, and the tenant stays PENDING until a corrected fact arrives.
-            log.error("tenant.created for {} carries no initialAdminEmail; not provisioned", created.tenantId());
-            return;
+            // The contract requires it (TenantCreatedV1). tenant.created is a one-time fact, so
+            // recording it without provisioning would leave the tenant PENDING for good: fail
+            // instead, so the record retries and dead-letters where the violation is visible.
+            throw new IllegalStateException(
+                    "tenant.created for " + created.tenantId() + " carries no initialAdminEmail; not provisioned");
         }
         List<RoleTemplateEntry> template = TenantContext.callAs(PlatformTenant.ID, roleTemplateService::snapshot);
         TenantContext.runAs(

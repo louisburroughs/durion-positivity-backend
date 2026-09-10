@@ -84,21 +84,31 @@ class TenantEventsListenerTest {
     }
 
     @Test
-    @DisplayName("no provisioning on a redelivery, on other facts, or without the administrator's email")
+    @DisplayName("no provisioning on a redelivery or on other facts")
     void provisioningIsGuarded() {
         when(processed.existsById("c2")).thenReturn(true);
         listener.onEvent(created("c2", "owner@acme.example"));
 
-        when(processed.existsById("c3")).thenReturn(false);
-        when(extTenants.findById(TENANT)).thenReturn(Optional.empty());
-        listener.onEvent(created("c3", null));
-
         when(processed.existsById("u1")).thenReturn(false);
+        when(extTenants.findById(TENANT)).thenReturn(Optional.empty());
         listener.onEvent(event("u1", "tenant.updated", 2, "ACTIVE"));
 
         verify(provisioningService, never()).provision(any(), any(), any());
         verify(roleTemplateService, never()).snapshot();
-        verify(processed, org.mockito.Mockito.times(2)).save(any(ProcessedEvent.class));
+        verify(processed, org.mockito.Mockito.times(1)).save(any(ProcessedEvent.class));
+    }
+
+    @Test
+    @DisplayName("tenant.created without the administrator's email fails and is not recorded")
+    void createdWithoutEmailIsAContractViolation() {
+        when(processed.existsById("c3")).thenReturn(false);
+
+        assertThatThrownBy(() -> listener.onEvent(created("c3", null)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("initialAdminEmail");
+
+        verify(provisioningService, never()).provision(any(), any(), any());
+        verify(processed, never()).save(any());
     }
 
     @Test
@@ -127,7 +137,7 @@ class TenantEventsListenerTest {
         when(processed.existsById("e1")).thenReturn(false);
         when(extTenants.findById(TENANT)).thenReturn(Optional.empty());
 
-        listener.onEvent(event("e1", "tenant.created", 1, "PENDING"));
+        listener.onEvent(created("e1", "owner@acme.example"));
 
         ArgumentCaptor<ExtTenant> saved = ArgumentCaptor.forClass(ExtTenant.class);
         verify(extTenants).save(saved.capture());
