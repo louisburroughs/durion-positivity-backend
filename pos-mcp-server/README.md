@@ -435,7 +435,7 @@ The two JDBC-written scoped tables, `mcp_tool_invocation_log` and `mcp_eval_turn
 the Postgres default of the bound request. The two scheduled jobs run per tenant: `ToolPriorityTuningService`
 (each tenant's invocation log tunes the shared tool catalog in turn; per-tenant priorities are plan WS6, with the
 session scoping) and `AlphaEvalTraceRetentionScheduler`. The startup runners seed and embed platform tables only.
-The H2 chain (`db/h2-migration`, `V10__tenancy.sql`) carries `tenant_id` with a fixed default standing in for
+The H2 chain (`db/h2-migration`, `V29__tenancy.sql`) carries `tenant_id` with a fixed default standing in for
 `app_current_tenant()`.
 
 Proof: `TenantIsolationIT` (tenant A's `nlti_session` row is invisible to tenant B and to an unbound connection,

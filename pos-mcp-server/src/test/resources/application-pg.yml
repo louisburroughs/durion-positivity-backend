@@ -19,6 +19,8 @@ spring:
         format_sql: true
   flyway:
     enabled: true
+    # The Postgres chain (V1 baseline + V2 seed), not the H2 chain application.yml points at.
+    locations: classpath:db/migration
   kafka:
     bootstrap-servers: localhost:9092
 
