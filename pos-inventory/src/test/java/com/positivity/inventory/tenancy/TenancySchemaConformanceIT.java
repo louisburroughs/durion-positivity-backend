@@ -18,8 +18,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * Every table not whitelisted in {@code db/tenancy-global-tables.txt} carries the tenancy schema
- * (ADR-0062 §2), every whitelisted table carries none of it, and the application connects as the
- * non-owner {@code pos_app} role with no bypass (plan R-B7, and the first risk in the plan's table).
+ * (ADR-0062 §2: {@code tenant_id}, row-level security enabled and forced, the {@code tenant_isolation}
+ * policy); every whitelisted table has no policy and no row-level security (it may still carry a
+ * {@code tenant_id} column as plain data, as {@code event_outbox} does); and the application connects
+ * as the non-owner {@code pos_app} role with no bypass (plan R-B7, and the first risk in the plan's
+ * table).
  */
 @DisplayName("Tenancy schema conformance (ADR-0062)")
 class TenancySchemaConformanceIT extends PostgresTenancyTestBase {
