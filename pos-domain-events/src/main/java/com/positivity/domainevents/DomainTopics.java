@@ -22,6 +22,12 @@ public final class DomainTopics {
     public static final String WORKORDER_COMMANDS_V1 = "workorder.commands.v1";
     public static final String WORKORDER_MANIFEST_V1 = "workorder.manifest.v1";
 
+    /**
+     * Tenant registry facts (ADR-0062 §7): published by pos-tenant, plus {@code tenant.provisioned}
+     * from pos-security-service. Keyed by tenant id.
+     */
+    public static final String TENANT_EVENTS_V1 = "tenant.events.v1";
+
     private DomainTopics() {}
 
     /** Fact topic for the given domain, version 1: {@code {domain}.events.v1}. */

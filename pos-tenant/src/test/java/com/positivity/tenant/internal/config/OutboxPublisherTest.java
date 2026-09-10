@@ -1,0 +1,227 @@
+package com.positivity.tenant.internal.config;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
+import com.positivity.tenant.internal.entity.OutboxEvent;
+import com.positivity.tenant.internal.repository.OutboxEventRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
+import org.springframework.test.util.ReflectionTestUtils;
+
+/**
+ * Unit tests for the pos-tenant {@link OutboxPublisher} (ADR-0044 §4).
+ *
+ * <p>
+ * The publisher drains {@code event_outbox} to Kafka with at-least-once
+ * semantics. Three properties carry the correctness weight:
+ *
+ * <ul>
+ * <li>a row is marked published <em>only</em> after the broker acknowledges, so
+ * a crash mid-send re-sends rather than silently dropping the event;</li>
+ * <li>the batch stops at the first failure, so a struggling broker cannot
+ * reorder events past a stuck row; and</li>
+ * <li>the failure path records {@code attempts} and a bounded
+ * {@code last_error} for alerting instead of throwing out of the scheduled
+ * method.</li>
+ * </ul>
+ */
+@DisplayName("pos-tenant OutboxPublisher — outbox drain contract")
+class OutboxPublisherTest {
+
+    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
+
+    private static final Instant NOW = Instant.parse("2026-07-08T12:00:00Z");
+    private static final Clock TEST_CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
+
+    private final OutboxEventRepository repository = mock(OutboxEventRepository.class);
+
+    @SuppressWarnings("unchecked")
+    private final KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
+
+    private SimpleMeterRegistry meterRegistry;
+    private OutboxPublisher publisher;
+
+    @BeforeEach
+    void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
+        publisher = newPublisher(meterRegistry);
+    }
+
+    @SuppressWarnings("unchecked")
+    private OutboxPublisher newPublisher(MeterRegistry registry) {
+        ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(registry);
+        OutboxPublisher created = new OutboxPublisher(repository, kafkaTemplate, TEST_CLOCK, provider);
+        ReflectionTestUtils.setField(created, "sendTimeoutMs", 1000L);
+        return created;
+    }
+
+    private OutboxEvent event(String key) {
+        return OutboxEvent.builder()
+                .id(UUID.randomUUID())
+                .tenantId(TENANT)
+                .topic("tenant.events.v1")
+                .recordKey(key)
+                .payload("{\"eventId\":\"" + key + "\"}")
+                .createdAt(NOW.minusSeconds(60))
+                .attempts(2)
+                .lastError("previous failure")
+                .build();
+    }
+
+    private void brokerAcknowledges() {
+        when(kafkaTemplate.send(any(ProducerRecord.class)))
+                .thenReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
+    }
+
+    private void brokerFailsWith(Throwable failure) {
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.failedFuture(failure));
+    }
+
+    private double counter(String name) {
+        var found = meterRegistry.find(name).counter();
+        return found == null ? 0d : found.count();
+    }
+
+    @Test
+    @DisplayName("marks the row published only after the broker acknowledges the send")
+    void marksPublishedAfterAcknowledgedSend() {
+        OutboxEvent row = event("k1");
+        when(repository.findTop100ByPublishedAtIsNullOrderByIdAsc()).thenReturn(List.of(row));
+        brokerAcknowledges();
+
+        publisher.publishPending();
+
+        ArgumentCaptor<ProducerRecord<String, String>> sent = ArgumentCaptor.captor();
+        verify(kafkaTemplate).send(sent.capture());
+        assertThat(sent.getValue().topic()).isEqualTo("tenant.events.v1");
+        assertThat(sent.getValue().key()).isEqualTo("k1");
+        assertThat(sent.getValue().value()).isEqualTo(row.getPayload());
+        assertThat(TenantKafkaHeaders.read(sent.getValue().headers()))
+                .as("the row's tenant travels on the record header (ADR-0062)")
+                .contains(TENANT);
+        assertThat(row.getPublishedAt()).isEqualTo(NOW);
+        assertThat(row.getAttempts()).isZero();
+        assertThat(row.getLastError()).isNull();
+        verify(repository).save(row);
+        assertThat(counter("tenant.outbox.published")).isEqualTo(1d);
+    }
+
+    @Test
+    @DisplayName("drains the whole batch in order while the broker keeps acknowledging")
+    void drainsWholeBatchWhenAllSendsSucceed() {
+        OutboxEvent first = event("k1");
+        OutboxEvent second = event("k2");
+        when(repository.findTop100ByPublishedAtIsNullOrderByIdAsc()).thenReturn(List.of(first, second));
+        brokerAcknowledges();
+
+        publisher.publishPending();
+
+        verify(kafkaTemplate, times(2)).send(any(ProducerRecord.class));
+        assertThat(first.getPublishedAt()).isEqualTo(NOW);
+        assertThat(second.getPublishedAt()).isEqualTo(NOW);
+        assertThat(counter("tenant.outbox.published")).isEqualTo(2d);
+    }
+
+    @Test
+    @DisplayName("on failure: records the attempt and error, leaves the row unpublished, stops the batch")
+    void recordsFailureAndStopsBatch() {
+        OutboxEvent first = event("k1");
+        OutboxEvent second = event("k2");
+        when(repository.findTop100ByPublishedAtIsNullOrderByIdAsc()).thenReturn(List.of(first, second));
+        brokerFailsWith(new RuntimeException("broker down"));
+
+        publisher.publishPending();
+
+        assertThat(first.getPublishedAt()).isNull();
+        assertThat(first.getAttempts()).isEqualTo(3);
+        assertThat(first.getLastError()).contains("broker down");
+        verify(repository).save(first);
+
+        // The batch stops at the first failure so publish order is preserved:
+        // the second row is never attempted and keeps its prior attempt count.
+        ArgumentCaptor<ProducerRecord<String, String>> sent = ArgumentCaptor.captor();
+        verify(kafkaTemplate, times(1)).send(sent.capture());
+        assertThat(sent.getValue().key()).isEqualTo("k1");
+        assertThat(sent.getValue().value()).isEqualTo(first.getPayload());
+        assertThat(second.getAttempts()).isEqualTo(2);
+        assertThat(second.getPublishedAt()).isNull();
+        assertThat(counter("tenant.outbox.publish.failures")).isEqualTo(1d);
+    }
+
+    @Test
+    @DisplayName("falls back to the exception class name when the failure carries no message")
+    void recordsClassNameWhenFailureMessageIsNull() {
+        OutboxEvent row = event("k1");
+        when(repository.findTop100ByPublishedAtIsNullOrderByIdAsc()).thenReturn(List.of(row));
+        // Thrown by send() itself rather than completing the future exceptionally:
+        // a failed future surfaces as an ExecutionException whose message is the
+        // cause's toString, so only a synchronous throw reaches the null-message
+        // fallback in recordFailure().
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new IllegalStateException());
+
+        publisher.publishPending();
+
+        assertThat(row.getLastError()).isEqualTo("IllegalStateException");
+        assertThat(row.getPublishedAt()).isNull();
+        assertThat(row.getAttempts()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("truncates an oversized failure message to the 2000-character column bound")
+    void truncatesOversizedFailureMessage() {
+        OutboxEvent row = event("k1");
+        when(repository.findTop100ByPublishedAtIsNullOrderByIdAsc()).thenReturn(List.of(row));
+        brokerFailsWith(new RuntimeException("x".repeat(2500)));
+
+        publisher.publishPending();
+
+        assertThat(row.getLastError()).hasSize(2000);
+    }
+
+    @Test
+    @DisplayName("does nothing when the outbox is empty")
+    void doesNothingWhenNoPendingRows() {
+        when(repository.findTop100ByPublishedAtIsNullOrderByIdAsc()).thenReturn(List.of());
+
+        publisher.publishPending();
+
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
+        verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("publishes normally when no MeterRegistry is available")
+    void publishesWithoutMeterRegistry() {
+        OutboxPublisher withoutMetrics = newPublisher(null);
+        OutboxEvent row = event("k1");
+        when(repository.findTop100ByPublishedAtIsNullOrderByIdAsc()).thenReturn(List.of(row));
+        brokerAcknowledges();
+
+        withoutMetrics.publishPending();
+
+        assertThat(row.getPublishedAt()).isEqualTo(NOW);
+        verify(repository).save(row);
+    }
+}

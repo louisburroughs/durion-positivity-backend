@@ -1,0 +1,35 @@
+# Testcontainers Postgres profile (plan R-B7): the real baseline + bootstrap seed, Hibernate
+# validate, and the ADR-0062 runtime in strict mode (no default tenant), with the application pool
+# connecting as the non-owner pos_app role. The ITs supply the datasource and Flyway credentials
+# through @DynamicPropertySource.
+spring:
+  application:
+    name: pos-tenant-pg-test
+  autoconfigure:
+    exclude: org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  cloud:
+    discovery:
+      enabled: false
+
+pos:
+  tenancy:
+    # strict: nothing binds a tenant unless the test does
+    default-tenant-id:
+  tenant:
+    kafka:
+      enabled: false
+
+eureka:
+  client:
+    enabled: false
+
+logging:
+  level:
+    com.positivity: INFO

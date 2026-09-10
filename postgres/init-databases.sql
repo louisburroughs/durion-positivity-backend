@@ -21,6 +21,7 @@ CREATE DATABASE pos_security_db;
 CREATE DATABASE pos_shop_manager_db;
 CREATE DATABASE pos_supplier_db;
 CREATE DATABASE pos_tax_db;
+CREATE DATABASE pos_tenant_db;
 CREATE DATABASE pos_vehicle_fitment_db;
 CREATE DATABASE pos_vehicle_inventory_db;
 CREATE DATABASE pos_vehicle_reference_carapi_db;

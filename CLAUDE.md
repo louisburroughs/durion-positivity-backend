@@ -68,8 +68,8 @@ External Clients
      ▼
 pos-api-gateway  (JWT validation, path rewrite /{domain}/vN/.., permission bitset → X-Authorities)
      │ lb://SERVICE_NAME (Eureka)
-     ├── pos-security-service (JWT issuer, RBAC source of truth; will consume tenant.events.v1 once pos-tenant exists)
-     ├── pos-tenant (PLANNED, ADR-0062: tenant registry + owning account; platform-tenant callers only; not yet in the reactor)
+     ├── pos-security-service (JWT issuer, RBAC source of truth; consumes tenant.events.v1 from WS2b on)
+     ├── pos-tenant (ADR-0062 §7: tenant registry + owning account; platform-tenant callers only, /tenant/v1/**)
      ├── domain services (pos-order, pos-customer, pos-inventory, pos-accounting, pos-catalog, ...)
      └── pos-event-receiver (event ingestion hub, shared-secret auth, not public)
 ```
@@ -81,10 +81,12 @@ pos-api-gateway  (JWT validation, path rewrite /{domain}/vN/.., permission bitse
   add-a-table checklist: `docs/TENANCY_SCHEMA.md`. The runtime is `pos-tenancy-common` (WS1: `TenantContext`,
   `TenantContextFilter`, `TenantRecordInterceptor`, `TenantAwareDataSource`, `TenantScopedEntity`, `@TenantGlobal`,
   `@PlatformScoped`, `TenantIterator`), adopted module by module (`pos-location` first) and enforced by
-  `pos-archunit`'s `TenancyArchitectureTest` for the modules in `ADOPTED_MODULES`. Not yet present: `pos-tenant`
-  (WS2a), the JWT `tid` claim and `X-Tenant-Id` injection (WS2b). Until then `pos.tenancy.default-tenant-id`
-  binds the alpha default tenant on every unbound path, and modules not yet adopted connect as the owner role,
-  which carries the same default (`postgres/init-tenancy.sh`). Never add an `organizationId` field (it is a
+  `pos-archunit`'s `TenancyArchitectureTest` for the modules in `ADOPTED_MODULES`. `pos-tenant` (WS2a) owns the
+  registry and publishes `tenant.events.v1`; its rows all belong to the platform tenant
+  (`PlatformTenant.ID`), the one place application code binds a tenant itself. Not yet present: the JWT `tid`
+  claim and `X-Tenant-Id` injection (WS2b). Until then `pos.tenancy.default-tenant-id` binds the alpha default
+  tenant (the platform tenant in `pos-tenant`) on every unbound path, and modules not yet adopted connect as the
+  owner role, which carries the same default (`postgres/init-tenancy.sh`). Never add an `organizationId` field (it is a
   remnant). Plan:
   `../durion/docs/architecture/plans/adr-0023-suppression-postgres-multitenancy-plan.md`.
 

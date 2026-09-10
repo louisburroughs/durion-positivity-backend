@@ -323,7 +323,7 @@ services:
         set -e
         BOOTSTRAP=kafka:29092
         # BEGIN GENERATED TOPICS (scripts/generate-kafka-topics.py)
-        # 76 topics (38 DLQ). Regenerate with
+        # 78 topics (39 DLQ). Regenerate with
         # scripts/generate-kafka-topics.py --apply after adding a listener or a
         # *-topic property; CI fails on a stale block.
         #
@@ -395,6 +395,8 @@ services:
         supplier.commands.v1.dlq         2592000000
         supplier.events.v1               604800000
         supplier.events.v1.dlq           2592000000
+        tenant.events.v1                 604800000
+        tenant.events.v1.dlq             2592000000
         vehicle.commands.v1              604800000
         vehicle.commands.v1.dlq          2592000000
         vehicle.events.v1                604800000
@@ -966,6 +968,47 @@ services:
       retries: 20
       start_period: 300s
 
+
+  # ADR-0062 section 7 (plan WS2a): tenant registry + owning accounts. Platform-tenant callers
+  # only; the module runs inside the platform tenant and connects as pos_app.
+  pos-tenant:
+    build:
+      context: ./pos-tenant
+      dockerfile: Dockerfile
+    ports:
+      - "8097:8080"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      # tenant.events.v1 producer (outbox drain) and tenant.provisioned consumer
+      POS_TENANT_KAFKA_ENABLED: ${POS_TENANT_KAFKA_ENABLED:-false}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_tenant_db
+      SPRING_DATASOURCE_USERNAME: pos_app
+      SPRING_DATASOURCE_PASSWORD: ${POS_APP_PASSWORD:-${POSTGRES_PASSWORD}}
+      SPRING_FLYWAY_USER: ${POSTGRES_USER}
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
+      SERVER_PORT: 8080
+      MANAGEMENT_SERVER_PORT: 8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      pos-security-service:
+        condition: service_healthy
+    logging: *logging
+    networks:
+      - pos-network
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 300s
   pos-mcp-server:
     build:
       context: ./pos-mcp-server

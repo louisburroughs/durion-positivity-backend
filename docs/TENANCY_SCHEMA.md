@@ -91,8 +91,8 @@ Constants:
 
 | Constant | Value | Meaning |
 | --- | --- | --- |
-| alpha default tenant | `01900000-0000-7000-8000-000000000001` | The one tenant the alpha cell serves until `pos-tenant` (plan WS2a) provisions tenants. Every seed row and every transitional binding uses it. |
-| platform tenant | `01900000-0000-7000-8000-000000000000` | Reserved for the platform-operator tenant of ADR-0062 §7; created by the `pos-tenant` bootstrap migration, not used yet. |
+| alpha default tenant | `01900000-0000-7000-8000-000000000001` | The one tenant the alpha cell serves today (slug `alpha` in the `pos-tenant` registry). Every seed row and every transitional binding uses it. |
+| platform tenant | `01900000-0000-7000-8000-000000000000` | The platform-operator tenant of ADR-0062 §7 (`PlatformTenant.ID`, slug `platform`), bootstrapped by `pos-tenant`'s `V2__seed_tenant.sql`. `pos-tenant`'s own rows all belong to it. |
 
 `postgres/init-tenancy.sh` also creates the shared `pos_app` role (LOGIN, `NOSUPERUSER`,
 `NOBYPASSRLS`, DML and sequence usage on every `pos_*` database, default privileges for tables

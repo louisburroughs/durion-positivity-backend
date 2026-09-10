@@ -1,0 +1,1249 @@
+openapi: 3.1.0
+info:
+  contact:
+    email: platform@durionpos.org
+    name: Durion Support Services
+  description: Tenant registry and the accounts that own each tenancy (ADR-0062 section 7). Platform-tenant callers only; reached via the API Gateway under /tenant.
+  title: Positivity Tenant API
+  version: v1
+servers:
+- description: API Gateway
+  url: http://api-gateway.local/v1/tenant
+tags:
+- description: The customer accounts that own tenants
+  name: Platform Account API
+- description: Register, inspect and move tenants through their lifecycle
+  name: Platform Tenant API
+paths:
+  /v1/platform/accounts:
+    get:
+      description: 'Lists every account with its contacts, billing profile and tenant ids, ordered by legal name.
+
+        Use this tool to find an account id before createTenant; do not use it for one account, use getAccount instead.
+
+        Preconditions: none beyond the platform:account:read authority.
+
+        Required inputs: none.
+
+        Emits an ACCOUNT_LIST event.
+
+        Returns 200 with the unpaginated list.
+
+        '
+      operationId: listAccounts
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/AccountResponse'
+                type: array
+          description: Accounts listed
+      security:
+      - bearerAuth:
+        - platform:account:read
+      summary: List Accounts
+      tags:
+      - Platform Account API
+      x-required-permissions:
+      - platform:account:read
+    post:
+      description: 'Creates the customer account that will own one or more tenants.
+
+        Use this tool before createTenant for a new customer; do not use it to add a tenant to an existing customer.
+
+        Preconditions: the legal name is not already registered.
+
+        Required inputs: legalName, homeCountry (ISO 3166-1 alpha-2) and homeCurrency (ISO 4217); tradingName and taxId are optional.
+
+        Emits an ACCOUNT_CREATE event.
+
+        Returns 201 with the account and 409 when the legal name is taken.
+
+        '
+      operationId: createAccount
+      requestBody:
+        content:
+          application/json:
+            examples:
+              New customer:
+                description: New customer
+                value:
+                  homeCountry: US
+                  homeCurrency: USD
+                  legalName: Acme Tire & Auto LLC
+                  taxId: 12-3456789
+                  tradingName: Acme Tire
+            schema:
+              $ref: '#/components/schemas/AccountCreateRequest'
+        description: 'Account to create: legal name, home country and currency; trading name and tax id optional.'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+          description: Account created
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+          description: Legal name already taken
+      security:
+      - bearerAuth:
+        - platform:account:create
+      summary: Create an Account
+      tags:
+      - Platform Account API
+      x-required-permissions:
+      - platform:account:create
+  /v1/platform/accounts/{id}:
+    get:
+      description: 'Returns one account with its contacts, billing profile and the ids of the tenants it owns.
+
+        Use this tool when the account id is known; do not use it to find an account by name, use listAccounts instead.
+
+        Preconditions: the account exists.
+
+        Required inputs: id (UUID) as a path parameter.
+
+        Emits an ACCOUNT_GET event.
+
+        Returns 200 with the account and 404 when it does not exist.
+
+        '
+      operationId: getAccount
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+          description: Account found
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+          description: Account not found
+      security:
+      - bearerAuth:
+        - platform:account:read
+      summary: Get an Account
+      tags:
+      - Platform Account API
+      x-required-permissions:
+      - platform:account:read
+    patch:
+      description: 'Applies a partial update to an account''s legal name, trading name, status, tax id, home country or home currency.
+
+        Use this tool for account descriptors; do not use it for contacts or billing details, use the contact and billing-profile operations instead.
+
+        Preconditions: the account exists; a new legal name must not be taken.
+
+        Required inputs: id (UUID) as a path parameter and a body where every field is optional and null leaves the value unchanged.
+
+        Emits an ACCOUNT_UPDATE event.
+
+        Returns 200 with the account, 404 when it does not exist and 409 when the legal name is taken.
+
+        '
+      operationId: updateAccount
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Rename trading name:
+                description: Rename trading name
+                value:
+                  status: ACTIVE
+                  tradingName: Acme Tire & Auto
+            schema:
+              $ref: '#/components/schemas/AccountUpdateRequest'
+        description: Fields to change; every field is optional and null leaves the value unchanged.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+          description: Account updated
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+          description: Account not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+          description: Legal name already taken
+      security:
+      - bearerAuth:
+        - platform:account:update
+      summary: Update an Account
+      tags:
+      - Platform Account API
+      x-required-permissions:
+      - platform:account:update
+  /v1/platform/accounts/{id}/billing-profile:
+    put:
+      description: 'Creates or replaces the account''s single billing profile: billing address, payment terms, invoicing email and the payment processor''s customer token. Card numbers are never accepted or stored.
+
+        Use this tool whenever billing details change; do not use it for the legal name or home currency, use updateAccount instead. The response reports only whether a processor token is on file.
+
+        Preconditions: the account exists.
+
+        Required inputs: id (UUID) as a path parameter and a body with addressLine1, city, country, paymentTerms and invoicingEmail; the rest is optional.
+
+        Emits an ACCOUNT_BILLING_PROFILE_PUT event.
+
+        Returns 200 with the billing profile and 404 when the account does not exist.
+
+        '
+      operationId: putAccountBillingProfile
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Net-30 profile:
+                description: Net-30 profile
+                value:
+                  addressLine1: 100 Main St
+                  city: Springfield
+                  country: US
+                  invoicingEmail: billing@acme.example
+                  paymentProcessorCustomerToken: cus_0123456789
+                  paymentTerms: NET30
+                  postalCode: '62704'
+                  region: IL
+            schema:
+              $ref: '#/components/schemas/BillingProfileRequest'
+        description: Billing address, payment terms, invoicing email and optional processor customer token; never a card number.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingProfileResponse'
+          description: Billing profile stored
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingProfileResponse'
+          description: Account not found
+      security:
+      - bearerAuth:
+        - platform:account:update
+      summary: Set an Account's Billing Profile
+      tags:
+      - Platform Account API
+      x-required-permissions:
+      - platform:account:update
+  /v1/platform/accounts/{id}/contacts:
+    post:
+      description: 'Adds an OWNER, BILLING or TECHNICAL contact to an account; an account may carry several of each role.
+
+        Use this tool for a new person; do not use it to change an existing contact, use updateAccountContact instead.
+
+        Preconditions: the account exists.
+
+        Required inputs: id (UUID) as a path parameter and a body with name, role and email; phone is optional.
+
+        Emits an ACCOUNT_CONTACT_ADD event.
+
+        Returns 201 with the contact and 404 when the account does not exist.
+
+        '
+      operationId: addAccountContact
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Billing contact:
+                description: Billing contact
+                value:
+                  email: jordan@acme.example
+                  name: Jordan Lee
+                  phone: +1 555 0100
+                  role: BILLING
+            schema:
+              $ref: '#/components/schemas/AccountContactRequest'
+        description: 'Contact: name, role (OWNER, BILLING or TECHNICAL), email; phone optional. A PUT replaces every field.'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountContactResponse'
+          description: Contact added
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountContactResponse'
+          description: Account not found
+      security:
+      - bearerAuth:
+        - platform:account:update
+      summary: Add a Contact to an Account
+      tags:
+      - Platform Account API
+      x-required-permissions:
+      - platform:account:update
+  /v1/platform/accounts/{id}/contacts/{contactId}:
+    delete:
+      description: 'Deletes a contact from an account.
+
+        Use this tool when a person no longer represents the customer; use updateAccountContact to change their role instead.
+
+        Preconditions: the contact exists on the account.
+
+        Required inputs: id and contactId (UUIDs) as path parameters.
+
+        Emits an ACCOUNT_CONTACT_REMOVE event.
+
+        Returns 204 and 404 when the account or contact does not exist.
+
+        '
+      operationId: removeAccountContact
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: contactId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '204':
+          description: Contact removed
+        '404':
+          description: Account or contact not found
+      security:
+      - bearerAuth:
+        - platform:account:update
+      summary: Remove an Account Contact
+      tags:
+      - Platform Account API
+      x-required-permissions:
+      - platform:account:update
+    put:
+      description: 'Replaces a contact''s name, role, email and phone.
+
+        Use this tool to correct an existing contact; do not use it to add or drop one, use addAccountContact or removeAccountContact instead.
+
+        Preconditions: the contact exists on the account.
+
+        Required inputs: id and contactId (UUIDs) as path parameters and a full contact body.
+
+        Emits an ACCOUNT_CONTACT_UPDATE event.
+
+        Returns 200 with the contact and 404 when the account or contact does not exist.
+
+        '
+      operationId: updateAccountContact
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: contactId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Billing contact:
+                description: Billing contact
+                value:
+                  email: jordan@acme.example
+                  name: Jordan Lee
+                  phone: +1 555 0100
+                  role: BILLING
+            schema:
+              $ref: '#/components/schemas/AccountContactRequest'
+        description: 'Contact: name, role (OWNER, BILLING or TECHNICAL), email; phone optional. A PUT replaces every field.'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountContactResponse'
+          description: Contact updated
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountContactResponse'
+          description: Account or contact not found
+      security:
+      - bearerAuth:
+        - platform:account:update
+      summary: Update an Account Contact
+      tags:
+      - Platform Account API
+      x-required-permissions:
+      - platform:account:update
+  /v1/platform/tenants:
+    get:
+      description: 'Lists every tenant in the registry, oldest first, optionally filtered by lifecycle status.
+
+        Use this tool to find a tenant id or slug; do not use it for one tenant''s full record, use getTenant instead.
+
+        Preconditions: none beyond the platform:tenant:read authority.
+
+        Required inputs: none; status is an optional filter (PENDING, ACTIVE, SUSPENDED, DECOMMISSIONED).
+
+        Emits a TENANT_LIST event.
+
+        Returns 200 with the unpaginated list.
+
+        '
+      operationId: listTenants
+      parameters:
+      - description: Only tenants in this status
+        in: query
+        name: status
+        required: false
+        schema:
+          enum:
+          - PENDING
+          - ACTIVE
+          - SUSPENDED
+          - DECOMMISSIONED
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/TenantResponse'
+                type: array
+          description: Tenants listed
+      security:
+      - bearerAuth:
+        - platform:tenant:read
+      summary: List Tenants
+      tags:
+      - Platform Tenant API
+      x-required-permissions:
+      - platform:tenant:read
+    post:
+      description: 'Registers a tenant under an existing account in status PENDING and publishes tenant.created on tenant.events.v1; pos-security-service provisions the role template and the initial administrator named by initialAdminEmail, then answers tenant.provisioned, which moves the tenant to ACTIVE.
+
+        Use this tool once per customer tenancy, after createAccount when the owning account does not exist; do not use it to change an existing tenant, use updateTenant or the lifecycle operations instead.
+
+        Preconditions: the account exists and the slug is not taken.
+
+        Required inputs: slug, displayName, accountId and initialAdminEmail; cell is optional.
+
+        Emits a TENANT_CREATE event.
+
+        Returns 201 with the tenant, 404 when the account is unknown and 409 when the slug is taken.
+
+        '
+      operationId: createTenant
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Register Acme:
+                description: Register Acme
+                value:
+                  accountId: 01990000-0000-7000-8000-00000000a001
+                  cell: us-east-1
+                  displayName: Acme Tire & Auto
+                  initialAdminEmail: owner@acme.example
+                  slug: acme-tire
+            schema:
+              $ref: '#/components/schemas/TenantCreateRequest'
+        description: 'Tenant to register: slug, display name, owning account and the initial administrator.'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+          description: Tenant registered
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+          description: Account not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+          description: Slug already taken
+      security:
+      - bearerAuth:
+        - platform:tenant:create
+      summary: Register a Tenant
+      tags:
+      - Platform Tenant API
+      x-required-permissions:
+      - platform:tenant:create
+  /v1/platform/tenants/{id}:
+    get:
+      description: 'Returns one tenant''s registry record, including its account, cell and lifecycle timestamps.
+
+        Use this tool when the tenant id is known; do not use it to search by slug or status, use listTenants instead.
+
+        Preconditions: the tenant exists.
+
+        Required inputs: id (UUID) as a path parameter.
+
+        Emits a TENANT_GET event.
+
+        Returns 200 with the tenant and 404 when it does not exist.
+
+        '
+      operationId: getTenant
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+          description: Tenant found
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+          description: Tenant not found
+      security:
+      - bearerAuth:
+        - platform:tenant:read
+      summary: Get a Tenant
+      tags:
+      - Platform Tenant API
+      x-required-permissions:
+      - platform:tenant:read
+    patch:
+      description: 'Changes a tenant''s display name or cell and publishes tenant.updated; slug, account and status are never changed here.
+
+        Use this tool for descriptive edits; do not use it to change status, use suspendTenant, reactivateTenant or decommissionTenant instead.
+
+        Preconditions: the tenant exists and is not DECOMMISSIONED.
+
+        Required inputs: id (UUID) as a path parameter and a body with displayName and/or cell; a null field leaves the value unchanged.
+
+        Emits a TENANT_UPDATE event.
+
+        Returns 200 with the tenant, 404 when it does not exist and 409 when it is decommissioned.
+
+        '
+      operationId: updateTenant
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Rename and move:
+                description: Rename and move
+                value:
+                  cell: us-east-2
+                  displayName: Acme Tire & Auto Group
+            schema:
+              $ref: '#/components/schemas/TenantUpdateRequest'
+        description: Fields to change; a null field leaves the value unchanged.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+          description: Tenant updated
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+          description: Tenant not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+          description: Tenant is decommissioned
+      security:
+      - bearerAuth:
+        - platform:tenant:update
+      summary: Update a Tenant
+      tags:
+      - Platform Tenant API
+      x-required-permissions:
+      - platform:tenant:update
+  /v1/platform/tenants/{id}/decommission:
+    post:
+      description: 'Moves a tenant to the terminal DECOMMISSIONED status and publishes tenant.decommissioned; the tenant can never be reactivated or edited again.
+
+        Use this tool when a tenancy ends; do not use it for a reversible hold, use suspendTenant instead.
+
+        Preconditions: the tenant is not already DECOMMISSIONED.
+
+        Required inputs: id (UUID) as a path parameter; no body.
+
+        Emits a TENANT_DECOMMISSION event.
+
+        Returns 200 with the tenant, 404 when it does not exist and 409 when it is already decommissioned.
+
+        '
+      operationId: decommissionTenant
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+          description: Tenant decommissioned
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+          description: Tenant not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+          description: Tenant already decommissioned
+      security:
+      - bearerAuth:
+        - platform:tenant:decommission
+      summary: Decommission a Tenant
+      tags:
+      - Platform Tenant API
+      x-required-permissions:
+      - platform:tenant:decommission
+  /v1/platform/tenants/{id}/reactivate:
+    post:
+      description: 'Moves a SUSPENDED tenant back to ACTIVE and publishes tenant.reactivated.
+
+        Use this tool to lift a hold placed by suspendTenant; do not use it on a PENDING tenant, which becomes ACTIVE through tenant.provisioned instead.
+
+        Preconditions: the tenant is SUSPENDED.
+
+        Required inputs: id (UUID) as a path parameter; no body.
+
+        Emits a TENANT_REACTIVATE event.
+
+        Returns 200 with the tenant, 404 when it does not exist and 409 when it is not SUSPENDED.
+
+        '
+      operationId: reactivateTenant
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+          description: Tenant reactivated
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+          description: Tenant not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+          description: Tenant is not SUSPENDED
+      security:
+      - bearerAuth:
+        - platform:tenant:reactivate
+      summary: Reactivate a Tenant
+      tags:
+      - Platform Tenant API
+      x-required-permissions:
+      - platform:tenant:reactivate
+  /v1/platform/tenants/{id}/suspend:
+    post:
+      description: 'Moves an ACTIVE tenant to SUSPENDED and publishes tenant.suspended; logins for the tenant are refused until reactivateTenant.
+
+        Use this tool for non-payment or abuse holds; do not use it for a permanent end, use decommissionTenant instead.
+
+        Preconditions: the tenant is ACTIVE.
+
+        Required inputs: id (UUID) as a path parameter; no body.
+
+        Emits a TENANT_SUSPEND event.
+
+        Returns 200 with the tenant, 404 when it does not exist and 409 when it is not ACTIVE.
+
+        '
+      operationId: suspendTenant
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+          description: Tenant suspended
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+          description: Tenant not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+          description: Tenant is not ACTIVE
+      security:
+      - bearerAuth:
+        - platform:tenant:suspend
+      summary: Suspend a Tenant
+      tags:
+      - Platform Tenant API
+      x-required-permissions:
+      - platform:tenant:suspend
+components:
+  schemas:
+    AccountContactRequest:
+      description: Request payload for an account contact
+      properties:
+        email:
+          description: Email address
+          example: jordan@acme.example
+          format: email
+          maxLength: 320
+          minLength: 0
+          type: string
+        name:
+          description: Contact's name
+          example: Jordan Lee
+          maxLength: 200
+          minLength: 0
+          type: string
+        phone:
+          description: Phone number
+          example: +1 555 0100
+          maxLength: 32
+          minLength: 0
+          type: string
+        role:
+          description: Role on the account
+          enum:
+          - OWNER
+          - BILLING
+          - TECHNICAL
+          type: string
+      required:
+      - email
+      - name
+      - role
+      type: object
+    AccountContactResponse:
+      description: A contact on an account
+      properties:
+        accountId:
+          description: Owning account id
+          format: uuid
+          type: string
+        createdAt:
+          description: Created at (ISO 8601)
+          format: date-time
+          type: string
+        email:
+          description: Email address
+          type: string
+        id:
+          description: Contact id
+          format: uuid
+          type: string
+        name:
+          description: Contact's name
+          type: string
+        phone:
+          description: Phone number
+          type: string
+        role:
+          description: Role on the account
+          enum:
+          - OWNER
+          - BILLING
+          - TECHNICAL
+          type: string
+        updatedAt:
+          description: Last changed at (ISO 8601)
+          format: date-time
+          type: string
+      required:
+      - accountId
+      - createdAt
+      - email
+      - id
+      - name
+      - role
+      - updatedAt
+      type: object
+    AccountCreateRequest:
+      description: Request payload for creating an account
+      properties:
+        homeCountry:
+          description: ISO 3166-1 alpha-2 home country
+          example: US
+          minLength: 1
+          pattern: ^[A-Z]{2}$
+          type: string
+        homeCurrency:
+          description: ISO 4217 home currency
+          example: USD
+          minLength: 1
+          pattern: ^[A-Z]{3}$
+          type: string
+        legalName:
+          description: Registered legal name
+          example: Acme Tire & Auto LLC
+          maxLength: 200
+          minLength: 0
+          type: string
+        taxId:
+          description: Tax identifier
+          example: 12-3456789
+          maxLength: 64
+          minLength: 0
+          type: string
+        tradingName:
+          description: Trading name, when different
+          example: Acme Tire
+          maxLength: 200
+          minLength: 0
+          type: string
+      required:
+      - homeCountry
+      - homeCurrency
+      - legalName
+      type: object
+    AccountResponse:
+      description: A customer account that owns tenants
+      properties:
+        billingProfile:
+          $ref: '#/components/schemas/BillingProfileResponse'
+        contacts:
+          description: Contacts on the account
+          items:
+            $ref: '#/components/schemas/AccountContactResponse'
+          type: array
+        createdAt:
+          description: Created at (ISO 8601)
+          format: date-time
+          type: string
+        homeCountry:
+          description: ISO 3166-1 alpha-2 home country
+          type: string
+        homeCurrency:
+          description: ISO 4217 home currency
+          type: string
+        id:
+          description: Account id
+          format: uuid
+          type: string
+        legalName:
+          description: Registered legal name
+          type: string
+        status:
+          description: Lifecycle status
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+          type: string
+        taxId:
+          description: Tax identifier
+          type: string
+        tenantIds:
+          description: Ids of the tenants this account owns
+          items:
+            format: uuid
+            type: string
+          type: array
+        tradingName:
+          description: Trading name
+          type: string
+        updatedAt:
+          description: Last changed at (ISO 8601)
+          format: date-time
+          type: string
+      required:
+      - contacts
+      - createdAt
+      - homeCountry
+      - homeCurrency
+      - id
+      - legalName
+      - status
+      - tenantIds
+      - updatedAt
+      type: object
+    AccountUpdateRequest:
+      description: Request payload for updating an account
+      properties:
+        homeCountry:
+          description: ISO 3166-1 alpha-2 home country
+          pattern: ^[A-Z]{2}$
+          type: string
+        homeCurrency:
+          description: ISO 4217 home currency
+          pattern: ^[A-Z]{3}$
+          type: string
+        legalName:
+          description: Registered legal name
+          maxLength: 200
+          minLength: 1
+          type: string
+        status:
+          description: Lifecycle status
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+          type: string
+        taxId:
+          description: Tax identifier
+          maxLength: 64
+          minLength: 0
+          type: string
+        tradingName:
+          description: Trading name
+          maxLength: 200
+          minLength: 0
+          type: string
+      type: object
+    BillingProfileRequest:
+      description: Request payload for an account's billing profile
+      properties:
+        addressLine1:
+          description: Billing address line 1
+          example: 100 Main St
+          maxLength: 200
+          minLength: 0
+          type: string
+        addressLine2:
+          description: Billing address line 2
+          maxLength: 200
+          minLength: 0
+          type: string
+        city:
+          description: City
+          example: Springfield
+          maxLength: 100
+          minLength: 0
+          type: string
+        country:
+          description: ISO 3166-1 alpha-2 country
+          example: US
+          minLength: 1
+          pattern: ^[A-Z]{2}$
+          type: string
+        invoicingEmail:
+          description: Where invoices are sent
+          example: billing@acme.example
+          format: email
+          maxLength: 320
+          minLength: 0
+          type: string
+        paymentProcessorCustomerToken:
+          description: Opaque customer token issued by the payment processor; never a card number
+          maxLength: 128
+          minLength: 0
+          type: string
+        paymentTerms:
+          description: Payment terms
+          example: NET30
+          maxLength: 32
+          minLength: 0
+          type: string
+        postalCode:
+          description: Postal code
+          example: '62704'
+          maxLength: 20
+          minLength: 0
+          type: string
+        region:
+          description: State, province or region
+          example: IL
+          maxLength: 100
+          minLength: 0
+          type: string
+      required:
+      - addressLine1
+      - city
+      - country
+      - invoicingEmail
+      - paymentTerms
+      type: object
+    BillingProfileResponse:
+      description: An account's billing profile
+      properties:
+        accountId:
+          description: Owning account id
+          format: uuid
+          type: string
+        addressLine1:
+          description: Billing address line 1
+          type: string
+        addressLine2:
+          description: Billing address line 2
+          type: string
+        city:
+          description: City
+          type: string
+        country:
+          description: ISO 3166-1 alpha-2 country
+          type: string
+        createdAt:
+          description: Created at (ISO 8601)
+          format: date-time
+          type: string
+        id:
+          description: Billing profile id
+          format: uuid
+          type: string
+        invoicingEmail:
+          description: Where invoices are sent
+          type: string
+        paymentProcessorCustomerTokenPresent:
+          description: Whether a payment processor customer token is on file
+          type: boolean
+        paymentTerms:
+          description: Payment terms
+          type: string
+        postalCode:
+          description: Postal code
+          type: string
+        region:
+          description: State, province or region
+          type: string
+        updatedAt:
+          description: Last changed at (ISO 8601)
+          format: date-time
+          type: string
+      required:
+      - accountId
+      - addressLine1
+      - city
+      - country
+      - createdAt
+      - id
+      - invoicingEmail
+      - paymentProcessorCustomerTokenPresent
+      - paymentTerms
+      - updatedAt
+      type: object
+    TenantCreateRequest:
+      description: Request payload for registering a tenant
+      properties:
+        accountId:
+          description: Owning account id
+          format: uuid
+          type: string
+        cell:
+          description: Cell or region the tenant is served from
+          example: us-east-1
+          maxLength: 64
+          minLength: 0
+          type: string
+        displayName:
+          description: Human-readable name
+          example: Acme Tire & Auto
+          maxLength: 200
+          minLength: 0
+          type: string
+        initialAdminEmail:
+          description: Email of the initial administrator pos-security-service creates while provisioning
+          example: owner@acme.example
+          format: email
+          maxLength: 320
+          minLength: 0
+          type: string
+        slug:
+          description: URL-safe unique name; lowercase letters, digits and hyphens, 3 to 63 characters
+          example: acme-tire
+          minLength: 1
+          pattern: ^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])$
+          type: string
+      required:
+      - accountId
+      - displayName
+      - initialAdminEmail
+      - slug
+      type: object
+    TenantResponse:
+      description: A tenant of the platform
+      properties:
+        accountId:
+          description: Owning account id
+          format: uuid
+          type: string
+        activatedAt:
+          description: First became ACTIVE at (ISO 8601)
+          format: date-time
+          type: string
+        cell:
+          description: Cell or region the tenant is served from
+          type: string
+        createdAt:
+          description: Registered at (ISO 8601)
+          format: date-time
+          type: string
+        decommissionedAt:
+          description: Decommissioned at (ISO 8601)
+          format: date-time
+          type: string
+        displayName:
+          description: Human-readable name
+          example: Acme Tire & Auto
+          type: string
+        id:
+          description: Tenant id; the value every module's tenant_id refers to
+          format: uuid
+          type: string
+        initialAdminEmail:
+          description: Email of the initial administrator
+          type: string
+        slug:
+          description: URL-safe unique name
+          example: acme-tire
+          type: string
+        status:
+          description: Lifecycle status
+          enum:
+          - PENDING
+          - ACTIVE
+          - SUSPENDED
+          - DECOMMISSIONED
+          type: string
+        suspendedAt:
+          description: Last suspended at (ISO 8601)
+          format: date-time
+          type: string
+        updatedAt:
+          description: Last changed at (ISO 8601)
+          format: date-time
+          type: string
+      required:
+      - accountId
+      - createdAt
+      - displayName
+      - id
+      - initialAdminEmail
+      - slug
+      - status
+      - updatedAt
+      type: object
+    TenantUpdateRequest:
+      description: Request payload for updating a tenant's display name or cell
+      properties:
+        cell:
+          description: New cell or region; omitted or null leaves it unchanged
+          maxLength: 64
+          minLength: 0
+          type: string
+        displayName:
+          description: New human-readable name; omitted or null leaves it unchanged
+          maxLength: 200
+          minLength: 1
+          type: string
+      type: object
+  securitySchemes:
+    bearerAuth:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http

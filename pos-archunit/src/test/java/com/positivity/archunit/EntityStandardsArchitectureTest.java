@@ -41,6 +41,7 @@ class EntityStandardsArchitectureTest {
         "com.positivity.people.internal.entity..",
         "com.positivity.peoplecontact.internal.entity..",
         "com.positivity.supplier.internal.entity..",
+        "com.positivity.tenant.internal.entity..",
         "com.positivity.warranty.internal.entity.."
     };
 

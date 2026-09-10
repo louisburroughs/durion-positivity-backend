@@ -246,6 +246,15 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  pos-tenant:
+    image: ${ECR_REGISTRY}/durion/pos-tenant:${BACKEND_TAG}
+    restart: unless-stopped
+    logging: *logging
+    # ADR-0062 section 7: the registry publishes tenant.events.v1; flag off means no outbox rows
+    # and pos-security-service's ext_tenant replica (plan WS2b) stays empty.
+    environment:
+      POS_TENANT_KAFKA_ENABLED: "true"
+
   pos-documents:
     image: ${ECR_REGISTRY}/durion/pos-documents:${BACKEND_TAG}
     restart: unless-stopped

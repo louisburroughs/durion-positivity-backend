@@ -1146,13 +1146,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 83")
+    @DisplayName("CATALOG_VERSION is 84")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(83);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(84);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 519")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 528")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1438,8 +1438,20 @@ class SecurityGatewayConfigTest {
         // phone, emergency contact — split off people:employee:view, which twelve roles hold and
         // which guards eight unscoped reads over other people (bit 519)
         assertThat(GatewayPermissionCatalog.authorityForBit(519)).isEqualTo("PERM_people:employee_pii:view");
+        // catalog v84 (#1924, ADR-0062 §7): the platform tenant's registry API in pos-tenant. Only the
+        // platform tenant's role template grants these; a tenant administrator never holds them
+        // (bits 520-528)
+        assertThat(GatewayPermissionCatalog.authorityForBit(520)).isEqualTo("PERM_platform:account:create");
+        assertThat(GatewayPermissionCatalog.authorityForBit(521)).isEqualTo("PERM_platform:account:read");
+        assertThat(GatewayPermissionCatalog.authorityForBit(522)).isEqualTo("PERM_platform:account:update");
+        assertThat(GatewayPermissionCatalog.authorityForBit(523)).isEqualTo("PERM_platform:tenant:create");
+        assertThat(GatewayPermissionCatalog.authorityForBit(524)).isEqualTo("PERM_platform:tenant:decommission");
+        assertThat(GatewayPermissionCatalog.authorityForBit(525)).isEqualTo("PERM_platform:tenant:reactivate");
+        assertThat(GatewayPermissionCatalog.authorityForBit(526)).isEqualTo("PERM_platform:tenant:read");
+        assertThat(GatewayPermissionCatalog.authorityForBit(527)).isEqualTo("PERM_platform:tenant:suspend");
+        assertThat(GatewayPermissionCatalog.authorityForBit(528)).isEqualTo("PERM_platform:tenant:update");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(520)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(529)).isNull();
     }
 
     @Test

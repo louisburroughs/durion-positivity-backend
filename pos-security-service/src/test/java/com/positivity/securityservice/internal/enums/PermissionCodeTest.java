@@ -32,13 +32,14 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
-    // 520 / 83: catalog v83 added people:employee_pii:view (#1898) at bit 519, on top of v82's
-    // crm:fact:replay (518), v81's people:self:view (517), v80's catalog:service:ingest (516),
-    // v79's workorder:labor_intelligence:view (515), v78's catalog service packages (513-514) and
-    // v77's pricing labor rates (510-512). Both numbers move together by design: the version bump
-    // is what tells a running gateway its cached catalog is stale.
-    private static final int EXPECTED_PERMISSION_COUNT = 520;
-    private static final int EXPECTED_CATALOG_VERSION = 83;
+    // 529 / 84: catalog v84 added the platform:account:{create,read,update} and
+    // platform:tenant:{create,decommission,reactivate,read,suspend,update} families of the
+    // pos-tenant registry (#1924, ADR-0062 section 7) at bits 520-528, on top of v83's
+    // people:employee_pii:view (519), v82's crm:fact:replay (518), v81's people:self:view (517)
+    // and v80's catalog:service:ingest (516). Both numbers move together by design: the version
+    // bump is what tells a running gateway its cached catalog is stale.
+    private static final int EXPECTED_PERMISSION_COUNT = 529;
+    private static final int EXPECTED_CATALOG_VERSION = 84;
 
     // -------------------------------------------------------------------------
     // AC-1: Catalog size — EXPECTED_PERMISSION_COUNT entries

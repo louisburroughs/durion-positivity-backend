@@ -283,6 +283,17 @@ scrape_configs:
           service: 'pos-tax'
           application: 'pos-tax'
 
+  - job_name: 'pos-tenant'
+    metrics_path: '/actuator/prometheus'
+    basic_auth:
+      username: 'prometheus_scraper'
+      password: 'durion-local-prom-scrape-password'
+    static_configs:
+      - targets: ['pos-tenant:8080']
+        labels:
+          service: 'pos-tenant'
+          application: 'pos-tenant'
+
   - job_name: 'pos-vehicle-inventory'
     metrics_path: '/actuator/prometheus'
     basic_auth:

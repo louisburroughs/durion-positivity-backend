@@ -35,6 +35,11 @@
                 <artifactId>pos-tenancy-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.positivity</groupId>
+                <artifactId>pos-tenant</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
             <!-- Shared Web MVC Concerns (Global Exception Handling) -->
             <dependency>

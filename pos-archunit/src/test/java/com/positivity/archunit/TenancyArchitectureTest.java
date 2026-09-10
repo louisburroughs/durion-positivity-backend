@@ -32,7 +32,7 @@ import org.springframework.data.jpa.repository.Query;
 class TenancyArchitectureTest {
 
     /** Root packages of the modules retrofitted so far (plan WS1 pilot, then WS3 waves). */
-    static final String[] ADOPTED_MODULES = {"com.positivity.location.."};
+    static final String[] ADOPTED_MODULES = {"com.positivity.location..", "com.positivity.tenant.."};
 
     private static final String ENTITY_ANNOTATION = "jakarta.persistence.Entity";
     private static final String SCHEDULED_ANNOTATION = "org.springframework.scheduling.annotation.Scheduled";
