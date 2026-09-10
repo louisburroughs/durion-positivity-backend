@@ -97,20 +97,10 @@ public class OutboxEventWriter {
             @NonNull UUID aggregateId,
             long aggregateVersion,
             @NonNull Object payload) {
-        UUID tenantId = tenantResolver.require();
         DomainEventEnvelope<Object> envelope = DomainEventEnvelope.of(
-                eventType,
-                schemaVersion,
-                aggregateId,
-                aggregateVersion,
-                SOURCE_SERVICE,
-                tenantId,
-                null,
-                null,
-                payload,
-                clock);
+                eventType, schemaVersion, aggregateId, aggregateVersion, SOURCE_SERVICE, null, null, payload, clock);
         OutboxEvent event = OutboxEvent.builder()
-                .tenantId(tenantId)
+                .tenantId(tenantResolver.require())
                 .topic(eventsTopic)
                 .recordKey(envelope.recordKey())
                 .payload(serialize(envelope))

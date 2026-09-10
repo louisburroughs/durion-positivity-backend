@@ -444,8 +444,6 @@ public class TransmissionStateWriter {
                         intent.getEventSequence(),
                         Instant.now(clock),
                         SOURCE,
-                        // tenantId: stamped by the outbox writer from the bound tenant (ADR-0062 §3)
-                        null,
                         intent.getCorrelationId(),
                         intent.getCreatedBy(),
                         payload));

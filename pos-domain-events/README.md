@@ -8,15 +8,6 @@ contract. Payloads are immutable Java records validated in their compact constru
 a schema version must be **additive and nullable** (ADR-0044 §3). A breaking change requires a new
 payload version (`…V2`) and a new topic version (`.v2`), dual-published during migration.
 
-Every envelope carries `tenantId` (ADR-0062 §3), required on the wire. Producers build envelopes with
-`DomainEventEnvelope.of(...)` without a tenant; the module's outbox writer stamps it from the bound
-tenant as it queues the row (`stampedWith`), the same tenant it writes on the outbox row and the
-`tenantId` Kafka header, and refuses an envelope already built for a different tenant. A sender that
-bypasses the outbox (a reconciliation manifest, sent straight to Kafka) passes the tenant explicitly
-through the ten-argument `of(...)`. This library has no dependency on `pos-tenancy-common`, which is
-why the stamp lives in the writer and not in `of(...)`. Consumers tolerate a missing field only on
-messages published before it existed (2026-09-10).
-
 ## Settlement contract (accounting parity, plan `plan-odoo-parity-pos-accounting.md` §7, story F1a)
 
 Normalized, processor-agnostic settlement reconciliation contract. The payment/settlement adapter

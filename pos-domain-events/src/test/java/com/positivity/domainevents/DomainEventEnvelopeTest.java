@@ -2,7 +2,6 @@ package com.positivity.domainevents;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
-import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -78,82 +77,6 @@ class DomainEventEnvelopeTest {
                 .isThrownBy(() -> DomainEventEnvelope.of(
                         "customer.party.updated", 1, id, 0L, "customer", null, null, "p", FIXED_CLOCK))
                 .withMessageContaining("sourceService");
-    }
-
-    @Test
-    void tenantIsStampedByThePublishPathAndSerialized() {
-        UUID tenant = UUID.fromString("01900000-0000-7000-8000-000000000001");
-        DomainEventEnvelope<PartyUpdatedV1> unstamped = envelope();
-        assertThat(unstamped.tenantId())
-                .as("of(...) leaves the tenant to the outbox writer")
-                .isNull();
-
-        DomainEventEnvelope<PartyUpdatedV1> stamped = unstamped.stampedWith(tenant);
-
-        assertThat(stamped.tenantId()).isEqualTo(tenant);
-        assertThat(stamped)
-                .usingRecursiveComparison()
-                .ignoringFields("tenantId")
-                .isEqualTo(unstamped);
-        assertThat(stamped.requireTenantId()).isEqualTo(tenant);
-        assertThat(stamped.stampedWith(tenant))
-                .as("already stamped with the bound tenant: unchanged")
-                .isSameAs(stamped);
-
-        ObjectMapper mapper = JsonMapper.builder().findAndAddModules().build();
-        String json = mapper.writeValueAsString(stamped);
-        assertThat(json).contains("\"tenantId\":\"" + tenant + "\"");
-        DomainEventEnvelope<PartyUpdatedV1> read = mapper.readValue(
-                json, mapper.getTypeFactory().constructParametricType(DomainEventEnvelope.class, PartyUpdatedV1.class));
-        assertThat(read).isEqualTo(stamped);
-    }
-
-    @Test
-    void explicitTenantOverloadAndWithTenantId() {
-        UUID tenant = UUID.fromString("01900000-0000-7000-8000-000000000000");
-        UUID partyId = UUID.randomUUID();
-
-        DomainEventEnvelope<String> explicit = DomainEventEnvelope.of(
-                "tenant.reconciliation.manifest", 1, partyId, 0L, "pos-tenant", tenant, null, null, "p", FIXED_CLOCK);
-        assertThat(explicit.tenantId()).isEqualTo(tenant);
-
-        DomainEventEnvelope<PartyUpdatedV1> rebound =
-                envelope().withTenantId(tenant).withTenantId(tenant);
-        assertThat(rebound.tenantId()).isEqualTo(tenant);
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> envelope().withTenantId(null))
-                .withMessageContaining("tenantId");
-    }
-
-    @Test
-    void publishingUnderAnotherTenantIsRefused() {
-        UUID tenantA = UUID.fromString("01900000-0000-7000-8000-000000000001");
-        UUID tenantB = UUID.fromString("01900000-0000-7000-8000-000000000002");
-        DomainEventEnvelope<PartyUpdatedV1> forA = envelope().withTenantId(tenantA);
-
-        assertThatIllegalStateException()
-                .isThrownBy(() -> forA.stampedWith(tenantB))
-                .withMessageContaining(tenantA.toString())
-                .withMessageContaining(tenantB.toString());
-        assertThatIllegalStateException()
-                .isThrownBy(() -> envelope().requireTenantId())
-                .withMessageContaining("no tenantId");
-    }
-
-    @Test
-    void messagesPublishedBeforeTheFieldExistedStillDeserialize() {
-        ObjectMapper mapper = JsonMapper.builder().findAndAddModules().build();
-        String legacy =
-                "{\"eventId\":\"01980001-0000-7000-8000-000000000001\",\"eventType\":\"customer.party.updated\","
-                        + "\"schemaVersion\":1,\"aggregateId\":\"01980001-0000-7000-8000-000000000002\",\"aggregateVersion\":3,"
-                        + "\"occurredAtUtc\":\"2026-07-08T12:00:00Z\",\"sourceService\":\"pos-customer\","
-                        + "\"correlationId\":null,\"actor\":null,\"payload\":\"p\"}";
-
-        DomainEventEnvelope<String> read = mapper.readValue(
-                legacy, mapper.getTypeFactory().constructParametricType(DomainEventEnvelope.class, String.class));
-
-        assertThat(read.tenantId()).isNull();
-        assertThat(read.eventType()).isEqualTo("customer.party.updated");
     }
 
     @Test

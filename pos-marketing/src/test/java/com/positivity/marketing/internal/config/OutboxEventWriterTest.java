@@ -101,12 +101,6 @@ class OutboxEventWriterTest {
         assertThat(saved.getTopic()).isEqualTo("marketing.events.v1");
         assertThat(saved.getRecordKey()).isEqualTo(AGGREGATE_ID.toString());
         assertThat(saved.getCreatedAt()).isEqualTo(NOW);
-        assertThat(new ObjectMapper()
-                        .readTree(saved.getPayload())
-                        .path("tenantId")
-                        .stringValue())
-                .as("the envelope carries the tenant the row carries (ADR-0062 §3)")
-                .isEqualTo(TENANT_A.toString());
         assertThat(saved.getPayload())
                 .contains(MarketingCampaignScheduledV1.EVENT_TYPE)
                 .contains(AGGREGATE_ID.toString())

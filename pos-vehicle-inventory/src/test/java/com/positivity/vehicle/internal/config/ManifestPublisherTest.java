@@ -4,6 +4,7 @@ import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -11,8 +12,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.ReconciliationManifestV1;
-import com.positivity.tenancy.PlatformTenant;
-import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import com.positivity.vehicle.internal.entity.OutboxEvent;
 import com.positivity.vehicle.internal.repository.OutboxEventRepository;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -24,7 +23,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -99,7 +97,7 @@ class ManifestPublisherTest {
     }
 
     private void brokerAcknowledges() {
-        when(kafkaTemplate.send(any(ProducerRecord.class)))
+        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
                 .thenReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
     }
 
@@ -127,26 +125,9 @@ class ManifestPublisherTest {
     }
 
     private JsonNode capturedManifest() {
-        ProducerRecord<String, String> record = capturedRecords(1).get(0);
-        assertThat(record.topic()).isEqualTo(MANIFEST_TOPIC);
-        return objectMapper.readTree(record.value());
-    }
-
-    /**
-     * The records handed to Kafka, after checking each carries the platform tenant on the header
-     * and in the envelope: a manifest summarises every tenant's rows, so it is a platform-tenant
-     * record until plan WS4-3 makes it per tenant (ADR-0062 §3).
-     */
-    @SuppressWarnings("unchecked")
-    private List<ProducerRecord<String, String>> capturedRecords(int expected) {
-        ArgumentCaptor<ProducerRecord<String, String>> records = ArgumentCaptor.forClass(ProducerRecord.class);
-        verify(kafkaTemplate, times(expected)).send(records.capture());
-        for (ProducerRecord<String, String> record : records.getAllValues()) {
-            assertThat(TenantKafkaHeaders.read(record.headers())).contains(PlatformTenant.ID);
-            assertThat(objectMapper.readTree(record.value()).path("tenantId").stringValue())
-                    .isEqualTo(PlatformTenant.ID.toString());
-        }
-        return records.getAllValues();
+        ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
+        verify(kafkaTemplate).send(eq(MANIFEST_TOPIC), anyString(), json.capture());
+        return objectMapper.readTree(json.getValue());
     }
 
     private double counter(String name) {
@@ -277,7 +258,7 @@ class ManifestPublisherTest {
         publisher.publishDueManifest();
         publisher.publishDueManifest();
 
-        verify(kafkaTemplate, times(1)).send(any(ProducerRecord.class));
+        verify(kafkaTemplate, times(1)).send(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -298,7 +279,7 @@ class ManifestPublisherTest {
     @DisplayName("retries the same window on the next run when the send fails")
     void retriesWindowAfterSendFailure() {
         outboxReturns(List.of());
-        when(kafkaTemplate.send(any(ProducerRecord.class)))
+        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
                 .thenReturn(CompletableFuture.failedFuture(new RuntimeException("broker down")))
                 .thenReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
 
@@ -306,7 +287,7 @@ class ManifestPublisherTest {
         publisher.publishDueManifest();
 
         // The window must not advance past a failure, or its manifest is lost.
-        verify(kafkaTemplate, times(2)).send(any(ProducerRecord.class));
+        verify(kafkaTemplate, times(2)).send(anyString(), anyString(), anyString());
         assertThat(counter("vehicle.manifest.publish.failures")).isEqualTo(1d);
         assertThat(counter("vehicle.manifest.published")).isEqualTo(1d);
     }
@@ -330,7 +311,7 @@ class ManifestPublisherTest {
 
         withoutMetrics.publishDueManifest();
 
-        assertThat(capturedRecords(1).get(0).topic()).isEqualTo(MANIFEST_TOPIC);
+        verify(kafkaTemplate).send(eq(MANIFEST_TOPIC), anyString(), anyString());
     }
 
     @Test
@@ -341,22 +322,23 @@ class ManifestPublisherTest {
 
         early.publishDueManifest();
 
-        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
     }
 
     @Test
     @DisplayName("keys every manifest for a window deterministically, so re-publishes land on one partition")
     void manifestRecordKeyIsStablePerWindow() {
         outboxReturns(List.of());
+        ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
 
         publisher.publishDueManifest();
         // A second publisher instance, same window: the key must match.
         ManifestPublisher other = newPublisher(meterRegistry, TEST_CLOCK);
         other.publishDueManifest();
 
-        List<String> keys = capturedRecords(2).stream().map(ProducerRecord::key).toList();
-        assertThat(keys).hasSize(2);
-        assertThat(keys.get(0)).isEqualTo(keys.get(1));
+        verify(kafkaTemplate, times(2)).send(anyString(), key.capture(), anyString());
+        assertThat(key.getAllValues()).hasSize(2);
+        assertThat(key.getAllValues().get(0)).isEqualTo(key.getAllValues().get(1));
     }
 
     @Test
@@ -374,9 +356,9 @@ class ManifestPublisherTest {
                 later, "clock", Clock.fixed(Instant.parse("2026-07-08T15:10:00Z"), ZoneOffset.UTC));
         later.publishDueManifest();
 
-        List<String> values =
-                capturedRecords(4).stream().map(ProducerRecord::value).toList();
-        assertThat(values)
+        ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
+        verify(kafkaTemplate, times(4)).send(anyString(), anyString(), json.capture());
+        assertThat(json.getAllValues())
                 .map(value -> objectMapper
                         .readTree(value)
                         .path("payload")

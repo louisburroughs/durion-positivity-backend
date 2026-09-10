@@ -39,13 +39,6 @@ import org.jspecify.annotations.Nullable;
  *                         staleness detection
  * @param occurredAtUtc    when the state change was committed by the owner
  * @param sourceService    producing service name, e.g. {@code pos-customer}
- * @param tenantId         tenant the fact belongs to (ADR-0062 §3). Required on
- *                         the wire: every publish path stamps it before the
- *                         envelope is serialized — the module's outbox writer
- *                         from the bound tenant ({@link #stampedWith}), a direct
- *                         sender explicitly. Null only between {@link #of} and
- *                         that stamp, and on messages published before the
- *                         field existed, which consumers must tolerate.
  * @param correlationId    correlation id propagated from the initiating
  *                         request, if available
  * @param actor            initiating user id or service name — audit only,
@@ -61,7 +54,6 @@ public record DomainEventEnvelope<T>(
         long aggregateVersion,
         @NonNull Instant occurredAtUtc,
         @NonNull String sourceService,
-        @Nullable UUID tenantId,
         @Nullable String correlationId,
         @Nullable String actor,
         @NonNull T payload) {
@@ -131,9 +123,10 @@ public record DomainEventEnvelope<T>(
 
     /**
      * Create an envelope with a freshly generated UUIDv7 {@code eventId} and the
-     * current time from the given clock, leaving {@code tenantId} for the outbox
-     * writer to stamp from the bound tenant ({@link #stampedWith}). Producers
-     * should use their injected {@link Clock} so tests stay deterministic.
+     * current time from
+     * the given clock. Producers should use their injected {@link Clock} so tests
+     * stay
+     * deterministic.
      */
     public static <T> @NonNull DomainEventEnvelope<T> of(
             @NonNull String eventType,
@@ -141,36 +134,6 @@ public record DomainEventEnvelope<T>(
             @NonNull UUID aggregateId,
             long aggregateVersion,
             @NonNull String sourceService,
-            @Nullable String correlationId,
-            @Nullable String actor,
-            @NonNull T payload,
-            @NonNull Clock clock) {
-        return of(
-                eventType,
-                schemaVersion,
-                aggregateId,
-                aggregateVersion,
-                sourceService,
-                null,
-                correlationId,
-                actor,
-                payload,
-                clock);
-    }
-
-    /**
-     * Like {@link #of(String, int, UUID, long, String, String, String, Object, Clock)} with the
-     * tenant supplied by the producer: for a sender that does not go through an outbox writer
-     * (a reconciliation manifest sent straight to Kafka) or one that binds the tenant itself
-     * ({@code pos-tenant} publishing under the platform tenant).
-     */
-    public static <T> @NonNull DomainEventEnvelope<T> of(
-            @NonNull String eventType,
-            int schemaVersion,
-            @NonNull UUID aggregateId,
-            long aggregateVersion,
-            @NonNull String sourceService,
-            @Nullable UUID tenantId,
             @Nullable String correlationId,
             @Nullable String actor,
             @NonNull T payload,
@@ -183,64 +146,9 @@ public record DomainEventEnvelope<T>(
                 aggregateVersion,
                 Instant.now(clock),
                 sourceService,
-                tenantId,
                 correlationId,
                 actor,
                 payload);
-    }
-
-    /** A copy of this envelope carrying {@code tenantId}. */
-    public @NonNull DomainEventEnvelope<T> withTenantId(@NonNull UUID tenantId) {
-        requireNonNull(tenantId, "tenantId");
-        return new DomainEventEnvelope<>(
-                eventId,
-                eventType,
-                schemaVersion,
-                aggregateId,
-                aggregateVersion,
-                occurredAtUtc,
-                sourceService,
-                tenantId,
-                correlationId,
-                actor,
-                payload);
-    }
-
-    /**
-     * The envelope as the outbox writer publishes it under {@code boundTenant}, the tenant it
-     * also stamps on the outbox row and the Kafka header: this envelope when it already carries
-     * that tenant, a copy carrying it when it carries none.
-     *
-     * <p>An envelope that names a different tenant is refused rather than overwritten: the
-     * producer built a fact for one tenant inside another tenant's binding, and publishing it
-     * under either would leak across the wall (ADR-0062 §3).
-     *
-     * @throws IllegalStateException when this envelope carries a different tenant
-     */
-    public @NonNull DomainEventEnvelope<T> stampedWith(@NonNull UUID boundTenant) {
-        requireNonNull(boundTenant, "boundTenant");
-        if (tenantId == null) {
-            return withTenantId(boundTenant);
-        }
-        if (!tenantId.equals(boundTenant)) {
-            throw new IllegalStateException("Envelope " + eventId + " (" + eventType + ") carries tenant " + tenantId
-                    + " but is being published under tenant " + boundTenant);
-        }
-        return this;
-    }
-
-    /**
-     * The tenant this envelope carries, for a publish path that must not send an unstamped
-     * envelope.
-     *
-     * @throws IllegalStateException when no tenant has been stamped
-     */
-    public @NonNull UUID requireTenantId() {
-        if (tenantId == null) {
-            throw new IllegalStateException(
-                    "Envelope " + eventId + " (" + eventType + ") carries no tenantId; stamp it before publishing");
-        }
-        return tenantId;
     }
 
     /**

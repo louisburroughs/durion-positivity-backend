@@ -123,8 +123,6 @@ public class PurchaseOrderTransmissionService {
                                 : order.getVersionNumber().longValue(),
                         now,
                         SOURCE,
-                        // tenantId: stamped by the outbox writer from the bound tenant (ADR-0062 §3)
-                        null,
                         null,
                         actorId,
                         new SupplierOrderRequestedV1(
