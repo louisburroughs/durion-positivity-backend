@@ -68,6 +68,10 @@ public class SecurityGatewayConfig {
     private static final String HEADER_X_LOC_OTH_BITS = "X-Loc-Oth-Bits";
     private static final String HEADER_X_LOC_SCOPE = "X-Loc-Scope";
     private static final String HEADER_X_CORRELATION_ID = "X-Correlation-Id";
+    /** ADR-0062: the tenant is derived from the token, never accepted from a client header. */
+    private static final String HEADER_X_TENANT_ID = "X-Tenant-Id";
+
+    private static final String HEADER_X_TENANT_SLUG = "X-Tenant-Slug";
     private static final String JWT_HEADER_ALG = "alg";
     private static final String CLAIM_PERMISSION_VERSION = "perm_ver";
     private static final String CLAIM_ROLES = "roles";
@@ -294,6 +298,8 @@ public class SecurityGatewayConfig {
                         headers.remove(HEADER_X_LOC_FIN_BITS);
                         headers.remove(HEADER_X_LOC_OTH_BITS);
                         headers.remove(HEADER_X_LOC_SCOPE);
+                        headers.remove(HEADER_X_TENANT_ID);
+                        headers.remove(HEADER_X_TENANT_SLUG);
                         incrementCounter(METRIC_AUTH_HEADER_STRIP_COUNT);
                     }
                 })

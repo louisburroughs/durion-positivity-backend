@@ -78,11 +78,14 @@ pos-api-gateway  (JWT validation, path rewrite /{domain}/vN/.., permission bitse
   module's Flyway history is one flattened baseline (`V1__baseline_<module>.sql`, 2026-09-09) that already carries
   the tenancy schema: `tenant_id` on every scoped table under Postgres row-level security, unique constraints and
   foreign keys scoped by tenant, and a per-module `db/tenancy-global-tables.txt` whitelist. Conventions and the
-  add-a-table checklist: `docs/TENANCY_SCHEMA.md`. Not yet present: `pos-tenancy-common` (`TenantScopedEntity`,
-  `@TenantGlobal`, `TenantAwareDataSource`, `TenantIterator`, plan WS1), `pos-tenant` (WS2a), the JWT `tid` claim
-  and `X-Tenant-Id` (WS2b), the `pos_app` runtime role switch. Until WS1 the owner role carries a transitional
-  default tenant (`postgres/init-tenancy.sh`) and the `pg` test profiles bind it per connection. Never add an
-  `organizationId` field (it is a remnant). Plan:
+  add-a-table checklist: `docs/TENANCY_SCHEMA.md`. The runtime is `pos-tenancy-common` (WS1: `TenantContext`,
+  `TenantContextFilter`, `TenantRecordInterceptor`, `TenantAwareDataSource`, `TenantScopedEntity`, `@TenantGlobal`,
+  `@PlatformScoped`, `TenantIterator`), adopted module by module (`pos-location` first) and enforced by
+  `pos-archunit`'s `TenancyArchitectureTest` for the modules in `ADOPTED_MODULES`. Not yet present: `pos-tenant`
+  (WS2a), the JWT `tid` claim and `X-Tenant-Id` injection (WS2b). Until then `pos.tenancy.default-tenant-id`
+  binds the alpha default tenant on every unbound path, and modules not yet adopted connect as the owner role,
+  which carries the same default (`postgres/init-tenancy.sh`). Never add an `organizationId` field (it is a
+  remnant). Plan:
   `../durion/docs/architecture/plans/adr-0023-suppression-postgres-multitenancy-plan.md`.
 
 - **API Gateway is the security boundary.** It validates JWTs and decodes the permission bitset into

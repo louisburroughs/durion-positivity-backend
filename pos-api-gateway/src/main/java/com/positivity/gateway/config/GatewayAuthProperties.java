@@ -20,8 +20,9 @@ public class GatewayAuthProperties {
 
     /**
      * When true, inbound {@code X-User}, {@code X-User-Id}, {@code X-Authorities},
-     * {@code X-Perm-Bits}, {@code X-Perm-Ver}, and {@code X-Roles}
-     * headers are stripped before forwarding to downstream services.
+     * {@code X-Perm-Bits}, {@code X-Perm-Ver}, {@code X-Roles}, the location-scope headers and
+     * the {@code X-Tenant-Id} / {@code X-Tenant-Slug} tenant headers (ADR-0062) are stripped
+     * before forwarding to downstream services.
      */
     private boolean stripInboundIdentityHeaders = true;
 

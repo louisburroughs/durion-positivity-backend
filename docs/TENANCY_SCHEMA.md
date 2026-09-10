@@ -53,17 +53,39 @@ outboxes and processed-event ledgers (they carry `tenant_id` as plain data), Spr
 the event-type registry, the permission catalog, the MCP tool/screen/prompt catalogs and RAG
 corpus, and the vehicle reference and fitment modules in full.
 
-## Binding the tenant (transitional until plan WS1)
+## Binding the tenant (`pos-tenancy-common`, plan WS1)
 
-Nothing in the application binds `app.current_tenant` yet; `pos-tenancy-common` (WS1) adds the
-`TenantAwareDataSource` that sets it per checkout from the request's `X-Tenant-Id`. Until then:
+A module that depends on `pos-tenancy-common` gets the ADR-0062 runtime by auto-configuration:
+
+| Edge | Component | What it does |
+| --- | --- | --- |
+| HTTP request | `TenantContextFilter` (order -110, ahead of Spring Security) | Binds `TenantContext` from `X-Tenant-Id`, which the gateway strips from inbound traffic and (WS2b) injects from the JWT `tid` claim. A malformed header, or no tenant at all in strict mode, is a 401 `ApiError` with code `TENANT_REQUIRED`. |
+| Kafka record | `TenantRecordInterceptor` | Binds from the `tenantId` record header before the `@KafkaListener` runs and clears after. Producers stamp the header with `TenantKafkaHeaders.record(...)`; the outbox row carries `tenant_id` as data for the unbound poller. |
+| Scheduled job | `TenantIterator.forEachActiveTenant(...)` or `@PlatformScoped` | Per-tenant jobs bind each active tenant in turn (from `TenantRegistry`, `pos.tenancy.tenants` until the `ext_tenant` replica exists); platform jobs run unbound and touch only global tables. |
+| Connection | `TenantAwareDataSource` | Every checkout runs `set_config('app.current_tenant', ?, false)` with the resolved tenant, or `RESET` when none; `close()` resets again. PostgreSQL only (pass-through on H2). |
+| Hibernate | `TenantContextIdentifierResolver` | `@TenantId` on `TenantScopedEntity` gets the same tenant: stamped on persist, appended to every query, mismatches rejected. `isRoot` is never true. |
+| Executors | `TenantContextTaskDecorator` | `@Async` and `TaskExecutor` work inherits the submitter's tenant. |
+| Cache | `TenantKeyGenerator` | The default `keyGenerator`: every cache key is prefixed with the tenant. |
+
+Application code reads `TenantContext.current()` / `require()` and never binds a tenant from request
+data. Entities extend `TenantScopedEntity` (no setter for `tenant_id`) or carry `@TenantGlobal`; the
+ArchUnit rules in `pos-archunit` (`TenancyArchitectureTest`) enforce that, the scheduler
+classification, and `@TenantAudited` on native queries, for every module listed in
+`ADOPTED_MODULES`.
+
+**Transitional default (ADR-0062 §9).** `pos.tenancy.default-tenant-id` binds the alpha default
+tenant on every unbound path while the gateway does not yet send `X-Tenant-Id` and producers do
+not yet stamp the header. Unset it and the module is strict. Modules that have not adopted the
+library still connect as the owner role, which `postgres/init-tenancy.sh` gives the same default
+through `ALTER ROLE ... SET app.current_tenant`; adopted modules connect as `pos_app`
+(`SPRING_DATASOURCE_USERNAME=pos_app`, `POS_APP_PASSWORD`) with Flyway on the owner credential
+(`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`). Adopted so far: `pos-location`.
 
 | Where | Binding |
 | --- | --- |
-| Compose and alpha | `postgres/init-tenancy.sh` sets `ALTER ROLE "$POSTGRES_USER" SET app.current_tenant = '<alpha default tenant>'`; every service still connects as that role, so every connection is bound. WS1 removes that line and switches services to `pos_app`. |
 | Flyway seeds | Each seed file opens with `SELECT set_config('app.current_tenant', '<alpha default tenant>', true)`, transaction-local to the migration. |
-| Testcontainers tests (`pg` profiles) | `spring.datasource.hikari.connection-init-sql` sets the same value per connection. Tests that open raw JDBC connections set it themselves. |
-| H2 `dev`/`test` profiles and `@DataJpaTest` slices | Hibernate `create-drop` from the entities; no tenancy columns, no Flyway (`spring.flyway.enabled: false` in every `application-dev.yml`, and inline in the slices that used to validate against the old H2-compatible baselines). The baseline is Postgres-only. |
+| Testcontainers tests (`pg` profiles) | Adopted modules run strict (`pos.tenancy.default-tenant-id:` empty) and bind per test with `TenantTestSupport.asTenant(...)`; the pool connects as `pos_app` (`PostgresTenancyTestBase`). Modules not yet adopted keep `spring.datasource.hikari.connection-init-sql`. |
+| H2 `dev`/`test` profiles and `@DataJpaTest` slices | Hibernate `create-drop` from the entities; no Flyway (`spring.flyway.enabled: false` in every `application-dev.yml`, and inline in the slices that used to validate against the old H2-compatible baselines). The baseline is Postgres-only. In adopted modules the entities carry `tenant_id` and Hibernate stamps the transitional default. |
 
 Constants:
 
@@ -74,7 +96,7 @@ Constants:
 
 `postgres/init-tenancy.sh` also creates the shared `pos_app` role (LOGIN, `NOSUPERUSER`,
 `NOBYPASSRLS`, DML and sequence usage on every `pos_*` database, default privileges for tables
-created later). Services do not use it until WS1.
+created later). Adopted modules connect as it; the rest switch in their WS3 wave.
 
 ## Adding a table
 
@@ -83,8 +105,9 @@ created later). Services do not use it until WS1.
 2. Lead every unique constraint and unique index with `tenant_id`; make foreign keys to scoped
    tables composite.
 3. If the table is global, list it in `tenancy-global-tables.txt` with a reason and skip the above.
-4. The entity needs no `tenant_id` mapping until `TenantScopedEntity` exists (WS1); Hibernate's
-   `validate` ignores unmapped columns and the column default fills the value.
+4. In an adopted module the entity extends `TenantScopedEntity` (or carries `@TenantGlobal` for a
+   global table); elsewhere the column stays unmapped, Hibernate's `validate` ignores it and the
+   column default fills the value.
 
 ## What the retrofit changed for application code
 

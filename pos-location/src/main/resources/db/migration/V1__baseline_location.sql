@@ -33,6 +33,9 @@ CREATE TABLE public.bays (
 
 CREATE TABLE public.event_outbox (
     id uuid NOT NULL,
+    -- global table: tenant_id is data, not a discriminator (no policy); the outbox poller runs
+    -- unbound and stamps it on the Kafka record header (ADR-0062 section 3)
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
     topic character varying(255) NOT NULL,
     record_key character varying(255) NOT NULL,
     payload text NOT NULL,

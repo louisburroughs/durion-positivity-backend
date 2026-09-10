@@ -78,6 +78,12 @@ springdoc:
   default-produces-media-type: application/json
 
 pos:
+  # ADR-0062 section 9, transitional: every unbound path (a request the gateway has not yet stamped with
+  # X-Tenant-Id, a record without the tenant header, a scheduler) runs as the alpha default tenant.
+  # Unset it (POS_TENANCY_DEFAULT_TENANT_ID=) once plan WS2b delivers the tid claim: the runtime is then
+  # strict and an unbound request is a 401.
+  tenancy:
+    default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000001}
   people:
     service-id: ${POS_PEOPLE_SERVICE_ID:people}
   inventory:

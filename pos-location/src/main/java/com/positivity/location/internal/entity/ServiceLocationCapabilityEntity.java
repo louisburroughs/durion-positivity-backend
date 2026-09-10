@@ -1,6 +1,7 @@
 package com.positivity.location.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -27,7 +28,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @AllArgsConstructor
 @Builder
 @EntityListeners(AuditingEntityListener.class)
-public class ServiceLocationCapabilityEntity {
+public class ServiceLocationCapabilityEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue
