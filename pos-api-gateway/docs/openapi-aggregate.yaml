@@ -1299,6 +1299,8 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1self-registration~1review-cases~1{caseId}
   /v1/self-registration/review-cases/{caseId}/resolve:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1self-registration~1review-cases~1{caseId}~1resolve
+  /v1/tenants/me:
+    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1tenants~1me
   /v1/users:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1users
   /v1/users/authorization/person-decision:
@@ -1441,6 +1443,26 @@ paths:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1transactions~1{referenceId}~1commit
   /v1/tax/transactions/{referenceId}/void:
     $ref: ../../pos-tax/openapi.yaml#/paths/~1v1~1tax~1transactions~1{referenceId}~1void
+  /v1/platform/accounts:
+    $ref: ../../pos-tenant/openapi.yaml#/paths/~1v1~1platform~1accounts
+  /v1/platform/accounts/{id}:
+    $ref: ../../pos-tenant/openapi.yaml#/paths/~1v1~1platform~1accounts~1{id}
+  /v1/platform/accounts/{id}/billing-profile:
+    $ref: ../../pos-tenant/openapi.yaml#/paths/~1v1~1platform~1accounts~1{id}~1billing-profile
+  /v1/platform/accounts/{id}/contacts:
+    $ref: ../../pos-tenant/openapi.yaml#/paths/~1v1~1platform~1accounts~1{id}~1contacts
+  /v1/platform/accounts/{id}/contacts/{contactId}:
+    $ref: ../../pos-tenant/openapi.yaml#/paths/~1v1~1platform~1accounts~1{id}~1contacts~1{contactId}
+  /v1/platform/tenants:
+    $ref: ../../pos-tenant/openapi.yaml#/paths/~1v1~1platform~1tenants
+  /v1/platform/tenants/{id}:
+    $ref: ../../pos-tenant/openapi.yaml#/paths/~1v1~1platform~1tenants~1{id}
+  /v1/platform/tenants/{id}/decommission:
+    $ref: ../../pos-tenant/openapi.yaml#/paths/~1v1~1platform~1tenants~1{id}~1decommission
+  /v1/platform/tenants/{id}/reactivate:
+    $ref: ../../pos-tenant/openapi.yaml#/paths/~1v1~1platform~1tenants~1{id}~1reactivate
+  /v1/platform/tenants/{id}/suspend:
+    $ref: ../../pos-tenant/openapi.yaml#/paths/~1v1~1platform~1tenants~1{id}~1suspend
   /v1/fitments/bulk-ingest:
     $ref: ../../pos-vehicle-fitment/openapi.yaml#/paths/~1v1~1fitments~1bulk-ingest
   /v1/vehicle-fitment/hints:
@@ -1766,6 +1788,8 @@ tags:
   description: Operations served by pos-supplier
 - name: pos-tax
   description: Operations served by pos-tax
+- name: pos-tenant
+  description: Operations served by pos-tenant
 - name: pos-vehicle-fitment
   description: Operations served by pos-vehicle-fitment
 - name: pos-vehicle-inventory
@@ -1797,6 +1821,7 @@ x-aggregated-modules:
 - pos-shop-manager
 - pos-supplier
 - pos-tax
+- pos-tenant
 - pos-vehicle-fitment
 - pos-vehicle-inventory
 - pos-warranty
