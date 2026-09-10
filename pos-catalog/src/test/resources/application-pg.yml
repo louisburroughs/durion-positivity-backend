@@ -1,0 +1,41 @@
+# Testcontainers Postgres profile (ADR-0062, plan R-B7): the real Flyway chain, Hibernate validate,
+# the pool as pos_app (PostgresTenancyTestBase), strict tenancy. The datasource is supplied at
+# runtime by @DynamicPropertySource.
+spring:
+  application:
+    name: pos-catalog-pg-test
+  autoconfigure:
+    exclude: org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  cloud:
+    discovery:
+      enabled: false
+
+pos:
+  tenancy:
+    # strict: nothing binds a tenant unless the test does
+    default-tenant-id:
+  catalog:
+    kafka:
+      enabled: false
+
+eureka:
+  client:
+    enabled: false
+
+logging:
+  level:
+    org.hibernate.SQL: warn
+
+# Downstream base URLs the module's clients need at startup; nothing here calls them.
+pos.price:
+  base-url: http://localhost:9999/mock-price
+  default-customer-tier-id: 00000000-0000-0000-0000-000000000099
+pos.inventory:
+  base-url: http://localhost:9999/mock-inventory

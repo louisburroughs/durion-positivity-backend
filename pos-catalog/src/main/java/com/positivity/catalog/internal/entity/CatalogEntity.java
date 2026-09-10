@@ -1,6 +1,7 @@
 package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.*;
 import java.util.List;
 import java.util.UUID;
@@ -16,7 +17,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @NoArgsConstructor
 @Entity
 @EntityListeners(AuditingEntityListener.class)
-public class CatalogEntity {
+public class CatalogEntity extends TenantScopedEntity {
     @Id
     @GeneratedValue
     @UUIDv7Id

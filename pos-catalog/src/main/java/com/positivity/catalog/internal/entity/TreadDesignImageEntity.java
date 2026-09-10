@@ -1,6 +1,7 @@
 package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -27,7 +28,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Entity
 @Table(name = "tread_design_image")
-public class TreadDesignImageEntity {
+public class TreadDesignImageEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

@@ -3,6 +3,7 @@ package com.positivity.catalog.internal.entity;
 import com.positivity.catalog.internal.enums.LaborTimeType;
 import com.positivity.catalog.internal.enums.OperationCategory;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -27,7 +28,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "labor_time_source_policy")
-public class LaborTimeSourcePolicyEntity {
+public class LaborTimeSourcePolicyEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

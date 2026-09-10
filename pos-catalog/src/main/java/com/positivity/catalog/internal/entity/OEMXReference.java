@@ -1,6 +1,7 @@
 package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.*;
 import java.util.UUID;
 import lombok.Data;
@@ -14,7 +15,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Getter
 @Setter
 @Data
-public class OEMXReference {
+public class OEMXReference extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

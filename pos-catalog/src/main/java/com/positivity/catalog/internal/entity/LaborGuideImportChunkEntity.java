@@ -1,6 +1,7 @@
 package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -18,7 +19,7 @@ import lombok.Data;
 @Data
 @Entity
 @Table(name = "labor_guide_import_chunk")
-public class LaborGuideImportChunkEntity {
+public class LaborGuideImportChunkEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

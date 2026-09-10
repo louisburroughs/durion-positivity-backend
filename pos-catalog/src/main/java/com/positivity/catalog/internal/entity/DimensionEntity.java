@@ -1,6 +1,7 @@
 package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.*;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -16,7 +17,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(name = "dimensions")
 @AllArgsConstructor
 @NoArgsConstructor
-public class DimensionEntity {
+public class DimensionEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

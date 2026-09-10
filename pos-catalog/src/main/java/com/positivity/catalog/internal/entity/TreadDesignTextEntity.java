@@ -1,6 +1,7 @@
 package com.positivity.catalog.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -33,7 +34,7 @@ import lombok.NoArgsConstructor;
                 @UniqueConstraint(
                         name = "uk_tread_design_text_design_language",
                         columnNames = {"tread_design_id", "language_code"}))
-public class TreadDesignTextEntity {
+public class TreadDesignTextEntity extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

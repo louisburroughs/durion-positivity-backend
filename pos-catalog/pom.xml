@@ -94,6 +94,28 @@
             <groupId>com.positivity</groupId>
             <artifactId>pos-events</artifactId>
         </dependency>
+        <!-- ADR-0062 (plan WS3): tenant context, connection binding, Hibernate resolver, Kafka propagation -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-tenancy-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Testcontainers Postgres for the tenancy isolation and schema-conformance ITs (plan R-B7) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- ADR-0044 §6 (#899): inventory availability/lead-time replica feed -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
