@@ -1,6 +1,7 @@
 package com.positivity.order.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -26,7 +27,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ExtWorkorderLine {
+public class ExtWorkorderLine extends TenantScopedEntity {
 
     public enum LineKind {
         PART,

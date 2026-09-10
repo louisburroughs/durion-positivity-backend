@@ -7,6 +7,7 @@ import com.positivity.customer.internal.enums.FollowUpType;
 import com.positivity.customer.internal.repository.ExtVehicleCarePreferenceRepository;
 import com.positivity.customer.internal.repository.FollowUpTaskRepository;
 import com.positivity.customer.internal.repository.ServiceHistoryRepository;
+import com.positivity.tenancy.TenantIterator;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -65,6 +66,7 @@ public class ServiceDueReminderJob {
     private final ServiceHistoryRepository serviceHistoryRepository;
     private final FollowUpTaskRepository followUpTaskRepository;
     private final ExtVehicleCarePreferenceRepository extVehicleCarePreferenceRepository;
+    private final TenantIterator tenantIterator;
 
     @Value("${pos.customer.crm.service-due-months:6}")
     private int serviceDueMonths = 6;
@@ -87,6 +89,11 @@ public class ServiceDueReminderJob {
             fixedDelayString = "${pos.customer.crm.service-due-reminder-interval-ms:86400000}",
             initialDelayString = "${pos.customer.crm.service-due-reminder-initial-delay-ms:60000}")
     public void generateReminders() {
+        tenantIterator.forEachActiveTenant(tenantId -> generateRemindersForTenant());
+    }
+
+    /** One tenant's run; service history and follow-up tasks are scoped tables (ADR-0062). */
+    void generateRemindersForTenant() {
         // The SQL cutoff must be loose enough for the tightest interval in effect anywhere, so
         // a vehicle with a shorter care-preference override still surfaces as a candidate; each
         // candidate is then judged against its own effective interval below (#1175).

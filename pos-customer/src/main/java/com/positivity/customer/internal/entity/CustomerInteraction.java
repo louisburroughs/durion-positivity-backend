@@ -4,6 +4,7 @@ import com.positivity.customer.internal.enums.InteractionDirection;
 import com.positivity.customer.internal.enums.InteractionType;
 import com.positivity.customer.internal.enums.MarketingChannel;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -46,7 +47,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_customer_interaction_source_event", columnList = "source_event_id"),
             @Index(name = "idx_customer_interaction_campaign", columnList = "campaign_id")
         })
-public class CustomerInteraction {
+public class CustomerInteraction extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

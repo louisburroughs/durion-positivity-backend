@@ -1,6 +1,7 @@
 package com.positivity.order.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -39,7 +40,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Builder
 @ToString(exclude = "order")
 @EqualsAndHashCode(exclude = "order")
-public class SalesOrderLine {
+public class SalesOrderLine extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

@@ -3,6 +3,7 @@ package com.positivity.customer.internal.entity;
 import com.positivity.customer.internal.enums.FollowUpStatus;
 import com.positivity.customer.internal.enums.FollowUpType;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -49,7 +50,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_follow_up_task_queue", columnList = "status, due_date"),
             @Index(name = "idx_follow_up_task_assignee", columnList = "assigned_to, status")
         })
-public class FollowUpTask {
+public class FollowUpTask extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

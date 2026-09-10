@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -41,7 +42,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         })
 @EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Audit record for party merge operations")
-public class MergeAudit {
+public class MergeAudit extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

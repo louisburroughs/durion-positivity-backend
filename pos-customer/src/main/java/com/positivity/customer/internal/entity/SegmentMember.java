@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -28,7 +29,7 @@ import lombok.NoArgsConstructor;
                         name = "uq_segment_member",
                         columnNames = {"segment_id", "party_id"}),
         indexes = {@Index(name = "idx_segment_member_segment", columnList = "segment_id")})
-public class SegmentMember {
+public class SegmentMember extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

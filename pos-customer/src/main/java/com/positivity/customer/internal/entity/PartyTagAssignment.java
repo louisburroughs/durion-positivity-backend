@@ -2,6 +2,7 @@ package com.positivity.customer.internal.entity;
 
 import com.positivity.customer.internal.enums.TagAssignmentSource;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -43,7 +44,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_party_tag_assignment_party", columnList = "party_id"),
             @Index(name = "idx_party_tag_assignment_tag", columnList = "tag_id")
         })
-public class PartyTagAssignment {
+public class PartyTagAssignment extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

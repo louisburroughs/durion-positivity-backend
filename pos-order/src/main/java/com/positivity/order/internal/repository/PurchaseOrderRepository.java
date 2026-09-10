@@ -2,6 +2,7 @@ package com.positivity.order.internal.repository;
 
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderStatusRollup;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
+import com.positivity.tenancy.TenantAudited;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,6 +28,10 @@ public interface PurchaseOrderRepository
      *
      * @return next sequence value for purchase order number generation
      */
+    @TenantAudited(
+            reason =
+                    "reads a sequence, not a table: purchase-order numbers are unique platform-wide and carry no tenant"
+                            + " data")
     @Query(value = "SELECT nextval('purchase_order_number_seq')", nativeQuery = true)
     long getNextPurchaseOrderSequence();
 

@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
@@ -33,7 +34,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(name = "party_alias")
 @EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Alias mapping for merged party IDs to ensure ID resolvability")
-public class PartyAlias {
+public class PartyAlias extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

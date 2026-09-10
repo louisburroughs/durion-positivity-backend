@@ -3,6 +3,7 @@ package com.positivity.customer.internal.entity;
 import com.positivity.customer.internal.enums.MarketingConsent;
 import com.positivity.customer.internal.enums.OptOutReason;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -65,7 +66,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         indexes = {@Index(name = "idx_comm_pref_party", columnList = "party_id")})
 @EntityListeners(AuditingEntityListener.class)
 @Schema(description = "Communication preferences and consent flags for a party")
-public class CommunicationPreference {
+public class CommunicationPreference extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

@@ -4,6 +4,7 @@ import com.positivity.customer.internal.enums.AudienceType;
 import com.positivity.customer.internal.enums.InquiryChannel;
 import com.positivity.customer.internal.enums.InquiryStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -47,7 +48,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_inquiry_party", columnList = "party_id"),
             @Index(name = "idx_inquiry_campaign", columnList = "campaign_code")
         })
-public class Inquiry {
+public class Inquiry extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

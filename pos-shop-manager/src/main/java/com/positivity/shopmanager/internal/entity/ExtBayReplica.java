@@ -1,6 +1,7 @@
 package com.positivity.shopmanager.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -33,7 +34,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Entity
 @Table(name = "ext_bay")
-public class ExtBayReplica {
+public class ExtBayReplica extends TenantScopedEntity {
 
     @Id
     @Column(name = "bay_id", nullable = false)

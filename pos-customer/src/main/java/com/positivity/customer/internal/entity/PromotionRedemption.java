@@ -2,6 +2,7 @@ package com.positivity.customer.internal.entity;
 
 import com.positivity.customer.internal.enums.RedemptionStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -32,7 +33,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Getter
 @Setter
 @NoArgsConstructor
-public class PromotionRedemption {
+public class PromotionRedemption extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

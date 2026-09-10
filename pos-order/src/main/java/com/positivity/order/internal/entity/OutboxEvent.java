@@ -1,6 +1,7 @@
 package com.positivity.order.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -22,6 +23,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * the pos-invoice outbox shape.
  */
 @Entity
+@TenantGlobal(
+        reason =
+                "transactional outbox drained by the unbound OutboxPublisher for every tenant; tenant_id carried as data")
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @NoArgsConstructor
@@ -34,6 +38,10 @@ public class OutboxEvent {
     @UUIDv7Id
     @Column(columnDefinition = "UUID")
     private UUID id;
+
+    /** The producing tenant, carried as data (the table is global) and stamped on the Kafka record header. */
+    @Column(name = "tenant_id", nullable = false, updatable = false)
+    private UUID tenantId;
 
     @Column(nullable = false)
     private String topic;

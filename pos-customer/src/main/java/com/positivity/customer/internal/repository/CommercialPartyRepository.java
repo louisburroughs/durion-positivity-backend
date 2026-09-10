@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.repository;
 
 import com.positivity.customer.internal.entity.CommercialParty;
+import com.positivity.tenancy.TenantAudited;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -36,6 +37,9 @@ public interface CommercialPartyRepository extends JpaRepository<CommercialParty
      *
      * @return next sequence value for commercial customer number generation
      */
+    @TenantAudited(
+            reason =
+                    "reads a sequence, not a table: customer numbers are unique platform-wide and carry no tenant data")
     @Query(value = "SELECT nextval('commercial_party_customer_number_seq')", nativeQuery = true)
     long getNextCustomerNumberSequence();
 

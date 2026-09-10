@@ -4,6 +4,7 @@ import com.positivity.customer.internal.enums.ConsentChangeSource;
 import com.positivity.customer.internal.enums.MarketingChannel;
 import com.positivity.customer.internal.enums.SuppressionReason;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -44,7 +45,7 @@ import lombok.NoArgsConstructor;
             @Index(name = "idx_suppression_party", columnList = "party_id"),
             @Index(name = "idx_suppression_lookup", columnList = "channel, address_hash")
         })
-public class SuppressionEntry {
+public class SuppressionEntry extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

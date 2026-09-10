@@ -1,6 +1,7 @@
 package com.positivity.customer.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -31,7 +32,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Entity
 @Table(name = "ext_organization_postal_address")
-public class ExtOrganizationPostalAddress {
+public class ExtOrganizationPostalAddress extends TenantScopedEntity {
 
     @Id
     @Column(name = "organization_id", nullable = false)

@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.config;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -11,6 +12,8 @@ import com.positivity.customer.internal.entity.OutboxEvent;
 import com.positivity.customer.internal.repository.OutboxEventRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.customer.CustomerPartyUpdatedV1;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantResolver;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -57,9 +60,15 @@ class OutboxEventWriterTest {
 
     private OutboxEventWriter writer;
 
+    private static TenantResolver tenantResolver() {
+        TenancyProperties tenancy = new TenancyProperties();
+        tenancy.setDefaultTenantId(TENANT_A);
+        return new TenantResolver(tenancy);
+    }
+
     @BeforeEach
     void setUp() {
-        writer = new OutboxEventWriter(clock, new ObjectMapper(), outboxEventRepository);
+        writer = new OutboxEventWriter(clock, new ObjectMapper(), outboxEventRepository, tenantResolver());
     }
 
     private static DomainEventEnvelope<Object> envelope() {
@@ -124,7 +133,8 @@ class OutboxEventWriterTest {
     void serializationFailureIsFatal() {
         ObjectMapper failing = org.mockito.Mockito.mock(ObjectMapper.class);
         when(failing.writeValueAsString(any())).thenThrow(new IllegalStateException("boom"));
-        OutboxEventWriter failingWriter = new OutboxEventWriter(clock, failing, outboxEventRepository);
+        OutboxEventWriter failingWriter =
+                new OutboxEventWriter(clock, failing, outboxEventRepository, tenantResolver());
 
         assertThatThrownBy(() -> failingWriter.publish("customer.events.v1", envelope()))
                 .isInstanceOf(IllegalStateException.class)

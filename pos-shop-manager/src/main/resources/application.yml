@@ -71,6 +71,12 @@ springdoc:
 
   default-produces-media-type: application/json
 pos:
+  # ADR-0062 section 9 (plan WS3): the transitional default tenant. Every unbound path (a request
+  # without X-Tenant-Id, a record without the tenant header, a scheduler with no registry entry)
+  # runs as the alpha default tenant. Unset it (POS_TENANCY_DEFAULT_TENANT_ID=) once every client
+  # sends a tenant: the runtime is then strict and an unbound request is a 401.
+  tenancy:
+    default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000001}
   crm:
     connect-timeout-ms: ${POS_CRM_CONNECT_TIMEOUT_MS:200}
     read-timeout-ms: ${POS_CRM_READ_TIMEOUT_MS:2000}

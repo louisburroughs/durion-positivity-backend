@@ -125,7 +125,7 @@ class MechanicRosterRepositoryTest {
 
     private void insertShop(UUID id, String name) {
         jdbcTemplate.update(
-                "INSERT INTO shop (id, name, created_at, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                "INSERT INTO shop (tenant_id, id, name, created_at, updated_at) VALUES ('01900000-0000-7000-8000-000000000001', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 id,
                 name);
     }
@@ -134,21 +134,21 @@ class MechanicRosterRepositoryTest {
         UUID mechanicId = mechanicId(personId);
         jdbcTemplate.update("""
         INSERT INTO mechanic
-            (mechanic_id, person_id, first_name, last_name, status, version,
+            (tenant_id, mechanic_id, person_id, first_name, last_name, status, version,
              created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        VALUES ('01900000-0000-7000-8000-000000000001', ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         """, mechanicId, personId.toString(), firstName, lastName, status);
         jdbcTemplate.update("""
         INSERT INTO mechanic_skill
-            (id, mechanic_id, skill_code, proficiency_level, created_at, updated_at)
-        VALUES (?, ?, ?, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            (tenant_id, id, mechanic_id, skill_code, proficiency_level, created_at, updated_at)
+        VALUES ('01900000-0000-7000-8000-000000000001', ?, ?, ?, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         """, UUID.randomUUID(), mechanicId, skillCode);
     }
 
     private void insertTechnician(UUID id, UUID personId, UUID locationId) {
         jdbcTemplate.update("""
-        INSERT INTO technician (id, person_id, shop_id, created_at, updated_at)
-        VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        INSERT INTO technician (tenant_id, id, person_id, shop_id, created_at, updated_at)
+        VALUES ('01900000-0000-7000-8000-000000000001', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         """, id, personId, locationId);
     }
 }
