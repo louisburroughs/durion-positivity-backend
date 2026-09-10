@@ -508,6 +508,7 @@ DOMAIN_SERVICES=(
   pos-shop-manager
   pos-supplier
   pos-tax
+  pos-tenant
   pos-warranty
   pos-workorder
 )

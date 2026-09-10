@@ -44,7 +44,7 @@ The backend implements a **dynamic port strategy** for development flexibility a
 All downstream services use `server.port: 0`:
 
 - pos-catalog, pos-customer, pos-inventory, pos-order, pos-accounting
-- pos-workorder, pos-shop-manager, pos-location, pos-people
+- pos-workorder, pos-shop-manager, pos-location, pos-people, pos-tenant
 - pos-vehicle-*, pos-price, pos-invoice, pos-inquiry, pos-event-receiver
 
 **How it works:**

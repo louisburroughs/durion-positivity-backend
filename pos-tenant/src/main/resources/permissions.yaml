@@ -1,0 +1,22 @@
+domain: platform
+serviceName: pos-tenant
+version: "1.0"
+permissions:
+  - name: "platform:tenant:create"
+    description: "Register a tenant under an account"
+  - name: "platform:tenant:read"
+    description: "Read tenants"
+  - name: "platform:tenant:update"
+    description: "Change a tenant's display name or cell"
+  - name: "platform:tenant:suspend"
+    description: "Suspend an active tenant"
+  - name: "platform:tenant:reactivate"
+    description: "Reactivate a suspended tenant"
+  - name: "platform:tenant:decommission"
+    description: "Decommission a tenant (terminal)"
+  - name: "platform:account:create"
+    description: "Create an account"
+  - name: "platform:account:read"
+    description: "Read accounts, their contacts and billing profile"
+  - name: "platform:account:update"
+    description: "Update an account, its contacts and billing profile"

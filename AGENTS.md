@@ -35,11 +35,12 @@
   scoped-to-scoped foreign keys leading with `tenant_id`, unless it is listed in `db/tenancy-global-tables.txt` with
   a reason (`docs/TENANCY_SCHEMA.md`); `INSERT ... ON CONFLICT (cols)` on a scoped table names `(tenant_id, cols)`;
   nothing reads a tenant from a request body, query parameter, or client header; no new `organizationId` fields.
-  **In a module that depends on `pos-tenancy-common`** (`pos-location` so far; each WS3 wave adds its module to
-  `TenancyArchitectureTest.ADOPTED_MODULES`): a new entity extends `TenantScopedEntity` or carries `@TenantGlobal`;
+  **In a module that depends on `pos-tenancy-common`** (`pos-location` and `pos-tenant` so far; each WS3 wave adds
+  its module to `TenancyArchitectureTest.ADOPTED_MODULES`): a new entity extends `TenantScopedEntity` or carries `@TenantGlobal`;
   a new `@Scheduled` job is wrapped in `TenantIterator.forEachActiveTenant` or annotated `@PlatformScoped`; native
   SQL and `JdbcTemplate` on scoped data carry `@TenantAudited`; a Kafka producer stamps the record with
-  `TenantKafkaHeaders.record(...)`; application code reads `TenantContext` and never binds it.
+  `TenantKafkaHeaders.record(...)`; application code reads `TenantContext` and never binds it (the one exception is
+  `pos-tenant`, whose rows are platform data and whose `tenant.provisioned` handler re-binds to `PlatformTenant.ID`).
 - Keep ArchUnit rules green.
 
 ## Where to Look

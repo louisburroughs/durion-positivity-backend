@@ -283,6 +283,7 @@
 		<module>pos-location</module>
 		<module>pos-supplier</module>
 		<module>pos-tax</module>
+		<module>pos-tenant</module>
 		<module>pos-documents</module>
 		<module>pos-warranty</module>
 		<module>pos-marketing</module>

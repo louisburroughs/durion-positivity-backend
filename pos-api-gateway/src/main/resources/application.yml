@@ -87,6 +87,14 @@ spring:
                 - Path=/location/**
               filters:
                 - StripPrefix=1
+            # ADR-0062 section 7: tenant registry, platform-tenant callers only (pos-tenant refuses
+            # any other bound tenant with 403 PLATFORM_TENANT_REQUIRED).
+            - id: tenant
+              uri: lb://TENANT
+              predicates:
+                - Path=/tenant/**
+              filters:
+                - StripPrefix=1
             - id: order
               uri: lb://ORDER
               predicates:
@@ -277,6 +285,8 @@ springdoc:
         url: /shop-manager/v3/api-docs
       - name: Supplier
         url: /supplier/v3/api-docs
+      - name: Tenant
+        url: /tenant/v3/api-docs
       - name: Vehicle Fitment
         url: /vehicle-fitment/v3/api-docs
       - name: Vehicle Inventory

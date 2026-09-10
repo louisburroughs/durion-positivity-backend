@@ -979,13 +979,23 @@ public enum PermissionCode {
     // search and then pull each one's home address. Seeded to ADMIN,
     // GENERAL_MANAGER, MANAGER and SHOP_MANAGER: a strict subset of the
     // people:employee:view holders, so the split removes reach and adds none.
-    PEOPLE__EMPLOYEE_PII__VIEW(519, "people:employee_pii:view");
+    PEOPLE__EMPLOYEE_PII__VIEW(519, "people:employee_pii:view"),
+    // ── Platform (new) ─────────────────────────────────────────────────────────
+    PLATFORM__ACCOUNT__CREATE(520, "platform:account:create"),
+    PLATFORM__ACCOUNT__READ(521, "platform:account:read"),
+    PLATFORM__ACCOUNT__UPDATE(522, "platform:account:update"),
+    PLATFORM__TENANT__CREATE(523, "platform:tenant:create"),
+    PLATFORM__TENANT__DECOMMISSION(524, "platform:tenant:decommission"),
+    PLATFORM__TENANT__REACTIVATE(525, "platform:tenant:reactivate"),
+    PLATFORM__TENANT__READ(526, "platform:tenant:read"),
+    PLATFORM__TENANT__SUSPEND(527, "platform:tenant:suspend"),
+    PLATFORM__TENANT__UPDATE(528, "platform:tenant:update");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 83;
+    public static final int CATALOG_VERSION = 84;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

@@ -1,0 +1,90 @@
+spring:
+  application:
+    name: tenant
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.postgresql.Driver}
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: pos-tenant-events
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+server:
+  port: 0
+  tomcat:
+    max-http-header-size: 65536
+
+management:
+  server:
+    port: 0
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:}
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
+logging:
+  level:
+    root: INFO
+    org:
+      springframework: INFO
+    com:
+      positivity:
+        tenant: INFO
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+  default-produces-media-type: application/json
+
+pos:
+  # ADR-0062 section 7: this module runs inside the platform tenant. Every request the gateway has
+  # not yet stamped with X-Tenant-Id (plan WS2b) binds the platform tenant; once the claim flows,
+  # PlatformTenantGuard refuses any other tenant with a 403. Never point this at a customer tenant.
+  tenancy:
+    default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000000}
+  tenant:
+    kafka:
+      # tenant.events.v1: this module publishes every fact on it except tenant.provisioned, which it
+      # consumes from pos-security-service (ADR-0062 section 7).
+      events-topic: ${POS_TENANT_EVENTS_TOPIC:tenant.events.v1}
+      events-consumer-group: ${POS_TENANT_EVENTS_CONSUMER_GROUP:pos-tenant-events}
+      enabled: ${POS_TENANT_KAFKA_ENABLED:false}
+    outbox:
+      poll-interval-ms: ${POS_TENANT_OUTBOX_POLL_INTERVAL_MS:1000}
+      send-timeout-ms: ${POS_TENANT_OUTBOX_SEND_TIMEOUT_MS:10000}
