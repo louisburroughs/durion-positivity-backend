@@ -49,10 +49,10 @@ public class InvoicePartyIdBackfillService {
         this.transaction = new TransactionTemplate(transactionManager);
     }
 
-    /** One backfill pass: a single bulk UPDATE; logs the patched-row count only when > 0. */
     /**
-     * Per tenant (ADR-0062 §3): invoices and the workorder replica are tenant-scoped, so the bulk
-     * UPDATE runs once per active tenant with the transaction opened inside the binding.
+     * One backfill pass per tenant (ADR-0062 §3): invoices and the workorder replica are tenant-scoped, so
+     * the single bulk UPDATE runs once per active tenant with the transaction opened inside the binding;
+     * the patched-row count is logged only when it is above zero.
      */
     @Scheduled(fixedDelayString = "${pos.invoice.party-backfill.interval-ms:3600000}")
     public void backfill() {
