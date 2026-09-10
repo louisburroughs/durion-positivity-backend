@@ -386,11 +386,15 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    # A manual dispatch is authoritative about its own deployment: `deploy_alpha: false`
+    # must not be overridden by AUTO_DEPLOY_ALPHA, which governs the automatic promotion
+    # path (a green "Backend CI/CD" run on main) only. Before this, every dispatch
+    # deployed to alpha regardless of the input, because the variable is set repo-wide.
     if: >
       success() &&
       (
         (github.event_name == 'workflow_dispatch' && inputs.deploy_alpha) ||
-        vars.AUTO_DEPLOY_ALPHA == 'true'
+        (github.event_name != 'workflow_dispatch' && vars.AUTO_DEPLOY_ALPHA == 'true')
       )
 
     steps:
