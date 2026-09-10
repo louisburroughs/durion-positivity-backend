@@ -308,7 +308,41 @@ jobs:
           echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
           echo "full_image=${FULL_IMAGE}" >> "$GITHUB_OUTPUT"
           echo "latest_image=${LATEST_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "ecr_repo_name=${ECR_REPO_NAME}" >> "$GITHUB_OUTPUT"
           echo "Image: ${FULL_IMAGE}"
+
+      # A new service's first push lands in a repository nothing else creates (this repo has no
+      # infrastructure-as-code for the AWS side), so create it here rather than fail the push.
+      # Tags stay mutable: every push also moves `:latest`.
+      - name: Ensure the ECR repository exists
+        env:
+          ECR_REPO_NAME: ${{ steps.meta.outputs.ecr_repo_name }}
+        run: |
+          set -euo pipefail
+          # Only "not found" means missing: an access or throttling error must surface as itself,
+          # not as a create attempt that then fails for the wrong reason.
+          if DESCRIBE="$(aws ecr describe-repositories --repository-names "${ECR_REPO_NAME}" 2>&1)"; then
+            echo "ECR repository ${ECR_REPO_NAME} exists"
+          elif grep -q RepositoryNotFoundException <<<"${DESCRIBE}"; then
+            echo "ECR repository ${ECR_REPO_NAME} is missing; creating it"
+            # Two runs (this branch's and a dispatch on another ref) can both see it missing; the
+            # loser of that race gets RepositoryAlreadyExistsException, which is success here.
+            if CREATE="$(aws ecr create-repository \
+                  --repository-name "${ECR_REPO_NAME}" \
+                  --image-tag-mutability MUTABLE \
+                  --image-scanning-configuration scanOnPush=true \
+                  --query 'repository.repositoryUri' --output text 2>&1)"; then
+              echo "Created ${CREATE}"
+            elif grep -q RepositoryAlreadyExistsException <<<"${CREATE}"; then
+              echo "ECR repository ${ECR_REPO_NAME} was created by a concurrent run"
+            else
+              printf '%s\n' "${CREATE}" >&2
+              exit 1
+            fi
+          else
+            printf '%s\n' "${DESCRIBE}" >&2
+            exit 1
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0

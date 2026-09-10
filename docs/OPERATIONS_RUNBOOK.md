@@ -80,7 +80,11 @@ does with an image it cannot resolve depends on whether the service is already h
 - **No container on the box** — the service was added by the commit being synced, and its image is
   published only by the `build-push-ecr` run that follows the merge, so it cannot exist at the
   pinned tag. The sync skips it with a warning and applies everything else; the service comes up
-  with that run's alpha deploy, which moves the box to a tag that has it. Nothing to do.
+  with that run's alpha deploy, which moves the box to a tag that has it. Nothing to do. That run
+  also creates the service's ECR repository when it is missing (`durion/<service>`, except
+  `pos-service-discovery`, which publishes to `durion/eureka-server`; nothing else creates it, as
+  this repo has no infrastructure-as-code for the AWS side), so a new service needs no manual AWS
+  step before its first push.
 - **A container exists** — the service was deployed at this tag, so its image has been retagged or
   deleted in ECR. The sync stops before changing anything. Re-run `build-push-ecr` on `main` with
   `deploy_alpha=true` to republish every service at a new tag and deploy it.
