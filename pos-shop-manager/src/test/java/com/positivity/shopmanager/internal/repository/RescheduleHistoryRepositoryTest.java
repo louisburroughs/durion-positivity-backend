@@ -79,9 +79,9 @@ class RescheduleHistoryRepositoryTest {
     private void insertAppointment(UUID appointmentId) {
         jdbcTemplate.update("""
                 INSERT INTO appointment
-                    (appointment_id, status, location_id, crm_customer_id, crm_vehicle_id,
+                    (tenant_id, appointment_id, status, location_id, crm_customer_id, crm_vehicle_id,
                      start_at, end_at, is_conflict_override, reopen_flag, created_at, updated_at)
-                VALUES (?, 'SCHEDULED', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, false, false,
+                VALUES ('01900000-0000-7000-8000-000000000001', ?, 'SCHEDULED', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, false, false,
                         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """, appointmentId, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
     }
@@ -89,10 +89,10 @@ class RescheduleHistoryRepositoryTest {
     private void insertRescheduleHistory(UUID rescheduleId, UUID appointmentId, Instant rescheduledAt) {
         jdbcTemplate.update("""
                 INSERT INTO reschedule_history
-                    (reschedule_id, appointment_id, previous_start_at, previous_end_at,
+                    (tenant_id, reschedule_id, appointment_id, previous_start_at, previous_end_at,
                      new_start_at, new_end_at, reschedule_reason, rescheduled_by, rescheduled_at,
                      conflict_overridden, notify_customer, created_at)
-                VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+                VALUES ('01900000-0000-7000-8000-000000000001', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
                         'CUSTOMER_REQUEST', 'test-user', ?, false, false, CURRENT_TIMESTAMP)
                 """, rescheduleId, appointmentId, rescheduledAt);
     }

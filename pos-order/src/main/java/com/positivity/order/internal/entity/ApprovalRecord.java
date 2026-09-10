@@ -1,6 +1,7 @@
 package com.positivity.order.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.*;
 import java.time.Instant;
@@ -27,7 +28,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ApprovalRecord {
+public class ApprovalRecord extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

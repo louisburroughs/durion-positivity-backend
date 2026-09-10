@@ -1,8 +1,8 @@
 package com.positivity.order.internal.config;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -11,15 +11,18 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.order.internal.entity.OutboxEvent;
 import com.positivity.order.internal.repository.OutboxEventRepository;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -63,6 +66,7 @@ class OutboxPublisherTest {
 
     private OutboxEvent event(String key) {
         return OutboxEvent.builder()
+                .tenantId(TENANT_A)
                 .id(UUID.randomUUID())
                 .topic(TOPIC)
                 .recordKey(key)
@@ -74,13 +78,12 @@ class OutboxPublisherTest {
     }
 
     private void brokerAcknowledges() {
-        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+        when(kafkaTemplate.send(any(ProducerRecord.class)))
                 .thenReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
     }
 
     private void brokerFailsWith(Throwable failure) {
-        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
-                .thenReturn(CompletableFuture.failedFuture(failure));
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.failedFuture(failure));
     }
 
     @Test
@@ -92,7 +95,14 @@ class OutboxPublisherTest {
 
         publisher.publishPending();
 
-        verify(kafkaTemplate).send(TOPIC, "k1", row.getPayload());
+        ArgumentCaptor<ProducerRecord<String, String>> sent = ArgumentCaptor.captor();
+        verify(kafkaTemplate).send(sent.capture());
+        assertThat(sent.getValue().topic()).isEqualTo(TOPIC);
+        assertThat(sent.getValue().key()).isEqualTo("k1");
+        assertThat(sent.getValue().value()).isEqualTo(row.getPayload());
+        assertThat(TenantKafkaHeaders.read(sent.getValue().headers()))
+                .as("the row's tenant travels on the record header (ADR-0062)")
+                .contains(TENANT_A);
         assertThat(row.getPublishedAt()).isEqualTo(NOW);
         assertThat(row.getLastError()).isNull();
         verify(repository).save(row);
@@ -120,7 +130,7 @@ class OutboxPublisherTest {
 
         publisher.publishPending();
 
-        verify(kafkaTemplate, times(2)).send(anyString(), anyString(), anyString());
+        verify(kafkaTemplate, times(2)).send(any(ProducerRecord.class));
         assertThat(first.getPublishedAt()).isEqualTo(NOW);
         assertThat(second.getPublishedAt()).isEqualTo(NOW);
     }
@@ -142,8 +152,11 @@ class OutboxPublisherTest {
 
         // The batch stops at the first failure so publish order is preserved:
         // the second row is never attempted and keeps its prior attempt count.
-        verify(kafkaTemplate, times(1)).send(anyString(), anyString(), anyString());
-        verify(kafkaTemplate).send(TOPIC, "k1", first.getPayload());
+        verify(kafkaTemplate, times(1)).send(any(ProducerRecord.class));
+        ArgumentCaptor<ProducerRecord<String, String>> sent = ArgumentCaptor.captor();
+        verify(kafkaTemplate).send(sent.capture());
+        assertThat(sent.getValue().key()).isEqualTo("k1");
+        assertThat(sent.getValue().value()).isEqualTo(first.getPayload());
         assertThat(second.getAttempts()).isEqualTo(2);
         assertThat(second.getPublishedAt()).isNull();
     }
@@ -156,7 +169,7 @@ class OutboxPublisherTest {
         // Thrown by send() itself: a failed future surfaces as an ExecutionException
         // whose message is the cause's toString, so only a synchronous throw
         // produces a null message here.
-        when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenThrow(new IllegalStateException());
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new IllegalStateException());
 
         publisher.publishPending();
 
@@ -184,7 +197,7 @@ class OutboxPublisherTest {
 
         publisher.publishPending();
 
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
         verify(repository, never()).save(any());
     }
 }

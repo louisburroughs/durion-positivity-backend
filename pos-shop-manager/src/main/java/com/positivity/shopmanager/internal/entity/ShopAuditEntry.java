@@ -2,6 +2,7 @@ package com.positivity.shopmanager.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.shopmanager.internal.enums.ShopAuditEventType;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -32,7 +33,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ShopAuditEntry {
+public class ShopAuditEntry extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

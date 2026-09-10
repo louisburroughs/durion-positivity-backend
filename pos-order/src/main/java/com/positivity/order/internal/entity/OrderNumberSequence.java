@@ -1,5 +1,6 @@
 package com.positivity.order.internal.entity;
 
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.EmbeddedId;
@@ -24,7 +25,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class OrderNumberSequence {
+public class OrderNumberSequence extends TenantScopedEntity {
 
     @EmbeddedId
     private Key key;

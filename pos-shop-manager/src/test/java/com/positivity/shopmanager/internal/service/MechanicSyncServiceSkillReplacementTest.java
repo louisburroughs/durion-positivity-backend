@@ -212,17 +212,17 @@ class MechanicSyncServiceSkillReplacementTest {
     private void insertMechanic(UUID personId, String firstName, String lastName) {
         jdbcTemplate.update("""
                 INSERT INTO mechanic
-                    (mechanic_id, person_id, first_name, last_name, status, version,
+                    (tenant_id, mechanic_id, person_id, first_name, last_name, status, version,
                      created_at, updated_at)
-                VALUES (?, ?, ?, ?, 'ACTIVE', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                VALUES ('01900000-0000-7000-8000-000000000001', ?, ?, ?, ?, 'ACTIVE', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """, mechanicId(personId), personId.toString(), firstName, lastName, SEEDED_VERSION);
     }
 
     private void insertSkill(UUID personId, String skillCode) {
         jdbcTemplate.update("""
                 INSERT INTO mechanic_skill
-                    (id, mechanic_id, skill_code, proficiency_level, created_at, updated_at)
-                VALUES (?, ?, ?, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    (tenant_id, id, mechanic_id, skill_code, proficiency_level, created_at, updated_at)
+                VALUES ('01900000-0000-7000-8000-000000000001', ?, ?, ?, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """, UUID.randomUUID(), mechanicId(personId), skillCode);
     }
 }

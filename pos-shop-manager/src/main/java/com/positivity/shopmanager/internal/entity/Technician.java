@@ -1,6 +1,7 @@
 package com.positivity.shopmanager.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -28,7 +29,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Technician {
+public class Technician extends TenantScopedEntity {
     @Id
     @GeneratedValue
     @UUIDv7Id

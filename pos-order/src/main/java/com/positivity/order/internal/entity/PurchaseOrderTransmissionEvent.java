@@ -1,6 +1,7 @@
 package com.positivity.order.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -36,7 +37,7 @@ import lombok.Setter;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PurchaseOrderTransmissionEvent {
+public class PurchaseOrderTransmissionEvent extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

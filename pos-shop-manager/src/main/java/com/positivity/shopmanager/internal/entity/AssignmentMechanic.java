@@ -2,6 +2,7 @@ package com.positivity.shopmanager.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.shopmanager.internal.enums.MechanicRoleEnum;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -30,7 +31,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AssignmentMechanic {
+public class AssignmentMechanic extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

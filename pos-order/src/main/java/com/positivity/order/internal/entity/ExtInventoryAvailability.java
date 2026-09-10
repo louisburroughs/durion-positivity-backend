@@ -2,6 +2,7 @@ package com.positivity.order.internal.entity;
 
 import com.positivity.shared.id.AssignedIdentifier;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -41,7 +42,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "ext_inventory_availability")
-public class ExtInventoryAvailability {
+public class ExtInventoryAvailability extends TenantScopedEntity {
 
     @Id
     @AssignedIdentifier("pos-inventory's own aggregate id for the (stockItemId, locationId) pair; a locally"

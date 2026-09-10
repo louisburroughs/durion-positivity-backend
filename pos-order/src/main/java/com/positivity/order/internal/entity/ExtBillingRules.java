@@ -1,6 +1,7 @@
 package com.positivity.order.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -26,7 +27,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ExtBillingRules {
+public class ExtBillingRules extends TenantScopedEntity {
 
     @Id
     @Column(name = "party_id", nullable = false, updatable = false, columnDefinition = "UUID")
