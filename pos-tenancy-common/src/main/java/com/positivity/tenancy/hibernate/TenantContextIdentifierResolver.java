@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.UUID;
 import org.hibernate.cfg.MultiTenancySettings;
 import org.hibernate.context.spi.CurrentTenantIdentifierResolver;
-import org.jspecify.annotations.Nullable;
 import org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCustomizer;
 
 /**
@@ -18,6 +17,16 @@ import org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCusto
  *
  * <p>{@link #isRoot} is never {@code true}: it is a Hibernate-level bypass, and row-level security
  * would still hide the rows, so the two layers would disagree. An ArchUnit rule pins that.
+ *
+ * <p>An unbound session resolves to {@link #NO_TENANT}, the nil UUID, rather than {@code null}: once
+ * any entity carries {@code @TenantId}, Hibernate refuses to open a session with no tenant at all
+ * ("SessionFactory configured for multi-tenancy, but no tenant identifier specified"), which would
+ * stop Spring Data deriving its queries at boot and stop every {@code @PlatformScoped} job reading a
+ * global table through JPA. The nil tenant is fail-closed on both layers: the Hibernate filter
+ * matches no scoped row, a persist stamps a tenant that no row-level-security policy's {@code WITH
+ * CHECK} accepts, and the pool has RESET {@code app.current_tenant} so Postgres hides every scoped
+ * row anyway. {@link com.positivity.tenancy.TenantResolver#resolve()} still answers empty for an
+ * unbound thread; the sentinel exists for Hibernate alone.
  */
 public class TenantContextIdentifierResolver
         implements CurrentTenantIdentifierResolver<UUID>, HibernatePropertiesCustomizer {
@@ -28,10 +37,13 @@ public class TenantContextIdentifierResolver
         this.tenantResolver = tenantResolver;
     }
 
-    /** The resolved tenant, or {@code null} so an unbound session inserts nothing (the column is NOT NULL). */
+    /** The tenant an unbound session runs as: the nil UUID, which matches no row and which every policy refuses. */
+    public static final UUID NO_TENANT = new UUID(0L, 0L);
+
+    /** The resolved tenant, or {@link #NO_TENANT} for an unbound session. */
     @Override
-    public @Nullable UUID resolveCurrentTenantIdentifier() {
-        return tenantResolver.resolve().orElse(null);
+    public UUID resolveCurrentTenantIdentifier() {
+        return tenantResolver.resolve().orElse(NO_TENANT);
     }
 
     @Override
