@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.warranty.internal.enums.RegistrationStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -44,7 +45,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_wreg_source_invoice", columnList = "source_invoice_id")
         })
 @EntityListeners(AuditingEntityListener.class)
-public class WarrantyRegistration {
+public class WarrantyRegistration extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

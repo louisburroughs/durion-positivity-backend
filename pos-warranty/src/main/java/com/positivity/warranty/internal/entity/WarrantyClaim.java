@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.warranty.internal.enums.ClaimDecision;
 import com.positivity.warranty.internal.enums.ClaimStatus;
 import com.positivity.warranty.internal.enums.ClaimType;
@@ -58,7 +59,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_wclaim_location", columnList = "location_id")
         })
 @EntityListeners(AuditingEntityListener.class)
-public class WarrantyClaim {
+public class WarrantyClaim extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

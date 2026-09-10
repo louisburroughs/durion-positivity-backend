@@ -43,7 +43,8 @@ class TenancyArchitectureTest {
         "com.positivity.shopmanager..",
         "com.positivity.order..",
         "com.positivity.customer..",
-        "com.positivity.supplier.."
+        "com.positivity.supplier..",
+        "com.positivity.warranty.."
     };
 
     private static final String ENTITY_ANNOTATION = "jakarta.persistence.Entity";

@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -23,7 +24,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Entity
 @Table(name = "claim_code_sequence")
-public class ClaimCodeSequence {
+public class ClaimCodeSequence extends TenantScopedEntity {
 
     @Id
     @Column(name = "code_year", nullable = false, updatable = false)

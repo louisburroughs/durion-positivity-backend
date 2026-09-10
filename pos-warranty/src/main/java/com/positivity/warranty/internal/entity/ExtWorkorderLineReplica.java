@@ -2,6 +2,7 @@ package com.positivity.warranty.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -25,7 +26,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Entity
 @Table(name = "ext_workorder_line")
-public class ExtWorkorderLineReplica {
+public class ExtWorkorderLineReplica extends TenantScopedEntity {
 
     @Id
     @Column(name = "workorder_line_id", nullable = false)

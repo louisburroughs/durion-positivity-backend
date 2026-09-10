@@ -2,6 +2,7 @@ package com.positivity.warranty.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -32,7 +33,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "ext_workorder")
-public class ExtWorkorderReplica {
+public class ExtWorkorderReplica extends TenantScopedEntity {
 
     @Id
     @Column(name = "workorder_id", nullable = false)

@@ -1,6 +1,7 @@
 package com.positivity.warranty.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.warranty.internal.enums.ProviderType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -40,7 +41,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_wprovider_ap_vendor", columnList = "ap_vendor_id")
         })
 @EntityListeners(AuditingEntityListener.class)
-public class WarrantyProvider {
+public class WarrantyProvider extends TenantScopedEntity {
 
     /** Provider status value: accepts new policies/claims. */
     public static final String STATUS_ACTIVE = "ACTIVE";

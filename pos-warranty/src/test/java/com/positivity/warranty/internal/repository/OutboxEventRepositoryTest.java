@@ -2,6 +2,7 @@ package com.positivity.warranty.internal.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.tenancy.testing.TenantTestSupport;
 import com.positivity.warranty.internal.entity.OutboxEvent;
 import java.time.Instant;
 import java.util.List;
@@ -45,6 +46,7 @@ class OutboxEventRepositoryTest {
 
     private OutboxEvent persist(String key, Instant createdAt, Instant publishedAt, int attempts, String lastError) {
         OutboxEvent saved = repository.saveAndFlush(OutboxEvent.builder()
+                .tenantId(TenantTestSupport.TENANT_A)
                 .topic(TOPIC)
                 .recordKey(key)
                 .payload("{\"eventId\":\"" + key + "\"}")
