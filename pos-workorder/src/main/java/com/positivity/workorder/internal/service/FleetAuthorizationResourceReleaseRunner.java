@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.tenancy.TenantIterator;
 import com.positivity.workorder.internal.entity.WorkorderFleetAuthorization;
 import com.positivity.workorder.internal.repository.WorkorderFleetAuthorizationRepository;
 import java.time.Clock;
@@ -50,6 +51,8 @@ public class FleetAuthorizationResourceReleaseRunner {
      */
     private final FleetAuthorizationResourceReleaser resourceReleaser;
 
+    private final TenantIterator tenantIterator;
+
     private final Clock clock;
     private final Duration releaseAfter;
     private final int batchSize;
@@ -57,11 +60,13 @@ public class FleetAuthorizationResourceReleaseRunner {
     public FleetAuthorizationResourceReleaseRunner(
             WorkorderFleetAuthorizationRepository authorizationRepository,
             FleetAuthorizationResourceReleaser resourceReleaser,
+            TenantIterator tenantIterator,
             Clock clock,
             @Value("${workorder.fleetauth.resource-release-after:PT4H}") Duration releaseAfter,
             @Value("${workorder.fleetauth.resource-release-batch-size:50}") int batchSize) {
         this.authorizationRepository = authorizationRepository;
         this.resourceReleaser = resourceReleaser;
+        this.tenantIterator = tenantIterator;
         this.clock = clock;
         this.releaseAfter = releaseAfter;
         this.batchSize = batchSize;
@@ -69,6 +74,11 @@ public class FleetAuthorizationResourceReleaseRunner {
 
     @Scheduled(fixedDelayString = "${workorder.fleetauth.resource-release-interval-ms:900000}")
     public void releaseOverdue() {
+        tenantIterator.forEachActiveTenant(tenantId -> releaseOverdueForTenant());
+    }
+
+    /** One tenant's sweep; {@code workorder_fleet_authorization} is a scoped table (ADR-0062). */
+    void releaseOverdueForTenant() {
         Instant releaseDueBefore = Instant.now(clock).minus(releaseAfter);
         List<WorkorderFleetAuthorization> due = authorizationRepository.findDueForResourceRelease(
                 releaseDueBefore, FleetAuthorizationResourceReleaser.BLOCKING_STATUSES, Limit.of(batchSize));

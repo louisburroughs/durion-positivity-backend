@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.config;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.domainevents.UuidV7Timestamps;
+import com.positivity.tenancy.PlatformScoped;
 import com.positivity.workorder.internal.entity.OutboxEvent;
 import com.positivity.workorder.internal.repository.OutboxEventRepository;
 import io.micrometer.core.instrument.Counter;
@@ -105,6 +106,9 @@ public class ManifestPublisher {
     private static final int MAX_WINDOWS_PER_RUN = 24;
 
     @Scheduled(fixedDelayString = "${workorder.manifest.poll-interval-ms:300000}")
+    @PlatformScoped(
+            reason = "summarises event_outbox, a global table, per window across every tenant; consumers compare"
+                    + " against their global processed-events ledger (per-tenant manifests are plan WS8)")
     public void publishDueManifest() {
         Instant latestClosed = latestClosedWindowEnd();
         if (latestClosed == null || (lastPublishedWindowEnd != null && !latestClosed.isAfter(lastPublishedWindowEnd))) {

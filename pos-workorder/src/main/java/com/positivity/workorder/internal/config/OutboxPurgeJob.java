@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.config;
 
+import com.positivity.tenancy.PlatformScoped;
 import com.positivity.workorder.internal.repository.OutboxEventRepository;
 import java.time.Clock;
 import java.time.Duration;
@@ -32,6 +33,7 @@ public class OutboxPurgeJob {
     private long retentionDays;
 
     @Scheduled(cron = "${workorder.outbox.purge-cron:0 0 3 * * *}")
+    @PlatformScoped(reason = "deletes published rows of event_outbox, a global table, across every tenant")
     @Transactional
     public void purge() {
         Instant cutoff = Instant.now(clock).minus(Duration.ofDays(retentionDays));

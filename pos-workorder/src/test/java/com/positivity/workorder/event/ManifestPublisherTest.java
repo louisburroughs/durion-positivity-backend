@@ -71,6 +71,7 @@ class ManifestPublisherTest {
 
     private OutboxEvent row(String eventId, String eventType, Instant createdAt) {
         return OutboxEvent.builder()
+                .tenantId(UUID.fromString("01900000-0000-7000-8000-000000000001"))
                 .id(UUID.randomUUID())
                 .topic("workorder.events.v1")
                 .recordKey(eventId)
@@ -178,6 +179,7 @@ class ManifestPublisherTest {
     @DisplayName("Rows without a parseable eventId are excluded rather than failing the manifest")
     void skipsRowsWithoutEventId() throws Exception {
         OutboxEvent broken = OutboxEvent.builder()
+                .tenantId(UUID.fromString("01900000-0000-7000-8000-000000000001"))
                 .id(UUID.randomUUID())
                 .topic("workorder.events.v1")
                 .recordKey("k")
@@ -229,6 +231,7 @@ class ManifestPublisherTest {
                 "workorder.work-session.started.v1",
                 WINDOW_START.plusSeconds(60));
         OutboxEvent badJson = OutboxEvent.builder()
+                .tenantId(UUID.fromString("01900000-0000-7000-8000-000000000001"))
                 .id(UUID.randomUUID())
                 .topic("workorder.events.v1")
                 .recordKey("bad")
@@ -237,6 +240,7 @@ class ManifestPublisherTest {
                 .publishedAt(WINDOW_START.plusSeconds(121))
                 .build();
         OutboxEvent badUuid = OutboxEvent.builder()
+                .tenantId(UUID.fromString("01900000-0000-7000-8000-000000000001"))
                 .id(UUID.randomUUID())
                 .topic("workorder.events.v1")
                 .recordKey("bad-uuid")

@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -23,7 +24,7 @@ import lombok.ToString;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class SubstituteAudit {
+public class SubstituteAudit extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

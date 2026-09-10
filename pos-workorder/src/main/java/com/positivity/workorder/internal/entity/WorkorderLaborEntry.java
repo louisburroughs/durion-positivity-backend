@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -48,7 +49,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @AllArgsConstructor
 @Builder
 @EntityListeners(AuditingEntityListener.class)
-public class WorkorderLaborEntry {
+public class WorkorderLaborEntry extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

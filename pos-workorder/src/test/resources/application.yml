@@ -24,6 +24,10 @@ logging:
 
 # Stub properties for pos-tax test mode
 pos:
+  # ADR-0062: this file shadows the main application.yml on the test classpath, so the transitional
+  # default tenant is repeated here; the pg profile clears it (strict).
+  tenancy:
+    default-tenant-id: 01900000-0000-7000-8000-000000000001
   tax:
     test-mode:
       enabled: true

@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -27,7 +28,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Entity
 @Table(name = "ext_pick_task")
-public class ExtPickTaskReplica {
+public class ExtPickTaskReplica extends TenantScopedEntity {
 
     @Id
     @Column(name = "pick_task_id", nullable = false)

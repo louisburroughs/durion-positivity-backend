@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.workorder.internal.enums.WorkSessionStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -44,7 +45,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @AllArgsConstructor
 @Builder
 @EntityListeners(AuditingEntityListener.class)
-public class WorkSession {
+public class WorkSession extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -39,7 +40,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(
         name = "idempotency_keys",
         indexes = {@Index(name = "idx_key_value", columnList = "keyValue", unique = true)})
-public class IdempotencyKey {
+public class IdempotencyKey extends TenantScopedEntity {
 
     @EqualsAndHashCode.Include
     @Id

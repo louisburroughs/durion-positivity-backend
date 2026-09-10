@@ -1,38 +1,39 @@
-# Test profile that runs the real Flyway migration chain against a Testcontainers Postgres
-# with Hibernate ddl-auto=validate. Executes the actual Postgres DDL (V1 baseline .. Vn) in CI,
-# catching entity/migration drift that the default H2 + flyway-disabled tests miss
-# (issue #711: the on-behalf audit columns added in V2). The datasource is supplied at runtime
-# by @ServiceConnection (no static URL here).
+# Testcontainers Postgres profile (ADR-0062, plan R-B7): the real Flyway chain (V1 baseline .. Vn),
+# Hibernate validate, strict tenancy (nothing binds a tenant unless the test does). The datasource
+# is supplied at runtime: PostgresTenancyTestBase connects the pool as pos_app with Flyway on the
+# owner (@DynamicPropertySource); FlywayMigrationIT (#711) uses @ServiceConnection as the owner.
 spring:
-  datasource:
-    hikari:
-      # Transitional tenant binding (ADR-0062): every scoped table defaults tenant_id from this
-      # session setting and hides rows without it. Replaced by TenantAwareDataSource in plan WS1.
-      connection-init-sql: "SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', false)"
   application:
     name: pos-workorder-pg-test
   autoconfigure:
-    exclude: org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+    exclude: org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: validate
+    open-in-view: false
     show-sql: false
-    properties:
-      hibernate:
-        format_sql: true
   flyway:
     enabled: true
-  kafka:
-    bootstrap-servers: localhost:9092
+  cloud:
+    discovery:
+      enabled: false
   main:
     allow-bean-definition-overriding: true
+
+pos:
+  tenancy:
+    # strict: nothing binds a tenant unless the test does
+    default-tenant-id:
+
+workorder:
+  kafka:
+    enabled: false
 
 # Disable security for tests
 security:
   enabled: false
 
-# Disable eureka for tests
 eureka:
   client:
     enabled: false
@@ -40,3 +41,4 @@ eureka:
 logging:
   level:
     com.positivity: INFO
+    org.hibernate.SQL: warn

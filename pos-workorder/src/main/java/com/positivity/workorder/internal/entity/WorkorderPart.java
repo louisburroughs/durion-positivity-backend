@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.workorder.internal.enums.PriceLockStatus;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import jakarta.persistence.*;
@@ -33,7 +34,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
                     constraint = "work_order_service_id IS NOT NULL OR work_order_id IS NOT NULL")
         })
 @EntityListeners(AuditingEntityListener.class)
-public class WorkorderPart {
+public class WorkorderPart extends TenantScopedEntity {
     public WorkorderPart(UUID id) {
         this.id = id;
     }

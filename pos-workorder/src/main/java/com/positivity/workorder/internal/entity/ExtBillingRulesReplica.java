@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -26,7 +27,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Entity
 @Table(name = "ext_billing_rules")
-public class ExtBillingRulesReplica {
+public class ExtBillingRulesReplica extends TenantScopedEntity {
 
     /** Owner key of the rules row: the commercial account's party id (36-char string). */
     @Id

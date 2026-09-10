@@ -7,6 +7,7 @@ import com.positivity.workorder.internal.repository.OutboxEventRepository;
 import com.positivity.workorder.internal.service.OutboxReplayServiceImpl;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +30,7 @@ class OutboxReplayServiceImplIntegrationTest {
 
     private OutboxEvent save(String key, Instant createdAt, Instant publishedAt, int attempts) {
         return repository.save(OutboxEvent.builder()
+                .tenantId(UUID.fromString("01900000-0000-7000-8000-000000000001"))
                 .topic("workorder.events.v1")
                 .recordKey(key)
                 .payload("{\"eventId\":\"" + key + "\"}")

@@ -11,7 +11,7 @@ spring:
   application:
     name: pos-security-pg-test
   autoconfigure:
-    exclude: org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+    exclude: org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:

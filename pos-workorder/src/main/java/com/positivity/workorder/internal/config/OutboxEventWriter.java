@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.config;
 
 import com.positivity.domainevents.DomainEventEnvelope;
+import com.positivity.tenancy.TenantResolver;
 import com.positivity.workorder.internal.entity.OutboxEvent;
 import com.positivity.workorder.internal.repository.OutboxEventRepository;
 import java.time.Clock;
@@ -52,6 +53,7 @@ public class OutboxEventWriter {
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final OutboxEventRepository outboxEventRepository;
+    private final TenantResolver tenantResolver;
 
     @Value("${workorder.kafka.events-topic:workorder.events.v1}")
     private String eventsTopic;
@@ -98,6 +100,7 @@ public class OutboxEventWriter {
         DomainEventEnvelope<Object> envelope = DomainEventEnvelope.of(
                 eventType, schemaVersion, aggregateId, aggregateVersion, SOURCE_SERVICE, null, null, payload, clock);
         OutboxEvent event = OutboxEvent.builder()
+                .tenantId(tenantResolver.require())
                 .topic(eventsTopic)
                 .recordKey(envelope.recordKey())
                 .payload(serialize(envelope))
