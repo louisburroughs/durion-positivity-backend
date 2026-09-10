@@ -24,6 +24,12 @@ pos:
   supplier:
     kafka:
       enabled: false
+    audit:
+      encryption:
+        # AuditPayloadCipher requires a real key under any profile set that is not entirely dev/test
+        # (ADR-0050 §7): a fixed 32-byte test key, not a secret, so the pg profile stands alone.
+        key: cGctdGVzdC1vbmx5LWtleS1wZy10ZXN0LW9ubHkta2V5MQ==
+        key-id: pg-test
 
 eureka:
   client:
