@@ -409,6 +409,26 @@ reconcile_databases() {
         sh -c 'psql -U "${POSTGRES_USER}" -d postgres -c "CREATE DATABASE '"${db}"';"' </dev/null
     fi
   done
+
+  reconcile_tenancy_roles
+}
+
+# postgres/init-tenancy.sh (ADR-0062) creates the shared application role pos_app and grants it
+# DML on every pos_* database. Like init-databases.sql it only runs on a fresh volume, so a
+# volume created before the role existed never gets it, and every service that connects as
+# pos_app (the adopted modules, pos-security-service first) fails its health check. The script
+# is idempotent (the role is created once; the grants and the transitional default-tenant
+# setting are re-applied), so it is run against the live container on every deploy, after the
+# databases exist so the grants cover any database created just above.
+reconcile_tenancy_roles() {
+  local init_sh="${BACKEND_DIR}/postgres/init-tenancy.sh"
+  if [[ ! -f "${init_sh}" ]]; then
+    echo "Warning: ${init_sh} not found; skipping tenancy role reconciliation." >&2
+    return 0
+  fi
+  echo "Reconciling the pos_app role and grants from init-tenancy.sh"
+  docker compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+    bash /docker-entrypoint-initdb.d/init-tenancy.sh </dev/null
 }
 
 # Inject the real Prometheus scrape secret into the deployed prometheus.yml (#863).
