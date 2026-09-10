@@ -7,7 +7,7 @@
 # as the owner. Tenancy is strict (nothing binds a tenant unless the test does; ADR-0062).
 spring:
   application:
-    name: pos-people-pg-test
+    name: pos-invoice-pg-test
   autoconfigure:
     exclude: org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
   jpa:
@@ -40,6 +40,6 @@ pos:
   tenancy:
     # strict: nothing binds a tenant unless the test does
     default-tenant-id:
-  people:
+  invoice:
     kafka:
       enabled: false

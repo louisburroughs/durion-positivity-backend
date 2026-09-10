@@ -2,6 +2,7 @@ package com.positivity.people.internal.entity;
 
 import com.positivity.people.internal.enums.TimeEntryStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -33,7 +34,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
             @Index(name = "idx_time_entry_person_start", columnList = "person_id, attendance_start_at"),
             @Index(name = "idx_time_entry_status_start", columnList = "status, attendance_start_at")
         })
-public class TimeEntry {
+public class TimeEntry extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

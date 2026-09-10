@@ -2,6 +2,7 @@ package com.positivity.people.internal.entity;
 
 import com.positivity.people.internal.enums.TimePeriodStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -33,7 +34,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
                 @UniqueConstraint(
                         name = "uq_time_period_tenant_start",
                         columnNames = {"tenant_id", "start_date"}))
-public class TimePeriod {
+public class TimePeriod extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

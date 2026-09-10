@@ -2,6 +2,7 @@ package com.positivity.people.internal.entity;
 
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -43,7 +44,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Employee {
+public class Employee extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

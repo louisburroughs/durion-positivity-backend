@@ -2,6 +2,7 @@ package com.positivity.people.internal.entity;
 
 import com.positivity.people.internal.enums.AdjustmentStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
@@ -14,7 +15,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "time_entry_adjustment")
 @Data
-public class TimeEntryAdjustment {
+public class TimeEntryAdjustment extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

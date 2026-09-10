@@ -3,6 +3,7 @@ package com.positivity.invoice.internal.entity;
 import com.positivity.invoice.internal.enums.RefundReason;
 import com.positivity.invoice.internal.enums.RefundStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -25,7 +26,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Data
 @Table(name = "refund_records")
 @EntityListeners(AuditingEntityListener.class)
-public class RefundRecord {
+public class RefundRecord extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

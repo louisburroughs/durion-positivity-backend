@@ -1,12 +1,14 @@
 package com.positivity.invoice.internal.service;
 
 import com.positivity.invoice.internal.repository.InvoiceRepository;
+import com.positivity.tenancy.TenantIterator;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Patches {@code invoices.customer_id} for pre-#920 invoices from the event-fed
@@ -35,15 +37,29 @@ import org.springframework.transaction.annotation.Transactional;
 public class InvoicePartyIdBackfillService {
 
     private final InvoiceRepository invoiceRepository;
+    private final TenantIterator tenantIterator;
+    private final TransactionTemplate transaction;
 
-    public InvoicePartyIdBackfillService(@NonNull InvoiceRepository invoiceRepository) {
+    public InvoicePartyIdBackfillService(
+            @NonNull InvoiceRepository invoiceRepository,
+            @NonNull TenantIterator tenantIterator,
+            @NonNull PlatformTransactionManager transactionManager) {
         this.invoiceRepository = invoiceRepository;
+        this.tenantIterator = tenantIterator;
+        this.transaction = new TransactionTemplate(transactionManager);
     }
 
     /** One backfill pass: a single bulk UPDATE; logs the patched-row count only when > 0. */
+    /**
+     * Per tenant (ADR-0062 §3): invoices and the workorder replica are tenant-scoped, so the bulk
+     * UPDATE runs once per active tenant with the transaction opened inside the binding.
+     */
     @Scheduled(fixedDelayString = "${pos.invoice.party-backfill.interval-ms:3600000}")
-    @Transactional
     public void backfill() {
+        tenantIterator.forEachActiveTenant(tenantId -> transaction.executeWithoutResult(status -> backfillForTenant()));
+    }
+
+    void backfillForTenant() {
         int patched = invoiceRepository.backfillPartyIdFromWorkorderReplica();
         if (patched > 0) {
             log.info("Party-id backfill patched {} invoice(s) from ext_workorder (#921)", patched);

@@ -92,6 +92,36 @@ refused location is a 403 with `ApiError.code` `LOCATION_SCOPE_DENIED` and never
 | `SPRING_DATASOURCE_URL` | required | PostgreSQL connection URL    |
 | `EUREKA_SERVER_URL`     | required | Eureka service discovery URL |
 
+## Multitenancy (ADR-0062, WS3 wave 9)
+
+This module runs on the ADR-0062 runtime: it depends on `pos-tenancy-common`, every scoped entity
+extends `TenantScopedEntity`, and the two global tables (`event_outbox`, `processed_events`, listed in
+`src/main/resources/db/tenancy-global-tables.txt`) carry `@TenantGlobal`. The request tenant is bound by
+`TenantContextFilter` from `X-Tenant-Id` (the gateway injects it from the token's `tid`), the Kafka tenant by
+`TenantRecordInterceptor` from the `tenantId` record header on every one of the module's consumers, and every connection checkout binds
+`app.current_tenant` for row-level security. `pos.tenancy.default-tenant-id` still binds the alpha default
+tenant on every unbound path (tokens issued before `tid`, records without the header).
+
+The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_DATASOURCE_USERNAME`
+/ `POS_APP_PASSWORD`); Flyway alone uses the owner credential (`SPRING_FLYWAY_USER` /
+`SPRING_FLYWAY_PASSWORD`, `FlywayConfig`).
+
+The outbox row carries the producing tenant as data (`tenant_id`, stamped from the bound tenant by
+`OutboxEventWriter`, added by `V2__event_outbox_tenant_id.sql`):
+
+| Job | Classification | Why |
+| --- | --- | --- |
+| `OutboxPublisher.publishPending` | platform-scoped | Drains `event_outbox`; each row's `tenant_id` becomes the record header |
+| `ManifestPublisher.publishDueManifest` | platform-scoped | Summarises `event_outbox` per window across tenants; per-tenant manifests are plan WS8 |
+| `TimePeriodRolloverScheduler.runScheduledRollover` | per-tenant | `time_period` and the entries it closes are scoped; one rollover per tenant of the registry |
+There are no native queries. The `pg` test profile is strict (the transitional `connection-init-sql` binding
+is gone); `FlywayMigrationIT` keeps its own `@ServiceConnection` container as the owner.
+
+Proof: `TenantIsolationIT` (tenant A's `ext_location` row is invisible to tenant B and to an unbound
+connection, through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every
+non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is
+`pos_app` with no bypass), both on Testcontainers Postgres (`./mvnw -pl pos-people -am verify`).
+
 ## Dependencies
 
 - `pos-security-common` — JWT-based security filter

@@ -3,6 +3,7 @@ package com.positivity.invoice.internal.entity;
 import com.positivity.invoice.internal.enums.InvoiceDeliveryMethod;
 import com.positivity.invoice.internal.enums.InvoiceGroupingStrategy;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
@@ -22,7 +23,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Table(
         name = "billing_rules",
         indexes = {@Index(name = "idx_billing_rules_party_id", columnList = "party_id", unique = true)})
-public class BillingRules {
+public class BillingRules extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

@@ -19,20 +19,28 @@ import org.springframework.context.annotation.Configuration;
 public class FlywayConfig {
 
     /**
-     * Hand-built Flyway instance (Boot's auto-configuration backs off), so spring.flyway.*
-     * properties are NOT applied automatically — each one this module relies on must be bound
-     * here explicitly. ignore-migration-patterns carries "repeatable:missing" for the retired
-     * timekeeping seed (docs/DATA_SEED_STRATEGY.md, #1527): without it, environments whose
-     * schema history recorded the deleted seed fail startup validation with "applied migration
-     * not resolved locally".
+     * Flyway runs on the owner credential when {@code spring.flyway.user} is set (ADR-0062 §3: the
+     * application pool is the non-owner {@code pos_app} role, which cannot run DDL), otherwise on
+     * the application {@link DataSource} as before. Migration locations and the ignore patterns come
+     * from {@code spring.flyway.*}, as Boot's own auto-configuration would read them.
      */
     @Bean(initMethod = "migrate")
     @ConditionalOnMissingBean(Flyway.class)
     public Flyway mcpFlyway(
             DataSource dataSource,
+            @Value("${spring.flyway.url:}") String flywayUrl,
+            @Value("${spring.flyway.user:}") String flywayUser,
+            @Value("${spring.flyway.password:}") String flywayPassword,
+            @Value("${spring.datasource.url:}") String datasourceUrl,
+            @Value("${spring.flyway.locations:classpath:db/migration}") String[] locations,
             @Value("${spring.flyway.ignore-migration-patterns:}") String[] ignoreMigrationPatterns) {
-        FluentConfiguration configuration =
-                Flyway.configure().dataSource(dataSource).locations("classpath:db/migration");
+        FluentConfiguration configuration = Flyway.configure().locations(locations);
+        if (flywayUser != null && !flywayUser.isBlank()) {
+            String url = flywayUrl == null || flywayUrl.isBlank() ? datasourceUrl : flywayUrl;
+            configuration = configuration.dataSource(url, flywayUser, flywayPassword);
+        } else {
+            configuration = configuration.dataSource(dataSource);
+        }
         String[] patterns = Arrays.stream(ignoreMigrationPatterns)
                 .filter(pattern -> !pattern.isBlank())
                 .toArray(String[]::new);
@@ -48,7 +56,6 @@ public class FlywayConfig {
     }
 
     static class FlywayEntityManagerFactoryDependsOnPostProcessor extends AbstractDependsOnBeanFactoryPostProcessor {
-
         FlywayEntityManagerFactoryDependsOnPostProcessor() {
             super(EntityManagerFactory.class, Flyway.class);
         }

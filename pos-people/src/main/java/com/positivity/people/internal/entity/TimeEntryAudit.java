@@ -1,6 +1,7 @@
 package com.positivity.people.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -23,7 +24,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "time_entry_audit")
-public class TimeEntryAudit {
+public class TimeEntryAudit extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

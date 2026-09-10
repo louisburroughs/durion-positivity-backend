@@ -3,6 +3,7 @@ package com.positivity.people.internal.entity;
 import com.positivity.people.internal.enums.ExceptionSeverity;
 import com.positivity.people.internal.enums.ExceptionStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.positivity.time.TimeSource;
 import jakarta.persistence.*;
 import jakarta.persistence.EnumType;
@@ -18,7 +19,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "time_entry_exception")
 @SuppressWarnings("java:S2166")
-public class TimeEntryException {
+public class TimeEntryException extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

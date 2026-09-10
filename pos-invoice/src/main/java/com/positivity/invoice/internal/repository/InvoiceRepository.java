@@ -2,6 +2,7 @@ package com.positivity.invoice.internal.repository;
 
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.enums.InvoiceStatus;
+import com.positivity.tenancy.TenantAudited;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collection;
@@ -89,6 +90,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
      *
      * @return number of invoices patched in this run
      */
+    @TenantAudited(
+            reason = "names no tenant: the backfill runs per tenant (TenantIterator), so row-level security confines"
+                    + " both invoices and the ext_workorder replica to the bound tenant")
     @Modifying(clearAutomatically = true)
     @Query(
             value = "UPDATE invoices inv SET customer_id = ("

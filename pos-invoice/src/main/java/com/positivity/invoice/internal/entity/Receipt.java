@@ -4,6 +4,7 @@ import com.positivity.invoice.internal.enums.ReceiptDeliveryMethod;
 import com.positivity.invoice.internal.enums.ReceiptDeliveryStatus;
 import com.positivity.invoice.internal.enums.ReceiptStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -25,7 +26,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @Table(name = "receipts")
-public class Receipt {
+public class Receipt extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

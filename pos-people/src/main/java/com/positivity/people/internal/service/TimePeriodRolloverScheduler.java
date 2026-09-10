@@ -1,6 +1,7 @@
 package com.positivity.people.internal.service;
 
 import com.positivity.people.internal.dto.TimePeriodRolloverResult;
+import com.positivity.tenancy.TenantIterator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -28,9 +29,14 @@ import org.springframework.stereotype.Component;
 public class TimePeriodRolloverScheduler {
 
     private final TimePeriodManagementService timePeriodManagementService;
+    private final TenantIterator tenantIterator;
 
     @Scheduled(cron = "${pos.people.time-period.rollover.cron:0 15 0 * * *}", zone = "UTC")
     public void runScheduledRollover() {
+        tenantIterator.forEachActiveTenant(tenantId -> runScheduledRolloverForTenant());
+    }
+
+    void runScheduledRolloverForTenant() {
         try {
             TimePeriodRolloverResult result = timePeriodManagementService.runRollover();
             log.info(

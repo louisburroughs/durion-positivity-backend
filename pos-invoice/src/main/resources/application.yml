@@ -80,6 +80,9 @@ billing:
 
 # Event service configuration
 pos:
+  tenancy:
+    # ADR-0062: binds the alpha default tenant on every unbound path until every token carries tid
+    default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000001}
   invoice:
     kafka:
       # Domain-event publishing (ADR-0044, #842). Off until the broker is provisioned;
