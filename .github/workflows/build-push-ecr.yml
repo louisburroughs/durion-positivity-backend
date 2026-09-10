@@ -319,15 +319,29 @@ jobs:
           ECR_REPO_NAME: ${{ steps.meta.outputs.ecr_repo_name }}
         run: |
           set -euo pipefail
-          if aws ecr describe-repositories --repository-names "${ECR_REPO_NAME}" >/dev/null 2>&1; then
+          # Only "not found" means missing: an access or throttling error must surface as itself,
+          # not as a create attempt that then fails for the wrong reason.
+          if DESCRIBE="$(aws ecr describe-repositories --repository-names "${ECR_REPO_NAME}" 2>&1)"; then
             echo "ECR repository ${ECR_REPO_NAME} exists"
-          else
+          elif grep -q RepositoryNotFoundException <<<"${DESCRIBE}"; then
             echo "ECR repository ${ECR_REPO_NAME} is missing; creating it"
-            aws ecr create-repository \
-              --repository-name "${ECR_REPO_NAME}" \
-              --image-tag-mutability MUTABLE \
-              --image-scanning-configuration scanOnPush=true \
-              --query 'repository.repositoryUri' --output text
+            # Two runs (this branch's and a dispatch on another ref) can both see it missing; the
+            # loser of that race gets RepositoryAlreadyExistsException, which is success here.
+            if CREATE="$(aws ecr create-repository \
+                  --repository-name "${ECR_REPO_NAME}" \
+                  --image-tag-mutability MUTABLE \
+                  --image-scanning-configuration scanOnPush=true \
+                  --query 'repository.repositoryUri' --output text 2>&1)"; then
+              echo "Created ${CREATE}"
+            elif grep -q RepositoryAlreadyExistsException <<<"${CREATE}"; then
+              echo "ECR repository ${ECR_REPO_NAME} was created by a concurrent run"
+            else
+              printf '%s\n' "${CREATE}" >&2
+              exit 1
+            fi
+          else
+            printf '%s\n' "${DESCRIBE}" >&2
+            exit 1
           fi
 
       - name: Set up Docker Buildx
