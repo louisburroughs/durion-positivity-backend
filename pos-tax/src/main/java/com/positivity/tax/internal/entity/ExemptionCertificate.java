@@ -3,6 +3,7 @@ package com.positivity.tax.internal.entity;
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tax.common.enums.ExemptionReasonCode;
 import com.positivity.tax.internal.enums.ExemptionCertificateStatus;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -46,7 +47,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "exemption_certificate")
-public class ExemptionCertificate {
+public class ExemptionCertificate extends TenantScopedEntity {
 
     /** UUID v7 primary key (ADR-0013). */
     @Id

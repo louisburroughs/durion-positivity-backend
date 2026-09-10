@@ -2,6 +2,7 @@ package com.positivity.tax.internal.repository;
 
 import com.positivity.tax.common.enums.TaxProviderTransactionStatus;
 import com.positivity.tax.internal.entity.TaxProviderTransaction;
+import com.positivity.tenancy.TenantAudited;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -59,14 +60,18 @@ public interface TaxProviderTransactionRepository extends JpaRepository<TaxProvi
      * @param timestamp     creation/modification timestamp
      * @return the number of rows inserted (1 if this call won the race, 0 if a row already existed)
      */
+    @TenantAudited(
+            reason = "names the tenant explicitly (the caller's resolved tenant), so the row is the bound tenant's on"
+                    + " Postgres and on the H2 slices alike; the policy's WITH CHECK still refuses any other tenant")
     @Modifying
     @Query(value = """
                     INSERT INTO tax_provider_transaction
-                        (id, reference_id, reference_type, provider, status, attempts, created_at, updated_at)
-                    VALUES (:id, :referenceId, :referenceType, :provider, :status, 0, :timestamp, :timestamp)
+                        (tenant_id, id, reference_id, reference_type, provider, status, attempts, created_at, updated_at)
+                    VALUES (:tenantId, :id, :referenceId, :referenceType, :provider, :status, 0, :timestamp, :timestamp)
                     ON CONFLICT DO NOTHING
                     """, nativeQuery = true)
     int insertIfAbsent(
+            @Param("tenantId") UUID tenantId,
             @Param("id") UUID id,
             @Param("referenceId") UUID referenceId,
             @Param("referenceType") String referenceType,

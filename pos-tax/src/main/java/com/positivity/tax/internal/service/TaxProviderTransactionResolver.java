@@ -4,6 +4,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.tax.common.enums.TaxProviderTransactionStatus;
 import com.positivity.tax.internal.entity.TaxProviderTransaction;
 import com.positivity.tax.internal.repository.TaxProviderTransactionRepository;
+import com.positivity.tenancy.TenantResolver;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
@@ -65,6 +66,7 @@ class TaxProviderTransactionResolver {
 
     private final TaxProviderTransactionRepository repository;
     private final Clock clock;
+    private final TenantResolver tenantResolver;
 
     /**
      * Return the id of the lifecycle row for {@code referenceId}, creating it
@@ -95,6 +97,7 @@ class TaxProviderTransactionResolver {
         // transaction. The id
         // is generated in Java (ADR-0013 UUID v7); it is discarded on conflict.
         repository.insertIfAbsent(
+                tenantResolver.require(),
                 UUIDv7Generator.generate(),
                 referenceId,
                 referenceType,

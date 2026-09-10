@@ -11,6 +11,9 @@ import com.positivity.tax.common.enums.TaxProviderTransactionStatus;
 import com.positivity.tax.internal.entity.TaxProviderTransaction;
 import com.positivity.tax.internal.exception.TaxCalculationException;
 import com.positivity.tax.internal.repository.TaxProviderTransactionRepository;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantResolver;
+import com.positivity.tenancy.testing.TenantTestSupport;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.util.UUID;
@@ -65,7 +68,8 @@ class TaxProviderLifecycleServiceTest {
         when(selector.select()).thenReturn(provider);
         ObjectProvider<MeterRegistry> meterRegistry = mock(ObjectProvider.class);
         when(meterRegistry.getIfAvailable()).thenReturn(null);
-        TaxProviderTransactionResolver resolver = new TaxProviderTransactionResolver(repository, Clock.systemUTC());
+        TaxProviderTransactionResolver resolver =
+                new TaxProviderTransactionResolver(repository, Clock.systemUTC(), tenantResolver());
         service = new TaxProviderLifecycleService(selector, repository, resolver, meterRegistry);
     }
 
@@ -183,5 +187,12 @@ class TaxProviderLifecycleServiceTest {
         public TaxProviderTransactionResult voidTransaction(@NonNull UUID referenceId) {
             return new TaxProviderTransactionResult(referenceId, TaxProviderTransactionStatus.VOIDED, "ext-123", "ok");
         }
+    }
+
+    /** Resolves the alpha default tenant, as an unbound path does at runtime (ADR-0062). */
+    private static TenantResolver tenantResolver() {
+        TenancyProperties tenancy = new TenancyProperties();
+        tenancy.setDefaultTenantId(TenantTestSupport.TENANT_A);
+        return new TenantResolver(tenancy);
     }
 }

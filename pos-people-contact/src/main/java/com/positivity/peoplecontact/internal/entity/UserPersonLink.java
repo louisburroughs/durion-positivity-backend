@@ -2,6 +2,7 @@ package com.positivity.peoplecontact.internal.entity;
 
 import com.positivity.peoplecontact.internal.enums.UserLinkStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
@@ -29,7 +30,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
         indexes = @Index(name = "idx_user_person_links_person_id", columnList = "person_id"))
 @Getter
 @Setter
-public class UserPersonLink {
+public class UserPersonLink extends TenantScopedEntity {
 
     @Id
     @GeneratedValue

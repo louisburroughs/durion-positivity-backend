@@ -1,5 +1,6 @@
 package com.positivity.image.internal.entity;
 
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -21,7 +22,7 @@ import java.time.Instant;
  */
 @Entity
 @Table(name = "image_content")
-public class ImageContentEntity {
+public class ImageContentEntity extends TenantScopedEntity {
 
     /** Lower-case hex SHA-256 of {@link #content}. The identity of an image is its bytes. */
     @Id

@@ -1,5 +1,6 @@
 package com.positivity.image.internal.entity;
 
+import com.positivity.tenancy.TenantScopedEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import java.util.List;
@@ -9,7 +10,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "image")
 @Schema(description = "Represents an image stored in the POS system.")
-public class ImageEntity {
+public class ImageEntity extends TenantScopedEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Schema(description = "Unique identifier of the image", example = "1")
