@@ -93,8 +93,8 @@ FROM (VALUES
     -- retried on every re-run of this repeatable migration.
     ('01960010-0000-7000-8000-000000000019'::uuid, 'CONTROLLER')
 ) AS a(user_id, role_name)
-JOIN roles r ON r.name = a.role_name
-JOIN users u ON u.id = a.user_id
+JOIN roles r ON r.name = a.role_name AND r.tenant_id = app_current_tenant()
+JOIN users u ON u.id = a.user_id AND u.tenant_id = app_current_tenant()
 WHERE NOT EXISTS (
     SELECT 1
     FROM role_assignments ra
@@ -122,5 +122,5 @@ SELECT '01960010-0000-7000-9000-000000000016'::uuid,
        NOW(),
        'seed-generator'
 FROM roles r
-WHERE r.name = 'INVENTORY_CONTROLLER'
+WHERE r.name = 'INVENTORY_CONTROLLER' AND r.tenant_id = app_current_tenant()
 ON CONFLICT (tenant_id, id) DO NOTHING;
