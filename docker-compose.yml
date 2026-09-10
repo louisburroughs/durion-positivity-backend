@@ -1005,6 +1005,10 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       # tenant.events.v1 producer (outbox drain) and tenant.provisioned consumer
       POS_TENANT_KAFKA_ENABLED: ${POS_TENANT_KAFKA_ENABLED:-false}
+      # Shared secret for GET /internal/v1/tenants, the endpoint pos-tenancy-common's
+      # RemoteTenantRegistry polls (plan WS4-2). A module in pos.tenancy.registry.mode=REMOTE sends
+      # the same value as pos.tenancy.registry.secret. Local default only; alpha sets it in .env.
+      POS_TENANT_REGISTRY_API_SECRET: ${POS_TENANT_REGISTRY_API_SECRET:-durion-local-tenant-registry-secret}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_tenant_db
       SPRING_DATASOURCE_USERNAME: pos_app

@@ -78,7 +78,15 @@ pos:
   # PlatformTenantGuard refuses any other tenant with a 403. Never point this at a customer tenant.
   tenancy:
     default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000000}
+    # The internal registry endpoint is called by other services with a shared secret, not by a
+    # user, so no tenant arrives with the request; the controller binds the platform tenant itself.
+    unenforced-paths:
+      - /internal/v1/tenants
   tenant:
+    registry:
+      # Shared secret for GET /internal/v1/tenants (plan WS4-2): the value every module's
+      # pos.tenancy.registry.secret sends as X-Tenant-Registry-Secret. Blank refuses every call.
+      api-secret: ${POS_TENANT_REGISTRY_API_SECRET:}
     kafka:
       # tenant.events.v1: this module publishes every fact on it except tenant.provisioned, which it
       # consumes from pos-security-service (ADR-0062 section 7).

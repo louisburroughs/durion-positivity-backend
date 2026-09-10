@@ -104,6 +104,27 @@ The skip is the reason a new-service merge no longer shows a red **Sync Alpha Co
 green build (`pos-reference-mock`, #1646). Behaviour is covered by
 `scripts/tests/deploy-backend-config-only-selftest.sh`.
 
+### Service secrets on alpha (on-box `.env`)
+
+Compose interpolates the service-to-service secrets from the on-box env file
+(`${ALPHA_ROOT}/.env`); `deploy-backend.sh` writes only `BACKEND_TAG`, `ECR_REGISTRY`,
+`SECURITY_SEED_ADMIN_PASSWORD_HASH` and `SUPPLIER_AUDIT_ENC_KEY` there itself. Every other secret
+is an entry an operator adds once, by hand, before the service that needs it is deployed; a
+missing entry interpolates to empty and the receiving service fails closed (a 401 on the guarded
+path), it does not fall back.
+
+| Entry | Consumed by | Guards |
+| --- | --- | --- |
+| `POS_EVENTS_API_SECRET` | `pos-event-receiver` and every emitting module | `X-Events-Api-Secret` on event and event-type registration |
+| `POS_SECURITY_API_SECRET` | `pos-security-service` and every registering module | `X-Permissions-Api-Secret` on `/v1/permissions/register` |
+| `POS_TENANT_REGISTRY_API_SECRET` | `pos-tenant`, and any module with `pos.tenancy.registry.mode=REMOTE` (as `pos.tenancy.registry.secret`) | `X-Tenant-Registry-Secret` on `GET /internal/v1/tenants` (ADR-0062 plan WS4-2) |
+
+The root `docker-compose.yml` gives `POS_TENANT_REGISTRY_API_SECRET` a local default for the dev
+stack only; alpha must set it in `.env` (`openssl rand -hex 32`) before any module is switched to
+`REMOTE`, and the same value goes to those modules. Rotating it is two config syncs: change the
+entry, recreate `pos-tenant`, then the consumers (their `RemoteTenantRegistry` keeps the last good
+snapshot while the values disagree, logging one WARN per module until the next refresh succeeds).
+
 ### Health and Readiness Checks
 
 ```bash

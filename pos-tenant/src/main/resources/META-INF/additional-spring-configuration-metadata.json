@@ -19,6 +19,11 @@
       "defaultValue": "pos-tenant-events"
     },
     {
+      "name": "pos.tenant.registry.api-secret",
+      "type": "java.lang.String",
+      "description": "Shared secret other services send as X-Tenant-Registry-Secret to GET /internal/v1/tenants (pos-tenancy-common RemoteTenantRegistry). Blank refuses every call."
+    },
+    {
       "name": "pos.tenant.outbox.poll-interval-ms",
       "type": "java.lang.Long",
       "description": "Outbox drain poll interval in milliseconds.",
