@@ -1434,7 +1434,7 @@ FROM (VALUES
     ('SYSTEM_ADMINISTRATOR', 'supplier:transmission:resolve'),
     ('SYSTEM_ADMINISTRATOR', 'workorder:events:replay')
 ) AS g(role_name, permission_name)
-JOIN roles r ON r.name = g.role_name
+JOIN roles r ON r.name = g.role_name AND r.tenant_id = app_current_tenant()
 JOIN permissions p ON p.name = g.permission_name
 ON CONFLICT DO NOTHING;
 
@@ -1460,7 +1460,8 @@ BEGIN
         ('SHOP_MANAGER'),
         ('SYSTEM_ADMINISTRATOR')
       ) AS g(role_name)
-     WHERE NOT EXISTS (SELECT 1 FROM roles r WHERE r.name = g.role_name);
+     WHERE NOT EXISTS (SELECT 1 FROM roles r
+                        WHERE r.name = g.role_name AND r.tenant_id = app_current_tenant());
 
     SELECT string_agg(DISTINCT g.permission_name, ', ' ORDER BY g.permission_name)
       INTO missing_permissions

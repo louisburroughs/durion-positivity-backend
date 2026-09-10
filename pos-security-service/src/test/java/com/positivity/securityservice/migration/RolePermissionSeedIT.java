@@ -266,7 +266,8 @@ class RolePermissionSeedIT {
     @DisplayName("an unresolvable permission name aborts the seed and names the permission")
     void seed_unknownPermissionName_failsLoudly() {
         jdbc().update("DELETE FROM role_permissions WHERE permission_id = "
-                + "(SELECT id FROM permissions WHERE name = 'shop:schedule:edit')");
+                + "(SELECT id FROM permissions WHERE name = 'shop:schedule:edit') "
+                + "AND tenant_id = app_current_tenant()");
         jdbc().update("UPDATE permissions SET name = 'shop:schedule:edit_renamed' "
                 + "WHERE name = 'shop:schedule:edit'");
         try {
