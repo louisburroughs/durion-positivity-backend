@@ -109,8 +109,7 @@ class RoleManagementServiceImplTest {
     /** ADR-0062 §6 (WS8): a role loaded into the platform tenant joins the template under its own name. */
     @Test
     void provisionTemplateRole_createsTheRoleWithItsNameAsTemplateKey() {
-        when(roleRepository.findByName("WARRANTY_CLERK")).thenReturn(Optional.empty());
-        when(roleRepository.existsByNameIgnoreCase("WARRANTY_CLERK")).thenReturn(false);
+        when(roleRepository.findByNameIgnoreCase("WARRANTY_CLERK")).thenReturn(Optional.empty());
         when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         RoleDto created = roleManagementService.provisionTemplateRole(
@@ -127,7 +126,7 @@ class RoleManagementServiceImplTest {
         role.setId(UUID.fromString("00000000-0000-0000-0000-000000000007"));
         role.setName("SHOP_MANAGER");
         role.setDescription("as the platform wrote it");
-        when(roleRepository.findByName("SHOP_MANAGER")).thenReturn(Optional.of(role));
+        when(roleRepository.findByNameIgnoreCase("SHOP_MANAGER")).thenReturn(Optional.of(role));
         when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         RoleDto marked = roleManagementService.provisionTemplateRole(
@@ -139,13 +138,30 @@ class RoleManagementServiceImplTest {
         verify(rolePersonaEventEmitter, never()).rolePersonaChanged(any(Role.class));
     }
 
+    /** Uniqueness is case-insensitive, so a differently-cased row is the same role: marked under its own name. */
+    @Test
+    void provisionTemplateRole_marksADifferentlyCasedExistingRoleUnderItsStoredName() {
+        Role role = new Role();
+        role.setId(UUID.fromString("00000000-0000-0000-0000-000000000009"));
+        role.setName("Shop_Manager");
+        when(roleRepository.findByNameIgnoreCase("SHOP_MANAGER")).thenReturn(Optional.of(role));
+        when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RoleDto marked = roleManagementService.provisionTemplateRole(
+                new RoleCreateRequest("SHOP_MANAGER", null, null, null, null, null, null));
+
+        assertThat(marked.getName()).isEqualTo("Shop_Manager");
+        assertThat(marked.getTemplateKey()).isEqualTo("Shop_Manager");
+        verify(roleRepository, never()).existsByNameIgnoreCase(any());
+    }
+
     @Test
     void provisionTemplateRole_isANoOpForARoleAlreadyInTheTemplate() {
         Role role = new Role();
         role.setId(UUID.fromString("00000000-0000-0000-0000-000000000008"));
         role.setName("ADMIN");
         role.setTemplateKey("ADMIN");
-        when(roleRepository.findByName("ADMIN")).thenReturn(Optional.of(role));
+        when(roleRepository.findByNameIgnoreCase("ADMIN")).thenReturn(Optional.of(role));
 
         RoleDto unchanged = roleManagementService.provisionTemplateRole(
                 new RoleCreateRequest("ADMIN", null, null, null, null, null, null));

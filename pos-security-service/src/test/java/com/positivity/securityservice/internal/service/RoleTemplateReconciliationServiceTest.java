@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -34,6 +35,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * {@code reconcileTemplate(tenant)} (ADR-0062 §6, plan WS8): copies template roles the tenant
@@ -112,7 +114,7 @@ class RoleTemplateReconciliationServiceTest {
     void copiesMissingRoles() {
         platformCaller();
         when(templates.snapshot()).thenReturn(List.of(entry("WARRANTY_CLERK", "warranty:claim:view")));
-        when(roles.findByName("WARRANTY_CLERK")).thenReturn(Optional.empty());
+        when(roles.findByNameIgnoreCase("WARRANTY_CLERK")).thenReturn(Optional.empty());
         AtomicReference<Optional<UUID>> boundDuringSave = new AtomicReference<>();
         when(roles.save(any(Role.class))).thenAnswer(invocation -> {
             boundDuringSave.set(TenantContext.current());
@@ -134,6 +136,12 @@ class RoleTemplateReconciliationServiceTest {
                 .extracting(Permission::getName)
                 .containsExactly("warranty:claim:view");
         assertThat(saved.getValue().getCreatedBy()).isEqualTo(RoleTemplateReconciliationService.ACTOR);
+        verify(roles)
+                .recordGrantProvenance(
+                        any(),
+                        eq(List.of(permission("warranty:claim:view").getId())),
+                        eq(RoleTemplateReconciliationService.ACTOR),
+                        eq(NOW));
         assertThat(boundDuringSave.get()).contains(TENANT);
         assertThat(TenantContext.current())
                 .as("the platform binding is restored")
@@ -146,7 +154,7 @@ class RoleTemplateReconciliationServiceTest {
         platformCaller();
         when(templates.snapshot()).thenReturn(List.of(entry("SHOP_MANAGER", "crm:party:view", "warranty:claim:view")));
         Role shopManager = existingRole("SHOP_MANAGER", "SHOP_MANAGER", "crm:party:view", "order:view");
-        when(roles.findByName("SHOP_MANAGER")).thenReturn(Optional.of(shopManager));
+        when(roles.findByNameIgnoreCase("SHOP_MANAGER")).thenReturn(Optional.of(shopManager));
 
         RoleTemplateReconcileResponse outcome = service.reconcile(TENANT);
 
@@ -175,7 +183,7 @@ class RoleTemplateReconciliationServiceTest {
         platformCaller();
         when(templates.snapshot()).thenReturn(List.of(entry("DISPATCHER", "crm:party:view", "not:registered:yet")));
         Role dispatcher = existingRole("DISPATCHER", null, "crm:party:view");
-        when(roles.findByName("DISPATCHER")).thenReturn(Optional.of(dispatcher));
+        when(roles.findByNameIgnoreCase("DISPATCHER")).thenReturn(Optional.of(dispatcher));
         when(permissions.findByName("not:registered:yet")).thenReturn(Optional.empty());
 
         RoleTemplateReconcileResponse outcome = service.reconcile(TENANT);
@@ -188,12 +196,67 @@ class RoleTemplateReconciliationServiceTest {
     }
 
     @Test
+    @DisplayName("a differently-cased tenant role is the template role, matched case-insensitively and kept as named")
+    void matchesExistingRolesCaseInsensitively() {
+        platformCaller();
+        when(templates.snapshot()).thenReturn(List.of(entry("SHOP_MANAGER", "crm:party:view")));
+        Role shopManager = existingRole("shop_manager", null, "crm:party:view");
+        when(roles.findByNameIgnoreCase("SHOP_MANAGER")).thenReturn(Optional.of(shopManager));
+
+        RoleTemplateReconcileResponse outcome = service.reconcile(TENANT);
+
+        assertThat(outcome.rolesCreated()).as("no duplicate is created").isEmpty();
+        assertThat(outcome.templateKeysAssigned()).containsExactly("shop_manager");
+        assertThat(shopManager.getName()).as("the tenant's stored name stays").isEqualTo("shop_manager");
+        assertThat(shopManager.getTemplateKey())
+                .as("the template's canonical name is the key")
+                .isEqualTo("SHOP_MANAGER");
+    }
+
+    @Test
+    @DisplayName("a unique-key collision with a concurrent reconciliation is retried and converges")
+    void retriesOnAConcurrentInsert() {
+        RoleTemplateReconciliationService.BoundOperations racing =
+                mock(RoleTemplateReconciliationService.BoundOperations.class);
+        RoleTemplateReconciliationService racingService =
+                new RoleTemplateReconciliationService(templates, tenants, racing);
+        TenantContext.bind(PlatformTenant.ID);
+        when(tenants.existsById(TENANT)).thenReturn(true);
+        List<RoleTemplateEntry> template = List.of(entry("WARRANTY_CLERK", "warranty:claim:view"));
+        when(templates.snapshot()).thenReturn(template);
+        RoleTemplateReconcileResponse converged =
+                new RoleTemplateReconcileResponse(TENANT, List.of(), List.of(), List.of());
+        when(racing.apply(TENANT, template))
+                .thenThrow(new DataIntegrityViolationException("roles_tenant_id_name_key"))
+                .thenReturn(converged);
+
+        assertThat(racingService.reconcile(TENANT)).isSameAs(converged);
+        verify(racing, times(2)).apply(TENANT, template);
+    }
+
+    @Test
+    @DisplayName("a collision that persists is given up on after the last attempt")
+    void givesUpAfterTheLastAttempt() {
+        RoleTemplateReconciliationService.BoundOperations racing =
+                mock(RoleTemplateReconciliationService.BoundOperations.class);
+        RoleTemplateReconciliationService racingService =
+                new RoleTemplateReconciliationService(templates, tenants, racing);
+        TenantContext.bind(PlatformTenant.ID);
+        when(tenants.existsById(TENANT)).thenReturn(true);
+        when(templates.snapshot()).thenReturn(List.of());
+        when(racing.apply(eq(TENANT), any())).thenThrow(new DataIntegrityViolationException("still colliding"));
+
+        assertThatThrownBy(() -> racingService.reconcile(TENANT)).isInstanceOf(DataIntegrityViolationException.class);
+        verify(racing, times(RoleTemplateReconciliationService.MAX_ATTEMPTS)).apply(eq(TENANT), any());
+    }
+
+    @Test
     @DisplayName("a tenant already up to the template is untouched: nothing saved, empty lists")
     void isIdempotent() {
         platformCaller();
         when(templates.snapshot()).thenReturn(List.of(entry("SHOP_MANAGER", "crm:party:view")));
         Role shopManager = existingRole("SHOP_MANAGER", "SHOP_MANAGER", "crm:party:view");
-        when(roles.findByName("SHOP_MANAGER")).thenReturn(Optional.of(shopManager));
+        when(roles.findByNameIgnoreCase("SHOP_MANAGER")).thenReturn(Optional.of(shopManager));
 
         RoleTemplateReconcileResponse outcome = service.reconcile(TENANT);
 

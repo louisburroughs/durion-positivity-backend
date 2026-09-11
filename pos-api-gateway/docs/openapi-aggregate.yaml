@@ -1265,6 +1265,8 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1permissions~1validate~1{permissionName}
   /v1/permissions/{id}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1permissions~1{id}
+  /v1/platform/tenants/{tenantId}/roles/reconcile-template:
+    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1platform~1tenants~1{tenantId}~1roles~1reconcile-template
   /v1/roles:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1roles
   /v1/roles/assignments:

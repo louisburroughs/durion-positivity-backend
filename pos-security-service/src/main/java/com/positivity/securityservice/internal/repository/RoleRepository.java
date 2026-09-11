@@ -25,6 +25,13 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
     boolean existsByNameIgnoreCase(String name);
 
     /**
+     * The role a name resolves to under the same case-insensitive uniqueness {@link
+     * #existsByNameIgnoreCase} enforces (ADR-0062 §6, WS8): the template's canonical name and a
+     * tenant's differently-cased copy are one role, never two.
+     */
+    Optional<Role> findByNameIgnoreCase(String name);
+
+    /**
      * The bound tenant's template roles (ADR-0062 §6). Read under the platform binding this is
      * the role template every new tenant is provisioned from.
      */

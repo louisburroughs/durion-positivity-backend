@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the security module.
-     * Total: 40 event types.
+     * Total: 41 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(

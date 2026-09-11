@@ -92,13 +92,16 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     /**
      * The platform bulk load's role (ADR-0062 §6, plan WS8): created with {@code template_key} =
      * its name, or, when a role of that name already exists, marked with it when it carries none.
-     * Everything else about an existing role is left alone, so re-running {@code roles.csv} against
-     * the platform tenant is a no-op for roles it already provisioned.
+     * Names resolve case-insensitively, the same uniqueness {@link #createRole} enforces, and the
+     * stored name is the canonical one: a differently-cased row is the same role, so it is marked
+     * under its own name rather than refused or duplicated. Everything else about an existing role
+     * is left alone, so re-running {@code roles.csv} against the platform tenant is a no-op for
+     * roles it already provisioned.
      */
     @Override
     @Transactional
     public RoleDto provisionTemplateRole(@NonNull RoleCreateRequest request) {
-        Optional<Role> existing = roleRepository.findByName(request.name());
+        Optional<Role> existing = roleRepository.findByNameIgnoreCase(request.name());
         if (existing.isPresent()) {
             Role role = existing.get();
             if (role.getTemplateKey() == null) {
@@ -108,9 +111,6 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 role = roleRepository.save(role);
             }
             return toRoleDto(role);
-        }
-        if (roleRepository.existsByNameIgnoreCase(request.name())) {
-            throw new DuplicateRoleNameException("Role with name " + request.name() + " already exists");
         }
         Role role = new Role();
         role.setName(request.name());
