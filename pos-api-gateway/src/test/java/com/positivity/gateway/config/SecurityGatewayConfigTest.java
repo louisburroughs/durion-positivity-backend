@@ -247,6 +247,52 @@ class SecurityGatewayConfigTest {
     }
 
     @Test
+    void internalServicePath_isNeverForwarded_evenWithAPlatformTokenAndTheSharedSecret() {
+        GlobalFilter filter = new SecurityGatewayConfig(
+                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                .authFilter();
+        AtomicReference<Boolean> forwarded = new AtomicReference<>(false);
+        GatewayFilterChain chain = ex -> {
+            forwarded.set(true);
+            return Mono.empty();
+        };
+        MockServerWebExchange exchange =
+                MockServerWebExchange.from(MockServerHttpRequest.get("/tenant/internal/v1/tenants")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + buildTenantToken(TENANT_ID))
+                        .header("X-Tenant-Registry-Secret", "anything")
+                        .build());
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(forwarded.get()).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(exchange.getResponse().getBodyAsString().block()).contains("\"code\":\"INTERNAL_PATH\"");
+
+        // ApiVersionHeaderToPathFilter runs at HIGHEST_PRECEDENCE and injects the X-API-Version
+        // segment, so the same request reaches this filter as /tenant/v1/internal/v1/tenants.
+        AtomicReference<Boolean> versionedForwarded = new AtomicReference<>(false);
+        MockServerWebExchange versioned =
+                MockServerWebExchange.from(MockServerHttpRequest.get("/tenant/v1/internal/v1/tenants")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + buildTenantToken(TENANT_ID))
+                        .header("X-Tenant-Registry-Secret", "anything")
+                        .build());
+        filter.filter(versioned, ex -> {
+                    versionedForwarded.set(true);
+                    return Mono.empty();
+                })
+                .block();
+        assertThat(versionedForwarded.get()).isFalse();
+        assertThat(versioned.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        // A public path and an ordinary versioned path are unaffected by the rule.
+        assertThat(forward(
+                        new GatewayAuthProperties(),
+                        MockServerHttpRequest.get("/people/v1/employees")
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + buildTenantToken(TENANT_ID))
+                                .build()))
+                .isNotNull();
+    }
+
+    @Test
     void tidClaim_isForwardedAsXTenantId_andInboundCopyIsReplaced() {
         HttpHeaders headers = forward(
                 new GatewayAuthProperties(),

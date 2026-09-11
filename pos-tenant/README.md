@@ -23,6 +23,8 @@ billing profile. `pos-security-service` does not own the registry; it consumes i
   by `eventId` through `processed_events`
 - `PlatformTenantGuard` — 403 `PLATFORM_TENANT_REQUIRED` for any request bound to a tenant other
   than the platform tenant
+- `InternalTenantRegistryController` / `TenantRegistrySecretFilter` — the shared-secret list
+  endpoint other services' `RemoteTenantRegistry` polls (plan WS4-2)
 
 ## API Endpoints
 
@@ -38,6 +40,26 @@ template grants.
 - `POST /v1/platform/accounts`, `GET /v1/platform/accounts[/{id}]`, `PATCH /v1/platform/accounts/{id}`
 - `POST /v1/platform/accounts/{id}/contacts`, `PUT|DELETE /v1/platform/accounts/{id}/contacts/{contactId}`
 - `PUT /v1/platform/accounts/{id}/billing-profile`
+
+### Internal registry endpoint (not through the gateway)
+
+`GET /internal/v1/tenants[?status=ACTIVE]` returns a JSON array of the public projection
+(`{tenantId, slug, displayName, status}`, the `TenantProjectionV1` shape) for every tenant in the
+status, oldest first; `status` defaults to `ACTIVE`. It exists for `pos-tenancy-common`'s
+`RemoteTenantRegistry` (`pos.tenancy.registry.mode=REMOTE`, plan WS4-2, decided 2026-09-10):
+modules that run per-tenant scheduled work fetch the active tenants from here instead of keeping
+an `ext_tenant` replica each.
+
+- Authentication is the shared secret header `X-Tenant-Registry-Secret`, compared in constant
+  time against `pos.tenant.registry.api-secret` (`POS_TENANT_REGISTRY_API_SECRET`). A wrong or
+  missing header is a 401 `ApiError` `INVALID_TENANT_REGISTRY_SECRET`; an unconfigured secret
+  refuses every call with 401 `TENANT_REGISTRY_SECRET_MISSING`.
+- The path has its own security chain (`SecurityConfig`), is hidden from the OpenAPI document,
+  needs no `platform:*` authority and emits no event.
+- The caller carries no tenant, so the path is in `pos.tenancy.unenforced-paths` and the
+  secret filter binds the platform tenant at the request edge (every registry row belongs to it under RLS).
+
+Callers reach it by Eureka name (`http://tenant/internal/v1/tenants`) through a `@LoadBalanced` client, or by DNS host (`http://pos-tenant:8080/internal/v1/tenants` in Compose) with a plain one; never via the gateway.
 
 ## Events (`tenant.events.v1`, keyed by tenant id)
 
@@ -71,6 +93,8 @@ tenant. Global tables: `db/tenancy-global-tables.txt`.
 
 | Property | Default | Purpose |
 | --- | --- | --- |
+| `pos.tenant.registry.api-secret` | (blank: refuse) | Shared secret for `GET /internal/v1/tenants` (`POS_TENANT_REGISTRY_API_SECRET`) |
+| `pos.tenancy.unenforced-paths` | `/internal/v1/tenants` | Paths `TenantContextFilter` never refuses for lack of a tenant |
 | `pos.tenant.kafka.enabled` | `false` | Outbox drain, fact publishing and the `tenant.provisioned` consumer |
 | `pos.tenant.kafka.events-topic` | `tenant.events.v1` | Fact topic |
 | `pos.tenant.kafka.events-consumer-group` | `pos-tenant-events` | Consumer group |

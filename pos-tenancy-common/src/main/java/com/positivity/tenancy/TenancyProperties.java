@@ -1,5 +1,6 @@
 package com.positivity.tenancy;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -29,7 +30,10 @@ public class TenancyProperties {
      */
     private boolean enforce = true;
 
-    /** Tenants a {@link TenantIterator} visits until the {@code ext_tenant} replica exists (plan WS2a). */
+    /**
+     * Tenants a {@link TenantIterator} visits in {@link Registry.Mode#STATIC} mode, and the snapshot
+     * a {@link RemoteTenantRegistry} starts from before its first successful fetch.
+     */
     private List<UUID> tenants = new ArrayList<>();
 
     /**
@@ -42,6 +46,8 @@ public class TenancyProperties {
     private List<String> unenforcedPaths = new ArrayList<>();
 
     private final Datasource datasource = new Datasource();
+
+    private final Registry registry = new Registry();
 
     public Optional<UUID> getDefaultTenantId() {
         return Optional.ofNullable(defaultTenantId);
@@ -80,6 +86,10 @@ public class TenancyProperties {
         return datasource;
     }
 
+    public Registry getRegistry() {
+        return registry;
+    }
+
     /** {@code pos.tenancy.datasource.*}. */
     public static class Datasource {
 
@@ -92,6 +102,93 @@ public class TenancyProperties {
 
         public void setEnabled(boolean enabled) {
             this.enabled = enabled;
+        }
+    }
+
+    /**
+     * {@code pos.tenancy.registry.*}: where {@link TenantRegistry} gets the active tenants from
+     * (plan WS4-2, decided 2026-09-10).
+     */
+    public static class Registry {
+
+        /** Source of the tenant list. */
+        public enum Mode {
+            /** {@link StaticTenantRegistry}: {@code pos.tenancy.tenants}, else the default tenant. */
+            STATIC,
+            /**
+             * {@link RemoteTenantRegistry}: a cached, shared-secret lookup against {@code pos-tenant}'s
+             * internal list endpoint, starting from the static list.
+             */
+            REMOTE
+        }
+
+        private Mode mode = Mode.STATIC;
+
+        /**
+         * Full URL of {@code pos-tenant}'s internal list endpoint. The default names the Eureka
+         * service id ({@code http://tenant/...}) and is only usable by a module that declares a
+         * {@code @LoadBalanced RestClient.Builder}; a module without one must set a DNS-resolvable
+         * host (in Compose, {@code http://pos-tenant:8080/internal/v1/tenants}) or the auto-configuration
+         * refuses to start in {@code REMOTE} mode.
+         */
+        private String url = "http://tenant/internal/v1/tenants";
+
+        /** Shared secret sent as {@code X-Tenant-Registry-Secret}; {@code pos.tenant.registry.api-secret} on the server. */
+        private String secret = "";
+
+        /** The snapshot is refreshed at most this often, lazily on read. */
+        private Duration refresh = Duration.ofSeconds(60);
+
+        private Duration connectTimeout = Duration.ofSeconds(2);
+
+        private Duration readTimeout = Duration.ofSeconds(5);
+
+        public Mode getMode() {
+            return mode;
+        }
+
+        public void setMode(Mode mode) {
+            this.mode = mode;
+        }
+
+        public String getUrl() {
+            return url;
+        }
+
+        public void setUrl(String url) {
+            this.url = url;
+        }
+
+        public String getSecret() {
+            return secret;
+        }
+
+        public void setSecret(@Nullable String secret) {
+            this.secret = secret == null ? "" : secret;
+        }
+
+        public Duration getRefresh() {
+            return refresh;
+        }
+
+        public void setRefresh(Duration refresh) {
+            this.refresh = refresh;
+        }
+
+        public Duration getConnectTimeout() {
+            return connectTimeout;
+        }
+
+        public void setConnectTimeout(Duration connectTimeout) {
+            this.connectTimeout = connectTimeout;
+        }
+
+        public Duration getReadTimeout() {
+            return readTimeout;
+        }
+
+        public void setReadTimeout(Duration readTimeout) {
+            this.readTimeout = readTimeout;
         }
     }
 }
