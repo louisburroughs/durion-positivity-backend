@@ -70,6 +70,17 @@ WHOLE_MODULE_GLOBAL = {
 
 TENANT_COL_LINE = "    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,"
 
+# Scoped tables whose PRIMARY KEY must lead with tenant_id instead of keeping the source key and
+# gaining a side _tenant_key. Leaving the key global is safe only for a UUID v7 surrogate, which no
+# two tenants can mint alike. These tables are keyed on a *business* key -- derived from the row's
+# own content, or from data a caller supplies -- and primary and unique constraints are enforced
+# across every row whatever row-level security hides, so a global key lets one tenant's insert
+# collide with a row it cannot see. See docs/TENANCY_SCHEMA.md, "Business-key primary keys".
+TENANT_LED_PK = {
+    # SHA-256 of the image bytes: two tenants storing the same picture derive it identically.
+    "image_content",
+}
+
 
 def ident(name: str) -> str:
     if len(name) <= 63:
@@ -181,6 +192,19 @@ def main(module: str, dump: Path, out_dir: Path):
                 out.append(s)
                 continue
             if kind == "PRIMARY KEY":
+                if t in TENANT_LED_PK and "tenant_id" not in pk[t]:
+                    # Rewrite the key itself rather than bolting a side unique beside a global one.
+                    # No _tenant_key is emitted: this key already covers (tenant_id, <pk cols>), so
+                    # the side constraint would be a second identical index, and FKs can target the
+                    # primary key directly.
+                    cols = ", ".join(pk[t])
+                    out.append(
+                        f"ALTER TABLE ONLY public.{t}\n"
+                        f"    ADD CONSTRAINT {ident(f'{t}_pkey')} PRIMARY KEY (tenant_id, {cols});"
+                    )
+                    tenant_keys_added.add((t, pk[t]))
+                    notes.append(f"{t}: primary key led with tenant_id (business key, TENANT_LED_PK)")
+                    continue
                 out.append(s)
                 if "tenant_id" not in pk[t]:
                     out.append(tenant_key_stmt(t, pk[t]))

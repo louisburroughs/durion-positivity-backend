@@ -3,12 +3,18 @@ package com.positivity.image.tenancy;
 import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_B;
 import static com.positivity.tenancy.testing.TenantTestSupport.asTenant;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.image.internal.entity.ImageContentEntity;
 import com.positivity.image.internal.entity.ImageEntity;
+import com.positivity.image.internal.repository.ImageContentRepository;
 import com.positivity.image.internal.repository.ImageRepository;
 import com.positivity.tenancy.TenantContext;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -28,6 +34,9 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
 
     @Autowired
     private ImageRepository rows;
+
+    @Autowired
+    private ImageContentRepository content;
 
     @Autowired
     private DataSource dataSource;
@@ -73,6 +82,88 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                 () -> assertThat(rows.findById(id).orElseThrow().getFilename())
                         .as("tenant B's UPDATE touched nothing")
                         .isEqualTo("logo.png"));
+    }
+
+    /**
+     * Two tenants storing byte-identical artwork must each end up with their own readable copy.
+     *
+     * <p>The baseline keyed {@code image_content} on the content hash alone. Unique and primary key
+     * constraints are enforced across every row whatever row-level security hides, so the second
+     * tenant's insert collided with a row it could not see; {@code ImageStorageServiceImpl} read
+     * that collision as a concurrent store of its own and left the image unreadable ever after.
+     * The baseline now leads that key with {@code tenant_id}, so identical bytes are simply two rows.
+     */
+    @Test
+    void twoTenantsCanEachHoldTheSameContentHash() {
+        // The real scenario: the SAME bytes, so both tenants derive the SAME hash the way the
+        // service does. A synthetic hash over differing bytes would not reproduce it — the whole
+        // point is that content addressing makes two tenants collide on identical artwork.
+        byte[] sameArtwork = "the identical picture, byte for byte".getBytes(UTF_8);
+        String sharedHash = sha256Hex(sameArtwork);
+
+        asTenant(TENANT_A, () -> content.saveAndFlush(content(sharedHash, sameArtwork)));
+        asTenant(TENANT_B, () -> content.saveAndFlush(content(sharedHash, sameArtwork)));
+
+        asTenant(TENANT_A, () -> {
+            ImageContentEntity mine = content.findById(sharedHash).orElseThrow();
+            assertThat(mine.getTenantId())
+                    .as("tenant A reads its own row, not the one the other tenant stored")
+                    .isEqualTo(TENANT_A);
+            assertThat(mine.getContent()).isEqualTo(sameArtwork);
+        });
+
+        asTenant(TENANT_B, () -> {
+            ImageContentEntity mine = content.findById(sharedHash).orElseThrow();
+            assertThat(mine.getTenantId())
+                    .as("tenant B reads its own row; with a global key this row could not be stored at all")
+                    .isEqualTo(TENANT_B);
+            assertThat(mine.getContent()).isEqualTo(sameArtwork);
+        });
+
+        // Two distinct rows now share the hash. Each tenant sees exactly its own: RLS scopes what is
+        // visible, and the tenant-led primary key is what allows the second row to exist at all.
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        asTenant(
+                TENANT_A,
+                () -> assertThat(countByHash(jdbc, sharedHash))
+                        .as("tenant A sees one row for the shared hash: its own")
+                        .isEqualTo(1));
+        asTenant(
+                TENANT_B,
+                () -> assertThat(countByHash(jdbc, sharedHash))
+                        .as("tenant B sees one row for the shared hash: its own")
+                        .isEqualTo(1));
+        assertThat(countByHash(jdbc, sharedHash)).as("unbound, RLS hides both").isZero();
+    }
+
+    /** The same derivation {@code ImageStorageServiceImpl} uses, so the fixture collides for real. */
+    private static String sha256Hex(byte[] content) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(content);
+            StringBuilder hex = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                hex.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is required by the platform", e);
+        }
+    }
+
+    private static int countByHash(JdbcTemplate jdbc, String contentHash) {
+        Integer count = jdbc.queryForObject(
+                "SELECT count(*) FROM image_content WHERE content_hash = ?", Integer.class, contentHash);
+        return count == null ? 0 : count;
+    }
+
+    private static ImageContentEntity content(String contentHash, byte[] bytes) {
+        ImageContentEntity entity = new ImageContentEntity();
+        entity.setContentHash(contentHash);
+        entity.setContentType("image/png");
+        entity.setByteSize(bytes.length);
+        entity.setContent(bytes);
+        entity.setCreatedAt(Instant.EPOCH);
+        return entity;
     }
 
     private static ImageEntity image() {

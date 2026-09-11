@@ -91,11 +91,18 @@ public class ImageStorageServiceImpl implements ImageStorageService {
     }
 
     /**
-     * Writes the bytes unless they are already held.
+     * Writes the bytes unless this tenant already holds them.
      *
      * <p>The insert can lose a race with a concurrent ingest of the same artwork — two catalogue
      * runs, or two instances. That collision means the content is present, which is the outcome
      * wanted, so it is treated as success rather than failing an ingest over a duplicate.
+     *
+     * <p>Both steps are tenant-scoped, and the swallow above is only sound because of it. The
+     * existence check reads through Hibernate's {@code @TenantId} filter and row-level security, so
+     * it answers for this tenant alone; the key it collides against is {@code (tenant_id,
+     * content_hash)}. That key was once the hash alone: another tenant's row — invisible to the
+     * check — collided here, was read as "already present", and left this tenant's image pointing at
+     * bytes it could never read. Narrowing this catch or widening that key reopens exactly that.
      */
     private void storeContentOnce(String contentHash, String contentType, byte[] content) {
         if (contentRepository.existsById(contentHash)) {
