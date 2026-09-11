@@ -4,6 +4,8 @@ import com.positivity.bulkloader.internal.entity.TusUpload;
 import com.positivity.bulkloader.internal.exception.TusOffsetConflictException;
 import com.positivity.bulkloader.internal.exception.TusUploadExpiredException;
 import com.positivity.bulkloader.internal.repository.TusUploadRepository;
+import com.positivity.tenancy.PlatformTenant;
+import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantIterator;
 import java.io.IOException;
 import java.io.InputStream;
@@ -16,8 +18,10 @@ import java.nio.file.StandardOpenOption;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -145,12 +149,22 @@ public class TusUploadServiceImpl implements TusUploadService {
      * Per-tenant sweep (ADR-0062 §3): {@code tus_upload} is tenant-scoped, so the expired rows are
      * visible only under their tenant's binding. Each tenant's transaction opens inside the
      * binding ({@link TransactionTemplate}, not {@code @Transactional}: a transaction begun before
-     * the iterator binds would run unbound and see nothing).
+     * the iterator binds would run unbound and see nothing). The platform tenant is visited as
+     * well: no registry lists it as active, yet platform loads (the role template's {@code
+     * roles.csv}) leave uploads there like any other job.
      */
     @Scheduled(fixedDelayString = "${bulk-loader.tus.cleanup-interval-ms:3600000}")
     public void cleanupExpiredUploads() {
-        tenantIterator.forEachActiveTenant(
-                tenantId -> transactionTemplate.executeWithoutResult(status -> cleanupExpiredUploadsOfBoundTenant()));
+        Set<UUID> visited = new HashSet<>();
+        tenantIterator.forEachActiveTenant(tenantId -> {
+            visited.add(tenantId);
+            transactionTemplate.executeWithoutResult(status -> cleanupExpiredUploadsOfBoundTenant());
+        });
+        if (!visited.contains(PlatformTenant.ID)) {
+            TenantContext.runAs(
+                    PlatformTenant.ID,
+                    () -> transactionTemplate.executeWithoutResult(status -> cleanupExpiredUploadsOfBoundTenant()));
+        }
     }
 
     void cleanupExpiredUploadsOfBoundTenant() {

@@ -119,7 +119,9 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
                 operatorId,
                 request.getDomainType(),
                 tenantId);
-        return toResponse(saved);
+        // Hibernate stamps tenant_id at flush, after this transaction's work, so the entity's own
+        // tenant is still null here; the response names the tenant the row was created under.
+        return toResponse(saved, tenantId);
     }
 
     @Override
@@ -276,11 +278,15 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
     }
 
     private BulkLoadJobResponse toResponse(BulkLoadJob job) {
+        return toResponse(job, job.getTenantId());
+    }
+
+    private BulkLoadJobResponse toResponse(BulkLoadJob job, @Nullable UUID tenantId) {
         return BulkLoadJobResponse.builder()
                 .id(job.getId())
                 .operatorId(job.getOperatorId())
                 .locationId(job.getLocationId())
-                .tenantId(job.getTenantId())
+                .tenantId(tenantId)
                 .fileName(job.getFileName())
                 .domainType(job.getDomainType())
                 .status(job.getStatus())

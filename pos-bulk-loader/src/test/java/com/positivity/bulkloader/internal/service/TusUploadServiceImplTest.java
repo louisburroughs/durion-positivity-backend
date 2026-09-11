@@ -15,6 +15,7 @@ import com.positivity.bulkloader.internal.entity.TusUpload;
 import com.positivity.bulkloader.internal.exception.TusOffsetConflictException;
 import com.positivity.bulkloader.internal.exception.TusUploadExpiredException;
 import com.positivity.bulkloader.internal.repository.TusUploadRepository;
+import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.StaticTenantRegistry;
 import com.positivity.tenancy.TenancyProperties;
 import com.positivity.tenancy.TenantContext;
@@ -99,6 +100,11 @@ class TusUploadServiceImplTest {
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 new TenantIterator(new StaticTenantRegistry(tenancyProperties)),
                 transactionManager);
+    }
+
+    /** What a tenant-scoped finder answers: the rows under {@code owner}'s binding, nothing under any other. */
+    private static List<TusUpload> expiredIn(UUID owner, TusUpload... uploads) {
+        return owner.equals(TenantContext.require()) ? List.of(uploads) : List.of();
     }
 
     private TusUpload existing(long offset, long totalSize, boolean completed, Instant expiresAt) {
@@ -290,7 +296,8 @@ class TusUploadServiceImplTest {
         TusUpload second = existing(8L, 16L, false, NOW.minusSeconds(120));
         Files.createFile(storageRoot.resolve(".tus").resolve(first.getId().toString()));
         Files.createFile(storageRoot.resolve(".tus").resolve(second.getId().toString()));
-        when(tusUploadRepository.findByExpiresAtBeforeAndCompletedFalse(NOW)).thenReturn(List.of(first, second));
+        when(tusUploadRepository.findByExpiresAtBeforeAndCompletedFalse(NOW))
+                .thenAnswer(invocation -> expiredIn(TENANT, first, second));
 
         service.cleanupExpiredUploads();
 
@@ -307,7 +314,8 @@ class TusUploadServiceImplTest {
         TusUpload bad = existing(4L, 16L, false, NOW.minusSeconds(60));
         TusUpload good = existing(8L, 16L, false, NOW.minusSeconds(120));
         Files.createFile(storageRoot.resolve(".tus").resolve(good.getId().toString()));
-        when(tusUploadRepository.findByExpiresAtBeforeAndCompletedFalse(NOW)).thenReturn(List.of(bad, good));
+        when(tusUploadRepository.findByExpiresAtBeforeAndCompletedFalse(NOW))
+                .thenAnswer(invocation -> expiredIn(TENANT, bad, good));
         doThrow(new IllegalStateException("row is locked"))
                 .when(tusUploadRepository)
                 .delete(bad);
@@ -341,19 +349,41 @@ class TusUploadServiceImplTest {
 
         service.cleanupExpiredUploads();
 
-        assertThat(visited).containsExactly(TENANT, other);
-        verify(transactionManager, times(2)).getTransaction(any());
+        assertThat(visited)
+                .as("every active tenant, then the platform tenant, which no registry lists")
+                .containsExactly(TENANT, other, PlatformTenant.ID);
+        verify(transactionManager, times(3)).getTransaction(any());
         assertThat(TenantContext.current()).isEmpty();
     }
 
     @Test
-    void cleanupExpiredUploads_visitsNoTenantWhenTheRegistryIsEmpty() {
-        tenancyProperties.setTenants(List.of());
+    void cleanupExpiredUploads_visitsThePlatformTenantOnceWhenTheRegistryAlreadyListsIt() {
+        tenancyProperties.setTenants(List.of(TENANT, PlatformTenant.ID));
         service = service();
+        List<UUID> visited = new ArrayList<>();
+        when(tusUploadRepository.findByExpiresAtBeforeAndCompletedFalse(NOW)).thenAnswer(invocation -> {
+            visited.add(TenantContext.require());
+            return List.of();
+        });
 
         service.cleanupExpiredUploads();
 
-        verify(tusUploadRepository, never()).findByExpiresAtBeforeAndCompletedFalse(any());
+        assertThat(visited).containsExactly(TENANT, PlatformTenant.ID);
+    }
+
+    @Test
+    void cleanupExpiredUploads_stillSweepsThePlatformTenantWhenTheRegistryIsEmpty() {
+        tenancyProperties.setTenants(List.of());
+        service = service();
+        List<UUID> visited = new ArrayList<>();
+        when(tusUploadRepository.findByExpiresAtBeforeAndCompletedFalse(NOW)).thenAnswer(invocation -> {
+            visited.add(TenantContext.require());
+            return List.of();
+        });
+
+        service.cleanupExpiredUploads();
+
+        assertThat(visited).containsExactly(PlatformTenant.ID);
     }
 
     private ByteArrayInputStream stream(String content) {
