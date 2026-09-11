@@ -1,0 +1,5 @@
+# Every log line carries the bound tenant (ADR-0062 plan WS6): supplies logging.pattern.correlation
+# before Boot initialises logging. Auto-configurations are registered in
+# META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports, not here.
+org.springframework.boot.EnvironmentPostProcessor=\
+com.positivity.tenancy.logging.TenantLogPatternEnvironmentPostProcessor
