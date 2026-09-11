@@ -3,20 +3,26 @@ package com.positivity.mcp.internal.repository;
 import com.positivity.mcp.internal.domain.ToolInvocationStats;
 import com.positivity.mcp.internal.domain.ToolPriorityOverlay;
 import com.positivity.tenancy.TenantAudited;
+import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Savepoint;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.jdbc.UncategorizedSQLException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -55,27 +61,61 @@ public class ToolPriorityRepositoryImpl implements ToolPriorityRepository {
 
     @Override
     public void upsertOverlay(@NonNull UUID toolId, double priority, int avgLatencyMs) {
-        // Update-then-insert rather than ON CONFLICT: portable to the H2 dev chain, and the insert
-        // names no tenant_id so the column default (app_current_tenant()) stamps the bound tenant.
+        // Update-then-insert rather than a single native upsert: the insert names no tenant_id so
+        // the column default (app_current_tenant() on Postgres) stamps the bound tenant, and no
+        // portable single statement covers both chains this module runs on. Postgres supports
+        // INSERT ... ON CONFLICT DO UPDATE, but the H2 dev/test chain runs in PostgreSQL
+        // compatibility mode where H2's parser only ever accepts the ON CONFLICT DO NOTHING form
+        // (org.h2.command.Parser#parseInsertCompatibility, h2database 2.4.240) — DO UPDATE is a
+        // syntax error there — so ON CONFLICT is not an option across both chains.
+        //
         // Two instances tuning the same tenant at once can both see no row and race on the insert;
-        // the loser's primary-key violation is caught and its values applied with a second update,
-        // so a concurrent run never aborts a tenant sweep.
+        // the loser's primary-key violation is caught and its values applied with a second update.
+        // That retry alone is not enough now that ToolPriorityTuningService runs a whole tenant's
+        // sweep in one transaction (JdbcTemplate no longer commits each statement on its own): on
+        // PostgreSQL a failed statement aborts the enclosing transaction until the next rollback
+        // ("current transaction is aborted, commands ignored until end of transaction block"), so a
+        // bare retry UPDATE issued straight after the failed INSERT would itself be refused, taking
+        // down the rest of this tenant's sweep and forcing the global rollup to skip. A JDBC
+        // savepoint taken immediately before the INSERT confines that abort: rolling back to it
+        // undoes only the failed insert attempt, leaving the rest of the transaction — and
+        // everything this tenant's sweep already wrote in it — intact for the retry update.
         if (updateOverlay(toolId, priority, avgLatencyMs) > 0) {
             return;
         }
+        DataSource dataSource = Objects.requireNonNull(jdbcTemplate.getDataSource(), "JdbcTemplate has no DataSource");
+        Connection connection = DataSourceUtils.getConnection(dataSource);
         try {
-            jdbcTemplate.update(
-                    "INSERT INTO mcp_tool_priority (tool_id, priority, avg_latency_ms) VALUES (?, ?, ?)",
-                    toolId,
-                    priority,
-                    avgLatencyMs);
-        } catch (DuplicateKeyException raced) {
-            LOGGER.debug("Overlay row for tool {} was inserted concurrently; applying this run's values", toolId);
-            if (updateOverlay(toolId, priority, avgLatencyMs) == 0) {
-                throw new IllegalStateException(
-                        "Overlay row for tool " + toolId + " vanished between a duplicate insert and its update",
-                        raced);
+            Savepoint savepoint;
+            try {
+                savepoint = connection.setSavepoint("mcpToolPriorityUpsert");
+            } catch (SQLException settingSavepointFailed) {
+                throw new UncategorizedSQLException("setSavepoint", null, settingSavepointFailed);
             }
+            try {
+                jdbcTemplate.update(
+                        "INSERT INTO mcp_tool_priority (tool_id, priority, avg_latency_ms) VALUES (?, ?, ?)",
+                        toolId,
+                        priority,
+                        avgLatencyMs);
+            } catch (DuplicateKeyException raced) {
+                LOGGER.debug(
+                        "Overlay row for tool {} was inserted concurrently; rolling back to the pre-insert"
+                                + " savepoint and applying this run's values by update",
+                        toolId);
+                try {
+                    connection.rollback(savepoint);
+                } catch (SQLException rollbackFailed) {
+                    throw new UncategorizedSQLException("rollback to savepoint", null, rollbackFailed);
+                }
+                if (updateOverlay(toolId, priority, avgLatencyMs) == 0) {
+                    throw new IllegalStateException(
+                            "Overlay row for tool " + toolId + " vanished between a duplicate insert and its update",
+                            raced);
+                }
+            }
+        } finally {
+            DataSourceUtils.releaseConnection(connection, dataSource);
         }
     }
 

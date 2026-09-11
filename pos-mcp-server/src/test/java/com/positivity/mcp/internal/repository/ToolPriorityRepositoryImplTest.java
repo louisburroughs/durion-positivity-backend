@@ -12,12 +12,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.tenancy.TenantAudited;
+import java.sql.Connection;
+import java.sql.Savepoint;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,6 +45,27 @@ class ToolPriorityRepositoryImplTest {
 
     @Mock
     private JdbcTemplate jdbcTemplate;
+
+    @Mock
+    private DataSource dataSource;
+
+    @Mock
+    private Connection connection;
+
+    @Mock
+    private Savepoint savepoint;
+
+    /**
+     * Every path through {@link ToolPriorityRepositoryImpl#upsertOverlay} that reaches the insert
+     * attempt takes a savepoint on the bound connection first (so a duplicate-key retry can roll
+     * back only the failed insert instead of the whole transaction, ADR-0062 plan WS6). Tests that
+     * exercise the insert branch call this first.
+     */
+    private void stubSavepointCapableConnection() throws java.sql.SQLException {
+        when(jdbcTemplate.getDataSource()).thenReturn(dataSource);
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.setSavepoint(anyString())).thenReturn(savepoint);
+    }
 
     @Test
     @SuppressWarnings("unchecked")
@@ -77,7 +101,8 @@ class ToolPriorityRepositoryImplTest {
 
     @Test
     @DisplayName("upsert updates the tenant's row in place and inserts without naming a tenant when absent")
-    void upsertIsUpdateThenInsert() {
+    void upsertIsUpdateThenInsert() throws java.sql.SQLException {
+        stubSavepointCapableConnection();
         when(jdbcTemplate.update(anyString(), any(), any(), any(), eq(TOOL_ID))).thenReturn(0);
 
         new ToolPriorityRepositoryImpl(jdbcTemplate, CLOCK).upsertOverlay(TOOL_ID, 0.42, 150);
@@ -87,11 +112,15 @@ class ToolPriorityRepositoryImplTest {
         assertThat(insert.getValue())
                 .startsWith("INSERT INTO mcp_tool_priority (tool_id, priority, avg_latency_ms)")
                 .doesNotContain("tenant_id");
+        verify(connection).setSavepoint(anyString());
+        verify(connection, never()).rollback(any(Savepoint.class));
     }
 
     @Test
-    @DisplayName("a concurrent insert of the same overlay row is absorbed: the loser re-applies its values by update")
-    void upsertAbsorbsAConcurrentInsert() {
+    @DisplayName("a concurrent insert of the same overlay row rolls back to the pre-insert savepoint, not the whole"
+            + " transaction, and the loser re-applies its values by update")
+    void upsertAbsorbsAConcurrentInsert() throws java.sql.SQLException {
+        stubSavepointCapableConnection();
         // First update: no row yet. Insert: another instance got there first. Second update: applied.
         when(jdbcTemplate.update(anyString(), any(), any(), any(), eq(TOOL_ID))).thenReturn(0, 1);
         when(jdbcTemplate.update(anyString(), eq(TOOL_ID), eq(0.42), eq(150)))
@@ -101,11 +130,18 @@ class ToolPriorityRepositoryImplTest {
                 .doesNotThrowAnyException();
 
         verify(jdbcTemplate, times(2)).update(anyString(), any(), any(), any(), eq(TOOL_ID));
+        // The retry update must be preceded by a rollback to the savepoint taken before the insert:
+        // on Postgres a bare retry after the duplicate-key violation would hit "current transaction
+        // is aborted" instead, since the whole per-tenant sweep now runs in one transaction.
+        verify(connection).setSavepoint(anyString());
+        verify(connection).rollback(savepoint);
+        verify(connection, never()).rollback();
     }
 
     @Test
     @DisplayName("a duplicate insert whose row then cannot be updated is reported, not swallowed")
-    void upsertReportsARowThatVanishedAfterTheDuplicate() {
+    void upsertReportsARowThatVanishedAfterTheDuplicate() throws java.sql.SQLException {
+        stubSavepointCapableConnection();
         when(jdbcTemplate.update(anyString(), any(), any(), any(), eq(TOOL_ID))).thenReturn(0, 0);
         when(jdbcTemplate.update(anyString(), eq(TOOL_ID), eq(0.42), eq(150)))
                 .thenThrow(new DuplicateKeyException("mcp_tool_priority_pkey"));
@@ -113,6 +149,8 @@ class ToolPriorityRepositoryImplTest {
         assertThatThrownBy(() -> new ToolPriorityRepositoryImpl(jdbcTemplate, CLOCK).upsertOverlay(TOOL_ID, 0.42, 150))
                 .isInstanceOf(IllegalStateException.class)
                 .hasCauseInstanceOf(DuplicateKeyException.class);
+
+        verify(connection).rollback(savepoint);
     }
 
     @Test
