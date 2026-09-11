@@ -376,7 +376,7 @@ Promtail (`observability/promtail-config.yml`) extracts that third field as the 
 sum by (service) (count_over_time({job="docker", tenant="<uuid>"}[5m]))    # a tenant's log volume
 ```
 
-The **Durion Logs (Loki)** dashboard has a **Tenant** variable (All includes lines with no tenant), and
+The **Durion Logs (Loki)** dashboard has a **Tenant** variable that filters every panel (All includes lines with no tenant), and
 the Loki datasource's TraceID derived field reads the leading `trace_id` of the same bracket.
 
 Event statistics have the same dimension. `pos-event-receiver`'s `emitted_event_hourly` continuous

@@ -166,7 +166,7 @@ Every `pos-*` module logs Boot's correlation bracket as `[<trace_id>,<span_id>,<
 `logging.pattern.correlation`; `TenantContext` mirrors the binding into the `tenantId` MDC key);
 lines logged with no tenant bound (startup, schedulers, unbound infrastructure paths) carry no
 `tenant` label. Filter per tenant with `{job="docker", tenant="<uuid>"}`; the Logs dashboard has a
-**Tenant** variable.
+**Tenant** variable that filters every panel (All includes lines with no tenant).
 
 **Requires** host mounts (already wired in `docker-compose.yml`):
 `/var/lib/docker/containers:ro` and `/var/run/docker.sock:ro`.

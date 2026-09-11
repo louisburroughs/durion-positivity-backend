@@ -6,6 +6,7 @@ import com.positivity.tenancy.TenantAudited;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
@@ -32,7 +33,8 @@ public interface EmittedEventHourlyRepository extends Repository<EmittedEventHou
       GROUP BY h.eventType
       ORDER BY SUM(h.eventCount) DESC
       """)
-    List<Object[]> summarizeSince(@Param("tenantId") UUID tenantId, @Param("since") Instant since);
+    @NonNull
+    List<Object[]> summarizeSince(@Param("tenantId") @NonNull UUID tenantId, @Param("since") @NonNull Instant since);
 
     /**
      * The global rollup: hourly counts of every tenant's events since {@code since}, summed per
@@ -49,5 +51,6 @@ public interface EmittedEventHourlyRepository extends Repository<EmittedEventHou
       GROUP BY h.eventType
       ORDER BY SUM(h.eventCount) DESC
       """)
-    List<Object[]> summarizeAcrossTenantsSince(@Param("since") Instant since);
+    @NonNull
+    List<Object[]> summarizeAcrossTenantsSince(@Param("since") @NonNull Instant since);
 }

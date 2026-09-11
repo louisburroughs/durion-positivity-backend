@@ -69,10 +69,11 @@ public class EventSummaryController {
                     the emitted_event_hourly TimescaleDB continuous aggregate.
                     Use this tool for a near-real-time pulse of platform event traffic; use getEventSummaryLastDay or \
                     getEventSummaryLastWeek instead for longer trend windows.
-                    Preconditions: none beyond service availability; GET requests bypass the shared-secret filter, \
-                    and the aggregate refreshes hourly with a one-hour end offset, so the newest counts can lag by up \
-                    to an hour.
-                    Required inputs: none; the window is fixed at one hour and cannot be parameterized. \
+                    Preconditions: a tenant binding, the X-Tenant-Id the gateway derives from the token (or the \
+                    transitional default tenant where one is configured; an unbound request is refused with 401). \
+                    GET requests bypass the shared-secret filter, and the aggregate refreshes hourly with a one-hour \
+                    end offset, so the newest counts can lag by up to an hour.
+                    Required inputs: none beyond the binding (tenantId is optional); the window is fixed at one hour and cannot be parameterized. \
                     """ + TENANT_SCOPE_DESCRIPTION + """
                     Emits an EVENT_RECEIVER_SUMMARY_LAST_HOUR event recording the query itself; the read changes no \
                     stored state.
@@ -106,10 +107,11 @@ public class EventSummaryController {
                     emitted_event_hourly TimescaleDB continuous aggregate.
                     Use this tool for a daily view of platform event traffic; use getEventSummaryLastHour instead for \
                     a near-real-time pulse, or getEventSummaryLastWeek for the weekly trend.
-                    Preconditions: none beyond service availability; GET requests bypass the shared-secret filter, \
-                    and the aggregate refreshes hourly with a one-hour end offset, so the newest counts can lag by up \
-                    to an hour.
-                    Required inputs: none; the window is fixed at 24 hours and cannot be parameterized. \
+                    Preconditions: a tenant binding, the X-Tenant-Id the gateway derives from the token (or the \
+                    transitional default tenant where one is configured; an unbound request is refused with 401). \
+                    GET requests bypass the shared-secret filter, and the aggregate refreshes hourly with a one-hour \
+                    end offset, so the newest counts can lag by up to an hour.
+                    Required inputs: none beyond the binding (tenantId is optional); the window is fixed at 24 hours and cannot be parameterized. \
                     """ + TENANT_SCOPE_DESCRIPTION + """
                     Emits an EVENT_RECEIVER_SUMMARY_LAST_DAY event recording the query itself; the read changes no \
                     stored state.
@@ -143,10 +145,11 @@ public class EventSummaryController {
                     emitted_event_hourly TimescaleDB continuous aggregate.
                     Use this tool for a weekly trend of platform event traffic; use getEventSummaryLastHour or \
                     getEventSummaryLastDay instead when a shorter window is wanted.
-                    Preconditions: none beyond service availability; GET requests bypass the shared-secret filter, \
-                    and the aggregate refreshes hourly with a one-hour end offset, so the newest counts can lag by up \
-                    to an hour.
-                    Required inputs: none; the window is fixed at 7 days and cannot be parameterized. \
+                    Preconditions: a tenant binding, the X-Tenant-Id the gateway derives from the token (or the \
+                    transitional default tenant where one is configured; an unbound request is refused with 401). \
+                    GET requests bypass the shared-secret filter, and the aggregate refreshes hourly with a one-hour \
+                    end offset, so the newest counts can lag by up to an hour.
+                    Required inputs: none beyond the binding (tenantId is optional); the window is fixed at 7 days and cannot be parameterized. \
                     """ + TENANT_SCOPE_DESCRIPTION + """
                     Emits an EVENT_RECEIVER_SUMMARY_LAST_WEEK event recording the query itself; the read changes no \
                     stored state.

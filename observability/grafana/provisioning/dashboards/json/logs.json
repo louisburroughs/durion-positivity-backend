@@ -63,7 +63,7 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "sum(rate({job=\"docker\", service=~\"$service\"}[$__rate_interval]))"
+          "expr": "sum(rate({job=\"docker\", service=~\"$service\", tenant=~\"$tenant\"}[$__rate_interval]))"
         }
       ],
       "fieldConfig": {
@@ -81,7 +81,7 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "sum(rate({job=\"docker\", service=~\"$service\", level=~\"ERROR|FATAL\"}[$__rate_interval]))"
+          "expr": "sum(rate({job=\"docker\", service=~\"$service\", level=~\"ERROR|FATAL\", tenant=~\"$tenant\"}[$__rate_interval]))"
         }
       ],
       "fieldConfig": {
@@ -110,7 +110,7 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "sum(rate({job=\"docker\", service=~\"$service\", level=\"WARN\"}[$__rate_interval]))"
+          "expr": "sum(rate({job=\"docker\", service=~\"$service\", level=\"WARN\", tenant=~\"$tenant\"}[$__rate_interval]))"
         }
       ],
       "fieldConfig": {
@@ -138,7 +138,7 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "sum by (service) (count_over_time({job=\"docker\", service=~\"$service\"}[1m]))",
+          "expr": "sum by (service) (count_over_time({job=\"docker\", service=~\"$service\", tenant=~\"$tenant\"}[1m]))",
           "legendFormat": "{{service}}"
         }
       ],
@@ -157,13 +157,13 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "sum by (service) (count_over_time({job=\"docker\", service=~\"$service\", level=~\"ERROR|FATAL\"}[1m]))",
+          "expr": "sum by (service) (count_over_time({job=\"docker\", service=~\"$service\", level=~\"ERROR|FATAL\", tenant=~\"$tenant\"}[1m]))",
           "legendFormat": "ERROR {{service}}"
         },
         {
           "refId": "B",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "sum by (service) (count_over_time({job=\"docker\", service=~\"$service\", level=\"WARN\"}[1m]))",
+          "expr": "sum by (service) (count_over_time({job=\"docker\", service=~\"$service\", level=\"WARN\", tenant=~\"$tenant\"}[1m]))",
           "legendFormat": "WARN {{service}}"
         }
       ]
