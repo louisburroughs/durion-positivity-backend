@@ -397,8 +397,17 @@ keeps no overlay and ranks on the global set. It logs one `Tool priority tuning 
 invocations=… proposals=…` line per tenant and a `Tool priority tuning finished: tenants=…` summary, the
 `mcp.tuning.proposals` counter is tagged `mode` and `scope` (`tenant`/`global`), and shadow proposals on
 the `mcp.tuning.shadow` logger carry `scope` and `tenant_id`. To reset one tenant's tuning, delete its
-`mcp_tool_priority` rows as that tenant (`SELECT set_config('app.current_tenant', '<uuid>', true)`):
-its requests fall back to the global row until the next live run (`pos-mcp-server/README.md`,
+`mcp_tool_priority` rows as that tenant; `set_config(..., true)` is transaction-local, so the binding and
+the delete go in one transaction (run as separate autocommit statements the DELETE sees no rows):
+
+```sql
+BEGIN;
+SELECT set_config('app.current_tenant', '<tenant uuid>', true);
+DELETE FROM mcp_tool_priority;          -- RLS confines this to the bound tenant's rows
+COMMIT;
+```
+
+Its requests fall back to the global row until the next live run (`pos-mcp-server/README.md`,
 "Per-tenant tool priorities").
 
 ### Dashboard Access
