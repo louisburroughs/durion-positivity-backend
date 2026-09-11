@@ -67,7 +67,8 @@ docker-compose up -d jaeger prometheus grafana otel-collector loki promtail
 
 - **Loki**: <http://localhost:3100> (API only; query via Grafana)
   - In Grafana: **Explore → Loki**, or open the **Durion Logs (Loki)** dashboard
-  - Example LogQL: `{job="docker", service="pos-order"} |= "ERROR"`
+  - Example LogQL: `{job="docker", service="pos-order"} |= "ERROR"`, or one tenant's lines:
+    `{job="docker", tenant="01900000-0000-7000-8000-000000000001"}`
 
 - **OTEL Collector Health**: <http://localhost:13133>
   - Check collector status
@@ -158,8 +159,17 @@ Promtail (`grafana/promtail:3.1.1`) uses Docker service-discovery to tail the `j
 every container on the host and push them to Loki.
 
 **Labels applied** (from the Docker API): `container`, `service` (compose service name),
-`project`, `stream`, `job="docker"`, and a `level` extracted from the log line
-(`TRACE|DEBUG|INFO|WARN|ERROR|FATAL`).
+`project`, `stream`, `job="docker"`, plus two extracted from the log line: `level`
+(`TRACE|DEBUG|INFO|WARN|ERROR|FATAL`) and `tenant`, the bound tenant's UUID (ADR-0062 plan WS6).
+Every `pos-*` module logs Boot's correlation bracket as `[<trace_id>,<span_id>,<tenantId>]` (the trace and span
+ids come from the OpenTelemetry agent's `trace_id`/`span_id` or Micrometer Tracing's `traceId`/`spanId`,
+whichever the module uses; a module running both, such as `pos-accounting`, keeps one injector, and the
+pattern collapses an id present under both names to one)
+(`pos-tenancy-common`'s `TenantLogPatternEnvironmentPostProcessor` supplies
+`logging.pattern.correlation`; `TenantContext` mirrors the binding into the `tenantId` MDC key);
+lines logged with no tenant bound (startup, schedulers, unbound infrastructure paths) carry no
+`tenant` label. Filter per tenant with `{job="docker", tenant="<uuid>"}`; the Logs dashboard has a
+**Tenant** variable that filters every panel (All includes lines with no tenant).
 
 **Requires** host mounts (already wired in `docker-compose.yml`):
 `/var/lib/docker/containers:ro` and `/var/run/docker.sock:ro`.

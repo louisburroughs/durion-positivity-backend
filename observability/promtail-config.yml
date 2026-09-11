@@ -49,5 +49,13 @@ scrape_configs:
       - template:
           source: level
           template: '{{ ToUpper .Value }}'
+      # Tenant of the line (ADR-0062 plan WS6). Every pos-* module logs Boot's correlation
+      # bracket as "[<trace_id>,<span_id>,<tenantId>]" (pos-tenancy-common's
+      # TenantLogPatternEnvironmentPostProcessor); the third field is the bound tenant's
+      # UUID, empty on unbound lines (startup, schedulers), which then carry no tenant
+      # label. Bounded cardinality: one value per tenant, not per user or request.
+      - regex:
+          expression: '\[[0-9a-fA-F]*,[0-9a-fA-F]*,(?P<tenant>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\]'
       - labels:
           level:
+          tenant:

@@ -6,8 +6,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.poseventreceiver.internal.entity.EmittedEvent;
+import com.positivity.poseventreceiver.internal.repository.EmittedEventHourlyRepository;
 import com.positivity.poseventreceiver.internal.repository.EmittedEventRepository;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -29,8 +32,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @DisplayName("Tenant column on the TimescaleDB hypertable (ADR-0062 exception, pos-event-receiver)")
 class TenantIsolationIT extends PostgresTenancyTestBase {
 
+    /** An event type no other test records, so the aggregate rows below are entirely this test's. */
+    private static final String HOURLY_EVENT_TYPE = "EVENT_RECEIVER_TENANT_ISOLATION_IT_HOURLY";
+
     @Autowired
     private EmittedEventRepository rows;
+
+    @Autowired
+    private EmittedEventHourlyRepository hourly;
 
     @Autowired
     private DataSource dataSource;
@@ -89,6 +98,59 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                         "SELECT relrowsecurity FROM pg_class WHERE relname = 'emitted_event'", Boolean.class))
                 .as("row security is off on the hypertable (V1_1)")
                 .isFalse();
+    }
+
+    /**
+     * The continuous aggregate carries the tenant dimension of plan WS6: two tenants' events land
+     * in their own (bucket, tenant, event type) rows, the per-tenant read returns only its tenant's
+     * count, and the platform-only rollup is their sum. Refreshed through the owner (the
+     * aggregate's owner runs {@code refresh_continuous_aggregate}); events sit two hours back so
+     * their bucket is complete and inside any window.
+     */
+    @Test
+    void theHourlyAggregateIsGroupedByTenantAndTheRollupIsTheSum() {
+        Instant publishedAt = Instant.now()
+                .minus(Duration.ofHours(2))
+                .truncatedTo(ChronoUnit.HOURS)
+                .plus(Duration.ofMinutes(10));
+        EmittedEvent a1 = hourlyEvent(TENANT_A, publishedAt);
+        EmittedEvent a2 = hourlyEvent(TENANT_A, publishedAt.plusSeconds(60));
+        EmittedEvent b1 = hourlyEvent(TENANT_B, publishedAt);
+        rows.saveAllAndFlush(List.of(a1, a2, b1));
+
+        new JdbcTemplate(ownerDataSource())
+                .execute("CALL refresh_continuous_aggregate('emitted_event_hourly', NULL, NULL)");
+
+        assertThat(countOf(hourly.summarizeSince(TENANT_A, Instant.EPOCH)))
+                .as("tenant A reads its own two events")
+                .isEqualTo(2L);
+        assertThat(countOf(hourly.summarizeSince(TENANT_B, Instant.EPOCH)))
+                .as("tenant B reads its own one event")
+                .isEqualTo(1L);
+        assertThat(countOf(hourly.summarizeAcrossTenantsSince(Instant.EPOCH)))
+                .as("the global rollup is the sum across tenants")
+                .isEqualTo(3L);
+
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM emitted_event_hourly WHERE event_type = ?",
+                        Long.class,
+                        HOURLY_EVENT_TYPE))
+                .as("one aggregate row per tenant for the bucket: the view is grouped by tenant_id")
+                .isEqualTo(2L);
+    }
+
+    private static long countOf(List<Object[]> summary) {
+        return summary.stream()
+                .filter(row -> HOURLY_EVENT_TYPE.equals(row[0]))
+                .mapToLong(row -> ((Number) row[1]).longValue())
+                .sum();
+    }
+
+    private static EmittedEvent hourlyEvent(UUID tenantId, Instant publishedAt) {
+        EmittedEvent event = new EmittedEvent(HOURLY_EVENT_TYPE, "1", 1_700_000_000_000L, 12L, publishedAt, null);
+        event.setTenantId(tenantId);
+        return event;
     }
 
     private static EmittedEvent event(String entityId) {

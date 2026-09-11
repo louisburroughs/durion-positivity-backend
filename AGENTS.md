@@ -34,14 +34,17 @@
   with `tenant_id` first, RLS enabled and forced, the `tenant_isolation` policy, unique constraints and
   scoped-to-scoped foreign keys leading with `tenant_id`, unless it is listed in `db/tenancy-global-tables.txt` with
   a reason (`docs/TENANCY_SCHEMA.md`); `INSERT ... ON CONFLICT (cols)` on a scoped table names `(tenant_id, cols)`;
-  nothing reads a tenant from a request body, query parameter, or client header (the one exception is
-  `pos-bulk-loader`'s `POST /v1/bulk-jobs`, whose `tenantId` body field names the tenant a bulk load writes into:
-  a load is an operator action against a tenant, not a request inside one, and the target has to be said out loud
-  because the job's rows, its audit trail and every sibling call it makes are bound to it. It is a target selector,
-  never an authorization input — `BulkLoadTenantBinding` refuses any tenant the caller is not already bound to, so
-  a bound caller may name only its own tenant, the platform operator included, and an unnamed target falls back to
-  the transitional default tenant and nothing else); no new `organizationId` fields.
-  **In a module that depends on `pos-tenancy-common`** (`pos-location`, `pos-tenant`, `pos-security-service`, `pos-inventory`, `pos-accounting`, `pos-workorder`, `pos-catalog`, `pos-shop-manager`, `pos-order`, `pos-customer`, `pos-supplier`, `pos-warranty`, `pos-people`, `pos-invoice`, `pos-marketing`, `pos-vehicle-inventory`, `pos-price`, `pos-vehicle-fitment`, `pos-people-contact`, `pos-tax`, `pos-image`, `pos-vehicle-reference-nhtsa`, `pos-vehicle-reference-carapi`, `pos-mcp-server` and `pos-event-receiver` so far; each WS3 wave adds
+  nothing reads a tenant from a request body, query parameter, or client header. Two exceptions are approved.
+  `pos-event-receiver`'s summary endpoints (plan WS6) take an optional `tenantId` query parameter as a *scope
+  selector* for a caller already bound to the platform tenant, never as the caller's identity, and refuse it from
+  any other binding with 403. `pos-bulk-loader`'s `POST /v1/bulk-jobs` (plan WS8) carries a `tenantId` body field
+  naming the tenant a bulk load writes into: a load is an operator action against a tenant, not a request inside
+  one, and the target has to be said out loud because the job's rows, its audit trail and every sibling call it
+  makes are bound to it. It is a target selector, never an authorization input — `BulkLoadTenantBinding` refuses
+  any tenant the caller is not already bound to, so a bound caller may name only its own tenant, the platform
+  operator included, and an unnamed target falls back to the transitional default tenant and nothing else.
+  No new `organizationId` fields.
+  **In a module that depends on `pos-tenancy-common`** (`pos-location`, `pos-tenant`, `pos-security-service`, `pos-inventory`, `pos-accounting`, `pos-workorder`, `pos-catalog`, `pos-shop-manager`, `pos-order`, `pos-customer`, `pos-supplier`, `pos-warranty`, `pos-people`, `pos-invoice`, `pos-marketing`, `pos-vehicle-inventory`, `pos-price`, `pos-vehicle-fitment`, `pos-people-contact`, `pos-tax`, `pos-image`, `pos-vehicle-reference-nhtsa`, `pos-vehicle-reference-carapi`, `pos-mcp-server`, `pos-event-receiver` and `pos-bulk-loader` so far; each WS3 wave adds
   its module to `TenancyArchitectureTest.ADOPTED_MODULES`): a new entity extends `TenantScopedEntity` or carries `@TenantGlobal`;
   a new `@Scheduled` job is wrapped in `TenantIterator.forEachActiveTenant` or annotated `@PlatformScoped`; native
   SQL and `JdbcTemplate` on scoped data carry `@TenantAudited`; a Kafka producer stamps the record with
