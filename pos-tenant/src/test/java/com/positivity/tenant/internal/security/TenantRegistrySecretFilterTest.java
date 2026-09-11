@@ -1,14 +1,19 @@
 package com.positivity.tenant.internal.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.positivity.tenancy.PlatformTenant;
+import com.positivity.tenancy.TenantContext;
 import jakarta.servlet.FilterChain;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -81,10 +86,24 @@ class TenantRegistrySecretFilterTest {
         request.addHeader(TenantRegistrySecretFilter.SECRET_HEADER, "s3cret");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
+        AtomicReference<UUID> boundTenant = new AtomicReference<>();
+        doAnswer(invocation -> {
+                    boundTenant.set(TenantContext.current().orElse(null));
+                    return null;
+                })
+                .when(chain)
+                .doFilter(request, response);
+
         filter("s3cret").doFilter(request, response, chain);
 
         verify(chain).doFilter(request, response);
         assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(boundTenant.get())
+                .as("the platform tenant is bound at the edge for the rest of the chain")
+                .isEqualTo(PlatformTenant.ID);
+        assertThat(TenantContext.isBound())
+                .as("the binding does not outlive the request")
+                .isFalse();
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         assertThat(authentication).isNotNull();
         assertThat(authentication.isAuthenticated()).isTrue();

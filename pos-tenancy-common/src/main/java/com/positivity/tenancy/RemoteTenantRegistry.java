@@ -157,12 +157,21 @@ public class RemoteTenantRegistry implements TenantRegistry {
                 .accept(MediaType.APPLICATION_JSON)
                 .header(SECRET_HEADER, secret)
                 .retrieve()
+                .onStatus(status -> !status.is2xxSuccessful(), (request, response) -> {
+                    // The default handler only rejects 4xx/5xx; a 3xx with a JSON body would otherwise
+                    // reach body() and replace the last good snapshot.
+                    throw new IllegalStateException("tenant registry answered " + response.getStatusCode());
+                })
                 .body(RESPONSE_TYPE);
         if (body == null || body.isEmpty()) {
             throw new IllegalStateException("empty tenant list");
         }
+        // The platform tenant is control-plane data (pos-tenant, pos-security-service, both with their
+        // own registries); a domain module's per-tenant work must never run under it.
         List<UUID> active = body.stream()
-                .filter(tenant -> tenant.tenantId() != null && STATUS_ACTIVE.equals(tenant.status()))
+                .filter(tenant -> tenant.tenantId() != null
+                        && !PlatformTenant.ID.equals(tenant.tenantId())
+                        && STATUS_ACTIVE.equals(tenant.status()))
                 .map(TenantSummary::tenantId)
                 .toList();
         if (active.isEmpty()) {

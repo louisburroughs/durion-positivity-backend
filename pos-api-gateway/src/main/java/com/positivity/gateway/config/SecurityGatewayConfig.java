@@ -83,6 +83,7 @@ public class SecurityGatewayConfig {
     private static final String CLAIM_LOC_SCOPE = "loc_scope";
     private static final String LOG_JWT_AUTH_REJECTED = "JWT auth rejected path={} reason={} jti={}";
     private static final String METRIC_AUTH_HEADER_STRIP_COUNT = "auth.header.strip.count";
+    private static final String METRIC_INTERNAL_PATH_REFUSED_COUNT = "gateway.auth.internal_path_refused";
     private static final String METRIC_AUTH_TENANT_CLAIM_MISSING = "auth.tenant.claim.missing";
     private static final String METRIC_AUTH_LEGACY_DECODE_COUNT = "auth.legacy.decode.count";
     private static final String METRIC_AUTH_PERMISSION_CATALOG_UNKNOWN = "auth.perm.catalog.version.unknown";
@@ -101,6 +102,11 @@ public class SecurityGatewayConfig {
     // stays deliberately undifferentiated in the body; the reason is logged, not returned.
     private static final String ERROR_CODE_TOKEN_REVOKED = "TOKEN_REVOKED";
     private static final String ERROR_CODE_UNAUTHORIZED = "UNAUTHORIZED";
+    private static final String ERROR_CODE_INTERNAL_PATH = "INTERNAL_PATH";
+    private static final String ERROR_MESSAGE_INTERNAL_PATH = "Internal service paths are not exposed by the gateway";
+    /** {@code /<service>/internal/...}: every module's service-to-service surface lives there. */
+    private static final Pattern INTERNAL_SERVICE_PATH = Pattern.compile("^/[^/]+/internal(?:/.*)?$");
+
     private static final String ERROR_MESSAGE_TOKEN_REVOKED = "Access token has been revoked";
     private static final String ERROR_MESSAGE_UNAUTHORIZED = "Authentication is required to access this resource";
     // An inbound correlation id is echoed into the error envelope, so it is accepted only in the
@@ -211,6 +217,15 @@ public class SecurityGatewayConfig {
     }
 
     private Mono<Void> authenticateRequest(AuthRequestContext context, GatewayFilterChain chain) {
+        if (isInternalServicePath(context.path())) {
+            // Service-to-service surfaces (pos-tenant's /internal/v1/tenants, guarded by a shared
+            // secret) are reachable only inside the mesh; a generic /{service}/** route must not
+            // carry them out to the public edge, whatever credential the caller holds.
+            LOG.warn("Refusing an internal service path at the gateway; path={}", context.path());
+            incrementCounter(METRIC_INTERNAL_PATH_REFUSED_COUNT);
+            return reject(
+                    context.exchange(), HttpStatus.FORBIDDEN, ERROR_CODE_INTERNAL_PATH, ERROR_MESSAGE_INTERNAL_PATH);
+        }
         if (isPublicPath(context.path())) {
             return chain.filter(withTenantSlugFromHost(context));
         }
@@ -759,6 +774,10 @@ public class SecurityGatewayConfig {
         return Optional.of(normalizedAuthorities);
     }
 
+    private static boolean isInternalServicePath(String path) {
+        return path != null && INTERNAL_SERVICE_PATH.matcher(path).matches();
+    }
+
     private boolean isPublicPath(String path) {
         return SYSTEM_TIME_PATH.equals(path)
                 || path.startsWith("/actuator")
@@ -883,15 +902,20 @@ public class SecurityGatewayConfig {
      * oracle for anyone else; it is logged and counted instead.
      */
     private static Mono<Void> unauthorized(ServerWebExchange exchange, String code, String message) {
+        return reject(exchange, HttpStatus.UNAUTHORIZED, code, message);
+    }
+
+    /** Completes the exchange with {@code status} and the platform {@code ApiError} envelope. */
+    private static Mono<Void> reject(ServerWebExchange exchange, HttpStatus status, String code, String message) {
         ServerHttpResponse response = exchange.getResponse();
-        response.setStatusCode(HttpStatus.UNAUTHORIZED);
+        response.setStatusCode(status);
         String correlationId = resolveCorrelationId(exchange.getRequest());
         response.getHeaders().set(HEADER_X_CORRELATION_ID, correlationId);
 
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("code", code);
         envelope.put("message", message);
-        envelope.put("status", HttpStatus.UNAUTHORIZED.value());
+        envelope.put("status", status.value());
         envelope.put("timestamp", TimeSource.instant().toString());
         envelope.put("correlationId", correlationId);
 
@@ -900,7 +924,7 @@ public class SecurityGatewayConfig {
             body = OBJECT_MAPPER.writeValueAsBytes(envelope);
         } catch (JsonProcessingException ex) {
             // Unreachable for a map of strings and an int; a 401 without a body still beats a 500.
-            LOG.warn("Failed to serialize 401 error envelope; responding without a body", ex);
+            LOG.warn("Failed to serialize {} error envelope; responding without a body", status.value(), ex);
             return response.setComplete();
         }
 

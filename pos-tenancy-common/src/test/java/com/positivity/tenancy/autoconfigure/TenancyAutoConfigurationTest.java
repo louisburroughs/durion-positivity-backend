@@ -25,8 +25,10 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.cloud.client.loadbalancer.LoadBalanced;
@@ -153,9 +155,31 @@ class TenancyAutoConfigurationTest {
                 out.write(body);
             }
         });
+        server.createContext("/moved", exchange -> {
+            exchange.getResponseHeaders().add("Location", "/internal/v1/tenants");
+            exchange.sendResponseHeaders(302, -1);
+            exchange.close();
+        });
         server.start();
         WatchedBuilder.SEEN_SECRETS.clear();
         try {
+            // A redirect to a valid list is not followed: the snapshot stays static and the secret
+            // is sent once, to the configured URL only.
+            runner.withUserConfiguration(WatchedBuilder.class)
+                    .withPropertyValues(
+                            "pos.tenancy.tenants=01900000-0000-7000-8000-000000000001",
+                            "pos.tenancy.registry.mode=REMOTE",
+                            "pos.tenancy.registry.secret=s3cret",
+                            "pos.tenancy.registry.url=http://127.0.0.1:"
+                                    + server.getAddress().getPort() + "/moved")
+                    .run(context -> {
+                        RemoteTenantRegistry registry = (RemoteTenantRegistry) context.getBean(TenantRegistry.class);
+                        assertThat(registry.activeTenantIds())
+                                .containsExactly(UUID.fromString("01900000-0000-7000-8000-000000000001"));
+                        assertThat(registry.consecutiveFailures()).isEqualTo(1);
+                        assertThat(WatchedBuilder.SEEN_SECRETS).containsExactly("s3cret");
+                    });
+            WatchedBuilder.SEEN_SECRETS.clear();
             runner.withUserConfiguration(WatchedBuilder.class)
                     .withPropertyValues(
                             "pos.tenancy.default-tenant-id=01900000-0000-7000-8000-000000000001",
@@ -233,12 +257,13 @@ class TenancyAutoConfigurationTest {
             context.register(PlainAndLoadBalancedBuilders.class);
             context.refresh();
 
-            RestClient.Builder chosen =
+            TenancyAutoConfiguration.RemoteRegistryConfiguration.ResolvedBuilder chosen =
                     TenancyAutoConfiguration.RemoteRegistryConfiguration.resolveBuilder(context.getBeanFactory());
 
-            assertThat(chosen)
+            assertThat(chosen.builder())
                     .as("http://tenant/... must resolve through the load balancer, not DNS")
                     .isSameAs(PlainAndLoadBalancedBuilders.LOAD_BALANCED);
+            assertThat(chosen.loadBalanced()).isTrue();
         }
     }
 
@@ -248,11 +273,50 @@ class TenancyAutoConfigurationTest {
             context.register(WatchedBuilder.class);
             context.refresh();
 
-            RestClient.Builder chosen =
+            TenancyAutoConfiguration.RemoteRegistryConfiguration.ResolvedBuilder chosen =
                     TenancyAutoConfiguration.RemoteRegistryConfiguration.resolveBuilder(context.getBeanFactory());
 
-            assertThat(chosen).isSameAs(context.getBean(RestClient.Builder.class));
+            assertThat(chosen.builder()).isSameAs(context.getBean(RestClient.Builder.class));
+            assertThat(chosen.loadBalanced()).isFalse();
         }
+    }
+
+    @Test
+    @DisplayName("REMOTE without RestClient on the classpath fails at startup instead of staying static")
+    void remoteModeWithoutRestClientOnTheClasspathFailsFast() {
+        runner.withClassLoader(new FilteredClassLoader(RestClient.class))
+                .withPropertyValues(
+                        "pos.tenancy.tenants=01900000-0000-7000-8000-000000000001", "pos.tenancy.registry.mode=REMOTE")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .rootCause()
+                            .hasMessageContaining("pos.tenancy.registry.mode=REMOTE")
+                            .hasMessageContaining("RestClient");
+                });
+        runner.withClassLoader(new FilteredClassLoader(RestClient.class))
+                .withPropertyValues("pos.tenancy.tenants=01900000-0000-7000-8000-000000000001")
+                .run(context ->
+                        assertThat(context.getBean(TenantRegistry.class)).isInstanceOf(StaticTenantRegistry.class));
+    }
+
+    @Test
+    @DisplayName("the service-id default URL is refused when no @LoadBalanced builder can resolve it")
+    void theServiceIdDefaultUrlIsRefusedWithoutALoadBalancedBuilder() {
+        runner.withUserConfiguration(WatchedBuilder.class)
+                .withPropertyValues("pos.tenancy.registry.mode=REMOTE")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .rootCause()
+                            .hasMessageContaining("pos.tenancy.registry.url=http://tenant/internal/v1/tenants")
+                            .hasMessageContaining("@LoadBalanced");
+                });
+        runner.withPropertyValues("pos.tenancy.registry.mode=REMOTE")
+                .run(context -> assertThat(context).hasFailed());
+        runner.withUserConfiguration(PlainAndLoadBalancedBuilders.class)
+                .withPropertyValues("pos.tenancy.registry.mode=REMOTE")
+                .run(context -> assertThat(context).hasNotFailed());
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -272,6 +336,15 @@ class TenancyAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasSingleBean(TenantRegistry.class);
                     assertThat(context).doesNotHaveBean(RemoteTenantRegistry.class);
+                    assertThat(context.getBean(TenantRegistry.class).activeTenantIds())
+                            .containsExactly(OwnRegistry.OWN);
+                });
+        // ... and also without RestClient on the classpath: the fail-fast guard yields to it.
+        runner.withUserConfiguration(OwnRegistry.class)
+                .withClassLoader(new FilteredClassLoader(RestClient.class))
+                .withPropertyValues("pos.tenancy.registry.mode=REMOTE")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
                     assertThat(context.getBean(TenantRegistry.class).activeTenantIds())
                             .containsExactly(OwnRegistry.OWN);
                 });
