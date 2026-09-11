@@ -24,10 +24,13 @@ import org.springframework.stereotype.Component;
  * TenantRegistry} lists as active, or the platform tenant (platform data: the role template's
  * {@code roles.csv} / {@code role-permissions.csv}, {@link #PLATFORM_TENANT_DOMAIN_TYPES}). A bound
  * caller may only load into its own tenant — the platform tenant's operator included, who therefore
- * loads platform data and nothing else. A request that names no tenant is refused unless the
- * transitional default tenant ({@code pos.tenancy.default-tenant-id}, ADR-0062 §9) is configured, in
- * which case the default is used and a WARN says so: the job will fail loudly once the default is
- * retired rather than silently landing somewhere.
+ * loads platform data and nothing else; {@code tenantId} is a target selector for that caller, never
+ * an authorization input. An unbound caller (no {@code tid} on its token yet, ADR-0062 §9) may name
+ * no tenant at all, in which case the transitional default tenant ({@code
+ * pos.tenancy.default-tenant-id}) is used and a WARN says so — the job will fail loudly once the
+ * default is retired rather than silently landing somewhere — but may not name a target explicitly:
+ * that would let a caller nobody has bound to any tenant pick any active one. A request that names
+ * no tenant and has no default configured is refused outright.
  *
  * <h2>Why the platform tenant is restricted to specific domain types</h2>
  *
@@ -78,12 +81,27 @@ public class BulkLoadTenantBinding {
      * @param domainType the job's domain type, checked against {@link #PLATFORM_TENANT_DOMAIN_TYPES}
      *     when the target resolves to the platform tenant
      * @return the tenant to bind the job to
-     * @throws BulkLoadTenantException when no tenant can be resolved, the tenant is not one the
-     *     module knows as active, the caller may not load into it, or the target is the platform
-     *     tenant and {@code domainType} is not one of its packs
+     * @throws BulkLoadTenantException when no tenant can be resolved, an unbound caller names a
+     *     target explicitly, the tenant is not one the module knows as active, the caller may not
+     *     load into it, or the target is the platform tenant and {@code domainType} is not one of
+     *     its packs
      */
     public @NonNull UUID resolveTarget(@Nullable UUID requested, @NonNull DomainType domainType) {
         Optional<UUID> bound = TenantContext.current();
+        // tenantId is a target selector for an already-bound caller only (AGENTS.md's tenancy
+        // paragraph), never an authorization input a caller can hand itself: an unbound caller
+        // (no tid on its token yet, ADR-0062 section 9) may name no tenant at all, in which case
+        // transitionalDefault() below applies the default with a WARN, but may not name a target
+        // explicitly — that would let a caller nobody has bound to any tenant pick any active one
+        // (Copilot review of PR #1955, third round).
+        if (bound.isEmpty() && requested != null) {
+            throw new BulkLoadTenantException(
+                    BulkLoadTenantException.TENANT_UNBOUND_TARGET_FORBIDDEN,
+                    HttpStatus.FORBIDDEN,
+                    "An unbound caller (no tid on its token) may not name a target tenant; name no tenantId to use"
+                            + " the transitional default, or authenticate with a token bound to the tenant to"
+                            + " load into");
+        }
         UUID target = requested != null ? requested : transitionalDefault();
         if (!isLoadable(target)) {
             throw new BulkLoadTenantException(
@@ -92,9 +110,7 @@ public class BulkLoadTenantBinding {
                     "Tenant " + target + " is not an active tenant of this cell; a bulk load must target an active"
                             + " tenant or the platform tenant");
         }
-        // Every bound caller, the platform operator included: see the class comment. An unbound
-        // caller is the transitional case only (no tid on the token yet, ADR-0062 section 9) and
-        // still names its target explicitly.
+        // Every bound caller, the platform operator included: see the class comment.
         if (bound.isPresent() && !bound.get().equals(target)) {
             throw new BulkLoadTenantException(
                     BulkLoadTenantException.TENANT_FORBIDDEN,

@@ -5,10 +5,11 @@ import org.springframework.http.HttpStatus;
 
 /**
  * A bulk-load job could not be bound to a target tenant (ADR-0062, plan WS8). Carries the
- * {@code ApiError} code and status {@code BulkLoaderExceptionHandler} answers with, so the four
+ * {@code ApiError} code and status {@code BulkLoaderExceptionHandler} answers with, so the five
  * refusals stay distinguishable to a client: no tenant at all (400), a tenant the module does not
- * know as active (400), a tenant the caller is not allowed to load into (403), and a domain type
- * the platform tenant does not accept (403).
+ * know as active (400), a tenant the caller is not allowed to load into (403), an unbound caller
+ * naming a target explicitly rather than falling back to the transitional default (403), and a
+ * domain type the platform tenant does not accept (403).
  */
 public class BulkLoadTenantException extends RuntimeException {
 
@@ -20,6 +21,15 @@ public class BulkLoadTenantException extends RuntimeException {
 
     /** The caller is bound to a tenant other than the one the request names. */
     public static final String TENANT_FORBIDDEN = "BULK_JOB_TENANT_FORBIDDEN";
+
+    /**
+     * An unbound caller (no {@code tid} on its token yet, ADR-0062 §9) named a target tenant
+     * explicitly. {@code tenantId} is a selector for an already-bound caller only, never an
+     * authorization input a caller can hand itself: an unbound request either names no tenant
+     * (and falls back to the transitional default) or is refused, not routed to whatever tenant it
+     * asks for (Copilot review of PR #1955, third round).
+     */
+    public static final String TENANT_UNBOUND_TARGET_FORBIDDEN = "BULK_JOB_TENANT_UNBOUND_TARGET_FORBIDDEN";
 
     /**
      * The target is the platform tenant, but the job's {@code domainType} is not one of the platform

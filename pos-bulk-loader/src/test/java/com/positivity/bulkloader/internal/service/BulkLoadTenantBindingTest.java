@@ -27,9 +27,10 @@ import org.springframework.http.HttpStatus;
  * The target-tenant rules of a bulk-load job (ADR-0062, plan WS8): named and active, or the
  * platform tenant, which is loadable as platform data whether or not the registry lists it
  * active; a bound caller — the platform tenant's operator included — may only load into its own
- * tenant; no tenant at all is refused unless the transitional default applies, and then it is
- * used with a WARN. When the target resolves to the platform tenant, the job's domain type must
- * also be one of the platform's own packs (Copilot review of PR #1955, Finding 5).
+ * tenant; an unbound caller may name no tenant at all — the transitional default applies then,
+ * with a WARN — but may not name a target explicitly (Copilot review of PR #1955, third round).
+ * When the target resolves to the platform tenant, the job's domain type must also be one of the
+ * platform's own packs (Copilot review of PR #1955, Finding 5).
  */
 @DisplayName("BulkLoadTenantBinding: which tenant a job loads into")
 class BulkLoadTenantBindingTest {
@@ -87,16 +88,59 @@ class BulkLoadTenantBindingTest {
         });
     }
 
+    /**
+     * Copilot review of PR #1955, third round: {@code tenantId} is a target selector for an
+     * already-bound caller only (AGENTS.md's tenancy paragraph), never an authorization input. An
+     * unbound caller naming an explicit target used to be resolved and bound like any other
+     * request, which let a caller nobody had bound to any tenant load into whichever active tenant
+     * it named.
+     */
     @Test
-    @DisplayName("an unbound caller (no request binding) may name any active tenant")
-    void unboundCallerMayNameAnActiveTenant() {
-        assertThat(binding().resolveTarget(BETA, ORDINARY_DOMAIN)).isEqualTo(BETA);
+    @DisplayName("an unbound caller naming an explicit target is refused: 403 BULK_JOB_TENANT_UNBOUND_TARGET_FORBIDDEN")
+    void unboundCallerNamingATargetIsRejected() {
+        BulkLoadTenantBinding binding = binding();
+
+        assertThatThrownBy(() -> binding.resolveTarget(BETA, ORDINARY_DOMAIN))
+                .isInstanceOfSatisfying(BulkLoadTenantException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo(BulkLoadTenantException.TENANT_UNBOUND_TARGET_FORBIDDEN);
+                    assertThat(e.getStatus()).isEqualTo(HttpStatus.FORBIDDEN);
+                });
         assertThat(logs.list).isEmpty();
+    }
+
+    @Test
+    @DisplayName("an unbound caller naming an explicit target is refused even when it names its own future tenant"
+            + " or the platform tenant: there is no binding yet for either to match")
+    void unboundCallerNamingAnyTargetIsRejectedRegardlessOfWhichTenant() {
+        BulkLoadTenantBinding binding = binding();
+
+        assertThatThrownBy(() -> binding.resolveTarget(PlatformTenant.ID, DomainType.SECURITY_ROLE))
+                .isInstanceOfSatisfying(
+                        BulkLoadTenantException.class,
+                        e -> assertThat(e.getCode())
+                                .isEqualTo(BulkLoadTenantException.TENANT_UNBOUND_TARGET_FORBIDDEN));
+    }
+
+    @Test
+    @DisplayName("an unbound caller naming no tenant still falls back to the transitional default, unaffected"
+            + " by the new unbound-target refusal")
+    void unboundCallerWithNoTargetStillUsesTheDefault() {
+        properties.setDefaultTenantId(ALPHA);
+        BulkLoadTenantBinding binding = binding();
+
+        assertThat(binding.resolveTarget(null, ORDINARY_DOMAIN)).isEqualTo(ALPHA);
+        assertThat(logs.list).anySatisfy(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.WARN);
+            assertThat(event.getFormattedMessage()).contains("transitional default tenant " + ALPHA);
+        });
     }
 
     @Test
     @DisplayName("a tenant the registry does not list as active is refused with BULK_JOB_TENANT_UNKNOWN")
     void unknownTenantIsRejected() {
+        // Bound to the tenant it names: this test is about the isLoadable check, not the
+        // unbound-target refusal a naming-any-other-tenant call would hit first.
+        TenantContext.bind(SUSPENDED);
         BulkLoadTenantBinding binding = binding();
 
         assertThatThrownBy(() -> binding.resolveTarget(SUSPENDED, ORDINARY_DOMAIN))

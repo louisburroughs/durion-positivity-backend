@@ -83,8 +83,8 @@ public class BulkLoaderExceptionHandler {
 
     /**
      * The job's target tenant could not be bound (ADR-0062, plan WS8): the exception carries its own
-     * code and status, so a missing tenant (400), an unknown one (400) and one the caller may not
-     * load into (403) each answer distinctly.
+     * code and status, so a missing tenant (400), an unknown one (400), one the caller may not load
+     * into (403), and an unbound caller naming a target explicitly (403) each answer distinctly.
      */
     @ExceptionHandler(BulkLoadTenantException.class)
     public ResponseEntity<ApiError> handleTenantBinding(
