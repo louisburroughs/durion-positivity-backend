@@ -29,8 +29,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.web.client.RestClient;
 
@@ -200,6 +203,56 @@ class TenancyAutoConfigurationTest {
                     assertThat(((RemoteTenantRegistry) registry).consecutiveFailures())
                             .isEqualTo(1);
                 });
+    }
+
+    /**
+     * The shape of a module with Spring Cloud on the classpath: a plain builder for direct calls,
+     * marked {@code @Primary}, and the {@code @LoadBalanced} one that resolves Eureka service ids.
+     */
+    @Configuration(proxyBeanMethods = false)
+    static class PlainAndLoadBalancedBuilders {
+        static final RestClient.Builder PLAIN = RestClient.builder();
+        static final RestClient.Builder LOAD_BALANCED = RestClient.builder();
+
+        @Bean
+        @Primary
+        RestClient.Builder plainRestClientBuilder() {
+            return PLAIN;
+        }
+
+        @Bean
+        @LoadBalanced
+        RestClient.Builder loadBalancedRestClientBuilder() {
+            return LOAD_BALANCED;
+        }
+    }
+
+    @Test
+    void theLoadBalancedBuilderIsChosenOverThePrimaryPlainOne() {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.register(PlainAndLoadBalancedBuilders.class);
+            context.refresh();
+
+            RestClient.Builder chosen =
+                    TenancyAutoConfiguration.RemoteRegistryConfiguration.resolveBuilder(context.getBeanFactory());
+
+            assertThat(chosen)
+                    .as("http://tenant/... must resolve through the load balancer, not DNS")
+                    .isSameAs(PlainAndLoadBalancedBuilders.LOAD_BALANCED);
+        }
+    }
+
+    @Test
+    void aSinglePlainBuilderIsUsedWhenNoneIsLoadBalanced() {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.register(WatchedBuilder.class);
+            context.refresh();
+
+            RestClient.Builder chosen =
+                    TenancyAutoConfiguration.RemoteRegistryConfiguration.resolveBuilder(context.getBeanFactory());
+
+            assertThat(chosen).isSameAs(context.getBean(RestClient.Builder.class));
+        }
     }
 
     @Configuration(proxyBeanMethods = false)
