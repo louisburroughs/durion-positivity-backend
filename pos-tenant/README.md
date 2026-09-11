@@ -57,9 +57,9 @@ an `ext_tenant` replica each.
 - The path has its own security chain (`SecurityConfig`), is hidden from the OpenAPI document,
   needs no `platform:*` authority and emits no event.
 - The caller carries no tenant, so the path is in `pos.tenancy.unenforced-paths` and the
-  controller binds the platform tenant itself (every registry row belongs to it under RLS).
+  secret filter binds the platform tenant at the request edge (every registry row belongs to it under RLS).
 
-Callers reach it by Eureka name (`http://tenant/internal/v1/tenants`), never via the gateway.
+Callers reach it by Eureka name (`http://tenant/internal/v1/tenants`) through a `@LoadBalanced` client, or by DNS host (`http://pos-tenant:8080/internal/v1/tenants` in Compose) with a plain one; never via the gateway.
 
 ## Events (`tenant.events.v1`, keyed by tenant id)
 

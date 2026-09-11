@@ -43,7 +43,8 @@
   a new `@Scheduled` job is wrapped in `TenantIterator.forEachActiveTenant` or annotated `@PlatformScoped`; native
   SQL and `JdbcTemplate` on scoped data carry `@TenantAudited`; a Kafka producer stamps the record with
   `TenantKafkaHeaders.record(...)`; application code reads `TenantContext` and never binds it (the one exception is
-  `pos-tenant`, whose rows are platform data and whose `tenant.provisioned` handler re-binds to `PlatformTenant.ID`).
+  `pos-tenant`, whose rows are platform data: its `tenant.provisioned` handler re-binds to `PlatformTenant.ID`, and
+  `TenantRegistrySecretFilter` binds it at the request edge for the internal registry endpoint).
 - Keep ArchUnit rules green.
 
 ## Where to Look

@@ -13,6 +13,9 @@ ENV OTEL_SERVICE_NAME=pos-accounting
 ARG OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 ENV OTEL_EXPORTER_OTLP_ENDPOINT=$OTEL_EXPORTER_OTLP_ENDPOINT
 ENV OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+# The module also runs Micrometer's OTel tracing bridge, which puts traceId/spanId in MDC; keep
+# one MDC injector so the correlation bracket (pos-tenancy-common) carries each id once.
+ENV OTEL_INSTRUMENTATION_LOGBACK_MDC_ENABLED=false
 # Optional: Set OTEL_EXPORTER_OTLP_HEADERS at runtime if your OTLP endpoint requires authentication
 # Default endpoint (otel-collector:4318) does not require authentication
 
