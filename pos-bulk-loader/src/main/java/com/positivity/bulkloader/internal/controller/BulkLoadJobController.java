@@ -56,9 +56,9 @@ public class BulkLoadJobController {
                     Preconditions: the operator must have no other job in an active state (CREATED, UPLOADING, \
                     DETECTING, MAPPING_REVIEW, DEDUP or PROCESSING); only one active job per operator is allowed.
                     Required inputs: fileName (name of the source file that will be uploaded later) and domainType \
-                    (one of CATALOG_PRODUCT, INVENTORY_STOCK_COUNT, LOCATION, CUSTOMER, COMMERCIAL_CUSTOMER, \
-                    PERSON, BASE_PRICE, VEHICLE, VEHICLE_FITMENT, SECURITY_ROLE or SECURITY_ROLE_PERMISSION); \
-                    locationId (UUID) is optional at creation but must be set before processing can start; \
+                    (see the domainType field's schema below for the full, current set of import domains this \
+                    endpoint accepts); locationId (UUID) is optional at creation but must be set before \
+                    processing can start; \
                     tenantId (UUID) names the tenant the job loads into (ADR-0062): an active tenant of the cell, \
                     or the platform tenant, which accepts only SECURITY_ROLE and SECURITY_ROLE_PERMISSION (the \
                     role template's roles.csv / role-permissions.csv); a bound caller may only name its own \
