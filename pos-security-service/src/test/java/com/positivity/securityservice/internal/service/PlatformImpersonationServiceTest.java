@@ -56,7 +56,7 @@ class PlatformImpersonationServiceTest {
     private static final UUID OPERATOR_ID = UUID.fromString("01900000-0000-7000-8000-0000000a0101");
     private static final String OPERATOR = "admin.platform";
     private static final IssuedImpersonationToken ISSUED =
-            new IssuedImpersonationToken("signed.jwt.token", "jti-1", NOW.plusSeconds(900));
+            new IssuedImpersonationToken("signed.jwt.token", "jti-1", NOW.plusSeconds(900), Set.of());
 
     private final ExtTenantRepository extTenants = mock(ExtTenantRepository.class);
     private final UserRepository users = mock(UserRepository.class);
@@ -256,6 +256,57 @@ class PlatformImpersonationServiceTest {
                     .containsEntry("correlationId", "corr-ws2b-4");
             assertThat(request.toString()).as("the token is never audited").doesNotContain("signed.jwt.token");
         }
+    }
+
+    @Test
+    @DisplayName("grants the ceiling dropped are audited as droppedGrants and the token is still issued")
+    void droppedGrantsAreAudited() {
+        TenantContext.bind(PlatformTenant.ID);
+        replicaHolds("ACTIVE");
+        when(jwtService.generateImpersonationToken(anyString(), any(), anyString(), any()))
+                .thenReturn(new IssuedImpersonationToken(
+                        "signed.jwt.token", "jti-1", NOW.plusSeconds(900), Set.of("security:user:delete")));
+
+        assertThat(service.issue(TENANT, null).token()).isEqualTo("signed.jwt.token");
+
+        ArgumentCaptor<AuditLogEventRequest> captor = ArgumentCaptor.forClass(AuditLogEventRequest.class);
+        verify(audit, times(2)).createEvent(captor.capture());
+        for (AuditLogEventRequest request : captor.getAllValues()) {
+            assertThat(request.getContext())
+                    .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+                    .containsEntry("droppedGrants", List.of("security:user:delete"));
+        }
+    }
+
+    @Test
+    @DisplayName(
+            "the synthetic subject never exceeds jwt_token.subject (255): the operator part is cut with a stable fingerprint")
+    void syntheticSubjectIsBounded() {
+        assertThat(PlatformImpersonationService.syntheticSubject("admin.platform", "acme"))
+                .isEqualTo("support:admin.platform@acme");
+
+        String longOperator = "o".repeat(255);
+        String longSlug = "s".repeat(63);
+        String subject = PlatformImpersonationService.syntheticSubject(longOperator, longSlug);
+        assertThat(subject).hasSizeLessThanOrEqualTo(PlatformImpersonationService.MAX_SUBJECT_LENGTH);
+        assertThat(subject)
+                .hasSize(255)
+                .startsWith("support:o")
+                .endsWith("@" + longSlug)
+                .contains("~");
+        assertThat(PlatformImpersonationService.syntheticSubject(longOperator, longSlug))
+                .as("deterministic across mints")
+                .isEqualTo(subject);
+        assertThat(PlatformImpersonationService.syntheticSubject("o".repeat(254) + "x", longSlug))
+                .as("two long operators sharing a prefix get distinct subjects")
+                .isNotEqualTo(subject)
+                .hasSize(255);
+
+        // Exactly at the limit: nothing is cut.
+        String exact = "e".repeat(255 - "support:".length() - 1 - longSlug.length());
+        assertThat(PlatformImpersonationService.syntheticSubject(exact, longSlug))
+                .isEqualTo("support:" + exact + "@" + longSlug)
+                .hasSize(255);
     }
 
     @Test

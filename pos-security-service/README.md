@@ -541,14 +541,20 @@ Flyway on the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`)
   `PlatformImpersonationService.issue`). It returns `{token, expiresAt, tenantId, tenantSlug}` exactly once. The
   token is an ordinary signed access token to the gateway and every module, minted by
   `JwtServiceImpl.generateImpersonationToken` under the *target* tenant's binding, with: `sub` / `username` =
-  `support:<operator>@<tenantSlug>` (a synthetic principal that matches no user), `uid` = the operator's user
+  `support:<operator>@<tenantSlug>` (a synthetic principal that matches no user; bounded to `jwt_token.subject`'s
+  255 characters — a longer operator name is cut and given a stable 8-hex SHA-256 fingerprint, `…~1a2b3c4d@slug`), `uid` = the operator's user
   id (so `X-User-Id` audit lineage names the human), `tid` = the target tenant, `roles` = `["ROLE_SUPPORT"]`,
   `perm_bits` = the target tenant's own `SUPPORT` role's grants (resolved under that binding, so a tenant that
-  narrowed its `SUPPORT` role narrowed support), empty location-scope bitsets and no `loc_scope`,
+  narrowed its `SUPPORT` role narrowed support) **intersected with the read-only ceiling**
+  (`SupportReadOnlyCeiling`: a template role's grants stay editable through the role-permission API, so a
+  tenant administrator who grants `security:user:delete` to `SUPPORT` widens the role but never the token —
+  the mint keeps only `*:*:view` / `*:*:read` and `location:read`, minus the explicit exclusions, and the
+  dropped codes are logged at WARN and audited as `droppedGrants`), empty location-scope bitsets and no `loc_scope`,
   `act` = `{"sub": <operator user id>, "username": <operator>}`, `token_use` = `"impersonation"`, and
   `exp` = `iat` + 15 minutes. **No refresh token**: the `jwt_token` row has a null refresh half (the two
   columns are nullable for exactly this row), `POST /v1/auth/refresh` answers 401 `INVALID_REFRESH_TOKEN` to a
-  token carrying `token_use=impersonation` before any lookup, and a longer session is a new mint. The gateway
+  token carrying `token_use=impersonation` before any lookup — live or already expired (the claims of an
+  expired, correctly signed token are still read for `token_use`) — and a longer session is a new mint. The gateway
   needs no change — it reads `tid` and `perm_bits` and ignores `act` / `token_use` — and downstream modules see
   `X-Tenant-Id` = the target tenant with the `SUPPORT` authorities, so `GET /v1/tenants/me` and every
   tenant-scoped read answer inside that tenant. Refusals: 403 `PLATFORM_TENANT_REQUIRED` under any other
@@ -570,8 +576,9 @@ Flyway on the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`)
   user is ever assigned it. Its grants are the `*:*:view` / `*:*:read` permissions of the six floor roles plus
   `location:read` — nothing else: no write, no `platform:*`, not the assistant baseline (`mcp:chat:*`,
   `nlti:request:*`), not the MCP administration surface, not `nlti:audit:read`, not `people:employee_pii:view`
-  and not `people:self:view`. `RolePermissionBaselineTest.supportIsReadOnly` pins the list to exactly that
-  rule, so a new read permission granted to a floor role must be added here too, deliberately. The grants
+  and not `people:self:view`. `RolePermissionBaselineTest.supportIsReadOnly` pins the seeded list to exactly the
+  `SupportReadOnlyCeiling` rule the mint enforces, so the seed and the runtime ceiling cannot drift apart, and a
+  new read permission granted to a floor role must be added here too, deliberately. The grants
   (133):
 
   | Domain | Permissions |

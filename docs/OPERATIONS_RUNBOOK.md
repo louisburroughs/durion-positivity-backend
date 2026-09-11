@@ -657,9 +657,9 @@ What the token can and cannot do:
 | | |
 | --- | --- |
 | Acts as | `sub` = `support:<operator>@<tenantSlug>`, a synthetic principal that matches no user; `uid` / `X-User-Id` = the operator's platform-tenant user id; `act` = `{sub, username}` of the operator; `token_use` = `impersonation`. |
-| Reads | Whatever the tenant's own `SUPPORT` role grants: the `*:*:view` / `*:*:read` permissions of the six floor roles plus `location:read` (the full list is in `pos-security-service/README.md`). A tenant that narrows its `SUPPORT` role narrows support. Never location-scoped. |
+| Reads | Whatever the tenant's own `SUPPORT` role grants, capped by the read-only ceiling: the `*:*:view` / `*:*:read` permissions of the six floor roles plus `location:read` (the full list is in `pos-security-service/README.md`). A tenant that narrows its `SUPPORT` role narrows support; a tenant that widens it with a write does not widen the token — the mint drops the grant, logs a WARN and records it as `droppedGrants` on the audit events (`SupportReadOnlyCeiling`). Never location-scoped. |
 | Cannot | Write anything (`SUPPORT` holds no write permission), reach `platform:*` (never granted to a tenant role), use the assistant (`mcp:chat:*`, `nlti:request:*` are not granted), read employee PII (`people:employee_pii:view`) or other principals' NLTI history (`nlti:audit:read`), or call the security service's bearer-authenticated `/v1/auth/**` utilities (`revoke`, `roles`, `subject`, `user-id`: the synthetic subject resolves to no user). |
-| Lifetime | 15 minutes from minting, fixed. **No refresh**: `POST /v1/auth/refresh` answers 401 `INVALID_REFRESH_TOKEN` to it. A longer session is a new mint, and a new audit event. |
+| Lifetime | 15 minutes from minting, fixed. **No refresh**: `POST /v1/auth/refresh` answers 401 `INVALID_REFRESH_TOKEN` to it, expired or not. A longer session is a new mint, and a new audit event. |
 | Ending it early | Wait for expiry, or revoke the tenant-side `jwt_token` row / the `jti` through the module's ordinary revocation paths (an operator endpoint for that is a follow-up). Suspending the tenant does not revoke tokens already minted; it only refuses new mints. |
 
 Refusals:

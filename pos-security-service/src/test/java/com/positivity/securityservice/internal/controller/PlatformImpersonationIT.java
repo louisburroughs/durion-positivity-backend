@@ -74,6 +74,9 @@ class PlatformImpersonationIT extends BaseContractIntegrationTest {
     private static final UUID UNKNOWN_TENANT = UUID.fromString("01990000-0000-7000-8000-00000000beef");
     private static final List<String> SUPPORT_GRANTS = List.of("crm:party:view", "order:order:view");
 
+    /** A write a tenant administrator added to SUPPORT: never on the token (SupportReadOnlyCeiling). */
+    private static final String WIDENED_GRANT = "security:user:delete";
+
     @Autowired
     private ExtTenantRepository extTenantRepository;
 
@@ -146,6 +149,7 @@ class PlatformImpersonationIT extends BaseContractIntegrationTest {
                 for (String name : SUPPORT_GRANTS) {
                     support.getPermissions().add(permission(name));
                 }
+                support.getPermissions().add(permission(WIDENED_GRANT));
                 roleRepository.save(support);
             }
         });
@@ -244,7 +248,9 @@ class PlatformImpersonationIT extends BaseContractIntegrationTest {
         String permBits = claims.get(JwtService.PERM_BITS, String.class);
         assertThat(PermissionBitsetCodec.decodeToPermissions(permBits, PermissionCode.CATALOG_VERSION))
                 .extracting(PermissionCode::code)
-                .containsExactlyInAnyOrderElementsOf(SUPPORT_GRANTS);
+                .as("the SUPPORT role's reads, and not the write the tenant added to it")
+                .containsExactlyInAnyOrderElementsOf(SUPPORT_GRANTS)
+                .doesNotContain(WIDENED_GRANT);
 
         // 3. Stored under the target tenant, with no refresh half.
         JwtToken stored = TenantContext.callAs(
@@ -298,6 +304,8 @@ class PlatformImpersonationIT extends BaseContractIntegrationTest {
             assertThat(event.getNewValue()).contains(expiresAt.toString());
             assertThat(event.getContext())
                     .contains("corr-ws2b-4")
+                    .contains("droppedGrants")
+                    .contains(WIDENED_GRANT)
                     .contains(claims.getId())
                     .contains("support:" + OPERATOR + "@alpha")
                     .doesNotContain(token);

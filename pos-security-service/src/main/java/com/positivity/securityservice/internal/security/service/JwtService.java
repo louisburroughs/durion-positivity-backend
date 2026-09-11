@@ -360,14 +360,18 @@ public interface JwtService {
     /**
      * A freshly minted impersonation token (ADR-0062 §7, WS2b-4).
      *
-     * @param token     the signed access token; there is no refresh token
-     * @param jti       its JWT id
-     * @param expiresAt its {@code exp}, {@link #IMPERSONATION_TOKEN_VALIDITY} after minting
+     * @param token              the signed access token; there is no refresh token
+     * @param jti                its JWT id
+     * @param expiresAt          its {@code exp}, {@link #IMPERSONATION_TOKEN_VALIDITY} after minting
+     * @param droppedAuthorities the codes the role granted that the read-only ceiling
+     *                           ({@code SupportReadOnlyCeiling}) kept out of {@code perm_bits};
+     *                           empty when the role is exactly as seeded
      */
     record IssuedImpersonationToken(
             @NonNull String token,
             @NonNull String jti,
-            @NonNull Instant expiresAt) {}
+            @NonNull Instant expiresAt,
+            @NonNull Set<String> droppedAuthorities) {}
 
     /**
      * Mints an impersonation token for the bound tenant (ADR-0062 §7, plan WS2b-4, decided
@@ -379,7 +383,10 @@ public interface JwtService {
      * principal, e.g. {@code support:admin.platform@acme}), {@code uid} = {@code operatorUserId}
      * (so downstream audit lineage names the human behind the request), {@code tid},
      * {@code username} = {@code subject}, {@code roles}, {@code perm_bits} / {@code perm_ver}
-     * resolved from {@code roles} under the bound tenant, empty {@code loc_fin_bits} /
+     * resolved from {@code roles} under the bound tenant and then intersected with the read-only
+     * ceiling ({@code SupportReadOnlyCeiling}: a grant a tenant administrator added to the role
+     * that is not a read never reaches the token; it is reported in {@code droppedAuthorities}
+     * instead), empty {@code loc_fin_bits} /
      * {@code loc_oth_bits} and no {@code loc_scope} (a support token is never location-scoped),
      * {@link #ACT} = {@code {sub, username}} of the operator, {@link #TOKEN_USE} =
      * {@link #TOKEN_USE_IMPERSONATION}, {@code iat}, {@code exp} = {@code iat} +

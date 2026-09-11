@@ -2,6 +2,7 @@ package com.positivity.securityservice.internal.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.securityservice.internal.domain.SupportReadOnlyCeiling;
 import com.positivity.securityservice.internal.enums.PermissionCode;
 import java.io.IOException;
 import java.io.InputStream;
@@ -456,19 +457,19 @@ class RolePermissionBaselineTest {
         // And it is the read surface, not a hand-picked subset: every view/read the floor holds
         // that is not on the exclusion list is granted, so a new read permission granted to a
         // floor role is a conscious decision here too.
+        // The rule is the one the mint enforces at runtime (SupportReadOnlyCeiling, WS2b-4): the
+        // seed and the ceiling must agree, or a seeded grant would be silently dropped from every
+        // token, or a token could carry what the seed deliberately left out.
         Set<String> expected = floorGrants.stream()
-                .filter(permission ->
-                        permission.matches("[a-z_\\-]+:[a-z_\\-]+:(view|read)") || permission.equals("location:read"))
-                .filter(permission -> !Set.of(
-                                "people:employee_pii:view",
-                                "people:self:view",
-                                "nlti:audit:read",
-                                "nlti:request:read",
-                                "mcp:eval_trace:view")
-                        .contains(permission))
-                .filter(permission -> !MCP_ADMINISTRATION_SURFACE.contains(permission))
+                .filter(SupportReadOnlyCeiling::admits)
                 .collect(Collectors.toCollection(TreeSet::new));
         assertThat(support).containsExactlyInAnyOrderElementsOf(expected);
+        // The read half of the MCP administration surface is refused by name; its writes fall to
+        // the action rule like every other write.
+        assertThat(SupportReadOnlyCeiling.EXCLUDED)
+                .containsAll(MCP_ADMINISTRATION_SURFACE.stream()
+                        .filter(permission -> permission.endsWith(":view"))
+                        .toList());
     }
 
     @Test

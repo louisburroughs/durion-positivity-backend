@@ -16,8 +16,13 @@ import com.positivity.securityservice.internal.security.service.JwtService.Issue
 import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.replica.TenantProjectionEvent;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -37,12 +42,15 @@ import org.springframework.transaction.annotation.Transactional;
  * token with {@code tid} = the target tenant, {@code act} = the operator and the target tenant's
  * fixed {@code SUPPORT} role as its authorities. The gateway and every module treat it as any
  * other token: {@code tid} becomes {@code X-Tenant-Id}, {@code perm_bits} becomes the caller's
- * authorities, so the operator reads exactly what the tenant's own {@code SUPPORT} role may read.
+ * authorities, so the operator reads what the tenant's own {@code SUPPORT} role may read — capped
+ * by the read-only ceiling ({@code SupportReadOnlyCeiling}) at mint time, because a template
+ * role's grants stay editable and a widened {@code SUPPORT} must never yield a write-capable
+ * token; grants dropped by the ceiling are logged and audited ({@code droppedGrants}).
  *
  * <p>Refusals: 403 {@code PLATFORM_TENANT_REQUIRED} under any binding but the platform tenant's;
  * 404 {@code TENANT_NOT_FOUND} when the target is not in the {@code ext_tenant} replica; 409
  * {@code TENANT_NOT_IMPERSONABLE} when it is not {@code ACTIVE} or holds no {@code SUPPORT} role
- * yet; 400 when the target is the platform tenant itself (the operator is already there).
+ * yet, or is the platform tenant itself (the operator is already there).
  *
  * <p>Tenant bindings: the guard and the operator lookup run under the caller's platform binding;
  * the role check and the mint run under the target tenant's binding
@@ -66,6 +74,12 @@ public class PlatformImpersonationService {
 
     /** Audit event type written on every issuance. */
     public static final String AUDIT_EVENT_TYPE = "PlatformImpersonationTokenIssued";
+
+    /** Length of {@code jwt_token.subject} ({@code V1__baseline_security_service.sql}). */
+    static final int MAX_SUBJECT_LENGTH = 255;
+
+    private static final String SUBJECT_PREFIX = "support:";
+    private static final String SUBJECT_SEPARATOR = "@";
 
     private final ExtTenantRepository extTenantRepository;
     private final BoundOperations boundOperations;
@@ -104,10 +118,22 @@ public class PlatformImpersonationService {
 
         String operatorUsername = CurrentActor.resolve();
         User operator = boundOperations.operator(operatorUsername);
-        String subject = "support:" + operatorUsername + "@" + target.getSlug();
+        String subject = syntheticSubject(operatorUsername, target.getSlug());
 
         IssuedImpersonationToken issued = TenantContext.callAs(
                 tenantId, () -> boundOperations.mint(tenantId, subject, operator.getId(), operatorUsername));
+
+        if (!issued.droppedAuthorities().isEmpty()) {
+            // The tenant widened its SUPPORT role past the read-only ceiling; the token stayed
+            // read-only (SupportReadOnlyCeiling), and the widening is worth a look.
+            log.warn(
+                    "Impersonation token for tenant {} ({}) minted without {} grant(s) its SUPPORT role carries "
+                            + "beyond the read-only ceiling: {}",
+                    tenantId,
+                    target.getSlug(),
+                    issued.droppedAuthorities().size(),
+                    issued.droppedAuthorities());
+        }
 
         // Audited after the mint committed, each event in its own transaction, so a failing audit
         // store can neither withhold the token nor poison the mint's transaction: the tenant-side
@@ -129,6 +155,36 @@ public class PlatformImpersonationService {
         return new IssuedToken(issued.token(), issued.expiresAt(), tenantId, target.getSlug());
     }
 
+    /**
+     * {@code support:<operator>@<slug>}, bounded to {@link #MAX_SUBJECT_LENGTH} — {@code
+     * jwt_token.subject} is {@code varchar(255)} and a username may already be 255 characters. When
+     * the full form does not fit, the operator part is cut and a stable eight-hex-digit SHA-256
+     * fingerprint of the whole username is appended, so the subject stays unique per operator,
+     * deterministic across mints, and still ends in {@code @<slug>}.
+     */
+    static @NonNull String syntheticSubject(@NonNull String operatorUsername, @NonNull String tenantSlug) {
+        String full = SUBJECT_PREFIX + operatorUsername + SUBJECT_SEPARATOR + tenantSlug;
+        if (full.length() <= MAX_SUBJECT_LENGTH) {
+            return full;
+        }
+        String fingerprint = "~" + sha256Hex(operatorUsername).substring(0, 8);
+        int room = MAX_SUBJECT_LENGTH
+                - SUBJECT_PREFIX.length()
+                - fingerprint.length()
+                - SUBJECT_SEPARATOR.length()
+                - tenantSlug.length();
+        return SUBJECT_PREFIX + operatorUsername.substring(0, room) + fingerprint + SUBJECT_SEPARATOR + tenantSlug;
+    }
+
+    private static String sha256Hex(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is not available", e);
+        }
+    }
+
     private static AuditLogEventRequest auditRequest(
             UUID tenantId,
             String operatorUsername,
@@ -141,6 +197,9 @@ public class PlatformImpersonationService {
         context.put("jti", issued.jti());
         context.put("expiresAt", issued.expiresAt().toString());
         context.put("role", SUPPORT_ROLE);
+        if (!issued.droppedAuthorities().isEmpty()) {
+            context.put("droppedGrants", List.copyOf(issued.droppedAuthorities()));
+        }
         if (correlationId != null && !correlationId.isBlank()) {
             context.put("correlationId", correlationId);
         }

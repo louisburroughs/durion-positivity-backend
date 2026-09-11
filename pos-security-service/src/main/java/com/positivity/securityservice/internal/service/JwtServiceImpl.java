@@ -2,6 +2,7 @@ package com.positivity.securityservice.internal.service;
 
 import com.positivity.securityservice.internal.domain.LocationScopeBits;
 import com.positivity.securityservice.internal.domain.PermissionBitsetCodec;
+import com.positivity.securityservice.internal.domain.SupportReadOnlyCeiling;
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.entity.JwtToken;
 import com.positivity.securityservice.internal.enums.PermissionCode;
@@ -14,6 +15,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantResolver;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.JwtParser;
@@ -511,22 +513,23 @@ public class JwtServiceImpl implements JwtService {
     public TokenPair refreshAccessToken(@NonNull String refreshToken) {
         // ADR-0062 §3: a refresh exchange cannot change tenant. The whole exchange, lookups and
         // the new pair alike, runs under the tenant the refresh token was issued for.
+        Claims claims;
+        try {
+            claims = getClaims(refreshToken);
+        } catch (ExpiredJwtException expired) {
+            // The signature verified, only exp has passed: an expired impersonation token is still
+            // an impersonation token, and answers the same 401 as a live one rather than the
+            // generic 400 an unparseable string gets (the claims of an expired token are readable).
+            refuseImpersonationRefresh(expired.getClaims());
+            throw new SecurityValidationException("Invalid refresh token");
+        } catch (JwtException | IllegalArgumentException e) {
+            throw new SecurityValidationException("Invalid refresh token");
+        }
+        refuseImpersonationRefresh(claims);
         UUID tenantId;
         try {
-            Claims claims = getClaims(refreshToken);
-            if (isImpersonation(claims)) {
-                // ADR-0062 §7 (WS2b-4): a support session is exactly IMPERSONATION_TOKEN_VALIDITY
-                // long. The token verifies and is stored, so this is not the generic "invalid"
-                // 400 shape: it is a well-formed token that must not be exchanged, the same
-                // 401 INVALID_REFRESH_TOKEN a refresh token for a deleted user gets.
-                log.warn(
-                        "Refresh refused: impersonation token presented as a refresh token. jti={} sub={}",
-                        claims.getId(),
-                        claims.getSubject());
-                throw new InvalidRefreshTokenException("Impersonation tokens cannot be refreshed");
-            }
             tenantId = tenantOf(claims);
-        } catch (JwtException | IllegalArgumentException e) {
+        } catch (IllegalArgumentException e) {
             throw new SecurityValidationException("Invalid refresh token");
         }
         return TenantContext.callAs(tenantId, () -> refreshAccessTokenBound(refreshToken));
@@ -535,6 +538,24 @@ public class JwtServiceImpl implements JwtService {
     /** {@code token_use = impersonation} (ADR-0062 §7, WS2b-4). */
     private static boolean isImpersonation(Claims claims) {
         return TOKEN_USE_IMPERSONATION.equals(claims.get(TOKEN_USE, String.class));
+    }
+
+    /**
+     * ADR-0062 §7 (WS2b-4): a support session is exactly {@link #IMPERSONATION_TOKEN_VALIDITY}
+     * long. The token verifies and is stored, so this is not the generic "invalid" 400 shape: it
+     * is a well-formed token that must not be exchanged, the same 401 {@code INVALID_REFRESH_TOKEN}
+     * a refresh token for a deleted user gets — whether it is still live or already expired.
+     */
+    private static void refuseImpersonationRefresh(Claims claims) {
+        if (!isImpersonation(claims)) {
+            return;
+        }
+        log.warn(
+                "Refresh refused: impersonation token presented as a refresh token. jti={} sub={} exp={}",
+                claims.getId(),
+                claims.getSubject(),
+                claims.getExpiration());
+        throw new InvalidRefreshTokenException("Impersonation tokens cannot be refreshed");
     }
 
     @Override
@@ -571,9 +592,12 @@ public class JwtServiceImpl implements JwtService {
         // resolved under that same binding, so perm_bits is what the tenant's own SUPPORT role
         // holds, not what a role of the same name holds anywhere else.
         UUID tenantId = tenantResolver.require();
-        Set<PermissionCode> permCodes = roleAuthorityService.expandRolesToAuthorities(roles).stream()
+        Set<PermissionCode> granted = roleAuthorityService.expandRolesToAuthorities(roles).stream()
                 .flatMap(authority -> PermissionCode.fromCode(authority).stream())
                 .collect(Collectors.toUnmodifiableSet());
+        // The role's grants are data a tenant administrator can widen; the token's reach is not.
+        SupportReadOnlyCeiling.Result ceiling = SupportReadOnlyCeiling.apply(granted);
+        Set<PermissionCode> permCodes = ceiling.admitted();
 
         // Insertion-ordered so the serialised token is deterministic, like loc_scope.
         Map<String, Object> actor = new LinkedHashMap<>();
@@ -623,7 +647,7 @@ public class JwtServiceImpl implements JwtService {
                 tenantId,
                 jti,
                 expiresAt);
-        return new IssuedImpersonationToken(token, jti, expiresAt);
+        return new IssuedImpersonationToken(token, jti, expiresAt, ceiling.dropped());
     }
 
     private TokenPair refreshAccessTokenBound(String refreshToken) {

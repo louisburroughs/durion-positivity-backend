@@ -168,6 +168,9 @@ class JwtServiceImplImpersonationTest {
         IssuedImpersonationToken issued = mintUnderTarget();
 
         assertThat(issued.expiresAt()).isEqualTo(NOW.plus(JwtService.IMPERSONATION_TOKEN_VALIDITY));
+        assertThat(issued.droppedAuthorities())
+                .as("the seeded role is within the ceiling")
+                .isEmpty();
         assertThat(claims(issued.token()).getExpiration().toInstant()).isEqualTo(NOW.plusSeconds(900));
         assertThat(claims(issued.token()).getIssuedAt().toInstant()).isEqualTo(NOW);
 
@@ -213,6 +216,74 @@ class JwtServiceImplImpersonationTest {
         verify(jwtTokenRepository, never()).findByRefreshToken(any());
         verify(jwtTokenRepository, never()).delete(any());
         verify(tokenRevocationManager, never()).revokeToken(any(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    @DisplayName(
+            "a write grant added to SUPPORT never reaches perm_bits: dropped by the read-only ceiling and reported")
+    void readOnlyCeilingDropsWriteGrants() {
+        when(roleAuthorityService.expandRolesToAuthorities(Set.of("SUPPORT")))
+                .thenReturn(Set.of(
+                        "ROLE_SUPPORT",
+                        "crm:party:view",
+                        "security:user:delete",
+                        "order:order:create",
+                        "people:employee_pii:view",
+                        "platform:tenant:read"));
+
+        IssuedImpersonationToken issued = mintUnderTarget();
+
+        assertThat(sut.getAuthoritiesFromToken(issued.token())).containsExactly("crm:party:view");
+        assertThat(PermissionBitsetCodec.hasPermission(
+                        claims(issued.token()).get(JwtService.PERM_BITS, String.class),
+                        PermissionCode.SECURITY__USER__DELETE))
+                .isFalse();
+        assertThat(issued.droppedAuthorities())
+                .containsExactly(
+                        "order:order:create",
+                        "people:employee_pii:view",
+                        "platform:tenant:read",
+                        "security:user:delete");
+    }
+
+    @Test
+    @DisplayName("an expired impersonation token presented for refresh is still the 401, not the generic 400")
+    void expiredImpersonationTokenRefreshIs401() {
+        String expired = Jwts.builder()
+                .id("jti-expired")
+                .subject(SUBJECT)
+                .issuer("pos-security-service")
+                .audience()
+                .add("api-gateway")
+                .and()
+                .claim(JwtService.TID, TARGET_TENANT.toString())
+                .claim(JwtService.TOKEN_USE, JwtService.TOKEN_USE_IMPERSONATION)
+                .issuedAt(Date.from(NOW.minusSeconds(1800)))
+                .expiration(Date.from(NOW.minusSeconds(900)))
+                .signWith(new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"))
+                .compact();
+
+        assertThatThrownBy(() -> sut.refreshAccessToken(expired))
+                .isInstanceOf(InvalidRefreshTokenException.class)
+                .hasMessageContaining("Impersonation tokens cannot be refreshed");
+        assertThat(sut.validateRefreshToken(expired)).isFalse();
+
+        // An expired ordinary refresh token keeps the generic answer: only token_use is read early.
+        String expiredRefresh = Jwts.builder()
+                .id("jti-expired-refresh")
+                .subject("alice")
+                .issuer("pos-security-service")
+                .audience()
+                .add("api-gateway")
+                .and()
+                .claim(JwtService.TID, TARGET_TENANT.toString())
+                .claim("type", "refresh")
+                .expiration(Date.from(NOW.minusSeconds(1)))
+                .signWith(new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"))
+                .compact();
+        assertThatThrownBy(() -> sut.refreshAccessToken(expiredRefresh))
+                .isInstanceOf(SecurityValidationException.class)
+                .hasMessage("Invalid refresh token");
     }
 
     @Test
