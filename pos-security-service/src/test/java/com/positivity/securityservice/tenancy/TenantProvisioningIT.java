@@ -35,16 +35,24 @@ import org.springframework.jdbc.core.JdbcTemplate;
  */
 class TenantProvisioningIT extends PostgresTenancyTestBase {
 
+    /** The six floor roles plus SUPPORT, the read-only role an impersonation token carries (WS2b-4). */
     private static final List<String> FLOOR = List.of(
-            "ADMIN", "CONTROLLER", "DISPATCHER", "SELF_SERVICE_CUSTOMER", "SHOP_MANAGER", "SYSTEM_ADMINISTRATOR");
+            "ADMIN",
+            "CONTROLLER",
+            "DISPATCHER",
+            "SELF_SERVICE_CUSTOMER",
+            "SHOP_MANAGER",
+            "SUPPORT",
+            "SYSTEM_ADMINISTRATOR");
 
     /**
-     * Grants {@code R__seed_tenant_template.sql} gives PLATFORM_ADMIN: the ten {@code platform:*}
-     * families of ADR-0062 §7, plus the four the platform operator needs to load the role template
-     * through pos-bulk-loader (plan WS8). The seed's own section-4 guard counts the same number;
-     * {@code PlatformOperatorGrantsTest} in pos-bulk-loader pins which four they are.
+     * Grants {@code R__seed_tenant_template.sql} gives PLATFORM_ADMIN: the eleven {@code platform:*}
+     * families of ADR-0062 §7 (including {@code platform:tenant:impersonate}, WS2b-4), plus the four
+     * the platform operator needs to load the role template through pos-bulk-loader (plan WS8). The
+     * seed's own section-4 guard counts the same number; {@code PlatformOperatorGrantsTest} in
+     * pos-bulk-loader pins which four the loader's endpoints require.
      */
-    private static final int PLATFORM_ADMIN_GRANTS = 14;
+    private static final int PLATFORM_ADMIN_GRANTS = 15;
 
     @Autowired
     private RoleTemplateService roleTemplateService;
@@ -90,7 +98,11 @@ class TenantProvisioningIT extends PostgresTenancyTestBase {
         assertThat(owner.queryForObject("""
                         SELECT count(*) FROM role_permissions rp JOIN roles r ON r.id = rp.role_id
                          WHERE r.tenant_id = ? AND r.name = 'PLATFORM_ADMIN'
-                        """, Integer.class, PlatformTenant.ID)).isEqualTo(PLATFORM_ADMIN_GRANTS);
+                        """, Integer.class, PlatformTenant.ID))
+                .as("platform:account:{create,read,update}, platform:tenant:{create,decommission,impersonate,"
+                        + "provision,reactivate,read,suspend,update}, bulkImport:{status:read,upload:execute},"
+                        + " security:role:{create,edit}")
+                .isEqualTo(PLATFORM_ADMIN_GRANTS);
         assertThat(owner.queryForObject("""
                         SELECT count(*) FROM role_assignments ra
                           JOIN users u ON u.id = ra.user_id JOIN roles r ON r.id = ra.role_id

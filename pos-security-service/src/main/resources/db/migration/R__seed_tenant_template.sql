@@ -5,7 +5,8 @@
 -- (R__seed_reference_security, V2), their grants (R__seed_role_permissions) and their location
 -- scope (R__seed_role_location_scope) exist. It does three things:
 --
---   1. Marks alpha's Flyway floor roles with template_key, so they reject delete exactly like the
+--   1. Marks alpha's Flyway floor roles (and SUPPORT, the read-only role an operator impersonation
+--      token carries, plan WS2b-4) with template_key, so they reject delete exactly like the
 --      copies every later tenant receives (section 6: canonical names are immutable per tenant).
 --   2. Holds the role template as data in the platform tenant: a copy of the floor roles, their
 --      grants and their ADR-0061 location-scope attributes, keyed by template_key.
@@ -16,9 +17,11 @@
 --      POST /v1/platform/tenants/{tenantId}/roles/reconcile-template.
 --   3. Bootstraps PLATFORM_ADMIN and admin.platform in the platform tenant: the only role holding
 --      the platform:tenant:* and platform:account:* families (section 7), and the one user that
---      can reach pos-tenant's registry. The alpha ADMIN no longer holds those grants. It also
---      holds the four bulk-import and role grants the documented platform role-template load needs
---      (plan WS8); see the comment on that VALUES block.
+--      can reach pos-tenant's registry. The alpha ADMIN no longer holds those grants.
+--      platform:tenant:impersonate (WS2b-4) is what lets an operator mint a SUPPORT token for a
+--      tenant; it lives here, never in a tenant role. The role also holds the four bulk-import and
+--      role-write grants the documented platform role-template load needs (plan WS8); see the
+--      comment on that VALUES block.
 --
 -- Idempotent: every write is ON CONFLICT DO NOTHING (the seed password is refreshed on re-run,
 -- as for admin.alpha). RoleSeedSql, the parser behind the alpha role-set tests, skips this file:
@@ -36,7 +39,7 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 UPDATE roles SET template_key = name
  WHERE template_key IS NULL
    AND name IN ('ADMIN', 'SYSTEM_ADMINISTRATOR', 'DISPATCHER', 'SHOP_MANAGER',
-                'SELF_SERVICE_CUSTOMER', 'CONTROLLER');
+                'SELF_SERVICE_CUSTOMER', 'CONTROLLER', 'SUPPORT');
 
 -- ---------------------------------------------------------------------------
 -- 2. The template: alpha's floor roles copied into the platform tenant.
@@ -140,6 +143,7 @@ FROM (VALUES
     ('PLATFORM_ADMIN', 'platform:account:update'),
     ('PLATFORM_ADMIN', 'platform:tenant:create'),
     ('PLATFORM_ADMIN', 'platform:tenant:decommission'),
+    ('PLATFORM_ADMIN', 'platform:tenant:impersonate'),
     ('PLATFORM_ADMIN', 'platform:tenant:provision'),
     ('PLATFORM_ADMIN', 'platform:tenant:reactivate'),
     ('PLATFORM_ADMIN', 'platform:tenant:read'),
@@ -172,15 +176,15 @@ DECLARE
     platform_grants integer;
 BEGIN
     SELECT count(*) INTO template_roles FROM roles WHERE template_key IS NOT NULL;
-    IF template_roles < 6 THEN
-        RAISE EXCEPTION 'platform role template holds % roles, expected the six floor roles', template_roles;
+    IF template_roles < 7 THEN
+        RAISE EXCEPTION 'platform role template holds % roles, expected the six floor roles plus SUPPORT', template_roles;
     END IF;
 
     SELECT count(*) INTO platform_grants
       FROM role_permissions rp
       JOIN roles r ON r.id = rp.role_id
      WHERE r.name = 'PLATFORM_ADMIN';
-    IF platform_grants < 14 THEN
-        RAISE EXCEPTION 'PLATFORM_ADMIN holds % grants, expected 14: the ten platform:* families plus the four the role-template bulk load needs (permission rows missing?)', platform_grants;
+    IF platform_grants < 15 THEN
+        RAISE EXCEPTION 'PLATFORM_ADMIN holds % grants, expected 15: the eleven platform:* families plus the four the role-template bulk load needs (permission rows missing?)', platform_grants;
     END IF;
 END $$;

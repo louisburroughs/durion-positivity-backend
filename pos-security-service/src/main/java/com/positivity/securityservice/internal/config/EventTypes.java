@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the security module.
-     * Total: 41 event types.
+     * Total: 42 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -44,6 +44,12 @@ public final class EventTypes {
                 EventTypeRegistration.write(
                                 "SECURITY_PLATFORM_ROLE_TEMPLATE_RECONCILE",
                                 "Reconcile a tenant's roles against the platform role template")
+                        .build(),
+
+                // PlatformImpersonationController - 1 event (ADR-0062 section 7, WS2b-4)
+                EventTypeRegistration.write(
+                                "SECURITY_PLATFORM_TENANT_IMPERSONATE",
+                                "Mint a 15-minute read-only SUPPORT impersonation token for a tenant")
                         .build(),
 
                 // JwtController - 4 events

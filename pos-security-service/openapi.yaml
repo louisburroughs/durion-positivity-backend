@@ -24,6 +24,8 @@ tags:
   name: Platform Administrator API
 - description: Platform-operator reconciliation of a tenant's roles against the platform role template
   name: Platform Role Template API
+- description: Platform-operator support access to a tenant (impersonation tokens)
+  name: Platform Support API
 - description: Asynchronous audit export job management
   name: Audit Exports
 - description: Bulk provision roles with persona metadata
@@ -1907,6 +1909,76 @@ paths:
       - Platform Administrator API
       x-required-permissions:
       - platform:tenant:provision
+  /v1/platform/tenants/{tenantId}/impersonation-token:
+    post:
+      description: 'Mints a 15-minute, read-only access token that acts inside the named tenant and returns it once, with its expiry, the
+        tenant id and the tenant slug; it carries tid = the tenant, act = {sub, username} of the calling operator, token_use =
+        impersonation and a synthetic subject support:<operator>@<tenantSlug>, has no refresh token, and refreshTokenPair
+        refuses it. perm_bits is not the SUPPORT role verbatim: a tenant administrator can edit that role''s grants, so the
+        mint intersects them with a read-only ceiling that admits only view and read actions plus location:read and never a
+        write, a platform:* permission or the documented exclusions; dropped grants do not fail the mint, and are logged at
+        WARN and recorded as droppedGrants on both audit events. The token ends early when the operator does, because
+        disabling or expiring their account, or revoking the role that carries platform:tenant:impersonate, revokes every
+        token they have minted in every tenant; SUPPORT itself can never be granted to a user, which every assignment path
+        refuses with 409 ROLE_NOT_USER_ASSIGNABLE. Use this tool when a platform operator must look at a tenant''s data to
+        support it, rather than granting an operator a role in the tenant or calling issueInternalToken, which binds the
+        caller''s own tenant. Preconditions: the caller must hold platform:tenant:impersonate, be bound to the platform tenant
+        and be a user of it, and the target must be ACTIVE in the ext_tenant replica with a SUPPORT role. Required inputs:
+        tenantId as a path parameter and no request body; X-Correlation-Id, when sent, is recorded on the audit events. Emits
+        a SECURITY_PLATFORM_TENANT_IMPERSONATE event and a PlatformImpersonationTokenIssued audit event in both the target
+        tenant and the platform tenant (operator, subject, jti, expiry, correlation id, droppedGrants), plus an INFO log line
+        that never contains the token. Returns 201 with the token; 403 PLATFORM_TENANT_REQUIRED when the caller is bound to
+        another tenant; 404 TENANT_NOT_FOUND when the replica does not know the tenant or USER_NOT_FOUND when the operator has
+        no user row in the platform tenant; 409 TENANT_NOT_IMPERSONABLE when the tenant is not ACTIVE (its status is in the
+        message), has no SUPPORT role, or is the platform tenant itself.'
+      operationId: mintImpersonationToken
+      parameters:
+      - description: The tenant to act inside
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpersonationTokenResponse'
+          description: Token minted; it is shown here and never again
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'PLATFORM_TENANT_REQUIRED: the caller is bound to a tenant other than the platform tenant'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'TENANT_NOT_FOUND: the ext_tenant replica does not know the tenant. USER_NOT_FOUND: the authenticated operator has no user row in the platform tenant'
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'TENANT_NOT_IMPERSONABLE: the tenant is not ACTIVE, has no SUPPORT role yet, or is the platform tenant'
+      security:
+      - bearerAuth:
+        - platform:tenant:impersonate
+      summary: Mint a Tenant Impersonation Token
+      tags:
+      - Platform Support API
+      x-required-permissions:
+      - platform:tenant:impersonate
   /v1/platform/tenants/{tenantId}/roles/reconcile-template:
     post:
       description: 'Upserts every platform template role into the named tenant: a template role the tenant lacks is created with the template''s description, persona, location scope and grants, exactly as provisioning creates it; a role the tenant already holds keeps every tenant-local grant and gains any grant the template has added since (union, never removal), and is marked with its template key when it carried none. An existing role''s description, persona and scope are left alone. Idempotent: a second run reports empty lists.
@@ -5282,6 +5354,32 @@ components:
       required:
       - field
       - message
+      type: object
+    ImpersonationTokenResponse:
+      description: 'A 15-minute, read-only SUPPORT impersonation token for a tenant, returned once. Its permissions are the tenant''s SUPPORT grants capped at the read-only ceiling, so a widened SUPPORT role never yields a write-capable token'
+      properties:
+        expiresAt:
+          description: 'When the token stops working (15 minutes after minting); there is no refresh. It also stops working earlier if the operator is disabled or expired, or loses the role carrying platform:tenant:impersonate'
+          example: '2026-09-10T12:15:00Z'
+          format: date-time
+          type: string
+        tenantId:
+          description: The tenant the token acts inside (its tid claim)
+          format: uuid
+          type: string
+        tenantSlug:
+          description: That tenant's slug
+          example: acme-tire
+          type: string
+        token:
+          description: 'The signed access token; send it as the bearer token. It carries tid = tenantId, act = the operator and token_use = impersonation, and cannot be refreshed. Its perm_bits is the tenant''s SUPPORT grants intersected with the read-only ceiling: only actions view and read, plus location:read; never a write, never platform:*, and never people:employee_pii:view, people:self:view, nlti:audit:read, nlti:request:read or the MCP administration surface (mcp:eval_trace:view, mcp:llm_api:view, mcp:system_prompt:view, mcp:tool:view). Anything the role grants beyond that is dropped and reported as droppedGrants on the audit events'
+          example: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBwb3J0OmFkbWluLnBsYXRmb3JtQGFjbWUifQ.sig
+          type: string
+      required:
+      - expiresAt
+      - tenantId
+      - tenantSlug
+      - token
       type: object
     GrantAdded:
       description: One permission added to one role of the tenant

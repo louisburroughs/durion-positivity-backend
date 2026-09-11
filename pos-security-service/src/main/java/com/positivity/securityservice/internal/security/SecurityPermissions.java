@@ -78,6 +78,13 @@ public final class SecurityPermissions {
      */
     public static final String PLATFORM_TENANT_PROVISION = "platform:tenant:provision";
 
+    /**
+     * Mint a 15-minute, no-refresh {@code SUPPORT} impersonation token for a tenant (ADR-0062 §7,
+     * WS2b-4). Like {@link #PLATFORM_TENANT_PROVISION} a {@code platform:*} permission: held by
+     * {@code PLATFORM_ADMIN} in the platform tenant only, never by a tenant role.
+     */
+    public static final String PLATFORM_TENANT_IMPERSONATE = "platform:tenant:impersonate";
+
     private SecurityPermissions() {
         // Utility class - prevent instantiation
     }

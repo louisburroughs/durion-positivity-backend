@@ -198,7 +198,7 @@ The seed file stays until the alpha reseed is verified (§5.4).
 | File | Rows | Target |
 |---|---|---|
 | `roles.csv` | 15 roles with persona metadata | `SECURITY_ROLE` loader (`POST /v1/roles/bulk-ingest`) |
-| `role-permissions.csv` | 17 roles, 1078 grants | `SECURITY_ROLE_PERMISSION` loader (`POST /v1/roles/permissions/bulk-ingest`) |
+| `role-permissions.csv` | 18 roles, 1363 grants | `SECURITY_ROLE_PERMISSION` loader (`POST /v1/roles/permissions/bulk-ingest`) |
 | `users.csv` | 25 users, 16 roles | gateway API pack (`POST /security-service/users` per row) |
 
 **Tenant tagging (ADR-0062, WS8).** Loaded into the alpha tenant, `roles.csv` provisions

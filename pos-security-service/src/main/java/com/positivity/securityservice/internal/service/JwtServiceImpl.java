@@ -2,6 +2,7 @@ package com.positivity.securityservice.internal.service;
 
 import com.positivity.securityservice.internal.domain.LocationScopeBits;
 import com.positivity.securityservice.internal.domain.PermissionBitsetCodec;
+import com.positivity.securityservice.internal.domain.SupportReadOnlyCeiling;
 import com.positivity.securityservice.internal.dto.UserDto;
 import com.positivity.securityservice.internal.entity.JwtToken;
 import com.positivity.securityservice.internal.enums.PermissionCode;
@@ -14,6 +15,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantResolver;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.JwtParser;
@@ -49,6 +51,7 @@ import org.springframework.security.core.userdetails.UserDetailsChecker;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -299,12 +302,35 @@ public class JwtServiceImpl implements JwtService {
         List<JwtToken> tokens = jwtTokenRepository.findAllBySubject(username);
         for (JwtToken jwtToken : tokens) {
             revokeJtiIfTokenActive(jwtToken.getToken(), "access");
-            revokeJtiIfTokenActive(jwtToken.getRefreshToken(), "refresh");
+            // An impersonation token row has no refresh half (WS2b-4).
+            if (jwtToken.getRefreshToken() != null) {
+                revokeJtiIfTokenActive(jwtToken.getRefreshToken(), "refresh");
+            }
         }
         if (!tokens.isEmpty()) {
             jwtTokenRepository.deleteAll(tokens);
             log.debug("Revoked all tokens for user: username={}, count={}", username, tokens.size());
         }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int revokeImpersonationTokensMintedBy(@NonNull UUID operatorUserId) {
+        List<JwtToken> tokens = jwtTokenRepository.findAllByImpersonatedByUserId(operatorUserId);
+        if (tokens.isEmpty()) {
+            return 0;
+        }
+        for (JwtToken jwtToken : tokens) {
+            // An impersonation row never has a refresh half (WS2b-4), so there is only one JTI.
+            revokeJtiIfTokenActive(jwtToken.getToken(), "impersonation");
+        }
+        jwtTokenRepository.deleteAll(tokens);
+        log.info(
+                "Revoked impersonation tokens: operator={}, tenant={}, count={}",
+                operatorUserId,
+                TenantContext.current().orElse(null),
+                tokens.size());
+        return tokens.size();
     }
 
     private void revokeJtiIfTokenActive(@NonNull String token, @NonNull String tokenType) {
@@ -470,6 +496,11 @@ public class JwtServiceImpl implements JwtService {
             Claims claims = jws.getPayload();
             String jti = claims.getId();
 
+            if (isImpersonation(claims)) {
+                log.debug("Refresh token validation failed: impersonation tokens are not refreshable. jti={}", jti);
+                return false;
+            }
+
             if (jti != null && tokenRevocationManager.isRevoked(jti)) {
                 log.debug("Refresh token validation failed: token is revoked. jti={}", jti);
                 return false;
@@ -503,13 +534,145 @@ public class JwtServiceImpl implements JwtService {
     public TokenPair refreshAccessToken(@NonNull String refreshToken) {
         // ADR-0062 §3: a refresh exchange cannot change tenant. The whole exchange, lookups and
         // the new pair alike, runs under the tenant the refresh token was issued for.
-        UUID tenantId;
+        Claims claims;
         try {
-            tenantId = tenantOf(getClaims(refreshToken));
+            claims = getClaims(refreshToken);
+        } catch (ExpiredJwtException expired) {
+            // The signature verified, only exp has passed: an expired impersonation token is still
+            // an impersonation token, and answers the same 401 as a live one rather than the
+            // generic 400 an unparseable string gets (the claims of an expired token are readable).
+            refuseImpersonationRefresh(expired.getClaims());
+            throw new SecurityValidationException("Invalid refresh token");
         } catch (JwtException | IllegalArgumentException e) {
             throw new SecurityValidationException("Invalid refresh token");
         }
+        refuseImpersonationRefresh(claims);
+        UUID tenantId;
+        try {
+            tenantId = tenantOf(claims);
+        } catch (IllegalArgumentException e) {
+            throw new SecurityValidationException("Invalid refresh token");
+        }
         return TenantContext.callAs(tenantId, () -> refreshAccessTokenBound(refreshToken));
+    }
+
+    /** {@code token_use = impersonation} (ADR-0062 §7, WS2b-4). */
+    private static boolean isImpersonation(Claims claims) {
+        return TOKEN_USE_IMPERSONATION.equals(claims.get(TOKEN_USE, String.class));
+    }
+
+    /**
+     * ADR-0062 §7 (WS2b-4): a support session is exactly {@link #IMPERSONATION_TOKEN_VALIDITY}
+     * long. The token verifies and is stored, so this is not the generic "invalid" 400 shape: it
+     * is a well-formed token that must not be exchanged, the same 401 {@code INVALID_REFRESH_TOKEN}
+     * a refresh token for a deleted user gets — whether it is still live or already expired.
+     */
+    private static void refuseImpersonationRefresh(Claims claims) {
+        if (!isImpersonation(claims)) {
+            return;
+        }
+        log.warn(
+                "Refresh refused: impersonation token presented as a refresh token. jti={} sub={} exp={}",
+                claims.getId(),
+                claims.getSubject(),
+                claims.getExpiration());
+        throw new InvalidRefreshTokenException("Impersonation tokens cannot be refreshed");
+    }
+
+    @Override
+    public @NonNull IssuedImpersonationToken generateImpersonationToken(
+            @NonNull String subject,
+            @NonNull UUID operatorUserId,
+            @NonNull String operatorUsername,
+            @NonNull Set<String> roles) {
+        if (subject == null || subject.isBlank()) {
+            throw new SecurityValidationException("Subject cannot be blank");
+        }
+        if (operatorUserId == null || operatorUsername == null || operatorUsername.isBlank()) {
+            throw new SecurityValidationException("Operator cannot be blank");
+        }
+        if (roles == null || roles.isEmpty()) {
+            throw new SecurityValidationException("Roles cannot be empty");
+        }
+        List<String> roleClaims = roles.stream()
+                .map(this::normalizeRoleClaim)
+                .filter(role -> !role.isBlank())
+                .distinct()
+                .sorted()
+                .toList();
+        if (roleClaims.isEmpty()) {
+            throw new SecurityValidationException("Roles cannot be blank");
+        }
+
+        // Whole seconds: a JWT's iat/exp carry no finer precision, and the expiry the operator is
+        // shown must be the one the token enforces.
+        Instant now = Instant.now(clock).truncatedTo(ChronoUnit.SECONDS);
+        Instant expiresAt = now.plus(IMPERSONATION_TOKEN_VALIDITY);
+        String jti = UUIDv7Generator.generate().toString();
+        // ADR-0062 §3: the bound tenant is the target tenant the caller rebound to. The grants are
+        // resolved under that same binding, so perm_bits is what the tenant's own SUPPORT role
+        // holds, not what a role of the same name holds anywhere else.
+        UUID tenantId = tenantResolver.require();
+        Set<PermissionCode> granted = roleAuthorityService.expandRolesToAuthorities(roles).stream()
+                .flatMap(authority -> PermissionCode.fromCode(authority).stream())
+                .collect(Collectors.toUnmodifiableSet());
+        // The role's grants are data a tenant administrator can widen; the token's reach is not.
+        SupportReadOnlyCeiling.Result ceiling = SupportReadOnlyCeiling.apply(granted);
+        Set<PermissionCode> permCodes = ceiling.admitted();
+
+        // Insertion-ordered so the serialised token is deterministic, like loc_scope.
+        Map<String, Object> actor = new LinkedHashMap<>();
+        actor.put("sub", operatorUserId.toString());
+        actor.put("username", operatorUsername);
+
+        String token = Jwts.builder()
+                .id(jti)
+                .subject(subject)
+                .issuer(ISSUER)
+                .audience()
+                .add(AUDIENCE)
+                .and()
+                .claim(UID, operatorUserId.toString())
+                .claim(TID, tenantId.toString())
+                .claim(USERNAME, subject)
+                .claim(ROLES, roleClaims)
+                .claim(PERM_BITS, PermissionBitsetCodec.encode(permCodes))
+                .claim(PERM_VER, PermissionCode.CATALOG_VERSION)
+                // Never location-scoped: SUPPORT is an ALL-scope role, and a support read that
+                // depended on the operator's (non-existent) staffing assignments would fail closed
+                // into a token that reads nothing.
+                .claim(LOC_FIN_BITS, PermissionBitsetCodec.encode(Set.of()))
+                .claim(LOC_OTH_BITS, PermissionBitsetCodec.encode(Set.of()))
+                .claim(ACT, actor)
+                .claim(TOKEN_USE, TOKEN_USE_IMPERSONATION)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(expiresAt))
+                .signWith(secretKey)
+                .compact();
+
+        // Stored like any access token so validateToken (and therefore the bearer path and
+        // /v1/auth/validate) recognises it, and revocation by subject or jti reaches it. No
+        // refresh half: the columns are nullable for exactly this row. The operator's user id is
+        // stored alongside it because the subject is synthetic and the row lives in the target
+        // tenant: revoking the operator's account or platform role reaches this row only through
+        // impersonated_by_user_id (ImpersonationTokenRevocationService, ADR-0062 §7, WS2b-4).
+        JwtToken jwtToken = new JwtToken();
+        jwtToken.setToken(token);
+        jwtToken.setIssuedAt(now);
+        jwtToken.setExpiresAt(expiresAt);
+        jwtToken.setSubject(subject);
+        jwtToken.setImpersonatedByUserId(operatorUserId);
+        jwtTokenRepository.save(jwtToken);
+
+        log.debug(
+                "Generated impersonation token: subject={}, operator={} ({}), tenant={}, jti={}, expiresAt={}",
+                subject,
+                operatorUsername,
+                operatorUserId,
+                tenantId,
+                jti,
+                expiresAt);
+        return new IssuedImpersonationToken(token, jti, expiresAt, ceiling.dropped());
     }
 
     private TokenPair refreshAccessTokenBound(String refreshToken) {

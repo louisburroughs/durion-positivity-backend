@@ -46,6 +46,14 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * still thread-bound and opens a genuinely new transaction on its own connection, so this method's
  * writes get their own real commit.
  *
+ * <p><b>Impersonation tokens too.</b> {@link JwtService#revokeAllTokensForUser} is keyed on the
+ * username and the bound tenant, which an impersonation token matches on neither count: it lives in
+ * the tenant being supported, under the synthetic subject {@code support:<operator>@<slug>}. A
+ * platform operator losing the role that carries {@code platform:tenant:impersonate} would
+ * therefore have kept reading that tenant until the token's own 15-minute expiry, so {@link
+ * ImpersonationTokenRevocationService#revokeForOperator} runs alongside it, keyed on the user id
+ * the token records (ADR-0062 §7, WS2b-4).
+ *
  * <p><b>Reuses {@link JwtService#revokeAllTokensForUser}</b> — the same username-keyed "revoke
  * every stored token for a user" facility {@code AdminAccountStateServiceImpl} already uses for
  * account lockout/disable, over the existing {@code TokenRevocationManager} + {@code jwt_token}
@@ -61,6 +69,7 @@ public class RoleAssignmentTokenRevocationListener {
 
     private final UserRepository userRepository;
     private final JwtService jwtService;
+    private final ImpersonationTokenRevocationService impersonationTokenRevocationService;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -71,6 +80,11 @@ public class RoleAssignmentTokenRevocationListener {
             return;
         }
         jwtService.revokeAllTokensForUser(user.get().getUsername());
+        // An operator who loses platform:tenant:impersonate (or the role that carries it) must not
+        // keep reading a tenant through a token already minted: those rows live in the target
+        // tenant under a synthetic subject, so the username-keyed revocation above cannot see them
+        // (ADR-0062 §7, WS2b-4).
+        impersonationTokenRevocationService.revokeForOperator(event.getUserId());
         log.info("Revoked live tokens after role-assignment revocation: userId={}", event.getUserId());
     }
 }

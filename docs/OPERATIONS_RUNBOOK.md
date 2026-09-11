@@ -703,6 +703,63 @@ loaded into a tenant instead is not template data; load it into the platform ten
 an already-present platform role rather than refusing it), then reconcile each tenant that should receive it.
 Grants come the same way: `role-permissions.csv` into the platform tenant, then reconcile.
 
+### Impersonating a tenant for support (ADR-0062 §7, WS2b-4)
+
+Platform support never gets a role inside a tenant (decided 2026-09-10: impersonation token, never a
+cross-tenant role). A platform operator instead mints a **15-minute, read-only, non-refreshable**
+access token that acts inside the tenant as its fixed `SUPPORT` role, and uses it like any other
+bearer token through the gateway:
+
+```bash
+# 1. As a platform operator (PLATFORM_ADMIN in the platform tenant, e.g. admin.platform), with the
+#    tenant id from GET /tenant/v1/tenants. The platform token carries tid = platform tenant.
+TENANT_ID=<id of the tenant to support>
+
+# 2. Mint the token. The response is the only copy; send X-Correlation-Id so the audit trail and
+#    the ticket share an id.
+curl -sS -X POST "https://<gateway>/security-service/v1/platform/tenants/$TENANT_ID/impersonation-token" \
+  -H "Authorization: Bearer $PLATFORM_ACCESS_TOKEN" -H "X-API-Version: 1" \
+  -H "X-Correlation-Id: support-ticket-4711"
+# → 201 {"token":"<jwt>","expiresAt":"2026-09-10T12:15:00Z","tenantId":"<TENANT_ID>","tenantSlug":"acme"}
+
+# 3. Read inside the tenant with it, exactly as that tenant's own user would; every call is
+#    logged downstream with X-User = support:<operator>@<slug> and X-User-Id = the operator.
+curl -sS "https://<gateway>/order/v1/orders" -H "Authorization: Bearer <jwt>" -H "X-API-Version: 1"
+curl -sS "https://<gateway>/security-service/v1/tenants/me" -H "Authorization: Bearer <jwt>" -H "X-API-Version: 1"
+# → the target tenant, not the platform tenant
+```
+
+What the token can and cannot do:
+
+| | |
+| --- | --- |
+| Acts as | `sub` = `support:<operator>@<tenantSlug>`, a synthetic principal that matches no user; `uid` / `X-User-Id` = the operator's platform-tenant user id; `act` = `{sub, username}` of the operator; `token_use` = `impersonation`. |
+| Reads | Whatever the tenant's own `SUPPORT` role grants, capped by the read-only ceiling: the `*:*:view` / `*:*:read` permissions of the six floor roles plus `location:read` (the full list is in `pos-security-service/README.md`). A tenant that narrows its `SUPPORT` role narrows support; a tenant that widens it with a write does not widen the token — the mint drops the grant, logs a WARN and records it as `droppedGrants` on the audit events (`SupportReadOnlyCeiling`). Never location-scoped. |
+| Cannot | Be held by a user: every grant, reconcile and import path refuses `SUPPORT` with 409 `ROLE_NOT_USER_ASSIGNABLE`, so the impersonation read surface can never land on an ordinary login token. Write anything (`SUPPORT` holds no write permission), reach `platform:*` (never granted to a tenant role), use the assistant (`mcp:chat:*`, `nlti:request:*` are not granted), read employee PII (`people:employee_pii:view`) or other principals' NLTI history (`nlti:audit:read`), or call the security service's bearer-authenticated `/v1/auth/**` utilities (`revoke`, `roles`, `subject`, `user-id`: the synthetic subject resolves to no user). |
+| Lifetime | 15 minutes from minting, fixed. **No refresh**: `POST /v1/auth/refresh` answers 401 `INVALID_REFRESH_TOKEN` to it, expired or not. A longer session is a new mint, and a new audit event. |
+| Ending it early | **Disable or expire the operator's account** (`POST /security-service/v1/users/{id}/disable`, `/expire-account`, `/expire-credentials`), or **revoke the role that carries `platform:tenant:impersonate`** — either revokes every support token that operator has minted, in every tenant, at once (`ImpersonationTokenRevocationService`, keyed on `jwt_token.impersonated_by_user_id`). Otherwise wait for expiry, or delete the tenant-side `jwt_token` row / revoke the `jti` by hand. Suspending the tenant does **not** revoke tokens already minted; it only refuses new mints. |
+
+Refusals:
+
+| Situation | Answer |
+| --- | --- |
+| Caller holds `platform:tenant:impersonate` but is bound to a tenant other than the platform tenant | 403 `PLATFORM_TENANT_REQUIRED`. |
+| Caller lacks the permission | 403 `FORBIDDEN`. Only `PLATFORM_ADMIN` in the platform tenant holds it (`R__seed_tenant_template.sql`); never grant it to a tenant role. |
+| `TENANT_ID` is not in `pos-security-service`'s `ext_tenant` replica | 404 `TENANT_NOT_FOUND` (the tenant does not exist, or its `tenant.created` has not been consumed yet). |
+| Tenant is `PENDING`, `SUSPENDED` or `DECOMMISSIONED` | 409 `TENANT_NOT_IMPERSONABLE`, the status in the message. |
+| Tenant has no `SUPPORT` role (provisioned before WS2b-4, template not yet reconciled by WS8) | 409 `TENANT_NOT_IMPERSONABLE`. Run the template reconcile, or create the role from the template by hand, then mint again. |
+| `TENANT_ID` is the platform tenant | 409 `TENANT_NOT_IMPERSONABLE`: the caller is already bound to it. |
+| Operator has no user row in the platform tenant (a gateway-header caller with no account) | 404 `USER_NOT_FOUND`. |
+
+Audit trail: every mint writes a `PlatformImpersonationTokenIssued` audit event **twice** — once in
+the target tenant (`entityType` `Tenant`, `entityId` the tenant, `actorId` the operator; the tenant's
+own administrators can see who read their data and until when) and once in the platform tenant (the
+operator-side ledger) — with the operator, the synthetic subject, the token's `jti`, the expiry and the
+request's `X-Correlation-Id` in `context`, plus an INFO log line
+(`Impersonation token issued: operator=… tenant=… subject=… jti=… expiresAt=… correlationId=…`) and
+the `SECURITY_PLATFORM_TENANT_IMPERSONATE` event. The token itself is never logged or audited; the
+`jwt_token` row under the target tenant is the only copy the platform keeps.
+
 ## Permission Registration
 
 ### Code-First Pattern
