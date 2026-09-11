@@ -80,6 +80,43 @@ class ProcessedEventTenantStampTest {
     }
 
     @Test
+    @DisplayName("a legacy row with no tenant is not re-stamped by a redelivery; only the documented backfill"
+            + " brings it into a tenant's window")
+    void legacyNullTenantRowIsRepairedByTheBackfillNotByRedelivery() {
+        String eventId = "01990000-0000-7000-8000-00000000000c";
+        String lower = "01990000-0000-7000-8000-000000000000";
+        String upper = "01990000-0000-7000-8000-0000000000ff";
+        // Recorded before tenant_id existed: nothing bound, tenant_id NULL.
+        repository.save(row(eventId));
+        entityManager.flush();
+        entityManager.clear();
+
+        // The listeners' idempotency path on a replayed envelope: existsById short-circuits before
+        // save, so @PrePersist never runs and the row stays outside every tenant's window.
+        assertThat(asTenant(TENANT_A, () -> repository.existsById(eventId))).isTrue();
+        assertThat(reload(eventId).getTenantId()).isNull();
+        assertThat(repository.findEventIdsInRange("customer", TENANT_A, lower, upper))
+                .isEmpty();
+
+        // Even a save() under the tenant would not repair it: the column is updatable = false and
+        // the merge of an existing row is an update, not a persist.
+        ProcessedEvent redelivered = row(eventId);
+        asTenant(TENANT_A, () -> repository.save(redelivered));
+        assertThat(reload(eventId).getTenantId()).isNull();
+
+        // The one-time repair the runbook prescribes ("Reconciliation manifests and drift detection").
+        int repaired = entityManager
+                .createNativeQuery("UPDATE processed_events SET tenant_id = :tenant WHERE tenant_id IS NULL")
+                .setParameter("tenant", TENANT_A)
+                .executeUpdate();
+        entityManager.clear();
+
+        assertThat(repaired).isEqualTo(1);
+        assertThat(repository.findEventIdsInRange("customer", TENANT_A, lower, upper))
+                .containsExactly(eventId);
+    }
+
+    @Test
     @DisplayName("the per-tenant window scan sees only rows stamped with the queried tenant")
     void windowScanIsScopedToTheStampedTenant() {
         String forA = "01990000-0000-7000-8000-00000000000a";
