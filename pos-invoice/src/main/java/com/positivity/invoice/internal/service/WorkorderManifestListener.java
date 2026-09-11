@@ -3,9 +3,11 @@ package com.positivity.invoice.internal.service;
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.domainevents.UuidV7Timestamps;
 import com.positivity.invoice.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -26,7 +28,10 @@ import tools.jackson.databind.ObjectMapper;
  * membership is the UUIDv7 timestamp embedded in each recorded eventId, exactly the definition
  * the owner used. On mismatch it increments {@code replica.drift} and publishes a
  * {@code workorder.outbox.replay-requested} command for the window; the replayed events are
- * deduplicated by the {@code processed_events} primary key, so repair is idempotent.
+ * deduplicated by the {@code processed_events} primary key, so repair is idempotent. Manifests are per
+ * tenant (ADR-0062 §3): the listener runs under the manifest\'s tenant, compares it against that
+ * tenant\'s ledger rows only, tags the drift metric with the tenant and sends the replay command
+ * with the tenant header so the owner replays only that tenant\'s events.
  *
  * <p>The owner's manifest counts every fact in the window (including the many workorder fact types this
  * module ignores), which is why {@link WorkorderEventsListener} records every eventId it sees.
@@ -41,7 +46,7 @@ public class WorkorderManifestListener {
     private final ProcessedEventRepository processedEventRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
-    private final Counter driftCounter;
+    private final @Nullable MeterRegistry meterRegistry;
 
     @Value("${pos.invoice.kafka.workorder-commands-topic:workorder.commands.v1}")
     private String locationCommandsTopic;
@@ -54,14 +59,7 @@ public class WorkorderManifestListener {
         this.processedEventRepository = processedEventRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
-        MeterRegistry registry = meterRegistry.getIfAvailable();
-        this.driftCounter = registry == null
-                ? null
-                : Counter.builder("replica.drift")
-                        .description("Reconciliation manifests that did not match the local replica")
-                        .tag("owner", "workorder")
-                        .tag("entity", "workorder-events")
-                        .register(registry);
+        this.meterRegistry = meterRegistry.getIfAvailable();
     }
 
     @KafkaListener(
@@ -80,25 +78,26 @@ public class WorkorderManifestListener {
 
         List<String> receivedIds = processedEventRepository.findEventIdsInRange(
                 WorkorderEventsListener.OWNER,
+                manifest.tenantId(),
                 UuidV7Timestamps.minStringAt(manifest.windowStartUtc()),
                 UuidV7Timestamps.minStringAt(manifest.windowEndUtc()));
         String observedChecksum = ReconciliationManifestV1.checksumOf(receivedIds);
 
         if (manifest.matches(receivedIds.size(), observedChecksum)) {
             log.debug(
-                    "Replica reconciled window=[{}, {}) events={}",
+                    "Replica reconciled tenant={} window=[{}, {}) events={}",
+                    manifest.tenantId(),
                     manifest.windowStartUtc(),
                     manifest.windowEndUtc(),
                     manifest.eventCount());
             return;
         }
 
-        if (driftCounter != null) {
-            driftCounter.increment();
-        }
+        countDrift(manifest.tenantId());
         log.warn(
-                "Replica drift detected owner=workorder window=[{}, {}) expectedCount={} observedCount={}"
+                "Replica drift detected owner=workorder tenant={} window=[{}, {}) expectedCount={} observedCount={}"
                         + " expectedChecksum={} observedChecksum={} eventTypeCounts={} — requesting outbox replay",
+                manifest.tenantId(),
                 manifest.windowStartUtc(),
                 manifest.windowEndUtc(),
                 manifest.eventCount(),
@@ -109,6 +108,23 @@ public class WorkorderManifestListener {
         requestReplay(manifest);
     }
 
+    /**
+     * One {@code replica.drift} increment per mismatched manifest, tagged with the tenant it was
+     * published for, so one tenant's divergence is visible on its own.
+     */
+    private void countDrift(@NonNull UUID tenantId) {
+        if (meterRegistry == null) {
+            return;
+        }
+        Counter.builder("replica.drift")
+                .description("Reconciliation manifests that did not match the local replica")
+                .tag("owner", "workorder")
+                .tag("entity", "workorder-events")
+                .tag("tenant", tenantId.toString())
+                .register(meterRegistry)
+                .increment();
+    }
+
     private void requestReplay(@NonNull ReconciliationManifestV1 manifest) {
         try {
             String command = objectMapper.writeValueAsString(new ReplayCommand(
@@ -116,7 +132,8 @@ public class WorkorderManifestListener {
                     new ReplayCommand.Payload(
                             manifest.windowStartUtc().toString(),
                             manifest.windowEndUtc().toString())));
-            kafkaTemplate.send(locationCommandsTopic, manifest.windowStartUtc().toString(), command);
+            kafkaTemplate.send(TenantKafkaHeaders.record(
+                    locationCommandsTopic, manifest.windowStartUtc().toString(), command, manifest.tenantId()));
         } catch (Exception e) {
             // Best effort: the drift metric already fired, and the next manifest re-detects.
             log.warn("Failed to publish outbox replay request for window starting {}", manifest.windowStartUtc(), e);

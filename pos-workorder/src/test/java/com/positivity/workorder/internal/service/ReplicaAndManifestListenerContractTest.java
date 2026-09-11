@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -21,6 +22,7 @@ import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpdatedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkRemovedV1;
 import com.positivity.domainevents.peoplecontact.UserPersonLinkUpdatedV1;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import com.positivity.workorder.internal.entity.ExtBayReplica;
 import com.positivity.workorder.internal.entity.ExtCustomerPartyReplica;
 import com.positivity.workorder.internal.entity.ExtLocationReplica;
@@ -46,6 +48,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -492,9 +495,9 @@ class ReplicaAndManifestListenerContractTest {
         private String manifestMessage(long eventCount, String checksum) {
             return """
                     {"eventId":"evt-1","eventType":"x.reconciliation.manifest",
-                     "payload":{"windowStartUtc":"%s","windowEndUtc":"%s","eventCount":%d,
+                     "payload":{"tenantId":"%s","windowStartUtc":"%s","windowEndUtc":"%s","eventCount":%d,
                        "eventIdsChecksum":"%s","eventTypeCounts":null}}
-                    """.formatted(WINDOW_START, WINDOW_END, eventCount, checksum);
+                    """.formatted(TENANT_A, WINDOW_START, WINDOW_END, eventCount, checksum);
         }
 
         private double driftCount(String owner) {
@@ -512,20 +515,17 @@ class ReplicaAndManifestListenerContractTest {
             List<String> ids = List.of("019ff000-0000-7000-8000-000000000001");
             when(processedEventRepository.findEventIdsInRange(
                             CustomerEventsListener.OWNER,
+                            TENANT_A,
                             UuidV7Timestamps.minStringAt(WINDOW_START),
                             UuidV7Timestamps.minStringAt(WINDOW_END)))
                     .thenReturn(ids);
 
             listener.onManifest(manifestMessage(1, ReconciliationManifestV1.checksumOf(ids)));
-            verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+            verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
 
             listener.onManifest(manifestMessage(2, "owner-checksum"));
             assertThat(driftCount("customer")).isEqualTo(1.0);
-            verify(kafkaTemplate)
-                    .send(
-                            org.mockito.ArgumentMatchers.eq("customer.commands.v1"),
-                            org.mockito.ArgumentMatchers.eq(WINDOW_START.toString()),
-                            anyString());
+            verify(kafkaTemplate).send(replayOn("customer.commands.v1"));
         }
 
         @Test
@@ -536,12 +536,11 @@ class ReplicaAndManifestListenerContractTest {
             ReflectionTestUtils.setField(listener, "locationCommandsTopic", "location.commands.v1");
 
             listener.onManifest("{not json");
-            verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+            verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
 
-            when(processedEventRepository.findEventIdsInRange(anyString(), anyString(), anyString()))
+            when(processedEventRepository.findEventIdsInRange(anyString(), any(), anyString(), anyString()))
                     .thenReturn(List.of());
-            when(kafkaTemplate.send(anyString(), anyString(), anyString()))
-                    .thenThrow(new IllegalStateException("broker down"));
+            when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new IllegalStateException("broker down"));
 
             listener.onManifest(manifestMessage(3, "owner-checksum"));
 
@@ -558,20 +557,35 @@ class ReplicaAndManifestListenerContractTest {
             List<String> ids = List.of("019ff000-0000-7000-8000-000000000001");
             when(processedEventRepository.findEventIdsInRange(
                             PeopleReplicaEventsListener.OWNER_PEOPLE,
+                            TENANT_A,
                             UuidV7Timestamps.minStringAt(WINDOW_START),
                             UuidV7Timestamps.minStringAt(WINDOW_END)))
                     .thenReturn(ids);
 
             listener.onManifest(manifestMessage(1, ReconciliationManifestV1.checksumOf(ids)));
-            verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+            verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
 
             listener.onManifest(manifestMessage(2, "owner-checksum"));
             assertThat(driftCount("people")).isEqualTo(1.0);
-            verify(kafkaTemplate)
-                    .send(
-                            org.mockito.ArgumentMatchers.eq("people.commands.v1"),
-                            org.mockito.ArgumentMatchers.eq(WINDOW_START.toString()),
-                            anyString());
+            verify(kafkaTemplate).send(replayOn("people.commands.v1"));
         }
+    }
+
+    /** The one replay command handed to Kafka: it must ride the manifest's tenant header (ADR-0062 §3). */
+    @SuppressWarnings("unchecked")
+    private ProducerRecord<String, String> capturedReplay() {
+        ArgumentCaptor<ProducerRecord<String, String>> record = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(kafkaTemplate).send(record.capture());
+        assertThat(TenantKafkaHeaders.read(record.getValue().headers())).contains(TENANT_A);
+        return record.getValue();
+    }
+
+    /** Matches a replay command routed to {@code topic} under the manifest's tenant header. */
+    private static ProducerRecord<String, String> replayOn(String topic) {
+        return org.mockito.ArgumentMatchers.argThat(
+                (ProducerRecord<String, String> record) -> topic.equals(record.topic())
+                        && TenantKafkaHeaders.read(record.headers())
+                                .filter(TENANT_A::equals)
+                                .isPresent());
     }
 }

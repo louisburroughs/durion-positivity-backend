@@ -1,6 +1,8 @@
 package com.positivity.workorder.internal.service;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -9,11 +11,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.ReconciliationManifestV1;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import com.positivity.workorder.internal.repository.ProcessedEventRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -68,6 +72,7 @@ class InvoiceManifestListenerTest {
                   "occurredAtUtc": "2026-07-14T11:05:00Z",
                   "sourceService": "pos-invoice",
                   "payload": {
+                    "tenantId": "%s",
                     "windowStartUtc": "%s",
                     "windowEndUtc": "%s",
                     "eventCount": %d,
@@ -77,6 +82,7 @@ class InvoiceManifestListenerTest {
                 }
                 """.formatted(
                         eventIdAt(Instant.parse("2026-07-14T11:05:00Z"), 9),
+                        TENANT_A,
                         WINDOW_START,
                         WINDOW_END,
                         eventCount,
@@ -85,40 +91,41 @@ class InvoiceManifestListenerTest {
     }
 
     private double driftCount() {
-        return meterRegistry
-                .get("replica.drift")
-                .tags("owner", "invoice")
-                .counter()
-                .count();
+        return java.util.Optional.ofNullable(meterRegistry
+                        .find("replica.drift")
+                        .tag("owner", "invoice")
+                        .counter())
+                .map(io.micrometer.core.instrument.Counter::count)
+                .orElse(0d);
     }
 
     @Test
     @DisplayName("Matching count and checksum → no drift, no replay request")
     void matchingManifestIsQuiet() {
         List<String> ids = List.of(IN_WINDOW_ID_1, IN_WINDOW_ID_2);
-        when(repository.findEventIdsInRange(eq("invoice"), anyString(), anyString()))
+        when(repository.findEventIdsInRange(eq("invoice"), eq(TENANT_A), anyString(), anyString()))
                 .thenReturn(ids);
 
         listener.onManifest(manifestMessage(2, ReconciliationManifestV1.checksumOf(ids)));
 
         assertThat(driftCount()).isZero();
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
     }
 
     @Test
     @DisplayName("Missing event → drift metric + replay request for the window")
     void missingEventTriggersDriftAndReplay() throws Exception {
         // Owner saw two events, we only recorded one.
-        when(repository.findEventIdsInRange(eq("invoice"), anyString(), anyString()))
+        when(repository.findEventIdsInRange(eq("invoice"), eq(TENANT_A), anyString(), anyString()))
                 .thenReturn(List.of(IN_WINDOW_ID_1));
 
         listener.onManifest(
                 manifestMessage(2, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_1, IN_WINDOW_ID_2))));
 
         assertThat(driftCount()).isEqualTo(1.0);
-        ArgumentCaptor<String> command = ArgumentCaptor.forClass(String.class);
-        verify(kafkaTemplate).send(eq("invoice.commands.v1"), anyString(), command.capture());
-        JsonNode json = objectMapper.readTree(command.getValue());
+        ProducerRecord<String, String> replay = capturedReplay();
+        assertThat(replay.topic()).isEqualTo("invoice.commands.v1");
+        JsonNode json = objectMapper.readTree(replay.value());
         assertThat(json.path("commandType").stringValue()).isEqualTo("invoice.outbox.replay-requested");
         assertThat(json.path("payload").path("since").stringValue()).isEqualTo(WINDOW_START.toString());
         assertThat(json.path("payload").path("until").stringValue()).isEqualTo(WINDOW_END.toString());
@@ -127,26 +134,26 @@ class InvoiceManifestListenerTest {
     @Test
     @DisplayName("Same count but different ids (checksum mismatch) → drift")
     void checksumMismatchTriggersDrift() {
-        when(repository.findEventIdsInRange(eq("invoice"), anyString(), anyString()))
+        when(repository.findEventIdsInRange(eq("invoice"), eq(TENANT_A), anyString(), anyString()))
                 .thenReturn(List.of(IN_WINDOW_ID_1));
 
         listener.onManifest(manifestMessage(1, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_2))));
 
         assertThat(driftCount()).isEqualTo(1.0);
-        verify(kafkaTemplate).send(eq("invoice.commands.v1"), anyString(), anyString());
+        verify(kafkaTemplate).send(replayOn("invoice.commands.v1"));
     }
 
     @Test
     @DisplayName("Window bounds passed to the repository are the UUIDv7 range of the manifest window")
     void queriesRepositoryWithWindowBounds() {
-        when(repository.findEventIdsInRange(eq("invoice"), anyString(), anyString()))
+        when(repository.findEventIdsInRange(eq("invoice"), eq(TENANT_A), anyString(), anyString()))
                 .thenReturn(List.of());
 
         listener.onManifest(manifestMessage(0, ReconciliationManifestV1.checksumOf(List.of())));
 
         ArgumentCaptor<String> lower = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> upper = ArgumentCaptor.forClass(String.class);
-        verify(repository).findEventIdsInRange(eq("invoice"), lower.capture(), upper.capture());
+        verify(repository).findEventIdsInRange(eq("invoice"), eq(TENANT_A), lower.capture(), upper.capture());
         assertThat(lower.getValue()).isLessThan(IN_WINDOW_ID_1).isLessThan(upper.getValue());
         assertThat(upper.getValue()).isGreaterThan(IN_WINDOW_ID_2);
         assertThat(driftCount()).isZero();
@@ -159,7 +166,25 @@ class InvoiceManifestListenerTest {
         listener.onManifest("{\"payload\": {\"windowStartUtc\": \"oops\"}}");
 
         assertThat(driftCount()).isZero();
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
-        verify(repository, never()).findEventIdsInRange(anyString(), anyString(), anyString());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
+        verify(repository, never()).findEventIdsInRange(anyString(), any(), anyString(), anyString());
+    }
+
+    /** The one replay command handed to Kafka: it must ride the manifest's tenant header (ADR-0062 §3). */
+    @SuppressWarnings("unchecked")
+    private ProducerRecord<String, String> capturedReplay() {
+        ArgumentCaptor<ProducerRecord<String, String>> record = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(kafkaTemplate).send(record.capture());
+        assertThat(TenantKafkaHeaders.read(record.getValue().headers())).contains(TENANT_A);
+        return record.getValue();
+    }
+
+    /** Matches a replay command routed to {@code topic} under the manifest's tenant header. */
+    private static ProducerRecord<String, String> replayOn(String topic) {
+        return org.mockito.ArgumentMatchers.argThat(
+                (ProducerRecord<String, String> record) -> topic.equals(record.topic())
+                        && TenantKafkaHeaders.read(record.headers())
+                                .filter(TENANT_A::equals)
+                                .isPresent());
     }
 }

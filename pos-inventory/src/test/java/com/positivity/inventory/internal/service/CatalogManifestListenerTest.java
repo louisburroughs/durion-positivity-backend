@@ -1,6 +1,8 @@
 package com.positivity.inventory.internal.service;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -10,10 +12,12 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -75,6 +79,7 @@ class CatalogManifestListenerTest {
                   "occurredAtUtc": "2026-07-21T11:05:00Z",
                   "sourceService": "pos-catalog",
                   "payload": {
+                    "tenantId": "%s",
                     "windowStartUtc": "%s",
                     "windowEndUtc": "%s",
                     "eventCount": %d,
@@ -84,6 +89,7 @@ class CatalogManifestListenerTest {
                 }
                 """.formatted(
                         eventIdAt(Instant.parse("2026-07-21T11:05:00Z"), 9),
+                        TENANT_A,
                         WINDOW_START,
                         WINDOW_END,
                         eventCount,
@@ -92,66 +98,67 @@ class CatalogManifestListenerTest {
     }
 
     private double driftCount() {
-        return meterRegistry
-                .get("replica.drift")
-                .tags("owner", "catalog")
-                .counter()
-                .count();
+        return java.util.Optional.ofNullable(meterRegistry
+                        .find("replica.drift")
+                        .tag("owner", "catalog")
+                        .counter())
+                .map(io.micrometer.core.instrument.Counter::count)
+                .orElse(0d);
     }
 
     @Test
     @DisplayName("Matching count and checksum → no drift, no replay command")
     void matchingManifestIsQuiet() {
         List<String> ids = List.of(IN_WINDOW_ID_1, IN_WINDOW_ID_2);
-        when(repository.findEventIdsInRange(eq("catalog"), anyString(), anyString()))
+        when(repository.findEventIdsInRange(eq("catalog"), eq(TENANT_A), anyString(), anyString()))
                 .thenReturn(ids);
 
         listener.onManifest(manifestMessage(2, ReconciliationManifestV1.checksumOf(ids)));
 
         assertThat(driftCount()).isZero();
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
     }
 
     @Test
     @DisplayName("Missing event → drift metric AND a replay command is published (#1537)")
     void missingEventTriggersDriftAndReplay() {
         // Owner saw two events, we only recorded one.
-        when(repository.findEventIdsInRange(eq("catalog"), anyString(), anyString()))
+        when(repository.findEventIdsInRange(eq("catalog"), eq(TENANT_A), anyString(), anyString()))
                 .thenReturn(List.of(IN_WINDOW_ID_1));
 
         listener.onManifest(
                 manifestMessage(2, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_1, IN_WINDOW_ID_2))));
 
         assertThat(driftCount()).isEqualTo(1.0);
-        verify(kafkaTemplate).send(eq(COMMANDS_TOPIC), anyString(), anyString());
+        verify(kafkaTemplate).send(replayOn(COMMANDS_TOPIC));
     }
 
     @Test
     @DisplayName("Checksum mismatch at equal counts → drift metric AND a replay command")
     void checksumMismatchTriggersDriftAndReplay() {
-        when(repository.findEventIdsInRange(eq("catalog"), anyString(), anyString()))
+        when(repository.findEventIdsInRange(eq("catalog"), eq(TENANT_A), anyString(), anyString()))
                 .thenReturn(List.of(IN_WINDOW_ID_1));
 
         listener.onManifest(manifestMessage(1, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_2))));
 
         assertThat(driftCount()).isEqualTo(1.0);
-        verify(kafkaTemplate).send(eq(COMMANDS_TOPIC), anyString(), anyString());
+        verify(kafkaTemplate).send(replayOn(COMMANDS_TOPIC));
     }
 
     @Test
     @DisplayName("Exactly one replay command is published on drift, carrying the window bounds")
     void replayCommand_carriesWindowBoundsAndIsPublishedOnce() {
-        when(repository.findEventIdsInRange(eq("catalog"), anyString(), anyString()))
+        when(repository.findEventIdsInRange(eq("catalog"), eq(TENANT_A), anyString(), anyString()))
                 .thenReturn(List.of());
-        ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
 
         listener.onManifest(manifestMessage(1, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_1))));
 
-        verify(kafkaTemplate).send(eq(COMMANDS_TOPIC), key.capture(), body.capture());
-        assertThat(key.getValue()).isEqualTo(WINDOW_START.toString());
+        ProducerRecord<String, String> replay = capturedReplay();
 
-        JsonNode command = objectMapper.readTree(body.getValue());
+        assertThat(replay.topic()).isEqualTo(COMMANDS_TOPIC);
+        assertThat(replay.key()).isEqualTo(WINDOW_START.toString());
+
+        JsonNode command = objectMapper.readTree(replay.value());
         assertThat(command.path("commandType").stringValue()).isEqualTo("catalog.outbox.replay-requested");
         assertThat(command.path("payload").path("since").stringValue()).isEqualTo(WINDOW_START.toString());
         assertThat(command.path("payload").path("until").stringValue()).isEqualTo(WINDOW_END.toString());
@@ -162,20 +169,38 @@ class CatalogManifestListenerTest {
     void unparseableManifestIsDropped() {
         listener.onManifest("not-json");
 
-        verify(repository, never()).findEventIdsInRange(anyString(), anyString(), anyString());
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        verify(repository, never()).findEventIdsInRange(anyString(), any(), anyString(), anyString());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
         assertThat(driftCount()).isZero();
     }
 
     @Test
     @DisplayName("A failed replay publish is swallowed — drift metric already fired, next manifest re-detects")
     void failedReplayPublishIsSwallowed() {
-        when(repository.findEventIdsInRange(eq("catalog"), anyString(), anyString()))
+        when(repository.findEventIdsInRange(eq("catalog"), eq(TENANT_A), anyString(), anyString()))
                 .thenReturn(List.of());
-        when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenThrow(new RuntimeException("broker down"));
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new RuntimeException("broker down"));
 
         listener.onManifest(manifestMessage(1, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_1))));
 
         assertThat(driftCount()).isEqualTo(1.0);
+    }
+
+    /** The one replay command handed to Kafka: it must ride the manifest's tenant header (ADR-0062 §3). */
+    @SuppressWarnings("unchecked")
+    private ProducerRecord<String, String> capturedReplay() {
+        ArgumentCaptor<ProducerRecord<String, String>> record = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(kafkaTemplate).send(record.capture());
+        assertThat(TenantKafkaHeaders.read(record.getValue().headers())).contains(TENANT_A);
+        return record.getValue();
+    }
+
+    /** Matches a replay command routed to {@code topic} under the manifest's tenant header. */
+    private static ProducerRecord<String, String> replayOn(String topic) {
+        return org.mockito.ArgumentMatchers.argThat(
+                (ProducerRecord<String, String> record) -> topic.equals(record.topic())
+                        && TenantKafkaHeaders.read(record.headers())
+                                .filter(TENANT_A::equals)
+                                .isPresent());
     }
 }

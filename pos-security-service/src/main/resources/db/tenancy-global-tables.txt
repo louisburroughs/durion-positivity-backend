@@ -4,4 +4,4 @@
 ext_tenant  # public tenant projection fed by tenant.events.v1 (ADR-0062 section 5); login resolves slugs before any tenant is bound
 event_outbox  # transactional outbox; the unbound poller publishes every tenant's rows (tenant_id carried as data)
 permissions  # permission catalog is global and code-first (ADR-0062 section 6, ADR-0040)
-processed_events  # consumer idempotency ledger keyed by eventId; checked before the tenant is bound
+processed_events  # consumer idempotency ledger keyed by eventId, deduplicated across tenants; tenant_id carried as data for per-tenant reconciliation

@@ -3,9 +3,11 @@ package com.positivity.inventory.internal.service;
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.domainevents.UuidV7Timestamps;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -26,7 +28,10 @@ import tools.jackson.databind.ObjectMapper;
  * membership is the UUIDv7 timestamp embedded in each recorded eventId, exactly the definition
  * the owner used. On mismatch it increments {@code replica.drift} and publishes a
  * {@code location.outbox.replay-requested} command for the window; the replayed events are
- * deduplicated by the {@code processed_events} primary key, so repair is idempotent.
+ * deduplicated by the {@code processed_events} primary key, so repair is idempotent. Manifests are per
+ * tenant (ADR-0062 §3): the listener runs under the manifest\'s tenant, compares it against that
+ * tenant\'s ledger rows only, tags the drift metric with the tenant and sends the replay command
+ * with the tenant header so the owner replays only that tenant\'s events.
  *
  */
 @Slf4j
@@ -39,7 +44,7 @@ public class LocationManifestListener {
     private final ProcessedEventRepository processedEventRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
-    private final Counter driftCounter;
+    private final @Nullable MeterRegistry meterRegistry;
 
     @Value("${pos.inventory.kafka.location-commands-topic:location.commands.v1}")
     private String locationCommandsTopic;
@@ -52,14 +57,7 @@ public class LocationManifestListener {
         this.processedEventRepository = processedEventRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
-        MeterRegistry registry = meterRegistry.getIfAvailable();
-        this.driftCounter = registry == null
-                ? null
-                : Counter.builder("replica.drift")
-                        .description("Reconciliation manifests that did not match the local replica")
-                        .tag("owner", "location")
-                        .tag("entity", "location-events")
-                        .register(registry);
+        this.meterRegistry = meterRegistry.getIfAvailable();
     }
 
     @KafkaListener(
@@ -78,25 +76,26 @@ public class LocationManifestListener {
 
         List<String> receivedIds = processedEventRepository.findEventIdsInRange(
                 LocationEventsListener.OWNER,
+                manifest.tenantId(),
                 UuidV7Timestamps.minStringAt(manifest.windowStartUtc()),
                 UuidV7Timestamps.minStringAt(manifest.windowEndUtc()));
         String observedChecksum = ReconciliationManifestV1.checksumOf(receivedIds);
 
         if (manifest.matches(receivedIds.size(), observedChecksum)) {
             log.debug(
-                    "Replica reconciled window=[{}, {}) events={}",
+                    "Replica reconciled tenant={} window=[{}, {}) events={}",
+                    manifest.tenantId(),
                     manifest.windowStartUtc(),
                     manifest.windowEndUtc(),
                     manifest.eventCount());
             return;
         }
 
-        if (driftCounter != null) {
-            driftCounter.increment();
-        }
+        countDrift(manifest.tenantId());
         log.warn(
-                "Replica drift detected owner=location window=[{}, {}) expectedCount={} observedCount={}"
+                "Replica drift detected owner=location tenant={} window=[{}, {}) expectedCount={} observedCount={}"
                         + " expectedChecksum={} observedChecksum={} eventTypeCounts={} — requesting outbox replay",
+                manifest.tenantId(),
                 manifest.windowStartUtc(),
                 manifest.windowEndUtc(),
                 manifest.eventCount(),
@@ -107,6 +106,23 @@ public class LocationManifestListener {
         requestReplay(manifest);
     }
 
+    /**
+     * One {@code replica.drift} increment per mismatched manifest, tagged with the tenant it was
+     * published for, so one tenant's divergence is visible on its own.
+     */
+    private void countDrift(@NonNull UUID tenantId) {
+        if (meterRegistry == null) {
+            return;
+        }
+        Counter.builder("replica.drift")
+                .description("Reconciliation manifests that did not match the local replica")
+                .tag("owner", "location")
+                .tag("entity", "location-events")
+                .tag("tenant", tenantId.toString())
+                .register(meterRegistry)
+                .increment();
+    }
+
     private void requestReplay(@NonNull ReconciliationManifestV1 manifest) {
         try {
             String command = objectMapper.writeValueAsString(new ReplayCommand(
@@ -114,7 +130,8 @@ public class LocationManifestListener {
                     new ReplayCommand.Payload(
                             manifest.windowStartUtc().toString(),
                             manifest.windowEndUtc().toString())));
-            kafkaTemplate.send(locationCommandsTopic, manifest.windowStartUtc().toString(), command);
+            kafkaTemplate.send(TenantKafkaHeaders.record(
+                    locationCommandsTopic, manifest.windowStartUtc().toString(), command, manifest.tenantId()));
         } catch (Exception e) {
             // Best effort: the drift metric already fired, and the next manifest re-detects.
             log.warn("Failed to publish outbox replay request for window starting {}", manifest.windowStartUtc(), e);

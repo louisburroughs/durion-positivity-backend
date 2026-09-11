@@ -136,6 +136,7 @@ CREATE TABLE public.pricing_snapshots (
 
 CREATE TABLE public.processed_events (
     event_id character varying(36) NOT NULL,
+    tenant_id uuid,
     owner character varying(64) NOT NULL,
     processed_at timestamp(6) with time zone NOT NULL
 );
@@ -383,7 +384,7 @@ CREATE INDEX idx_event_outbox_unpublished ON public.event_outbox USING btree (id
 
 CREATE UNIQUE INDEX idx_permissions_bit_index ON public.permissions USING btree (bit_index) WHERE (bit_index IS NOT NULL);
 
-CREATE INDEX idx_processed_events_owner_event ON public.processed_events USING btree (owner, event_id);
+CREATE INDEX idx_processed_events_owner_tenant_event ON public.processed_events USING btree (owner, tenant_id, event_id);
 
 CREATE INDEX idx_role_assignments_effective_dates ON public.role_assignments USING btree (effective_start_date, effective_end_date);
 
