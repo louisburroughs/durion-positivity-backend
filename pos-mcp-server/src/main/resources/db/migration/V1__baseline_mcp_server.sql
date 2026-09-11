@@ -152,6 +152,18 @@ CREATE TABLE public.mcp_tool_prerequisite (
     producing_field character varying(120) NOT NULL
 );
 
+-- ADR-0062 plan WS6: per-tenant tool-priority overlay. mcp_tool.priority stays the global row (the
+-- catalog is a global, code-first table); a tenant's overlay row, tuned from that tenant's own
+-- mcp_tool_invocation_log, wins for that tool and the global row serves every tool without one.
+-- The primary key leads with tenant_id, so no separate tenant index is needed.
+CREATE TABLE public.mcp_tool_priority (
+    tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
+    tool_id uuid NOT NULL,
+    priority double precision NOT NULL,
+    avg_latency_ms integer NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE public.mcp_tool_workflow (
     tool_id uuid NOT NULL,
     workflow_state_id uuid NOT NULL
@@ -276,6 +288,9 @@ ALTER TABLE ONLY public.mcp_tool
 ALTER TABLE ONLY public.mcp_tool_prerequisite
     ADD CONSTRAINT mcp_tool_prerequisite_pkey PRIMARY KEY (tool_name, required_param);
 
+ALTER TABLE ONLY public.mcp_tool_priority
+    ADD CONSTRAINT mcp_tool_priority_pkey PRIMARY KEY (tenant_id, tool_id);
+
 ALTER TABLE ONLY public.mcp_tool_workflow
     ADD CONSTRAINT mcp_tool_workflow_pkey PRIMARY KEY (tool_id, workflow_state_id);
 
@@ -387,6 +402,9 @@ ALTER TABLE ONLY public.mcp_tool_invocation_log
 ALTER TABLE ONLY public.mcp_tool_permission
     ADD CONSTRAINT mcp_tool_permission_tool_id_fkey FOREIGN KEY (tool_id) REFERENCES public.mcp_tool(id) ON DELETE CASCADE;
 
+ALTER TABLE ONLY public.mcp_tool_priority
+    ADD CONSTRAINT mcp_tool_priority_tool_id_fkey FOREIGN KEY (tool_id) REFERENCES public.mcp_tool(id) ON DELETE CASCADE;
+
 ALTER TABLE ONLY public.mcp_tool_workflow
     ADD CONSTRAINT mcp_tool_workflow_tool_id_fkey FOREIGN KEY (tool_id) REFERENCES public.mcp_tool(id);
 
@@ -414,6 +432,12 @@ CREATE POLICY tenant_isolation ON public.mcp_eval_turn_trace
 ALTER TABLE public.mcp_tool_invocation_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mcp_tool_invocation_log FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON public.mcp_tool_invocation_log
+    USING (tenant_id = public.app_current_tenant())
+    WITH CHECK (tenant_id = public.app_current_tenant());
+
+ALTER TABLE public.mcp_tool_priority ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mcp_tool_priority FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON public.mcp_tool_priority
     USING (tenant_id = public.app_current_tenant())
     WITH CHECK (tenant_id = public.app_current_tenant());
 

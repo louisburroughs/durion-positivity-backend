@@ -1,0 +1,115 @@
+package com.positivity.mcp.internal.repository;
+
+import com.positivity.mcp.internal.domain.ToolInvocationStats;
+import com.positivity.mcp.internal.domain.ToolPriorityOverlay;
+import com.positivity.tenancy.TenantAudited;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
+
+/**
+ * JDBC implementation of {@link ToolPriorityRepository}. The overlay and the invocation log are
+ * tenant-scoped tables read through the bound connection: no statement names a tenant, row-level
+ * security supplies it (ADR-0062 §5). {@code mcp_tool} is global.
+ */
+@Repository
+@TenantAudited(
+        reason = "mcp_tool_priority and mcp_tool_invocation_log are read and written through the bound"
+                + " connection only; every statement leaves tenant_id to row-level security and the column"
+                + " default, and mcp_tool is a global catalog table")
+public class ToolPriorityRepositoryImpl implements ToolPriorityRepository {
+
+    private final JdbcTemplate jdbcTemplate;
+
+    public ToolPriorityRepositoryImpl(@NonNull JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    @Override
+    public @NonNull Map<UUID, ToolPriorityOverlay> findOverlayForCurrentTenant() {
+        List<ToolPriorityOverlay> rows = jdbcTemplate.query(
+                "SELECT tool_id, priority, avg_latency_ms FROM mcp_tool_priority",
+                ToolPriorityRepositoryImpl::mapOverlay);
+        Map<UUID, ToolPriorityOverlay> byTool = new HashMap<>();
+        for (ToolPriorityOverlay row : rows) {
+            byTool.put(row.toolId(), row);
+        }
+        return byTool;
+    }
+
+    @Override
+    public void upsertOverlay(@NonNull UUID toolId, double priority, int avgLatencyMs) {
+        // Update-then-insert rather than ON CONFLICT: portable to the H2 dev chain, and the insert
+        // names no tenant_id so the column default (app_current_tenant()) stamps the bound tenant.
+        int updated = jdbcTemplate.update(
+                "UPDATE mcp_tool_priority SET priority = ?, avg_latency_ms = ?, updated_at = ? WHERE tool_id = ?",
+                priority,
+                avgLatencyMs,
+                Instant.now().atOffset(ZoneOffset.UTC),
+                toolId);
+        if (updated == 0) {
+            jdbcTemplate.update(
+                    "INSERT INTO mcp_tool_priority (tool_id, priority, avg_latency_ms) VALUES (?, ?, ?)",
+                    toolId,
+                    priority,
+                    avgLatencyMs);
+        }
+    }
+
+    @Override
+    public @NonNull List<ToolInvocationStats> invocationStatsSince(@NonNull Instant cutoff) {
+        String sql = """
+                SELECT tool_id,
+                       COUNT(*) AS total_calls,
+                       SUM(CASE WHEN success THEN 1 ELSE 0 END) AS success_count,
+                       SUM(execution_time_ms) AS latency_sum_ms,
+                       SUM(CASE WHEN fallback_invoked THEN 1 ELSE 0 END) AS fallback_count
+                FROM mcp_tool_invocation_log
+                WHERE created_at > ?
+                  AND tool_id IS NOT NULL
+                  AND execution_time_ms >= 0
+                GROUP BY tool_id
+                """;
+        // created_at is timestamp without time zone: bind the instant at UTC, as the log writes it.
+        return jdbcTemplate.query(
+                sql,
+                ToolPriorityRepositoryImpl::mapStats,
+                cutoff.atOffset(ZoneOffset.UTC).toLocalDateTime());
+    }
+
+    @Override
+    public @NonNull Optional<Double> findGlobalPriority(@NonNull UUID toolId) {
+        List<Double> priorities = jdbcTemplate.query(
+                "SELECT priority FROM mcp_tool WHERE id = ?", (rs, rowNum) -> rs.getDouble("priority"), toolId);
+        return priorities.isEmpty() ? Optional.empty() : Optional.of(priorities.get(0));
+    }
+
+    @Override
+    public void updateGlobalPriority(@NonNull UUID toolId, double priority, int avgLatencyMs) {
+        jdbcTemplate.update(
+                "UPDATE mcp_tool SET priority = ?, avg_latency_ms = ? WHERE id = ?", priority, avgLatencyMs, toolId);
+    }
+
+    private static ToolPriorityOverlay mapOverlay(ResultSet rs, int rowNum) throws SQLException {
+        return new ToolPriorityOverlay(
+                rs.getObject("tool_id", UUID.class), rs.getDouble("priority"), rs.getInt("avg_latency_ms"));
+    }
+
+    private static ToolInvocationStats mapStats(ResultSet rs, int rowNum) throws SQLException {
+        return new ToolInvocationStats(
+                rs.getObject("tool_id", UUID.class),
+                rs.getLong("total_calls"),
+                rs.getLong("success_count"),
+                rs.getLong("latency_sum_ms"),
+                rs.getLong("fallback_count"));
+    }
+}
