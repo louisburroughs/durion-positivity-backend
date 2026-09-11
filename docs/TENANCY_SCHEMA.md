@@ -48,6 +48,17 @@ ALTER TABLE t ADD CONSTRAINT t_tenant_key UNIQUE (tenant_id, <pk>); -- the compo
   owner's privileges and bypass RLS, so a single-column key could be satisfied by another tenant's
   row. Keys to global tables stay single-column.
 - Primary keys are unchanged (UUID v7, globally unique).
+- **Business-key primary keys lead with `tenant_id`.** The rule above holds only because a UUID v7
+  surrogate is unique by construction: no two tenants can mint the same one. A primary key that is a
+  *business* key — derived from the row's own content or from data a caller supplies — has no such
+  guarantee, and primary and unique constraints are enforced across every row of the table whatever
+  row-level security hides. Leaving such a key global makes the table cross-tenant in the one way RLS
+  cannot cover: the second tenant's insert collides with a row it cannot see, and code that reads a
+  duplicate-key violation as "already present" then proceeds on data belonging to somebody else.
+  Lead these keys with `tenant_id` and omit the usual `_tenant_key` side constraint, which the key
+  then already covers. The recorded case: `pos-image.image_content`, keyed on a SHA-256 of the bytes
+  (`PRIMARY KEY (tenant_id, content_hash)`). `scripts/db/tenancy/flatten.py` names these tables in
+  `TENANT_LED_PK` so a re-flatten does not restore the global key.
 
 Global tables (`tenancy-global-tables.txt`) carry none of this. The recorded classes: transactional
 outboxes and processed-event ledgers (they carry `tenant_id` as plain data), Spring Batch metadata,
