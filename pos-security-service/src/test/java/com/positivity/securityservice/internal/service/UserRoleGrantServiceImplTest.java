@@ -1,16 +1,19 @@
 package com.positivity.securityservice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.domain.ReservedRoles;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.event.RoleAssignmentRevokedEvent;
+import com.positivity.securityservice.internal.exception.RoleNotUserAssignableException;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -64,6 +67,51 @@ class UserRoleGrantServiceImplTest {
         roleB = new Role();
         roleB.setId(UUID.randomUUID());
         roleB.setName("ROLE_B");
+    }
+
+    @Test
+    @DisplayName("grant() refuses SUPPORT: it is carried by an impersonation token, never held by a user")
+    void grant_supportRole_isRefused() {
+        Role support = new Role();
+        support.setId(UUID.randomUUID());
+        support.setName(ReservedRoles.SUPPORT);
+
+        assertThatThrownBy(() -> sut.grant(user, support, ACTOR))
+                .isInstanceOf(RoleNotUserAssignableException.class)
+                .hasMessageContaining(ReservedRoles.SUPPORT);
+
+        verifyNoInteractions(roleAssignmentRepository);
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    @DisplayName("reconcile() refuses SUPPORT before it revokes anything, so a refused call writes nothing")
+    void reconcile_supportRole_isRefusedBeforeAnyWrite() {
+        Role support = new Role();
+        support.setId(UUID.randomUUID());
+        support.setName(ReservedRoles.SUPPORT);
+
+        assertThatThrownBy(() -> sut.reconcile(user, Set.of(support), ACTOR))
+                .isInstanceOf(RoleNotUserAssignableException.class)
+                .hasMessageContaining(ReservedRoles.SUPPORT);
+
+        // Not even the existing assignments were read: the whole desired set is validated first,
+        // so a caller cannot lose their real roles to a request that was going to be refused.
+        verifyNoInteractions(roleAssignmentRepository);
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    @DisplayName("reconcile() refuses SUPPORT even when it is one name among several legitimate roles")
+    void reconcile_supportRoleAmongOthers_isRefused() {
+        Role support = new Role();
+        support.setId(UUID.randomUUID());
+        support.setName(ReservedRoles.SUPPORT);
+
+        assertThatThrownBy(() -> sut.reconcile(user, Set.of(roleA, support), ACTOR))
+                .isInstanceOf(RoleNotUserAssignableException.class);
+
+        verifyNoInteractions(roleAssignmentRepository);
     }
 
     @Test

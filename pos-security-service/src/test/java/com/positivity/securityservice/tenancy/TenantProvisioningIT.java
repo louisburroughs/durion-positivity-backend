@@ -34,8 +34,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
  */
 class TenantProvisioningIT extends PostgresTenancyTestBase {
 
+    /** The six floor roles plus SUPPORT, the read-only role an impersonation token carries (WS2b-4). */
     private static final List<String> FLOOR = List.of(
-            "ADMIN", "CONTROLLER", "DISPATCHER", "SELF_SERVICE_CUSTOMER", "SHOP_MANAGER", "SYSTEM_ADMINISTRATOR");
+            "ADMIN",
+            "CONTROLLER",
+            "DISPATCHER",
+            "SELF_SERVICE_CUSTOMER",
+            "SHOP_MANAGER",
+            "SUPPORT",
+            "SYSTEM_ADMINISTRATOR");
 
     @Autowired
     private RoleTemplateService roleTemplateService;
@@ -81,7 +88,10 @@ class TenantProvisioningIT extends PostgresTenancyTestBase {
         assertThat(owner.queryForObject("""
                         SELECT count(*) FROM role_permissions rp JOIN roles r ON r.id = rp.role_id
                          WHERE r.tenant_id = ? AND r.name = 'PLATFORM_ADMIN'
-                        """, Integer.class, PlatformTenant.ID)).isEqualTo(10);
+                        """, Integer.class, PlatformTenant.ID))
+                .as("platform:account:{create,read,update}, platform:tenant:{create,decommission,impersonate,"
+                        + "provision,reactivate,read,suspend,update}")
+                .isEqualTo(11);
         assertThat(owner.queryForObject("""
                         SELECT count(*) FROM role_assignments ra
                           JOIN users u ON u.id = ra.user_id JOIN roles r ON r.id = ra.role_id
