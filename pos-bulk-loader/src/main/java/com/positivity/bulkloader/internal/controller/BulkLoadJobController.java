@@ -57,20 +57,24 @@ public class BulkLoadJobController {
                     DETECTING, MAPPING_REVIEW, DEDUP or PROCESSING); only one active job per operator is allowed.
                     Required inputs: fileName (name of the source file that will be uploaded later) and domainType \
                     (one of CATALOG_PRODUCT, INVENTORY_STOCK_COUNT, LOCATION, CUSTOMER, COMMERCIAL_CUSTOMER, \
-                    PERSON, BASE_PRICE, VEHICLE or VEHICLE_FITMENT); locationId (UUID) is optional at creation but \
-                    must be set before processing can start; tenantId (UUID) names the tenant the job loads into \
-                    (ADR-0062): an active tenant of the cell, or the platform tenant for platform data such as the \
-                    role template's roles.csv; a bound caller may only name its own tenant, the platform \
-                    operator included; the job, its audit rows and every call to a sibling service are bound to \
-                    that tenant, and the job is visible afterwards only under that tenant's binding.
+                    PERSON, BASE_PRICE, VEHICLE, VEHICLE_FITMENT, SECURITY_ROLE or SECURITY_ROLE_PERMISSION); \
+                    locationId (UUID) is optional at creation but must be set before processing can start; \
+                    tenantId (UUID) names the tenant the job loads into (ADR-0062): an active tenant of the cell, \
+                    or the platform tenant, which accepts only SECURITY_ROLE and SECURITY_ROLE_PERMISSION (the \
+                    role template's roles.csv / role-permissions.csv); a bound caller may only name its own \
+                    tenant, the platform operator included; the job, its audit rows and every call to a sibling \
+                    service are bound to that tenant, and the job is visible afterwards only under that tenant's \
+                    binding.
                     INVENTORY_STOCK_COUNT establishes opening on-hand stock: each line is filed and approved, so \
                     the token must carry inventory:adjustment:approve as well as inventory:adjustment:create.
                     Emits a BULK_LOADER_JOB_CREATE event; no file content is stored by this call.
                     Returns 201 with the new job; 400 with BULK_JOB_TENANT_REQUIRED when tenantId is omitted and \
                     no transitional default tenant is configured (with the default, the job uses it and logs a \
                     WARN); 400 with BULK_JOB_TENANT_UNKNOWN when the tenant is not active in this cell; 403 with \
-                    BULK_JOB_TENANT_FORBIDDEN when the caller may not load into it; and 409 when the operator \
-                    already has an active bulk load job in progress.
+                    BULK_JOB_TENANT_FORBIDDEN when the caller may not load into it; 403 with \
+                    BULK_JOB_TENANT_DOMAIN_FORBIDDEN when the target is the platform tenant and domainType is not \
+                    one of its own packs; and 409 when the operator already has an active bulk load job in \
+                    progress.
                     """)
     @ApiResponse(responseCode = "201", description = "Job created")
     @ApiResponse(
@@ -80,7 +84,9 @@ public class BulkLoadJobController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "BULK_JOB_TENANT_FORBIDDEN: the caller is bound to a tenant other than the one named",
+            description = "BULK_JOB_TENANT_FORBIDDEN: the caller is bound to a tenant other than the one named;"
+                    + " BULK_JOB_TENANT_DOMAIN_FORBIDDEN: the target is the platform tenant and domainType is not"
+                    + " one of its own packs",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
