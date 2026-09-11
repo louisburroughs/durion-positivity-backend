@@ -7,6 +7,7 @@ import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantHeaders;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
@@ -49,6 +50,22 @@ public class AuthorizationHeaderRelay {
 
     private static final String BEARER_PREFIX = "Bearer ";
 
+    /**
+     * The compact-bitset-shape headers ({@code GatewayCallerHeaders} javadoc): {@code
+     * GatewayAuthoritiesFilter} gives {@code X-Perm-Bits} precedence over {@code X-Authorities}
+     * whenever it is present — the plain-authorities path is not even consulted — so relaying it
+     * alongside a call site's narrower {@code X-Authorities} override would silently replace that
+     * override with the operator's whole permission set on the sibling side. The scope bitsets ride
+     * with the same shape and are read only when {@code X-Perm-Bits} is, so they are dropped for
+     * the same reason (Copilot review of PR #1955, fifth round).
+     */
+    private static final Set<String> BITSET_SHAPE_HEADERS = Set.of(
+            GatewaySecurityConstants.HEADER_PERM_BITS,
+            GatewaySecurityConstants.HEADER_PERM_VER,
+            GatewaySecurityConstants.HEADER_LOC_SCOPE,
+            GatewaySecurityConstants.HEADER_LOC_FIN_BITS,
+            GatewaySecurityConstants.HEADER_LOC_OTH_BITS);
+
     private final BulkLoadAuthorizationContext bulkLoadAuthorizationContext;
 
     /**
@@ -85,6 +102,14 @@ public class AuthorizationHeaderRelay {
      * rather than overwriting — which is also why it sets rather than appends: appending would
      * leave two {@code X-Authorities} values whose winner depends on how the sibling's servlet
      * container folds repeated headers.
+     *
+     * <p>Filling gaps is not enough by itself when the caller's token carries the compact
+     * permission bitset ({@link #BITSET_SHAPE_HEADERS}): {@code GatewayAuthoritiesFilter} checks
+     * {@code X-Perm-Bits} first and, when present, decodes authorities from it alone — it never
+     * looks at {@code X-Authorities} at all in that case. Gap-filling {@code X-Perm-Bits} in behind
+     * an explicit {@code X-Authorities} override would therefore still replace that override on the
+     * sibling side, so the bitset-shape headers are left out entirely once the call site has set
+     * {@code X-Authorities} itself, and the plain-authorities decode path is what the sibling uses.
      */
     private void applyGatewayHeaders(RestClient.RequestHeadersSpec<?> requestSpec) {
         Map<String, String> captured = bulkLoadAuthorizationContext.getGatewayHeaders();
@@ -96,11 +121,18 @@ public class AuthorizationHeaderRelay {
                     GatewayCallerHeaders.RELAYED);
             return;
         }
-        requestSpec.headers(httpHeaders -> headers.forEach((name, value) -> {
-            if (!httpHeaders.containsHeader(name)) {
-                httpHeaders.set(name, value);
-            }
-        }));
+        requestSpec.headers(httpHeaders -> {
+            boolean explicitAuthoritiesOverride =
+                    httpHeaders.containsHeader(GatewaySecurityConstants.HEADER_AUTHORITIES);
+            headers.forEach((name, value) -> {
+                if (explicitAuthoritiesOverride && BITSET_SHAPE_HEADERS.contains(name)) {
+                    return;
+                }
+                if (!httpHeaders.containsHeader(name)) {
+                    httpHeaders.set(name, value);
+                }
+            });
+        });
     }
 
     @Nullable

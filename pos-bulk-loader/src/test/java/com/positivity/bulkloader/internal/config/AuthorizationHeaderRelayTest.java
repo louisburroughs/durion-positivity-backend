@@ -120,6 +120,44 @@ class AuthorizationHeaderRelayTest {
     }
 
     @Test
+    @DisplayName("an explicit X-Authorities override also holds back the compact perm-bitset headers,"
+            + " which GatewayAuthoritiesFilter would otherwise decode instead of it")
+    void withholdsPermBitsWhenTheCallSiteAlreadySetAuthorities() {
+        // GatewayAuthoritiesFilter checks X-Perm-Bits first and, when present, never even looks at
+        // X-Authorities — it decodes the operator's whole permission set from the bitset instead.
+        // Gap-filling X-Perm-Bits in behind BulkIngestWriterFactory's narrower X-Authorities would
+        // therefore still let the operator's bitset win on the sibling side (Copilot review of
+        // PR #1955, fifth round).
+        RestClient.RequestHeadersSpec<?> spec = mock(RestClient.RequestHeadersSpec.class);
+        authorizationContext.setGatewayHeaders(Map.of(
+                GatewaySecurityConstants.HEADER_AUTHORITIES, "location:read,crm:party:create",
+                GatewaySecurityConstants.HEADER_PERM_BITS, "AQID",
+                GatewaySecurityConstants.HEADER_PERM_VER, "7",
+                GatewaySecurityConstants.HEADER_LOC_SCOPE, "loc-scope-bits",
+                GatewaySecurityConstants.HEADER_USER, "admin.alpha"));
+        TenantContext.bind(TENANT);
+
+        relay.apply(spec);
+
+        HttpHeaders alreadySet = new HttpHeaders();
+        alreadySet.set(GatewaySecurityConstants.HEADER_AUTHORITIES, "catalog:product:create");
+        HttpHeaders sent = applyHeaderCustomisations(spec, alreadySet);
+        assertThat(sent.getFirst(GatewaySecurityConstants.HEADER_AUTHORITIES))
+                .as("the call site's narrower authority still wins")
+                .isEqualTo("catalog:product:create");
+        assertThat(sent.headerNames())
+                .as("the compact bitset shape is withheld so the sibling's plain-authorities decode"
+                        + " path runs instead of the perm-bits path")
+                .doesNotContain(
+                        GatewaySecurityConstants.HEADER_PERM_BITS,
+                        GatewaySecurityConstants.HEADER_PERM_VER,
+                        GatewaySecurityConstants.HEADER_LOC_SCOPE);
+        assertThat(sent.getFirst(GatewaySecurityConstants.HEADER_USER))
+                .as("a header nobody set is still filled in")
+                .isEqualTo("admin.alpha");
+    }
+
+    @Test
     @DisplayName("a launch that captured no authorities sends none rather than inventing any")
     void sendsNoGatewayAuthoritiesWhenTheLaunchCapturedNone() {
         RestClient.RequestHeadersSpec<?> spec = mock(RestClient.RequestHeadersSpec.class);
