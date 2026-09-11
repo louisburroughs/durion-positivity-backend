@@ -18,9 +18,22 @@ import org.jspecify.annotations.NonNull;
  * the template carries that it does not. The permission catalog is global (ADR-0062 §6), so a
  * grant naming a permission the catalog does not know is a template ahead of the registered
  * catalog, not a tenant problem: it is skipped with a WARN.
+ *
+ * <p>A {@code platform:*} grant is skipped the same way, for a different reason (ADR-0062 §7):
+ * {@code platform:*} is held only by {@code PLATFORM_ADMIN} in the platform tenant, never by a
+ * tenant role. {@link RoleManagementServiceImpl#provisionTemplateRole} already refuses to let such
+ * a grant reach a template role in the first place, but this is the defense in depth for it — the
+ * template entry this method reads is a detached snapshot, so nothing stops a future template
+ * source (or a bypassed check) from carrying one. Skipping here, like the unregistered-permission
+ * case, keeps the rest of the role's grants applying and the run converging rather than aborting
+ * the whole tenant on one bad grant; unlike that case this is never expected to happen in a
+ * healthy system, so it is worth its own WARN line naming the permission and the role.
  */
 @Slf4j
 final class RoleTemplateApplier {
+
+    /** One segment of every {@code platform:*} permission (ADR-0062 §7): never copied into a tenant role. */
+    private static final String PLATFORM_PERMISSION_PREFIX = "platform:";
 
     private RoleTemplateApplier() {}
 
@@ -60,6 +73,14 @@ final class RoleTemplateApplier {
         Set<Permission> added = new LinkedHashSet<>();
         for (String permissionName : entry.permissionNames().stream().sorted().toList()) {
             if (held.contains(permissionName)) {
+                continue;
+            }
+            if (permissionName.startsWith(PLATFORM_PERMISSION_PREFIX)) {
+                log.warn(
+                        "Template role {} grants {}, a platform:* permission (ADR-0062 section 7); skipped -- "
+                                + "platform:* is never copied into a tenant role",
+                        entry.name(),
+                        permissionName);
                 continue;
             }
             permissionRepository

@@ -199,6 +199,38 @@ class TenantProvisioningServiceTest {
         verify(userService).createUserAwaitingActivation("owner@acme.example", Set.of("admin"));
     }
 
+    /**
+     * ADR-0062 §7 defense in depth: {@code RoleManagementServiceImpl.provisionTemplateRole} is what
+     * normally keeps a {@code platform:*} grant out of the template in the first place, but this
+     * proves the second, independent guard -- if one ever reached this far anyway (a template read
+     * some other way, or a bypassed check), it still must never be copied into a tenant role.
+     */
+    @Test
+    @DisplayName("a platform:* grant on a template entry is never copied into the tenant's role (ADR-0062 section 7)")
+    void aPlatformPermissionOnATemplateEntryIsNeverCopiedIntoTheTenant() {
+        when(outboxProvider.getIfAvailable()).thenReturn(outbox);
+        when(roles.existsByNameIgnoreCase(anyString())).thenReturn(false);
+        when(permissions.findByName("security:role:view")).thenReturn(Optional.of(permission("security:role:view")));
+        // Registered, not just present in the template: were the platform:* guard removed, this
+        // stub is what would let the grant actually get added, proving the guard is what excludes
+        // it rather than the permission happening to be unregistered in this test.
+        when(permissions.findByName("platform:tenant:create"))
+                .thenReturn(Optional.of(permission("platform:tenant:create")));
+        when(users.existsByUsername("owner@acme.example")).thenReturn(false);
+
+        TenantContext.bind(TENANT);
+        service.provision(
+                TENANT, "owner@acme.example", List.of(entry("ADMIN", "security:role:view", "platform:tenant:create")));
+
+        ArgumentCaptor<Role> saved = ArgumentCaptor.forClass(Role.class);
+        verify(roles).save(saved.capture());
+        assertThat(saved.getValue().getPermissions())
+                .extracting(Permission::getName)
+                .as("platform:* is never copied into a tenant role, whatever the template carries")
+                .containsExactly("security:role:view");
+        verify(permissions, never()).findByName("platform:tenant:create");
+    }
+
     @Test
     @DisplayName("refuses to run under another binding or without an ADMIN template role")
     void guards() {

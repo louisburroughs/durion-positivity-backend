@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
 import com.positivity.securityservice.internal.config.AuditEventService;
+import com.positivity.securityservice.internal.domain.ReservedRoles;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
@@ -19,6 +20,7 @@ import com.positivity.securityservice.internal.exception.DuplicateRoleNameExcept
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.exception.TemplateRoleImmutableException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
@@ -38,6 +40,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -89,6 +92,9 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         return toRoleDto(saved);
     }
 
+    /** One segment of every {@code platform:*} permission (ADR-0062 §7): held only by {@link ReservedRoles#PLATFORM_ADMIN}. */
+    private static final String PLATFORM_PERMISSION_PREFIX = "platform:";
+
     /**
      * The platform bulk load's role (ADR-0062 §6, plan WS8): created with {@code template_key} =
      * its name, or, when a role of that name already exists, marked with it when it carries none.
@@ -97,14 +103,27 @@ public class RoleManagementServiceImpl implements RoleManagementService {
      * under its own name rather than refused or duplicated. Everything else about an existing role
      * is left alone, so re-running {@code roles.csv} against the platform tenant is a no-op for
      * roles it already provisioned.
+     *
+     * <p>Two refusals guard ADR-0062 §7's invariant that {@code platform:*} is held only by {@link
+     * ReservedRoles#PLATFORM_ADMIN} in the platform tenant and never reaches a tenant role: a row
+     * naming {@link ReservedRoles#PLATFORM_ADMIN} itself ({@link
+     * ReservedRoles#isTemplateEligible}), and a row naming any other role that already holds a
+     * {@code platform:*} grant. Either would otherwise mark the role's {@code template_key}, and
+     * {@code RoleTemplateService.snapshot()} — read by {@code TenantProvisioningService} and {@code
+     * RoleTemplateReconciliationService} — copies every marked role, grants included, into every
+     * tenant. Both throw {@link SecurityValidationException}, which {@code RoleBulkIngestController}
+     * already reports as a row rejection rather than a server fault, since the caller's own
+     * {@code roles.csv} row is what is wrong.
      */
     @Override
     @Transactional
     public RoleDto provisionTemplateRole(@NonNull RoleCreateRequest request) {
+        refuseNonTemplateEligibleRole(request.name());
         Optional<Role> existing = roleRepository.findByNameIgnoreCase(request.name());
         if (existing.isPresent()) {
             Role role = existing.get();
             if (role.getTemplateKey() == null) {
+                refuseRoleHoldingAPlatformPermission(role);
                 role.setTemplateKey(role.getName());
                 role.setLastModifiedAt(Instant.now(clock));
                 role.setLastModifiedBy(getCurrentUsername());
@@ -124,9 +143,49 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         role.setCreatedBy(getCurrentUsername());
         role.setCreatedAt(Instant.now(clock));
 
-        Role saved = roleRepository.save(role);
+        Role saved;
+        try {
+            saved = roleRepository.save(role);
+        } catch (DataIntegrityViolationException collision) {
+            // Two concurrent platform bulk-ingest requests can both observe no role for this name
+            // (the read above) and race to create it; the loser hits the (tenant_id, lower(name))
+            // unique index the check-then-insert above cannot see coming, rather than the
+            // application-level branch above. roles.csv is re-runnable by design, so the loser
+            // converges onto the winner's row exactly as a genuine re-run would — re-reading and
+            // marking it if needed — instead of surfacing a spurious row failure to
+            // RoleBulkIngestController for a role that, from the caller's perspective, now exists
+            // exactly as requested.
+            Role winner = roleRepository.findByNameIgnoreCase(request.name()).orElseThrow(() -> collision);
+            if (winner.getTemplateKey() == null) {
+                refuseRoleHoldingAPlatformPermission(winner);
+                winner.setTemplateKey(winner.getName());
+                winner.setLastModifiedAt(Instant.now(clock));
+                winner.setLastModifiedBy(getCurrentUsername());
+                winner = roleRepository.save(winner);
+            }
+            return toRoleDto(winner);
+        }
         rolePersonaEventEmitter.rolePersonaChanged(saved);
         return toRoleDto(saved);
+    }
+
+    private void refuseNonTemplateEligibleRole(String name) {
+        if (!ReservedRoles.isTemplateEligible(name)) {
+            throw new SecurityValidationException("Role " + name + " is reserved to the platform tenant (ADR-0062"
+                    + " section 7) and may never join the per-tenant role template: its grants would then be"
+                    + " copied into every tenant by provisioning and reconciliation.");
+        }
+    }
+
+    private void refuseRoleHoldingAPlatformPermission(Role role) {
+        boolean holdsPlatformGrant = role.getPermissions().stream()
+                .map(Permission::getName)
+                .anyMatch(name -> name.startsWith(PLATFORM_PERMISSION_PREFIX));
+        if (holdsPlatformGrant) {
+            throw new SecurityValidationException("Role " + role.getName() + " holds a platform:* permission"
+                    + " (ADR-0062 section 7) and may never join the per-tenant role template: its grants would"
+                    + " then be copied into every tenant by provisioning and reconciliation.");
+        }
     }
 
     /**

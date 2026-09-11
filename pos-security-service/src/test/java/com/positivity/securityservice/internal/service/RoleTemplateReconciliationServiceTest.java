@@ -195,6 +195,34 @@ class RoleTemplateReconciliationServiceTest {
         verify(roles, never()).recordGrantProvenance(any(), any(), any(), any());
     }
 
+    /**
+     * ADR-0062 §7 defense in depth, the second production path {@link RoleTemplateApplier} guards
+     * (the first is provisioning; see {@code TenantProvisioningServiceTest}): a {@code platform:*}
+     * grant on a template entry must never reach a tenant role through reconciliation either.
+     */
+    @Test
+    @DisplayName("a platform:* grant on a template entry is never copied into the tenant's role (ADR-0062 section 7)")
+    void aPlatformPermissionOnATemplateEntryIsNeverCopiedIntoTheTenant() {
+        platformCaller();
+        // Registered, not just present in the template: were the platform:* guard removed, this
+        // stub is what would let the grant actually get added, proving the guard is what excludes
+        // it rather than the permission happening to be unregistered in this test.
+        when(permissions.findByName("platform:tenant:create"))
+                .thenReturn(Optional.of(permission("platform:tenant:create")));
+        when(templates.snapshot())
+                .thenReturn(List.of(entry("SHOP_MANAGER", "crm:party:view", "platform:tenant:create")));
+        Role shopManager = existingRole("SHOP_MANAGER", "SHOP_MANAGER");
+        when(roles.findByNameIgnoreCase("SHOP_MANAGER")).thenReturn(Optional.of(shopManager));
+
+        RoleTemplateReconcileResponse outcome = service.reconcile(TENANT);
+
+        assertThat(outcome.grantsAdded())
+                .as("platform:* is never copied into a tenant role, whatever the template carries")
+                .containsExactly(new RoleTemplateReconcileResponse.GrantAdded("SHOP_MANAGER", "crm:party:view"));
+        assertThat(shopManager.getPermissions()).extracting(Permission::getName).containsExactly("crm:party:view");
+        verify(permissions, never()).findByName("platform:tenant:create");
+    }
+
     @Test
     @DisplayName("a differently-cased tenant role is the template role, matched case-insensitively and kept as named")
     void matchesExistingRolesCaseInsensitively() {
