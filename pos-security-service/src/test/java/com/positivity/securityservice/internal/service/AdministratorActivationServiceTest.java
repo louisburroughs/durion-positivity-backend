@@ -62,8 +62,10 @@ class AdministratorActivationServiceTest {
     private final ObjectProvider<AuditEventService> auditProvider = mock(ObjectProvider.class);
 
     private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+    private final AdministratorActivationService.MintAuditWriter mintAuditWriter =
+            new AdministratorActivationService.MintAuditWriter(auditProvider);
     private final AdministratorActivationService.BoundOperations bound =
-            new AdministratorActivationService.BoundOperations(users, tokens, encoder, auditProvider, clock);
+            new AdministratorActivationService.BoundOperations(users, tokens, encoder, mintAuditWriter, clock);
     private final AdministratorActivationService service = new AdministratorActivationService(tokens, bound, clock);
 
     @AfterEach

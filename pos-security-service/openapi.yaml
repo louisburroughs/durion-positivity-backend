@@ -4628,9 +4628,11 @@ components:
         newPassword:
           description: The password to set; hashed server-side before storage
           example: Sup3rS3cret!
+          minLength: 1
           type: string
         token:
           description: The activation token the operator handed over
+          minLength: 1
           type: string
       required:
       - newPassword
