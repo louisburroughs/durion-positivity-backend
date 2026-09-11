@@ -90,6 +90,46 @@ public class RoleManagementServiceImpl implements RoleManagementService {
     }
 
     /**
+     * The platform bulk load's role (ADR-0062 §6, plan WS8): created with {@code template_key} =
+     * its name, or, when a role of that name already exists, marked with it when it carries none.
+     * Everything else about an existing role is left alone, so re-running {@code roles.csv} against
+     * the platform tenant is a no-op for roles it already provisioned.
+     */
+    @Override
+    @Transactional
+    public RoleDto provisionTemplateRole(@NonNull RoleCreateRequest request) {
+        Optional<Role> existing = roleRepository.findByName(request.name());
+        if (existing.isPresent()) {
+            Role role = existing.get();
+            if (role.getTemplateKey() == null) {
+                role.setTemplateKey(role.getName());
+                role.setLastModifiedAt(Instant.now(clock));
+                role.setLastModifiedBy(getCurrentUsername());
+                role = roleRepository.save(role);
+            }
+            return toRoleDto(role);
+        }
+        if (roleRepository.existsByNameIgnoreCase(request.name())) {
+            throw new DuplicateRoleNameException("Role with name " + request.name() + " already exists");
+        }
+        Role role = new Role();
+        role.setName(request.name());
+        role.setDescription(request.description());
+        role.setPersonaTitle(request.personaTitle());
+        role.setPersonaFocus(request.personaFocus());
+        role.setPersonaTone(request.personaTone());
+        role.setMcpPersonaRank(request.mcpPersonaRank());
+        role.setMcpPersonaEligible(request.personaEligibleOrDefault());
+        role.setTemplateKey(request.name());
+        role.setCreatedBy(getCurrentUsername());
+        role.setCreatedAt(Instant.now(clock));
+
+        Role saved = roleRepository.save(role);
+        rolePersonaEventEmitter.rolePersonaChanged(saved);
+        return toRoleDto(saved);
+    }
+
+    /**
      * Replace an existing role's description and MCP persona metadata (#1613).
      *
      * <p>Every field is assigned unconditionally: an omitted field clears the stored value, which is

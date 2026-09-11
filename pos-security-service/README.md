@@ -536,9 +536,24 @@ Flyway on the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`)
 - **Role template and platform tenant** (`R__seed_tenant_template.sql`, tier 1). The six Flyway floor roles
   (`ADMIN`, `SYSTEM_ADMINISTRATOR`, `DISPATCHER`, `SHOP_MANAGER`, `SELF_SERVICE_CUSTOMER`, `CONTROLLER`) carry
   `template_key` in alpha and are copied, grants and scope included, into the platform tenant as the template.
-  Roles the alpha bulk loader adds later (`roles.csv`) are not in the template yet (WS8 runs the loader against
-  the platform tenant). A template role rejects delete for the life of its tenant (409 `ROLE_TEMPLATE_IMMUTABLE`);
-  its grants may change and custom roles (`template_key` null) are unrestricted.
+  A template role rejects delete for the life of its tenant (409 `ROLE_TEMPLATE_IMMUTABLE`); its grants may
+  change and custom roles (`template_key` null) are unrestricted.
+- **Bulk-loaded template roles (WS8, decided 2026-09-10).** `POST /v1/roles/bulk-ingest` called under the
+  platform tenant binding (a `pos-bulk-loader` job whose `tenantId` is the platform tenant) provisions template
+  roles: `RoleManagementService.provisionTemplateRole` creates each with `template_key` = its name, or marks a
+  role already present that carried none, and leaves everything else about an existing role alone. Under any
+  other binding the same endpoint provisions ordinary tenant-local roles. `POST /v1/roles/permissions/bulk-ingest`
+  under the platform binding gives the template roles their grants.
+- **`reconcileTemplate(tenant)` (WS8).** `POST /v1/platform/tenants/{tenantId}/roles/reconcile-template`
+  (`PlatformRoleTemplateController` → `RoleTemplateReconciliationService`, `platform:tenant:provision`, platform
+  binding only, 403 `PLATFORM_TENANT_REQUIRED` otherwise, 404 `TENANT_NOT_FOUND` for a tenant `ext_tenant` does
+  not hold) brings an existing tenant up to the template: a template role the tenant lacks is created exactly
+  as provisioning creates it (shared `RoleTemplateApplier`); a role it holds keeps its tenant-local grants and
+  gains the template's new ones (union, never removal; provenance stamped `role-template-reconcile`), and gets
+  `template_key` when it had none; description, persona and scope of an existing role are never touched.
+  Idempotent: the response lists `rolesCreated`, `grantsAdded` and `templateKeysAssigned`, all empty on a second
+  run. Emits `SECURITY_PLATFORM_ROLE_TEMPLATE_RECONCILE`. Operator steps: `docs/OPERATIONS_RUNBOOK.md` →
+  "Reconciling the role template".
 - **`PLATFORM_ADMIN` / `admin.platform`** exist in the platform tenant only and hold the `platform:tenant:*` and
   `platform:account:*` families; alpha's `ADMIN` no longer does. `generate-permissions.sh --sync` refuses to grant
   a `platform:*` permission through the alpha sources: add the tuple to the platform seed by hand.

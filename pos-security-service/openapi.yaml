@@ -22,6 +22,8 @@ tags:
   name: Tenant API
 - description: Platform-operator activation of a tenant's first administrator
   name: Platform Administrator API
+- description: Platform-operator reconciliation of a tenant's roles against the platform role template
+  name: Platform Role Template API
 - description: Asynchronous audit export job management
   name: Audit Exports
 - description: Bulk provision roles with persona metadata
@@ -1899,6 +1901,63 @@ paths:
       summary: Mint a First-Administrator Activation Token
       tags:
       - Platform Administrator API
+      x-required-permissions:
+      - platform:tenant:provision
+  /v1/platform/tenants/{tenantId}/roles/reconcile-template:
+    post:
+      description: 'Upserts every platform template role into the named tenant: a template role the tenant lacks is created with the template''s description, persona, location scope and grants, exactly as provisioning creates it; a role the tenant already holds keeps every tenant-local grant and gains any grant the template has added since (union, never removal), and is marked with its template key when it carried none. An existing role''s description, persona and scope are left alone. Idempotent: a second run reports empty lists.
+
+        Use this tool after the template has grown — a platform bulk load of roles.csv into the platform tenant, or a new grant on a template role — to bring tenants provisioned before the change up to it; do not use it to provision a tenant (tenant.created does that) and do not use it to remove grants, which it never does.
+
+        Preconditions: the caller must hold platform:tenant:provision and be bound to the platform tenant; the tenant must be known to this service (ext_tenant), or be the platform tenant itself.
+
+        Required inputs: tenantId as a path parameter; there is no request body.
+
+        Emits a SECURITY_PLATFORM_ROLE_TEMPLATE_RECONCILE event; role_permissions rows it adds carry the actor role-template-reconcile.
+
+        Returns 200 with the roles created, the grants added and the roles newly marked as template; 403 with PLATFORM_TENANT_REQUIRED when the caller is bound to a tenant other than the platform tenant; 404 with TENANT_NOT_FOUND when the tenant is unknown.
+
+        '
+      operationId: reconcileRoleTemplate
+      parameters:
+      - description: The tenant to bring up to the template
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleTemplateReconcileResponse'
+          description: Reconciled; the lists say what changed (all empty when nothing did)
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'PLATFORM_TENANT_REQUIRED: the caller is bound to a tenant other than the platform tenant'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'TENANT_NOT_FOUND: no such tenant'
+      security:
+      - bearerAuth:
+        - platform:tenant:provision
+      summary: Reconcile a Tenant's Roles Against the Platform Role Template
+      tags:
+      - Platform Role Template API
       x-required-permissions:
       - platform:tenant:provision
   /v1/roles:
@@ -5218,6 +5277,21 @@ components:
       - field
       - message
       type: object
+    GrantAdded:
+      description: One permission added to one role of the tenant
+      properties:
+        permission:
+          description: Permission name
+          example: warranty:claim:view
+          type: string
+        role:
+          description: Role name
+          example: SHOP_MANAGER
+          type: string
+      required:
+      - permission
+      - role
+      type: object
     InternalTokenRequest:
       description: Request to generate a single JWT token for an internal trusted caller
       properties:
@@ -5998,6 +6072,39 @@ components:
       required:
       - generatedAt
       - roles
+      type: object
+    RoleTemplateReconcileResponse:
+      description: What reconciling the platform role template into a tenant changed; all lists empty when the tenant was already up to the template
+      properties:
+        grantsAdded:
+          description: Grants the template carries that an existing role of the tenant lacked, now added
+          items:
+            $ref: '#/components/schemas/GrantAdded'
+          type: array
+        rolesCreated:
+          description: Template roles the tenant lacked, created with the template's grants
+          example:
+          - WARRANTY_CLERK
+          items:
+            type: string
+          type: array
+        templateKeysAssigned:
+          description: Existing roles of the tenant that carried no template key and now do
+          example:
+          - SHOP_MANAGER
+          items:
+            type: string
+          type: array
+        tenantId:
+          description: The reconciled tenant
+          example: 01990000-0000-7000-8000-000000000123
+          format: uuid
+          type: string
+      required:
+      - grantsAdded
+      - rolesCreated
+      - templateKeysAssigned
+      - tenantId
       type: object
     RoleUpdateRequest:
       description: Replacement description and MCP persona metadata for an existing role

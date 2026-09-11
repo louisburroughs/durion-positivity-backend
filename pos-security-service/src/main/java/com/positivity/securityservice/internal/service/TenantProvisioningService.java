@@ -3,7 +3,6 @@ package com.positivity.securityservice.internal.service;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.tenant.TenantProvisionedV1;
 import com.positivity.securityservice.internal.config.OutboxEventWriter;
-import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -30,7 +29,9 @@ import org.springframework.transaction.annotation.Transactional;
  * ({@code TenantContext.runAs(tenantId, ...)}); every row written here is that tenant's under
  * row-level security. Idempotent on tenant: a role or user that already exists is left alone, so a
  * redelivered event or a retry after a partial failure converges. The answer is emitted on every
- * successful run, and pos-tenant's handler is idempotent on tenant id.
+ * successful run, and pos-tenant's handler is idempotent on tenant id. Bringing an already
+ * provisioned tenant up to a template that has since grown is {@link
+ * RoleTemplateReconciliationService} (plan WS8), which shares {@link RoleTemplateApplier}.
  *
  * <p>The administrator is created awaiting activation (plan WS2b-3, decided 2026-09-10): the
  * password is generated and discarded (never returned, logged or persisted in plaintext) and the
@@ -102,7 +103,8 @@ public class TenantProvisioningService {
             if (roleRepository.existsByName(entry.name())) {
                 continue;
             }
-            roleRepository.save(fromTemplate(entry));
+            roleRepository.save(
+                    RoleTemplateApplier.fromTemplate(entry, permissionRepository, Instant.now(clock), ACTOR));
             created++;
         }
 
@@ -120,35 +122,6 @@ public class TenantProvisioningService {
                 initialAdminEmail,
                 administratorCreated ? "created" : "already present");
         return new Outcome(created, administratorCreated);
-    }
-
-    private Role fromTemplate(RoleTemplateEntry entry) {
-        Role role = new Role();
-        role.setName(entry.name());
-        role.setDescription(entry.description());
-        role.setTemplateKey(entry.templateKey());
-        role.setPersonaTitle(entry.personaTitle());
-        role.setPersonaFocus(entry.personaFocus());
-        role.setPersonaTone(entry.personaTone());
-        role.setMcpPersonaRank(entry.mcpPersonaRank());
-        role.setMcpPersonaEligible(entry.mcpPersonaEligible());
-        role.setLocationScope(entry.locationScope());
-        role.setLocationHierarchy(entry.locationHierarchy());
-        role.setCreatedAt(Instant.now(clock));
-        role.setCreatedBy(ACTOR);
-        for (String permissionName : entry.permissionNames()) {
-            // The catalog is global (ADR-0062 §6), so a name that does not resolve is a template
-            // ahead of the registered catalog, not a tenant problem: skip it and say so.
-            permissionRepository
-                    .findByName(permissionName)
-                    .ifPresentOrElse(
-                            role.getPermissions()::add,
-                            () -> log.warn(
-                                    "Template role {} grants unknown permission {}; skipped",
-                                    entry.name(),
-                                    permissionName));
-        }
-        return role;
     }
 
     private void emitProvisioned(UUID tenantId) {

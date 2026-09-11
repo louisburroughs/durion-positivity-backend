@@ -15,6 +15,7 @@ import com.positivity.securityservice.internal.exception.SecurityValidationExcep
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationReviewCaseNotFoundException;
 import com.positivity.securityservice.internal.exception.TemplateRoleImmutableException;
+import com.positivity.securityservice.internal.exception.TenantNotFoundException;
 import com.positivity.securityservice.internal.exception.TokenUserIdMissingException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.shared.error.ApiError;
@@ -598,6 +599,25 @@ public class GlobalExceptionHandler {
         String correlationId = extractCorrelationId(request);
         log.warn("Platform tenant required (correlationId={}): {}", correlationId, ex.getMessage());
         return respond(HttpStatus.FORBIDDEN, "PLATFORM_TENANT_REQUIRED", ex.getMessage(), correlationId);
+    }
+
+    /**
+     * Handles TenantNotFoundException: a platform operation named a tenant the {@code ext_tenant}
+     * replica does not hold (ADR-0062 §7, plan WS8).
+     *
+     * <p>
+     * <b>HTTP Status:</b> 404 Not Found (TENANT_NOT_FOUND)
+     *
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 404 status and correlation ID
+     */
+    @ExceptionHandler(TenantNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ResponseEntity<ApiError> handleTenantNotFoundException(TenantNotFoundException ex, WebRequest request) {
+        String correlationId = extractCorrelationId(request);
+        log.warn("Tenant not found (correlationId={}): {}", correlationId, ex.getMessage());
+        return respond(HttpStatus.NOT_FOUND, "TENANT_NOT_FOUND", ex.getMessage(), correlationId);
     }
 
     @ExceptionHandler(LockedException.class)

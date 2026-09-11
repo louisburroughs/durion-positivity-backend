@@ -12,6 +12,8 @@ import com.positivity.securityservice.internal.exception.DuplicateRoleNameExcept
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.internal.service.RoleManagementService;
+import com.positivity.tenancy.PlatformTenant;
+import com.positivity.tenancy.TenantContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -79,6 +81,9 @@ public class RoleBulkIngestController extends AbstractBulkIngestController<RoleB
                     Required inputs: jobId, locationId, and records; each record needs a non-blank name.
                     A role that already exists counts as a success — provisioning is expected to be re-runnable \
                     against an environment that is already partly seeded.
+                    Under the platform tenant the batch is the platform role template (ADR-0062): each role is \
+                    created with templateKey = its name (or marked when already present) and reaches tenants \
+                    through provisioning and reconcileRoleTemplate.
                     Persona slots must describe the role rather than instruct the assistant: single line, within the \
                     length cap, and free of imperative control verbs.
                     Emits a SECURITY_ROLE_BULK_INGEST event.
@@ -109,23 +114,33 @@ public class RoleBulkIngestController extends AbstractBulkIngestController<RoleB
         return super.bulkIngest(request);
     }
 
+    /**
+     * A batch loaded into the platform tenant is the role template itself (ADR-0062 §6, plan WS8,
+     * decided 2026-09-10): each role is created with {@code template_key} = its name, or marked
+     * when already present, and joins what {@code reconcileTemplate(tenant)} and provisioning copy
+     * into tenants. Under any other tenant the batch provisions ordinary, tenant-local roles.
+     */
     @Override
     protected BulkIngestResponse processRecords(@NonNull BulkIngestRequest<RoleBulkIngestRecord> request) {
         List<BulkIngestResult> results = new ArrayList<>();
         int successCount = 0;
         int failureCount = 0;
+        boolean template = PlatformTenant.isPlatform(TenantContext.current().orElse(null));
 
         for (int i = 0; i < request.getRecords().size(); i++) {
             RoleBulkIngestRecord record = request.getRecords().get(i);
             try {
-                RoleDto created = roleManagementService.createRole(new RoleCreateRequest(
+                RoleCreateRequest createRequest = new RoleCreateRequest(
                         record.name(),
                         record.description(),
                         record.personaTitle(),
                         record.personaFocus(),
                         record.personaTone(),
                         record.mcpPersonaRank(),
-                        record.mcpPersonaEligible()));
+                        record.mcpPersonaEligible());
+                RoleDto created = template
+                        ? roleManagementService.provisionTemplateRole(createRequest)
+                        : roleManagementService.createRole(createRequest);
                 results.add(BulkIngestResult.builder()
                         .rowIndex(i)
                         .entityId(created.getId())
