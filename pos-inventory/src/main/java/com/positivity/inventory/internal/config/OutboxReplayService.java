@@ -9,9 +9,9 @@ import org.jspecify.annotations.NonNull;
  */
 public interface OutboxReplayService {
 
-    /** Re-queue published events created at or after {@code since}. Returns the count queued. */
+    /** Re-queue the bound tenant's published events created at or after {@code since}. Returns the count queued. */
     int replaySince(@NonNull Instant since);
 
-    /** Re-queue published events created in {@code [since, until)}. Returns the count queued. */
+    /** Re-queue the bound tenant's published events created in {@code [since, until)}. Returns the count queued. */
     int replayBetween(@NonNull Instant since, @NonNull Instant until);
 }
