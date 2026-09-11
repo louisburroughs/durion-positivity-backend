@@ -5,3 +5,4 @@ ext_tenant  # public tenant projection fed by tenant.events.v1 (ADR-0062 section
 event_outbox  # transactional outbox; the unbound poller publishes every tenant's rows (tenant_id carried as data)
 permissions  # permission catalog is global and code-first (ADR-0062 section 6, ADR-0040)
 processed_events  # consumer idempotency ledger keyed by eventId, deduplicated across tenants; tenant_id carried as data for per-tenant reconciliation
+user_activation_tokens  # one-time first-administrator activation tokens (ADR-0062 section 7, WS2b-3): looked up by hash on the unauthenticated /v1/auth/activate before any tenant is bound (tenant_id carried as data)

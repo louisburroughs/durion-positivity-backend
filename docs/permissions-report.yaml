@@ -1,9 +1,9 @@
-generatedAt: "2026-09-10T04:49:30.541801+00:00"
+generatedAt: "2026-09-11T00:50:28.173833+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 493
-  uniquePermissionCount: 493
+  permissionCount: 494
+  uniquePermissionCount: 494
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -943,7 +943,7 @@ manifests:
     domain: "platform"
     serviceName: "pos-tenant"
     version: "1.0"
-    permissionCount: 9
+    permissionCount: 10
     permissions:
       - name: "platform:tenant:create"
         description: "Register a tenant under an account"
@@ -951,6 +951,8 @@ manifests:
         description: "Read tenants"
       - name: "platform:tenant:update"
         description: "Change a tenant's display name or cell"
+      - name: "platform:tenant:provision"
+        description: "Mint a first-administrator activation token for a provisioned tenant"
       - name: "platform:tenant:suspend"
         description: "Suspend an active tenant"
       - name: "platform:tenant:reactivate"
@@ -3138,6 +3140,12 @@ permissions:
     source: "pos-tenant/src/main/resources/permissions.yaml"
   - name: "platform:tenant:decommission"
     description: "Decommission a tenant (terminal)"
+    domain: "platform"
+    serviceName: "pos-tenant"
+    module: "pos-tenant"
+    source: "pos-tenant/src/main/resources/permissions.yaml"
+  - name: "platform:tenant:provision"
+    description: "Mint a first-administrator activation token for a provisioned tenant"
     domain: "platform"
     serviceName: "pos-tenant"
     module: "pos-tenant"

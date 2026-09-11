@@ -1,12 +1,14 @@
 package com.positivity.securityservice.internal.config;
 
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
+import com.positivity.securityservice.internal.exception.ActivationTokenInvalidException;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
 import com.positivity.securityservice.internal.exception.InvalidTokenException;
 import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
+import com.positivity.securityservice.internal.exception.PlatformTenantRequiredException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
@@ -14,6 +16,7 @@ import com.positivity.securityservice.internal.exception.SelfRegistrationConflic
 import com.positivity.securityservice.internal.exception.SelfRegistrationReviewCaseNotFoundException;
 import com.positivity.securityservice.internal.exception.TemplateRoleImmutableException;
 import com.positivity.securityservice.internal.exception.TokenUserIdMissingException;
+import com.positivity.securityservice.internal.exception.UserNotAwaitingActivationException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -552,6 +555,72 @@ public class GlobalExceptionHandler {
         String correlationId = extractCorrelationId(request);
         log.warn("Invalid token (correlationId={}): {}", correlationId, ex.getMessage());
         return respond(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", ex.getMessage(), correlationId);
+    }
+
+    /**
+     * Handles ActivationTokenInvalidException: the token presented to {@code POST /v1/auth/activate}
+     * is unknown, expired or already used (ADR-0062 §7, WS2b-3). One code for the three conditions on
+     * purpose — the caller is unauthenticated and the answer must not reveal which guesses were once
+     * real tokens.
+     *
+     * <p>
+     * <b>HTTP Status:</b> 401 Unauthorized (ACTIVATION_TOKEN_INVALID), the same status the module's
+     * other refused tokens answer ({@code INVALID_TOKEN}, {@code INVALID_REFRESH_TOKEN}).
+     *
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 401 status and correlation ID
+     */
+    @ExceptionHandler(ActivationTokenInvalidException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ResponseEntity<ApiError> handleActivationTokenInvalidException(
+            ActivationTokenInvalidException ex, WebRequest request) {
+        String correlationId = extractCorrelationId(request);
+        log.warn("Activation refused (correlationId={}): {}", correlationId, ex.getMessage());
+        return respond(HttpStatus.UNAUTHORIZED, "ACTIVATION_TOKEN_INVALID", ex.getMessage(), correlationId);
+    }
+
+    /**
+     * Handles UserNotAwaitingActivationException: an activation token was requested for a user
+     * that is not the credential-expired, never-signed-in account provisioning creates (ADR-0062
+     * §7, WS2b-3) — a live account keeps its password.
+     *
+     * <p>
+     * <b>HTTP Status:</b> 409 Conflict (USER_NOT_AWAITING_ACTIVATION): the request is well formed
+     * and authorized but conflicts with the account's state.
+     *
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 409 status and correlation ID
+     */
+    @ExceptionHandler(UserNotAwaitingActivationException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ResponseEntity<ApiError> handleUserNotAwaitingActivationException(
+            UserNotAwaitingActivationException ex, WebRequest request) {
+        String correlationId = extractCorrelationId(request);
+        log.warn("Activation token refused (correlationId={}): {}", correlationId, ex.getMessage());
+        return respond(HttpStatus.CONFLICT, "USER_NOT_AWAITING_ACTIVATION", ex.getMessage(), correlationId);
+    }
+
+    /**
+     * Handles PlatformTenantRequiredException: a platform-only operation was called under a tenant
+     * binding other than the platform tenant (ADR-0062 §7).
+     *
+     * <p>
+     * <b>HTTP Status:</b> 403 Forbidden (PLATFORM_TENANT_REQUIRED), the same code {@code pos-tenant}'s
+     * {@code PlatformTenantGuard} answers at its edge.
+     *
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 403 status and correlation ID
+     */
+    @ExceptionHandler(PlatformTenantRequiredException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ResponseEntity<ApiError> handlePlatformTenantRequiredException(
+            PlatformTenantRequiredException ex, WebRequest request) {
+        String correlationId = extractCorrelationId(request);
+        log.warn("Platform tenant required (correlationId={}): {}", correlationId, ex.getMessage());
+        return respond(HttpStatus.FORBIDDEN, "PLATFORM_TENANT_REQUIRED", ex.getMessage(), correlationId);
     }
 
     @ExceptionHandler(LockedException.class)

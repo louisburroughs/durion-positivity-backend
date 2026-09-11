@@ -9,8 +9,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.securityservice.internal.exception.ActivationTokenInvalidException;
 import com.positivity.securityservice.internal.exception.NoRolesAssignedException;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
+import com.positivity.securityservice.internal.service.AdministratorActivationService;
 import com.positivity.securityservice.internal.service.AuthenticationService;
 import com.positivity.securityservice.internal.service.CustomUserDetailsService;
 import com.positivity.securityservice.internal.service.SelfRegistrationService;
@@ -78,6 +80,9 @@ class AuthControllerErrorHandlingTest {
     private SelfRegistrationService selfRegistrationService;
 
     @MockitoBean
+    private AdministratorActivationService administratorActivationService;
+
+    @MockitoBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @MockitoBean
@@ -140,6 +145,48 @@ class AuthControllerErrorHandlingTest {
                 .andExpect(header().string("X-Correlation-Id", CORRELATION_ID))
                 .andExpect(jsonPath("$.code").value("ACCOUNT_LOCKED"))
                 .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID));
+    }
+
+    // ── POST /v1/auth/activate (ADR-0062 §7, WS2b-3) ─────────────────────────────────────────
+
+    @Test
+    @DisplayName("activate with a live token answers 204 and passes token and password through unchanged")
+    void activateWithLiveTokenAnswers204() throws Exception {
+        mockMvc.perform(post("/v1/auth/activate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"abc-token\",\"newPassword\":\"Sup3rS3cret!\"}"))
+                .andExpect(status().isNoContent());
+
+        org.mockito.Mockito.verify(administratorActivationService).activate("abc-token", "Sup3rS3cret!");
+    }
+
+    @Test
+    @DisplayName("activate with an unknown, expired or used token answers 401 ACTIVATION_TOKEN_INVALID")
+    void activateWithBadTokenAnswers401ActivationTokenInvalid() throws Exception {
+        org.mockito.Mockito.doThrow(new ActivationTokenInvalidException())
+                .when(administratorActivationService)
+                .activate(any(), any());
+
+        mockMvc.perform(post("/v1/auth/activate")
+                        .header("X-Correlation-Id", CORRELATION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"stale\",\"newPassword\":\"Sup3rS3cret!\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("X-Correlation-Id", CORRELATION_ID))
+                .andExpect(jsonPath("$.code").value("ACTIVATION_TOKEN_INVALID"))
+                .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID));
+    }
+
+    @Test
+    @DisplayName("activate with a blank password is a 400 before the service is reached")
+    void activateWithBlankPasswordIs400() throws Exception {
+        mockMvc.perform(post("/v1/auth/activate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"abc-token\",\"newPassword\":\" \"}"))
+                .andExpect(status().isBadRequest());
+
+        org.mockito.Mockito.verify(administratorActivationService, org.mockito.Mockito.never())
+                .activate(any(), any());
     }
 
     /** Clock for {@code GlobalExceptionHandler} and {@code pos-web-common}'s advice, plus method security. */

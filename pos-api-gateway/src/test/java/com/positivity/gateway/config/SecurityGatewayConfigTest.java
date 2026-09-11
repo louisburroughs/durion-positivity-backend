@@ -1350,9 +1350,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 84")
+    @DisplayName("CATALOG_VERSION is 85")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(84);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(85);
     }
 
     @Test
@@ -1654,8 +1654,11 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(526)).isEqualTo("PERM_platform:tenant:read");
         assertThat(GatewayPermissionCatalog.authorityForBit(527)).isEqualTo("PERM_platform:tenant:suspend");
         assertThat(GatewayPermissionCatalog.authorityForBit(528)).isEqualTo("PERM_platform:tenant:update");
+        // catalog v85 (ADR-0062 §7, WS2b-3): first-administrator activation tokens, minted by
+        // pos-security-service for the platform tenant only (bit 529)
+        assertThat(GatewayPermissionCatalog.authorityForBit(529)).isEqualTo("PERM_platform:tenant:provision");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(529)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(530)).isNull();
     }
 
     @Test

@@ -8,6 +8,10 @@ permissions:
     description: "Read tenants"
   - name: "platform:tenant:update"
     description: "Change a tenant's display name or cell"
+  # Enforced by pos-security-service (POST /v1/platform/tenants/{tenantId}/administrators/{userId}/activation-token,
+  # ADR-0062 section 7, WS2b-3); listed here because the platform domain owns the platform:* family.
+  - name: "platform:tenant:provision"
+    description: "Mint a first-administrator activation token for a provisioned tenant"
   - name: "platform:tenant:suspend"
     description: "Suspend an active tenant"
   - name: "platform:tenant:reactivate"

@@ -1,10 +1,12 @@
 package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.securityservice.internal.dto.ActivateAccountRequest;
 import com.positivity.securityservice.internal.dto.LoginRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationResponse;
 import com.positivity.securityservice.internal.dto.TokenPairResponse;
+import com.positivity.securityservice.internal.service.AdministratorActivationService;
 import com.positivity.securityservice.internal.service.AuthenticationService;
 import com.positivity.securityservice.internal.service.SelfRegistrationService;
 import com.positivity.shared.error.ApiError;
@@ -43,6 +45,7 @@ public class AuthController {
 
     private final AuthenticationService authenticationService;
     private final SelfRegistrationService selfRegistrationService;
+    private final AdministratorActivationService administratorActivationService;
 
     @Operation(operationId = "loginUser", summary = "Authenticate User and Issue Tokens", description = """
                     Authenticates a user with username and password and returns a JWT access token (1-hour) and \
@@ -151,5 +154,55 @@ public class AuthController {
                     @RequestBody
                     SelfRegistrationRequest request) {
         return ResponseEntity.status(201).body(selfRegistrationService.selfRegister(request));
+    }
+
+    @Operation(
+            operationId = "activateAccount",
+            summary = "Activate an Account with a One-Time Token",
+            description = """
+                    Exchanges a one-time activation token for the account's first password: sets the password, \
+                    clears the credential expiry provisioning left on the account, and marks the token used, all in \
+                    one transaction under the token's tenant.
+                    Use this tool when a tenant's first administrator has received an activation token from a \
+                    platform operator (mintAdministratorActivationToken); do not use loginUser, which cannot \
+                    succeed until the account is activated, and do not use updateUser, which needs an \
+                    authenticated caller.
+                    Preconditions: none on the caller — the endpoint is unauthenticated and binds no tenant; the \
+                    token must be unexpired (72 hours from minting) and unused.
+                    Required inputs: token and newPassword, both non-blank.
+                    Emits a SECURITY_AUTH_ACTIVATE event; no tokens are issued, so a follow-up loginUser call is \
+                    required.
+                    Returns 204 on success; 400 on a blank field; 401 with ACTIVATION_TOKEN_INVALID when the token \
+                    is unknown, expired or already used (one code on purpose, so nothing about the account or the \
+                    token's history is revealed).
+                    """)
+    @ApiResponse(responseCode = "204", description = "Password set; the account can sign in")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Missing or blank token/newPassword",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "ACTIVATION_TOKEN_INVALID: the token is unknown, expired or already used",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @EmitEvent(id = "SECURITY_AUTH_ACTIVATE", apiVersion = "1")
+    @PostMapping("/activate")
+    @PreAuthorize("permitAll()")
+    public ResponseEntity<Void> activate(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The activation token and the password to set.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Activation", value = """
+                                                                    {"token":"Qm9iIGlzIG5vdCBhIHJlYWwgdG9rZW4gYnV0IGxvb2tzIGxpa2Ugb25l",
+                                                                     "newPassword":"Sup3rS3cret!"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    ActivateAccountRequest request) {
+        administratorActivationService.activate(request.token(), request.newPassword());
+        return ResponseEntity.noContent().build();
     }
 }

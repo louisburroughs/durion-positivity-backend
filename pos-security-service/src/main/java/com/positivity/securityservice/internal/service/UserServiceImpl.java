@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,12 +52,31 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserDto createUserWithGeneratedPassword(String username, Set<String> roleNames) {
-        // 32 bytes from a cryptographically strong source, hashed by createUser like any other
-        // password and then dropped: it is never returned, logged, or persisted in plaintext.
+        return createUser(username, generatePassword(), roleNames);
+    }
+
+    @Override
+    @Transactional
+    public @NonNull UserDto createUserAwaitingActivation(@NonNull String username, @NonNull Set<String> roleNames) {
+        UserDto created = createUser(username, generatePassword(), roleNames);
+        User user = userRepository
+                .findById(created.getId())
+                .orElseThrow(() -> new IllegalStateException("User " + created.getId() + " vanished after creation"));
+        user.setCredentialsNonExpired(false);
+        user.setCredentialsExpireAt(Instant.now(clock));
+        user.setAwaitingActivation(true);
+        userRepository.save(user);
+        return created;
+    }
+
+    /**
+     * 32 bytes from a cryptographically strong source, hashed by {@link #createUser} like any other
+     * password and then dropped: it is never returned, logged, or persisted in plaintext.
+     */
+    private static String generatePassword() {
         byte[] entropy = new byte[GENERATED_PASSWORD_BYTES];
         SECURE_RANDOM.nextBytes(entropy);
-        String generated = Base64.getUrlEncoder().withoutPadding().encodeToString(entropy);
-        return createUser(username, generated, roleNames);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(entropy);
     }
 
     /**
@@ -159,14 +179,33 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserDto updateUser(UUID id, UserUpdateRequest request) {
-        User existingUser =
-                userRepository.findById(id).orElseThrow(() -> new UserNotFoundException("User not found: " + id));
+        // Pessimistic write lock (WS2b-3 review): the same lock AdministratorActivationService's
+        // mint/activate take on this row, so an ordinary password update that reads the row before
+        // an in-flight activation exchange takes its lock waits here instead of racing it — without
+        // this, this path could still read the pre-exchange row, then commit afterwards and
+        // overwrite the password and credential flags activation just set.
+        User existingUser = userRepository
+                .findByIdForUpdate(id)
+                .orElseThrow(() -> new UserNotFoundException("User not found: " + id));
 
         if (request.getUsername() != null && !request.getUsername().isBlank()) {
             existingUser.setUsername(request.getUsername());
         }
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            boolean wasAwaitingActivation = existingUser.isAwaitingActivation();
             existingUser.setPassword(passwordEncoder.encode(request.getPassword()));
+            // An ordinary password set ends the awaiting-activation state (WS2b-3): a token minted
+            // before it can no longer overwrite this password.
+            existingUser.setAwaitingActivation(false);
+            if (wasAwaitingActivation) {
+                // This is exactly the documented fallback for the first password on an account
+                // provisioning left credential-expired awaiting an activation token (WS2b-3): also
+                // clear the expiry, or the password just set still fails login with
+                // CredentialsExpiredException. An ordinary account an administrator deliberately
+                // expired was never awaiting activation, so it keeps its expiry untouched here.
+                existingUser.setCredentialsNonExpired(true);
+                existingUser.setCredentialsExpireAt(null);
+            }
         }
         if (request.getRoles() != null) {
             // A non-null roles list reconciles the effective set the same way assignRoles does,

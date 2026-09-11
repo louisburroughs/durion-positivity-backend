@@ -242,6 +242,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
      * Get role assignments for a user.
      */
     @Override
+    @Transactional(readOnly = true)
     public List<RoleAssignmentDto> getAssignmentsForUser(@NonNull UUID userId, boolean includeHistory) {
         return getAssignmentEntitiesForUser(userId, includeHistory).stream()
                 .map(this::toRoleAssignmentDto)

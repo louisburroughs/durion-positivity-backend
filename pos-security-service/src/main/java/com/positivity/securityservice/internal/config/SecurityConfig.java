@@ -37,6 +37,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
     private static final String V1_AUTH_LOGIN = "/v1/auth/login";
     private static final String V1_AUTH_SELF_REGISTER = "/v1/auth/self-register";
+    /** Unauthenticated by design: the one-time activation token is the credential (ADR-0062 §7, WS2b-3). */
+    private static final String V1_AUTH_ACTIVATE = "/v1/auth/activate";
+
     private static final String METRICS_ROLE = "ROLE_ACTUATOR_METRICS";
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final UserDetailsService userDetailsService;
@@ -62,7 +65,11 @@ public class SecurityConfig {
                     .csrf(csrf -> csrf.ignoringRequestMatchers("/v1/auth/**"))
                     .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                     .authorizeHttpRequests(auth -> auth.requestMatchers(
-                                    "/v1/auth/refresh", "/v1/auth/validate", V1_AUTH_LOGIN, V1_AUTH_SELF_REGISTER)
+                                    "/v1/auth/refresh",
+                                    "/v1/auth/validate",
+                                    V1_AUTH_LOGIN,
+                                    V1_AUTH_SELF_REGISTER,
+                                    V1_AUTH_ACTIVATE)
                             .permitAll()
                             .anyRequest()
                             .authenticated())
