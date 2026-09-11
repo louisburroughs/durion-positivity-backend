@@ -37,8 +37,9 @@ module's `TenantRegistry` returns.
   lock (one thread fetches, the others keep reading the old snapshot, no background thread). A
   transport error, a non-2xx, an empty body or a list with no `ACTIVE` tenant is a failure: the
   last good snapshot stands, a WARN is logged on the transition to failing and an INFO on
-  recovery, each with the consecutive-failure count. The registry is never empty because of a
-  bad answer.
+  recovery, each with the consecutive-failure count. A bad answer never replaces the snapshot,
+  which is the static list (or empty, when neither `pos.tenancy.tenants` nor a default tenant is
+  configured) until the first fetch succeeds: an empty snapshot means the iterator visits nobody.
 
   That fallback keeps per-tenant jobs alive, but the list it hands out during an outage is not the
   fleet — the static seed never was, and a snapshot kept through an outage cannot hold a tenant

@@ -232,6 +232,37 @@ class RemoteTenantRegistryTest {
     }
 
     @Test
+    @DisplayName("the static seed drops the platform tenant too, so a failed first fetch never yields it")
+    void platformTenantIsExcludedFromTheStaticSeed() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer local = MockRestServiceServer.bindTo(builder).build();
+        TenancyProperties properties = new TenancyProperties();
+        // pos-tenant configures the platform tenant as its default, and any module may list it.
+        properties.setDefaultTenantId(PlatformTenant.ID);
+        properties.setTenants(List.of(PlatformTenant.ID, ACME));
+        properties.getRegistry().setMode(TenancyProperties.Registry.Mode.REMOTE);
+        properties.getRegistry().setUrl(URL);
+        RemoteTenantRegistry seeded = new RemoteTenantRegistry(properties, builder.build(), clock);
+
+        assertThat(seeded.snapshotSize()).isEqualTo(1);
+        local.expect(requestTo(URL)).andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+
+        assertThat(seeded.activeTenantIds()).containsExactly(ACME);
+        assertThat(seeded.consecutiveFailures()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("an additive field in a newer pos-tenant response does not fail the fetch")
+    void unknownFieldsAreIgnored() {
+        expectSuccess("[{\"tenantId\":\"" + ACME + "\",\"slug\":\"acme\",\"displayName\":\"Acme\","
+                + "\"status\":\"ACTIVE\",\"region\":\"us-east-1\",\"createdAt\":\"2026-09-11T00:00:00Z\"}]");
+
+        assertThat(registry.activeTenantIds()).containsExactly(ACME);
+        assertThat(registry.consecutiveFailures()).isZero();
+        server.verify();
+    }
+
+    @Test
     @DisplayName("the platform tenant is never part of the snapshot, ACTIVE or not")
     void platformTenantIsExcluded() {
         expectSuccess("[{\"tenantId\":\"" + PlatformTenant.ID + "\",\"slug\":\"platform\",\"status\":\"ACTIVE\"},"
