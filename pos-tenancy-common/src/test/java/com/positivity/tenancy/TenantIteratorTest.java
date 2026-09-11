@@ -99,6 +99,85 @@ class TenantIteratorTest {
                 .isFalse();
     }
 
+    @Test
+    @DisplayName("sweep reads the tenant list and its completeness from one atomic snapshot() call, never by"
+            + " calling activeTenantIds() and separately consulting hasCompleteSnapshot() — a concurrent refresh"
+            + " landing in between those two calls must not pair the pre-refresh list with a post-refresh"
+            + " completeness verdict")
+    void sweepNeverTearsTheListApartFromItsCompletenessVerdict() {
+        // Stands in for a RemoteTenantRegistry: activeTenantIds() returns the list as it was before a
+        // refresh, and — deterministically, as a side effect of that very call rather than on a timer or a
+        // second thread — a refresh lands and flips completeness. A caller that reads the list via
+        // activeTenantIds() and only afterward, separately, reads hasCompleteSnapshot() observes the
+        // pre-refresh list paired with the post-refresh "complete" verdict: exactly the torn read the fix
+        // closes. The registry's own snapshot() override is what a correctly fixed RemoteTenantRegistry
+        // publishes atomically instead.
+        TornOnActiveTenantIdsRegistry registry = new TornOnActiveTenantIdsRegistry(List.of(A, B));
+
+        TenantIterator.Sweep sweep = new TenantIterator(registry).sweep(tenant -> {});
+
+        assertThat(registry.activeTenantIdsCalls())
+                .as("sweep must go through the atomic snapshot() accessor, not call activeTenantIds() itself")
+                .isZero();
+        assertThat(registry.hasCompleteSnapshotCalls())
+                .as("sweep must go through the atomic snapshot() accessor, not call hasCompleteSnapshot() itself")
+                .isZero();
+        assertThat(sweep.completeTenantList())
+                .as("the list this sweep iterated ([A, B]) was captured before the refresh landed, so it must"
+                        + " not be marked complete just because a concurrent refresh (which the sweep never"
+                        + " saw the result of) happened to land while the registry was being read")
+                .isFalse();
+    }
+
+    /**
+     * A {@link TenantRegistryFreshness} registry whose {@link #activeTenantIds()} triggers, as a side effect,
+     * the same state change a background refresh would — deterministically reproducing the torn-read window
+     * a two-call {@code activeTenantIds()} + {@code hasCompleteSnapshot()} read is exposed to, without relying
+     * on real thread timing. {@link #snapshot()} is overridden to return the correct atomic pairing, standing
+     * in for a registry (like the fixed {@code RemoteTenantRegistry}) that publishes list and completeness
+     * together; the test above asserts {@link TenantIterator#sweep} reaches only that method.
+     */
+    private static final class TornOnActiveTenantIdsRegistry implements TenantRegistry, TenantRegistryFreshness {
+        private final List<UUID> tenants;
+        private boolean refreshLandedDuringActiveTenantIds;
+        private int activeTenantIdsCalls;
+        private int hasCompleteSnapshotCalls;
+
+        TornOnActiveTenantIdsRegistry(List<UUID> tenants) {
+            this.tenants = tenants;
+        }
+
+        @Override
+        public List<UUID> activeTenantIds() {
+            activeTenantIdsCalls++;
+            // A concurrent refresh landing between this call and a later, separately timed
+            // hasCompleteSnapshot() call — reproduced deterministically as this call's own side effect.
+            refreshLandedDuringActiveTenantIds = true;
+            return tenants;
+        }
+
+        @Override
+        public boolean hasCompleteSnapshot() {
+            hasCompleteSnapshotCalls++;
+            return refreshLandedDuringActiveTenantIds;
+        }
+
+        @Override
+        public TenantRegistry.Snapshot snapshot() {
+            // The atomic pairing a fixed registry publishes: the list as it stood before the refresh,
+            // correctly marked incomplete, with neither activeTenantIds() nor hasCompleteSnapshot() called.
+            return new TenantRegistry.Snapshot(tenants, false);
+        }
+
+        int activeTenantIdsCalls() {
+            return activeTenantIdsCalls;
+        }
+
+        int hasCompleteSnapshotCalls() {
+            return hasCompleteSnapshotCalls;
+        }
+    }
+
     private record FreshnessRegistry(List<UUID> tenants, boolean complete)
             implements TenantRegistry, TenantRegistryFreshness {
 

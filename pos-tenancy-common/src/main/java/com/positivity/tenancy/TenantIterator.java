@@ -41,21 +41,27 @@ public class TenantIterator {
      * is simpler. This overload is for a job that then rolls its per-tenant results up into one
      * fleet-wide write: over a partial list that write is wrong rather than merely late, so the
      * completeness verdict must belong to the exact list the sweep iterated. {@link
-     * TenantRegistry#activeTenantIds()} and, when the registry implements {@link
-     * TenantRegistryFreshness}, {@link TenantRegistryFreshness#hasCompleteSnapshot()} are therefore
-     * read together before {@code work} runs for anyone — not afterward, when a sweep that can run
-     * for as long as the per-tenant work takes has given a concurrent refresh (triggered by any
-     * other caller sharing the registry, not only this one) time to move the registry from an
-     * incomplete snapshot to a complete one, or the reverse, making the verdict belong to a
-     * snapshot other than the one just iterated. Registries that are authoritative by construction
-     * do not implement {@link TenantRegistryFreshness} and always report complete.
+     * TenantRegistry#snapshot()} reads the tenant list and its completeness as one atomic pair
+     * before {@code work} runs for anyone — not two separate calls ({@link
+     * TenantRegistry#activeTenantIds()} then, separately, {@link
+     * TenantRegistryFreshness#hasCompleteSnapshot()}), which a registry that publishes list and
+     * freshness from independent state could tear: a concurrent refresh (triggered by any other
+     * caller sharing the registry, not only this one) landing between the two calls can pair the
+     * list from before the refresh with the completeness verdict from after it, marking a partial
+     * list complete. Reading both through one {@link TenantRegistry#snapshot()} call — which a
+     * registry whose snapshot can go stale is required to publish atomically — closes that window
+     * along with the larger one this method already closes by reading before {@code work} runs
+     * rather than after the sweep, which can take as long as the per-tenant work itself, has given a
+     * concurrent refresh time to move the registry from an incomplete snapshot to a complete one, or
+     * the reverse. Registries that are authoritative by construction do not implement {@link
+     * TenantRegistryFreshness} and always report complete.
      *
      * @return the per-tenant completion count and whether the iterated list was complete
      */
     public @NonNull Sweep sweep(Consumer<UUID> work) {
-        var tenants = registry.activeTenantIds();
-        boolean completeTenantList =
-                !(registry instanceof TenantRegistryFreshness freshness) || freshness.hasCompleteSnapshot();
+        TenantRegistry.Snapshot snapshot = registry.snapshot();
+        var tenants = snapshot.tenantIds();
+        boolean completeTenantList = snapshot.complete();
         if (tenants.isEmpty()) {
             log.warn("TenantIterator visited no tenants: the registry is empty");
             return new Sweep(0, completeTenantList);
