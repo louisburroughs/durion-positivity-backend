@@ -39,6 +39,7 @@ class ClasspathVisibilityGuardTest {
      */
     private static final Map<String, String> MODULE_ROOT_PACKAGES = new TreeMap<>(Map.ofEntries(
             Map.entry("pos-accounting", "com.positivity.accounting"),
+            Map.entry("pos-bulk-loader", "com.positivity.bulkloader"),
             Map.entry("pos-catalog", "com.positivity.catalog"),
             Map.entry("pos-customer", "com.positivity.customer"),
             Map.entry("pos-event-receiver", "com.positivity.poseventreceiver"),

@@ -6,12 +6,22 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
+import com.positivity.tenancy.PlatformScoped;
+import com.positivity.tenancy.TenantGlobal;
+import com.positivity.tenancy.TenantIterator;
+import com.positivity.tenancy.TenantScopedEntity;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaCall;
+import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 import java.time.Clock;
 
 /**
@@ -175,4 +185,70 @@ public class ArchitectureTest {
             .allowEmptyShould(true)
             .because("a competing Clock bean wins over the accelerated ScaledClock and drags this module's JPA"
                     + " auditing provider onto wall time");
+
+    // ADR-0062 (plan WS8): this module has adopted pos-tenancy-common. The cross-module rules in
+    // pos-archunit's TenancyArchitectureTest judge it too; these module-local copies fail the module's
+    // own build first, before the reactor-wide test runs.
+
+    @ArchTest
+    static final ArchRule every_entity_is_tenant_scoped_or_declared_global = classes()
+            .that()
+            .areAnnotatedWith("jakarta.persistence.Entity")
+            .should(beTenantScopedOrDeclaredGlobal())
+            .because("ADR-0062 section 5: a table is tenant-scoped (entity extends TenantScopedEntity) unless it is"
+                    + " listed in db/tenancy-global-tables.txt with a reason (entity carries @TenantGlobal)");
+
+    @ArchTest
+    static final ArchRule nothing_assigns_the_tenant_of_an_entity = noClasses()
+            .should()
+            .accessField(TenantScopedEntity.class, "tenantId")
+            .because("ADR-0062 section 3: Hibernate stamps tenant_id from the bound context; the loader binds the"
+                    + " job's tenant (TenantContext.runAs) and never chooses a row's tenant itself");
+
+    @ArchTest
+    static final ArchRule every_scheduler_is_classified = methods()
+            .that()
+            .areAnnotatedWith("org.springframework.scheduling.annotation.Scheduled")
+            .should(bePlatformScopedOrIterateTenants())
+            .allowEmptyShould(true)
+            .because("ADR-0062 section 3: a scheduled job is per-tenant (TenantIterator.forEachActiveTenant) or"
+                    + " @PlatformScoped; tus_upload is tenant-scoped, so the expiry sweep iterates tenants");
+
+    private static ArchCondition<JavaClass> beTenantScopedOrDeclaredGlobal() {
+        return new ArchCondition<>("extend TenantScopedEntity or be annotated with @TenantGlobal") {
+            @Override
+            public void check(JavaClass entity, ConditionEvents events) {
+                boolean scoped = entity.isAssignableTo(TenantScopedEntity.class);
+                boolean global = entity.isAnnotatedWith(TenantGlobal.class);
+                if (scoped == global) {
+                    events.add(SimpleConditionEvent.violated(
+                            entity,
+                            entity.getName()
+                                    + (scoped
+                                            ? " is both tenant-scoped and @TenantGlobal"
+                                            : " neither extends TenantScopedEntity nor carries @TenantGlobal")));
+                }
+            }
+        };
+    }
+
+    private static ArchCondition<JavaMethod> bePlatformScopedOrIterateTenants() {
+        return new ArchCondition<>("be annotated with @PlatformScoped or call TenantIterator.forEachActiveTenant") {
+            @Override
+            public void check(JavaMethod method, ConditionEvents events) {
+                if (method.isAnnotatedWith(PlatformScoped.class)) {
+                    return;
+                }
+                boolean iterates = method.getMethodCallsFromSelf().stream()
+                        .map(JavaMethodCall::getTarget)
+                        .anyMatch(target -> target.getOwner().isEquivalentTo(TenantIterator.class)
+                                && target.getName().equals("forEachActiveTenant"));
+                if (!iterates) {
+                    events.add(SimpleConditionEvent.violated(
+                            method,
+                            method.getFullName() + " is @Scheduled but neither @PlatformScoped nor per-tenant"));
+                }
+            }
+        };
+    }
 }

@@ -11,13 +11,17 @@
 --   2. Holds the role template as data in the platform tenant: a copy of the floor roles, their
 --      grants and their ADR-0061 location-scope attributes, keyed by template_key.
 --      TenantProvisioningService reads this copy under the platform binding and applies it to a
---      new tenant on tenant.created. Roles the alpha bulk loader adds after startup (roles.csv)
---      are not part of the template yet; WS8 runs that loader against the platform tenant.
+--      new tenant on tenant.created. Roles the bulk loader adds after startup (roles.csv) join
+--      the template when the job targets the platform tenant (WS8: RoleBulkIngestController sets
+--      template_key under the platform binding), and reach existing tenants through
+--      POST /v1/platform/tenants/{tenantId}/roles/reconcile-template.
 --   3. Bootstraps PLATFORM_ADMIN and admin.platform in the platform tenant: the only role holding
 --      the platform:tenant:* and platform:account:* families (section 7), and the one user that
 --      can reach pos-tenant's registry. The alpha ADMIN no longer holds those grants.
 --      platform:tenant:impersonate (WS2b-4) is what lets an operator mint a SUPPORT token for a
---      tenant; it lives here, never in a tenant role.
+--      tenant; it lives here, never in a tenant role. The role also holds the four bulk-import and
+--      role-write grants the documented platform role-template load needs (plan WS8); see the
+--      comment on that VALUES block.
 --
 -- Idempotent: every write is ON CONFLICT DO NOTHING (the seed password is refreshed on re-run,
 -- as for admin.alpha). RoleSeedSql, the parser behind the alpha role-set tests, skips this file:
@@ -117,9 +121,23 @@ VALUES ('01900000-0000-7000-8000-0000000a0100'::uuid, 'PLATFORM_ADMIN',
         5, false, 'ALL', 'OTHER')
 ON CONFLICT (tenant_id, name) DO NOTHING;
 
+-- The platform operator's grants. Two families:
+--
+--   * platform:* (section 7) -- the tenant and account registry, held nowhere else.
+--   * the four an operator needs to load the role template through pos-bulk-loader (plan WS8):
+--     bulkImport:upload:execute and bulkImport:status:read gate every create/upload/process/status
+--     call on the loader, and security:role:create / security:role:edit gate the /v1/roles and
+--     /v1/roles/permissions bulk-ingest endpoints the loader then calls. Without them the
+--     documented platform template load (docs/OPERATIONS_RUNBOOK.md, "Bulk loading into a tenant")
+--     is refused with 403 before a single row is read. They are safe here because a load, like
+--     everything else this role does, runs under the platform binding: the roles it writes are the
+--     template's own rows in the platform tenant, which is exactly what the operator owns. No
+--     tenant role receives these tuples -- this file writes only to the platform tenant.
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM (VALUES
+    ('PLATFORM_ADMIN', 'bulkImport:status:read'),
+    ('PLATFORM_ADMIN', 'bulkImport:upload:execute'),
     ('PLATFORM_ADMIN', 'platform:account:create'),
     ('PLATFORM_ADMIN', 'platform:account:read'),
     ('PLATFORM_ADMIN', 'platform:account:update'),
@@ -130,7 +148,9 @@ FROM (VALUES
     ('PLATFORM_ADMIN', 'platform:tenant:reactivate'),
     ('PLATFORM_ADMIN', 'platform:tenant:read'),
     ('PLATFORM_ADMIN', 'platform:tenant:suspend'),
-    ('PLATFORM_ADMIN', 'platform:tenant:update')
+    ('PLATFORM_ADMIN', 'platform:tenant:update'),
+    ('PLATFORM_ADMIN', 'security:role:create'),
+    ('PLATFORM_ADMIN', 'security:role:edit')
 ) AS g(role_name, permission_name)
 JOIN roles r ON r.name = g.role_name
 JOIN permissions p ON p.name = g.permission_name
@@ -164,7 +184,7 @@ BEGIN
       FROM role_permissions rp
       JOIN roles r ON r.id = rp.role_id
      WHERE r.name = 'PLATFORM_ADMIN';
-    IF platform_grants < 11 THEN
-        RAISE EXCEPTION 'PLATFORM_ADMIN holds % platform grants, expected 11 (permission rows missing?)', platform_grants;
+    IF platform_grants < 15 THEN
+        RAISE EXCEPTION 'PLATFORM_ADMIN holds % grants, expected 15: the eleven platform:* families plus the four the role-template bulk load needs (permission rows missing?)', platform_grants;
     END IF;
 END $$;

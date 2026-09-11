@@ -177,10 +177,12 @@ public class FileUploadController {
      * operator's bearer token reaches the ingest writers and the business-key resolvers through
      * {@code BulkLoadAuthorizationContext}, a {@code ThreadLocal} that is set and cleared around
      * {@code launch()} on this thread, so a pooled batch thread would find no credential and
-     * every downstream write would fail. The launch would also have to move after the
-     * transaction that stamps PROCESSING commits, or the batch thread could read a job row that
-     * is not there yet. Both belong with a deliberate decision to hold or not hold a connection
-     * for the length of an import, so neither is done here.
+     * every downstream write would fail. {@code BulkLoadJobServiceImpl.startProcessing} does now
+     * launch the batch only after the transaction that stamps PROCESSING commits — needed so each
+     * chunk step gets its own commit boundary instead of joining that outer transaction (Copilot
+     * review of PR #1955, third round) — but that alone does not make this endpoint asynchronous:
+     * the launch is still synchronous on this same request thread, which is exactly what keeps the
+     * thread-local authorization context valid without a task decorator.
      */
     public ResponseEntity<BulkLoadJobResponse> startProcessing(@PathVariable @NonNull UUID jobId) {
         String operatorId = currentOperatorId();

@@ -590,8 +590,12 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_bulk_loader_db
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      # ADR-0062 WS8: the application pool is the shared non-owner pos_app role (created by
+      # postgres/init-tenancy.sh, no BYPASSRLS); Flyway alone keeps the owner credential.
+      SPRING_DATASOURCE_USERNAME: pos_app
+      SPRING_DATASOURCE_PASSWORD: ${POS_APP_PASSWORD:-${POSTGRES_PASSWORD}}
+      SPRING_FLYWAY_USER: ${POSTGRES_USER}
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       # Sibling-service targets resolve via Eureka service ids (#641); the
       # POS_*_SERVICE_ID env vars exist for override but the yml defaults are correct.

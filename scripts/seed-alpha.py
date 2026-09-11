@@ -20,16 +20,26 @@ then reports one expected duplicate failure in the LOCATION job).
 
 Usage:
   scripts/seed-alpha.py --gateway https://alpha.example.com \
-      --token "$SEED_BEARER_TOKEN" [--location-code CLT-MAIN-001] \
+      --token "$SEED_BEARER_TOKEN" [--tenant-id "$SEED_TENANT_ID"] [--location-code CLT-MAIN-001] \
       [--bootstrap-location] [--only customer/person-customers.csv] [--dry-run]
+
+Every job loads into --tenant-id (ADR-0062, plan WS8), which must be the token's own tenant
+(its tid claim; the default when --tenant-id is omitted): the loader's upload, process and
+status calls are scoped to the token's tenant. Loading security/roles.csv and
+security/role-permissions.csv with a PLATFORM_ADMIN token and --tenant-id set to the platform
+tenant (plus an explicit --location-id, the platform tenant having no locations) makes those
+roles the role template; see docs/OPERATIONS_RUNBOOK.md, "Bulk loading into a tenant".
+PLATFORM_ADMIN is seeded with exactly the four grants that load needs on top of its platform:*
+families -- bulkImport:upload:execute, bulkImport:status:read, security:role:create and
+security:role:edit (R__seed_tenant_template.sql) -- so no extra role is needed for it.
 
 Seeded user accounts get a password generated inside pos-security-service and
 returned to no one, so they have no usable login until someone goes through the
 reset path. That is deliberate: a bulk file is uploaded and stored, and a
 password column in it would exist at rest for as long as the upload does.
 
-The bearer token needs bulkImport:upload:execute plus the per-domain create
-permissions relayed to downstream services (location:read, location:write,
+The bearer token needs bulkImport:upload:execute and bulkImport:status:read plus the
+per-domain create permissions relayed to downstream services (location:read, location:write,
 crm:party:create, for the putaway-rules pack catalog:product:view plus
 inventory:putaway_rule:view/inventory:putaway_rule:manage, and for the on-hand
 pack inventory:adjustment:create and inventory:adjustment:approve, and for the
@@ -40,6 +50,7 @@ for the labor-rate packs pricing:labor_rate:manage).
 """
 
 import argparse
+import base64
 import csv
 import datetime
 import io
@@ -97,6 +108,39 @@ PACK_FILES = [
 CATALOG_PRODUCTS_PACK = "catalog/products.csv"
 
 POLL_INTERVAL_SECONDS = 5
+
+# The tenant every job loads into (ADR-0062, plan WS8), from --tenant-id, else the token's own
+# tenant (its tid claim). None omits tenantId from the create request, which the loader accepts only
+# while its transitional default tenant is configured (it then loads into that default and logs a
+# WARN).
+TARGET_TENANT_ID = None
+
+PLATFORM_TENANT_ID = "01900000-0000-7000-8000-000000000000"
+
+# The packs that make sense in the platform tenant: the role template (docs/OPERATIONS_RUNBOOK.md,
+# "Reconciling the role template"). Every other pack is tenant data.
+PLATFORM_PACK_FILES = {"security/roles.csv", "security/role-permissions.csv"}
+
+
+def token_tenant_id(token):
+    """The tid claim of a JWT, or None when the token carries none (unverified: this only picks
+    the tenant the loader will bind, the gateway verifies the signature)."""
+    parts = token.split(".")
+    if len(parts) < 2:
+        return None
+    payload = parts[1] + "=" * (-len(parts[1]) % 4)
+    try:
+        claims = json.loads(base64.urlsafe_b64decode(payload))
+    except (ValueError, UnicodeDecodeError):
+        return None
+    tid = claims.get("tid") if isinstance(claims, dict) else None
+    try:
+        return str(uuid.UUID(tid)) if tid else None
+    except (ValueError, AttributeError, TypeError):
+        # A claim that is not a UUID string at all -- a number, a list, an object -- reaches
+        # uuid.UUID() as the wrong type and raises AttributeError or TypeError rather than
+        # ValueError. Any of the three means the same thing here: this token names no tenant.
+        return None
 # PARTIAL is terminal too: the batch finished, but the owning service rejected some rows. Without
 # it here the driver would poll a finished job forever and then report a timeout.
 TERMINAL_STATUSES = {"COMPLETED", "PARTIAL", "FAILED", "CANCELLED"}
@@ -294,10 +338,10 @@ def run_pack_file(gateway, relative_path, domain_type, location_id, poll_timeout
         file_bytes = fh.read()
     data_rows = max(0, len(file_bytes.decode("utf-8").strip().splitlines()) - 1)
 
-    _, job = gateway.post_json(
-        "/bulk-loader/bulk-jobs",
-        {"fileName": file_name, "domainType": domain_type, "locationId": location_id},
-    )
+    body = {"fileName": file_name, "domainType": domain_type, "locationId": location_id}
+    if TARGET_TENANT_ID:
+        body["tenantId"] = TARGET_TENANT_ID
+    _, job = gateway.post_json("/bulk-loader/bulk-jobs", body)
     job_id = job["id"]
     print(f"  job {job_id} created ({domain_type}, {data_rows} rows)")
 
@@ -338,10 +382,34 @@ def main():
                         help="Create the --location-code location from locations.csv when the roster lacks it")
     parser.add_argument("--only", action="append", default=None, metavar="PACK_FILE",
                         help="Run only these pack files (repeatable, e.g. customer/person-customers.csv)")
+    parser.add_argument("--tenant-id", default=os.environ.get("SEED_TENANT_ID"),
+                        help="Tenant every job loads into (ADR-0062; default: $SEED_TENANT_ID, else the token's "
+                             "tid claim). Must be the token's own tenant: the loader's upload, process and status "
+                             "endpoints are scoped to the token's tenant, so a job created elsewhere could not be "
+                             "continued. A PLATFORM_ADMIN token with the platform tenant "
+                             "01900000-0000-7000-8000-000000000000 makes security/roles.csv the role template.")
     parser.add_argument("--poll-timeout", type=int, default=600,
                         help="Seconds to wait for each job to finish (default: 600)")
     parser.add_argument("--dry-run", action="store_true", help="List planned actions without calling the gateway")
     args = parser.parse_args()
+
+    global TARGET_TENANT_ID
+    if args.tenant_id:
+        try:
+            TARGET_TENANT_ID = str(uuid.UUID(args.tenant_id))
+        except ValueError:
+            parser.error(f"--tenant-id is not a UUID: {args.tenant_id}")
+    token_tenant = token_tenant_id(args.token) if args.token else None
+    if TARGET_TENANT_ID is None:
+        TARGET_TENANT_ID = token_tenant
+    elif token_tenant is not None and token_tenant != TARGET_TENANT_ID:
+        # The loader creates the job in the target tenant, but upload, process and status are
+        # tenant-scoped reads under the token's tenant: a job created elsewhere is invisible to
+        # the calls that follow. Refuse up front rather than fail after the first job is created.
+        parser.error(
+            f"--tenant-id {TARGET_TENANT_ID} is not the token's tenant (tid {token_tenant}); the bulk loader's "
+            "job endpoints are scoped to the token's tenant, so use a token of the target tenant (a tenant "
+            "administrator, or a PLATFORM_ADMIN token for the platform tenant)")
 
     selected = [(p, d) for p, d in PACK_FILES if args.only is None or p in args.only]
     if args.only:
@@ -351,8 +419,22 @@ def main():
     if not selected:
         parser.error("nothing selected")
 
+    if TARGET_TENANT_ID == PLATFORM_TENANT_ID:
+        # The platform tenant holds the role template and nothing else: no locations to resolve a
+        # code against, and no owning service expects its rows there.
+        not_platform = [p for p, _ in selected if p not in PLATFORM_PACK_FILES]
+        if not_platform:
+            parser.error("only the role template loads into the platform tenant "
+                         f"({', '.join(sorted(PLATFORM_PACK_FILES))}); use --only. Not platform data: "
+                         f"{', '.join(not_platform)}")
+        if not args.location_id:
+            parser.error("the platform tenant has no locations to resolve --location-code against; pass "
+                         "--location-id explicitly (the role ingest carries the id along and ignores it, so the "
+                         "nil UUID 00000000-0000-0000-0000-000000000000 will do)")
+
     if args.dry_run:
-        print(f"dry-run against {args.gateway}; location code {args.location_id or args.location_code}")
+        print(f"dry-run against {args.gateway}; location code {args.location_id or args.location_code}; "
+              f"tenant {TARGET_TENANT_ID or '(loader default)'}")
         for path, domain in selected:
             print(f"  would load {path} as {domain}")
         return 0

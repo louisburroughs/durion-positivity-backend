@@ -23,6 +23,7 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -43,6 +44,15 @@ class TenantProvisioningIT extends PostgresTenancyTestBase {
             "SHOP_MANAGER",
             "SUPPORT",
             "SYSTEM_ADMINISTRATOR");
+
+    /**
+     * Grants {@code R__seed_tenant_template.sql} gives PLATFORM_ADMIN: the eleven {@code platform:*}
+     * families of ADR-0062 §7 (including {@code platform:tenant:impersonate}, WS2b-4), plus the four
+     * the platform operator needs to load the role template through pos-bulk-loader (plan WS8). The
+     * seed's own section-4 guard counts the same number; {@code PlatformOperatorGrantsTest} in
+     * pos-bulk-loader pins which four the loader's endpoints require.
+     */
+    private static final int PLATFORM_ADMIN_GRANTS = 15;
 
     @Autowired
     private RoleTemplateService roleTemplateService;
@@ -90,8 +100,9 @@ class TenantProvisioningIT extends PostgresTenancyTestBase {
                          WHERE r.tenant_id = ? AND r.name = 'PLATFORM_ADMIN'
                         """, Integer.class, PlatformTenant.ID))
                 .as("platform:account:{create,read,update}, platform:tenant:{create,decommission,impersonate,"
-                        + "provision,reactivate,read,suspend,update}")
-                .isEqualTo(11);
+                        + "provision,reactivate,read,suspend,update}, bulkImport:{status:read,upload:execute},"
+                        + " security:role:{create,edit}")
+                .isEqualTo(PLATFORM_ADMIN_GRANTS);
         assertThat(owner.queryForObject("""
                         SELECT count(*) FROM role_assignments ra
                           JOIN users u ON u.id = ra.user_id JOIN roles r ON r.id = ra.role_id
@@ -149,5 +160,48 @@ class TenantProvisioningIT extends PostgresTenancyTestBase {
                                 "SELECT count(*) FROM users WHERE username = ?", Integer.class, email))
                         .as("alpha did not receive the administrator")
                         .isZero());
+    }
+
+    /**
+     * Role names are one name per tenant whatever their casing (ADR-0062 §6, plan WS8). The
+     * database says so — {@code roles_tenant_lower_name_key} — and provisioning agrees, so a
+     * tenant that already carries {@code admin} is not given a second ADMIN it could never store.
+     */
+    @Test
+    void aDifferentlyCasedRoleIsTheSameRoleToTheSchemaAndToProvisioning() {
+        UUID tenant = UUID.randomUUID();
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        owner.update(
+                "INSERT INTO roles (tenant_id, id, name, description, created_at, created_by) "
+                        + "VALUES (?, ?, 'admin', 'hand-made, lower case', NOW(), 'it')",
+                tenant,
+                UUID.randomUUID());
+
+        assertThatThrownBy(() -> owner.update(
+                        "INSERT INTO roles (tenant_id, id, name, description, created_at, created_by) "
+                                + "VALUES (?, ?, 'ADMIN', 'the same role, shouted', NOW(), 'it')",
+                        tenant,
+                        UUID.randomUUID()))
+                .as("UNIQUE (tenant_id, lower(name)) refuses the second casing")
+                .isInstanceOf(DuplicateKeyException.class);
+
+        assertThat(owner.queryForObject(
+                        "SELECT count(*) FROM roles WHERE tenant_id = ? AND name = 'ADMIN'", Integer.class, TENANT_A))
+                .as("the same name in another tenant is untouched: the index leads with tenant_id")
+                .isEqualTo(1);
+
+        List<RoleTemplateEntry> template = asTenant(PlatformTenant.ID, roleTemplateService::snapshot);
+        String email = "owner-" + UUID.randomUUID() + "@acme.example";
+        TenantProvisioningService.Outcome outcome =
+                asTenant(tenant, () -> provisioningService.provision(tenant, email, template));
+
+        assertThat(outcome.rolesCreated())
+                .as("ADMIN was already there under another casing, so only the other five are created")
+                .isEqualTo(FLOOR.size() - 1);
+        assertThat(owner.queryForObject(
+                        "SELECT count(*) FROM roles WHERE tenant_id = ? AND lower(name) = 'admin'",
+                        Integer.class,
+                        tenant))
+                .isEqualTo(1);
     }
 }

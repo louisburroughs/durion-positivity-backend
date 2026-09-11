@@ -647,7 +647,8 @@ public class GlobalExceptionHandler {
 
     /**
      * Handles TenantNotFoundException: a platform operation named a tenant the {@code ext_tenant}
-     * replica does not hold (ADR-0062 §7, WS2b-4).
+     * replica does not hold (ADR-0062 §7; both the WS2b-4 impersonation and the WS8 role-template
+     * reconciliation paths raise it).
      *
      * <p>
      * <b>HTTP Status:</b> 404 Not Found (TENANT_NOT_FOUND)

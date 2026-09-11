@@ -2,7 +2,10 @@ package com.positivity.bulkloader.internal.service;
 
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.DomainType;
+import com.positivity.bulkloader.internal.security.GatewayCallerHeaders;
+import com.positivity.tenancy.TenantContext;
 import java.util.Map;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -62,18 +65,37 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
             throw new IllegalArgumentException("Bulk load job must include an operatorId before launch");
         }
 
+        // The tenant the run is bound to (ADR-0062, plan WS8), recorded with the batch metadata so
+        // an execution can be traced to its tenant. The binding itself is the caller's: the job is
+        // launched inside TenantContext.runAs(job tenant), and the writers read the context, not
+        // this parameter. Non-identifying, like the other descriptive parameters here.
+        UUID tenantId = TenantContext.current().orElse(null);
+        if (tenantId == null) {
+            log.warn("Bulk load job {} launched with no tenant bound (ADR-0062)", job.getId());
+        }
         try {
             bulkLoadAuthorizationContext.setAuthorizationHeader(authorizationHeader);
-            jobOperator.start(
-                    resolveJob(job.getDomainType()),
-                    new JobParametersBuilder()
-                            .addString("jobId", job.getId().toString())
-                            .addString("storagePath", job.getOriginalFilePath())
-                            .addString("locationId", job.getLocationId().toString())
-                            .addString("operatorId", job.getOperatorId())
-                            .addLong("launchEpochMillis", System.currentTimeMillis())
-                            .toJobParameters());
-            log.info("Launched batch job for bulk load job {} domain {}", job.getId(), job.getDomainType());
+            // The caller's gateway authorities, captured here for the same reason the token is:
+            // this runs on the HTTP thread, and the writers and resolvers that need them run on
+            // whatever thread the batch gives them. Without these a direct sibling call carries a
+            // bearer token nothing downstream authenticates with, and every protected endpoint
+            // answers 401 (see GatewayCallerHeaders).
+            bulkLoadAuthorizationContext.setGatewayHeaders(GatewayCallerHeaders.fromCurrentRequest());
+            JobParametersBuilder parameters = new JobParametersBuilder()
+                    .addString("jobId", job.getId().toString())
+                    .addString("storagePath", job.getOriginalFilePath())
+                    .addString("locationId", job.getLocationId().toString())
+                    .addString("operatorId", job.getOperatorId())
+                    .addLong("launchEpochMillis", System.currentTimeMillis());
+            if (tenantId != null) {
+                parameters.addString("tenantId", tenantId.toString(), false);
+            }
+            jobOperator.start(resolveJob(job.getDomainType()), parameters.toJobParameters());
+            log.info(
+                    "Launched batch job for bulk load job {} domain {} in tenant {}",
+                    job.getId(),
+                    job.getDomainType(),
+                    tenantId);
         } catch (JobExecutionAlreadyRunningException
                 | JobRestartException
                 | JobInstanceAlreadyCompleteException

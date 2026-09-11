@@ -4,6 +4,9 @@ import com.positivity.bulkloader.internal.entity.TusUpload;
 import com.positivity.bulkloader.internal.exception.TusOffsetConflictException;
 import com.positivity.bulkloader.internal.exception.TusUploadExpiredException;
 import com.positivity.bulkloader.internal.repository.TusUploadRepository;
+import com.positivity.tenancy.PlatformTenant;
+import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.TenantIterator;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -15,15 +18,19 @@ import java.nio.file.StandardOpenOption;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @Slf4j
@@ -35,19 +42,25 @@ public class TusUploadServiceImpl implements TusUploadService {
     private final Path tusRoot;
     private final int expiryHours;
     private final Clock clock;
+    private final TenantIterator tenantIterator;
+    private final TransactionTemplate transactionTemplate;
 
     public TusUploadServiceImpl(
             TusUploadRepository tusUploadRepository,
             BulkLoadJobService bulkLoadJobService,
             @Value("${bulk-loader.storage.local-root:/tmp/bulk-loader}") String storageRootPath,
             @Value("${bulk-loader.tus.expiry-hours:24}") int expiryHours,
-            Clock clock) {
+            Clock clock,
+            TenantIterator tenantIterator,
+            PlatformTransactionManager transactionManager) {
         this.tusUploadRepository = tusUploadRepository;
         this.bulkLoadJobService = bulkLoadJobService;
         this.storageRoot = Paths.get(storageRootPath);
         this.tusRoot = this.storageRoot.resolve(".tus");
         this.expiryHours = expiryHours;
         this.clock = clock;
+        this.tenantIterator = tenantIterator;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
         try {
             Files.createDirectories(this.tusRoot);
         } catch (IOException e) {
@@ -132,21 +145,54 @@ public class TusUploadServiceImpl implements TusUploadService {
         log.info("TUS upload deleted: id={}", uploadId);
     }
 
+    /**
+     * Per-tenant sweep (ADR-0062 §3): {@code tus_upload} is tenant-scoped, so the expired rows are
+     * visible only under their tenant's binding. Each tenant's transaction opens inside the
+     * binding ({@link TransactionTemplate}, not {@code @Transactional}: a transaction begun before
+     * the iterator binds would run unbound and see nothing). The platform tenant is visited as
+     * well: no registry lists it as active, yet platform loads (the role template's {@code
+     * roles.csv}) leave uploads there like any other job.
+     */
     @Scheduled(fixedDelayString = "${bulk-loader.tus.cleanup-interval-ms:3600000}")
-    @Transactional
     public void cleanupExpiredUploads() {
-        List<TusUpload> expired = tusUploadRepository.findByExpiresAtBeforeAndCompletedFalse(Instant.now(clock));
+        Set<UUID> visited = new HashSet<>();
+        tenantIterator.forEachActiveTenant(tenantId -> {
+            visited.add(tenantId);
+            cleanupExpiredUploadsOfBoundTenant();
+        });
+        if (!visited.contains(PlatformTenant.ID)) {
+            TenantContext.runAs(PlatformTenant.ID, this::cleanupExpiredUploadsOfBoundTenant);
+        }
+    }
+
+    /**
+     * Reads the tenant's expired uploads in one transaction, then deletes each in its own separate
+     * transaction (Copilot review of PR #1955, fourth round). A single transaction shared across
+     * the whole sweep does not give "one failure does not strand the rest" in a real database: when
+     * {@code tusUploadRepository.delete(upload)} throws — a foreign key or optimistic-lock failure
+     * on one row — Hibernate/Spring marks that transaction rollback-only, so every delete already
+     * done earlier in the same loop is undone at commit instead of kept, even though the {@code
+     * catch} below looks like it isolated the failure. Giving each deletion its own {@link
+     * TransactionTemplate} call means a failed row's rollback is scoped to that row alone.
+     */
+    void cleanupExpiredUploadsOfBoundTenant() {
+        List<TusUpload> expired = transactionTemplate.execute(
+                status -> tusUploadRepository.findByExpiresAtBeforeAndCompletedFalse(Instant.now(clock)));
+        int cleaned = 0;
         for (TusUpload upload : expired) {
             try {
-                deleteTempFile(upload.getId());
-                tusUploadRepository.delete(upload);
+                transactionTemplate.executeWithoutResult(status -> {
+                    deleteTempFile(upload.getId());
+                    tusUploadRepository.delete(upload);
+                });
                 log.info("Cleaned up expired TUS upload: id={} jobId={}", upload.getId(), upload.getJobId());
+                cleaned++;
             } catch (Exception e) {
                 log.warn("Failed to clean up expired TUS upload {}: {}", upload.getId(), e.getMessage());
             }
         }
-        if (!expired.isEmpty()) {
-            log.info("TUS cleanup complete: {} expired uploads removed", expired.size());
+        if (cleaned > 0) {
+            log.info("TUS cleanup complete: {} expired uploads removed", cleaned);
         }
     }
 

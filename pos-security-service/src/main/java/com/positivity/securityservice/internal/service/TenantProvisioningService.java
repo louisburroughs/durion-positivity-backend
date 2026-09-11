@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.service;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.tenant.TenantProvisionedV1;
 import com.positivity.securityservice.internal.config.OutboxEventWriter;
+import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
@@ -30,7 +31,9 @@ import org.springframework.transaction.annotation.Transactional;
  * ({@code TenantContext.runAs(tenantId, ...)}); every row written here is that tenant's under
  * row-level security. Idempotent on tenant: a role or user that already exists is left alone, so a
  * redelivered event or a retry after a partial failure converges. The answer is emitted on every
- * successful run, and pos-tenant's handler is idempotent on tenant id.
+ * successful run, and pos-tenant's handler is idempotent on tenant id. Bringing an already
+ * provisioned tenant up to a template that has since grown is {@link
+ * RoleTemplateReconciliationService} (plan WS8), which shares {@link RoleTemplateApplier}.
  *
  * <p>The administrator is created awaiting activation (plan WS2b-3, decided 2026-09-10): the
  * password is generated and discarded (never returned, logged or persisted in plaintext) and the
@@ -92,23 +95,55 @@ public class TenantProvisioningService {
         if (!tenantId.equals(TenantContext.require())) {
             throw new IllegalStateException("Provisioning of tenant " + tenantId + " must run under its own binding");
         }
-        if (template.stream().noneMatch(entry -> INITIAL_ADMIN_ROLE.equals(entry.name()))) {
+        // Case-insensitively, the same convention the convergence loop below and
+        // RoleTemplateReconciliationService both use: a template entry is the same role by name
+        // regardless of case (ADR-0062 section 6, plan WS8), and this guard must recognise exactly
+        // the entry the loop below would. An exact comparison here rejected a template whose ADMIN
+        // entry was provisioned under a different case (`roles.csv` resolves names case-insensitively
+        // too) before the convergence logic that does tolerate it ever ran.
+        if (template.stream().noneMatch(entry -> INITIAL_ADMIN_ROLE.equalsIgnoreCase(entry.name()))) {
             throw new IllegalStateException("The platform role template has no " + INITIAL_ADMIN_ROLE
                     + " role; nothing to give the administrator");
         }
 
         int created = 0;
         for (RoleTemplateEntry entry : template) {
-            if (roleRepository.existsByName(entry.name())) {
+            // Case-insensitively, the same uniqueness createRole enforces and the same lookup
+            // RoleTemplateReconciliationService uses (ADR-0062 section 6, plan WS8): a tenant that
+            // already carries `admin` must not be given a second ADMIN, which the (tenant_id,
+            // lower(name)) index in the baseline would refuse anyway -- failing provisioning
+            // outright rather than converging on a redelivered tenant.created.
+            if (roleRepository.existsByNameIgnoreCase(entry.name())) {
                 continue;
             }
-            roleRepository.save(fromTemplate(entry));
+            Instant now = Instant.now(clock);
+            Role saved = roleRepository.save(RoleTemplateApplier.fromTemplate(entry, permissionRepository, now, ACTOR));
+            // RoleTemplateApplier.fromTemplate attaches the entry's grants through the plain
+            // @ManyToMany join, which leaves role_permissions.granted_by NULL; recordGrantProvenance
+            // is what stamps it, mirroring RoleTemplateReconciliationService.BoundOperations.apply's
+            // create branch -- without this call a freshly provisioned tenant's grants were
+            // unattributed while every grant reconciliation later added to the same role was not
+            // (Copilot review of PR #1955, suppressed finding b).
+            if (!saved.getPermissions().isEmpty()) {
+                roleRepository.recordGrantProvenance(
+                        saved.getId(),
+                        saved.getPermissions().stream().map(Permission::getId).toList(),
+                        ACTOR,
+                        now);
+            }
             created++;
         }
 
         boolean administratorCreated = false;
         if (!userRepository.existsByUsername(initialAdminEmail)) {
-            userService.createUserAwaitingActivation(initialAdminEmail, Set.of(INITIAL_ADMIN_ROLE));
+            // The guard above is case-insensitive, so a tenant that already carried `admin` keeps
+            // that row and no ADMIN was created; the administrator must be given the name actually
+            // stored, because role resolution on the user path matches exactly.
+            String adminRole = roleRepository
+                    .findByNameIgnoreCase(INITIAL_ADMIN_ROLE)
+                    .map(Role::getName)
+                    .orElse(INITIAL_ADMIN_ROLE);
+            userService.createUserAwaitingActivation(initialAdminEmail, Set.of(adminRole));
             administratorCreated = true;
         }
 
@@ -120,35 +155,6 @@ public class TenantProvisioningService {
                 initialAdminEmail,
                 administratorCreated ? "created" : "already present");
         return new Outcome(created, administratorCreated);
-    }
-
-    private Role fromTemplate(RoleTemplateEntry entry) {
-        Role role = new Role();
-        role.setName(entry.name());
-        role.setDescription(entry.description());
-        role.setTemplateKey(entry.templateKey());
-        role.setPersonaTitle(entry.personaTitle());
-        role.setPersonaFocus(entry.personaFocus());
-        role.setPersonaTone(entry.personaTone());
-        role.setMcpPersonaRank(entry.mcpPersonaRank());
-        role.setMcpPersonaEligible(entry.mcpPersonaEligible());
-        role.setLocationScope(entry.locationScope());
-        role.setLocationHierarchy(entry.locationHierarchy());
-        role.setCreatedAt(Instant.now(clock));
-        role.setCreatedBy(ACTOR);
-        for (String permissionName : entry.permissionNames()) {
-            // The catalog is global (ADR-0062 §6), so a name that does not resolve is a template
-            // ahead of the registered catalog, not a tenant problem: skip it and say so.
-            permissionRepository
-                    .findByName(permissionName)
-                    .ifPresentOrElse(
-                            role.getPermissions()::add,
-                            () -> log.warn(
-                                    "Template role {} grants unknown permission {}; skipped",
-                                    entry.name(),
-                                    permissionName));
-        }
-        return role;
     }
 
     private void emitProvisioned(UUID tenantId) {

@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,9 +15,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.securityservice.internal.dto.RoleCreateRequest;
 import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import com.positivity.securityservice.internal.service.CustomUserDetailsService;
 import com.positivity.securityservice.internal.service.RoleManagementService;
+import com.positivity.tenancy.PlatformTenant;
+import com.positivity.tenancy.TenantContext;
 import jakarta.servlet.FilterChain;
 import java.time.Clock;
 import java.time.Instant;
@@ -120,6 +124,28 @@ class RoleBulkIngestControllerTest {
                 .isEqualTo((short) 35);
     }
 
+    /** ADR-0062 §6 (WS8): a batch loaded under the platform tenant is the role template itself. */
+    @Test
+    void roles_loadedIntoThePlatformTenant_joinTheTemplate() throws Exception {
+        when(roleManagementService.provisionTemplateRole(any(RoleCreateRequest.class)))
+                .thenReturn(role("SHOP_MANAGER"));
+
+        try {
+            TenantContext.bind(PlatformTenant.ID);
+            mockMvc.perform(post("/v1/roles/bulk-ingest")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(ROLES_BODY)
+                            .with(user("admin.platform").authorities(() -> "security:role:create")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.successCount").value(1));
+        } finally {
+            TenantContext.clear();
+        }
+
+        verify(roleManagementService).provisionTemplateRole(any(RoleCreateRequest.class));
+        verify(roleManagementService, org.mockito.Mockito.never()).createRole(any(RoleCreateRequest.class));
+    }
+
     @Test
     void roles_alreadyProvisionedCountAsSuccess_soARerunIsClean() throws Exception {
         when(roleManagementService.createRole(any(RoleCreateRequest.class)))
@@ -188,6 +214,37 @@ class RoleBulkIngestControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.failureCount").value(1))
                 .andExpect(jsonPath("$.results[0].errorCode").value("ROLE_PERMISSION_ROLE_UNKNOWN"));
+    }
+
+    /**
+     * Copilot review of PR #1955, fourth round (Finding 2): {@code PlatformGrantGuard} refuses a
+     * {@code platform:*} grant to anything but {@code PLATFORM_ADMIN} in the platform tenant by
+     * throwing {@code SecurityValidationException} — the caller's own grant file named a forbidden
+     * permission, so it belongs in this controller's row-rejection classification ({@code
+     * ROLE_PERMISSION_INGEST_FAILED}), not in the generic {@code INTERNAL_ERROR} fallback for a
+     * server-side fault. {@code RoleBulkIngestController} already classified the same exception
+     * correctly; this controller has its own, separate {@code ROW_REJECTION_TYPES} list.
+     */
+    @Test
+    void grants_forAForbiddenPlatformGrantFailWithTheRowRejectionCode_notInternalError() throws Exception {
+        when(roleManagementService.getAllRoles()).thenReturn(List.of(role("SHOP_MANAGER")));
+        doThrow(new SecurityValidationException("Permission platform:tenant:manage is a platform:* permission"
+                        + " (ADR-0062 section 7) and may be granted only to PLATFORM_ADMIN in the platform"
+                        + " tenant."))
+                .when(roleManagementService)
+                .assignPermissionToRole(eq(ROLE_ID), eq("platform:tenant:manage"));
+
+        mockMvc.perform(post("/v1/roles/permissions/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"jobId":"01990000-0000-7000-8000-0000000000a0",
+                                 "locationId":"01990000-0000-7000-8000-0000000000a1",
+                                 "operatorId":"seed-operator",
+                                 "records":[{"roleName":"SHOP_MANAGER","permissions":["platform:tenant:manage"]}]}""")
+                        .with(user("admin-user").authorities(() -> "security:role:edit")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("ROLE_PERMISSION_INGEST_FAILED"));
     }
 
     @Test

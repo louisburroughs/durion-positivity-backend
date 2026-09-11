@@ -171,6 +171,9 @@ class FileUploadProcessEndToEndTest {
         verify(requestBodySpec, timeout(2000)).header(GatewaySecurityConstants.HEADER_TOKEN, "token-e2e");
         verify(requestBodySpec, timeout(2000)).header("X-Authorities", "catalog:product:create");
         verify(requestBodySpec, timeout(2000)).header("X-User", "test-operator");
+        // ADR-0062 (WS8): the run is bound to the job's tenant (here the transitional default of
+        // application.yml, since no request header binds one) and every sibling call carries it.
+        verify(requestBodySpec, timeout(2000)).header("X-Tenant-Id", "01900000-0000-7000-8000-000000000001");
 
         ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
         verify(requestBodySpec, timeout(2000)).body(bodyCaptor.capture());

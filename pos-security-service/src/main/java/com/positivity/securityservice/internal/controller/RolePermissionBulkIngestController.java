@@ -10,6 +10,7 @@ import com.positivity.securityservice.internal.dto.RoleDto;
 import com.positivity.securityservice.internal.dto.RolePermissionBulkIngestRecord;
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.security.SecurityPermissions;
 import com.positivity.securityservice.internal.service.RoleManagementService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -65,13 +66,24 @@ public class RolePermissionBulkIngestController extends AbstractBulkIngestContro
      * not been registered yet, which is exactly what the operator needs told. Anything else is a
      * server-side fault and is reported as one (issue #1718).
      *
+     * <p>Also includes {@link SecurityValidationException}: {@code
+     * RoleManagementServiceImpl.assignPermissionToRole} refuses a {@code platform:*} grant to any
+     * role but {@code PLATFORM_ADMIN} in the platform tenant (ADR-0062 §7's {@code
+     * PlatformGrantGuard}) by throwing it, and that refusal is the caller's own grant file naming a
+     * forbidden permission — a row rejection, not a server fault. Without it here the guard's
+     * refusal fell through to the {@code serverFaults} branch below and reported {@code
+     * INTERNAL_ERROR} with a correlation id instead of the documented {@code
+     * ROLE_PERMISSION_INGEST_FAILED} (Copilot review of PR #1955, fourth round); {@link
+     * RoleBulkIngestController#rowRejectionTypes} already classified it correctly, but that is a
+     * different controller with its own list.
+     *
      * <p>This controller classifies per grant rather than per row, so it calls
      * {@link BulkIngestFailures} directly instead of overriding
      * {@code AbstractBulkIngestController#rowRejectionTypes}: a row here carries a role's whole
      * grant set, and one bad permission in it must not decide the whole row's verdict.
      */
     private static final List<Class<? extends Throwable>> ROW_REJECTION_TYPES =
-            List.of(PermissionNotFoundException.class, RoleNotFoundException.class);
+            List.of(PermissionNotFoundException.class, RoleNotFoundException.class, SecurityValidationException.class);
 
     private static final String UNKNOWN_ROLE = "ROLE_PERMISSION_ROLE_UNKNOWN";
 

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.DomainType;
+import com.positivity.tenancy.TenantContext;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -122,6 +123,51 @@ class SpringBatchBulkLoadLauncherTest {
         assertThat(jobParameters.getString("operatorId")).isEqualTo("operator-vehicle");
         assertThat(jobParameters.getLong("launchEpochMillis")).isNotNull();
         assertThat(bulkLoadAuthorizationContext.getAuthorizationHeader()).isNull();
+    }
+
+    /** ADR-0062 (WS8): the launch is made inside the job tenant's binding; the batch metadata records it. */
+    @Test
+    void launch_whenATenantIsBound_recordsItAsANonIdentifyingParameter() throws Exception {
+        SpringBatchBulkLoadLauncher launcher = launcher();
+        BulkLoadJob job = new BulkLoadJob();
+        job.setId(UUID.fromString("00000000-0000-0000-0000-000000000024"));
+        job.setDomainType(DomainType.VEHICLE);
+        job.setOriginalFilePath("00000000-0000-0000-0000-000000000024/vehicles.csv");
+        job.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000031"));
+        job.setOperatorId("operator-vehicle");
+        UUID tenantId = UUID.fromString("01900000-0000-7000-8000-000000000001");
+        when(jobOperator.start(any(Job.class), any(JobParameters.class))).thenReturn(jobExecution);
+
+        try {
+            TenantContext.bind(tenantId);
+            launcher.launch(job, "Bearer token-vehicle");
+        } finally {
+            TenantContext.clear();
+        }
+
+        ArgumentCaptor<JobParameters> parametersCaptor = ArgumentCaptor.forClass(JobParameters.class);
+        verify(jobOperator).start(org.mockito.Mockito.same(vehicleBulkLoadJob), parametersCaptor.capture());
+        JobParameters jobParameters = parametersCaptor.getValue();
+        assertThat(jobParameters.getString("tenantId")).isEqualTo(tenantId.toString());
+        assertThat(jobParameters.getParameter("tenantId").identifying()).isFalse();
+    }
+
+    @Test
+    void launch_whenNoTenantIsBound_omitsTheParameter() throws Exception {
+        SpringBatchBulkLoadLauncher launcher = launcher();
+        BulkLoadJob job = new BulkLoadJob();
+        job.setId(UUID.fromString("00000000-0000-0000-0000-000000000025"));
+        job.setDomainType(DomainType.VEHICLE);
+        job.setOriginalFilePath("00000000-0000-0000-0000-000000000025/vehicles.csv");
+        job.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000031"));
+        job.setOperatorId("operator-vehicle");
+        when(jobOperator.start(any(Job.class), any(JobParameters.class))).thenReturn(jobExecution);
+
+        launcher.launch(job, null);
+
+        ArgumentCaptor<JobParameters> parametersCaptor = ArgumentCaptor.forClass(JobParameters.class);
+        verify(jobOperator).start(any(Job.class), parametersCaptor.capture());
+        assertThat(parametersCaptor.getValue().getString("tenantId")).isNull();
     }
 
     @Test

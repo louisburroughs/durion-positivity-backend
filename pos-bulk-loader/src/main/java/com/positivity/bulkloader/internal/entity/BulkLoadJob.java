@@ -3,6 +3,7 @@ package com.positivity.bulkloader.internal.entity;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.enums.JobStatus;
 import com.positivity.shared.id.UUIDv7Id;
+import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -21,13 +22,19 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+/**
+ * One bulk-load job. Tenant-scoped (ADR-0062, plan WS8): the row is created under the job's target
+ * tenant, so the tenant a job loads into is its {@code tenant_id}, stamped by Hibernate from the
+ * binding {@code BulkLoadJobServiceImpl} establishes for the create; every audit, mapping and
+ * upload row of the job carries the same tenant through the composite foreign key.
+ */
 @Entity
 @Table(name = "bulk_load_job")
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
 @NoArgsConstructor
-public class BulkLoadJob {
+public class BulkLoadJob extends TenantScopedEntity {
 
     @Id
     @GeneratedValue
