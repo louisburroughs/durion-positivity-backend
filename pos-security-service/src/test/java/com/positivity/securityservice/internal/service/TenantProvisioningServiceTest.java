@@ -29,6 +29,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -56,6 +57,14 @@ class TenantProvisioningServiceTest {
             outboxProvider,
             Clock.fixed(NOW, ZoneOffset.UTC),
             "tenant.events.v1");
+
+    @BeforeEach
+    void echoSavedRoleBack() {
+        // recordGrantProvenance (added for suppressed finding b, Copilot review of PR #1955) reads
+        // the saved role back from roleRepository.save's return value, the same convention
+        // RoleTemplateReconciliationServiceTest's platformCaller() establishes.
+        when(roles.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    }
 
     @AfterEach
     void clear() {
@@ -282,5 +291,39 @@ class TenantProvisioningServiceTest {
 
         verify(roles).save(any(Role.class));
         verify(userService).createUserAwaitingActivation("owner@acme.example", Set.of("ADMIN"));
+    }
+
+    /**
+     * Suppressed finding b, Copilot review of PR #1955: {@code RoleTemplateApplier.fromTemplate}
+     * attaches the entry's grants through the plain {@code @ManyToMany} join, which leaves {@code
+     * role_permissions.granted_by} {@code NULL}; only {@code recordGrantProvenance} stamps it. Before
+     * this fix that call was missing here while {@code RoleTemplateReconciliationService}'s own
+     * create branch already made it (see {@code copiesMissingRoles} in
+     * {@code RoleTemplateReconciliationServiceTest}), so a freshly provisioned tenant's grants were
+     * unattributed while a grant reconciliation later added to the same role was not.
+     */
+    @Test
+    @DisplayName("a freshly created role's grants are stamped with recordGrantProvenance, like reconciliation's are")
+    void provisioningStampsGrantProvenanceOnNewRoles() {
+        when(outboxProvider.getIfAvailable()).thenReturn(outbox);
+        when(roles.existsByNameIgnoreCase(anyString())).thenReturn(false);
+        when(permissions.findByName("security:role:view")).thenReturn(Optional.of(permission("security:role:view")));
+        when(permissions.findByName("order:order:view")).thenReturn(Optional.of(permission("order:order:view")));
+        when(users.existsByUsername("owner@acme.example")).thenReturn(false);
+
+        TenantContext.bind(TENANT);
+        service.provision(
+                TENANT,
+                "owner@acme.example",
+                List.of(entry("ADMIN", "security:role:view", "order:order:view"), entry("DISPATCHER")));
+
+        ArgumentCaptor<List<UUID>> grantedIds = ArgumentCaptor.captor();
+        verify(roles).recordGrantProvenance(any(), grantedIds.capture(), eq(TenantProvisioningService.ACTOR), eq(NOW));
+        assertThat(grantedIds.getValue())
+                .as("both of ADMIN's grants are stamped")
+                .hasSize(2);
+        // DISPATCHER carries no grants: nothing to stamp, and stamping an empty list would be a
+        // pointless write.
+        verify(roles, org.mockito.Mockito.times(1)).recordGrantProvenance(any(), any(), any(), any());
     }
 }

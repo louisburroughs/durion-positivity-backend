@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.service;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.tenant.TenantProvisionedV1;
 import com.positivity.securityservice.internal.config.OutboxEventWriter;
+import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
@@ -115,8 +116,21 @@ public class TenantProvisioningService {
             if (roleRepository.existsByNameIgnoreCase(entry.name())) {
                 continue;
             }
-            roleRepository.save(
-                    RoleTemplateApplier.fromTemplate(entry, permissionRepository, Instant.now(clock), ACTOR));
+            Instant now = Instant.now(clock);
+            Role saved = roleRepository.save(RoleTemplateApplier.fromTemplate(entry, permissionRepository, now, ACTOR));
+            // RoleTemplateApplier.fromTemplate attaches the entry's grants through the plain
+            // @ManyToMany join, which leaves role_permissions.granted_by NULL; recordGrantProvenance
+            // is what stamps it, mirroring RoleTemplateReconciliationService.BoundOperations.apply's
+            // create branch -- without this call a freshly provisioned tenant's grants were
+            // unattributed while every grant reconciliation later added to the same role was not
+            // (Copilot review of PR #1955, suppressed finding b).
+            if (!saved.getPermissions().isEmpty()) {
+                roleRepository.recordGrantProvenance(
+                        saved.getId(),
+                        saved.getPermissions().stream().map(Permission::getId).toList(),
+                        ACTOR,
+                        now);
+            }
             created++;
         }
 
