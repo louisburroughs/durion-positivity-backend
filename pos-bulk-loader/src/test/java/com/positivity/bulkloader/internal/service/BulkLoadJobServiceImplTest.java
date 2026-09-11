@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.bulkloader.internal.dto.BulkLoadJobCreateRequest;
@@ -13,20 +14,28 @@ import com.positivity.bulkloader.internal.dto.BulkLoadJobResponse;
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.enums.JobStatus;
+import com.positivity.bulkloader.internal.exception.BulkLoadTenantException;
 import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.TenantContextMissingException;
+import com.positivity.tenancy.TenantResolver;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.transaction.PlatformTransactionManager;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings({"java:S100", "java:S1192"})
@@ -35,9 +44,8 @@ class BulkLoadJobServiceImplTest {
     private static final UUID JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String OPERATOR_ID = "operator-001";
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
-
-    @Spy
-    Clock clock = TEST_CLOCK;
+    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
+    private static final UUID OTHER_TENANT = UUID.fromString("01900000-0000-7000-8000-000000000002");
 
     @Mock
     BulkLoadJobRepository jobRepository;
@@ -45,28 +53,106 @@ class BulkLoadJobServiceImplTest {
     @Mock
     BulkLoadBatchLauncher bulkLoadBatchLauncher;
 
-    @InjectMocks
-    BulkLoadJobServiceImpl service;
+    /** A mock manager makes the TransactionTemplate a pass-through: getTransaction/commit are no-ops. */
+    @Mock
+    PlatformTransactionManager transactionManager;
+
+    @Mock
+    BulkLoadTenantBinding tenantBinding;
+
+    /** Strict: nothing resolves unless the test binds a tenant. */
+    private final TenancyProperties tenancyProperties = new TenancyProperties();
+
+    private BulkLoadJobServiceImpl service;
+
+    @BeforeEach
+    void setUp() {
+        service = new BulkLoadJobServiceImpl(
+                jobRepository,
+                bulkLoadBatchLauncher,
+                TEST_CLOCK,
+                transactionManager,
+                tenantBinding,
+                new TenantResolver(tenancyProperties));
+    }
+
+    @AfterEach
+    void clearTenant() {
+        TenantContext.clear();
+    }
 
     // ─── createJob ───────────────────────────────────────────────────────────
 
     @Test
-    void createJob_happyPath_savesAndReturnsResponse() {
+    void createJob_happyPath_savesUnderTheTargetTenantAndReturnsResponse() {
         BulkLoadJobCreateRequest request = new BulkLoadJobCreateRequest();
         request.setFileName("products.csv");
         request.setDomainType(DomainType.CATALOG_PRODUCT);
+        request.setTenantId(TENANT);
 
         BulkLoadJob saved = savedJob(JOB_ID, OPERATOR_ID, JobStatus.CREATED);
+        AtomicReference<Optional<UUID>> boundDuringSave = new AtomicReference<>();
 
+        when(tenantBinding.resolveTarget(TENANT)).thenReturn(TENANT);
         when(jobRepository.countByOperatorIdAndStatusIn(any(), any())).thenReturn(0L);
-        when(jobRepository.save(any(BulkLoadJob.class))).thenReturn(saved);
+        when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> {
+            boundDuringSave.set(TenantContext.current());
+            return saved;
+        });
 
         BulkLoadJobResponse response = service.createJob(request, OPERATOR_ID);
 
         assertThat(response.getId()).isEqualTo(JOB_ID);
         assertThat(response.getOperatorId()).isEqualTo(OPERATOR_ID);
         assertThat(response.getStatus()).isEqualTo(JobStatus.CREATED);
+        assertThat(boundDuringSave.get())
+                .as("the row is written under the target tenant, so Hibernate stamps it there")
+                .contains(TENANT);
+        assertThat(TenantContext.current())
+                .as("the binding is restored afterwards")
+                .isEmpty();
+        verify(transactionManager).getTransaction(any());
         verify(jobRepository).save(any(BulkLoadJob.class));
+    }
+
+    @Test
+    void createJob_whenTheCallerIsBoundElsewhere_restoresThatBindingAfterwards() {
+        BulkLoadJobCreateRequest request = new BulkLoadJobCreateRequest();
+        request.setFileName("products.csv");
+        request.setDomainType(DomainType.CATALOG_PRODUCT);
+        request.setTenantId(TENANT);
+        BulkLoadJob saved = savedJob(JOB_ID, OPERATOR_ID, JobStatus.CREATED);
+        AtomicReference<Optional<UUID>> boundDuringSave = new AtomicReference<>();
+
+        when(tenantBinding.resolveTarget(TENANT)).thenReturn(TENANT);
+        when(jobRepository.countByOperatorIdAndStatusIn(any(), any())).thenReturn(0L);
+        when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> {
+            boundDuringSave.set(TenantContext.current());
+            return saved;
+        });
+
+        // A platform operator: bound to the platform tenant by the gateway, loading into TENANT.
+        TenantContext.bind(OTHER_TENANT);
+        service.createJob(request, OPERATOR_ID);
+
+        assertThat(boundDuringSave.get()).contains(TENANT);
+        assertThat(TenantContext.current()).contains(OTHER_TENANT);
+    }
+
+    @Test
+    void createJob_whenTheTenantCannotBeBound_writesNothing() {
+        BulkLoadJobCreateRequest request = new BulkLoadJobCreateRequest();
+        request.setFileName("products.csv");
+        request.setDomainType(DomainType.CATALOG_PRODUCT);
+
+        when(tenantBinding.resolveTarget(null))
+                .thenThrow(new BulkLoadTenantException(
+                        BulkLoadTenantException.TENANT_REQUIRED, HttpStatus.BAD_REQUEST, "tenantId is required"));
+
+        assertThatThrownBy(() -> service.createJob(request, OPERATOR_ID))
+                .isInstanceOf(BulkLoadTenantException.class)
+                .hasMessageContaining("tenantId is required");
+        verifyNoInteractions(jobRepository, transactionManager);
     }
 
     @Test
@@ -74,7 +160,9 @@ class BulkLoadJobServiceImplTest {
         BulkLoadJobCreateRequest request = new BulkLoadJobCreateRequest();
         request.setFileName("products.csv");
         request.setDomainType(DomainType.CATALOG_PRODUCT);
+        request.setTenantId(TENANT);
 
+        when(tenantBinding.resolveTarget(TENANT)).thenReturn(TENANT);
         when(jobRepository.countByOperatorIdAndStatusIn(any(), any())).thenReturn(1L);
 
         assertThatThrownBy(() -> service.createJob(request, OPERATOR_ID))
@@ -98,6 +186,7 @@ class BulkLoadJobServiceImplTest {
 
     @Test
     void startProcessing_whenUploadedFileMissing_throwsIllegalState() {
+        TenantContext.bind(TENANT);
         BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.CREATED);
 
         when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
@@ -109,6 +198,7 @@ class BulkLoadJobServiceImplTest {
 
     @Test
     void startProcessing_whenUploadedFilePresent_transitionsToProcessing() {
+        TenantContext.bind(TENANT);
         BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.UPLOADING);
         job.setOriginalFilePath("00000000-0000-0000-0000-000000000001/products.csv");
         job.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
@@ -134,6 +224,7 @@ class BulkLoadJobServiceImplTest {
      */
     @Test
     void startProcessing_whenLaunchCompletesTheRun_leavesTheTerminalStatusIntact() {
+        TenantContext.bind(TENANT);
         BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.UPLOADING);
         job.setOriginalFilePath("00000000-0000-0000-0000-000000000001/products.csv");
         job.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
@@ -162,7 +253,60 @@ class BulkLoadJobServiceImplTest {
     }
 
     @Test
+    void startProcessing_runsTheLaunchUnderTheJobsTenant() {
+        TenantContext.bind(TENANT);
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.UPLOADING);
+        job.setOriginalFilePath("00000000-0000-0000-0000-000000000001/products.csv");
+        AtomicReference<Optional<UUID>> boundDuringLaunch = new AtomicReference<>();
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doAnswer(invocation -> {
+                    boundDuringLaunch.set(TenantContext.current());
+                    return null;
+                })
+                .when(bulkLoadBatchLauncher)
+                .launch(any(BulkLoadJob.class), nullable(String.class));
+
+        service.startProcessing(JOB_ID, OPERATOR_ID, "Bearer token-123");
+
+        assertThat(boundDuringLaunch.get())
+                .as("the whole batch runs inside TenantContext.runAs(job tenant)")
+                .contains(TENANT);
+        verify(transactionManager).getTransaction(any());
+    }
+
+    @Test
+    void startProcessing_whenNothingIsBoundAndNoDefaultApplies_failsBeforeTouchingTheJob() {
+        assertThatThrownBy(() -> service.startProcessing(JOB_ID, OPERATOR_ID, null))
+                .isInstanceOf(TenantContextMissingException.class);
+        verifyNoInteractions(jobRepository, bulkLoadBatchLauncher);
+    }
+
+    @Test
+    void startProcessing_whenNothingIsBoundButTheTransitionalDefaultApplies_runsAsTheDefault() {
+        tenancyProperties.setDefaultTenantId(OTHER_TENANT);
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.UPLOADING);
+        job.setOriginalFilePath("00000000-0000-0000-0000-000000000001/products.csv");
+        AtomicReference<Optional<UUID>> boundDuringLaunch = new AtomicReference<>();
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doAnswer(invocation -> {
+                    boundDuringLaunch.set(TenantContext.current());
+                    return null;
+                })
+                .when(bulkLoadBatchLauncher)
+                .launch(any(BulkLoadJob.class), nullable(String.class));
+
+        service.startProcessing(JOB_ID, OPERATOR_ID, null);
+
+        assertThat(boundDuringLaunch.get()).contains(OTHER_TENANT);
+    }
+
+    @Test
     void startProcessing_whenLocationIdMissing_throwsIllegalState() {
+        TenantContext.bind(TENANT);
         BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.UPLOADING);
         job.setOriginalFilePath("00000000-0000-0000-0000-000000000001/products.csv");
         job.setLocationId(null);

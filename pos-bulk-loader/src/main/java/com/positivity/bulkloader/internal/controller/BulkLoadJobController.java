@@ -58,14 +58,31 @@ public class BulkLoadJobController {
                     Required inputs: fileName (name of the source file that will be uploaded later) and domainType \
                     (one of CATALOG_PRODUCT, INVENTORY_STOCK_COUNT, LOCATION, CUSTOMER, COMMERCIAL_CUSTOMER, \
                     PERSON, BASE_PRICE, VEHICLE or VEHICLE_FITMENT); locationId (UUID) is optional at creation but \
-                    must be set before processing can start.
+                    must be set before processing can start; tenantId (UUID) names the tenant the job loads into \
+                    (ADR-0062): an active tenant of the cell, or the platform tenant for platform data such as the \
+                    role template's roles.csv. A caller bound to a tenant may only name its own; a platform-tenant \
+                    caller may name any. The job, its audit rows and every call to a sibling service are bound to \
+                    that tenant, and the job is visible afterwards only under that tenant's binding.
                     INVENTORY_STOCK_COUNT establishes opening on-hand stock: each line is filed and approved, so \
                     the token must carry inventory:adjustment:approve as well as inventory:adjustment:create.
                     Emits a BULK_LOADER_JOB_CREATE event; no file content is stored by this call.
-                    Returns 201 with the new job, and 409 when the operator already has an active bulk load job \
-                    in progress.
+                    Returns 201 with the new job; 400 with BULK_JOB_TENANT_REQUIRED when tenantId is omitted and \
+                    no transitional default tenant is configured (with the default, the job uses it and logs a \
+                    WARN); 400 with BULK_JOB_TENANT_UNKNOWN when the tenant is not active in this cell; 403 with \
+                    BULK_JOB_TENANT_FORBIDDEN when the caller may not load into it; and 409 when the operator \
+                    already has an active bulk load job in progress.
                     """)
     @ApiResponse(responseCode = "201", description = "Job created")
+    @ApiResponse(
+            responseCode = "400",
+            description = "BULK_JOB_TENANT_REQUIRED: no tenantId and no transitional default; BULK_JOB_TENANT_UNKNOWN:"
+                    + " the tenant is not active in this cell; VALIDATION_ERROR: a malformed request",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "BULK_JOB_TENANT_FORBIDDEN: the caller is bound to another tenant and is not a"
+                    + " platform-tenant caller",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
             description = "Operator already has an active job",
@@ -81,7 +98,8 @@ public class BulkLoadJobController {
                                             examples = @ExampleObject(name = "Catalog product import", value = """
                                                                     {"fileName":"products-2026-01.csv",
                                                                      "domainType":"CATALOG_PRODUCT",
-                                                                     "locationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b"}
+                                                                     "locationId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b",
+                                                                     "tenantId":"01900000-0000-7000-8000-000000000001"}
                                                                     """)))
                     @Valid
                     @RequestBody

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +15,10 @@ import com.positivity.bulkloader.internal.entity.TusUpload;
 import com.positivity.bulkloader.internal.exception.TusOffsetConflictException;
 import com.positivity.bulkloader.internal.exception.TusUploadExpiredException;
 import com.positivity.bulkloader.internal.repository.TusUploadRepository;
+import com.positivity.tenancy.StaticTenantRegistry;
+import com.positivity.tenancy.TenancyProperties;
+import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.TenantIterator;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -22,10 +27,12 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +40,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Resumable (TUS) uploads.
@@ -49,6 +57,7 @@ class TusUploadServiceImplTest {
     private static final Instant NOW = Instant.parse("2026-01-15T10:00:00Z");
     private static final int EXPIRY_HOURS = 24;
     private static final String OPERATOR = "op-1";
+    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
 
     @Mock
     private TusUploadRepository tusUploadRepository;
@@ -62,15 +71,34 @@ class TusUploadServiceImplTest {
     private TusUploadServiceImpl service;
     private UUID jobId;
 
+    /** A mock manager makes the sweep's TransactionTemplate a pass-through. */
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
+    /** The sweep visits this registry's tenants; one tenant unless a test says otherwise. */
+    private final TenancyProperties tenancyProperties = new TenancyProperties();
+
     @BeforeEach
     void setUp() {
         jobId = UUID.randomUUID();
-        service = new TusUploadServiceImpl(
+        tenancyProperties.setTenants(List.of(TENANT));
+        service = service();
+    }
+
+    @AfterEach
+    void clearTenant() {
+        TenantContext.clear();
+    }
+
+    private TusUploadServiceImpl service() {
+        return new TusUploadServiceImpl(
                 tusUploadRepository,
                 bulkLoadJobService,
                 storageRoot.toString(),
                 EXPIRY_HOURS,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                new TenantIterator(new StaticTenantRegistry(tenancyProperties)),
+                transactionManager);
     }
 
     private TusUpload existing(long offset, long totalSize, boolean completed, Instant expiresAt) {
@@ -297,6 +325,35 @@ class TusUploadServiceImplTest {
         service.cleanupExpiredUploads();
 
         verify(tusUploadRepository, never()).delete(any(TusUpload.class));
+    }
+
+    /** ADR-0062 §3: tus_upload is tenant-scoped, so the sweep runs once per active tenant, bound and in a transaction. */
+    @Test
+    void cleanupExpiredUploads_sweepsEachActiveTenantUnderItsBinding() {
+        UUID other = UUID.fromString("01900000-0000-7000-8000-000000000002");
+        tenancyProperties.setTenants(List.of(TENANT, other));
+        service = service();
+        List<UUID> visited = new ArrayList<>();
+        when(tusUploadRepository.findByExpiresAtBeforeAndCompletedFalse(NOW)).thenAnswer(invocation -> {
+            visited.add(TenantContext.require());
+            return List.of();
+        });
+
+        service.cleanupExpiredUploads();
+
+        assertThat(visited).containsExactly(TENANT, other);
+        verify(transactionManager, times(2)).getTransaction(any());
+        assertThat(TenantContext.current()).isEmpty();
+    }
+
+    @Test
+    void cleanupExpiredUploads_visitsNoTenantWhenTheRegistryIsEmpty() {
+        tenancyProperties.setTenants(List.of());
+        service = service();
+
+        service.cleanupExpiredUploads();
+
+        verify(tusUploadRepository, never()).findByExpiresAtBeforeAndCompletedFalse(any());
     }
 
     private ByteArrayInputStream stream(String content) {

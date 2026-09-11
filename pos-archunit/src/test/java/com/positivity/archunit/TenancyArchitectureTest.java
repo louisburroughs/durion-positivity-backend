@@ -57,7 +57,8 @@ class TenancyArchitectureTest {
         "com.positivity.nhtsa..",
         "com.positivity.vehiclereferencecarapi..",
         "com.positivity.mcp..",
-        "com.positivity.poseventreceiver.."
+        "com.positivity.poseventreceiver..",
+        "com.positivity.bulkloader.."
     };
 
     private static final String ENTITY_ANNOTATION = "jakarta.persistence.Entity";

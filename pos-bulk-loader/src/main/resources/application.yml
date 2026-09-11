@@ -54,6 +54,12 @@ management:
       show-details: when-authorized
 
 pos:
+  # ADR-0062 section 9, transitional: a request the gateway has not stamped with X-Tenant-Id, and a
+  # job created without an explicit tenantId, run as the alpha default tenant (the latter logs a
+  # WARN). Unset it (POS_TENANCY_DEFAULT_TENANT_ID=) and the runtime is strict: an unbound request is
+  # a 401 and a job without a tenantId is a 400 BULK_JOB_TENANT_REQUIRED.
+  tenancy:
+    default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000001}
   events:
     base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}
     api-secret: ${POS_EVENTS_API_SECRET:}
