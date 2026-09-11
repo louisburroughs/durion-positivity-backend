@@ -16,6 +16,7 @@ import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.entity.UserActivationToken;
 import com.positivity.securityservice.internal.exception.ActivationTokenInvalidException;
 import com.positivity.securityservice.internal.exception.PlatformTenantRequiredException;
+import com.positivity.securityservice.internal.exception.UserNotAwaitingActivationException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.UserActivationTokenRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -36,6 +37,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * First-administrator activation (ADR-0062 §7, WS2b-3): mint under the platform binding only,
@@ -119,9 +122,10 @@ class AdministratorActivationServiceTest {
         @DisplayName(
                 "stores only the hash under the target tenant's binding, closes earlier open tokens, 72 h validity")
         void mintsUnderTheTargetBinding() {
+            // No transaction here, so the audit is emitted at once; the deferral is proven below.
             when(auditProvider.getIfAvailable()).thenReturn(audit);
             AtomicReference<UUID> boundDuringLookup = new AtomicReference<>();
-            when(users.findById(USER)).thenAnswer(inv -> {
+            when(users.findByIdForUpdate(USER)).thenAnswer(inv -> {
                 boundDuringLookup.set(TenantContext.require());
                 return Optional.of(user());
             });
@@ -166,7 +170,7 @@ class AdministratorActivationServiceTest {
         @Test
         @DisplayName("two mints never produce the same token")
         void tokensAreRandom() {
-            when(users.findById(USER)).thenReturn(Optional.of(user()));
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(user()));
             when(tokens.findByTenantIdAndUserIdAndUsedAtIsNull(TENANT, USER)).thenReturn(List.of());
             TenantContext.bind(PlatformTenant.ID);
 
@@ -179,7 +183,7 @@ class AdministratorActivationServiceTest {
         @Test
         @DisplayName("a user the target tenant does not hold is 404 USER_NOT_FOUND, and nothing is written")
         void unknownUserIs404() {
-            when(users.findById(USER)).thenReturn(Optional.empty());
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.empty());
             TenantContext.bind(PlatformTenant.ID);
 
             assertThatThrownBy(() -> service.mint(TENANT, USER)).isInstanceOf(UserNotFoundException.class);
@@ -188,11 +192,62 @@ class AdministratorActivationServiceTest {
         }
 
         @Test
+        @DisplayName("a user whose credentials are live is 409: a token must never overwrite a live password")
+        void liveUserIs409() {
+            User live = user();
+            live.setCredentialsNonExpired(true);
+            live.setCredentialsExpireAt(null);
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(live));
+            TenantContext.bind(PlatformTenant.ID);
+
+            assertThatThrownBy(() -> service.mint(TENANT, USER))
+                    .isInstanceOf(UserNotAwaitingActivationException.class)
+                    .hasMessageContaining(USER.toString());
+            verify(tokens, never()).save(any());
+            verify(tokens, never()).saveAll(any());
+        }
+
+        @Test
+        @DisplayName("a credential-expired user that has signed in before is 409 too: not the provisioning state")
+        void expiredButOnceSignedInUserIs409() {
+            User expiredLater = user();
+            expiredLater.setLastSuccessfulLoginAt(NOW.minus(Duration.ofDays(30)));
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(expiredLater));
+            TenantContext.bind(PlatformTenant.ID);
+
+            assertThatThrownBy(() -> service.mint(TENANT, USER)).isInstanceOf(UserNotAwaitingActivationException.class);
+            verify(tokens, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("inside a transaction the audit event waits for the commit and its failure is only a WARN")
+        void auditIsEmittedAfterCommit() {
+            when(auditProvider.getIfAvailable()).thenReturn(audit);
+            when(audit.createEvent(any())).thenThrow(new IllegalStateException("audit down"));
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(user()));
+            when(tokens.findByTenantIdAndUserIdAndUsedAtIsNull(TENANT, USER)).thenReturn(List.of());
+            TenantContext.bind(PlatformTenant.ID);
+
+            TransactionSynchronizationManager.initSynchronization();
+            try {
+                assertThat(service.mint(TENANT, USER).token()).isNotBlank();
+                verify(audit, never()).createEvent(any());
+                List<TransactionSynchronization> registered = TransactionSynchronizationManager.getSynchronizations();
+                assertThat(registered).hasSize(1);
+                // A throwing audit after commit is swallowed, never surfaced to the caller.
+                registered.forEach(TransactionSynchronization::afterCommit);
+                verify(audit).createEvent(any());
+            } finally {
+                TransactionSynchronizationManager.clearSynchronization();
+            }
+        }
+
+        @Test
         @DisplayName("an audit failure does not fail the mint")
         void auditFailureIsSwallowed() {
             when(auditProvider.getIfAvailable()).thenReturn(audit);
             when(audit.createEvent(any())).thenThrow(new IllegalStateException("audit down"));
-            when(users.findById(USER)).thenReturn(Optional.of(user()));
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(user()));
             when(tokens.findByTenantIdAndUserIdAndUsedAtIsNull(TENANT, USER)).thenReturn(List.of());
             TenantContext.bind(PlatformTenant.ID);
 

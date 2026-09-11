@@ -1044,6 +1044,11 @@ class GlobalExceptionHandlerTest {
                                     new com.positivity.securityservice.internal.exception
                                             .ActivationTokenInvalidException(),
                                     request)),
+                    Named.of("handleUserNotAwaitingActivationException", (HandlerInvocation)
+                            request -> handler.handleUserNotAwaitingActivationException(
+                                    new com.positivity.securityservice.internal.exception
+                                            .UserNotAwaitingActivationException(UUID.randomUUID()),
+                                    request)),
                     Named.of("handlePlatformTenantRequiredException", (HandlerInvocation)
                             request -> handler.handlePlatformTenantRequiredException(
                                     new com.positivity.securityservice.internal.exception

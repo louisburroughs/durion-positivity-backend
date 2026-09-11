@@ -721,8 +721,6 @@ paths:
       summary: Activate an Account with a One-Time Token
       tags:
       - Auth API
-      x-required-permissions:
-      - PUBLIC
   /v1/auth/internal/token:
     post:
       description: 'Issues a single JWT access token (1-hour expiry) for an existing user''s username on behalf of a trusted internal caller, without checking a password.
@@ -1843,13 +1841,13 @@ paths:
 
         Use this tool after tenant provisioning (tenant.created → tenant.provisioned) leaves the first ADMIN unable to sign in, or whenever that administrator has lost an unexchanged token; do not use updateUser to set a tenant''s first password from the platform tenant.
 
-        Preconditions: the caller must hold platform:tenant:provision and be bound to the platform tenant; the user must exist in the named tenant.
+        Preconditions: the caller must hold platform:tenant:provision and be bound to the platform tenant; the user must exist in the named tenant and still be awaiting activation (credentials expired by provisioning, never signed in).
 
         Required inputs: tenantId and userId as path parameters; there is no request body.
 
         Emits a SECURITY_PLATFORM_ADMINISTRATOR_ACTIVATION_TOKEN_MINT event and an audit event on the user; only the token''s SHA-256 is stored, so a lost token is replaced by minting again.
 
-        Returns 201 with the token and expiresAt (72 hours); 403 with PLATFORM_TENANT_REQUIRED when the caller is bound to a tenant other than the platform tenant; 404 with USER_NOT_FOUND when the user is not in that tenant.
+        Returns 201 with the token and expiresAt (72 hours); 403 with PLATFORM_TENANT_REQUIRED when the caller is bound to a tenant other than the platform tenant; 404 with USER_NOT_FOUND when the user is not in that tenant; 409 with USER_NOT_AWAITING_ACTIVATION when the user has already been activated or signed in, so a live account''s password is never overwritten.
 
         '
       operationId: mintAdministratorActivationToken
@@ -1893,6 +1891,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'USER_NOT_FOUND: no such user in that tenant'
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'USER_NOT_AWAITING_ACTIVATION: the user has been activated or signed in already, or is not the credential-expired account provisioning created; a live account keeps its password'
       security:
       - bearerAuth:
         - platform:tenant:provision

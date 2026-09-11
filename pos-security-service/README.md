@@ -524,7 +524,9 @@ Flyway on the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`)
   bytes, URL-safe base64, valid 72 hours; only its SHA-256 is stored (`user_activation_tokens`, a global table
   carrying `tenant_id` as data), and any earlier open token for the user is closed. A caller bound to another
   tenant is refused with 403 `PLATFORM_TENANT_REQUIRED` whatever it holds; an unknown user in that tenant is 404
-  `USER_NOT_FOUND`. The operator hands the token over out of band; the administrator exchanges it, unauthenticated,
+  `USER_NOT_FOUND`; a user that is not awaiting activation (credentials not expired, or ever signed in) is 409
+  `USER_NOT_AWAITING_ACTIVATION`, so a live account's password is never overwritten. Mints for one user serialize on
+  a pessimistic lock of the user row; the audit event is emitted after commit. The operator hands the token over out of band; the administrator exchanges it, unauthenticated,
   at `POST /v1/auth/activate` `{token, newPassword}` (on `pos.tenancy.unenforced-paths`), which finds the row by
   hash, binds the row's tenant, sets the password, clears the credential expiry and consumes the token in one
   transaction. Unknown, expired and used tokens are one answer, 401 `ACTIVATION_TOKEN_INVALID`. The same token

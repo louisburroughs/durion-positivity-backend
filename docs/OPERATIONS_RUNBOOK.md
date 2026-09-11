@@ -648,6 +648,7 @@ Rules and refusals:
 | Caller holds `platform:tenant:provision` but is bound to a tenant other than the platform tenant | 403 `PLATFORM_TENANT_REQUIRED`. Only `PLATFORM_ADMIN` in the platform tenant holds `platform:*` (`R__seed_tenant_template.sql`); never grant it to a tenant role. |
 | Caller lacks the permission | 403 `FORBIDDEN`. |
 | `USER_ID` is not a user of `TENANT_ID` | 404 `USER_NOT_FOUND`. |
+| The user has already activated or signed in (or is any other live account) | 409 `USER_NOT_AWAITING_ACTIVATION`. Only the credential-expired, never-signed-in account provisioning created can be activated with a token; a live account's password is never overwritten this way. |
 | Administrator wants a new password later | The ordinary account-state / password paths; the activation token is for the first credential only. The same token shape is the basis of the coming e-mail reset. |
 
 Audit: every mint writes an `AdministratorActivationTokenMinted` audit event on the user (actor,
