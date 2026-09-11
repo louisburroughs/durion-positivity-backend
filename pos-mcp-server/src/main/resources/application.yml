@@ -6,8 +6,6 @@ spring:
       - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   jackson:
     default-property-inclusion: non_null
-  flyway:
-    locations: classpath:db/h2-migration
   ai:
     ollama:
       base-url: ${OLLAMA_CHAT_BASE_URL:${OLLAMA_BASE_URL:http://localhost:11434}}

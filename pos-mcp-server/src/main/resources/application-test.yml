@@ -11,8 +11,11 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password: ""
+  # H2 test profile: Hibernate builds the schema from the entities, as src/test/resources/
+  # application-test.yml (which shadows this file on the test classpath) also does. The Flyway
+  # baseline is Postgres-only (ADR-0062) and cannot run against H2.
   flyway:
-    locations: classpath:db/h2-migration
+    enabled: false
   jpa:
     hibernate:
       ddl-auto: update
