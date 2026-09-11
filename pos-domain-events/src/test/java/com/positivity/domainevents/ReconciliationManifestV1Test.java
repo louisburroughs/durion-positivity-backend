@@ -6,12 +6,14 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class ReconciliationManifestV1Test {
 
     private static final Instant START = Instant.parse("2026-07-08T10:00:00Z");
     private static final Instant END = Instant.parse("2026-07-08T11:00:00Z");
+    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
 
     @Test
     void checksumIsOrderIndependentAndDeterministic() {
@@ -41,11 +43,23 @@ class ReconciliationManifestV1Test {
     @Test
     void matchesComparesCountAndChecksum() {
         String checksum = ReconciliationManifestV1.checksumOf(List.of("x"));
-        ReconciliationManifestV1 manifest = new ReconciliationManifestV1(START, END, 1, checksum, Map.of("t", 1L));
+        ReconciliationManifestV1 manifest =
+                new ReconciliationManifestV1(TENANT, START, END, 1, checksum, Map.of("t", 1L));
 
+        assertThat(manifest.tenantId()).isEqualTo(TENANT);
         assertThat(manifest.matches(1, checksum)).isTrue();
         assertThat(manifest.matches(2, checksum)).isFalse();
         assertThat(manifest.matches(1, "0".repeat(64))).isFalse();
+    }
+
+    @Test
+    void rejectsMissingTenant() {
+        String checksum = ReconciliationManifestV1.checksumOf(List.of());
+        // One manifest per tenant per window: a manifest that names no tenant cannot be compared
+        // against any tenant's ledger, so it is refused at construction rather than on the wire.
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new ReconciliationManifestV1(null, START, END, 0, checksum, null))
+                .withMessageContaining("tenantId");
     }
 
     @Test
@@ -57,11 +71,12 @@ class ReconciliationManifestV1Test {
     void rejectsInvalidWindowsAndValues() {
         String checksum = ReconciliationManifestV1.checksumOf(List.of());
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> new ReconciliationManifestV1(END, START, 0, checksum, null));
+                .isThrownBy(() -> new ReconciliationManifestV1(TENANT, END, START, 0, checksum, null));
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> new ReconciliationManifestV1(START, START, 0, checksum, null));
+                .isThrownBy(() -> new ReconciliationManifestV1(TENANT, START, START, 0, checksum, null));
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> new ReconciliationManifestV1(START, END, -1, checksum, null));
-        assertThatIllegalArgumentException().isThrownBy(() -> new ReconciliationManifestV1(START, END, 0, " ", null));
+                .isThrownBy(() -> new ReconciliationManifestV1(TENANT, START, END, -1, checksum, null));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new ReconciliationManifestV1(TENANT, START, END, 0, " ", null));
     }
 }
