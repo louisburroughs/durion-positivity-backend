@@ -387,30 +387,7 @@ jobs:
             fi
           done
           echo "Regenerating: ${MODULES[*]:-<all configured modules>}"
-          # Tee to a file as well as the log: when generation fails, the reason is
-          # thousands of Maven lines above the end of a job that keeps going
-          # (continue-on-error), which makes it effectively unreadable through the
-          # Actions log API. The step below replays the tail where it can be found.
-          ./scripts/generate-openapi.sh --validation-mode "${VALIDATION_MODE}" "${MODULES[@]}" \
-            2>&1 | tee "${RUNNER_TEMP}/openapi-generate.log"
-
-      - name: Explain a failed generation
-        # Only on failure, and never fails the job itself: this is diagnostics, not a gate.
-        if: always() && steps.generate.outcome == 'failure'
-        run: |
-          set -uo pipefail
-          LOG="${RUNNER_TEMP}/openapi-generate.log"
-          echo "::group::Last 200 lines of scripts/generate-openapi.sh"
-          tail -n 200 "${LOG}" 2>/dev/null || echo "(no generation log was captured)"
-          echo "::endgroup::"
-          echo "### OpenAPI generation failed" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          # Lines that name the cause, so the summary says why without the Maven noise.
-          grep -nE '^\[ERROR\]|BUILD FAILURE|ERROR: |Caused by:|APPLICATION FAILED TO START|timed out' \
-            "${LOG}" 2>/dev/null | head -n 40 >> "$GITHUB_STEP_SUMMARY" \
-            || echo "(no error lines matched; see the job log group above)" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          ./scripts/generate-openapi.sh --validation-mode "${VALIDATION_MODE}" "${MODULES[@]}"
 
       - name: Collect backend changes
         id: changes
