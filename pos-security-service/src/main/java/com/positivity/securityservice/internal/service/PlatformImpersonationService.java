@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
 import com.positivity.securityservice.internal.config.AuditEventService;
+import com.positivity.securityservice.internal.domain.ReservedRoles;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.entity.ExtTenant;
 import com.positivity.securityservice.internal.entity.User;
@@ -69,8 +70,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PlatformImpersonationService {
 
-    /** The template role an impersonation token carries; seeded by {@code R__seed_reference_security.sql}. */
-    public static final String SUPPORT_ROLE = "SUPPORT";
+    /**
+     * The template role an impersonation token carries; seeded by
+     * {@code R__seed_reference_security.sql} and never assignable to a user ({@link ReservedRoles}).
+     */
+    public static final String SUPPORT_ROLE = ReservedRoles.SUPPORT;
 
     /** Audit event type written on every issuance. */
     public static final String AUDIT_EVENT_TYPE = "PlatformImpersonationTokenIssued";

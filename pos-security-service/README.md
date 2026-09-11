@@ -567,23 +567,43 @@ Flyway on the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`)
   `jti`, expiry and the request's `X-Correlation-Id`, plus an INFO log line; the token itself is never logged.
   The token holder cannot call this module's bearer-authenticated `/v1/auth/**` utilities (`revoke`, `roles`,
   `subject`, `user-id`): `JwtAuthenticationFilter` resolves the subject to a user, and the synthetic principal
-  is none. Operator steps: `docs/OPERATIONS_RUNBOOK.md` → "Impersonating a tenant for support".
+  is none. **Revocation.** The row is stored in the target tenant under the synthetic subject, so neither the
+  binding nor the subject `JwtService.revokeAllTokensForUser` queries on matches it; `jwt_token` therefore
+  carries `impersonated_by_user_id` (the operator, a partial index), and
+  `ImpersonationTokenRevocationService.revokeForOperator` sweeps every tenant `ext_tenant` knows — plus the
+  platform tenant — revoking the operator's rows in each (`JwtService.revokeImpersonationTokensMintedBy`, a
+  `REQUIRES_NEW` transaction inside the rebind, because the session fixes its tenant when it opens; one
+  unreachable tenant is logged and the sweep continues). It runs alongside the username-keyed revocation in
+  `AdminAccountStateServiceImpl.disable` / `expireAccount` / `expireCredentials` and in
+  `RoleAssignmentTokenRevocationListener`, so disabling or expiring the operator, or revoking the role carrying
+  `platform:tenant:impersonate`, ends every support token they had minted instead of leaving it live for up to
+  15 minutes. Operator steps: `docs/OPERATIONS_RUNBOOK.md` → "Impersonating a tenant for support".
 - **`SUPPORT` role.** The fixed, read-only role an impersonation token carries. Seeded as an alpha floor role
   (`R__seed_reference_security.sql`, `mcp_persona_eligible = false`, location scope `ALL` / `OTHER`), granted in
   `R__seed_role_permissions.sql`, listed in the alpha bulk-load baseline (`roles.csv`, `role-permissions.csv`)
   and marked `template_key` so `R__seed_tenant_template.sql` copies it into the platform role template and
-  provisioning gives it to every new tenant (existing tenants get it through the WS8 template reconcile). No
-  user is ever assigned it. Its grants are the `*:*:view` / `*:*:read` permissions of the six floor roles plus
+  provisioning gives it to every new tenant (existing tenants get it through the WS8 template reconcile). **No
+  user is ever assigned it, and no user can be**: `ReservedRoles` names it unassignable and every grant path
+  refuses it with 409 `ROLE_NOT_USER_ASSIGNABLE` — `UserRoleGrantServiceImpl.grant` / `reconcile` (which covers
+  `assignUserRole`, `PUT /v1/users/{username}/roles`, `updateUser`, `createUser`, the user bulk-ingest, the
+  alpha CSV loader and self-registration) and `RoleManagementServiceImpl.createRoleAssignment`, which writes its
+  own dated row. A `reconcile` validates the whole desired set before it revokes anything, so a refused request
+  writes nothing. The role itself stays present and editable — an impersonation token has to have something to
+  resolve. Its grants are the `*:*:view` / `*:*:read` permissions of the six floor roles plus
   `location:read` — nothing else: no write, no `platform:*`, not the assistant baseline (`mcp:chat:*`,
   `nlti:request:*`), not the MCP administration surface, not `nlti:audit:read`, not `people:employee_pii:view`
   and not `people:self:view`. `RolePermissionBaselineTest.supportIsReadOnly` pins the seeded list to exactly the
   `SupportReadOnlyCeiling` rule the mint enforces, so the seed and the runtime ceiling cannot drift apart, and a
-  new read permission granted to a floor role must be added here too, deliberately. The grants
-  (133):
+  new read permission granted to a floor role must be added here too, deliberately. The rule reads a permission
+  code the way the catalog spells one, mixed case included (`SupportReadOnlyCeiling.SEGMENT` mirrors
+  `PermissionRegistryServiceImpl.PERMISSION_PATTERN`), so camelCase reads such as `people:timeAdjustment:view`
+  and `people-contact:userLink:view` are admitted like any other. The grants
+  (138):
 
   | Domain | Permissions |
   | --- | --- |
   | `accounting` | `accounting:analytics:view`, `accounting:ap:view`, `accounting:coa:view`, `accounting:credit-memo:read`, `accounting:customer-credit:view`, `accounting:default-mapping:view`, `accounting:events:view`, `accounting:export:view`, `accounting:je:view`, `accounting:mapping-key:view`, `accounting:period:view`, `accounting:posting-category:view`, `accounting:posting_rules:view`, `accounting:reconciliation:view` |
+  | `bulkImport` | `bulkImport:status:read` |
   | `catalog` | `catalog:catalog_grouping:view`, `catalog:item_cost:read`, `catalog:labor_standard:view`, `catalog:location_price_override:read`, `catalog:msrp:read`, `catalog:non_inventory:view`, `catalog:price_book:read`, `catalog:product:view`, `catalog:product_uom:view`, `catalog:service_package:view`, `catalog:service_type:view`, `catalog:substitution_group:view`, `catalog:supplier_cost:read`, `catalog:tread_design:view`, `catalog:uom_conversion:view` |
   | `crm` | `crm:consent:view`, `crm:contact:view`, `crm:contact_preference:view`, `crm:followup:view`, `crm:inquiry:view`, `crm:interaction:view`, `crm:party:view`, `crm:person:read`, `crm:processing_log:view`, `crm:promotion_redemption:view`, `crm:relationship:read`, `crm:segment:view`, `crm:suppression:view`, `crm:suspense:view`, `crm:tag:view`, `crm:vehicle:view` |
   | `inventory` | `inventory:adjustment:view`, `inventory:asn:view`, `inventory:availability:read`, `inventory:cycle_count:view`, `inventory:goods_receipt:view`, `inventory:ledger:view`, `inventory:location:view`, `inventory:on_hand:view`, `inventory:pick_list:view`, `inventory:putaway:view`, `inventory:putaway_rule:view`, `inventory:receiving:view`, `inventory:return:view`, `inventory:scrap:view`, `inventory:shortage:view`, `inventory:supplier_stock_hint:view`, `inventory:transfer:view`, `inventory:valuation:view` |
@@ -591,8 +611,8 @@ Flyway on the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`)
   | `location` | `location:bay:read`, `location:mobile-unit:read`, `location:read`, `location:service-area:read`, `location:travel-buffer-policy:read` |
   | `marketing` | `marketing:campaign:view`, `marketing:stats:view`, `marketing:template:view` |
   | `order` | `order:order:view`, `order:price_override:view`, `order:purchase_order:view`, `order:return:view`, `order:session:view` |
-  | `people` | `people:availability:view`, `people:compliance:view`, `people:employee:view`, `people:skill:view`, `people:timekeeping:view` |
-  | `people-contact` | `people-contact:organization:view`, `people-contact:person:view`, `people-contact:role:view` |
+  | `people` | `people:availability:view`, `people:compliance:view`, `people:employee:view`, `people:skill:view`, `people:timeAdjustment:view`, `people:timeEntry:view`, `people:timeException:view`, `people:timekeeping:view` |
+  | `people-contact` | `people-contact:organization:view`, `people-contact:person:view`, `people-contact:role:view`, `people-contact:userLink:view` |
   | `pricing` | `pricing:labor_rate:view`, `pricing:normalization:view`, `pricing:promotion:view`, `pricing:restrictions:view`, `pricing:rule:view` |
   | `security` | `security:audit:view`, `security:permission:view`, `security:role:view`, `security:user:view`, `security:user_account_state:view` |
   | `shop` | `shop:dashboard:view`, `shop:schedule:view`, `shop:technician:view` |

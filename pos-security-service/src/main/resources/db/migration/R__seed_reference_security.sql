@@ -67,7 +67,9 @@ ON CONFLICT (tenant_id, name) DO NOTHING;
 -- from the template reconcile (WS8). Read-only grants in R__seed_role_permissions.sql. No MCP
 -- persona (mcp_persona_eligible false): the token holds no assistant entrypoint, and a support
 -- read is not a chat session. No user is ever assigned it — the impersonation token names it
--- directly. Id is UUIDv5 of "durion-positivity://roles/SUPPORT" (NAMESPACE_URL).
+-- directly, and every user-role grant, reconcile and import refuses it with 409
+-- ROLE_NOT_USER_ASSIGNABLE (ReservedRoles, UserRoleGrantServiceImpl.refuseReservedRole). Id is
+-- UUIDv5 of "durion-positivity://roles/SUPPORT" (NAMESPACE_URL).
 INSERT INTO roles (id, name, description, created_at, created_by, mcp_persona_eligible,
                    location_scope, location_hierarchy)
 VALUES ('ad025890-d2da-5f34-8dfc-5ef19bf73b42'::uuid, 'SUPPORT',

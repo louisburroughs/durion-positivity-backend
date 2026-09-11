@@ -297,7 +297,11 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 --   administration surface, not nlti:audit:read (other principals' request
 --   history), not people:employee_pii:view (home addresses and emergency
 --   contacts) and not people:self:view (a synthetic principal has no self).
---   RolePermissionBaselineTest pins each of those exclusions. Widening SUPPORT is
+--   RolePermissionBaselineTest pins each of those exclusions, and derives the whole
+--   list from the same rule the mint applies (SupportReadOnlyCeiling), so the two
+--   cannot drift. The rule reads a permission code the way the catalog spells one,
+--   mixed case included: people:timeAdjustment:view and people-contact:userLink:view
+--   are reads like any other. Widening SUPPORT is
 --   a product decision; a write permission here is a defect.
 --
 -- IDEMPOTENCY
@@ -1463,6 +1467,7 @@ FROM (VALUES
     ('SUPPORT', 'accounting:posting-category:view'),
     ('SUPPORT', 'accounting:posting_rules:view'),
     ('SUPPORT', 'accounting:reconciliation:view'),
+    ('SUPPORT', 'bulkImport:status:read'),
     ('SUPPORT', 'catalog:catalog_grouping:view'),
     ('SUPPORT', 'catalog:item_cost:read'),
     ('SUPPORT', 'catalog:labor_standard:view'),
@@ -1530,10 +1535,14 @@ FROM (VALUES
     ('SUPPORT', 'people-contact:organization:view'),
     ('SUPPORT', 'people-contact:person:view'),
     ('SUPPORT', 'people-contact:role:view'),
+    ('SUPPORT', 'people-contact:userLink:view'),
     ('SUPPORT', 'people:availability:view'),
     ('SUPPORT', 'people:compliance:view'),
     ('SUPPORT', 'people:employee:view'),
     ('SUPPORT', 'people:skill:view'),
+    ('SUPPORT', 'people:timeAdjustment:view'),
+    ('SUPPORT', 'people:timeEntry:view'),
+    ('SUPPORT', 'people:timeException:view'),
     ('SUPPORT', 'people:timekeeping:view'),
     ('SUPPORT', 'pricing:labor_rate:view'),
     ('SUPPORT', 'pricing:normalization:view'),

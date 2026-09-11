@@ -1,9 +1,11 @@
 package com.positivity.securityservice.internal.service;
 
+import com.positivity.securityservice.internal.domain.ReservedRoles;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.event.RoleAssignmentRevokedEvent;
+import com.positivity.securityservice.internal.exception.RoleNotUserAssignableException;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -40,6 +42,7 @@ public class UserRoleGrantServiceImpl implements UserRoleGrantService {
     @Override
     @Transactional
     public void grant(@NonNull User user, @NonNull Role role, @NonNull String actor) {
+        refuseReservedRole(role);
         LocalDateTime now = LocalDateTime.now(clock);
         boolean alreadyEffective = roleAssignmentRepository.findByUserAndRole(user, role).stream()
                 .anyMatch(assignment -> assignment.isEffectiveAt(now));
@@ -66,6 +69,10 @@ public class UserRoleGrantServiceImpl implements UserRoleGrantService {
     @Override
     @Transactional
     public void reconcile(@NonNull User user, @NonNull Set<Role> desiredRoles, @NonNull String actor) {
+        // Before anything is written: a reconcile revokes before it grants, so refusing only when
+        // the reserved role's turn to be granted came would have already closed the user's other
+        // assignments. Validate the whole desired set first and the call is a no-op on refusal.
+        desiredRoles.forEach(UserRoleGrantServiceImpl::refuseReservedRole);
         LocalDateTime now = LocalDateTime.now(clock);
         List<RoleAssignment> existing = roleAssignmentRepository.findByUser(user);
 
@@ -86,6 +93,21 @@ public class UserRoleGrantServiceImpl implements UserRoleGrantService {
             if (!effectiveRoleIds.contains(role.getId())) {
                 grant(user, role, actor);
             }
+        }
+    }
+
+    /**
+     * Refuses a role that exists but may never be held by a user ({@code SUPPORT} — ADR-0062 §7,
+     * WS2b-4). Enforced here because this service is the single writer every grant path funnels
+     * through: {@code RoleManagementServiceImpl.assignRoleToUser}, {@code UserServiceImpl.createUser}
+     * (and therefore the user bulk-ingest and the alpha CSV loader), {@code assignRoles}, {@code
+     * updateUser} and {@code SelfRegistrationServiceImpl}. The one grant path that does not is
+     * {@code RoleManagementServiceImpl.createRoleAssignment}, which writes its own dated row and
+     * calls this same check.
+     */
+    static void refuseReservedRole(Role role) {
+        if (!ReservedRoles.isUserAssignable(role.getName())) {
+            throw new RoleNotUserAssignableException(role.getName());
         }
     }
 

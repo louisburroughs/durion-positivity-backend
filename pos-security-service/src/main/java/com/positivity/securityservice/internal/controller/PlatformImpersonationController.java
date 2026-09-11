@@ -28,6 +28,11 @@ import org.springframework.web.bind.annotation.RestController;
  * no-refresh, read-only impersonation token for a tenant. Reachable from the platform tenant only:
  * a caller bound to any other tenant is refused with 403 {@code PLATFORM_TENANT_REQUIRED}
  * regardless of the authorities it holds.
+ *
+ * <p>The token's {@code perm_bits} is the tenant's {@code SUPPORT} grants <em>after</em> the
+ * read-only ceiling ({@code SupportReadOnlyCeiling}), not the role verbatim — a widened role never
+ * yields a write-capable token — and it is revoked wholesale when the operator's account or
+ * platform role ends ({@code ImpersonationTokenRevocationService}), not only at its own expiry.
  */
 @Tag(name = "Platform Support API", description = "Platform-operator support access to a tenant (impersonation tokens)")
 @RestController
@@ -42,12 +47,24 @@ public class PlatformImpersonationController {
     @Operation(operationId = "mintImpersonationToken", summary = "Mint a Tenant Impersonation Token", description = """
                     Mints a 15-minute, read-only access token that acts inside the named tenant and returns it \
                     once, with its expiry, the tenant id and the tenant slug. The token carries tid = the tenant, \
-                    the tenant's own SUPPORT role's permissions as perm_bits, act = {sub, username} of the \
-                    calling operator, token_use = impersonation and a synthetic subject \
-                    support:<operator>@<tenantSlug>; it has no refresh token and refreshTokenPair refuses it.
+                    act = {sub, username} of the calling operator, token_use = impersonation and a synthetic \
+                    subject support:<operator>@<tenantSlug>; it has no refresh token and refreshTokenPair \
+                    refuses it.
+                    perm_bits is not the SUPPORT role verbatim: a tenant administrator can edit that role's \
+                    grants, so the mint intersects them with a read-only ceiling and encodes only what passes. \
+                    Admitted: a permission whose action is view or read, plus location:read. Refused, and so \
+                    absent from the token however the role is configured: every write, every platform:* \
+                    permission, and the named exclusions people:employee_pii:view, people:self:view, \
+                    nlti:audit:read, nlti:request:read, mcp:eval_trace:view, mcp:llm_api:view, \
+                    mcp:system_prompt:view and mcp:tool:view. Dropped grants do not fail the mint; they are \
+                    logged at WARN and recorded as droppedGrants on both audit events.
+                    The token ends early when the operator does: disabling or expiring the operator's account, \
+                    or revoking the role that carries platform:tenant:impersonate, revokes every token they \
+                    have minted, in every tenant.
                     Use this tool when a platform operator must look at a tenant's data to support it; do not \
                     grant an operator a role in the tenant, and do not use issueInternalToken, which binds the \
-                    caller's own tenant.
+                    caller's own tenant. SUPPORT itself cannot be granted to a user: every assignment path \
+                    refuses it with 409 ROLE_NOT_USER_ASSIGNABLE.
                     Preconditions: the caller must hold platform:tenant:impersonate and be bound to the platform \
                     tenant; the tenant must be ACTIVE in the ext_tenant replica and hold a SUPPORT role; the \
                     caller must be a user of the platform tenant.
@@ -55,10 +72,12 @@ public class PlatformImpersonationController {
                     when sent, is recorded on the audit events.
                     Emits a SECURITY_PLATFORM_TENANT_IMPERSONATE event and a PlatformImpersonationTokenIssued \
                     audit event in both the target tenant and the platform tenant (operator, subject, jti, \
-                    expiry, correlation id), plus an INFO log line; the token itself is never logged.
+                    expiry, correlation id, droppedGrants), plus an INFO log line; the token itself is never \
+                    logged.
                     Returns 201 with the token; 403 with PLATFORM_TENANT_REQUIRED when the caller is bound to a \
                     tenant other than the platform tenant; 404 with TENANT_NOT_FOUND when the replica does not \
-                    know the tenant; 409 with TENANT_NOT_IMPERSONABLE when the tenant is not ACTIVE (its status \
+                    know the tenant, or USER_NOT_FOUND when the authenticated operator has no user row in the \
+                    platform tenant; 409 with TENANT_NOT_IMPERSONABLE when the tenant is not ACTIVE (its status \
                     is in the message) or has no SUPPORT role yet, or when the target is the platform tenant \
                     itself.
                     """)
@@ -72,7 +91,8 @@ public class PlatformImpersonationController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
-            description = "TENANT_NOT_FOUND: the ext_tenant replica does not know the tenant",
+            description = "TENANT_NOT_FOUND: the ext_tenant replica does not know the tenant. "
+                    + "USER_NOT_FOUND: the authenticated operator has no user row in the platform tenant",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",

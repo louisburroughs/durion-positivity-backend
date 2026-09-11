@@ -50,6 +50,40 @@ class SupportReadOnlyCeilingTest {
     }
 
     @Test
+    @DisplayName("camelCase segments are admitted: the catalog really contains them (regression)")
+    void camelCaseReadsAreAdmitted() {
+        // An all-lowercase segment pattern silently refused these, so every impersonation token
+        // was minted without them even though the SUPPORT role granted them.
+        assertThat(SupportReadOnlyCeiling.admits("people:timeAdjustment:view")).isTrue();
+        assertThat(SupportReadOnlyCeiling.admits("people:timeEntry:view")).isTrue();
+        assertThat(SupportReadOnlyCeiling.admits("people:timeException:view")).isTrue();
+        assertThat(SupportReadOnlyCeiling.admits("people-contact:userLink:view"))
+                .isTrue();
+        assertThat(SupportReadOnlyCeiling.admits("bulkImport:status:read")).isTrue();
+        // Mixed case does not weaken the action half: a camelCase write is still a write.
+        assertThat(SupportReadOnlyCeiling.admits("people:timeAdjustment:approve"))
+                .isFalse();
+        assertThat(SupportReadOnlyCeiling.admits("people-contact:userLink:write"))
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("every three-segment view/read in the catalog is admitted unless deliberately refused")
+    void theCatalogsReadsAreAdmitted() {
+        Set<String> refused = Arrays.stream(PermissionCode.values())
+                .map(PermissionCode::code)
+                .filter(code -> code.endsWith(":view") || code.endsWith(":read"))
+                .filter(code -> code.chars().filter(c -> c == ':').count() == 2)
+                .filter(code -> !code.startsWith("platform:"))
+                .filter(code -> !SupportReadOnlyCeiling.EXCLUDED.contains(code))
+                .filter(code -> !SupportReadOnlyCeiling.admits(code))
+                .collect(java.util.stream.Collectors.toSet());
+        assertThat(refused)
+                .as("a read the catalog defines but the ceiling's shape refuses is a token that reads too little")
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("apply keeps the reads and reports the rest by code, sorted")
     void applyPartitions() {
         SupportReadOnlyCeiling.Result result = SupportReadOnlyCeiling.apply(Set.of(

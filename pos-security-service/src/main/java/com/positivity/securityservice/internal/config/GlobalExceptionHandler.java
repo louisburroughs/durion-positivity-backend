@@ -11,6 +11,7 @@ import com.positivity.securityservice.internal.exception.PermissionNotFoundExcep
 import com.positivity.securityservice.internal.exception.PlatformTenantRequiredException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
+import com.positivity.securityservice.internal.exception.RoleNotUserAssignableException;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationReviewCaseNotFoundException;
@@ -490,6 +491,25 @@ public class GlobalExceptionHandler {
      *
      * **HTTP Status:** 409 Conflict
      */
+    /**
+     * Handles RoleNotUserAssignableException: a grant, reconcile or import named a role that exists
+     * but may never be held by a user — {@code SUPPORT}, which only a platform impersonation token
+     * carries (ADR-0062 §7, WS2b-4).
+     *
+     * **HTTP Status:** 409 Conflict — the request is well-formed and authorised; what refuses it is
+     * the role's nature, exactly as for a template role's delete.
+     */
+    @ExceptionHandler(RoleNotUserAssignableException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ResponseEntity<ApiError> handleRoleNotUserAssignableException(
+            RoleNotUserAssignableException ex, WebRequest request) {
+
+        String correlationId = extractCorrelationId(request);
+        log.warn("Role assignment refused (correlationId={}): {}", correlationId, ex.getMessage());
+
+        return respond(HttpStatus.CONFLICT, "ROLE_NOT_USER_ASSIGNABLE", ex.getMessage(), correlationId);
+    }
+
     @ExceptionHandler(TemplateRoleImmutableException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ResponseEntity<ApiError> handleTemplateRoleImmutableException(

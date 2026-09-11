@@ -43,7 +43,18 @@ public final class SupportReadOnlyCeiling {
             "mcp:system_prompt:view",
             "mcp:tool:view");
 
-    private static final Pattern READ_ACTION = Pattern.compile("[a-z_\\-]+:[a-z_\\-]+:(view|read)");
+    /**
+     * One segment of a permission code, exactly as the catalog defines it (see {@code
+     * PermissionRegistryServiceImpl.PERMISSION_PATTERN}): a letter of either case followed by
+     * mixed-case alphanumerics, underscores and hyphens. Spelling this the catalog's way is
+     * load-bearing — an all-lowercase segment silently refused the camelCase reads the catalog
+     * really contains ({@code people:timeAdjustment:view}, {@code people:timeEntry:view}, {@code
+     * people:timeException:view}, {@code people-contact:userLink:view}, {@code
+     * bulkImport:status:read}), dropping them from every impersonation token.
+     */
+    public static final String SEGMENT = "[A-Za-z][A-Za-z0-9_-]*";
+
+    private static final Pattern READ_ACTION = Pattern.compile(SEGMENT + ":" + SEGMENT + ":(view|read)");
 
     private SupportReadOnlyCeiling() {}
 
@@ -56,7 +67,7 @@ public final class SupportReadOnlyCeiling {
     }
 
     /**
-     * The permissions of {@code granted} that pass the ceiling, and the codes of those that did not.
+     * The permissions of a role that pass the ceiling, and the codes of those that did not.
      *
      * @param admitted the permissions to encode into {@code perm_bits}
      * @param dropped  the codes refused, sorted, for the log and the audit event; empty when the
@@ -65,6 +76,12 @@ public final class SupportReadOnlyCeiling {
     public record Result(
             @NonNull Set<PermissionCode> admitted, @NonNull Set<String> dropped) {}
 
+    /**
+     * Partitions {@code granted} into what an impersonation token may carry and what it may not.
+     *
+     * @param granted the role's resolved permissions, as held in the tenant
+     * @return the admitted permissions and the dropped codes
+     */
     public static @NonNull Result apply(@NonNull Set<PermissionCode> granted) {
         Set<PermissionCode> admitted = new TreeSet<>();
         Set<String> dropped = new TreeSet<>();

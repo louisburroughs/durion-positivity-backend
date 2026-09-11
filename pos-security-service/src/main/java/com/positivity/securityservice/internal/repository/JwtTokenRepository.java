@@ -20,4 +20,11 @@ public interface JwtTokenRepository extends JpaRepository<JwtToken, UUID> {
 
     /** Token pairs of {@code subject} whose access token has not yet expired at {@code now}. */
     List<JwtToken> findAllBySubjectAndExpiresAtAfter(String subject, Instant now);
+
+    /**
+     * Impersonation tokens minted by {@code impersonatedByUserId} in the tenant currently bound
+     * (ADR-0062 §7, WS2b-4). The subject of such a row is synthetic and its tenant is the target
+     * tenant, so the operator's user id is the only key that reaches it.
+     */
+    List<JwtToken> findAllByImpersonatedByUserId(UUID impersonatedByUserId);
 }

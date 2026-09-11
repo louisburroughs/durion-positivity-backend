@@ -30,6 +30,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * - refreshToken: Refresh token (unique; null for an impersonation token, which has no
  *   refresh half — ADR-0062 §7, WS2b-4)
  * - subject: Token subject (username or principal)
+ * - impersonatedByUserId: the platform operator behind an impersonation token; null otherwise
  * - issuedAt: Token creation timestamp
  * - expiresAt: Access token expiration
  * - refreshExpiresAt: Refresh token expiration
@@ -65,6 +66,20 @@ public class JwtToken extends TenantScopedEntity {
 
     @Column(nullable = false)
     private String subject;
+
+    /**
+     * The platform operator who minted this impersonation token (ADR-0062 §7, WS2b-4);
+     * {@code null} on every ordinary token.
+     *
+     * <p>An impersonation row is stored in the <em>target</em> tenant under a synthetic subject
+     * ({@code support:<operator>@<slug>}), so neither its {@code tenant_id} nor its {@code subject}
+     * names the operator. This column is the revocable link back to them: it is what {@code
+     * ImpersonationTokenRevocationService} sweeps on when the operator is disabled, expired, or
+     * loses the platform role, none of which can reach the row through {@code
+     * findAllBySubject(username)} under the platform binding.
+     */
+    @Column(name = "impersonated_by_user_id", columnDefinition = "UUID")
+    private UUID impersonatedByUserId;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

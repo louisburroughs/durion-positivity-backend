@@ -259,9 +259,32 @@ public interface JwtService {
      * transitions (disable, expireAccount, expireCredentials) to ensure no
      * active token survives an account deactivation.
      *
+     * <p><b>Does not reach an impersonation token.</b> Such a row is stored in the target tenant
+     * under a synthetic subject, so neither the binding nor the subject this method queries on
+     * matches it; {@link #revokeImpersonationTokensMintedBy} is the path that does, and {@code
+     * ImpersonationTokenRevocationService} is what calls it for every tenant.
+     *
      * @param username the subject (username) of the user whose tokens should be revoked
      */
     void revokeAllTokensForUser(@NonNull String username);
+
+    /**
+     * Revokes the impersonation tokens {@code operatorUserId} minted <em>in the tenant currently
+     * bound</em> (ADR-0062 §7, WS2b-4): deletes each {@code jwt_token} row whose {@code
+     * impersonated_by_user_id} is the operator and marks its still-live JTI revoked, exactly as
+     * {@link #revokeAllTokensForUser} does for an ordinary token.
+     *
+     * <p>Tenant-scoped by design — it is the per-tenant half of a sweep. Callers must not use it
+     * directly to end an operator's support access: an operator may hold a live token in any
+     * tenant, so {@code ImpersonationTokenRevocationService.revokeForOperator} rebinds this call
+     * onto every tenant in turn. This method opens its own transaction
+     * ({@code REQUIRES_NEW}) so that the rebind reaches the database session, which fixes its
+     * tenant when it opens.
+     *
+     * @param operatorUserId the platform operator whose support tokens should end
+     * @return how many token rows were deleted in the bound tenant
+     */
+    int revokeImpersonationTokensMintedBy(@NonNull UUID operatorUserId);
 
     /**
      * Record representing a pair of access and refresh tokens.

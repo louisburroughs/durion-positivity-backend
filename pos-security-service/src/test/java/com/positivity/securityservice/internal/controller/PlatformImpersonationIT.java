@@ -98,6 +98,9 @@ class PlatformImpersonationIT extends BaseContractIntegrationTest {
     @Autowired
     private TenantContextFilter tenantContextFilter;
 
+    @Autowired
+    private com.positivity.securityservice.internal.service.AdminAccountStateService adminAccountStateService;
+
     @Value("${pos.tenancy.default-tenant-id}")
     private UUID targetTenant;
 
@@ -160,7 +163,11 @@ class PlatformImpersonationIT extends BaseContractIntegrationTest {
                 user.setPassword("{noop}not-a-real-password");
                 return userRepository.save(user);
             });
-            operatorId = operator.getId();
+            // operatorIsDisabled() below leaves the account disabled; put it back so the test
+            // order cannot matter.
+            operator.setEnabled(true);
+            operator.setAccountNonExpired(true);
+            operatorId = userRepository.save(operator).getId();
         });
         TenantContext.clear();
     }
@@ -310,6 +317,37 @@ class PlatformImpersonationIT extends BaseContractIntegrationTest {
                     .contains("support:" + OPERATOR + "@alpha")
                     .doesNotContain(token);
         }
+    }
+
+    @Test
+    @DisplayName("disabling the operator ends the support token they already minted, in the tenant it acts inside")
+    void disablingTheOperatorEndsAnIssuedToken() throws Exception {
+        String token = objectMapper
+                .readTree(mintAs(OPERATOR, PLATFORM_AUTHORITIES, PlatformTenant.ID, targetTenant)
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString())
+                .path("token")
+                .stringValue();
+
+        // It works right now, well inside its 15 minutes.
+        mockMvc.perform(get("/v1/auth/validate").param("token", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(true));
+
+        // The operator's account is disabled in the platform tenant. The token row it has to reach
+        // is in the *target* tenant, under the synthetic subject support:<operator>@alpha — neither
+        // the binding nor the username the account-state path revokes on.
+        TenantContext.runAs(PlatformTenant.ID, () -> adminAccountStateService.disable(operatorId));
+        TenantContext.clear();
+
+        mockMvc.perform(get("/v1/auth/validate").param("token", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(false));
+        assertThat(TenantContext.callAs(targetTenant, () -> jwtTokenRepository.findByToken(token)))
+                .as("the row is gone, so the bearer path refuses it too")
+                .isEmpty();
     }
 
     @Test

@@ -315,6 +315,53 @@ class JwtServiceImplImpersonationTest {
         verify(jwtTokenRepository).deleteAll(List.of(stored));
     }
 
+    @Test
+    @DisplayName("the stored row records the operator, the only revocable link back to the human")
+    void storedRowNamesTheOperator() {
+        ArgumentCaptor<JwtToken> captor = ArgumentCaptor.forClass(JwtToken.class);
+        IssuedImpersonationToken issued = mintUnderTarget();
+
+        verify(jwtTokenRepository).save(captor.capture());
+        JwtToken saved = captor.getValue();
+        assertThat(saved.getToken()).isEqualTo(issued.token());
+        assertThat(saved.getSubject()).isEqualTo(SUBJECT);
+        assertThat(saved.getRefreshToken()).isNull();
+        // The subject is synthetic and the row is in the target tenant, so neither identifies the
+        // operator: without this column nothing could revoke the token when the operator is
+        // disabled or loses their platform role (ADR-0062 §7, WS2b-4).
+        assertThat(saved.getImpersonatedByUserId()).isEqualTo(OPERATOR_ID);
+    }
+
+    @Test
+    @DisplayName("revokeImpersonationTokensMintedBy deletes the operator's rows in the bound tenant and kills the jti")
+    void revokeByOperatorEndsTheToken() {
+        IssuedImpersonationToken issued = mintUnderTarget();
+        JwtToken stored = new JwtToken();
+        stored.setToken(issued.token());
+        stored.setSubject(SUBJECT);
+        stored.setImpersonatedByUserId(OPERATOR_ID);
+        when(jwtTokenRepository.findAllByImpersonatedByUserId(OPERATOR_ID)).thenReturn(List.of(stored));
+
+        int revoked = TenantContext.callAs(TARGET_TENANT, () -> sut.revokeImpersonationTokensMintedBy(OPERATOR_ID));
+
+        assertThat(revoked).isEqualTo(1);
+        verify(tokenRevocationManager)
+                .revokeToken(org.mockito.ArgumentMatchers.eq(issued.jti()), org.mockito.ArgumentMatchers.anyLong());
+        verify(jwtTokenRepository).deleteAll(List.of(stored));
+    }
+
+    @Test
+    @DisplayName("an operator with no rows in the bound tenant deletes nothing")
+    void revokeByOperatorWithNoRowsIsANoOp() {
+        when(jwtTokenRepository.findAllByImpersonatedByUserId(OPERATOR_ID)).thenReturn(List.of());
+
+        assertThat(TenantContext.callAs(TARGET_TENANT, () -> sut.revokeImpersonationTokensMintedBy(OPERATOR_ID)))
+                .isZero();
+
+        verify(jwtTokenRepository, never()).deleteAll(any());
+        verify(tokenRevocationManager, never()).revokeToken(any(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
     private static TenantResolver tenantResolver() {
         TenancyProperties properties = new TenancyProperties();
         properties.setDefaultTenantId(DEFAULT_TENANT);

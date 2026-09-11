@@ -51,6 +51,7 @@ import org.springframework.security.core.userdetails.UserDetailsChecker;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -310,6 +311,26 @@ public class JwtServiceImpl implements JwtService {
             jwtTokenRepository.deleteAll(tokens);
             log.debug("Revoked all tokens for user: username={}, count={}", username, tokens.size());
         }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int revokeImpersonationTokensMintedBy(@NonNull UUID operatorUserId) {
+        List<JwtToken> tokens = jwtTokenRepository.findAllByImpersonatedByUserId(operatorUserId);
+        if (tokens.isEmpty()) {
+            return 0;
+        }
+        for (JwtToken jwtToken : tokens) {
+            // An impersonation row never has a refresh half (WS2b-4), so there is only one JTI.
+            revokeJtiIfTokenActive(jwtToken.getToken(), "impersonation");
+        }
+        jwtTokenRepository.deleteAll(tokens);
+        log.info(
+                "Revoked impersonation tokens: operator={}, tenant={}, count={}",
+                operatorUserId,
+                TenantContext.current().orElse(null),
+                tokens.size());
+        return tokens.size();
     }
 
     private void revokeJtiIfTokenActive(@NonNull String token, @NonNull String tokenType) {
@@ -631,12 +652,16 @@ public class JwtServiceImpl implements JwtService {
 
         // Stored like any access token so validateToken (and therefore the bearer path and
         // /v1/auth/validate) recognises it, and revocation by subject or jti reaches it. No
-        // refresh half: the columns are nullable for exactly this row.
+        // refresh half: the columns are nullable for exactly this row. The operator's user id is
+        // stored alongside it because the subject is synthetic and the row lives in the target
+        // tenant: revoking the operator's account or platform role reaches this row only through
+        // impersonated_by_user_id (ImpersonationTokenRevocationService, ADR-0062 §7, WS2b-4).
         JwtToken jwtToken = new JwtToken();
         jwtToken.setToken(token);
         jwtToken.setIssuedAt(now);
         jwtToken.setExpiresAt(expiresAt);
         jwtToken.setSubject(subject);
+        jwtToken.setImpersonatedByUserId(operatorUserId);
         jwtTokenRepository.save(jwtToken);
 
         log.debug(

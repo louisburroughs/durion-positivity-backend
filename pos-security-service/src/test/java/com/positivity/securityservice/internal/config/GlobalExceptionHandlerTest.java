@@ -18,6 +18,7 @@ import com.positivity.securityservice.internal.exception.NoRolesAssignedExceptio
 import com.positivity.securityservice.internal.exception.PermissionNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleAssignmentNotFoundException;
 import com.positivity.securityservice.internal.exception.RoleNotFoundException;
+import com.positivity.securityservice.internal.exception.RoleNotUserAssignableException;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationReviewCaseNotFoundException;
@@ -723,6 +724,28 @@ class GlobalExceptionHandlerTest {
     }
 
     // ---------------------------------------------------------------
+    // handleRoleNotUserAssignableException (ADR-0062 section 7, WS2b-4)
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleRoleNotUserAssignableException")
+    class HandleRoleNotUserAssignableException {
+
+        @Test
+        @DisplayName("returns 409 ROLE_NOT_USER_ASSIGNABLE naming the role")
+        void returns409RoleNotUserAssignable() {
+            RoleNotUserAssignableException ex = new RoleNotUserAssignableException("SUPPORT");
+
+            ResponseEntity<ApiError> response = sut.handleRoleNotUserAssignableException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("ROLE_NOT_USER_ASSIGNABLE");
+            assertThat(response.getBody().message()).contains("SUPPORT");
+        }
+    }
+
+    // ---------------------------------------------------------------
     // handleDuplicateRoleNameException
     // ---------------------------------------------------------------
 
@@ -1064,7 +1087,10 @@ class GlobalExceptionHandlerTest {
                                     new com.positivity.securityservice.internal.exception
                                             .TenantNotImpersonableException(
                                             UUID.randomUUID(), "its status is SUSPENDED"),
-                                    request)));
+                                    request)),
+                    Named.of("handleRoleNotUserAssignableException", (HandlerInvocation)
+                            request -> handler.handleRoleNotUserAssignableException(
+                                    new RoleNotUserAssignableException("SUPPORT"), request)));
         }
 
         @ParameterizedTest
