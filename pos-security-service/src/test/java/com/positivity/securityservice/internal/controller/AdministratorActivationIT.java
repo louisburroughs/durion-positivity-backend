@@ -14,6 +14,7 @@ import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.entity.UserActivationToken;
 import com.positivity.securityservice.internal.exception.ActivationTokenInvalidException;
+import com.positivity.securityservice.internal.repository.AuditLogEventRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserActivationTokenRepository;
@@ -72,6 +73,9 @@ class AdministratorActivationIT extends BaseContractIntegrationTest {
 
     @Autowired
     private UserActivationTokenRepository tokenRepository;
+
+    @Autowired
+    private AuditLogEventRepository auditLogEventRepository;
 
     @Autowired
     private UserService userService;
@@ -165,6 +169,14 @@ class AdministratorActivationIT extends BaseContractIntegrationTest {
                 .as("only the hash is stored")
                 .isPresent();
         assertThat(tokenRepository.findAll()).noneMatch(row -> token.equals(row.getTokenHash()));
+        // The mint audit row is written from an afterCommit callback in a dedicated REQUIRES_NEW
+        // transaction (AdministratorActivationService.MintAuditWriter); querying it back here,
+        // after the HTTP call that minted the token has already returned, is the proof that the
+        // insert actually committed rather than silently joining the already-completed mint
+        // transaction and being discarded.
+        assertThat(auditLogEventRepository.findByEventTypeOrderByTimestampDesc("AdministratorActivationTokenMinted"))
+                .as("the mint audit row is durable")
+                .anyMatch(event -> userId.toString().equals(event.getEntityId()));
 
         // 3. Still no login: a token is not a password.
         login(token)
