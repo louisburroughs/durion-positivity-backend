@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 public interface UserService {
 
@@ -31,7 +32,8 @@ public interface UserService {
      * outside. {@code POST /v1/auth/activate} with an operator-minted activation token sets the
      * first password and clears the flag.
      */
-    UserDto createUserAwaitingActivation(String username, Set<String> roleNames);
+    @NonNull
+    UserDto createUserAwaitingActivation(@NonNull String username, @NonNull Set<String> roleNames);
 
     Optional<UserAuthContext> getUserByUsername(String username);
 

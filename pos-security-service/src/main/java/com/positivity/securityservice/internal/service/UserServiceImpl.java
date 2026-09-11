@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,7 +57,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public UserDto createUserAwaitingActivation(String username, Set<String> roleNames) {
+    public @NonNull UserDto createUserAwaitingActivation(@NonNull String username, @NonNull Set<String> roleNames) {
         UserDto created = createUser(username, generatePassword(), roleNames);
         User user = userRepository
                 .findById(created.getId())
