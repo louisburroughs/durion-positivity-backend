@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.mcp.internal.domain.ToolMetadata;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
+import com.positivity.mcp.internal.repository.ToolPriorityRepository;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -48,6 +49,10 @@ class Wave2ToolSelectionRegressionTest {
 
     @Mock
     private ToolMetadataRepository repository;
+
+    /** Mockito answers an empty map: no overlay, so every test below runs on the global priorities. */
+    @Mock
+    private ToolPriorityRepository priorityRepository;
 
     @Mock
     private EmbeddingModel embeddingModel;
@@ -150,7 +155,8 @@ class Wave2ToolSelectionRegressionTest {
 
     @BeforeEach
     void setUp() {
-        service = new ToolRegistryService(repository, embeddingModel);
+        service =
+                new ToolRegistryService(repository, embeddingModel, new TenantToolPriorityResolver(priorityRepository));
     }
 
     @Test

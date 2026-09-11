@@ -14,6 +14,54 @@ import java.util.UUID;
  */
 public interface TenantRegistry {
 
-    /** Ids of every tenant that is {@code ACTIVE}, in a stable order. */
+    /**
+     * Ids of every tenant that is {@code ACTIVE}, in a stable order.
+     *
+     * <p><strong>Never includes {@link PlatformTenant#ID}.</strong> The platform tenant is
+     * control-plane data owned by {@code pos-tenant} (ADR-0062 §7), not an ordinary tenant, and this
+     * list's only consumer ({@link TenantIterator}, per-tenant scheduled work) must never run a
+     * tenant job under it — {@code @PlatformScoped} exists precisely so platform work is swept
+     * separately. Every implementation must uphold this itself: {@link StaticTenantRegistry} filters
+     * it out of {@code pos.tenancy.tenants} and {@code pos.tenancy.default-tenant-id} (both of which
+     * {@code pos-tenant} sets to the platform tenant for its own rows), and {@link
+     * RemoteTenantRegistry} filters it out of both its static seed and every fetched list. A module
+     * that supplies its own {@link TenantRegistry} (as {@code pos-security-service} does for its
+     * {@code ext_tenant} replica) must filter it too, or every other {@code TenantIterator} caller in
+     * that module inherits the same control-plane leak.
+     */
     List<UUID> activeTenantIds();
+
+    /**
+     * The active tenant list together with whether it is a complete picture of the fleet, read as
+     * one atomic pair.
+     *
+     * <p>A caller that needs both values — a fleet-wide rollup grading itself against the exact
+     * list it iterated, for instance — must not call {@link #activeTenantIds()} and, separately,
+     * {@link TenantRegistryFreshness#hasCompleteSnapshot()}: on a registry whose snapshot changes
+     * concurrently (a background refresh landing between the two calls) that composes a list from
+     * one moment with a completeness verdict from another, and the torn pair can read as complete
+     * while missing tenants the refresh just added. This method exists so there is always one call
+     * that cannot be torn.
+     *
+     * <p>The default below composes the two separate reads and is adequate only for a registry that
+     * cannot be caught mid-refresh — one that is authoritative by construction ({@link
+     * StaticTenantRegistry}, or a module-owned registry backed by a local replica), which is exactly
+     * the set of registries that do not implement {@link TenantRegistryFreshness} and so always
+     * report complete here. Any registry that implements {@link TenantRegistryFreshness} because its
+     * snapshot can go stale or be mid-refresh ({@link RemoteTenantRegistry}) MUST override this method
+     * to publish the list and its completeness from one consistent internal snapshot instead.
+     *
+     * @return the current tenant list paired with whether it is complete
+     */
+    default Snapshot snapshot() {
+        List<UUID> tenantIds = activeTenantIds();
+        boolean complete = !(this instanceof TenantRegistryFreshness freshness) || freshness.hasCompleteSnapshot();
+        return new Snapshot(tenantIds, complete);
+    }
+
+    /**
+     * One atomic read of {@link #activeTenantIds()} and its completeness verdict, as returned by
+     * {@link #snapshot()}.
+     */
+    record Snapshot(List<UUID> tenantIds, boolean complete) {}
 }

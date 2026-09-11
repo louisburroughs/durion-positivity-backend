@@ -8,9 +8,12 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.domain.ToolMetadata;
+import com.positivity.mcp.internal.domain.ToolPriorityOverlay;
 import com.positivity.mcp.internal.domain.ToolSelectionContext;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
+import com.positivity.mcp.internal.repository.ToolPriorityRepository;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +33,10 @@ class ToolRegistryServiceTest {
 
     @Mock
     private ToolMetadataRepository repository;
+
+    /** Mockito answers an empty map: no overlay, so every test below runs on the global priorities. */
+    @Mock
+    private ToolPriorityRepository priorityRepository;
 
     @Mock
     private EmbeddingModel embeddingModel;
@@ -69,7 +76,8 @@ class ToolRegistryServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ToolRegistryService(repository, embeddingModel);
+        service =
+                new ToolRegistryService(repository, embeddingModel, new TenantToolPriorityResolver(priorityRepository));
     }
 
     @Test
@@ -137,6 +145,43 @@ class ToolRegistryServiceTest {
         List<ToolMetadata> result = service.resolveCandidateTools(context, 5);
 
         assertThat(result).containsExactly(SAMPLE_TOOL);
+    }
+
+    @Test
+    @DisplayName("the bound tenant's priority overlay reorders the priority fallback (ADR-0062 WS6)")
+    void resolveCandidateTools_appliesTenantOverlayToPriorityFallback() {
+        ToolSelectionContext context =
+                new ToolSelectionContext("look up customer", "ROLE_CASHIER", "IDLE", CASHIER_PERMISSIONS);
+        ToolMetadata inventory = new ToolMetadata(
+                UUID.fromString("00000000-0000-0000-0000-000000000020"),
+                "InventoryFacadeTool",
+                "Inventory",
+                "Inventory availability",
+                "inventory",
+                1.0,
+                "low",
+                220,
+                true,
+                "inventoryFacadeTool");
+        // Globally, inventory (1.0) outranks the customer tool (0.8); this tenant's overlay says otherwise.
+        when(repository.findEnabledByPermissionsAndWorkflow(CASHIER_PERMISSIONS, "IDLE"))
+                .thenReturn(List.of(inventory, SAMPLE_TOOL));
+        when(embeddingModel.embed(anyString())).thenReturn(new float[] {0.1f, 0.2f});
+        when(repository.findTopKByEmbeddingForPermissions(
+                        any(float[].class), anyInt(), eq(CASHIER_PERMISSIONS), eq("IDLE")))
+                .thenReturn(List.of());
+        when(priorityRepository.findOverlayForCurrentTenant())
+                .thenReturn(Map.of(
+                        TOOL_ID,
+                        new ToolPriorityOverlay(TOOL_ID, 0.95, 50),
+                        inventory.id(),
+                        new ToolPriorityOverlay(inventory.id(), 0.3, 900)));
+
+        List<ToolMetadata> result = service.resolveCandidateTools(context, 5);
+
+        assertThat(result).extracting(ToolMetadata::name).containsExactly("customerFacadeTool", "InventoryFacadeTool");
+        assertThat(result.getFirst().priority()).isEqualTo(0.95);
+        assertThat(result.get(1).avgLatencyMs()).isEqualTo(900);
     }
 
     @Test

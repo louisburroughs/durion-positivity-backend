@@ -11,6 +11,7 @@ import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.entity.NltiSession;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
+import com.positivity.mcp.tenancy.BoundTenant;
 import com.positivity.security.common.GatewaySecurityConstants;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
@@ -48,6 +49,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
  * Issue: NLTI-009
  */
 @ExtendWith(MockitoExtension.class)
+@ExtendWith(BoundTenant.class)
 class NltiMetricsTest {
 
     // Hardcoded test UUIDs — no UUID.randomUUID() per ADR-0013
@@ -97,6 +99,7 @@ class NltiMetricsTest {
 
         service = new NltiRequestServiceImpl(
                 sessionRepository,
+                new NltiSessionAccess(sessionRepository),
                 requestRepository,
                 intentParserService,
                 writePlanService,
