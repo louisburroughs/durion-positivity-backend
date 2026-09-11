@@ -5,12 +5,19 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
+import com.positivity.tenancy.PlatformScoped;
+import com.positivity.tenancy.TenantIterator;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaCall;
+import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 import java.util.UUID;
 
 /**
@@ -147,6 +154,63 @@ public class ArchitectureTest {
             .beFreeOfCycles()
             .allowEmptyShould(true)
             .because("cyclic dependencies make modules harder to maintain and evolve");
+
+    // ADR-0062 §3 (plan WS6): every scheduled job in this module is classified — per tenant through
+    // TenantIterator.forEachActiveTenant or sweep, or @PlatformScoped over global tables only. pos-archunit
+    // enforces the same rule across modules; this copy keeps the module's own suite red on a new
+    // unclassified job. The scheduler table in README.md lists each job's classification.
+    @ArchTest
+    static final ArchRule scheduled_jobs_should_be_classified_for_tenancy = methods()
+            .that()
+            .areAnnotatedWith("org.springframework.scheduling.annotation.Scheduled")
+            .should(bePlatformScopedOrIterateTenants())
+            .allowEmptyShould(true)
+            .because(
+                    "ADR-0062 section 3: a scheduled job is per-tenant (TenantIterator.forEachActiveTenant or sweep) or"
+                            + " @PlatformScoped, so an unclassified job cannot silently run unbound");
+
+    // Jobs registered programmatically (SchedulingConfigurer.configureTasks -> addFixedDelayTask and
+    // friends) carry no @Scheduled and would slip past the rule above; the registering method is
+    // classified instead (SiteMapEmbeddingWarmupRunner).
+    @ArchTest
+    static final ArchRule programmatically_scheduled_jobs_should_be_classified_for_tenancy = methods()
+            .that()
+            .haveName("configureTasks")
+            .and()
+            .areDeclaredInClassesThat()
+            .implement("org.springframework.scheduling.annotation.SchedulingConfigurer")
+            .should(bePlatformScopedOrIterateTenants())
+            .allowEmptyShould(true)
+            .because(
+                    "ADR-0062 section 3: a job registered through SchedulingConfigurer is classified on the"
+                            + " registering method, per-tenant (TenantIterator.forEachActiveTenant or sweep) or @PlatformScoped");
+
+    /** The {@link TenantIterator} entry points that bind each active tenant in turn. */
+    private static final java.util.Set<String> PER_TENANT_ITERATION = java.util.Set.of("forEachActiveTenant", "sweep");
+
+    private static ArchCondition<JavaMethod> bePlatformScopedOrIterateTenants() {
+        return new ArchCondition<>(
+                "be annotated with @PlatformScoped or call TenantIterator.forEachActiveTenant or sweep") {
+            @Override
+            public void check(JavaMethod method, ConditionEvents events) {
+                if (method.isAnnotatedWith(PlatformScoped.class)) {
+                    return;
+                }
+                // Either entry point classifies a job as per-tenant: forEachActiveTenant and sweep read
+                // the same active-tenant list and bind each tenant in turn. sweep additionally reports
+                // whether that list was complete, which a caller needs before writing a cross-tenant
+                // rollup (plan WS6-b); it is the same iteration, so it satisfies the same rule.
+                boolean iterates = method.getMethodCallsFromSelf().stream()
+                        .map(JavaMethodCall::getTarget)
+                        .anyMatch(target -> target.getOwner().isEquivalentTo(TenantIterator.class)
+                                && PER_TENANT_ITERATION.contains(target.getName()));
+                if (!iterates) {
+                    events.add(SimpleConditionEvent.violated(
+                            method, method.getFullName() + " is scheduled but neither @PlatformScoped nor per-tenant"));
+                }
+            }
+        };
+    }
 
     @ArchTest
     static final ArchRule entities_should_depend_on_uuidv7_id = classes()

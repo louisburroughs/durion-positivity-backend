@@ -91,8 +91,9 @@ class TenancyArchitectureTest {
             .resideInAnyPackage(ADOPTED_MODULES)
             .should(bePlatformScopedOrIterateTenants())
             .allowEmptyShould(true)
-            .because("ADR-0062 section 3: a scheduled job is per-tenant (TenantIterator.forEachActiveTenant) or"
-                    + " @PlatformScoped, so an unclassified job cannot silently run unbound");
+            .because(
+                    "ADR-0062 section 3: a scheduled job is per-tenant (TenantIterator.forEachActiveTenant or sweep) or"
+                            + " @PlatformScoped, so an unclassified job cannot silently run unbound");
 
     @ArchTest
     static final ArchRule native_queries_on_scoped_repositories_are_reviewed = methods()
@@ -133,17 +134,25 @@ class TenancyArchitectureTest {
         };
     }
 
+    /** The {@link TenantIterator} entry points that bind each active tenant in turn. */
+    private static final java.util.Set<String> PER_TENANT_ITERATION = java.util.Set.of("forEachActiveTenant", "sweep");
+
     private static ArchCondition<JavaMethod> bePlatformScopedOrIterateTenants() {
-        return new ArchCondition<>("be annotated with @PlatformScoped or call TenantIterator.forEachActiveTenant") {
+        return new ArchCondition<>(
+                "be annotated with @PlatformScoped or call TenantIterator.forEachActiveTenant or sweep") {
             @Override
             public void check(JavaMethod method, ConditionEvents events) {
                 if (method.isAnnotatedWith(PlatformScoped.class)) {
                     return;
                 }
+                // Either entry point classifies a job as per-tenant: forEachActiveTenant and sweep read
+                // the same active-tenant list and bind each tenant in turn. sweep additionally reports
+                // whether that list was complete, which a caller needs before writing a cross-tenant
+                // rollup (plan WS6-b); it is the same iteration, so it satisfies the same rule.
                 boolean iterates = method.getMethodCallsFromSelf().stream()
                         .map(JavaMethodCall::getTarget)
                         .anyMatch(target -> target.getOwner().isEquivalentTo(TenantIterator.class)
-                                && target.getName().equals("forEachActiveTenant"));
+                                && PER_TENANT_ITERATION.contains(target.getName()));
                 if (!iterates) {
                     events.add(SimpleConditionEvent.violated(
                             method,

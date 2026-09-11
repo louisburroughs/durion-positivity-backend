@@ -358,6 +358,62 @@ Note that `build-push-ecr.yml` does **not** ship the agent files — only `sync-
 does. A rebuilt box that receives nothing but code deploys therefore stays unwatched until either
 this checklist is run or something under `deployment/alpha/` is merged.
 
+### Per-tenant logs and event statistics (ADR-0062 plan WS6)
+
+Every `pos-*` module that carries `pos-tenancy-common` logs Boot's correlation bracket as
+`[<trace_id>,<span_id>,<tenantId>]` on every line (trace and span from the OpenTelemetry agent's `trace_id`/`span_id`
+or Micrometer Tracing's `traceId`/`spanId`, whichever the module uses): `TenantContext` mirrors the bound tenant into the
+`tenantId` MDC key, and `TenantLogPatternEnvironmentPostProcessor` supplies `logging.pattern.correlation`
+as the lowest-precedence property (a module's own `logging.pattern.correlation` or `logback-spring.xml`
+wins). Lines logged with no tenant bound — startup, `@PlatformScoped` schedulers, actuator — print an
+empty third field. Nothing else about the line or its volume changes.
+
+Promtail (`observability/promtail-config.yml`) extracts that third field as the Loki label `tenant`
+(bounded cardinality: one value per tenant), so logs filter per tenant:
+
+```logql
+{job="docker", tenant="01900000-0000-7000-8000-000000000001"}                 # one tenant, every service
+{job="docker", service="pos-order", tenant="01900000-0000-7000-8000-000000000001"} |= "ERROR"
+sum by (service) (count_over_time({job="docker", tenant="<uuid>"}[5m]))    # a tenant's log volume
+```
+
+The **Durion Logs (Loki)** dashboard has a **Tenant** variable that filters every panel (All includes lines with no tenant), and
+the Loki datasource's TraceID derived field reads the leading `trace_id` of the same bracket.
+
+Event statistics have the same dimension. `pos-event-receiver`'s `emitted_event_hourly` continuous
+aggregate is grouped by `tenant_id`; the global view is the sum. `GET /event-receiver/v1/events/summary/
+{lastHour,lastDay,lastWeek}` reads the caller's own tenant, or — from the platform tenant only — the
+global rollup by default and one tenant with `?tenantId=<uuid>`; `tenantId` from any other tenant is a
+403 (`pos-event-receiver/README.md`, "Per-tenant statistics with global rollups"). The aggregate's
+refresh policy is unchanged (hourly, one-hour end offset), so per-tenant counts lag by up to an hour like
+the global ones.
+
+MCP tool priorities have the same shape. `pos-mcp-server` ranks tools on `mcp_tool.priority`, the global
+row, overridden tool by tool by the caller's tenant's overlay in `mcp_tool_priority` (row-level security:
+a tenant's connection sees its own overlay rows only). The sweep visits the tenants the module's registry
+knows: with the default `pos.tenancy.registry.mode=STATIC` that is `pos.tenancy.tenants` or just the alpha
+default tenant, and the service logs `mcp.tuning.mode=... with the STATIC tenant registry (1 tenant)` at
+startup when tuning is on — set `pos.tenancy.registry.mode=REMOTE` (`pos.tenancy.registry.url`, `.secret`)
+before enabling tuning on a multi-tenant deployment. The nightly tuning job (`mcp.tuning.cron`,
+`mcp.tuning.mode=off|shadow|live`) tunes each tenant's overlay from that tenant's own
+`mcp_tool_invocation_log` and then the global row from all tenants' logs summed; a tenant with no history
+keeps no overlay and ranks on the global set. It logs one `Tool priority tuning tenant=<uuid>
+invocations=… proposals=…` line per tenant and a `Tool priority tuning finished: tenants=…` summary, the
+`mcp.tuning.proposals` counter is tagged `mode` and `scope` (`tenant`/`global`), and shadow proposals on
+the `mcp.tuning.shadow` logger carry `scope` and `tenant_id`. To reset one tenant's tuning, delete its
+`mcp_tool_priority` rows as that tenant; `set_config(..., true)` is transaction-local, so the binding and
+the delete go in one transaction (run as separate autocommit statements the DELETE sees no rows):
+
+```sql
+BEGIN;
+SELECT set_config('app.current_tenant', '<tenant uuid>', true);
+DELETE FROM mcp_tool_priority;          -- RLS confines this to the bound tenant's rows
+COMMIT;
+```
+
+Its requests fall back to the global row until the next live run (`pos-mcp-server/README.md`,
+"Per-tenant tool priorities").
+
 ### Dashboard Access
 
 | Dashboard  | URL                      | Credentials |

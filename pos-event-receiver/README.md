@@ -33,6 +33,9 @@ Central event aggregation and storage service for the Durion Positivity ETSMS pl
 - `GET /v1/events/summary/lastDay` — event counts for last day
 - `GET /v1/events/summary/lastWeek` — event counts for last week
 
+The three summary endpoints take an optional `tenantId` (platform-tenant callers only; see "Per-tenant
+statistics" below).
+
 ## Configuration
 
 | Property                | Default  | Description                                  |
@@ -58,8 +61,35 @@ data column: `EventDaoImpl` stamps it from the bound request on every row, and e
 `EmittedEventRepository` names it; the repository is a marker `Repository`, not a `JpaRepository`, so no inherited
 `findAll()`/`findById()` can read across tenants, and `V1_1` leads the entity-lookup index with `tenant_id`.
 **Never query `emitted_event` without the tenant predicate.** The event-type
-registry (`event_type`, `preregistered_event`) and the `emitted_event_hourly` continuous aggregate (platform-wide
-hourly statistics; per-tenant observability with global rollups is plan WS6) are global as before.
+registry (`event_type`, `preregistered_event`) is global as before.
+
+### Per-tenant statistics with global rollups (plan WS6, decided 2026-09-10)
+
+The `emitted_event_hourly` continuous aggregate (`V2`) is grouped by `tenant_id` as well as event type: a tenant's
+hourly statistics are its own rows, and the global view is the sum across tenants. Like the hypertable it is
+built on, the aggregate has no row-level security (TimescaleDB excludes it), so `tenant_id` is a data column and
+the query shape is the isolation. `EmittedEventHourlyRepository` is a marker `Repository` with exactly two reads:
+`summarizeSince(tenantId, since)`, which names the tenant, and the `@TenantAudited` rollup
+`summarizeAcrossTenantsSince(since)`; `EmittedEventHourlyRepositoryQueryShapeTest` holds that shape.
+
+`EventSummaryServiceImpl` picks the scope for `GET /v1/events/summary/{lastHour,lastDay,lastWeek}`:
+
+| Caller bound to (`X-Tenant-Id`) | `?tenantId=` | Reads |
+| --- | --- | --- |
+| an ordinary tenant | omitted | its own tenant's counts |
+| an ordinary tenant | any value (even its own id) | 403 `FORBIDDEN` (`TenantScopeForbiddenException`, via the shared handler) |
+| the platform tenant (`PlatformTenant.ID`) | omitted | the global rollup, summed across tenants |
+| the platform tenant | one tenant | that tenant's counts |
+
+The refresh policy (`add_continuous_aggregate_policy`, hourly with a one-hour end offset) and the compression
+policy are unchanged; compression now segments by `(tenant_id, id)` so per-tenant reads of compressed chunks stay
+selective. `V2` is edited in place (`docs/TENANCY_SCHEMA.md`): a database that already carries the tenant-less
+aggregate is reset, not migrated. The H2 `dev` profile builds the view as a plain table from `EmittedEventHourly`
+(`ddl-auto: create-drop`), so the JPQL reads work there unchanged.
+
+Every log line of this module carries the bound tenant in Boot's correlation bracket,
+`[<trace_id>,<span_id>,<tenantId>]`, supplied by `pos-tenancy-common`'s `TenantLogPatternEnvironmentPostProcessor`
+and extracted by Promtail as the Loki `tenant` label (`observability/README.md`).
 
 The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_DATASOURCE_USERNAME`
 / `POS_APP_PASSWORD`); Flyway alone uses the owner credential (`SPRING_FLYWAY_USER` /
@@ -70,7 +100,8 @@ job, `flushEventBatch`, is platform-scoped because it drains the batch for every
 row's tenant (`EventDaoImplTenantTest`). There are no native queries.
 
 Proof: `TenantIsolationIT` (both tenant-bound queries return only their tenant's rows, raw SQL sees both, a row
-without a tenant is refused, and the hypertable still carries compression and the continuous aggregate) and
+without a tenant is refused, the hypertable still carries compression and the continuous aggregate, and the
+aggregate holds one row per tenant with the per-tenant read and the rollup agreeing on the sum) and
 `TenancySchemaConformanceIT` (every non-whitelisted table has `tenant_id`, RLS enabled and forced, and the
 `tenant_isolation` policy; the whitelisted ones have neither; the pool is `pos_app` with no bypass), both on a
 Testcontainers TimescaleDB (`./mvnw -pl pos-event-receiver -am verify`).

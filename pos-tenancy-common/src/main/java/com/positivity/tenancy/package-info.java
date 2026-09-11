@@ -5,8 +5,9 @@
  * this library binds the request's tenant to the connection ({@link
  * com.positivity.tenancy.datasource.TenantAwareDataSource}), to Hibernate ({@link
  * com.positivity.tenancy.hibernate.TenantContextIdentifierResolver}), and to Kafka consumers
- * ({@link com.positivity.tenancy.kafka.TenantRecordInterceptor}), and carries the classification
- * annotations the ArchUnit rules check.
+ * ({@link com.positivity.tenancy.kafka.TenantRecordInterceptor}), puts it on every log line
+ * ({@link com.positivity.tenancy.logging.TenantLogPatternEnvironmentPostProcessor}), and carries
+ * the classification annotations the ArchUnit rules check.
  */
 @NullMarked
 package com.positivity.tenancy;

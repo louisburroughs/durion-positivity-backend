@@ -15,14 +15,12 @@ import com.positivity.mcp.internal.enums.ArgProvenance;
 import com.positivity.mcp.internal.enums.NltiAuditEventType;
 import com.positivity.mcp.internal.enums.NltiRequestStatus;
 import com.positivity.mcp.internal.enums.NltiRiskLevel;
-import com.positivity.mcp.internal.exception.SessionOwnershipViolationException;
 import com.positivity.mcp.internal.exception.WritePlanConflictException;
 import com.positivity.mcp.internal.exception.WritePlanExecutionException;
 import com.positivity.mcp.internal.exception.WritePlanExpiredException;
 import com.positivity.mcp.internal.exception.WritePlanNotFoundException;
 import com.positivity.mcp.internal.exception.WritePlanStaleException;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
-import com.positivity.mcp.internal.repository.NltiSessionRepository;
 import com.positivity.mcp.internal.repository.NltiWritePlanRepository;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.WriteSignal;
@@ -106,7 +104,7 @@ public class NltiWritePlanService {
 
     private final NltiWritePlanRepository planRepository;
     private final NltiRequestRepository requestRepository;
-    private final NltiSessionRepository sessionRepository;
+    private final NltiSessionAccess sessionAccess;
     private final ToolMetadataRepository toolMetadataRepository;
     private final WritePlanExecutor writePlanExecutor;
     private final SourceEntityVersionProbe versionProbe;
@@ -122,7 +120,7 @@ public class NltiWritePlanService {
     public NltiWritePlanService(
             @NonNull NltiWritePlanRepository planRepository,
             @NonNull NltiRequestRepository requestRepository,
-            @NonNull NltiSessionRepository sessionRepository,
+            @NonNull NltiSessionAccess sessionAccess,
             @NonNull ToolMetadataRepository toolMetadataRepository,
             @NonNull WritePlanExecutor writePlanExecutor,
             @NonNull SourceEntityVersionProbe versionProbe,
@@ -133,7 +131,7 @@ public class NltiWritePlanService {
             @NonNull Clock clock) {
         this.planRepository = planRepository;
         this.requestRepository = requestRepository;
-        this.sessionRepository = sessionRepository;
+        this.sessionAccess = sessionAccess;
         this.toolMetadataRepository = toolMetadataRepository;
         this.writePlanExecutor = writePlanExecutor;
         this.versionProbe = versionProbe;
@@ -401,12 +399,9 @@ public class NltiWritePlanService {
         NltiWritePlan plan = planRepository
                 .findByRequestId(requestId)
                 .orElseThrow(() -> new WritePlanNotFoundException("No write plan for request: " + requestId));
-        if (sessionRepository
-                .findByIdAndSubjectId(plan.getSessionId(), subjectId)
-                .isEmpty()) {
-            throw new SessionOwnershipViolationException(
-                    "Write plan session is not owned by the authenticated subject: " + plan.getSessionId());
-        }
+        // ADR-0062 plan WS6: the plan's session is resolved under the bound tenant (404 when this
+        // tenant has no such session, 403 when it belongs to another subject).
+        sessionAccess.requireOwned(plan.getSessionId(), subjectId);
         return plan;
     }
 

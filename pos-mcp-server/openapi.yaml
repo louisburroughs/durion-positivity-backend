@@ -513,13 +513,13 @@ paths:
 
         Use this tool to start or continue a natural-language task conversation; do not use confirmWritePlan, which executes a plan this operation has already previewed.
 
-        Preconditions: a supplied sessionId must belong to the calling subject, and a session idle for more than 24 hours is silently replaced with a new one.
+        Preconditions: a supplied sessionId is resolved within the caller''s tenant; one owned by another subject of that tenant is rejected, one the tenant does not have (unknown, or another tenant''s) starts a fresh session, and a session idle for more than 24 hours is silently replaced with a new one.
 
         Required inputs: prompt (non-blank text); sessionId (UUID) is optional and a new session is created when it is absent; clientContext is an optional key-value map; an optional X-Correlation-Id header is reused and echoed back, otherwise a correlation id is generated.
 
         Emits a NLTI_REQUEST_SUBMIT event and persists the request with a SHA-256 prompt hash rather than the raw prompt text.
 
-        Returns 202 with status ACCEPTED or an attached write-plan preview, 403 when the supplied sessionId is owned by another subject, and 429 when the per-session rate limit (default 100 requests) is exceeded.
+        Returns 202 with status ACCEPTED or an attached write-plan preview (with a fresh sessionId when the supplied one was absent from the caller''s tenant), 403 when the supplied sessionId is owned by another subject of the same tenant, and 429 when the per-session rate limit (default 100 requests) is exceeded.
 
         '
       operationId: submitNltiRequest
@@ -571,7 +571,7 @@ paths:
 
         Emits a NLTI_WRITE_PLAN_CANCEL event and appends a CONFIRMATION audit-ledger entry with outcome cancelled.
 
-        Returns 200 with the plan (idempotently for already-inactive plans), 404 when no plan or request exists for the id, 403 when the plan is not owned by the caller, and 409 when the plan is COMPLETE, EXECUTING or ERROR and can no longer be cancelled.
+        Returns 200 with the plan (idempotently for already-inactive plans), 404 WRITE_PLAN_NOT_FOUND when no plan or request exists for the id, 404 SESSION_NOT_FOUND when the plan''s session is absent from the caller''s tenant, 403 when the plan''s session belongs to another subject of that tenant, and 409 when the plan is COMPLETE, EXECUTING or ERROR and can no longer be cancelled.
 
         '
       operationId: cancelWritePlan
@@ -609,7 +609,7 @@ paths:
 
         Emits a NLTI_WRITE_PLAN_CONFIRM event, appends CONFIRMATION and EXECUTION audit-ledger entries, and executes the target tool; re-confirming a COMPLETE plan returns the prior outcome without re-executing.
 
-        Returns 200 on execution or idempotent replay, 404 when no plan or request exists for the id, 403 when the plan is not owned by the caller or the tool permission is missing, 409 when the plan is cancelled, executing, previously failed, stale, or the idempotency key mismatches, 410 when the plan has expired, and 502 when the target tool call itself fails.
+        Returns 200 on execution or idempotent replay, 404 WRITE_PLAN_NOT_FOUND when no plan or request exists for the id, 404 SESSION_NOT_FOUND when the plan''s session is absent from the caller''s tenant, 403 when the plan''s session belongs to another subject of that tenant or the tool permission is missing, 409 when the plan is cancelled, executing, previously failed, stale, or the idempotency key mismatches, 410 when the plan has expired, and 502 when the target tool call itself fails.
 
         '
       operationId: confirmWritePlan
@@ -657,13 +657,13 @@ paths:
 
         Use this tool when a conversation enters or leaves an operational flow such as purchase-order creation; do not use submitNltiRequest, which submits a new prompt and never changes the workflow state directly.
 
-        Preconditions: the session must exist and be owned by the authenticated subject; an unknown session and a session owned by someone else are both rejected as ownership violations.
+        Preconditions: the session must exist for the caller''s tenant and be owned by the authenticated subject; a session of another tenant is indistinguishable from an unknown one.
 
         Required inputs: sessionId (UUID) as a path parameter and workflowState, one of IDLE, CREATING_PO, RECEIVING_ASN, INVENTORY_RECON or PROCESSING_RETURN; new sessions default to IDLE.
 
         Emits a NLTI_SESSION_WORKFLOW_STATE_SET event and updates only the session''s workflow state.
 
-        Returns 200 with the persisted state, and 403 when the session does not exist or is not owned by the caller.
+        Returns 200 with the persisted state, 404 when the caller''s tenant has no such session, and 403 when the session belongs to another subject.
 
         '
       operationId: setSessionWorkflowState

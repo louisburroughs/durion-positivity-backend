@@ -15,7 +15,9 @@ import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryPublisher;
+import com.positivity.mcp.tenancy.BoundTenant;
 import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.tenancy.testing.TenantTestSupport;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
@@ -45,6 +47,7 @@ import org.springframework.test.util.ReflectionTestUtils;
  * Issue: NLTI-001
  */
 @ExtendWith(MockitoExtension.class)
+@ExtendWith(BoundTenant.class)
 class NltiRequestServiceImplTest {
 
     // Hardcoded test UUIDs — no UUID.randomUUID() per ADR
@@ -81,6 +84,7 @@ class NltiRequestServiceImplTest {
         meterRegistry = new SimpleMeterRegistry();
         service = new NltiRequestServiceImpl(
                 sessionRepository,
+                new NltiSessionAccess(sessionRepository),
                 requestRepository,
                 intentParserService,
                 writePlanService,
@@ -174,6 +178,24 @@ class NltiRequestServiceImplTest {
         assertThatThrownBy(() -> service.submit(request))
                 .isInstanceOf(SessionOwnershipViolationException.class)
                 .hasMessageContaining("not owned");
+    }
+
+    @Test
+    @DisplayName(
+            "provided sessionId of another tenant → a fresh session, never a cross-tenant read or a 403 (ADR-0062 WS6)")
+    void submit_withSessionIdOfAnotherTenant_startsFreshSession() {
+        // Hibernate's tenant filter and RLS keep the row from the repository; even if a row of
+        // another tenant did come back, the service-level check treats it as absent.
+        NltiSession foreign = buildSession(UNKNOWN_SESSION_ID, SUBJECT);
+        ReflectionTestUtils.setField(foreign, "tenantId", TenantTestSupport.TENANT_B);
+        when(sessionRepository.findByIdAndSubjectId(UNKNOWN_SESSION_ID, SUBJECT))
+                .thenReturn(Optional.of(foreign));
+        when(sessionRepository.findById(UNKNOWN_SESSION_ID)).thenReturn(Optional.of(foreign));
+
+        NltiRequestDTO request = new NltiRequestDTO("list open invoices", UNKNOWN_SESSION_ID, null);
+        NltiResponseV1 response = service.submit(request);
+
+        assertThat(response.sessionId()).isNotNull().isNotEqualTo(UNKNOWN_SESSION_ID);
     }
 
     // ─── No security context → "system" subject fallback ────────────────────
@@ -325,6 +347,7 @@ class NltiRequestServiceImplTest {
     void submit_whenTelemetryEmitterThrows_doesNotFailTheRequest() {
         NltiRequestServiceImpl serviceWithFailingEmitter = new NltiRequestServiceImpl(
                 sessionRepository,
+                new NltiSessionAccess(sessionRepository),
                 requestRepository,
                 intentParserService,
                 writePlanService,

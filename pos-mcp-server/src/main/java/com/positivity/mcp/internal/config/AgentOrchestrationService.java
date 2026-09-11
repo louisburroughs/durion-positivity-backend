@@ -34,8 +34,9 @@ public interface AgentOrchestrationService {
     }
 
     /**
-     * Evicts the cached agent for the given user.
-     * Call on role changes or explicit logout.
+     * Evicts the conversation state and rate counter of {@code username} within the bound tenant
+     * (the caches are keyed by the gateway username, not the user id). Call on role changes or
+     * explicit logout.
      */
-    void evict(@NonNull String userId);
+    void evict(@NonNull String username);
 }

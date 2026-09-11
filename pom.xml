@@ -147,6 +147,13 @@
 				<artifactId>commons-jxpath</artifactId>
 				<version>1.4.0</version>
 			</dependency>
+			<!-- CVE-2026-84939 (9.1): Eureka's server-side template rendering pulls
+			     freemarker 2.3.34 transitively. 2.3.35 is the current release. -->
+			<dependency>
+				<groupId>org.freemarker</groupId>
+				<artifactId>freemarker</artifactId>
+				<version>2.3.35</version>
+			</dependency>
 
 			<!-- UTILITY LIBRARIES -->
 			<dependency>
