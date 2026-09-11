@@ -78,14 +78,14 @@ public class RoleBulkIngestController extends AbstractBulkIngestController<RoleB
                     Use this tool to provision a set of roles from a load file; do not use it to grant permissions, \
                     which is bulkIngestRolePermissions, and do not use createRole, which creates one role at a time.
                     Preconditions: the caller must hold security:role:create.
-                    Required inputs: jobId, locationId, and records; each record needs a non-blank name.
+                    Required inputs: jobId, locationId, and records; each record needs a non-blank name, and any \
+                    persona slot must describe the role rather than instruct the assistant (single line, within the \
+                    length cap, and free of imperative control verbs).
                     A role that already exists counts as a success — provisioning is expected to be re-runnable \
                     against an environment that is already partly seeded.
                     Under the platform tenant the batch is the platform role template (ADR-0062): each role is \
                     created with templateKey = its name (or marked when already present) and reaches tenants \
                     through provisioning and reconcileRoleTemplate.
-                    Persona slots must describe the role rather than instruct the assistant: single line, within the \
-                    length cap, and free of imperative control verbs.
                     Emits a SECURITY_ROLE_BULK_INGEST event.
                     Returns 200 in all cases; inspect each record's errorCode, which is ROLE_INGEST_FAILED with \
                     the reason for a row the service refused, or INTERNAL_ERROR with a correlationId to quote for a \

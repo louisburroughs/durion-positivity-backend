@@ -1227,6 +1227,8 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1audit~1pricing-snapshots
   /v1/audit/pricing-snapshots/{snapshotId}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1audit~1pricing-snapshots~1{snapshotId}
+  /v1/auth/activate:
+    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1auth~1activate
   /v1/auth/internal/token:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1auth~1internal~1token
   /v1/auth/login:
@@ -1265,6 +1267,10 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1permissions~1validate~1{permissionName}
   /v1/permissions/{id}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1permissions~1{id}
+  /v1/platform/tenants/{tenantId}/administrators/{userId}/activation-token:
+    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1platform~1tenants~1{tenantId}~1administrators~1{userId}~1activation-token
+  /v1/platform/tenants/{tenantId}/impersonation-token:
+    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1platform~1tenants~1{tenantId}~1impersonation-token
   /v1/platform/tenants/{tenantId}/roles/reconcile-template:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1platform~1tenants~1{tenantId}~1roles~1reconcile-template
   /v1/roles:
