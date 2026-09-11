@@ -16,6 +16,7 @@ import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.enums.LocationHierarchy;
 import com.positivity.securityservice.internal.enums.LocationScope;
 import com.positivity.securityservice.internal.exception.PlatformTenantRequiredException;
+import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.exception.TenantNotFoundException;
 import com.positivity.securityservice.internal.repository.ExtTenantRepository;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
@@ -193,6 +194,30 @@ class RoleTemplateReconciliationServiceTest {
         assertThat(dispatcher.getTemplateKey()).isEqualTo("DISPATCHER");
         verify(roles).save(dispatcher);
         verify(roles, never()).recordGrantProvenance(any(), any(), any(), any());
+    }
+
+    /**
+     * ADR-0062 §7 (Copilot review of PR #1955, Finding 4): {@code reconcile} is reachable with the
+     * platform tenant itself as its target ({@code aPlatformCallerReconcilingItsOwnTenant} below), so
+     * a case-matching non-{@code PLATFORM_ADMIN} role that already holds {@code platform:*} — through
+     * the role-permission bulk/update paths, before {@code PlatformGrantGuard} existed to stop it
+     * there — could be marked as a template role by this branch. Marking it is what lets {@code
+     * RoleTemplateService.snapshot()} copy that grant into every tenant, so this path needs the same
+     * refusal {@code provisionTemplateRole} already applies before marking an existing role.
+     */
+    @Test
+    @DisplayName("reconcile refuses to mark an existing role that already holds a platform:* permission")
+    void refusesToMarkAnExistingRoleHoldingAPlatformPermission() {
+        platformCaller();
+        when(templates.snapshot()).thenReturn(List.of(entry("ADMIN", "crm:party:view")));
+        Role admin = existingRole("ADMIN", null, "platform:tenant:create");
+        when(roles.findByNameIgnoreCase("ADMIN")).thenReturn(Optional.of(admin));
+
+        assertThatThrownBy(() -> service.reconcile(TENANT))
+                .isInstanceOf(SecurityValidationException.class)
+                .hasMessageContaining("platform:*");
+        assertThat(admin.getTemplateKey()).isNull();
+        verify(roles, never()).save(any(Role.class));
     }
 
     /**

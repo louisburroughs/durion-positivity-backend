@@ -71,6 +71,9 @@ class RoleManagementServiceImplTest {
     private RolePersonaEventEmitter rolePersonaEventEmitter;
 
     @Mock
+    private RoleManagementServiceImpl.TemplateRoleProvisioner templateRoleProvisioner;
+
+    @Mock
     private EffectiveGrantResolver effectiveGrantResolver;
 
     @Mock
@@ -112,75 +115,13 @@ class RoleManagementServiceImplTest {
         assertThat(updated.getPermissions()).extracting("name").contains("security:role:grant");
     }
 
-    /** ADR-0062 §6 (WS8): a role loaded into the platform tenant joins the template under its own name. */
-    @Test
-    void provisionTemplateRole_createsTheRoleWithItsNameAsTemplateKey() {
-        when(roleRepository.findByNameIgnoreCase("WARRANTY_CLERK")).thenReturn(Optional.empty());
-        when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        RoleDto created = roleManagementService.provisionTemplateRole(
-                new RoleCreateRequest("WARRANTY_CLERK", "Warranty claim intake", null, null, null, null, null));
-
-        assertThat(created.getTemplateKey()).isEqualTo("WARRANTY_CLERK");
-        assertThat(created.getName()).isEqualTo("WARRANTY_CLERK");
-        verify(rolePersonaEventEmitter).rolePersonaChanged(any(Role.class));
-    }
-
-    @Test
-    void provisionTemplateRole_marksAnExistingUnmarkedRoleAndLeavesTheRestAlone() {
-        Role role = new Role();
-        role.setId(UUID.fromString("00000000-0000-0000-0000-000000000007"));
-        role.setName("SHOP_MANAGER");
-        role.setDescription("as the platform wrote it");
-        when(roleRepository.findByNameIgnoreCase("SHOP_MANAGER")).thenReturn(Optional.of(role));
-        when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        RoleDto marked = roleManagementService.provisionTemplateRole(
-                new RoleCreateRequest("SHOP_MANAGER", "a different description", null, null, null, null, null));
-
-        assertThat(marked.getTemplateKey()).isEqualTo("SHOP_MANAGER");
-        assertThat(role.getDescription()).isEqualTo("as the platform wrote it");
-        verify(roleRepository).save(role);
-        verify(rolePersonaEventEmitter, never()).rolePersonaChanged(any(Role.class));
-    }
-
-    /** Uniqueness is case-insensitive, so a differently-cased row is the same role: marked under its own name. */
-    @Test
-    void provisionTemplateRole_marksADifferentlyCasedExistingRoleUnderItsStoredName() {
-        Role role = new Role();
-        role.setId(UUID.fromString("00000000-0000-0000-0000-000000000009"));
-        role.setName("Shop_Manager");
-        when(roleRepository.findByNameIgnoreCase("SHOP_MANAGER")).thenReturn(Optional.of(role));
-        when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        RoleDto marked = roleManagementService.provisionTemplateRole(
-                new RoleCreateRequest("SHOP_MANAGER", null, null, null, null, null, null));
-
-        assertThat(marked.getName()).isEqualTo("Shop_Manager");
-        assertThat(marked.getTemplateKey()).isEqualTo("Shop_Manager");
-        verify(roleRepository, never()).existsByNameIgnoreCase(any());
-    }
-
-    @Test
-    void provisionTemplateRole_isANoOpForARoleAlreadyInTheTemplate() {
-        Role role = new Role();
-        role.setId(UUID.fromString("00000000-0000-0000-0000-000000000008"));
-        role.setName("ADMIN");
-        role.setTemplateKey("ADMIN");
-        when(roleRepository.findByNameIgnoreCase("ADMIN")).thenReturn(Optional.of(role));
-
-        RoleDto unchanged = roleManagementService.provisionTemplateRole(
-                new RoleCreateRequest("ADMIN", null, null, null, null, null, null));
-
-        assertThat(unchanged.getTemplateKey()).isEqualTo("ADMIN");
-        verify(roleRepository, never()).save(any(Role.class));
-    }
-
     /**
      * ADR-0062 §7: {@code PLATFORM_ADMIN} is the platform tenant's own role and may never join the
      * per-tenant role template, whatever its current {@code template_key} state — otherwise a
      * {@code roles.csv} row naming it would let provisioning and reconciliation copy its
-     * {@code platform:*} grants into every tenant.
+     * {@code platform:*} grants into every tenant. This refusal stays directly in {@code
+     * provisionTemplateRole}, ahead of {@link RoleManagementServiceImpl.TemplateRoleProvisioner}, so
+     * a row naming it never opens a transaction at all.
      */
     @Test
     @DisplayName("provisionTemplateRole refuses PLATFORM_ADMIN by name, whether the role exists yet or not")
@@ -189,60 +130,66 @@ class RoleManagementServiceImplTest {
                         new RoleCreateRequest(ReservedRoles.PLATFORM_ADMIN, null, null, null, null, null, null)))
                 .isInstanceOf(SecurityValidationException.class)
                 .hasMessageContaining(ReservedRoles.PLATFORM_ADMIN);
-        verify(roleRepository, never()).findByNameIgnoreCase(any());
-        verify(roleRepository, never()).save(any(Role.class));
+        verify(templateRoleProvisioner, never()).attempt(any(RoleCreateRequest.class));
     }
 
     /**
-     * Defense in depth for the same invariant: a role that is not named {@code PLATFORM_ADMIN} but
-     * already holds a {@code platform:*} grant (RolePermissionBulkIngestController can attach one to
-     * any existing role under the platform binding) must not be markable as a template role either.
+     * The transactional single-attempt logic (create, mark-existing, the platform-grant refusal) now
+     * lives in {@link RoleManagementServiceImpl.TemplateRoleProvisioner}, a separate bean — see
+     * {@code TemplateRoleProvisionerTest} for that behaviour and {@code
+     * TemplateRoleProvisioningConcurrencyTest} for the real, transaction-boundary-crossing
+     * concurrent-create race it exists to fix (Finding 1, Copilot review of PR #1955). What remains
+     * here is {@code provisionTemplateRole}'s own retry loop: does it hand back the provisioner's
+     * result, does it retry a collision, and does it give up after the configured attempt count —
+     * exactly the shape {@code RoleTemplateReconciliationServiceTest} already tests for {@code
+     * applyWithRetry}.
      */
     @Test
-    @DisplayName("provisionTemplateRole refuses to mark an existing role that already holds a platform:* permission")
-    void provisionTemplateRole_refusesAnExistingRoleHoldingAPlatformPermission() {
-        Role role = new Role();
-        role.setId(UUID.fromString("00000000-0000-0000-0000-00000000000a"));
-        role.setName("ADMIN");
-        Permission platformGrant = new Permission();
-        platformGrant.setName("platform:tenant:create");
-        role.getPermissions().add(platformGrant);
-        when(roleRepository.findByNameIgnoreCase("ADMIN")).thenReturn(Optional.of(role));
+    @DisplayName("provisionTemplateRole returns the provisioner's result on the first attempt")
+    void provisionTemplateRole_delegatesToTheProvisioner() throws Exception {
+        RoleCreateRequest request =
+                new RoleCreateRequest("WARRANTY_CLERK", "Warranty claim intake", null, null, null, null, null);
+        Role provisioned = new Role();
+        provisioned.setId(UUID.fromString("00000000-0000-0000-0000-00000000000b"));
+        provisioned.setName("WARRANTY_CLERK");
+        provisioned.setTemplateKey("WARRANTY_CLERK");
+        when(templateRoleProvisioner.attempt(request)).thenReturn(provisioned);
 
-        assertThatThrownBy(() -> roleManagementService.provisionTemplateRole(
-                        new RoleCreateRequest("ADMIN", null, null, null, null, null, null)))
-                .isInstanceOf(SecurityValidationException.class)
-                .hasMessageContaining("platform:*");
-        assertThat(role.getTemplateKey()).isNull();
-        verify(roleRepository, never()).save(any(Role.class));
+        RoleDto result = roleManagementService.provisionTemplateRole(request);
+
+        assertThat(result.getTemplateKey()).isEqualTo("WARRANTY_CLERK");
+        verify(templateRoleProvisioner, times(1)).attempt(request);
     }
 
-    /**
-     * The (tenant_id, lower(name)) unique index, not the application-level check, decides a race
-     * between two concurrent platform bulk-ingest requests that both observed no role for the name:
-     * the loser must converge onto the winner's row (marking it if needed) rather than surface the
-     * raw {@link DataIntegrityViolationException} to the bulk-ingest controller as a spurious
-     * row failure.
-     */
     @Test
-    @DisplayName("provisionTemplateRole converges onto the winner of a concurrent create instead of failing the row")
-    void provisionTemplateRole_convergesOnAConcurrentCreateCollision() {
+    @DisplayName("provisionTemplateRole retries a collision in a fresh attempt and converges")
+    void provisionTemplateRole_retriesOnCollisionAndConverges() throws Exception {
+        RoleCreateRequest request =
+                new RoleCreateRequest("WARRANTY_CLERK", "Warranty claim intake", null, null, null, null, null);
         Role winner = new Role();
         winner.setId(UUID.fromString("00000000-0000-0000-0000-00000000000b"));
         winner.setName("WARRANTY_CLERK");
-        when(roleRepository.findByNameIgnoreCase("WARRANTY_CLERK")).thenReturn(Optional.empty(), Optional.of(winner));
-        when(roleRepository.save(any(Role.class)))
+        winner.setTemplateKey("WARRANTY_CLERK");
+        when(templateRoleProvisioner.attempt(request))
                 .thenThrow(new DataIntegrityViolationException("roles_tenant_lower_name_key"))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenReturn(winner);
 
-        RoleDto result = roleManagementService.provisionTemplateRole(
-                new RoleCreateRequest("WARRANTY_CLERK", "Warranty claim intake", null, null, null, null, null));
+        RoleDto result = roleManagementService.provisionTemplateRole(request);
 
         assertThat(result.getTemplateKey()).isEqualTo("WARRANTY_CLERK");
-        assertThat(winner.getTemplateKey()).isEqualTo("WARRANTY_CLERK");
-        verify(roleRepository, times(2)).findByNameIgnoreCase("WARRANTY_CLERK");
-        verify(roleRepository, times(2)).save(any(Role.class));
-        verify(rolePersonaEventEmitter, never()).rolePersonaChanged(any(Role.class));
+        verify(templateRoleProvisioner, times(2)).attempt(request);
+    }
+
+    @Test
+    @DisplayName("provisionTemplateRole gives up once every attempt collides")
+    void provisionTemplateRole_givesUpAfterMaxAttempts() throws Exception {
+        RoleCreateRequest request = new RoleCreateRequest("WARRANTY_CLERK", null, null, null, null, null, null);
+        DataIntegrityViolationException collision = new DataIntegrityViolationException("roles_tenant_lower_name_key");
+        when(templateRoleProvisioner.attempt(request)).thenThrow(collision);
+
+        assertThatThrownBy(() -> roleManagementService.provisionTemplateRole(request))
+                .isSameAs(collision);
+        verify(templateRoleProvisioner, times(3)).attempt(request);
     }
 
     @Test
@@ -326,5 +273,51 @@ class RoleManagementServiceImplTest {
         assertThatThrownBy(() -> roleManagementService.getRoleByName("MISSING"))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Role not found");
+    }
+
+    /**
+     * ADR-0062 §7 (Copilot review of PR #1955, Findings 2/3): {@code security:role:edit} authorizes
+     * this method (directly, and through the role-permission bulk ingest that calls it per grant),
+     * and nothing previously stopped it from handing a {@code platform:*} permission to a role that
+     * is not {@code PLATFORM_ADMIN} in the platform tenant.
+     */
+    @Test
+    @DisplayName("assignPermissionToRole refuses a platform:* permission on a role that is not PLATFORM_ADMIN")
+    void assignPermissionToRole_refusesAPlatformPermissionOnAnOrdinaryRole() {
+        UUID roleId = UUID.fromString("00000000-0000-0000-0000-00000000000c");
+        Role role = new Role();
+        role.setId(roleId);
+        role.setName("SHOP_MANAGER");
+        Permission permission = new Permission();
+        permission.setName("platform:tenant:create");
+        when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
+        when(permissionRepository.findByName("platform:tenant:create")).thenReturn(Optional.of(permission));
+
+        assertThatThrownBy(() -> roleManagementService.assignPermissionToRole(roleId, "platform:tenant:create"))
+                .isInstanceOf(SecurityValidationException.class)
+                .hasMessageContaining("platform:tenant:create");
+        assertThat(role.getPermissions()).isEmpty();
+        verify(roleRepository, never()).save(any(Role.class));
+    }
+
+    /** Same invariant, the other grant path: {@code updateRolePermissions} replaces the whole set directly. */
+    @Test
+    @DisplayName("updateRolePermissions refuses a platform:* permission on a role that is not PLATFORM_ADMIN")
+    void updateRolePermissions_refusesAPlatformPermissionOnAnOrdinaryRole() {
+        UUID roleId = UUID.fromString("00000000-0000-0000-0000-00000000000d");
+        Role role = new Role();
+        role.setId(roleId);
+        role.setName("SHOP_MANAGER");
+        Permission permission = new Permission();
+        permission.setName("platform:tenant:create");
+        when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
+        when(permissionRepository.findByName("platform:tenant:create")).thenReturn(Optional.of(permission));
+
+        assertThatThrownBy(() -> roleManagementService.updateRolePermissions(
+                        new RolePermissionsRequest(roleId, Set.of("platform:tenant:create"))))
+                .isInstanceOf(SecurityValidationException.class)
+                .hasMessageContaining("platform:tenant:create");
+        assertThat(role.getPermissions()).isEmpty();
+        verify(roleRepository, never()).save(any(Role.class));
     }
 }

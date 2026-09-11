@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.service;
 
+import com.positivity.securityservice.internal.domain.PlatformGrantGuard;
 import com.positivity.securityservice.internal.dto.RoleTemplateReconcileResponse;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
@@ -155,6 +156,14 @@ public class RoleTemplateReconciliationService {
                 Role role = existing.get();
                 boolean changed = false;
                 if (role.getTemplateKey() == null) {
+                    // Same guard provisionTemplateRole applies before marking a role as a template
+                    // (ADR-0062 §7): a role can already hold platform:* through the role-permission
+                    // bulk/update paths, and reconcile(tenantId) is reachable with the platform
+                    // tenant itself, so this branch can run against the platform tenant's own roles.
+                    // A case-matching non-PLATFORM_ADMIN role there must not become a template role
+                    // — RoleTemplateService.snapshot() would then copy it, grants included, into
+                    // every tenant.
+                    PlatformGrantGuard.refuseRoleHoldingAPlatformPermission(role);
                     role.setTemplateKey(entry.templateKey());
                     templateKeysAssigned.add(role.getName());
                     changed = true;

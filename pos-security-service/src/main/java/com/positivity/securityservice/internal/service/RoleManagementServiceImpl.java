@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
 import com.positivity.securityservice.internal.config.AuditEventService;
+import com.positivity.securityservice.internal.domain.PlatformGrantGuard;
 import com.positivity.securityservice.internal.domain.ReservedRoles;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.dto.PermissionDto;
@@ -41,6 +42,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -92,8 +94,11 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         return toRoleDto(saved);
     }
 
-    /** One segment of every {@code platform:*} permission (ADR-0062 §7): held only by {@link ReservedRoles#PLATFORM_ADMIN}. */
-    private static final String PLATFORM_PERMISSION_PREFIX = "platform:";
+    /** Attempts of {@link TemplateRoleProvisioner#attempt} before a persistent unique-key collision is given up on;
+     * mirrors {@code RoleTemplateReconciliationService#MAX_ATTEMPTS}. */
+    private static final int PROVISION_TEMPLATE_ROLE_MAX_ATTEMPTS = 3;
+
+    private final TemplateRoleProvisioner templateRoleProvisioner;
 
     /**
      * The platform bulk load's role (ADR-0062 §6, plan WS8): created with {@code template_key} =
@@ -107,66 +112,42 @@ public class RoleManagementServiceImpl implements RoleManagementService {
      * <p>Two refusals guard ADR-0062 §7's invariant that {@code platform:*} is held only by {@link
      * ReservedRoles#PLATFORM_ADMIN} in the platform tenant and never reaches a tenant role: a row
      * naming {@link ReservedRoles#PLATFORM_ADMIN} itself ({@link
-     * ReservedRoles#isTemplateEligible}), and a row naming any other role that already holds a
-     * {@code platform:*} grant. Either would otherwise mark the role's {@code template_key}, and
-     * {@code RoleTemplateService.snapshot()} — read by {@code TenantProvisioningService} and {@code
-     * RoleTemplateReconciliationService} — copies every marked role, grants included, into every
-     * tenant. Both throw {@link SecurityValidationException}, which {@code RoleBulkIngestController}
-     * already reports as a row rejection rather than a server fault, since the caller's own
-     * {@code roles.csv} row is what is wrong.
+     * ReservedRoles#isTemplateEligible}), and (inside {@link TemplateRoleProvisioner}) a row naming
+     * any other role that already holds a {@code platform:*} grant. Either would otherwise mark the
+     * role's {@code template_key}, and {@code RoleTemplateService.snapshot()} — read by {@code
+     * TenantProvisioningService} and {@code RoleTemplateReconciliationService} — copies every marked
+     * role, grants included, into every tenant. Both throw {@link SecurityValidationException}, which
+     * {@code RoleBulkIngestController} already reports as a row rejection rather than a server fault,
+     * since the caller's own {@code roles.csv} row is what is wrong.
+     *
+     * <p>Deliberately not itself {@code @Transactional}: each attempt runs inside {@link
+     * TemplateRoleProvisioner}, a separate bean, so its own {@code @Transactional} method commits (or
+     * rolls back) in its own transaction before this loop decides whether to retry — the same shape
+     * {@code RoleTemplateReconciliationService.applyWithRetry} uses. Catching {@link
+     * DataIntegrityViolationException} in a method that is itself the transactional boundary does not
+     * work: {@code roleRepository.save} only enqueues the insert, Hibernate defers it to commit-time
+     * flush, and that flush happens only after such a method has already returned — past any local
+     * catch, so a concurrent {@code roles_tenant_lower_name_key} collision would reach the caller as a
+     * raw {@link DataIntegrityViolationException} instead of converging (Copilot review, PR #1955).
      */
     @Override
-    @Transactional
     public RoleDto provisionTemplateRole(@NonNull RoleCreateRequest request) {
         refuseNonTemplateEligibleRole(request.name());
-        Optional<Role> existing = roleRepository.findByNameIgnoreCase(request.name());
-        if (existing.isPresent()) {
-            Role role = existing.get();
-            if (role.getTemplateKey() == null) {
-                refuseRoleHoldingAPlatformPermission(role);
-                role.setTemplateKey(role.getName());
-                role.setLastModifiedAt(Instant.now(clock));
-                role.setLastModifiedBy(getCurrentUsername());
-                role = roleRepository.save(role);
+        DataIntegrityViolationException last = null;
+        for (int attempt = 1; attempt <= PROVISION_TEMPLATE_ROLE_MAX_ATTEMPTS; attempt++) {
+            try {
+                return toRoleDto(templateRoleProvisioner.attempt(request));
+            } catch (DataIntegrityViolationException collision) {
+                last = collision;
+                log.info(
+                        "provisionTemplateRole collided with a concurrent create for {} (attempt {} of {});"
+                                + " retrying",
+                        request.name(),
+                        attempt,
+                        PROVISION_TEMPLATE_ROLE_MAX_ATTEMPTS);
             }
-            return toRoleDto(role);
         }
-        Role role = new Role();
-        role.setName(request.name());
-        role.setDescription(request.description());
-        role.setPersonaTitle(request.personaTitle());
-        role.setPersonaFocus(request.personaFocus());
-        role.setPersonaTone(request.personaTone());
-        role.setMcpPersonaRank(request.mcpPersonaRank());
-        role.setMcpPersonaEligible(request.personaEligibleOrDefault());
-        role.setTemplateKey(request.name());
-        role.setCreatedBy(getCurrentUsername());
-        role.setCreatedAt(Instant.now(clock));
-
-        Role saved;
-        try {
-            saved = roleRepository.save(role);
-        } catch (DataIntegrityViolationException collision) {
-            // Two concurrent platform bulk-ingest requests can both observe no role for this name
-            // (the read above) and race to create it; the loser hits the (tenant_id, lower(name))
-            // unique index the check-then-insert above cannot see coming, rather than the
-            // application-level branch above. roles.csv is re-runnable by design, so the loser
-            // converges onto the winner's row exactly as a genuine re-run would — re-reading and
-            // marking it if needed — instead of surfacing a spurious row failure to
-            // RoleBulkIngestController for a role that, from the caller's perspective, now exists
-            // exactly as requested.
-            Role winner = roleRepository.findByNameIgnoreCase(request.name()).orElseThrow(() -> collision);
-            if (winner.getTemplateKey() == null) {
-                refuseRoleHoldingAPlatformPermission(winner);
-                winner.setTemplateKey(winner.getName());
-                winner.setLastModifiedAt(Instant.now(clock));
-                winner.setLastModifiedBy(getCurrentUsername());
-                winner = roleRepository.save(winner);
-            }
-            return toRoleDto(winner);
-        }
-        rolePersonaEventEmitter.rolePersonaChanged(saved);
-        return toRoleDto(saved);
+        throw last;
     }
 
     private void refuseNonTemplateEligibleRole(String name) {
@@ -177,14 +158,56 @@ public class RoleManagementServiceImpl implements RoleManagementService {
         }
     }
 
-    private void refuseRoleHoldingAPlatformPermission(Role role) {
-        boolean holdsPlatformGrant = role.getPermissions().stream()
-                .map(Permission::getName)
-                .anyMatch(name -> name.startsWith(PLATFORM_PERMISSION_PREFIX));
-        if (holdsPlatformGrant) {
-            throw new SecurityValidationException("Role " + role.getName() + " holds a platform:* permission"
-                    + " (ADR-0062 section 7) and may never join the per-tenant role template: its grants would"
-                    + " then be copied into every tenant by provisioning and reconciliation.");
+    /**
+     * The transactional half of {@link #provisionTemplateRole} (ADR-0062 §7): a separate bean, on
+     * the same shape as {@code RoleTemplateReconciliationService.BoundOperations}, so one attempt is
+     * one complete transaction rather than a segment of the caller's. On the create path,
+     * {@code saveAndFlush} forces the {@code (tenant_id, lower(name))} collision to surface
+     * synchronously, inside this transaction and before {@link RolePersonaEventEmitter} fires — a
+     * losing attempt then rolls back cleanly with nothing published, and {@link
+     * #provisionTemplateRole}'s loop starts the next attempt in a fresh transaction rather than
+     * resuming one Hibernate has already flagged.
+     */
+    @Component
+    @RequiredArgsConstructor
+    static class TemplateRoleProvisioner {
+
+        private final RoleRepository roleRepository;
+        private final Clock clock;
+        private final RolePersonaEventEmitter rolePersonaEventEmitter;
+
+        @Transactional
+        Role attempt(RoleCreateRequest request) {
+            Optional<Role> existing = roleRepository.findByNameIgnoreCase(request.name());
+            if (existing.isPresent()) {
+                Role role = existing.get();
+                if (role.getTemplateKey() == null) {
+                    PlatformGrantGuard.refuseRoleHoldingAPlatformPermission(role);
+                    role.setTemplateKey(role.getName());
+                    role.setLastModifiedAt(Instant.now(clock));
+                    role.setLastModifiedBy(CurrentActor.resolve());
+                    role = roleRepository.save(role);
+                }
+                return role;
+            }
+
+            Role role = new Role();
+            role.setName(request.name());
+            role.setDescription(request.description());
+            role.setPersonaTitle(request.personaTitle());
+            role.setPersonaFocus(request.personaFocus());
+            role.setPersonaTone(request.personaTone());
+            role.setMcpPersonaRank(request.mcpPersonaRank());
+            role.setMcpPersonaEligible(request.personaEligibleOrDefault());
+            role.setTemplateKey(request.name());
+            role.setCreatedBy(CurrentActor.resolve());
+            role.setCreatedAt(Instant.now(clock));
+
+            // Forces the insert (and any (tenant_id, lower(name)) collision) to happen right here,
+            // rather than deferred to this method's own commit-time flush — see the class javadoc.
+            Role saved = roleRepository.saveAndFlush(role);
+            rolePersonaEventEmitter.rolePersonaChanged(saved);
+            return saved;
         }
     }
 
@@ -240,6 +263,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                     .findByName(permissionName)
                     .orElseThrow(() -> new PermissionNotFoundException(
                             "Permission not found: " + permissionName + ". It must be registered first."));
+            PlatformGrantGuard.refuseGrantingPlatformPermission(role, permissionName);
             permissions.add(permission);
         }
 
@@ -485,6 +509,7 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 .findByName(permissionKey)
                 .orElseThrow(() -> new PermissionNotFoundException(
                         "Permission not found: " + permissionKey + ". It must be registered first."));
+        PlatformGrantGuard.refuseGrantingPlatformPermission(role, permissionKey);
         boolean newGrant = role.getPermissions().add(permission);
         role.setLastModifiedBy(getCurrentUsername());
         role.setLastModifiedAt(Instant.now(clock));
