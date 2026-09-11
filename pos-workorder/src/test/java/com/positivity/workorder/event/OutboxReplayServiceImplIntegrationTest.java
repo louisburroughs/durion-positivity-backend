@@ -5,6 +5,8 @@ import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_B;
 import static com.positivity.tenancy.testing.TenantTestSupport.asTenant;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.tenancy.PlatformTenant;
+import com.positivity.tenancy.TenantIterator;
 import com.positivity.workorder.internal.entity.OutboxEvent;
 import com.positivity.workorder.internal.repository.OutboxEventRepository;
 import com.positivity.workorder.internal.service.OutboxReplayServiceImpl;
@@ -15,6 +17,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 
 /**
@@ -23,8 +27,17 @@ import org.springframework.context.annotation.Import;
  * the bound tenant (ADR-0062 §3): another tenant's rows in the same window stay published.
  */
 @DataJpaTest(properties = "spring.flyway.enabled=false")
-@Import(OutboxReplayServiceImpl.class)
+@Import({OutboxReplayServiceImpl.class, OutboxReplayServiceImplIntegrationTest.RegistryConfig.class})
 class OutboxReplayServiceImplIntegrationTest {
+
+    /** The registry a platform operator's replay fans out over: tenants A and B. */
+    @TestConfiguration
+    static class RegistryConfig {
+        @Bean
+        TenantIterator tenantIterator() {
+            return new TenantIterator(() -> List.of(TENANT_A, TENANT_B));
+        }
+    }
 
     @Autowired
     private OutboxReplayServiceImpl service;
@@ -107,6 +120,39 @@ class OutboxReplayServiceImplIntegrationTest {
                 .filteredOn(e -> e.getPublishedAt() == null)
                 .extracting(OutboxEvent::getRecordKey)
                 .containsExactly("b-in-window");
+    }
+
+    @Test
+    @DisplayName("Admin replay by an ordinary tenant re-queues only that tenant's rows")
+    void adminReplayForOrdinaryTenantIsScopedToIt() {
+        Instant cutoff = Instant.parse("2026-07-01T00:00:00Z");
+        save(TENANT_A, "a", Instant.parse("2026-07-02T00:00:00Z"), Instant.now(), 1);
+        save(TENANT_B, "b", Instant.parse("2026-07-02T00:00:00Z"), Instant.now(), 1);
+
+        int queued = asTenant(TENANT_A, () -> service.replaySinceForCaller(cutoff));
+
+        assertThat(queued).isEqualTo(1);
+        assertThat(repository.findAll())
+                .filteredOn(e -> e.getPublishedAt() == null)
+                .extracting(OutboxEvent::getRecordKey)
+                .containsExactly("a");
+    }
+
+    @Test
+    @DisplayName("Admin replay by a platform-tenant operator re-queues every active tenant's rows")
+    void adminReplayForPlatformOperatorFansOutOverActiveTenants() {
+        Instant cutoff = Instant.parse("2026-07-01T00:00:00Z");
+        save(TENANT_A, "a", Instant.parse("2026-07-02T00:00:00Z"), Instant.now(), 1);
+        save(TENANT_B, "b", Instant.parse("2026-07-02T00:00:00Z"), Instant.now(), 2);
+        save(TENANT_A, "a-old", Instant.parse("2026-06-01T00:00:00Z"), Instant.now(), 0);
+
+        int queued = asTenant(PlatformTenant.ID, () -> service.replaySinceForCaller(cutoff));
+
+        assertThat(queued).isEqualTo(2);
+        assertThat(repository.findAll())
+                .filteredOn(e -> e.getPublishedAt() == null)
+                .extracting(OutboxEvent::getRecordKey)
+                .containsExactlyInAnyOrder("a", "b");
     }
 
     @Test

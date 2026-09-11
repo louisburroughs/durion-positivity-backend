@@ -24,6 +24,18 @@ public interface OutboxReplayService {
     int replaySince(@NonNull Instant since);
 
     /**
+     * Administrative replay for the calling operator (ADR-0062 §3): the bound tenant's published
+     * outbox events created at or after {@code since} — or, when the caller is bound to the platform
+     * tenant, which owns no workorder rows of its own, every active tenant's in turn through
+     * {@code TenantIterator}. This is the {@code POST /v1/outbox/replay} path; the Kafka
+     * {@code workorder.outbox.replay-requested} path always uses {@link #replaySince} for exactly
+     * the tenant on the command's header.
+     *
+     * @return the number of events queued for re-publication across the tenants replayed
+     */
+    int replaySinceForCaller(@NonNull Instant since);
+
+    /**
      * Mark the bound tenant's published outbox events created in {@code [since, until)} for
      * re-publication — the
      * bounded form used by manifest-driven drift repair, so one drifted window never triggers a
