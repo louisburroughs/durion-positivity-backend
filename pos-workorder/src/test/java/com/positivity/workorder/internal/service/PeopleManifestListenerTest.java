@@ -1,6 +1,8 @@
 package com.positivity.workorder.internal.service;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -9,11 +11,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.ReconciliationManifestV1;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import com.positivity.workorder.internal.repository.ProcessedEventRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -76,6 +80,7 @@ class PeopleManifestListenerTest {
                   "occurredAtUtc": "2026-07-14T11:05:00Z",
                   "sourceService": "pos-people",
                   "payload": {
+                    "tenantId": "%s",
                     "windowStartUtc": "%s",
                     "windowEndUtc": "%s",
                     "eventCount": %d,
@@ -85,6 +90,7 @@ class PeopleManifestListenerTest {
                 }
                 """.formatted(
                         eventIdAt(Instant.parse("2026-07-14T11:05:00Z"), 9),
+                        TENANT_A,
                         WINDOW_START,
                         WINDOW_END,
                         eventCount,
@@ -93,41 +99,41 @@ class PeopleManifestListenerTest {
     }
 
     private double driftCount() {
-        return meterRegistry
-                .get("replica.drift")
-                .tags("owner", "people")
-                .counter()
-                .count();
+        return java.util.Optional.ofNullable(meterRegistry
+                        .find("replica.drift")
+                        .tag("owner", "people")
+                        .counter())
+                .map(io.micrometer.core.instrument.Counter::count)
+                .orElse(0d);
     }
 
     @Test
     @DisplayName("Matching count and checksum → no drift, no replay request")
     void matchingManifestIsQuiet() {
         List<String> ids = List.of(IN_WINDOW_ID_1, IN_WINDOW_ID_2);
-        when(repository.findEventIdsInRange(eq("people"), anyString(), anyString()))
+        when(repository.findEventIdsInRange(eq("people"), eq(TENANT_A), anyString(), anyString()))
                 .thenReturn(ids);
 
         listener.onManifest(manifestMessage(2, ReconciliationManifestV1.checksumOf(ids)));
 
         assertThat(driftCount()).isZero();
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
     }
 
     @Test
     @DisplayName("Missing event → drift metric + exactly one replay request for the window")
     void missingEventTriggersDriftAndReplay() throws Exception {
         // Owner saw two events, we only recorded one.
-        when(repository.findEventIdsInRange(eq("people"), anyString(), anyString()))
+        when(repository.findEventIdsInRange(eq("people"), eq(TENANT_A), anyString(), anyString()))
                 .thenReturn(List.of(IN_WINDOW_ID_1));
 
         listener.onManifest(
                 manifestMessage(2, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_1, IN_WINDOW_ID_2))));
 
         assertThat(driftCount()).isEqualTo(1.0);
-        ArgumentCaptor<String> command = ArgumentCaptor.forClass(String.class);
-        verify(kafkaTemplate, org.mockito.Mockito.times(1))
-                .send(eq("people.commands.v1"), anyString(), command.capture());
-        JsonNode json = objectMapper.readTree(command.getValue());
+        ProducerRecord<String, String> replay = capturedReplay();
+        assertThat(replay.topic()).isEqualTo("people.commands.v1");
+        JsonNode json = objectMapper.readTree(replay.value());
         assertThat(json.path("commandType").stringValue()).isEqualTo("people.outbox.replay-requested");
         assertThat(json.path("payload").path("since").stringValue()).isEqualTo(WINDOW_START.toString());
         assertThat(json.path("payload").path("until").stringValue()).isEqualTo(WINDOW_END.toString());
@@ -136,13 +142,13 @@ class PeopleManifestListenerTest {
     @Test
     @DisplayName("Same count but different ids (checksum mismatch) → drift")
     void checksumMismatchTriggersDrift() {
-        when(repository.findEventIdsInRange(eq("people"), anyString(), anyString()))
+        when(repository.findEventIdsInRange(eq("people"), eq(TENANT_A), anyString(), anyString()))
                 .thenReturn(List.of(IN_WINDOW_ID_1));
 
         listener.onManifest(manifestMessage(1, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_2))));
 
         assertThat(driftCount()).isEqualTo(1.0);
-        verify(kafkaTemplate).send(eq("people.commands.v1"), anyString(), anyString());
+        verify(kafkaTemplate).send(replayOn("people.commands.v1"));
     }
 
     @Test
@@ -152,17 +158,16 @@ class PeopleManifestListenerTest {
         listener.onManifest("{\"payload\": {\"windowStartUtc\": \"oops\"}}");
 
         assertThat(driftCount()).isZero();
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
-        verify(repository, never()).findEventIdsInRange(anyString(), anyString(), anyString());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
+        verify(repository, never()).findEventIdsInRange(anyString(), any(), anyString(), anyString());
     }
 
     @Test
     @DisplayName("A failed replay publish is swallowed — the drift metric still fires")
     void replayPublishFailureIsSwallowed() {
-        when(repository.findEventIdsInRange(eq("people"), anyString(), anyString()))
+        when(repository.findEventIdsInRange(eq("people"), eq(TENANT_A), anyString(), anyString()))
                 .thenReturn(List.of());
-        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
-                .thenThrow(new IllegalStateException("broker down"));
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new IllegalStateException("broker down"));
 
         listener.onManifest(manifestMessage(1, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_1))));
 
@@ -172,7 +177,7 @@ class PeopleManifestListenerTest {
     @Test
     @DisplayName("Redelivering the same manifest is idempotent: same verdict every time")
     void redeliveryIsIdempotent() {
-        when(repository.findEventIdsInRange(eq("people"), anyString(), anyString()))
+        when(repository.findEventIdsInRange(eq("people"), eq(TENANT_A), anyString(), anyString()))
                 .thenReturn(List.of(IN_WINDOW_ID_1));
         String message =
                 manifestMessage(2, ReconciliationManifestV1.checksumOf(List.of(IN_WINDOW_ID_1, IN_WINDOW_ID_2)));
@@ -181,6 +186,48 @@ class PeopleManifestListenerTest {
         listener.onManifest(message);
 
         assertThat(driftCount()).isEqualTo(2.0);
-        verify(kafkaTemplate, org.mockito.Mockito.times(2)).send(eq("people.commands.v1"), anyString(), anyString());
+        verify(kafkaTemplate, org.mockito.Mockito.times(2)).send(replayOn("people.commands.v1"));
+    }
+
+    /** The one replay command handed to Kafka: it must ride the manifest's tenant header (ADR-0062 §3). */
+    @SuppressWarnings("unchecked")
+    private ProducerRecord<String, String> capturedReplay() {
+        ArgumentCaptor<ProducerRecord<String, String>> record = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(kafkaTemplate).send(record.capture());
+        assertThat(TenantKafkaHeaders.read(record.getValue().headers())).contains(TENANT_A);
+        return record.getValue();
+    }
+
+    /** Matches a replay command routed to {@code topic} under the manifest's tenant header. */
+    private static ProducerRecord<String, String> replayOn(String topic) {
+        return org.mockito.ArgumentMatchers.argThat(
+                (ProducerRecord<String, String> record) -> topic.equals(record.topic())
+                        && TenantKafkaHeaders.read(record.headers())
+                                .filter(TENANT_A::equals)
+                                .isPresent());
+    }
+
+    @Test
+    @DisplayName("skips a manifest without tenantId instead of reading it as any tenant's (WS4-3)")
+    void skipsAManifestWithoutTenant() {
+        // Published before manifests were per tenant (ADR-0062 WS4-3): it summarised every
+        // tenant's rows at once, so no single tenant's ledger can be compared against it.
+        String legacy = """
+                {"eventType":"x.reconciliation.manifest",
+                 "payload":{"windowStartUtc":"%s","windowEndUtc":"%s","eventCount":2,
+                   "eventIdsChecksum":"owner-checksum","eventTypeCounts":null}}
+                """.formatted(WINDOW_START, WINDOW_END);
+
+        listener.onManifest(legacy);
+
+        verify(repository, never()).findEventIdsInRange(any(), any(), any(), any());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
+        assertThat(meterRegistry.find("replica.drift").counters()).isEmpty();
+        var skipped = meterRegistry
+                .find("replica.manifest.skipped")
+                .tag("reason", "missing_tenant")
+                .counter();
+        assertThat(skipped).isNotNull();
+        assertThat(skipped.count()).isEqualTo(1.0);
     }
 }

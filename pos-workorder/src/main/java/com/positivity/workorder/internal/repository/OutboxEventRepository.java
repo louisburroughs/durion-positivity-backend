@@ -50,13 +50,13 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
             @NonNull String topic, @NonNull Instant from, @NonNull Instant to);
 
     /**
-     * Mark already-published events created at or after {@code since} for re-publication
+     * Mark {@code tenantId}'s already-published events created at or after {@code since} for re-publication
      * (ADR-0044 backfill/drift repair). The publisher re-sends them; consumers dedupe by eventId.
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update OutboxEvent e set e.publishedAt = null, e.attempts = 0, e.lastError = null"
-            + " where e.publishedAt is not null and e.createdAt >= :since")
-    int markForReplaySince(@Param("since") @NonNull Instant since);
+            + " where e.publishedAt is not null and e.tenantId = :tenantId and e.createdAt >= :since")
+    int markForReplaySince(@Param("tenantId") @NonNull UUID tenantId, @Param("since") @NonNull Instant since);
 
     /**
      * Bounded variant for manifest-driven drift repair: re-queue only the drifted window instead
@@ -64,6 +64,10 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update OutboxEvent e set e.publishedAt = null, e.attempts = 0, e.lastError = null"
-            + " where e.publishedAt is not null and e.createdAt >= :since and e.createdAt < :until")
-    int markForReplayBetween(@Param("since") @NonNull Instant since, @Param("until") @NonNull Instant until);
+            + " where e.publishedAt is not null and e.tenantId = :tenantId and e.createdAt >= :since"
+            + " and e.createdAt < :until")
+    int markForReplayBetween(
+            @Param("tenantId") @NonNull UUID tenantId,
+            @Param("since") @NonNull Instant since,
+            @Param("until") @NonNull Instant until);
 }

@@ -3,4 +3,4 @@
 # TenancySchemaConformanceIT (plan WS1) reads this file.
 event_outbox  # transactional outbox; the unbound poller publishes every tenant's rows (tenant_id carried as data)
 kafka_event_outbox  # transactional outbox; the unbound poller publishes every tenant's rows (tenant_id carried as data)
-processed_events  # consumer idempotency ledger keyed by eventId; checked before the tenant is bound
+processed_events  # consumer idempotency ledger keyed by eventId, deduplicated across tenants; tenant_id carried as data for per-tenant reconciliation

@@ -66,6 +66,7 @@ CREATE TABLE public.person_contact_point (
 
 CREATE TABLE public.processed_events (
     event_id character varying(36) NOT NULL,
+    tenant_id uuid,
     owner character varying(64) NOT NULL,
     processed_at timestamp(6) with time zone NOT NULL
 );
@@ -130,7 +131,7 @@ CREATE INDEX idx_person_contact_point_person ON public.person_contact_point USIN
 
 CREATE INDEX idx_person_contact_point_type ON public.person_contact_point USING btree (contact_type);
 
-CREATE INDEX idx_processed_events_owner_event ON public.processed_events USING btree (owner, event_id);
+CREATE INDEX idx_processed_events_owner_tenant_event ON public.processed_events USING btree (owner, tenant_id, event_id);
 
 CREATE INDEX idx_user_person_links_person_id ON public.user_person_links USING btree (person_id);
 

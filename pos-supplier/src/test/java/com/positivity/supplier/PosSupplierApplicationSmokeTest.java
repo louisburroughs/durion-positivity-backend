@@ -61,9 +61,10 @@ class PosSupplierApplicationSmokeTest {
 
     @Test
     void processedEventsMatchesPlatformIdempotencyLogShape() {
-        // ADR-0044 §4 / platform processed_events convention (pos-people-contact V3,
-        // pos-catalog V5): event_id varchar(36) PK, owner varchar(64), processed_at
-        // timestamptz — all NOT NULL — plus the (owner, event_id) lookup index.
+        // ADR-0044 §4 / platform processed_events convention: event_id varchar(36) PK,
+        // tenant_id uuid (nullable: the tenant the listener ran under, plan WS4-3), owner
+        // varchar(64), processed_at timestamptz, plus the (owner, tenant_id, event_id) lookup
+        // index the per-tenant manifest comparison reads.
         List<Map<String, Object>> columns =
                 jdbcTemplate.queryForList("SELECT column_name, data_type, character_maximum_length, is_nullable"
                         + " FROM information_schema.columns WHERE table_name = 'PROCESSED_EVENTS'"
@@ -77,6 +78,7 @@ class PosSupplierApplicationSmokeTest {
                         c -> c.get("IS_NULLABLE"))
                 .containsExactly(
                         tuple("EVENT_ID", "CHARACTER VARYING", 36L, "NO"),
+                        tuple("TENANT_ID", "UUID", null, "YES"),
                         tuple("OWNER", "CHARACTER VARYING", 64L, "NO"),
                         tuple("PROCESSED_AT", "TIMESTAMP WITH TIME ZONE", null, "NO"));
 
@@ -91,10 +93,10 @@ class PosSupplierApplicationSmokeTest {
         List<String> ownerIndexColumns = jdbcTemplate.queryForList(
                 "SELECT column_name FROM information_schema.index_columns"
                         + " WHERE table_name = 'PROCESSED_EVENTS'"
-                        + " AND index_name = 'IDX_PROCESSED_EVENTS_OWNER_EVENT'"
+                        + " AND index_name = 'IDX_PROCESSED_EVENTS_OWNER_TENANT_EVENT'"
                         + " ORDER BY ordinal_position",
                 String.class);
-        assertThat(ownerIndexColumns).containsExactly("OWNER", "EVENT_ID");
+        assertThat(ownerIndexColumns).containsExactly("OWNER", "TENANT_ID", "EVENT_ID");
     }
 
     @Test

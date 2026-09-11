@@ -1,6 +1,8 @@
 package com.positivity.invoice.internal.service;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -9,11 +11,13 @@ import static org.mockito.Mockito.when;
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.domainevents.UuidV7Timestamps;
 import com.positivity.invoice.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
 import java.util.function.Consumer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -113,14 +117,15 @@ class ManifestListenerContractTest {
     private String manifest(long eventCount, String checksum) {
         return """
                 {"eventId":"evt-1","eventType":"x.reconciliation.manifest",
-                 "payload":{"windowStartUtc":"%s","windowEndUtc":"%s","eventCount":%d,
+                 "payload":{"tenantId":"%s","windowStartUtc":"%s","windowEndUtc":"%s","eventCount":%d,
                    "eventIdsChecksum":"%s","eventTypeCounts":null}}
-                """.formatted(WINDOW_START, WINDOW_END, eventCount, checksum);
+                """.formatted(TENANT_A, WINDOW_START, WINDOW_END, eventCount, checksum);
     }
 
     private void replicaHolds(Listener listener, List<String> eventIds) {
         when(processedEventRepository.findEventIdsInRange(
                         listener.owner(),
+                        TENANT_A,
                         UuidV7Timestamps.minStringAt(WINDOW_START),
                         UuidV7Timestamps.minStringAt(WINDOW_END)))
                 .thenReturn(eventIds);
@@ -142,7 +147,7 @@ class ManifestListenerContractTest {
 
         listener.dispatch().accept(manifest(ids.size(), ReconciliationManifestV1.checksumOf(ids)));
 
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
         assertThat(driftCount(listener.owner())).isZero();
     }
 
@@ -154,15 +159,11 @@ class ManifestListenerContractTest {
         replicaHolds(listener, List.of());
 
         listener.dispatch().accept(manifest(2, "owner-checksum"));
-
-        ArgumentCaptor<String> command = ArgumentCaptor.forClass(String.class);
         // A misrouted replay repairs nothing while looking like a successful attempt.
-        verify(kafkaTemplate)
-                .send(
-                        org.mockito.ArgumentMatchers.eq(listener.commandsTopic()),
-                        org.mockito.ArgumentMatchers.eq(WINDOW_START.toString()),
-                        command.capture());
-        var payload = objectMapper.readTree(command.getValue()).path("payload");
+        ProducerRecord<String, String> replay = capturedReplay();
+        assertThat(replay.topic()).isEqualTo(listener.commandsTopic());
+        assertThat(replay.key()).isEqualTo(WINDOW_START.toString());
+        var payload = objectMapper.readTree(replay.value()).path("payload");
         assertThat(payload.path("since").asString()).isEqualTo(WINDOW_START.toString());
         assertThat(payload.path("until").asString()).isEqualTo(WINDOW_END.toString());
         assertThat(driftCount(listener.owner())).isEqualTo(1.0);
@@ -180,7 +181,7 @@ class ManifestListenerContractTest {
         listener.dispatch().accept(manifest(ids.size(), "a-different-checksum"));
 
         assertThat(driftCount(listener.owner())).isEqualTo(1.0);
-        verify(kafkaTemplate).send(anyString(), anyString(), anyString());
+        verify(kafkaTemplate).send(any(ProducerRecord.class));
     }
 
     @ParameterizedTest
@@ -195,7 +196,7 @@ class ManifestListenerContractTest {
         listener.dispatch().accept(message);
 
         assertThat(driftCount(listener.owner())).isEqualTo(2.0);
-        verify(kafkaTemplate, org.mockito.Mockito.times(2)).send(anyString(), anyString(), anyString());
+        verify(kafkaTemplate, org.mockito.Mockito.times(2)).send(any(ProducerRecord.class));
     }
 
     @ParameterizedTest
@@ -204,8 +205,8 @@ class ManifestListenerContractTest {
     void unparseableManifestIsDropped(String owner) {
         listener(owner).dispatch().accept("{not json");
 
-        verify(processedEventRepository, never()).findEventIdsInRange(anyString(), anyString(), anyString());
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        verify(processedEventRepository, never()).findEventIdsInRange(anyString(), any(), anyString(), anyString());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
     }
 
     @ParameterizedTest
@@ -214,12 +215,55 @@ class ManifestListenerContractTest {
     void replayPublishFailureStillCountsDrift(String owner) {
         Listener listener = listener(owner);
         replicaHolds(listener, List.of());
-        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
-                .thenThrow(new IllegalStateException("broker down"));
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new IllegalStateException("broker down"));
 
         listener.dispatch().accept(manifest(3, "owner-checksum"));
 
         // Best effort by design: a broker outage must not take the consumer down with it.
         assertThat(driftCount(listener.owner())).isEqualTo(1.0);
+    }
+
+    /** The one replay command handed to Kafka: it must ride the manifest's tenant header (ADR-0062 §3). */
+    @SuppressWarnings("unchecked")
+    private ProducerRecord<String, String> capturedReplay() {
+        ArgumentCaptor<ProducerRecord<String, String>> record = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(kafkaTemplate).send(record.capture());
+        assertThat(TenantKafkaHeaders.read(record.getValue().headers())).contains(TENANT_A);
+        return record.getValue();
+    }
+
+    /** Matches a replay command routed to {@code topic} under the manifest's tenant header. */
+    private static ProducerRecord<String, String> replayOn(String topic) {
+        return org.mockito.ArgumentMatchers.argThat(
+                (ProducerRecord<String, String> record) -> topic.equals(record.topic())
+                        && TenantKafkaHeaders.read(record.headers())
+                                .filter(TENANT_A::equals)
+                                .isPresent());
+    }
+
+    @ParameterizedTest
+    @FieldSource("LISTENERS")
+    @DisplayName("skips a manifest without tenantId instead of reading it as any tenant's (WS4-3)")
+    void skipsAManifestWithoutTenant(String owner) {
+        Listener listener = listener(owner);
+        // Published before manifests were per tenant (ADR-0062 WS4-3): it summarised every
+        // tenant's rows at once, so no single tenant's ledger can be compared against it.
+        String legacy = """
+                {"eventType":"x.reconciliation.manifest",
+                 "payload":{"windowStartUtc":"%s","windowEndUtc":"%s","eventCount":2,
+                   "eventIdsChecksum":"owner-checksum","eventTypeCounts":null}}
+                """.formatted(WINDOW_START, WINDOW_END);
+
+        listener.dispatch().accept(legacy);
+
+        verify(processedEventRepository, never()).findEventIdsInRange(any(), any(), any(), any());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
+        assertThat(meterRegistry.find("replica.drift").counters()).isEmpty();
+        var skipped = meterRegistry
+                .find("replica.manifest.skipped")
+                .tag("reason", "missing_tenant")
+                .counter();
+        assertThat(skipped).isNotNull();
+        assertThat(skipped.count()).isEqualTo(1.0);
     }
 }
