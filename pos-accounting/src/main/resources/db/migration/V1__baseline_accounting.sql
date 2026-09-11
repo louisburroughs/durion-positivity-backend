@@ -838,6 +838,7 @@ CREATE TABLE public.posting_rule_version (
 
 CREATE TABLE public.processed_events (
     event_id character varying(36) NOT NULL,
+    tenant_id uuid,
     processed_at timestamp(6) with time zone NOT NULL,
     owner character varying(64)
 );
@@ -1686,7 +1687,7 @@ CREATE INDEX idx_posting_rule_version_set ON public.posting_rule_version USING b
 
 CREATE INDEX idx_posting_rule_version_state ON public.posting_rule_version USING btree (state);
 
-CREATE INDEX idx_processed_events_owner_event ON public.processed_events USING btree (owner, event_id);
+CREATE INDEX idx_processed_events_owner_tenant_event ON public.processed_events USING btree (owner, tenant_id, event_id);
 
 CREATE INDEX idx_processor_settlement_provider ON public.processor_settlement USING btree (provider_code);
 

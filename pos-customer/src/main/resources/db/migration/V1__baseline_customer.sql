@@ -387,6 +387,7 @@ CREATE TABLE public.person_party (
 
 CREATE TABLE public.processed_events (
     event_id character varying(36) NOT NULL,
+    tenant_id uuid,
     owner character varying(64) NOT NULL,
     processed_at timestamp(6) with time zone NOT NULL
 );
@@ -760,7 +761,7 @@ CREATE INDEX idx_party_tag_category ON public.party_tag USING btree (category);
 
 CREATE INDEX idx_person_party_lifecycle ON public.person_party USING btree (lifecycle_stage);
 
-CREATE INDEX idx_processed_events_owner_event ON public.processed_events USING btree (owner, event_id);
+CREATE INDEX idx_processed_events_owner_tenant_event ON public.processed_events USING btree (owner, tenant_id, event_id);
 
 CREATE INDEX idx_promotion_redemption_campaign_code ON public.promotion_redemption USING btree (campaign_code) WHERE (campaign_code IS NOT NULL);
 

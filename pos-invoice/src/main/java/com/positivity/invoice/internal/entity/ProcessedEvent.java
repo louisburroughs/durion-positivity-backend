@@ -1,13 +1,16 @@
 package com.positivity.invoice.internal.entity;
 
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -27,8 +30,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Entity
 @TenantGlobal(
-        reason = "consumer idempotency ledger keyed by eventId; checked before the record's tenant is bound,"
-                + " so the row has no tenant (db/tenancy-global-tables.txt)")
+        reason = "consumer idempotency ledger keyed by eventId, deduplicated across tenants; the tenant the fact"
+                + " was applied under is carried as data for per-tenant reconciliation (db/tenancy-global-tables.txt)")
 @Table(name = "processed_events")
 public class ProcessedEvent {
 
@@ -41,6 +44,24 @@ public class ProcessedEvent {
 
     @Column(name = "processed_at", nullable = false)
     private Instant processedAt;
+
+    /**
+     * Tenant the fact was applied under (ADR-0062 §3), stamped from the tenant bound to the thread
+     * when the row is persisted — the tenant the record interceptor read from the message header.
+     * Reconciliation-manifest window scans filter on it so one tenant's manifest math never sees
+     * another tenant's eventIds; a row recorded with no tenant bound belongs to no manifest. Carried
+     * as data, never as a discriminator: the table is global and the eventId key deduplicates across
+     * tenants.
+     */
+    @Column(name = "tenant_id", updatable = false)
+    private UUID tenantId;
+
+    @PrePersist
+    void stampTenantFromContext() {
+        if (tenantId == null) {
+            tenantId = TenantContext.current().orElse(null);
+        }
+    }
 
     /**
      * Explicit dependency hook for the ArchUnit UUIDv7 rule: the eventId key IS a UUIDv7,

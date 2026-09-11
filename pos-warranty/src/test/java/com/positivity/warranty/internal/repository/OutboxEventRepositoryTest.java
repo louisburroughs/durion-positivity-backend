@@ -45,8 +45,13 @@ class OutboxEventRepositoryTest {
     private jakarta.persistence.EntityManager entityManager;
 
     private OutboxEvent persist(String key, Instant createdAt, Instant publishedAt, int attempts, String lastError) {
+        return persist(TenantTestSupport.TENANT_A, key, createdAt, publishedAt, attempts, lastError);
+    }
+
+    private OutboxEvent persist(
+            UUID tenantId, String key, Instant createdAt, Instant publishedAt, int attempts, String lastError) {
         OutboxEvent saved = repository.saveAndFlush(OutboxEvent.builder()
-                .tenantId(TenantTestSupport.TENANT_A)
+                .tenantId(tenantId)
                 .topic(TOPIC)
                 .recordKey(key)
                 .payload("{\"eventId\":\"" + key + "\"}")
@@ -86,8 +91,10 @@ class OutboxEventRepositoryTest {
         OutboxEvent atBoundary = persist("at-since", SINCE, SINCE.plusSeconds(1), 3, "stale error");
         OutboxEvent afterBoundary = persist("after", SINCE.plusSeconds(10), SINCE.plusSeconds(11), 0, null);
         OutboxEvent unpublished = persist("unpublished", SINCE.plusSeconds(20), null, 4, "still failing");
+        OutboxEvent otherTenant = persist(
+                TenantTestSupport.TENANT_B, "other-tenant", SINCE.plusSeconds(10), SINCE.plusSeconds(11), 0, null);
 
-        int requeued = repository.markForReplaySince(SINCE);
+        int requeued = repository.markForReplaySince(TenantTestSupport.TENANT_A, SINCE);
 
         assertThat(requeued).isEqualTo(2);
         OutboxEvent reloadedAtBoundary = reload(atBoundary.getId());
@@ -101,6 +108,8 @@ class OutboxEventRepositoryTest {
         OutboxEvent reloadedUnpublished = reload(unpublished.getId());
         assertThat(reloadedUnpublished.getAttempts()).isEqualTo(4);
         assertThat(reloadedUnpublished.getLastError()).isEqualTo("still failing");
+        // Another tenant's row in the window: replay is per tenant (ADR-0062 §3), so untouched.
+        assertThat(reload(otherTenant.getId()).getPublishedAt()).isNotNull();
     }
 
     @Test
@@ -109,8 +118,10 @@ class OutboxEventRepositoryTest {
         OutboxEvent inside = persist("inside", UNTIL.minusSeconds(1), UNTIL, 0, null);
         OutboxEvent atUntil = persist("at-until", UNTIL, UNTIL.plusSeconds(1), 0, null);
         OutboxEvent beforeSince = persist("before-since", SINCE.minusSeconds(1), SINCE, 0, null);
+        OutboxEvent otherTenant =
+                persist(TenantTestSupport.TENANT_B, "other-tenant", SINCE, SINCE.plusSeconds(1), 0, null);
 
-        int requeued = repository.markForReplayBetween(SINCE, UNTIL);
+        int requeued = repository.markForReplayBetween(TenantTestSupport.TENANT_A, SINCE, UNTIL);
 
         assertThat(requeued).isEqualTo(2);
         // Row at exactly :since IS requeued (inclusive lower bound).
@@ -119,6 +130,7 @@ class OutboxEventRepositoryTest {
         // Row at exactly :until is NOT requeued (exclusive upper bound).
         assertThat(reload(atUntil.getId()).getPublishedAt()).isNotNull();
         assertThat(reload(beforeSince.getId()).getPublishedAt()).isNotNull();
+        assertThat(reload(otherTenant.getId()).getPublishedAt()).isNotNull();
     }
 
     private OutboxEvent reload(UUID id) {

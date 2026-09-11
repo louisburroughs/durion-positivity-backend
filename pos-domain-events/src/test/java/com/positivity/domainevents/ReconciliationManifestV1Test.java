@@ -6,12 +6,14 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class ReconciliationManifestV1Test {
 
     private static final Instant START = Instant.parse("2026-07-08T10:00:00Z");
     private static final Instant END = Instant.parse("2026-07-08T11:00:00Z");
+    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
 
     @Test
     void checksumIsOrderIndependentAndDeterministic() {
@@ -41,11 +43,26 @@ class ReconciliationManifestV1Test {
     @Test
     void matchesComparesCountAndChecksum() {
         String checksum = ReconciliationManifestV1.checksumOf(List.of("x"));
-        ReconciliationManifestV1 manifest = new ReconciliationManifestV1(START, END, 1, checksum, Map.of("t", 1L));
+        ReconciliationManifestV1 manifest =
+                new ReconciliationManifestV1(TENANT, START, END, 1, checksum, Map.of("t", 1L));
 
+        assertThat(manifest.tenantId()).isEqualTo(TENANT);
         assertThat(manifest.matches(1, checksum)).isTrue();
         assertThat(manifest.matches(2, checksum)).isFalse();
         assertThat(manifest.matches(1, "0".repeat(64))).isFalse();
+    }
+
+    @Test
+    void manifestWithoutTenantStillDeserialisesButExposesNoTenant() {
+        String checksum = ReconciliationManifestV1.checksumOf(List.of());
+        // A manifest published before the field existed carries no tenant (additive-nullable
+        // evolution within schema version 1). It is still a valid record on the wire; consumers
+        // decide what to do with it (they skip it: manifests are per tenant from WS4-3 on).
+        ReconciliationManifestV1 legacy = new ReconciliationManifestV1(null, START, END, 0, checksum, null);
+
+        assertThat(legacy.tenantId()).isNull();
+        assertThat(new ReconciliationManifestV1(TENANT, START, END, 0, checksum, null).tenantId())
+                .isEqualTo(TENANT);
     }
 
     @Test
@@ -57,11 +74,12 @@ class ReconciliationManifestV1Test {
     void rejectsInvalidWindowsAndValues() {
         String checksum = ReconciliationManifestV1.checksumOf(List.of());
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> new ReconciliationManifestV1(END, START, 0, checksum, null));
+                .isThrownBy(() -> new ReconciliationManifestV1(TENANT, END, START, 0, checksum, null));
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> new ReconciliationManifestV1(START, START, 0, checksum, null));
+                .isThrownBy(() -> new ReconciliationManifestV1(TENANT, START, START, 0, checksum, null));
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> new ReconciliationManifestV1(START, END, -1, checksum, null));
-        assertThatIllegalArgumentException().isThrownBy(() -> new ReconciliationManifestV1(START, END, 0, " ", null));
+                .isThrownBy(() -> new ReconciliationManifestV1(TENANT, START, END, -1, checksum, null));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new ReconciliationManifestV1(TENANT, START, END, 0, " ", null));
     }
 }
