@@ -361,7 +361,8 @@ this checklist is run or something under `deployment/alpha/` is merged.
 ### Per-tenant logs and event statistics (ADR-0062 plan WS6)
 
 Every `pos-*` module that carries `pos-tenancy-common` logs Boot's correlation bracket as
-`[<trace_id>,<span_id>,<tenantId>]` on every line: `TenantContext` mirrors the bound tenant into the
+`[<trace_id>,<span_id>,<tenantId>]` on every line (trace and span from the OpenTelemetry agent's `trace_id`/`span_id`
+or Micrometer Tracing's `traceId`/`spanId`, whichever the module uses): `TenantContext` mirrors the bound tenant into the
 `tenantId` MDC key, and `TenantLogPatternEnvironmentPostProcessor` supplies `logging.pattern.correlation`
 as the lowest-precedence property (a module's own `logging.pattern.correlation` or `logback-spring.xml`
 wins). Lines logged with no tenant bound — startup, `@PlatformScoped` schedulers, actuator — print an

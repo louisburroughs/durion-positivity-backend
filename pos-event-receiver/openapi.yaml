@@ -469,16 +469,25 @@ paths:
 
         Use this tool for a daily view of platform event traffic; use getEventSummaryLastHour instead for a near-real-time pulse, or getEventSummaryLastWeek for the weekly trend.
 
-        Preconditions: none beyond service availability; GET requests bypass the shared-secret filter, and the aggregate refreshes hourly with a one-hour end offset, so the newest counts can lag by up to an hour.
+        Preconditions: a tenant binding, the X-Tenant-Id the gateway derives from the token (or the transitional default tenant where one is configured; an unbound request is refused with 401). GET requests bypass the shared-secret filter, and the aggregate refreshes hourly with a one-hour end offset, so the newest counts can lag by up to an hour.
 
-        Required inputs: none; the window is fixed at 24 hours and cannot be parameterized.
+        Required inputs: none beyond the binding (tenantId is optional); the window is fixed at 24 hours and cannot be parameterized. Counts carry a tenant dimension (ADR-0062): a caller bound to an ordinary tenant sees its own tenant''s counts; the platform tenant sees the global rollup summed across tenants, or one tenant when it names tenantId. tenantId from any other caller is refused with 403.
 
         Emits an EVENT_RECEIVER_SUMMARY_LAST_DAY event recording the query itself; the read changes no stored state.
 
-        Returns 200 with a list of event-type and count pairs, which is empty when no events fall inside the window.
+        Returns 200 with a list of event-type and count pairs, which is empty when no events fall inside the window, and 403 when tenantId is named by a caller that is not the platform tenant.
 
         '
       operationId: getEventSummaryLastDay
+      parameters:
+      - description: Tenant to report on; platform-tenant callers only. Omitted, an ordinary tenant reads its own counts and the platform tenant reads the global rollup (the sum across tenants). Named by a caller that is not the platform tenant, the request is refused with 403.
+        example: 01900000-0000-7000-8000-000000000001
+        in: query
+        name: tenantId
+        required: false
+        schema:
+          format: uuid
+          type: string
       responses:
         '200':
           content:
@@ -488,6 +497,8 @@ paths:
                   $ref: '#/components/schemas/EventSummaryResponse'
                 type: array
           description: Summary returned successfully
+        '403':
+          description: tenantId named by a caller that is not the platform tenant
       summary: Get event summary for the last day
       tags:
       - Event Summary
@@ -497,16 +508,25 @@ paths:
 
         Use this tool for a near-real-time pulse of platform event traffic; use getEventSummaryLastDay or getEventSummaryLastWeek instead for longer trend windows.
 
-        Preconditions: none beyond service availability; GET requests bypass the shared-secret filter, and the aggregate refreshes hourly with a one-hour end offset, so the newest counts can lag by up to an hour.
+        Preconditions: a tenant binding, the X-Tenant-Id the gateway derives from the token (or the transitional default tenant where one is configured; an unbound request is refused with 401). GET requests bypass the shared-secret filter, and the aggregate refreshes hourly with a one-hour end offset, so the newest counts can lag by up to an hour.
 
-        Required inputs: none; the window is fixed at one hour and cannot be parameterized.
+        Required inputs: none beyond the binding (tenantId is optional); the window is fixed at one hour and cannot be parameterized. Counts carry a tenant dimension (ADR-0062): a caller bound to an ordinary tenant sees its own tenant''s counts; the platform tenant sees the global rollup summed across tenants, or one tenant when it names tenantId. tenantId from any other caller is refused with 403.
 
         Emits an EVENT_RECEIVER_SUMMARY_LAST_HOUR event recording the query itself; the read changes no stored state.
 
-        Returns 200 with a list of event-type and count pairs, which is empty when no events fall inside the window.
+        Returns 200 with a list of event-type and count pairs, which is empty when no events fall inside the window, and 403 when tenantId is named by a caller that is not the platform tenant.
 
         '
       operationId: getEventSummaryLastHour
+      parameters:
+      - description: Tenant to report on; platform-tenant callers only. Omitted, an ordinary tenant reads its own counts and the platform tenant reads the global rollup (the sum across tenants). Named by a caller that is not the platform tenant, the request is refused with 403.
+        example: 01900000-0000-7000-8000-000000000001
+        in: query
+        name: tenantId
+        required: false
+        schema:
+          format: uuid
+          type: string
       responses:
         '200':
           content:
@@ -516,6 +536,8 @@ paths:
                   $ref: '#/components/schemas/EventSummaryResponse'
                 type: array
           description: Summary returned successfully
+        '403':
+          description: tenantId named by a caller that is not the platform tenant
       summary: Get event summary for the last hour
       tags:
       - Event Summary
@@ -525,16 +547,25 @@ paths:
 
         Use this tool for a weekly trend of platform event traffic; use getEventSummaryLastHour or getEventSummaryLastDay instead when a shorter window is wanted.
 
-        Preconditions: none beyond service availability; GET requests bypass the shared-secret filter, and the aggregate refreshes hourly with a one-hour end offset, so the newest counts can lag by up to an hour.
+        Preconditions: a tenant binding, the X-Tenant-Id the gateway derives from the token (or the transitional default tenant where one is configured; an unbound request is refused with 401). GET requests bypass the shared-secret filter, and the aggregate refreshes hourly with a one-hour end offset, so the newest counts can lag by up to an hour.
 
-        Required inputs: none; the window is fixed at 7 days and cannot be parameterized.
+        Required inputs: none beyond the binding (tenantId is optional); the window is fixed at 7 days and cannot be parameterized. Counts carry a tenant dimension (ADR-0062): a caller bound to an ordinary tenant sees its own tenant''s counts; the platform tenant sees the global rollup summed across tenants, or one tenant when it names tenantId. tenantId from any other caller is refused with 403.
 
         Emits an EVENT_RECEIVER_SUMMARY_LAST_WEEK event recording the query itself; the read changes no stored state.
 
-        Returns 200 with a list of event-type and count pairs, which is empty when no events fall inside the window.
+        Returns 200 with a list of event-type and count pairs, which is empty when no events fall inside the window, and 403 when tenantId is named by a caller that is not the platform tenant.
 
         '
       operationId: getEventSummaryLastWeek
+      parameters:
+      - description: Tenant to report on; platform-tenant callers only. Omitted, an ordinary tenant reads its own counts and the platform tenant reads the global rollup (the sum across tenants). Named by a caller that is not the platform tenant, the request is refused with 403.
+        example: 01900000-0000-7000-8000-000000000001
+        in: query
+        name: tenantId
+        required: false
+        schema:
+          format: uuid
+          type: string
       responses:
         '200':
           content:
@@ -544,6 +575,8 @@ paths:
                   $ref: '#/components/schemas/EventSummaryResponse'
                 type: array
           description: Summary returned successfully
+        '403':
+          description: tenantId named by a caller that is not the platform tenant
       summary: Get event summary for the last week
       tags:
       - Event Summary

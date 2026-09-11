@@ -104,6 +104,25 @@ class TenantLogPatternEnvironmentPostProcessorTest {
     }
 
     @Test
+    void bothTracingKeyNamesRenderInTheSameFields() {
+        PatternLayout layout = new PatternLayout();
+        layout.setContext(new LoggerContext());
+        layout.setPattern(TenantLogPatternEnvironmentPostProcessor.CORRELATION_PATTERN + "%m");
+        layout.start();
+
+        MDC.put("traceId", "4bf92f3577b34da6a3ce929d0e0e4736");
+        MDC.put("spanId", "00f067aa0ba902b7");
+        String micrometer = layout.doLayout(event("bridge"));
+        MDC.clear();
+        MDC.put("trace_id", "4bf92f3577b34da6a3ce929d0e0e4736");
+        MDC.put("span_id", "00f067aa0ba902b7");
+        String agent = layout.doLayout(event("agent"));
+
+        assertThat(micrometer).isEqualTo("[4bf92f3577b34da6a3ce929d0e0e4736,00f067aa0ba902b7,] bridge");
+        assertThat(agent).isEqualTo("[4bf92f3577b34da6a3ce929d0e0e4736,00f067aa0ba902b7,] agent");
+    }
+
+    @Test
     void isRegisteredWithBootUnderTheEnvironmentPostProcessorKey() throws IOException {
         Properties factories = new Properties();
         try (InputStream in = getClass().getClassLoader().getResourceAsStream("META-INF/spring.factories")) {
