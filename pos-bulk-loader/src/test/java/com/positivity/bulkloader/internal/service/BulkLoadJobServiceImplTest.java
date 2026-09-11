@@ -105,6 +105,9 @@ class BulkLoadJobServiceImplTest {
         assertThat(response.getId()).isEqualTo(JOB_ID);
         assertThat(response.getOperatorId()).isEqualTo(OPERATOR_ID);
         assertThat(response.getStatus()).isEqualTo(JobStatus.CREATED);
+        assertThat(response.getTenantId())
+                .as("the response names the tenant the row was created under, before Hibernate stamps it at flush")
+                .isEqualTo(TENANT);
         assertThat(boundDuringSave.get())
                 .as("the row is written under the target tenant, so Hibernate stamps it there")
                 .contains(TENANT);
