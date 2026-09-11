@@ -30,6 +30,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -143,7 +144,7 @@ public class AdministratorActivationService {
         private final UserRepository userRepository;
         private final UserActivationTokenRepository tokenRepository;
         private final PasswordEncoder passwordEncoder;
-        private final ObjectProvider<AuditEventService> auditEventService;
+        private final MintAuditWriter mintAuditWriter;
         private final Clock clock;
 
         /** Under the target tenant's binding: the user must be visible there. */
@@ -253,14 +254,43 @@ public class AdministratorActivationService {
         }
 
         private void audit(AuditLogEventRequest request) {
-            AuditEventService service = auditEventService.getIfAvailable();
-            if (service == null) {
-                return;
-            }
             try {
-                service.createEvent(request);
+                mintAuditWriter.write(request);
             } catch (RuntimeException e) {
                 log.warn("Audit event emission failed: {}", e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Commits the mint audit row in its own transaction, a dedicated bean so the {@code
+     * @Transactional} proxy applies (the same reason {@link BoundOperations} is split out of the
+     * outer service).
+     *
+     * <p>{@link AuditEventService#createEvent} is {@code @Transactional} with the default {@code
+     * REQUIRED} propagation, and {@link BoundOperations#auditAfterCommit} runs it from an {@code
+     * afterCommit} synchronization callback. At that point the just-committed transaction's
+     * resources (its {@code EntityManagerHolder}) are still thread-bound — Spring only unbinds
+     * them once every {@code afterCommit} synchronization has run — so a plain {@code REQUIRED}
+     * call here would "join" that already-committed, about-to-be-discarded transaction instead of
+     * opening a fresh one: the insert would land in the stale persistence context but never
+     * actually be committed, since only the transaction that started it calls commit. {@code
+     * REQUIRES_NEW} suspends whatever is still thread-bound and opens a genuinely new transaction
+     * on its own connection, so this write gets its own real commit. See {@link
+     * RoleAssignmentTokenRevocationListener}'s javadoc for the same mechanism applied to token
+     * revocation, the pattern this follows.
+     */
+    @Component
+    @RequiredArgsConstructor
+    static class MintAuditWriter {
+
+        private final ObjectProvider<AuditEventService> auditEventService;
+
+        @Transactional(propagation = Propagation.REQUIRES_NEW)
+        void write(@NonNull AuditLogEventRequest request) {
+            AuditEventService service = auditEventService.getIfAvailable();
+            if (service != null) {
+                service.createEvent(request);
             }
         }
     }
