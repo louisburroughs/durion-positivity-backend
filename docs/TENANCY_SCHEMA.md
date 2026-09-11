@@ -82,7 +82,7 @@ through `ALTER ROLE ... SET app.current_tenant`; adopted modules connect as `pos
 (`SPRING_DATASOURCE_USERNAME=pos_app`, `POS_APP_PASSWORD`) with Flyway on the owner credential
 (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`). Adopted so far: `pos-location`, `pos-tenant`,
 `pos-security-service`, `pos-inventory` (WS3 wave 1), `pos-accounting` (wave 2), `pos-workorder` (wave 3), `pos-catalog` (wave 4), `pos-shop-manager` and
-`pos-order` (wave 5), `pos-customer` (wave 6), `pos-supplier` (wave 7), `pos-warranty` (wave 8), `pos-people` and `pos-invoice` (wave 9), `pos-marketing`, `pos-vehicle-inventory`, `pos-price` and `pos-vehicle-fitment` (wave 10), `pos-people-contact`, `pos-tax`, `pos-image`, `pos-vehicle-reference-nhtsa` and `pos-vehicle-reference-carapi` (wave 11), `pos-mcp-server` (wave 12), `pos-event-receiver` (wave 13; `pos-bulk-loader` is plan WS8).
+`pos-order` (wave 5), `pos-customer` (wave 6), `pos-supplier` (wave 7), `pos-warranty` (wave 8), `pos-people` and `pos-invoice` (wave 9), `pos-marketing`, `pos-vehicle-inventory`, `pos-price` and `pos-vehicle-fitment` (wave 10), `pos-people-contact`, `pos-tax`, `pos-image`, `pos-vehicle-reference-nhtsa` and `pos-vehicle-reference-carapi` (wave 11), `pos-mcp-server` (wave 12), `pos-event-receiver` (wave 13), `pos-bulk-loader` (plan WS8: every job runs under a target tenant; the last persisting module).
 
 **Tenant registry (WS4-2, decided 2026-09-10).** `TenantIterator` reads the active tenants from
 the module's `TenantRegistry`. The default, `pos.tenancy.registry.mode=STATIC`, is

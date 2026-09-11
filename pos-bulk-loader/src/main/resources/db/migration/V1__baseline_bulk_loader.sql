@@ -200,7 +200,7 @@ ALTER TABLE ONLY public.tus_upload
 
 CREATE INDEX idx_bulk_load_column_mapping_job_id ON public.bulk_load_column_mapping USING btree (job_id);
 
-CREATE UNIQUE INDEX idx_bulk_load_job_one_active_per_operator ON public.bulk_load_job USING btree (tenant_id, operator_id) WHERE ((status)::text <> ALL ((ARRAY['COMPLETED'::character varying, 'CANCELLED'::character varying, 'FAILED'::character varying])::text[]));
+CREATE UNIQUE INDEX idx_bulk_load_job_one_active_per_operator ON public.bulk_load_job USING btree (tenant_id, operator_id) WHERE ((status)::text <> ALL ((ARRAY['COMPLETED'::character varying, 'CANCELLED'::character varying, 'FAILED'::character varying, 'PARTIAL'::character varying])::text[]));
 
 CREATE INDEX idx_bulk_load_job_operator_id ON public.bulk_load_job USING btree (operator_id);
 

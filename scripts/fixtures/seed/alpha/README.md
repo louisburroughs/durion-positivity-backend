@@ -26,20 +26,43 @@ they would for production traffic — none of which happens for direct SQL seeds
 The driver runs every pack in dependency order through the gateway:
 
 ```bash
-scripts/seed-alpha.py --gateway https://<alpha-gateway> --token "$SEED_BEARER_TOKEN"
+scripts/seed-alpha.py --gateway https://<alpha-gateway> --token "$SEED_BEARER_TOKEN" \
+    --tenant-id "$SEED_TENANT_ID"
 # subset / rehearsal:
 scripts/seed-alpha.py --gateway ... --only customer/person-customers.csv
 scripts/seed-alpha.py --gateway ... --dry-run
 # empty alpha (no locations yet):
 scripts/seed-alpha.py --gateway ... --bootstrap-location
+# the role template: roles.csv and its grants into the platform tenant, with a PLATFORM_ADMIN
+# token (which holds bulkImport:upload:execute, bulkImport:status:read, security:role:create and
+# security:role:edit for exactly this); the platform tenant has no locations, so the (ignored) job
+# location is given explicitly
+scripts/seed-alpha.py --gateway ... --token "$PLATFORM_ACCESS_TOKEN" \
+    --tenant-id 01900000-0000-7000-8000-000000000000 \
+    --location-id 00000000-0000-0000-0000-000000000000 \
+    --only security/roles.csv --only security/role-permissions.csv
 ```
+
+Every job loads into `--tenant-id` (ADR-0062, plan WS8): the alpha tenant
+`01900000-0000-7000-8000-000000000001` for the alpha data. It must be the token's own tenant
+(its `tid` claim, which is also the default when `--tenant-id` is omitted): the loader's upload,
+process and status endpoints are scoped to the token's tenant, so the driver refuses a target the
+token is not bound to rather than create a job it could not continue. A token without a `tid`
+and no `--tenant-id` omits the tenant, which the loader accepts only while its transitional
+default tenant is configured (it then loads into the default and logs a WARN). Into the platform
+tenant only the two security role packs load, with an explicit `--location-id` (the role ingest
+carries the id along and ignores it). Operator steps: `docs/OPERATIONS_RUNBOOK.md`, "Bulk loading
+into a tenant".
 
 Per pack file it creates a bulk-load job (`POST /bulk-loader/bulk-jobs`), uploads the
 CSV, starts processing, and polls the job to a terminal state, reporting the row
 counters. A job that finished but rejected rows reports `PARTIAL` rather than `COMPLETED`;
 every rejected row has an audit record naming what the owning service said about it
-(`GET /bulk-loader/bulk-jobs/{id}/audit`), and those rows can be corrected and retried. The token needs `bulkImport:upload:execute` plus the relayed per-domain
-create permissions (`location:write`, `crm:party:create`). Bulk-load jobs require a
+(`GET /bulk-loader/bulk-jobs/{id}/audit`), and those rows can be corrected and retried. The token needs `bulkImport:upload:execute` and `bulkImport:status:read` plus the relayed per-domain
+create permissions (`location:write`, `crm:party:create`) and the read permissions the business-key
+lookups go through (`location:read`, `catalog:product:view`): the loader calls its siblings as the
+operator, relaying the caller's own gateway authorities, so a lookup the token may not make comes
+back as an unresolved name. Bulk-load jobs require a
 `locationId`: the driver resolves `--location-code` (default `CLT-MAIN-001`) against
 the location roster, and `--bootstrap-location` creates it from `locations.csv` via
 the gateway API when the roster is empty (that row then reports one expected
@@ -177,6 +200,15 @@ The seed file stays until the alpha reseed is verified (§5.4).
 | `roles.csv` | 15 roles with persona metadata | `SECURITY_ROLE` loader (`POST /v1/roles/bulk-ingest`) |
 | `role-permissions.csv` | 18 roles, 1363 grants | `SECURITY_ROLE_PERMISSION` loader (`POST /v1/roles/permissions/bulk-ingest`) |
 | `users.csv` | 25 users, 16 roles | gateway API pack (`POST /security-service/users` per row) |
+
+**Tenant tagging (ADR-0062, WS8).** Loaded into the alpha tenant, `roles.csv` provisions
+alpha's tenant-local roles as before. Loaded into the *platform* tenant (a `PLATFORM_ADMIN`
+token, `--tenant-id 01900000-0000-7000-8000-000000000000` and an explicit `--location-id`),
+the same file is the platform role template: each role is created with `template_key` = its name, provisioning
+copies it into every tenant created afterwards, and
+`POST /security-service/v1/platform/tenants/{tenantId}/roles/reconcile-template` brings
+tenants created before it up to date. `role-permissions.csv` loaded into the platform
+tenant gives those template roles their grants the same way. `users.csv` is alpha data only.
 
 **Roles load before users, and grants between them** (#1613 D8). A user record names
 the roles it is assigned, so the roles have to exist first; grants come after the

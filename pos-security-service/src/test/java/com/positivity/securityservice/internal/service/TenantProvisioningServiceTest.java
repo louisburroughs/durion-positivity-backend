@@ -29,6 +29,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -56,6 +57,14 @@ class TenantProvisioningServiceTest {
             outboxProvider,
             Clock.fixed(NOW, ZoneOffset.UTC),
             "tenant.events.v1");
+
+    @BeforeEach
+    void echoSavedRoleBack() {
+        // recordGrantProvenance (added for suppressed finding b, Copilot review of PR #1955) reads
+        // the saved role back from roleRepository.save's return value, the same convention
+        // RoleTemplateReconciliationServiceTest's platformCaller() establishes.
+        when(roles.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    }
 
     @AfterEach
     void clear() {
@@ -88,7 +97,7 @@ class TenantProvisioningServiceTest {
             "copies the template, creates the administrator on ADMIN awaiting activation, and answers tenant.provisioned")
     void provisionsAFreshTenant() {
         when(outboxProvider.getIfAvailable()).thenReturn(outbox);
-        when(roles.existsByName(anyString())).thenReturn(false);
+        when(roles.existsByNameIgnoreCase(anyString())).thenReturn(false);
         when(permissions.findByName("security:role:view")).thenReturn(Optional.of(permission("security:role:view")));
         when(permissions.findByName("order:order:view")).thenReturn(Optional.of(permission("order:order:view")));
         when(permissions.findByName("not:registered:yet")).thenReturn(Optional.empty());
@@ -134,7 +143,7 @@ class TenantProvisioningServiceTest {
     @DisplayName("a redelivery leaves existing roles and the administrator alone but still answers")
     void redeliveryConverges() {
         when(outboxProvider.getIfAvailable()).thenReturn(outbox);
-        when(roles.existsByName("ADMIN")).thenReturn(true);
+        when(roles.existsByNameIgnoreCase("ADMIN")).thenReturn(true);
         when(users.existsByUsername("owner@acme.example")).thenReturn(true);
 
         TenantContext.bind(TENANT);
@@ -145,6 +154,112 @@ class TenantProvisioningServiceTest {
         verify(roles, never()).save(any());
         verify(userService, never()).createUserAwaitingActivation(anyString(), any());
         verify(outbox).publish(eq("tenant.events.v1"), any());
+    }
+
+    @Test
+    @DisplayName("a tenant already carrying a differently-cased role keeps it: no second copy is created")
+    void aDifferentlyCasedExistingRoleIsTheSameRole() {
+        // The tenant was provisioned, or hand-edited, with `admin` rather than ADMIN. The template
+        // entry is ADMIN. Matching case-sensitively would create a second row, which the baseline's
+        // UNIQUE (tenant_id, lower(name)) index refuses -- so provisioning would fail rather than
+        // converge, and findByNameIgnoreCase everywhere else would then have two rows to choose
+        // between. Both readings of the name resolve to the one role (ADR-0062 section 6, WS8).
+        when(outboxProvider.getIfAvailable()).thenReturn(outbox);
+        when(roles.existsByNameIgnoreCase("ADMIN")).thenReturn(true);
+        when(roles.existsByNameIgnoreCase("DISPATCHER")).thenReturn(false);
+        when(permissions.findByName("order:order:view")).thenReturn(Optional.of(permission("order:order:view")));
+        when(users.existsByUsername("owner@acme.example")).thenReturn(true);
+
+        TenantContext.bind(TENANT);
+        TenantProvisioningService.Outcome outcome = service.provision(
+                TENANT,
+                "owner@acme.example",
+                List.of(entry("ADMIN", "order:order:view"), entry("DISPATCHER", "order:order:view")));
+
+        assertThat(outcome).isEqualTo(new TenantProvisioningService.Outcome(1, false));
+        ArgumentCaptor<Role> saved = ArgumentCaptor.forClass(Role.class);
+        verify(roles).save(saved.capture());
+        assertThat(saved.getAllValues())
+                .as("only the role the tenant genuinely lacks is created")
+                .extracting(Role::getName)
+                .containsExactly("DISPATCHER");
+        verify(roles, never()).existsByName(anyString());
+    }
+
+    @Test
+    @DisplayName("the first administrator gets the role name the tenant actually stores, whatever its case")
+    void theAdministratorGetsTheStoredRoleName() {
+        // The tenant already carries `admin`, so the case-insensitive guard above creates no ADMIN
+        // row. Handing the template's spelling to the user path would then fail: role resolution
+        // there matches exactly, and provisioning would die with "Role not found: ADMIN" after
+        // having already created the other template roles.
+        when(outboxProvider.getIfAvailable()).thenReturn(outbox);
+        when(roles.existsByNameIgnoreCase("ADMIN")).thenReturn(true);
+        Role stored = new Role();
+        stored.setName("admin");
+        when(roles.findByNameIgnoreCase("ADMIN")).thenReturn(Optional.of(stored));
+        when(users.existsByUsername("owner@acme.example")).thenReturn(false);
+
+        TenantContext.bind(TENANT);
+        TenantProvisioningService.Outcome outcome =
+                service.provision(TENANT, "owner@acme.example", List.of(entry("ADMIN", "order:order:view")));
+
+        assertThat(outcome).isEqualTo(new TenantProvisioningService.Outcome(0, true));
+        verify(userService).createUserAwaitingActivation("owner@acme.example", Set.of("admin"));
+    }
+
+    /**
+     * ADR-0062 §7 defense in depth: {@code RoleManagementServiceImpl.provisionTemplateRole} is what
+     * normally keeps a {@code platform:*} grant out of the template in the first place, but this
+     * proves the second, independent guard -- if one ever reached this far anyway (a template read
+     * some other way, or a bypassed check), it still must never be copied into a tenant role.
+     */
+    @Test
+    @DisplayName("a platform:* grant on a template entry is never copied into the tenant's role (ADR-0062 section 7)")
+    void aPlatformPermissionOnATemplateEntryIsNeverCopiedIntoTheTenant() {
+        when(outboxProvider.getIfAvailable()).thenReturn(outbox);
+        when(roles.existsByNameIgnoreCase(anyString())).thenReturn(false);
+        when(permissions.findByName("security:role:view")).thenReturn(Optional.of(permission("security:role:view")));
+        // Registered, not just present in the template: were the platform:* guard removed, this
+        // stub is what would let the grant actually get added, proving the guard is what excludes
+        // it rather than the permission happening to be unregistered in this test.
+        when(permissions.findByName("platform:tenant:create"))
+                .thenReturn(Optional.of(permission("platform:tenant:create")));
+        when(users.existsByUsername("owner@acme.example")).thenReturn(false);
+
+        TenantContext.bind(TENANT);
+        service.provision(
+                TENANT, "owner@acme.example", List.of(entry("ADMIN", "security:role:view", "platform:tenant:create")));
+
+        ArgumentCaptor<Role> saved = ArgumentCaptor.forClass(Role.class);
+        verify(roles).save(saved.capture());
+        assertThat(saved.getValue().getPermissions())
+                .extracting(Permission::getName)
+                .as("platform:* is never copied into a tenant role, whatever the template carries")
+                .containsExactly("security:role:view");
+        verify(permissions, never()).findByName("platform:tenant:create");
+    }
+
+    /**
+     * Priority 3 (Copilot review, PR #1955): the required-ADMIN guard above the convergence loop
+     * must recognise a template's admin role the same way the loop below does -- case-insensitively,
+     * the same convention {@code RoleTemplateReconciliationService} and role creation both use
+     * (ADR-0062 section 6, plan WS8) -- rather than reject a template whose ADMIN entry happens to
+     * be stored under a different case before the tolerant logic below ever runs.
+     */
+    @Test
+    @DisplayName("the required-ADMIN guard matches the template's admin role case-insensitively")
+    void theAdminGuardMatchesCaseInsensitively() {
+        when(outboxProvider.getIfAvailable()).thenReturn(outbox);
+        when(roles.existsByNameIgnoreCase("admin")).thenReturn(false);
+        when(users.existsByUsername("owner@acme.example")).thenReturn(false);
+
+        TenantContext.bind(TENANT);
+        TenantProvisioningService.Outcome outcome =
+                service.provision(TENANT, "owner@acme.example", List.of(entry("admin")));
+
+        assertThat(outcome).isEqualTo(new TenantProvisioningService.Outcome(1, true));
+        verify(userService).createUserAwaitingActivation(anyString(), any());
     }
 
     @Test
@@ -168,7 +283,7 @@ class TenantProvisioningServiceTest {
     @DisplayName("without Kafka the rows are still written and the missing answer is logged")
     void noOutboxWhenKafkaIsOff() {
         when(outboxProvider.getIfAvailable()).thenReturn(null);
-        when(roles.existsByName("ADMIN")).thenReturn(false);
+        when(roles.existsByNameIgnoreCase("ADMIN")).thenReturn(false);
         when(users.existsByUsername("owner@acme.example")).thenReturn(false);
 
         TenantContext.bind(TENANT);
@@ -176,5 +291,39 @@ class TenantProvisioningServiceTest {
 
         verify(roles).save(any(Role.class));
         verify(userService).createUserAwaitingActivation("owner@acme.example", Set.of("ADMIN"));
+    }
+
+    /**
+     * Suppressed finding b, Copilot review of PR #1955: {@code RoleTemplateApplier.fromTemplate}
+     * attaches the entry's grants through the plain {@code @ManyToMany} join, which leaves {@code
+     * role_permissions.granted_by} {@code NULL}; only {@code recordGrantProvenance} stamps it. Before
+     * this fix that call was missing here while {@code RoleTemplateReconciliationService}'s own
+     * create branch already made it (see {@code copiesMissingRoles} in
+     * {@code RoleTemplateReconciliationServiceTest}), so a freshly provisioned tenant's grants were
+     * unattributed while a grant reconciliation later added to the same role was not.
+     */
+    @Test
+    @DisplayName("a freshly created role's grants are stamped with recordGrantProvenance, like reconciliation's are")
+    void provisioningStampsGrantProvenanceOnNewRoles() {
+        when(outboxProvider.getIfAvailable()).thenReturn(outbox);
+        when(roles.existsByNameIgnoreCase(anyString())).thenReturn(false);
+        when(permissions.findByName("security:role:view")).thenReturn(Optional.of(permission("security:role:view")));
+        when(permissions.findByName("order:order:view")).thenReturn(Optional.of(permission("order:order:view")));
+        when(users.existsByUsername("owner@acme.example")).thenReturn(false);
+
+        TenantContext.bind(TENANT);
+        service.provision(
+                TENANT,
+                "owner@acme.example",
+                List.of(entry("ADMIN", "security:role:view", "order:order:view"), entry("DISPATCHER")));
+
+        ArgumentCaptor<List<UUID>> grantedIds = ArgumentCaptor.captor();
+        verify(roles).recordGrantProvenance(any(), grantedIds.capture(), eq(TenantProvisioningService.ACTOR), eq(NOW));
+        assertThat(grantedIds.getValue())
+                .as("both of ADMIN's grants are stamped")
+                .hasSize(2);
+        // DISPATCHER carries no grants: nothing to stamp, and stamping an empty list would be a
+        // pointless write.
+        verify(roles, org.mockito.Mockito.times(1)).recordGrantProvenance(any(), any(), any(), any());
     }
 }

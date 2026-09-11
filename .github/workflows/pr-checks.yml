@@ -161,6 +161,14 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts/tests -p 'test_generate_permissions*.py'
 
+      - name: Seed driver unit tests (test_seed_alpha*.py)
+        # seed-alpha.py picks the tenant it loads into from the access token's unverified `tid`
+        # claim (ADR-0062, plan WS8). A claim that is not a UUID string must come back as "no
+        # tenant" rather than abort the run, and only a job evaluating these pins keeps it that
+        # way. Stdlib only.
+        run: |
+          python3 -m unittest discover -s scripts/tests -p 'test_seed_alpha*.py'
+
   pr-comment:
     name: PR Summary Comment
     runs-on: ubuntu-latest

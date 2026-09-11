@@ -30,6 +30,15 @@ public interface RoleManagementService {
     RoleDto createRole(@NonNull RoleCreateRequest request);
 
     /**
+     * Create a role that joins the platform role template (ADR-0062 §6, plan WS8): {@code
+     * template_key} is its own name. For the platform bulk load of {@code roles.csv} under the
+     * platform tenant; a role already present is marked rather than refused, so a re-run converges.
+     *
+     * @return the role, created or already present
+     */
+    RoleDto provisionTemplateRole(@NonNull RoleCreateRequest request);
+
+    /**
      * Replace an existing role's description and MCP persona metadata (#1613).
      *
      * <p>PUT semantics: an omitted field clears the stored value, returning that persona slot to its

@@ -11,6 +11,15 @@ spring:
     hibernate:
       ddl-auto: validate
     show-sql: false
+    # ADR-0062, plan WS8: createJob and startProcessing rebind the tenant mid-request
+    # (TenantContext.callAs/runAs, BulkLoadJobServiceImpl) and open their own transaction inside
+    # that binding. A request-scoped (open-in-view) session fixes its Hibernate @TenantId
+    # identifier once, at session-open time, under whatever tenant was bound when the request
+    # arrived — before the rebind runs — so a mid-request rebind would not reach the Hibernate
+    # tenant filter even though the pooled connection's app.current_tenant setting does track it
+    # (rebound on every fresh checkout). See pos-security-service's application.yml, which
+    # documents and fixes the identical mechanism for its own mid-request rebinds.
+    open-in-view: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -54,6 +63,12 @@ management:
       show-details: when-authorized
 
 pos:
+  # ADR-0062 section 9, transitional: a request the gateway has not stamped with X-Tenant-Id, and a
+  # job created without an explicit tenantId, run as the alpha default tenant (the latter logs a
+  # WARN). Unset it (POS_TENANCY_DEFAULT_TENANT_ID=) and the runtime is strict: an unbound request is
+  # a 401 and a job without a tenantId is a 400 BULK_JOB_TENANT_REQUIRED.
+  tenancy:
+    default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000001}
   events:
     base-url: ${POS_EVENTS_BASE_URL:http://pos-event-receiver:8080}
     api-secret: ${POS_EVENTS_API_SECRET:}

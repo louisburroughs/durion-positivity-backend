@@ -682,6 +682,84 @@ Audit: every mint writes an `AdministratorActivationTokenMinted` audit event on 
 expiry, number of earlier tokens closed) and an INFO log line; every activation logs the user, tenant
 and token id. The token itself is never logged.
 
+### Bulk loading into a tenant (ADR-0062, WS8)
+
+Every `pos-bulk-loader` job loads into exactly one tenant, named by `tenantId` on
+`POST /bulk-loader/bulk-jobs` (`scripts/seed-alpha.py --tenant-id`). The loader binds that tenant around the
+job's create and around the whole batch run, so the job row, its audit and mapping rows, and every call it
+makes to the owning services (`X-Tenant-Id` on each `/bulk-ingest` and lookup call) land in that tenant.
+
+```bash
+# Tenant data (the alpha packs): a token of that tenant, naming that tenant. The token needs
+# bulkImport:upload:execute and bulkImport:status:read, the per-domain create permissions, and the
+# read permissions the business-key lookups use (location:read, catalog:product:view): the loader
+# calls its siblings as the operator, relaying the caller's own gateway authorities.
+scripts/seed-alpha.py --gateway https://<gateway> --token "$SEED_BEARER_TOKEN" \
+    --tenant-id 01900000-0000-7000-8000-000000000001
+
+# Platform data (the role template): a PLATFORM_ADMIN token, naming the platform tenant -- the
+# operator's own tenant, which is the only one it may load into. PLATFORM_ADMIN is seeded with
+# bulkImport:upload:execute and bulkImport:status:read (the loader's own gates) and
+# security:role:create / security:role:edit (the two ingest endpoints these packs reach), so no
+# separate credential is needed. The platform tenant has no locations, and a job needs one, so the
+# location is given explicitly: the role and grant ingests carry it along and ignore it, so the
+# nil UUID will do.
+scripts/seed-alpha.py --gateway https://<gateway> --token "$PLATFORM_ACCESS_TOKEN" \
+    --tenant-id 01900000-0000-7000-8000-000000000000 \
+    --location-id 00000000-0000-0000-0000-000000000000 \
+    --only security/roles.csv --only security/role-permissions.csv
+```
+
+The driver requires `--tenant-id` to be the token's own tenant (its `tid` claim, which is also
+the default when the flag is omitted), refuses the platform tenant for any pack but the two
+security role packs, and insists on `--location-id` there. The API enforces the same rule: a bound
+caller loads into its own tenant and nowhere else, the platform operator included. The rows below
+say what each answer means.
+
+| Situation | Answer |
+| --- | --- |
+| `tenantId` omitted | 400 `BULK_JOB_TENANT_REQUIRED`, unless the loader's transitional default tenant (`pos.tenancy.default-tenant-id`) is configured: the job then loads into the default and the loader logs a WARN. Name the tenant; the fallback goes away with the default. |
+| `tenantId` is not an active tenant of the cell | 400 `BULK_JOB_TENANT_UNKNOWN`. The loader asks its `TenantRegistry`: `pos.tenancy.tenants`, else the default tenant, or pos-tenant's list with `pos.tenancy.registry.mode=REMOTE`. The platform tenant is always allowed. |
+| Caller's token is bound to tenant A, `tenantId` is B | 403 `BULK_JOB_TENANT_FORBIDDEN`, for every caller including a platform operator. A job is continued under the creating caller's own binding and operator id, so a job created in another tenant is one nobody could upload to, process or poll; it is refused at create rather than left as an unusable row. Loading into a tenant on its behalf needs a credential genuinely bound to it (an impersonation path), which is not part of WS8. |
+| Caller's token carries no `tid` at all (unbound) and `tenantId` is named explicitly | 403 `BULK_JOB_TENANT_UNBOUND_TARGET_FORBIDDEN`. `tenantId` is a target selector for an already-bound caller only, never an authorization input: an unbound caller may name no tenant (the row above then applies), not pick whichever active tenant it likes. |
+| A platform operator wants to load data into tenant B | Not possible today, by design (see the row above): use a token of B — B's own administrator. `seed-alpha.py` refuses the mode up front for the same reason. |
+| `roles.csv` loaded into the platform tenant | The roles become the platform role template (`template_key` = name); see "Reconciling the role template" to push them to existing tenants. |
+
+The job's tenant is recorded as the non-identifying `tenantId` batch parameter and on every log line (MDC
+`tenantId`), and is returned as `tenantId` on the job.
+
+### Reconciling the role template (ADR-0062 §6, WS8)
+
+Provisioning copies the platform role template once, on `tenant.created`. When the template grows
+afterwards — a platform bulk load of `roles.csv` / `role-permissions.csv` into the platform tenant, a grant
+added to a template role, a role created in the platform tenant and promoted — existing tenants are brought
+up to it explicitly, one tenant per call:
+
+```bash
+# As a platform operator (PLATFORM_ADMIN in the platform tenant, platform:tenant:provision).
+curl -sS -X POST "https://<gateway>/security-service/v1/platform/tenants/$TENANT_ID/roles/reconcile-template" \
+  -H "Authorization: Bearer $PLATFORM_ACCESS_TOKEN" -H "X-API-Version: 1"
+# → 200 {"tenantId":"...","rolesCreated":["WARRANTY_CLERK"],
+#        "grantsAdded":[{"role":"SHOP_MANAGER","permission":"warranty:claim:view"}],
+#        "templateKeysAssigned":["DISPATCHER"]}
+```
+
+What it does, per template role: missing in the tenant → created with the template's description, persona,
+location scope and grants, exactly as provisioning would have; present → keeps every tenant-local grant and
+gains the grants the template carries that it lacks (union, never removal; `role_permissions.granted_by =
+role-template-reconcile`), and gets `template_key` when it had none. An existing role's description, persona
+and scope are left alone (they may be tenant edits). Idempotent: run it again and every list is empty. A
+template grant naming a permission the catalog has not registered yet is skipped with a WARN in
+pos-security-service's log; re-run after the owning module has registered it. Refusals: 403
+`PLATFORM_TENANT_REQUIRED` for a caller bound to any tenant but the platform tenant, 404 `TENANT_NOT_FOUND`
+for a tenant pos-security-service's `ext_tenant` replica does not hold.
+
+Promoting a bulk-loaded role to the template: a role loaded into the *platform* tenant (`roles.csv` with a
+`PLATFORM_ADMIN` token and `--tenant-id` = the platform tenant) joins the template on load. A role that was
+loaded into a tenant instead is not template data; load it into the platform tenant as well (the loader marks
+an already-present platform role rather than refusing it), then reconcile each tenant that should receive it.
+Grants come the same way: `role-permissions.csv` into the platform tenant, then reconcile.
+
 ### Impersonating a tenant for support (ADR-0062 §7, WS2b-4)
 
 Platform support never gets a role inside a tenant (decided 2026-09-10: impersonation token, never a

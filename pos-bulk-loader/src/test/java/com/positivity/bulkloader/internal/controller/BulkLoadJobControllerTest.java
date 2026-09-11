@@ -1,10 +1,13 @@
 package com.positivity.bulkloader.internal.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -13,14 +16,17 @@ import com.positivity.bulkloader.internal.dto.BulkLoadJobCreateRequest;
 import com.positivity.bulkloader.internal.dto.BulkLoadJobResponse;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.enums.JobStatus;
+import com.positivity.bulkloader.internal.exception.BulkLoadTenantException;
 import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.internal.service.BulkLoadJobService;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
@@ -35,6 +41,7 @@ import tools.jackson.databind.ObjectMapper;
 class BulkLoadJobControllerTest {
 
     private static final UUID JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000010");
+    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
 
     @Autowired
     MockMvc mockMvc;
@@ -70,6 +77,80 @@ class BulkLoadJobControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(JOB_ID.toString()))
                 .andExpect(jsonPath("$.status").value("CREATED"));
+    }
+
+    @Test
+    @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+    void createJob_carriesTheTargetTenantToTheServiceAndBack() throws Exception {
+        BulkLoadJobCreateRequest request = new BulkLoadJobCreateRequest();
+        request.setFileName("roles.csv");
+        request.setDomainType(DomainType.SECURITY_ROLE);
+        request.setTenantId(TENANT);
+
+        when(bulkLoadJobService.createJob(any(), eq("test-operator")))
+                .thenReturn(BulkLoadJobResponse.builder()
+                        .id(JOB_ID)
+                        .operatorId("test-operator")
+                        .fileName("roles.csv")
+                        .domainType(DomainType.SECURITY_ROLE)
+                        .status(JobStatus.CREATED)
+                        .tenantId(TENANT)
+                        .build());
+
+        mockMvc.perform(post("/v1/bulk-jobs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tenantId").value(TENANT.toString()));
+
+        ArgumentCaptor<BulkLoadJobCreateRequest> captor = ArgumentCaptor.forClass(BulkLoadJobCreateRequest.class);
+        verify(bulkLoadJobService).createJob(captor.capture(), eq("test-operator"));
+        assertThat(captor.getValue().getTenantId()).isEqualTo(TENANT);
+    }
+
+    @Test
+    @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+    void createJob_withoutATenantAndNoDefault_returns400TenantRequired() throws Exception {
+        BulkLoadJobCreateRequest request = new BulkLoadJobCreateRequest();
+        request.setFileName("products.csv");
+        request.setDomainType(DomainType.CATALOG_PRODUCT);
+
+        when(bulkLoadJobService.createJob(any(), eq("test-operator")))
+                .thenThrow(new BulkLoadTenantException(
+                        BulkLoadTenantException.TENANT_REQUIRED,
+                        HttpStatus.BAD_REQUEST,
+                        "A bulk load job must name its target tenant (tenantId)"));
+
+        mockMvc.perform(post("/v1/bulk-jobs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Correlation-Id", "corr-tenant-1")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("BULK_JOB_TENANT_REQUIRED"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.correlationId").value("corr-tenant-1"))
+                .andExpect(header().string("X-Correlation-Id", "corr-tenant-1"));
+    }
+
+    @Test
+    @WithMockUser(username = "test-operator", authorities = "bulkImport:upload:execute")
+    void createJob_intoAnotherTenant_returns403TenantForbidden() throws Exception {
+        BulkLoadJobCreateRequest request = new BulkLoadJobCreateRequest();
+        request.setFileName("products.csv");
+        request.setDomainType(DomainType.CATALOG_PRODUCT);
+        request.setTenantId(TENANT);
+
+        when(bulkLoadJobService.createJob(any(), eq("test-operator")))
+                .thenThrow(new BulkLoadTenantException(
+                        BulkLoadTenantException.TENANT_FORBIDDEN,
+                        HttpStatus.FORBIDDEN,
+                        "A caller bound to another tenant cannot load into " + TENANT));
+
+        mockMvc.perform(post("/v1/bulk-jobs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("BULK_JOB_TENANT_FORBIDDEN"));
     }
 
     @Test

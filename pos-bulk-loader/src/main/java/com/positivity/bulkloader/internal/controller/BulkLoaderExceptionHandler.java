@@ -1,5 +1,6 @@
 package com.positivity.bulkloader.internal.controller;
 
+import com.positivity.bulkloader.internal.exception.BulkLoadTenantException;
 import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.internal.exception.TusOffsetConflictException;
 import com.positivity.bulkloader.internal.exception.TusUploadExpiredException;
@@ -78,6 +79,17 @@ public class BulkLoaderExceptionHandler {
     public ResponseEntity<ApiError> handleOwnershipViolation(
             JobOwnershipViolationException ex, HttpServletRequest request, HttpServletResponse response) {
         return envelope(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied", request, response);
+    }
+
+    /**
+     * The job's target tenant could not be bound (ADR-0062, plan WS8): the exception carries its own
+     * code and status, so a missing tenant (400), an unknown one (400), one the caller may not load
+     * into (403), and an unbound caller naming a target explicitly (403) each answer distinctly.
+     */
+    @ExceptionHandler(BulkLoadTenantException.class)
+    public ResponseEntity<ApiError> handleTenantBinding(
+            BulkLoadTenantException ex, HttpServletRequest request, HttpServletResponse response) {
+        return envelope(ex.getStatus(), ex.getCode(), ex.getMessage(), request, response);
     }
 
     @ExceptionHandler(NoSuchElementException.class)
