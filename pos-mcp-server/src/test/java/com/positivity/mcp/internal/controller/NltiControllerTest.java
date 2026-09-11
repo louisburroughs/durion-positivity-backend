@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.dto.NltiResponseV1;
+import com.positivity.mcp.internal.exception.SessionNotFoundException;
 import com.positivity.mcp.internal.service.NltiRequestService;
 import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import java.util.UUID;
@@ -224,6 +225,24 @@ class NltiControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sessionId").value(SESSION_ID.toString()))
                 .andExpect(jsonPath("$.workflowState").value("CREATING_PO"));
+    }
+
+    @Test
+    @WithGatewayUser(username = "alice", authorities = "nlti:request:submit")
+    @DisplayName("POST workflow-state for a session the tenant does not have is 404 SESSION_NOT_FOUND (ADR-0062 WS6)")
+    void setWorkflowState_sessionAbsentInTenant_returns404() throws Exception {
+        // Another tenant's session id lands here too: indistinguishable from an unknown one, never a 403
+        // that would reveal the id exists elsewhere.
+        when(workflowStateService.advance(eq(SESSION_ID), eq("alice"), eq(WorkflowState.CREATING_PO), any(UUID.class)))
+                .thenThrow(new SessionNotFoundException("No such session for this tenant: " + SESSION_ID));
+
+        mockMvc.perform(post("/v1/nlt/sessions/" + SESSION_ID + "/workflow-state")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workflowState\":\"CREATING_PO\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("SESSION_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
     @Test

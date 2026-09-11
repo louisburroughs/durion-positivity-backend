@@ -19,7 +19,8 @@ adaptively from invocation outcomes.
 - Orchestrate multi-step agent conversations via Spring AI session assistants (synchronous and streaming SSE).
 - Embed and retrieve RAG documents using pgvector for context-augmented tool selection and answers.
 - Persist system prompts, tool metadata, invocation audit logs, and NLTI sessions/requests/intents.
-- Tune `mcp_tool.priority` adaptively from invocation success rate and latency (daily cron).
+- Tune tool priorities adaptively from invocation success rate and latency (daily cron): a per-tenant overlay from
+  each tenant's own invocation log, and the global `mcp_tool.priority` from all tenants' logs (ADR-0062 plan WS6).
 - Run asynchronous, resumable RAG document-ingestion jobs.
 - Expose NLTI request submission and audit query endpoints.
 
@@ -259,15 +260,20 @@ history but not the layered system prompt or RAG block, and costs a second full 
 ## Audit & Adaptive Tuning
 
 Every tool decision is logged (selected tool, semantic rank, final score, `selected`, `success`, `fallback_invoked`,
-latency). A daily cron (`mcp.tuning.cron`, default `0 0 2 * * ?`) recomputes per-tool performance and adjusts
-`mcp_tool.priority`:
+latency) as a tenant-scoped row of `mcp_tool_invocation_log`. A daily cron (`mcp.tuning.cron`, default
+`0 0 2 * * ?`) recomputes per-tool performance over the last 7 days for every tool with at least 10 executed calls
+and blends it into the current priority:
 
 ```
-performance_score = (success_rate * 0.6) + ((1 - normalized_latency) * 0.3) + ...
+performance_score = (success_rate * 0.6) + ((1 - min(avg_latency_ms / 2000, 1)) * 0.3) - (fallback_rate * 0.2)
+new_priority      = current_priority * 0.7 + clamp(performance_score, 0.1, 1.0) * 0.3
 ```
 
-Tuning is enabled by default with a runtime kill switch (`mcp.tuning.enabled`). Owning classes: `ToolAuditService`,
-`ToolPriorityTuningService`.
+Tuning runs per tenant with a global rollup (see [Per-tenant tool priorities](#per-tenant-tool-priorities)) and is
+off by default: `mcp.tuning.mode` is `off`, `shadow` (proposals logged to `mcp.tuning.shadow` and counted, nothing
+written) or `live` (written only behind a fresh, passing eval baseline; `mcp.tuning.eval-result-path`,
+`mcp.tuning.eval-freshness-hours`). The legacy `mcp.tuning.enabled=true` still means `live`. Owning classes:
+`ToolAuditService`, `ToolPriorityTuningService`, `ToolPriorityRepository`, `TenantToolPriorityResolver`.
 
 ## Offline Replay Eval (#1682)
 
@@ -349,7 +355,7 @@ or similarity floors.
 | `mcp.rag.chunking.max-overlap-size`         | `MCP_RAG_MAX_OVERLAP_SIZE`                  | Chunk overlap                                                                                                                                                                                                                                                                                                                                                              |
 | `mcp.rag.hybrid.lexical-enabled`            | `MCP_RAG_LEXICAL_ENABLED` `true`            | Include scoped PostgreSQL full-text hits in RRF fusion; set `false` for immediate rollback                                                                                                                                                                                                                                                                                 |
 | `mcp.rag.preload.docs`                      | `[]`                                        | Static classpath documents to preload                                                                                                                                                                                                                                                                                                                                      |
-| `mcp.tuning.enabled`                        | `MCP_TUNING_ENABLED` `false`                | Adaptive tool priority tuning (disabled until regression harness exists — Gate 0)                                                                                                                                                                                                                                                                                          |
+| `mcp.tuning.mode`                           | `MCP_TUNING_MODE` `off`                     | Adaptive tool priority tuning: `off`, `shadow` (log and count proposals, write nothing) or `live` (write per-tenant overlays and the global row behind the eval gate). `mcp.tuning.enabled=true` (`MCP_TUNING_ENABLED`, deprecated) still means `live`                                                                                                                       |
 | `mcp.tuning.cron`                           | `0 0 2 * * ?`                               | Tuning schedule (daily 02:00)                                                                                                                                                                                                                                                                                                                                              |
 | `mcp.model.fallback.enabled`                | `MCP_MODEL_FALLBACK_ENABLED` `false` (alpha `true`) | Primary → secondary model fallback (#1691: on in the alpha profile)                                                                                                                                                                                                                                                                                                                                         |
 | `mcp.model.tiering-enabled`                 | `MCP_MODEL_TIERING_ENABLED` `false`         | Gate 4 tier routing. **Dormant** (#1683): with `mcp.model.simple`/`complex` blank both T2 tiers resolve to the same model, so enabling it only pays for a per-turn classification call whose outcome cannot change which model answers                                                                                                                                     |
@@ -414,7 +420,9 @@ Key tables (Flyway migrations under `src/main/resources/db/migration`, H2 varian
 - `mcp_tool`, `mcp_tool_permission`, `mcp_workflow_state` — tool registry, permission gating (`V17`/`V18`), workflow
   gating. `mcp_tool.source` distinguishes facade vs discovered operations.
 - `mcp_role`, `mcp_tool_role` — legacy role gating, retained pending cleanup (see [Backlog](#backlog--missing-features)).
-- `mcp_tool_invocation_log` — per-decision audit feeding adaptive tuning.
+- `mcp_tool_invocation_log` — per-decision audit feeding adaptive tuning (tenant-scoped).
+- `mcp_tool_priority` — per-tenant tool-priority overlay tuned from that tenant's invocation log (tenant-scoped);
+  `mcp_tool.priority` stays the global row.
 - `mcp_rag_*` — RAG ingestion jobs, preload tracking, and immutable preload audit records.
 
 ## Multitenancy (ADR-0062, WS3 wave 12)
@@ -431,17 +439,116 @@ The application pool connects as the non-owner `pos_app` role (Compose: `POS_MCP
 Flyway alone uses the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`, read by Boot's Flyway
 auto-configuration).
 
-The two JDBC-written scoped tables, `mcp_tool_invocation_log` and `mcp_eval_turn_trace`, take their `tenant_id` from
-the Postgres default of the bound request. The two scheduled jobs run per tenant: `ToolPriorityTuningService`
-(each tenant's invocation log tunes the shared tool catalog in turn; per-tenant priorities are plan WS6, with the
-session scoping) and `AlphaEvalTraceRetentionScheduler`. The startup runners seed and embed platform tables only.
-The H2 chain (`db/h2-migration`, `V29__tenancy.sql`) carries `tenant_id` with a fixed default standing in for
+The three JDBC-written scoped tables, `mcp_tool_invocation_log`, `mcp_tool_priority` and `mcp_eval_turn_trace`, take
+their `tenant_id` from the Postgres default of the bound connection; their repositories carry `@TenantAudited` and
+name no tenant. The startup runners seed and embed platform tables only. The H2 chain (`db/h2-migration`,
+`V29__tenancy.sql`, `V30__tool_priority_overlay.sql`) carries `tenant_id` with a fixed default standing in for
 `app_current_tenant()`.
 
-Proof: `TenantIsolationIT` (tenant A's `nlti_session` row is invisible to tenant B and to an unbound connection,
-through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every non-whitelisted table has
-`tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is `pos_app` with no bypass), both
-on Testcontainers Postgres (`./mvnw -pl pos-mcp-server -am verify`).
+### Schedulers
+
+| Job | Classification | What it touches |
+| --- | --- | --- |
+| `ToolPriorityTuningService.tuneToolPriorities` (`mcp.tuning.cron`) | Per tenant (`TenantIterator`), then the `@PlatformScoped` global rollup `recomputeGlobalPriorities` | Reads each tenant's `mcp_tool_invocation_log` under its binding and writes that tenant's `mcp_tool_priority` overlay, in a `TransactionTemplate` opened inside the binding; the rollup writes `mcp_tool.priority` (global) from the per-tenant aggregates summed in memory, in one transaction of its own |
+| `AlphaEvalTraceRetentionScheduler.deleteExpiredTraces` (`alpha`, `mcp.eval.turn-trace.enabled`) | Per tenant (`TenantIterator`) | Deletes each tenant's expired `mcp_eval_turn_trace` rows |
+| `DiscoveryRefreshScheduler.refresh` | `@PlatformScoped` | Refreshes the platform tool catalog (`mcp_tool` and embeddings); overlay rows of a pruned tool go with it (`ON DELETE CASCADE`) |
+| `RolePersonaSyncRunner.scheduledRefresh` | `@PlatformScoped` | Refreshes the platform role personas (`system_prompt`) |
+| `SiteMapEmbeddingWarmupRunner.configureTasks` (programmatic, `SchedulingConfigurer`, cadence `mcp.sitemap.cache-ttl`) | `@PlatformScoped` on the registering method | Re-embeds the platform site map (`mcp_screen_registry` and the section embedding cache) |
+
+There is no session cleanup job: an NLTI session expires on resume (`pos.nlti.session.ttl-hours`, checked under the
+caller's tenant binding) and its row is retained. The module `ArchitectureTest` and `pos-archunit` both fail on a
+`@Scheduled` method that is neither per tenant nor `@PlatformScoped`; a job registered programmatically through
+`SchedulingConfigurer.configureTasks` carries no `@Scheduled`, so the module rule classifies the registering method
+instead (`programmatically_scheduled_jobs_should_be_classified_for_tenancy`).
+
+### Per-tenant tool priorities
+
+Tool priorities have a tenant dimension with a global rollup (plan WS6, decided 2026-09-10). `mcp_tool.priority` is
+the global row: the catalog is a global, code-first table, so keeping the global value there leaves every catalog
+read and the seed unchanged. `mcp_tool_priority (tenant_id, tool_id, priority, avg_latency_ms)` is the tenant-scoped
+overlay under row-level security, so a request bound to tenant T can only ever see T's overlay rows and an unbound
+connection sees none (a global row owned by the platform tenant in the same table would need one connection to read
+two tenants' rows, which RLS forbids for `pos_app`).
+
+- **Resolution** (`TenantToolPriorityResolver`, applied by `ToolRegistryService` to every candidate list of a
+  request): the overlay is read once per resolution through the bound connection and applied tool by tool — an
+  overlay row replaces the tool's priority and latency, a tool without one keeps the global row, and a tenant with
+  no overlay at all (no invocation history, or tuning never run live) ranks on the global set unchanged.
+- **Tuning** (`ToolPriorityTuningService`): the nightly run sweeps the active tenants through `TenantIterator`;
+  bound to each, it reads that tenant's own log (RLS shows it nothing else) and tunes that tenant's overlay for every
+  tool with at least 10 executed calls in the window, starting a new overlay from the global priority and drifting
+  an existing one from its own previous value. The per-tenant aggregates are summed in memory and, after the sweep,
+  the `@PlatformScoped` rollup recomputes the global row from all tenants' logs (the sum is the only way a non-owner
+  connection sees every tenant's history). The threshold applies per scope: two tenants with 6 calls each tune the
+  global row but keep no overlay. Shadow proposals on `mcp.tuning.shadow` carry `scope` (`tenant`/`global`) and
+  `tenant_id`; the `mcp.tuning.proposals` counter is tagged `mode` and `scope`; the run logs one line per tenant
+  (invocations, tools with history, proposals) and a summary. Tool invocation metrics are not tagged by tenant:
+  `mcp.tool.execution.latency` is not tagged by tool either, so a tenant tag would have been a new dimension rather
+  than a matching one.
+- **Which tenants the sweep visits.** `TenantIterator` reads the module's `TenantRegistry`, and the default
+  `pos.tenancy.registry.mode=STATIC` knows `pos.tenancy.tenants` or just the alpha default tenant. On that registry
+  the "global" rollup is one tenant's rollup, so the service logs a WARN at startup when tuning is `shadow` or
+  `live` on a static registry of one tenant. A multi-tenant deployment must set `pos.tenancy.registry.mode=REMOTE`
+  (with `pos.tenancy.registry.url` and `.secret`; `pos-tenancy-common/README.md`, "Tenant registry") before enabling
+  tuning. The module does not default to `REMOTE`: that needs the pos-tenant secret in every environment.
+- **Atomicity and the catalog snapshot.** `JdbcTemplate` commits every statement on its own, so the run
+  opens its own transactions. Each tenant's log read and overlay upserts are one `TransactionTemplate`
+  unit executed *inside* the `TenantIterator` binding (a transaction opened around the sweep would
+  check its connection out before a tenant is bound and run unbound -- `docs/TENANCY_SCHEMA.md`,
+  "Per-tenant schedulers and transactions"); a failure on the third of five proposals rolls the first
+  two back, and that tenant still counts as unfinished. The live rollup's `mcp_tool` updates are one
+  transaction too, because the rollup is a single fleet-wide result: a failure part way through leaves
+  the previous global set intact rather than a mixture of recomputed and stale priorities. Proposal
+  counters are incremented only after the matching transaction commits. The global priorities are read
+  once per run and that snapshot serves both the per-tenant seeding and the rollup arithmetic --
+  `mcp_tool` is global, so the per-tool alternative cost O(tenants x tools) serial lookups. The
+  snapshot cannot mask a value the same run wrote: the sweep only reads, and the rollup computes every
+  proposal before opening its write transaction, so no read of the global priority ever follows a write
+  of it. A run that cannot read the catalog at all tunes nothing and counts `mcp.tuning.incomplete`.
+- **When the rollup is skipped.** The global row is a statement about the whole fleet, so it is written only from a
+  sweep that covered it. Two things stop it, each counting the run in `mcp.tuning.incomplete` and logging a WARN
+  while leaving the per-tenant overlays that did succeed in place:
+  - a tenant that failed — an unreadable log, a rejected overlay write, anything `TenantIterator` caught and carried
+    on past. That tenant's aggregates never reach the rollup either: they are merged only once its own tuning
+    succeeded.
+  - a registry that cannot vouch for its list (`TenantIterator.hasCompleteTenantList()`). A `REMOTE` registry
+    answers from its static seed until pos-tenant replies once, and from its last good snapshot while a refresh is
+    failing, so during an outage the sweep would otherwise visit one tenant and rewrite `mcp_tool.priority` as
+    though it had visited all of them. The startup WARN above cannot see this — it is a run-time state — which is
+    why the check is per run. A `STATIC` registry is authoritative by construction and never trips it.
+
+### Session scoping
+
+An NLTI session never serves another tenant (plan R-B6). `NltiSession` extends `TenantScopedEntity`, and every lookup
+by id goes through `NltiSessionAccess`, which requires a bound tenant (`TenantContext.require()`, so an unbound
+path fails loudly rather than reading nothing), relies on Hibernate's `@TenantId` filter and RLS to confine the
+query, and treats a row of another tenant as absent even if one were returned. A session id the bound tenant does not
+have is indistinguishable from one that never existed: `POST /v1/nlt/sessions/{sessionId}/workflow-state` and a
+write-plan confirm/cancel answer 404 `SESSION_NOT_FOUND` (403 `SESSION_ACCESS_DENIED` is reserved for this tenant's
+session owned by another subject), and `POST /v1/nlt/requests` starts a fresh session for the caller exactly as it
+does for an unknown id. `SessionAgentManager` / `StreamingSessionAgentManager` key their two per-user caches beneath
+the tenant, because a username is unique within a tenant only: the rate counter by the actor key
+`tenant::username`, and chat memory by `tenant::username::role` (the blocking manager adds `::conversationId` when
+the caller supplies one). `evict(username)` removes both for that actor in the bound tenant and nothing of the same
+username in another tenant. The streaming manager captures the request's tenant before assembling the Flux and
+re-binds it in every callback that writes tenant-scoped data (the audit row, the turn trace, the answer-source
+record), since the stream is subscribed and completed on Reactor threads that never carried the binding. The tool
+executions themselves are covered the same way and independently: Spring AI's tool loop runs them on
+`boundedElastic`, so `RequestBoundToolCallback` captures the caller, their bearer token and their tenant when the
+per-request callback list is assembled and re-binds all three around each execution — that is what puts a streamed
+tool call's `mcp_tool_invocation_log` row under the caller's tenant instead of losing it to RLS (`ToolAuditService`
+logs such a failure at WARN and returns, so it would not surface). `TenantContextPropagation` also registers the
+tenant with Micrometer's `ContextRegistry`, so wherever Reactor's automatic context propagation is on it travels
+with a context snapshot as well — but that JVM-wide hook is switched on only by `EvalTurnTracePropagation` under the
+`alpha` profile, so nothing depends on it and the explicit re-binding above is what holds on every deployment.
+
+Proof: `TenantIsolationIT` (tenant A's `nlti_session` row and `mcp_tool_priority` overlay are invisible to tenant B
+and to an unbound connection, through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every
+non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is
+`pos_app` with no bypass), both on Testcontainers Postgres (`./mvnw -pl pos-mcp-server -am verify`); the
+service-level contract is unit-tested in `NltiSessionAccessTest`, `TenantToolPriorityResolverTest`,
+`ToolPriorityTuningServiceTest` and `RequestBoundToolCallbackTest` (which executes callbacks on a plain executor,
+with no Reactor propagation, so it proves the non-alpha case).
 
 ## Dependencies
 

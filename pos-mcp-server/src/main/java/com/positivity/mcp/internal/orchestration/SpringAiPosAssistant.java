@@ -104,9 +104,9 @@ final class SpringAiPosAssistant implements PosAssistant {
         if (openApiToolProvider != null) {
             toolCallbacks.addAll(openApiToolProvider.resolveToolCallbacks(userMessage));
         }
-        // Bind the caller per request: facade callbacks were wrapped once in the constructor and this
-        // agent is cached per role, so the recorder must not read the caller at execution time.
-        toolCallbacks = CallerBoundToolCallback.bindCurrentCaller(toolCallbacks, requestScopedUserContext);
+        // Bind the caller and tenant per request: facade callbacks were wrapped once in the constructor
+        // and this agent is cached per role, so the recorder must not read either at execution time.
+        toolCallbacks = RequestBoundToolCallback.bindCurrentRequest(toolCallbacks, requestScopedUserContext);
         String systemPrompt = buildSystemPrompt(userMessage, userContext);
         if (invocationRecorder != null) {
             List<ToolDefinitionTrace> toolDefinitions = toolCallbacks.stream()

@@ -96,9 +96,10 @@ final class SpringAiStreamingPosAssistant implements StreamingPosAssistant {
             toolCallbacks.addAll(openApiToolProvider.resolveToolCallbacks(userMessage));
         }
         // ToolCallingAdvisor executes streamed tool calls on Schedulers.boundedElastic(), after this
-        // request's ThreadLocal caller has been cleared on the assembly thread. Bind it now or every
-        // streamed invocation is audited as "unknown" and loses its correlation id.
-        toolCallbacks = CallerBoundToolCallback.bindCurrentCaller(toolCallbacks, requestScopedUserContext);
+        // request's ThreadLocal caller and tenant have been cleared on the assembly thread. Bind them
+        // now or every streamed invocation is audited as "unknown", loses its correlation id, and
+        // writes its mcp_tool_invocation_log row unbound (ADR-0062 plan WS6).
+        toolCallbacks = RequestBoundToolCallback.bindCurrentRequest(toolCallbacks, requestScopedUserContext);
         String systemPrompt = buildSystemPrompt(userMessage, userContext);
         List<Message> promptMessages = new ArrayList<>(chatMemory.get(memoryId));
         promptMessages.add(new SystemMessage(systemPrompt));

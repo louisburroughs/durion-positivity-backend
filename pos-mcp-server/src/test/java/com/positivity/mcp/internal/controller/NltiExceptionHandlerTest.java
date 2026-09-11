@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.mcp.internal.dto.NltiRequestDTO;
 import com.positivity.mcp.internal.exception.InvalidDocumentMetadataException;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
+import com.positivity.mcp.internal.exception.SessionNotFoundException;
 import com.positivity.mcp.internal.exception.SessionOwnershipViolationException;
 import com.positivity.mcp.internal.exception.WritePlanConflictException;
 import com.positivity.mcp.internal.exception.WritePlanExecutionException;
@@ -274,6 +275,8 @@ class NltiExceptionHandlerTest {
                     Named.of("handleInvalidDocumentMetadata", (HandlerInvocation)
                             request -> handler.handleInvalidDocumentMetadata(
                                     new InvalidDocumentMetadataException("bad metadata", null), request)),
+                    Named.of("handleSessionNotFound", (HandlerInvocation) request ->
+                            handler.handleSessionNotFound(new SessionNotFoundException("no such session"), request)),
                     Named.of("handleSessionOwnershipViolation", (HandlerInvocation)
                             request -> handler.handleSessionOwnershipViolation(
                                     new SessionOwnershipViolationException("not owned"), request)),

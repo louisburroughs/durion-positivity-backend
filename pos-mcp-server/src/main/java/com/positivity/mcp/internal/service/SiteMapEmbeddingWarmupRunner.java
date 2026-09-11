@@ -1,6 +1,7 @@
 package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.config.SiteMapProperties;
+import com.positivity.tenancy.PlatformScoped;
 import java.time.Duration;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.ApplicationArguments;
@@ -52,6 +53,9 @@ public class SiteMapEmbeddingWarmupRunner implements ApplicationRunner, Scheduli
     }
 
     @Override
+    @PlatformScoped(
+            reason = "re-embeds the platform site map (mcp_screen_registry and the section embedding cache, global);"
+                    + " nothing tenant-scoped is read or written")
     public void configureTasks(@NonNull ScheduledTaskRegistrar registrar) {
         // Re-warm on the TTL cadence; first firing is one interval after startup (run() already
         // covered boot), so the two never double up.

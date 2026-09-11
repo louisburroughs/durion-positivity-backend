@@ -90,11 +90,16 @@ public class ToolRegistryService {
 
     private final ToolMetadataRepository repository;
     private final EmbeddingModel embeddingModel;
+    private final TenantToolPriorityResolver priorityResolver;
     private final ToolScorer scorer;
 
-    public ToolRegistryService(@NonNull ToolMetadataRepository repository, @NonNull EmbeddingModel embeddingModel) {
+    public ToolRegistryService(
+            @NonNull ToolMetadataRepository repository,
+            @NonNull EmbeddingModel embeddingModel,
+            @NonNull TenantToolPriorityResolver priorityResolver) {
         this.repository = repository;
         this.embeddingModel = embeddingModel;
+        this.priorityResolver = priorityResolver;
         this.scorer = new ToolScorer();
     }
 
@@ -112,8 +117,11 @@ public class ToolRegistryService {
             return List.of();
         }
 
-        List<ToolMetadata> gatedTools =
-                repository.findEnabledByPermissionsAndWorkflow(context.permissionCodes(), context.workflowState());
+        // ADR-0062 plan WS6: the catalog rows carry the global priority; the bound tenant's overlay
+        // replaces it tool by tool (read once here, applied to every list of this resolution).
+        TenantToolPriorityResolver.Overlay priorityOverlay = priorityResolver.currentOverlay();
+        List<ToolMetadata> gatedTools = priorityOverlay.apply(
+                repository.findEnabledByPermissionsAndWorkflow(context.permissionCodes(), context.workflowState()));
 
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug(
@@ -159,8 +167,8 @@ public class ToolRegistryService {
         // Permission-gated ANN — only tools authorized for this caller's permissionCodes
         // and workflow enter the ranking window. Unauthorized tools can never displace
         // authorized ones.
-        List<ToolMetadata> semanticCandidates = repository.findTopKByEmbeddingForPermissions(
-                embedding, semanticLimit, context.permissionCodes(), context.workflowState());
+        List<ToolMetadata> semanticCandidates = priorityOverlay.apply(repository.findTopKByEmbeddingForPermissions(
+                embedding, semanticLimit, context.permissionCodes(), context.workflowState()));
 
         if (semanticCandidates.isEmpty()) {
             // Fallback: tools have no embeddings yet; return highest-priority gated tools

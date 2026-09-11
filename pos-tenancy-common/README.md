@@ -40,6 +40,16 @@ module's `TenantRegistry` returns.
   recovery, each with the consecutive-failure count. A bad answer never replaces the snapshot,
   which is the static list (or empty, when neither `pos.tenancy.tenants` nor a default tenant is
   configured) until the first fetch succeeds: an empty snapshot means the iterator visits nobody.
+
+  That fallback keeps per-tenant jobs alive, but the list it hands out during an outage is not the
+  fleet — the static seed never was, and a snapshot kept through an outage cannot hold a tenant
+  created since. `RemoteTenantRegistry` therefore implements `TenantRegistryFreshness`: complete
+  means a fetch has succeeded *and* the most recent one did too. A job that rolls its per-tenant
+  sweep up into one fleet-wide write asks `TenantIterator.hasCompleteTenantList()` before that
+  write and holds off when it is false (`pos-mcp-server`'s nightly tool-priority tuning is the
+  worked example). Per-tenant work itself runs regardless: an incomplete list still deserves the
+  tenants it does name. A registry that is authoritative by construction (`StaticTenantRegistry`,
+  or a module's own replica-backed one) does not implement the interface and counts as complete.
 - A module that keeps its own registry (`pos-security-service`'s `ext_tenant`-backed
   `ExtTenantRegistry`) declares a `TenantRegistry` bean and the auto-configured one backs off in
   either mode.

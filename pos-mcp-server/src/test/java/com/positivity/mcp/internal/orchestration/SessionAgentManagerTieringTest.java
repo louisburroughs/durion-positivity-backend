@@ -36,6 +36,7 @@ import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.RolePromptResolver;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
+import com.positivity.mcp.tenancy.BoundTenant;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -73,6 +74,7 @@ import org.springframework.test.util.ReflectionTestUtils;
  * write telemetry signal.
  */
 @ExtendWith(MockitoExtension.class)
+@ExtendWith(BoundTenant.class)
 class SessionAgentManagerTieringTest {
 
     private static final UUID USER_ID = UUID.fromString("00000000-0000-7000-8000-000000001192");

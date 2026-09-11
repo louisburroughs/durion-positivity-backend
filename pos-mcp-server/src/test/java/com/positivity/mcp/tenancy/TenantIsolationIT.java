@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.mcp.internal.entity.NltiSession;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
+import com.positivity.mcp.internal.repository.ToolPriorityRepository;
 import com.positivity.tenancy.TenantContext;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -32,6 +33,9 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
 
     @Autowired
     private DataSource dataSource;
+
+    @Autowired
+    private ToolPriorityRepository priorities;
 
     @AfterEach
     void clear() {
@@ -75,6 +79,53 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                 () -> assertThat(rows.findById(id).orElseThrow().getSubjectId())
                         .as("tenant B's UPDATE touched nothing")
                         .isEqualTo("user-1"));
+    }
+
+    /**
+     * The per-tenant tool-priority overlay (plan WS6): a row tuned as tenant A is A's alone through
+     * the repository (which names no tenant: row-level security scopes it), tenant B reads an empty
+     * overlay and so falls back to the global catalog priority, and an unbound connection can
+     * neither read nor write the table.
+     */
+    @Test
+    void aToolPriorityOverlayTunedAsOneTenantIsInvisibleToAnotherAndToNoTenant() {
+        // InventoryFacadeTool, seeded by V2 in the global catalog every tenant shares.
+        UUID tool = UUID.fromString("3a274527-e44c-47b7-82e0-554ed4b8f9d0");
+
+        asTenant(TENANT_A, () -> priorities.upsertOverlay(tool, 0.42, 150));
+
+        asTenant(TENANT_A, () -> {
+            assertThat(priorities.findOverlayForCurrentTenant()).containsOnlyKeys(tool);
+            assertThat(priorities.findOverlayForCurrentTenant().get(tool).priority())
+                    .isEqualTo(0.42);
+            // A second tuning updates the row in place rather than adding one.
+            priorities.upsertOverlay(tool, 0.5, 160);
+            assertThat(priorities.findOverlayForCurrentTenant()).hasSize(1);
+            assertThat(priorities.findOverlayForCurrentTenant().get(tool).avgLatencyMs())
+                    .isEqualTo(160);
+        });
+
+        asTenant(
+                TENANT_B,
+                () -> assertThat(priorities.findOverlayForCurrentTenant())
+                        .as("tenant B has no overlay: its requests fall back to the global priority")
+                        .isEmpty());
+
+        assertThat(priorities.findOverlayForCurrentTenant())
+                .as("unbound: RLS shows nothing")
+                .isEmpty();
+        assertThatThrownBy(() -> priorities.upsertOverlay(tool, 0.9, 10))
+                .as("unbound: the NOT NULL default is NULL and the policy's WITH CHECK refuses the row")
+                .isInstanceOf(DataAccessException.class);
+
+        asTenant(
+                TENANT_A,
+                () -> assertThat(priorities
+                                .findOverlayForCurrentTenant()
+                                .get(tool)
+                                .priority())
+                        .as("nothing else touched A's row")
+                        .isEqualTo(0.5));
     }
 
     private static NltiSession session() {

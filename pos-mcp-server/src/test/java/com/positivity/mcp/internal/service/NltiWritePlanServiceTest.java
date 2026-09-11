@@ -22,6 +22,7 @@ import com.positivity.mcp.internal.entity.NltiWritePlan;
 import com.positivity.mcp.internal.enums.NltiAuditEventType;
 import com.positivity.mcp.internal.enums.NltiRequestStatus;
 import com.positivity.mcp.internal.enums.NltiRiskLevel;
+import com.positivity.mcp.internal.exception.SessionNotFoundException;
 import com.positivity.mcp.internal.exception.SessionOwnershipViolationException;
 import com.positivity.mcp.internal.exception.WritePlanConflictException;
 import com.positivity.mcp.internal.exception.WritePlanExecutionException;
@@ -32,6 +33,7 @@ import com.positivity.mcp.internal.repository.NltiSessionRepository;
 import com.positivity.mcp.internal.repository.NltiWritePlanRepository;
 import com.positivity.mcp.internal.repository.ToolMetadataRepository;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
+import com.positivity.mcp.tenancy.BoundTenant;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
@@ -57,6 +59,7 @@ import org.springframework.security.access.AccessDeniedException;
  * persisted-args execution.
  */
 @ExtendWith(MockitoExtension.class)
+@ExtendWith(BoundTenant.class)
 class NltiWritePlanServiceTest {
 
     // Hardcoded test UUIDs — no UUID.randomUUID() per ADR
@@ -107,7 +110,7 @@ class NltiWritePlanServiceTest {
         service = new NltiWritePlanService(
                 planRepository,
                 requestRepository,
-                sessionRepository,
+                new NltiSessionAccess(sessionRepository),
                 toolMetadataRepository,
                 writePlanExecutor,
                 versionProbe,
@@ -158,7 +161,14 @@ class NltiWritePlanServiceTest {
     }
 
     private void stubOwnership() {
-        when(sessionRepository.findByIdAndSubjectId(SESSION_ID, SUBJECT)).thenReturn(Optional.of(new NltiSession()));
+        when(sessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(ownedSession(SUBJECT)));
+    }
+
+    private static NltiSession ownedSession(String subjectId) {
+        NltiSession session = new NltiSession();
+        session.setId(SESSION_ID);
+        session.setSubjectId(subjectId);
+        return session;
     }
 
     private void stubPermission() {
@@ -403,10 +413,21 @@ class NltiWritePlanServiceTest {
     @DisplayName("confirm on a foreign session is an ownership violation")
     void confirm_foreignSession_ownershipViolation() {
         when(planRepository.findByRequestId(REQUEST_ID)).thenReturn(Optional.of(pendingPlan()));
-        when(sessionRepository.findByIdAndSubjectId(SESSION_ID, "mallory")).thenReturn(Optional.empty());
+        when(sessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(ownedSession(SUBJECT)));
 
         assertThatThrownBy(() -> service.confirm(REQUEST_ID, "mallory", CALLER_PERMS, null, null))
                 .isInstanceOf(SessionOwnershipViolationException.class);
+        verify(writePlanExecutor, never()).execute(anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("confirm on a session the bound tenant does not have is not-found (ADR-0062 WS6)")
+    void confirm_sessionAbsentInTenant_notFound() {
+        when(planRepository.findByRequestId(REQUEST_ID)).thenReturn(Optional.of(pendingPlan()));
+        when(sessionRepository.findById(SESSION_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.confirm(REQUEST_ID, SUBJECT, CALLER_PERMS, null, null))
+                .isInstanceOf(SessionNotFoundException.class);
         verify(writePlanExecutor, never()).execute(anyString(), anyString(), any());
     }
 

@@ -10,6 +10,7 @@ import com.positivity.mcp.internal.dto.NltiResponseV1;
 import com.positivity.mcp.internal.entity.NltiSession;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
+import com.positivity.mcp.tenancy.BoundTenant;
 import com.positivity.security.common.GatewaySecurityConstants;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -44,6 +45,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
  * Issue: NLTI-001
  */
 @ExtendWith(MockitoExtension.class)
+@ExtendWith(BoundTenant.class)
 class NltiSessionServiceTest {
 
     // Hardcoded test UUIDs — no UUID.randomUUID() per ADR
@@ -76,6 +78,7 @@ class NltiSessionServiceTest {
         meterRegistry = new SimpleMeterRegistry();
         service = new NltiRequestServiceImpl(
                 sessionRepository,
+                new NltiSessionAccess(sessionRepository),
                 requestRepository,
                 intentParserService,
                 writePlanService,
