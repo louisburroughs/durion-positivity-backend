@@ -253,6 +253,7 @@ CREATE TABLE public.users (
     account_non_locked boolean DEFAULT true NOT NULL,
     account_non_expired boolean DEFAULT true NOT NULL,
     credentials_non_expired boolean DEFAULT true NOT NULL,
+    awaiting_activation boolean DEFAULT false NOT NULL,
     failed_login_attempts integer DEFAULT 0 NOT NULL,
     last_failed_login_at timestamp with time zone,
     last_successful_login_at timestamp with time zone,
@@ -284,6 +285,9 @@ CREATE TABLE public.user_activation_tokens (
     created_by character varying(255) NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
+
+COMMENT ON COLUMN public.users.awaiting_activation IS
+    'ADR-0062 section 7 (WS2b-3): true only for the first administrator provisioning created and nobody has activated; the one state an activation token may set a password for. Cleared by activation and by any ordinary password set.';
 
 COMMENT ON COLUMN public.user_activation_tokens.tenant_id IS
     'ADR-0062: the user''s tenant, carried as data (global table, no policy); bound by the activation service before the user is updated.';

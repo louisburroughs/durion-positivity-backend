@@ -418,9 +418,35 @@ class UserServiceTest {
                 .as("cannot sign in until activated")
                 .isFalse();
         assertThat(user.getCredentialsExpireAt()).isEqualTo(TEST_CLOCK.instant());
+        assertThat(user.isAwaitingActivation())
+                .as("the explicit provisioning marker")
+                .isTrue();
         assertThat(user.getPassword()).startsWith("hashed:");
         // 32 random bytes, URL-safe base64 without padding: 43 characters, never a caller-chosen value
         assertThat(user.getPassword().substring("hashed:".length())).hasSize(43).matches("[A-Za-z0-9_-]+");
         verify(userRoleGrantService).grant(eq(user), eq(admin), anyString());
+    }
+
+    @Test
+    void updateUser_settingAPasswordEndsTheAwaitingActivationState() {
+        UUID id = UUID.fromString("01990000-0000-7000-8000-000000000502");
+        User user = new User();
+        user.setId(id);
+        user.setUsername("owner@acme.example");
+        user.setPassword("$2a$unmatchable");
+        user.setCredentialsNonExpired(false);
+        user.setAwaitingActivation(true);
+        when(userRepository.findById(id)).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode("Sup3rS3cret!")).thenReturn("$2a$hashed");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        UserUpdateRequest request = new UserUpdateRequest();
+        request.setPassword("Sup3rS3cret!");
+
+        userService.updateUser(id, request);
+
+        assertThat(user.getPassword()).isEqualTo("$2a$hashed");
+        assertThat(user.isAwaitingActivation())
+                .as("a token minted before this password set can no longer overwrite it")
+                .isFalse();
     }
 }

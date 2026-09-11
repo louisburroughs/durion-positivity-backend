@@ -193,16 +193,25 @@ public class AdministratorActivationService {
         /** Under the token's tenant binding. Consumes the token first, so a concurrent second use fails. */
         @Transactional
         public void exchange(@NonNull UserActivationToken row, @NonNull String newPassword) {
+            // The user row is locked first, the same lock issue() takes: a mint running concurrently
+            // waits here and then finds this token consumed and the user activated, so it refuses
+            // (409) instead of committing a fresh token that could redeem against the live password.
+            // A user hidden by row-level security (the row's tenant no longer holds it), or one no
+            // longer awaiting activation, is the same refusal as an unknown token: nothing about the
+            // account is revealed to the unauthenticated caller.
+            User user =
+                    userRepository.findByIdForUpdate(row.getUserId()).orElseThrow(ActivationTokenInvalidException::new);
+            if (!isAwaitingActivation(user)) {
+                throw new ActivationTokenInvalidException();
+            }
             Instant now = Instant.now(clock);
             if (tokenRepository.consume(row.getId(), now) != 1) {
                 throw new ActivationTokenInvalidException();
             }
-            // A user hidden by row-level security (the row's tenant no longer holds it) is the same
-            // refusal as an unknown token: nothing about the account is revealed.
-            User user = userRepository.findById(row.getUserId()).orElseThrow(ActivationTokenInvalidException::new);
             user.setPassword(passwordEncoder.encode(newPassword));
             user.setCredentialsNonExpired(true);
             user.setCredentialsExpireAt(null);
+            user.setAwaitingActivation(false);
             userRepository.save(user);
             log.info(
                     "Administrator {} ({}) of tenant {} activated with token {}",
@@ -213,12 +222,16 @@ public class AdministratorActivationService {
         }
 
         /**
-         * The account provisioning creates and nobody has activated yet: credentials expired and no
-         * successful login ever. A live account, even one whose credentials an administrator later
-         * expired, keeps its password — a token must never overwrite it.
+         * The account provisioning creates and nobody has activated yet, read from the explicit
+         * {@code users.awaiting_activation} marker that only {@code createUserAwaitingActivation}
+         * sets and that activation and every ordinary password set clear. Credential state alone
+         * cannot tell that account from a live one whose credentials an administrator expired
+         * before its first login, so the marker decides; the expired-credentials invariant of the
+         * provisioning state is kept as a defensive AND. A live account keeps its password — a
+         * token must never overwrite it.
          */
         static boolean isAwaitingActivation(@NonNull User user) {
-            return !user.isCredentialsNonExpired() && user.getLastSuccessfulLoginAt() == null;
+            return user.isAwaitingActivation() && !user.isCredentialsNonExpired();
         }
 
         /**

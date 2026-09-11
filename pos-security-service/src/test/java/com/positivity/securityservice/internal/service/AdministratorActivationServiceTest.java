@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -35,6 +36,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -76,6 +78,7 @@ class AdministratorActivationServiceTest {
         user.setPassword("$2a$unmatchable");
         user.setCredentialsNonExpired(false);
         user.setCredentialsExpireAt(NOW.minus(Duration.ofDays(1)));
+        user.setAwaitingActivation(true);
         return user;
     }
 
@@ -208,11 +211,26 @@ class AdministratorActivationServiceTest {
         }
 
         @Test
-        @DisplayName("a credential-expired user that has signed in before is 409 too: not the provisioning state")
-        void expiredButOnceSignedInUserIs409() {
-            User expiredLater = user();
-            expiredLater.setLastSuccessfulLoginAt(NOW.minus(Duration.ofDays(30)));
-            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(expiredLater));
+        @DisplayName("an ordinary account whose credentials an administrator expired before its first login is 409:"
+                + " only the explicit marker names the provisioning state")
+        void adminExpiredNeverSignedInUserIs409() {
+            User expiredByAdmin = user();
+            expiredByAdmin.setAwaitingActivation(false);
+            assertThat(expiredByAdmin.isCredentialsNonExpired()).isFalse();
+            assertThat(expiredByAdmin.getLastSuccessfulLoginAt()).isNull();
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(expiredByAdmin));
+            TenantContext.bind(PlatformTenant.ID);
+
+            assertThatThrownBy(() -> service.mint(TENANT, USER)).isInstanceOf(UserNotAwaitingActivationException.class);
+            verify(tokens, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("the marker alone is not enough: credentials that are live again make it 409 (defensive AND)")
+        void markerWithLiveCredentialsIs409() {
+            User inconsistent = user();
+            inconsistent.setCredentialsNonExpired(true);
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(inconsistent));
             TenantContext.bind(PlatformTenant.ID);
 
             assertThatThrownBy(() -> service.mint(TENANT, USER)).isInstanceOf(UserNotAwaitingActivationException.class);
@@ -271,7 +289,7 @@ class AdministratorActivationServiceTest {
             when(tokens.consume(row.getId(), NOW)).thenReturn(1);
             User user = user();
             AtomicReference<UUID> boundDuringUpdate = new AtomicReference<>();
-            when(users.findById(USER)).thenAnswer(inv -> {
+            when(users.findByIdForUpdate(USER)).thenAnswer(inv -> {
                 boundDuringUpdate.set(TenantContext.require());
                 return Optional.of(user);
             });
@@ -286,7 +304,33 @@ class AdministratorActivationServiceTest {
             assertThat(user.getPassword()).isEqualTo("$2a$hashed");
             assertThat(user.isCredentialsNonExpired()).isTrue();
             assertThat(user.getCredentialsExpireAt()).isNull();
+            assertThat(user.isAwaitingActivation()).as("the marker is cleared").isFalse();
             verify(users).save(user);
+            verify(users, never()).findById(any());
+            // The user lock is taken before the token is consumed, the same order issue() uses, so a
+            // concurrent mint cannot slip a fresh token in between the consume and the password write.
+            InOrder inOrder = inOrder(users, tokens);
+            inOrder.verify(users).findByIdForUpdate(USER);
+            inOrder.verify(tokens).consume(row.getId(), NOW);
+            inOrder.verify(users).save(user);
+        }
+
+        @Test
+        @DisplayName(
+                "a user no longer awaiting activation is refused before the token is consumed, as an invalid token")
+        void userNoLongerAwaitingIsInvalidAndTokenUntouched() {
+            UserActivationToken row = row(HASH, NOW.plus(Duration.ofHours(1)), null);
+            when(tokens.findByTokenHash(HASH)).thenReturn(Optional.of(row));
+            User activated = user();
+            activated.setAwaitingActivation(false);
+            activated.setCredentialsNonExpired(true);
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(activated));
+
+            assertThatThrownBy(() -> service.activate(TOKEN, "Sup3rS3cret!"))
+                    .isInstanceOf(ActivationTokenInvalidException.class);
+            verify(tokens, never()).consume(any(), any());
+            verify(users, never()).save(any());
+            verify(encoder, never()).encode(anyString());
         }
 
         @Test
@@ -296,7 +340,7 @@ class AdministratorActivationServiceTest {
 
             assertThatThrownBy(() -> service.activate("nope", "Sup3rS3cret!"))
                     .isInstanceOf(ActivationTokenInvalidException.class);
-            verify(users, never()).findById(any());
+            verify(users, never()).findByIdForUpdate(any());
             verify(encoder, never()).encode(anyString());
         }
 
@@ -326,6 +370,7 @@ class AdministratorActivationServiceTest {
         void raceOnConsumeIsInvalid() {
             UserActivationToken row = row(HASH, NOW.plus(Duration.ofHours(1)), null);
             when(tokens.findByTokenHash(HASH)).thenReturn(Optional.of(row));
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(user()));
             when(tokens.consume(row.getId(), NOW)).thenReturn(0);
 
             assertThatThrownBy(() -> service.activate(TOKEN, "Sup3rS3cret!"))
@@ -338,11 +383,11 @@ class AdministratorActivationServiceTest {
         void hiddenUserIsInvalid() {
             UserActivationToken row = row(HASH, NOW.plus(Duration.ofHours(1)), null);
             when(tokens.findByTokenHash(HASH)).thenReturn(Optional.of(row));
-            when(tokens.consume(eq(row.getId()), any())).thenReturn(1);
-            when(users.findById(USER)).thenReturn(Optional.empty());
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.activate(TOKEN, "Sup3rS3cret!"))
                     .isInstanceOf(ActivationTokenInvalidException.class);
+            verify(tokens, never()).consume(eq(row.getId()), any());
         }
     }
 }
