@@ -14,7 +14,21 @@ import java.util.UUID;
  */
 public interface TenantRegistry {
 
-    /** Ids of every tenant that is {@code ACTIVE}, in a stable order. */
+    /**
+     * Ids of every tenant that is {@code ACTIVE}, in a stable order.
+     *
+     * <p><strong>Never includes {@link PlatformTenant#ID}.</strong> The platform tenant is
+     * control-plane data owned by {@code pos-tenant} (ADR-0062 §7), not an ordinary tenant, and this
+     * list's only consumer ({@link TenantIterator}, per-tenant scheduled work) must never run a
+     * tenant job under it — {@code @PlatformScoped} exists precisely so platform work is swept
+     * separately. Every implementation must uphold this itself: {@link StaticTenantRegistry} filters
+     * it out of {@code pos.tenancy.tenants} and {@code pos.tenancy.default-tenant-id} (both of which
+     * {@code pos-tenant} sets to the platform tenant for its own rows), and {@link
+     * RemoteTenantRegistry} filters it out of both its static seed and every fetched list. A module
+     * that supplies its own {@link TenantRegistry} (as {@code pos-security-service} does for its
+     * {@code ext_tenant} replica) must filter it too, or every other {@code TenantIterator} caller in
+     * that module inherits the same control-plane leak.
+     */
     List<UUID> activeTenantIds();
 
     /**

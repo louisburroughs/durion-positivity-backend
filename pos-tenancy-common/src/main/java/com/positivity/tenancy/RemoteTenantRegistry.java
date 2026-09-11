@@ -82,12 +82,11 @@ public class RemoteTenantRegistry implements TenantRegistry, TenantRegistryFresh
         this.secret = config.getSecret();
         this.refresh = config.getRefresh();
         this.clock = clock;
-        // The seed is filtered exactly as a fetched list is: a failed first fetch must not leave the
-        // control-plane tenant in the snapshot either, and pos-tenant configures it as its default.
-        List<UUID> seed = new StaticTenantRegistry(properties)
-                .activeTenantIds().stream()
-                        .filter(tenantId -> !PlatformTenant.ID.equals(tenantId))
-                        .toList();
+        // StaticTenantRegistry already excludes the platform tenant (TenantRegistry#activeTenantIds()
+        // forbids it), so the seed is clean the same way a fetched list is: a failed first fetch must
+        // not leave the control-plane tenant in the snapshot either, and pos-tenant configures it as
+        // its default.
+        List<UUID> seed = new StaticTenantRegistry(properties).activeTenantIds();
         // The static seed is never the fleet, so it starts incomplete, same as hasCompleteSnapshot()
         // always reported before this pairing existed.
         this.snapshot = new TenantRegistry.Snapshot(seed, false);
