@@ -45,9 +45,14 @@ module's `TenantRegistry` returns.
   fleet — the static seed never was, and a snapshot kept through an outage cannot hold a tenant
   created since. `RemoteTenantRegistry` therefore implements `TenantRegistryFreshness`: complete
   means a fetch has succeeded *and* the most recent one did too. A job that rolls its per-tenant
-  sweep up into one fleet-wide write asks `TenantIterator.hasCompleteTenantList()` before that
-  write and holds off when it is false (`pos-mcp-server`'s nightly tool-priority tuning is the
-  worked example). Per-tenant work itself runs regardless: an incomplete list still deserves the
+  sweep up into one fleet-wide write uses `TenantIterator.sweep()` instead of
+  `forEachActiveTenant()` and holds off its fleet-wide write when the returned `Sweep`'s
+  `completeTenantList()` is false (`pos-mcp-server`'s nightly tool-priority tuning is the worked
+  example). `sweep()` reads the freshness flag in the same breath as the tenant list, before any
+  tenant runs, so the verdict belongs to the exact list iterated rather than to whatever the
+  registry reports once the whole sweep — which can take as long as the per-tenant work does — is
+  over and a concurrent refresh (triggered by any other caller sharing the registry) has had time
+  to move it. Per-tenant work itself runs regardless: an incomplete list still deserves the
   tenants it does name. A registry that is authoritative by construction (`StaticTenantRegistry`,
   or a module's own replica-backed one) does not implement the interface and counts as complete.
 - A module that keeps its own registry (`pos-security-service`'s `ext_tenant`-backed

@@ -13,8 +13,9 @@ package com.positivity.tenancy;
  *
  * <p>A registry whose list is authoritative by construction ({@link StaticTenantRegistry}, or a
  * module-owned one backed by a local replica) does not implement this; callers treat its absence as
- * complete. {@link TenantIterator#hasCompleteTenantList()} is the check, so no caller needs the
- * {@code instanceof}.
+ * complete. {@link TenantIterator#sweep(java.util.function.Consumer)} reads this in the same breath
+ * as the tenant list itself and reports both together, so no caller needs the {@code instanceof} or
+ * a second, separately-timed read of this method.
  */
 public interface TenantRegistryFreshness {
 

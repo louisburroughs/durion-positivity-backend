@@ -68,10 +68,12 @@ import org.springframework.transaction.support.TransactionTemplate;
  * snapshot itself cannot be read the run tunes nothing and counts {@code mcp.tuning.incomplete}.
  *
  * <p>The same holds when every tenant succeeded but the registry cannot vouch for the list it
- * handed out ({@link TenantIterator#hasCompleteTenantList()}): a REMOTE registry answers from its
- * static seed until {@code pos-tenant} replies once, and from its last good snapshot while a
- * refresh is failing, so an outage would otherwise have a one-tenant sweep rewrite the global
- * priorities as though it had covered the fleet.
+ * handed out ({@link TenantIterator.Sweep#completeTenantList()}, read by {@link
+ * TenantIterator#sweep} in the same breath as the tenant list itself — not by a second, separately
+ * timed read once the sweep is over, which a concurrent refresh could flip either way in the
+ * meantime): a REMOTE registry answers from its static seed until {@code pos-tenant} replies once,
+ * and from its last good snapshot while a refresh is failing, so an outage would otherwise have a
+ * one-tenant sweep rewrite the global priorities as though it had covered the fleet.
  *
  * <p>Behavior is governed by {@code mcp.tuning.mode} ({@link TuningMode}): {@code off} skips the
  * run, {@code shadow} computes proposals and emits them to the structured logger
@@ -165,7 +167,7 @@ public class ToolPriorityTuningService {
      * <p>This is startup configuration advice only, and deliberately silent for REMOTE: a remote
      * registry also starts on that same static fallback and keeps it when a fetch fails, which no
      * startup check can see. {@link #tuneToolPriorities()} covers that case per run, by skipping the
-     * global rollup while {@link TenantIterator#hasCompleteTenantList()} is false.
+     * global rollup while {@link TenantIterator.Sweep#completeTenantList()} is false.
      *
      * @return the warning to log, or empty when tuning is off, the registry is remote, or the static
      *     list names more than one tenant
@@ -220,7 +222,12 @@ public class ToolPriorityTuningService {
 
         Map<UUID, ToolInvocationStats> global = new LinkedHashMap<>();
         List<UUID> failedTenants = new ArrayList<>();
-        int tenants = tenantIterator.forEachActiveTenant(tenantId -> {
+        // sweep(), not forEachActiveTenant() plus a later hasCompleteTenantList(): the completeness
+        // verdict must belong to the exact tenant list this run iterated, not to whatever the
+        // registry reports once every tenant's read and overlay writes are done, which can take
+        // long enough for a concurrent refresh (triggered by any other caller sharing the registry)
+        // to flip the verdict either way in between.
+        TenantIterator.Sweep tenantSweep = tenantIterator.sweep(tenantId -> {
             TenantSweep sweep;
             try {
                 // The transaction opens inside the tenant binding, so its connection carries the
@@ -259,23 +266,26 @@ public class ToolPriorityTuningService {
                     failedTenants);
             return;
         }
-        if (!tenantIterator.hasCompleteTenantList()) {
+        if (!tenantSweep.completeTenantList()) {
             // A REMOTE registry answers from its static seed until pos-tenant replies once, and from
             // its last good snapshot while a refresh is failing. Either way the sweep visited the
             // tenants it could name, not the fleet, so the per-tenant overlays above stand but the
-            // global row must not be rewritten from a sum over part of it.
+            // global row must not be rewritten from a sum over part of it. This is the verdict for
+            // the list actually iterated (read by TenantIterator.sweep before any tenant ran), not a
+            // fresh read of the registry now that every tenant is done.
             meterRegistry.counter(INCOMPLETE_COUNTER).increment();
             LOGGER.warn(
-                    "Tool priority tuning: the tenant registry has no complete snapshot (still on its static"
-                            + " fallback, or its last refresh failed); {} tenant(s) were tuned but the global"
-                            + " rollup is skipped this run and mcp_tool.priority keeps its previous values",
-                    tenants);
+                    "Tool priority tuning: the tenant registry had no complete snapshot when this sweep started"
+                            + " (still on its static fallback, or its last refresh failed); {} tenant(s) were tuned"
+                            + " but the global rollup is skipped this run and mcp_tool.priority keeps its previous"
+                            + " values",
+                    tenantSweep.completed());
             return;
         }
         int globalProposals = recomputeGlobalPriorities(global, globalPriorities, applyLive);
         LOGGER.info(
                 "Tool priority tuning finished: tenants={} globalToolsWithHistory={} globalProposals={} mode={}",
-                tenants,
+                tenantSweep.completed(),
                 global.size(),
                 globalProposals,
                 applyLive ? "live" : "shadow");

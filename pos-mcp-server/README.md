@@ -511,11 +511,14 @@ two tenants' rows, which RLS forbids for `pos_app`).
   - a tenant that failed — an unreadable log, a rejected overlay write, anything `TenantIterator` caught and carried
     on past. That tenant's aggregates never reach the rollup either: they are merged only once its own tuning
     succeeded.
-  - a registry that cannot vouch for its list (`TenantIterator.hasCompleteTenantList()`). A `REMOTE` registry
-    answers from its static seed until pos-tenant replies once, and from its last good snapshot while a refresh is
-    failing, so during an outage the sweep would otherwise visit one tenant and rewrite `mcp_tool.priority` as
-    though it had visited all of them. The startup WARN above cannot see this — it is a run-time state — which is
-    why the check is per run. A `STATIC` registry is authoritative by construction and never trips it.
+  - a registry that cannot vouch for its list (`TenantIterator.Sweep.completeTenantList()`, read by
+    `TenantIterator.sweep()` in the same breath as the tenant list it hands the sweep — not by a separate,
+    later call once every tenant is done, which would let a concurrent refresh flip the verdict in the
+    meantime and hide that the sweep it graded ran over a stale list). A `REMOTE` registry answers from its
+    static seed until pos-tenant replies once, and from its last good snapshot while a refresh is failing, so
+    during an outage the sweep would otherwise visit one tenant and rewrite `mcp_tool.priority` as though it
+    had visited all of them. The startup WARN above cannot see this — it is a run-time state — which is why
+    the check is per run. A `STATIC` registry is authoritative by construction and never trips it.
 
 ### Session scoping
 
