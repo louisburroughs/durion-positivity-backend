@@ -1,10 +1,13 @@
 package com.positivity.mcp.internal.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -21,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -83,6 +87,32 @@ class ToolPriorityRepositoryImplTest {
         assertThat(insert.getValue())
                 .startsWith("INSERT INTO mcp_tool_priority (tool_id, priority, avg_latency_ms)")
                 .doesNotContain("tenant_id");
+    }
+
+    @Test
+    @DisplayName("a concurrent insert of the same overlay row is absorbed: the loser re-applies its values by update")
+    void upsertAbsorbsAConcurrentInsert() {
+        // First update: no row yet. Insert: another instance got there first. Second update: applied.
+        when(jdbcTemplate.update(anyString(), any(), any(), any(), eq(TOOL_ID))).thenReturn(0, 1);
+        when(jdbcTemplate.update(anyString(), eq(TOOL_ID), eq(0.42), eq(150)))
+                .thenThrow(new DuplicateKeyException("mcp_tool_priority_pkey"));
+
+        assertThatCode(() -> new ToolPriorityRepositoryImpl(jdbcTemplate, CLOCK).upsertOverlay(TOOL_ID, 0.42, 150))
+                .doesNotThrowAnyException();
+
+        verify(jdbcTemplate, times(2)).update(anyString(), any(), any(), any(), eq(TOOL_ID));
+    }
+
+    @Test
+    @DisplayName("a duplicate insert whose row then cannot be updated is reported, not swallowed")
+    void upsertReportsARowThatVanishedAfterTheDuplicate() {
+        when(jdbcTemplate.update(anyString(), any(), any(), any(), eq(TOOL_ID))).thenReturn(0, 0);
+        when(jdbcTemplate.update(anyString(), eq(TOOL_ID), eq(0.42), eq(150)))
+                .thenThrow(new DuplicateKeyException("mcp_tool_priority_pkey"));
+
+        assertThatThrownBy(() -> new ToolPriorityRepositoryImpl(jdbcTemplate, CLOCK).upsertOverlay(TOOL_ID, 0.42, 150))
+                .isInstanceOf(IllegalStateException.class)
+                .hasCauseInstanceOf(DuplicateKeyException.class);
     }
 
     @Test

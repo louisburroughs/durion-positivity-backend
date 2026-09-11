@@ -14,6 +14,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -28,6 +31,8 @@ import org.springframework.stereotype.Repository;
                 + " connection only; every statement leaves tenant_id to row-level security and the column"
                 + " default, and mcp_tool is a global catalog table")
 public class ToolPriorityRepositoryImpl implements ToolPriorityRepository {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ToolPriorityRepositoryImpl.class);
 
     private final JdbcTemplate jdbcTemplate;
     private final Clock clock;
@@ -53,19 +58,35 @@ public class ToolPriorityRepositoryImpl implements ToolPriorityRepository {
     public void upsertOverlay(@NonNull UUID toolId, double priority, int avgLatencyMs) {
         // Update-then-insert rather than ON CONFLICT: portable to the H2 dev chain, and the insert
         // names no tenant_id so the column default (app_current_tenant()) stamps the bound tenant.
-        int updated = jdbcTemplate.update(
-                "UPDATE mcp_tool_priority SET priority = ?, avg_latency_ms = ?, updated_at = ? WHERE tool_id = ?",
-                priority,
-                avgLatencyMs,
-                Instant.now(clock).atOffset(ZoneOffset.UTC),
-                toolId);
-        if (updated == 0) {
+        // Two instances tuning the same tenant at once can both see no row and race on the insert;
+        // the loser's primary-key violation is caught and its values applied with a second update,
+        // so a concurrent run never aborts a tenant sweep.
+        if (updateOverlay(toolId, priority, avgLatencyMs) > 0) {
+            return;
+        }
+        try {
             jdbcTemplate.update(
                     "INSERT INTO mcp_tool_priority (tool_id, priority, avg_latency_ms) VALUES (?, ?, ?)",
                     toolId,
                     priority,
                     avgLatencyMs);
+        } catch (DuplicateKeyException raced) {
+            LOGGER.debug("Overlay row for tool {} was inserted concurrently; applying this run's values", toolId);
+            if (updateOverlay(toolId, priority, avgLatencyMs) == 0) {
+                throw new IllegalStateException(
+                        "Overlay row for tool " + toolId + " vanished between a duplicate insert and its update",
+                        raced);
+            }
         }
+    }
+
+    private int updateOverlay(@NonNull UUID toolId, double priority, int avgLatencyMs) {
+        return jdbcTemplate.update(
+                "UPDATE mcp_tool_priority SET priority = ?, avg_latency_ms = ?, updated_at = ? WHERE tool_id = ?",
+                priority,
+                avgLatencyMs,
+                Instant.now(clock).atOffset(ZoneOffset.UTC),
+                toolId);
     }
 
     @Override
