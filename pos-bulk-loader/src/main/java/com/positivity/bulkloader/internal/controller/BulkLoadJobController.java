@@ -71,10 +71,12 @@ public class BulkLoadJobController {
                     Returns 201 with the new job; 400 with BULK_JOB_TENANT_REQUIRED when tenantId is omitted and \
                     no transitional default tenant is configured (with the default, the job uses it and logs a \
                     WARN); 400 with BULK_JOB_TENANT_UNKNOWN when the tenant is not active in this cell; 403 with \
-                    BULK_JOB_TENANT_FORBIDDEN when the caller may not load into it; 403 with \
-                    BULK_JOB_TENANT_DOMAIN_FORBIDDEN when the target is the platform tenant and domainType is not \
-                    one of its own packs; and 409 when the operator already has an active bulk load job in \
-                    progress.
+                    BULK_JOB_TENANT_FORBIDDEN when a bound caller may not load into the tenant it named; 403 with \
+                    BULK_JOB_TENANT_UNBOUND_TARGET_FORBIDDEN when the caller has no tenant bound on its token yet \
+                    and still named one explicitly, rather than omitting tenantId for the transitional default; \
+                    403 with BULK_JOB_TENANT_DOMAIN_FORBIDDEN when the target is the platform tenant and \
+                    domainType is not one of its own packs; and 409 when the operator already has an active bulk \
+                    load job in progress.
                     """)
     @ApiResponse(responseCode = "201", description = "Job created")
     @ApiResponse(
@@ -85,8 +87,9 @@ public class BulkLoadJobController {
     @ApiResponse(
             responseCode = "403",
             description = "BULK_JOB_TENANT_FORBIDDEN: the caller is bound to a tenant other than the one named;"
-                    + " BULK_JOB_TENANT_DOMAIN_FORBIDDEN: the target is the platform tenant and domainType is not"
-                    + " one of its own packs",
+                    + " BULK_JOB_TENANT_UNBOUND_TARGET_FORBIDDEN: the caller has no tenant bound on its token yet"
+                    + " and named one explicitly; BULK_JOB_TENANT_DOMAIN_FORBIDDEN: the target is the platform"
+                    + " tenant and domainType is not one of its own packs",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",

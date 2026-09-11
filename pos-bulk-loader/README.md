@@ -59,7 +59,12 @@ caller is not itself bound to (403 `BULK_JOB_TENANT_FORBIDDEN`) — the platform
 platform data and nothing else —
 and refuses a request with no `tenantId` (400 `BULK_JOB_TENANT_REQUIRED`) unless the transitional default
 tenant is configured, in which case the default is used and logged at WARN. An unknown tenant is 400
-`BULK_JOB_TENANT_UNKNOWN`.
+`BULK_JOB_TENANT_UNKNOWN`. `tenantId` is a target selector for an already-bound caller only: a caller with no
+`tid` on its token yet may name no tenant at all (the transitional default applies, with the same WARN) but may
+not name a target explicitly, which is refused as 403 `BULK_JOB_TENANT_UNBOUND_TARGET_FORBIDDEN` rather than
+`BULK_JOB_TENANT_FORBIDDEN` — kept distinct because the fix is different: an unbound caller needs a token bound
+to the tenant it wants (or no `tenantId` at all), while a bound caller naming the wrong tenant needs its own
+tenant's id instead.
 
 `BulkLoadJobServiceImpl` binds the target (`TenantContext.runAs`) around the job's create, so the job row lands
 in that tenant, and around the whole batch run (`startProcessing`), so every audit and mapping row and every
