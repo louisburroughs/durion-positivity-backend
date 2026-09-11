@@ -29,6 +29,7 @@ import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetryFactory.TierRouting;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
+import com.positivity.tenancy.TenantContext;
 import io.micrometer.observation.ObservationRegistry;
 import java.time.Clock;
 import java.time.Duration;
@@ -192,7 +193,9 @@ public class StreamingSessionAgentManager
     public @NonNull Flux<String> streamChat(@NonNull CurrentUserContext currentUserContext, @NonNull String message) {
         String username = currentUserContext.username();
         String role = currentUserContext.primaryRole();
-        AtomicInteger requestCount = requestCountCache.get(username, key -> new AtomicInteger(0));
+        // ADR-0062 plan WS6 (R-B6): memory and the rate counter are keyed beneath the bound tenant.
+        UUID tenantId = TenantContext.require();
+        AtomicInteger requestCount = requestCountCache.get(actorKey(tenantId, username), key -> new AtomicInteger(0));
         if (requestCount.incrementAndGet() > rateLimitPerSession) {
             requestCount.decrementAndGet();
             LOGGER.warn("Rate limit exceeded for username={} userId={}", username, currentUserContext.userId());
@@ -200,7 +203,7 @@ public class StreamingSessionAgentManager
         }
 
         long startMs = System.currentTimeMillis();
-        String memoryId = memoryKey(username, role);
+        String memoryId = memoryKey(tenantId, username, role);
         String messagePreview = sharedOrchestrationSupport.preview(message);
         LOGGER.debug(
                 "MCP streaming chat dispatch username={} role={} chars={} tokens={} preview=\"{}\"",
@@ -514,10 +517,12 @@ public class StreamingSessionAgentManager
         return List.copyOf(withWriteGate);
     }
 
+    /** Evicts a user's conversation state and rate counter within the bound tenant. */
     @Override
     public void evict(@NonNull String userId) {
-        chatMemoryCache.asMap().keySet().removeIf(key -> key.startsWith(userId + MEMORY_KEY_SEPARATOR));
-        requestCountCache.invalidate(userId);
+        String actor = actorKey(TenantContext.require(), userId);
+        chatMemoryCache.asMap().keySet().removeIf(key -> key.startsWith(actor + MEMORY_KEY_SEPARATOR));
+        requestCountCache.invalidate(actor);
     }
 
     /**
@@ -814,8 +819,14 @@ public class StreamingSessionAgentManager
                         .build());
     }
 
-    private static @NonNull String memoryKey(@NonNull String userId, @NonNull String role) {
-        return userId + MEMORY_KEY_SEPARATOR + role;
+    /** The actor beneath which memory and the rate counter live: {@code tenant::username} (ADR-0062 plan WS6). */
+    static @NonNull String actorKey(@NonNull UUID tenantId, @NonNull String username) {
+        return tenantId + MEMORY_KEY_SEPARATOR + username;
+    }
+
+    /** {@code tenant::username::role}: the tenant leads because a username is unique within a tenant only. */
+    static @NonNull String memoryKey(@NonNull UUID tenantId, @NonNull String userId, @NonNull String role) {
+        return actorKey(tenantId, userId) + MEMORY_KEY_SEPARATOR + role;
     }
 
     private @Nullable String currentAuthorizationHeader() {

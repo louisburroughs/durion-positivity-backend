@@ -30,6 +30,7 @@ import com.positivity.mcp.internal.service.NltiWorkflowStateService;
 import com.positivity.mcp.internal.service.OpenApiToolProvider;
 import com.positivity.mcp.internal.service.RequestScopedUserContext;
 import com.positivity.mcp.internal.service.RolePromptResolver;
+import com.positivity.mcp.tenancy.BoundTenant;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -106,6 +107,7 @@ import org.springframework.test.util.ReflectionTestUtils;
  * running alpha stack is still outstanding and tracked by issue #1196 — it is not covered here.
  */
 @ExtendWith(MockitoExtension.class)
+@ExtendWith(BoundTenant.class)
 class CachedAgentOpenApiPermissionLeakageTest {
 
     private static final UUID USER_A_ID = UUID.fromString("00000000-0000-7000-8000-000000001196");

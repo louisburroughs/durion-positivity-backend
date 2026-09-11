@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.service;
 
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.entity.NltiSession;
+import com.positivity.mcp.internal.exception.SessionNotFoundException;
 import com.positivity.mcp.internal.exception.SessionOwnershipViolationException;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
 import com.positivity.mcp.internal.telemetry.NltiWorkflowTransitionEmitter;
@@ -32,14 +33,17 @@ public class NltiWorkflowStateService {
     private static final Logger LOGGER = LoggerFactory.getLogger(NltiWorkflowStateService.class);
 
     private final NltiSessionRepository sessionRepository;
+    private final NltiSessionAccess sessionAccess;
     private final NltiWorkflowTransitionEmitter transitionEmitter;
     private final Clock clock;
 
     public NltiWorkflowStateService(
             @NonNull NltiSessionRepository sessionRepository,
+            @NonNull NltiSessionAccess sessionAccess,
             @NonNull NltiWorkflowTransitionEmitter transitionEmitter,
             @NonNull Clock clock) {
         this.sessionRepository = sessionRepository;
+        this.sessionAccess = sessionAccess;
         this.transitionEmitter = transitionEmitter;
         this.clock = clock;
     }
@@ -67,8 +71,10 @@ public class NltiWorkflowStateService {
      *
      * @param correlationId the correlation id of the request performing the transition, so the event
      *     joins to that request's {@code nlti.request.telemetry} lines
-     * @throws SessionOwnershipViolationException when the session does not exist or is not owned by
-     *     the subject — matching {@code NltiRequestServiceImpl}'s ownership posture.
+     * @throws SessionNotFoundException when the bound tenant has no such session (ADR-0062 plan WS6:
+     *     another tenant's session id lands here, indistinguishable from an unknown id)
+     * @throws SessionOwnershipViolationException when the session exists in this tenant but is not
+     *     owned by the subject — matching {@code NltiRequestServiceImpl}'s ownership posture.
      */
     @Transactional
     public @NonNull WorkflowState advance(
@@ -76,10 +82,7 @@ public class NltiWorkflowStateService {
             @NonNull String subjectId,
             @NonNull WorkflowState newState,
             @NonNull UUID correlationId) {
-        NltiSession session = sessionRepository
-                .findByIdAndSubjectId(sessionId, subjectId)
-                .orElseThrow(() -> new SessionOwnershipViolationException(
-                        "Session is not owned by the authenticated subject or does not exist: " + sessionId));
+        NltiSession session = sessionAccess.requireOwned(sessionId, subjectId);
         WorkflowState previous = session.getWorkflowState();
         session.setWorkflowState(newState);
         NltiSession saved = sessionRepository.save(session);

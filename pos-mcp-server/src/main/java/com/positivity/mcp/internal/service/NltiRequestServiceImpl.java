@@ -52,6 +52,7 @@ public class NltiRequestServiceImpl implements NltiRequestService {
     static final String TELEMETRY_STATUS_ERROR = "ERROR";
 
     private final NltiSessionRepository sessionRepository;
+    private final NltiSessionAccess sessionAccess;
     private final NltiRequestRepository requestRepository;
     private final IntentParserService intentParserService;
     private final NltiWritePlanService writePlanService;
@@ -77,6 +78,7 @@ public class NltiRequestServiceImpl implements NltiRequestService {
 
     public NltiRequestServiceImpl(
             @NonNull NltiSessionRepository sessionRepository,
+            @NonNull NltiSessionAccess sessionAccess,
             @NonNull NltiRequestRepository requestRepository,
             @NonNull IntentParserService intentParserService,
             @NonNull NltiWritePlanService writePlanService,
@@ -84,6 +86,7 @@ public class NltiRequestServiceImpl implements NltiRequestService {
             @NonNull Clock clock,
             @NonNull MeterRegistry meterRegistry) {
         this.sessionRepository = Objects.requireNonNull(sessionRepository, "sessionRepository must not be null");
+        this.sessionAccess = Objects.requireNonNull(sessionAccess, "sessionAccess must not be null");
         this.requestRepository = Objects.requireNonNull(requestRepository, "requestRepository must not be null");
         this.intentParserService = Objects.requireNonNull(intentParserService, "intentParserService must not be null");
         this.writePlanService = Objects.requireNonNull(writePlanService, "writePlanService must not be null");
@@ -201,11 +204,17 @@ public class NltiRequestServiceImpl implements NltiRequestService {
         span.setAttribute(key, value);
     }
 
+    /**
+     * ADR-0062 plan WS6: every lookup runs under the bound tenant through {@link NltiSessionAccess}.
+     * A session id of another tenant is indistinguishable from an id that never existed, so it
+     * starts a fresh session for the caller exactly as an unknown id does: never a cross-tenant
+     * read, and no 403 that would reveal the id exists elsewhere.
+     */
     private @NonNull UUID resolveSession(@Nullable UUID providedSessionId, @NonNull String subjectId) {
         if (providedSessionId == null) {
             return createAndSaveNewSession(subjectId);
         }
-        Optional<NltiSession> sessionForSubject = sessionRepository.findByIdAndSubjectId(providedSessionId, subjectId);
+        Optional<NltiSession> sessionForSubject = sessionAccess.findOwned(providedSessionId, subjectId);
         if (sessionForSubject.isPresent()) {
             NltiSession existing = sessionForSubject.get();
             boolean expired =
@@ -218,7 +227,7 @@ public class NltiRequestServiceImpl implements NltiRequestService {
             return existing.getId();
         }
 
-        if (sessionRepository.findById(providedSessionId).isPresent()) {
+        if (sessionAccess.findInTenant(providedSessionId).isPresent()) {
             throw new SessionOwnershipViolationException(
                     "Provided sessionId is not owned by the authenticated subject: " + providedSessionId);
         }

@@ -119,13 +119,13 @@ public class NltiController {
                     Use this tool when a conversation enters or leaves an operational flow such as purchase-order \
                     creation; do not use submitNltiRequest, which submits a new prompt and never changes the \
                     workflow state directly.
-                    Preconditions: the session must exist and be owned by the authenticated subject; an unknown \
-                    session and a session owned by someone else are both rejected as ownership violations.
+                    Preconditions: the session must exist for the caller's tenant and be owned by the authenticated \
+                    subject; a session of another tenant is indistinguishable from an unknown one.
                     Required inputs: sessionId (UUID) as a path parameter and workflowState, one of IDLE, \
                     CREATING_PO, RECEIVING_ASN, INVENTORY_RECON or PROCESSING_RETURN; new sessions default to IDLE.
                     Emits a NLTI_SESSION_WORKFLOW_STATE_SET event and updates only the session's workflow state.
-                    Returns 200 with the persisted state, and 403 when the session does not exist or is not owned \
-                    by the caller.
+                    Returns 200 with the persisted state, 404 when the caller's tenant has no such session, and 403 \
+                    when the session belongs to another subject.
                     """)
     ResponseEntity<WorkflowStateResponse> setWorkflowState(
             @PathVariable @NonNull UUID sessionId,

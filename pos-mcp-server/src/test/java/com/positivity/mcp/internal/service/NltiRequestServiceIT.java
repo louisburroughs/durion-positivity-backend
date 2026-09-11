@@ -7,9 +7,11 @@ import com.positivity.mcp.internal.dto.NltiResponseV1;
 import com.positivity.mcp.internal.entity.NltiSession;
 import com.positivity.mcp.internal.repository.NltiRequestRepository;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
+import com.positivity.mcp.tenancy.BoundTenant;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -31,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
         properties = {"pos.security.permission-registration.enabled=false", "eureka.client.enabled=false"})
 @ActiveProfiles("test")
 @Transactional
+@ExtendWith(BoundTenant.class)
 class NltiRequestServiceIT {
 
     // Hardcoded test session UUID — no UUID.randomUUID() per ADR

@@ -47,6 +47,7 @@ import com.positivity.mcp.internal.service.RolePromptResolver;
 import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
+import com.positivity.mcp.tenancy.BoundTenant;
 import java.lang.reflect.Member;
 import java.time.Clock;
 import java.time.Instant;
@@ -94,6 +95,7 @@ import reactor.core.publisher.Flux;
  * calls.
  */
 @ExtendWith(MockitoExtension.class)
+@ExtendWith(BoundTenant.class)
 class StreamingSessionAgentManagerTest {
 
     private static final UUID USER_ID = UUID.fromString("00000000-0000-7000-8000-000000000302");

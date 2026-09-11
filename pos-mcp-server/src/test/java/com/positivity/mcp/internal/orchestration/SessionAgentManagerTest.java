@@ -38,6 +38,7 @@ import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.internal.telemetry.NltiRequestTelemetry;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
+import com.positivity.mcp.tenancy.BoundTenant;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -91,6 +92,7 @@ import org.springframework.web.client.RestClient;
  * {@code @Tool} annotation.
  */
 @ExtendWith(MockitoExtension.class)
+@ExtendWith(BoundTenant.class)
 class SessionAgentManagerTest {
 
     private static final UUID USER_ID = UUID.fromString("00000000-0000-7000-8000-000000000301");
