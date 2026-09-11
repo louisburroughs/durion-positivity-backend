@@ -1,6 +1,7 @@
 package com.positivity.workorder.event;
 
 import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_B;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -10,7 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.ReconciliationManifestV1;
-import com.positivity.tenancy.PlatformTenant;
+import com.positivity.tenancy.TenantRegistry;
 import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import com.positivity.workorder.internal.config.ManifestPublisher;
 import com.positivity.workorder.internal.entity.OutboxEvent;
@@ -21,8 +22,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,6 +54,8 @@ class ManifestPublisherTest {
     @SuppressWarnings("unchecked")
     private final ObjectProvider<MeterRegistry> meterRegistry = mock(ObjectProvider.class);
 
+    private final TenantRegistry tenantRegistry = mock(TenantRegistry.class);
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private ManifestPublisher publisher;
@@ -57,7 +63,9 @@ class ManifestPublisherTest {
     @BeforeEach
     void setUp() {
         when(meterRegistry.getIfAvailable()).thenReturn(null);
-        publisher = new ManifestPublisher(repository, kafkaTemplate, objectMapper, TEST_CLOCK, meterRegistry);
+        when(tenantRegistry.activeTenantIds()).thenReturn(List.of(TENANT_A));
+        publisher = new ManifestPublisher(
+                repository, kafkaTemplate, objectMapper, TEST_CLOCK, tenantRegistry, meterRegistry);
         ReflectionTestUtils.setField(publisher, "eventsTopic", "workorder.events.v1");
         ReflectionTestUtils.setField(publisher, "manifestTopic", "workorder.manifest.v1");
         ReflectionTestUtils.setField(publisher, "window", Duration.ofHours(1));
@@ -74,8 +82,12 @@ class ManifestPublisherTest {
     }
 
     private OutboxEvent row(String eventId, String eventType, Instant createdAt) {
+        return row(TENANT_A, eventId, eventType, createdAt);
+    }
+
+    private OutboxEvent row(UUID tenantId, String eventId, String eventType, Instant createdAt) {
         return OutboxEvent.builder()
-                .tenantId(TENANT_A)
+                .tenantId(tenantId)
                 .id(UUID.randomUUID())
                 .topic("workorder.events.v1")
                 .recordKey(eventId)
@@ -105,7 +117,9 @@ class ManifestPublisherTest {
         JsonNode envelope = objectMapper.readTree(json);
         assertThat(envelope.path("eventType").stringValue()).isEqualTo("workorder.reconciliation.manifest");
         assertThat(envelope.path("sourceService").stringValue()).isEqualTo("pos-workorder");
+        assertThat(envelope.path("tenantId").stringValue()).isEqualTo(TENANT_A.toString());
         JsonNode manifest = envelope.path("payload");
+        assertThat(manifest.path("tenantId").stringValue()).isEqualTo(TENANT_A.toString());
         assertThat(manifest.path("windowStartUtc").stringValue()).isEqualTo(WINDOW_START.toString());
         assertThat(manifest.path("windowEndUtc").stringValue()).isEqualTo(WINDOW_END.toString());
         assertThat(manifest.path("eventCount").longValue()).isEqualTo(2);
@@ -118,18 +132,51 @@ class ManifestPublisherTest {
     }
 
     @Test
-    @DisplayName("Publishes zero-count manifests so consumers can alert on manifest absence")
-    void publishesEmptyWindowManifest() throws Exception {
+    @DisplayName("Publishes one manifest per tenant in the window, each over that tenant's rows only")
+    void publishesOneManifestPerTenant() {
+        when(tenantRegistry.activeTenantIds()).thenReturn(List.of(TENANT_A, TENANT_B));
+        String a1 = eventIdAt(WINDOW_START.plusSeconds(60), 1);
+        String a2 = eventIdAt(WINDOW_START.plusSeconds(120), 2);
+        String b1 = eventIdAt(WINDOW_START.plusSeconds(180), 3);
+        when(repository.findByTopicAndPublishedAtIsNotNullAndCreatedAtBetween(anyString(), any(), any()))
+                .thenReturn(List.of(
+                        row(TENANT_A, a1, "VehicleUpdated", WINDOW_START.plusSeconds(60)),
+                        row(TENANT_B, b1, "PartyNoteAdded", WINDOW_START.plusSeconds(180)),
+                        row(TENANT_A, a2, "VehicleUpdated", WINDOW_START.plusSeconds(120))));
+
+        publisher.publishDueManifest();
+
+        Map<UUID, JsonNode> manifests = capturedManifestsByTenant(2);
+        assertThat(manifests).containsOnlyKeys(TENANT_A, TENANT_B);
+        assertThat(manifests.get(TENANT_A).path("eventCount").longValue()).isEqualTo(2);
+        assertThat(manifests.get(TENANT_A).path("eventIdsChecksum").stringValue())
+                .isEqualTo(ReconciliationManifestV1.checksumOf(List.of(a1, a2)));
+        assertThat(manifests.get(TENANT_A).path("eventTypeCounts").has("PartyNoteAdded"))
+                .isFalse();
+        assertThat(manifests.get(TENANT_B).path("eventCount").longValue()).isEqualTo(1);
+        assertThat(manifests.get(TENANT_B).path("eventIdsChecksum").stringValue())
+                .isEqualTo(ReconciliationManifestV1.checksumOf(List.of(b1)));
+        // Per-tenant manifests of one window land on distinct keys.
+        assertThat(capturedRecords(2).stream().map(ProducerRecord::key).toList())
+                .doesNotHaveDuplicates();
+    }
+
+    @Test
+    @DisplayName("Publishes zero-count manifests per active tenant so consumers can alert on manifest absence")
+    void publishesEmptyWindowManifestPerTenant() throws Exception {
+        when(tenantRegistry.activeTenantIds()).thenReturn(List.of(TENANT_A, TENANT_B));
         when(repository.findByTopicAndPublishedAtIsNotNullAndCreatedAtBetween(anyString(), any(), any()))
                 .thenReturn(List.of());
 
         publisher.publishDueManifest();
 
-        String json = capturedRecords(1).get(0).value();
-        JsonNode manifest = objectMapper.readTree(json).path("payload");
-        assertThat(manifest.path("eventCount").longValue()).isZero();
-        assertThat(manifest.path("eventIdsChecksum").stringValue())
-                .isEqualTo(ReconciliationManifestV1.checksumOf(List.of()));
+        Map<UUID, JsonNode> manifests = capturedManifestsByTenant(2);
+        assertThat(manifests).containsOnlyKeys(TENANT_A, TENANT_B);
+        for (JsonNode manifest : manifests.values()) {
+            assertThat(manifest.path("eventCount").longValue()).isZero();
+            assertThat(manifest.path("eventIdsChecksum").stringValue())
+                    .isEqualTo(ReconciliationManifestV1.checksumOf(List.of()));
+        }
     }
 
     @Test
@@ -257,9 +304,9 @@ class ManifestPublisherTest {
     }
 
     /**
-     * The records handed to Kafka, after checking each carries the platform tenant on the header
-     * and in the envelope: a manifest summarises every tenant's rows, so it is a platform-tenant
-     * record until plan WS4-3 makes it per tenant (ADR-0062 §3).
+     * The records handed to Kafka, after checking each is a per-tenant manifest: the record header,
+     * the envelope and the manifest payload all name the same tenant (ADR-0062 §3), so the
+     * consumer's interceptor binds the tenant whose ledger the manifest is compared against.
      */
     @SuppressWarnings("unchecked")
     private List<ProducerRecord<String, String>> capturedRecords(int expected) {
@@ -267,10 +314,19 @@ class ManifestPublisherTest {
         verify(kafkaTemplate, times(expected)).send(records.capture());
         for (ProducerRecord<String, String> record : records.getAllValues()) {
             assertThat(record.topic()).isEqualTo("workorder.manifest.v1");
-            assertThat(TenantKafkaHeaders.read(record.headers())).contains(PlatformTenant.ID);
-            assertThat(objectMapper.readTree(record.value()).path("tenantId").stringValue())
-                    .isEqualTo(PlatformTenant.ID.toString());
+            JsonNode envelope = objectMapper.readTree(record.value());
+            String manifestTenant = envelope.path("payload").path("tenantId").stringValue();
+            assertThat(manifestTenant).isNotBlank();
+            assertThat(TenantKafkaHeaders.read(record.headers())).contains(UUID.fromString(manifestTenant));
+            assertThat(envelope.path("tenantId").stringValue()).isEqualTo(manifestTenant);
         }
         return records.getAllValues();
+    }
+
+    private Map<UUID, JsonNode> capturedManifestsByTenant(int expected) {
+        return capturedRecords(expected).stream()
+                .map(record -> objectMapper.readTree(record.value()).path("payload"))
+                .collect(Collectors.toMap(
+                        manifest -> UUID.fromString(manifest.path("tenantId").stringValue()), Function.identity()));
     }
 }

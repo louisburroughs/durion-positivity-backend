@@ -2,13 +2,20 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.config.OutboxReplayService;
 import com.positivity.inventory.internal.repository.OutboxEventRepository;
+import com.positivity.tenancy.TenantContext;
 import java.time.Instant;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Replays only the rows of the tenant bound to the thread (ADR-0062 §3): the replay command arrives
+ * with the requesting manifest's tenant header, so one tenant's drift never re-sends another
+ * tenant's events. An unbound call fails closed with {@code TenantContextMissingException}.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -19,16 +26,18 @@ public class OutboxReplayServiceImpl implements OutboxReplayService {
     @Override
     @Transactional
     public int replaySince(@NonNull Instant since) {
-        int count = outboxEventRepository.markForReplaySince(since);
-        log.info("Outbox replay requested since={} eventsQueued={}", since, count);
+        UUID tenantId = TenantContext.require();
+        int count = outboxEventRepository.markForReplaySince(tenantId, since);
+        log.info("Outbox replay requested tenant={} since={} eventsQueued={}", tenantId, since, count);
         return count;
     }
 
     @Override
     @Transactional
     public int replayBetween(@NonNull Instant since, @NonNull Instant until) {
-        int count = outboxEventRepository.markForReplayBetween(since, until);
-        log.info("Outbox replay requested window=[{}, {}) eventsQueued={}", since, until, count);
+        UUID tenantId = TenantContext.require();
+        int count = outboxEventRepository.markForReplayBetween(tenantId, since, until);
+        log.info("Outbox replay requested tenant={} window=[{}, {}) eventsQueued={}", tenantId, since, until, count);
         return count;
     }
 }

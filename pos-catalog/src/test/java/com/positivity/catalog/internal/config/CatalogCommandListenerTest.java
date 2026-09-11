@@ -1,5 +1,7 @@
 package com.positivity.catalog.internal.config;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
+import static com.positivity.tenancy.testing.TenantTestSupport.asTenant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -16,10 +18,12 @@ import com.positivity.catalog.internal.dto.ProductFactReplayResultDto;
 import com.positivity.catalog.internal.dto.ServiceFactReplayResultDto;
 import com.positivity.catalog.internal.dto.SupplierArticleCodeReplayResultDto;
 import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.UUID;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -274,6 +278,55 @@ class CatalogCommandListenerTest {
         assertThat(payload.path("scope").stringValue()).isEqualTo("PRODUCT");
         assertThat(payload.path("afterProductId").stringValue()).isEqualTo(cursor.toString());
         assertThat(payload.path("continuation").intValue()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("ADR-0062: every continuation of a tenant's replay carries that tenant's header, so a"
+            + " multi-page replay stays the requesting tenant's page after page")
+    @SuppressWarnings("unchecked")
+    void continuationsOfATenantReplayCarryTheInboundTenant() {
+        UUID firstCursor = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b");
+        UUID secondCursor = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c");
+        when(productFactReplayService.replayPage(isNull(), any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(new ProductFactReplayResultDto(1000, firstCursor, false, null, Instant.now()));
+        when(productFactReplayService.replayPage(eq(firstCursor), any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(new ProductFactReplayResultDto(1000, secondCursor, false, null, Instant.now()));
+        when(productFactReplayService.replayPage(eq(secondCursor), any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(new ProductFactReplayResultDto(3, null, true, null, Instant.now()));
+        ArgumentCaptor<ProducerRecord<String, String>> record = ArgumentCaptor.forClass(ProducerRecord.class);
+
+        // Page 1: the manifest listener's command, consumed under tenant A (the record interceptor
+        // bound it from the header).
+        asTenant(TENANT_A, () -> listener.onCommand("""
+                {"commandType":"catalog.outbox.replay-requested",
+                 "payload":{"since":"2026-07-13T10:00:00Z","scope":"PRODUCT"}}
+                """));
+
+        verify(kafkaTemplate).send(record.capture());
+        ProducerRecord<String, String> first = record.getValue();
+        assertThat(first.topic()).isEqualTo(COMMANDS_TOPIC);
+        assertThat(TenantKafkaHeaders.read(first.headers())).contains(TENANT_A);
+        JsonNode firstPayload = objectMapper.readTree(first.value()).path("payload");
+        assertThat(firstPayload.path("afterProductId").stringValue()).isEqualTo(firstCursor.toString());
+        assertThat(firstPayload.path("continuation").intValue()).isEqualTo(1);
+
+        // Page 2: that continuation comes back under the same tenant and continues it again.
+        org.mockito.Mockito.clearInvocations(kafkaTemplate);
+        asTenant(TENANT_A, () -> listener.onCommand(first.value()));
+
+        verify(kafkaTemplate).send(record.capture());
+        ProducerRecord<String, String> second = record.getValue();
+        assertThat(TenantKafkaHeaders.read(second.headers())).contains(TENANT_A);
+        JsonNode secondPayload = objectMapper.readTree(second.value()).path("payload");
+        assertThat(secondPayload.path("afterProductId").stringValue()).isEqualTo(secondCursor.toString());
+        assertThat(secondPayload.path("continuation").intValue()).isEqualTo(2);
+
+        // Page 3 completes: no further command, and none was ever sent without the header.
+        org.mockito.Mockito.clearInvocations(kafkaTemplate);
+        asTenant(TENANT_A, () -> listener.onCommand(second.value()));
+
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
+        verify(kafkaTemplate, never()).send(any(), any(), any());
     }
 
     @Test

@@ -696,6 +696,7 @@ CREATE TABLE public.normalized_availability (
 
 CREATE TABLE public.processed_events (
     event_id character varying(36) NOT NULL,
+    tenant_id uuid,
     owner character varying(64) NOT NULL,
     processed_at timestamp(6) with time zone NOT NULL
 );
@@ -1601,7 +1602,7 @@ CREATE INDEX idx_location_sync_log_outcome ON public.location_sync_log USING btr
 
 CREATE INDEX idx_location_sync_log_run_id ON public.location_sync_log USING btree (sync_run_id);
 
-CREATE INDEX idx_processed_events_owner ON public.processed_events USING btree (owner, event_id);
+CREATE INDEX idx_processed_events_owner_tenant_event ON public.processed_events USING btree (owner, tenant_id, event_id);
 
 CREATE INDEX idx_purchase_suggestion_policy_status ON public.purchase_suggestion USING btree (policy_id, status);
 

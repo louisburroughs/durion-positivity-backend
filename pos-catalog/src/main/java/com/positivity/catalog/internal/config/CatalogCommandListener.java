@@ -4,8 +4,11 @@ import com.positivity.catalog.internal.dto.ProductFactReplayResultDto;
 import com.positivity.catalog.internal.dto.ServiceFactReplayResultDto;
 import com.positivity.catalog.internal.dto.SupplierArticleCodeReplayResultDto;
 import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
+import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import java.time.Instant;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -370,6 +373,14 @@ public class CatalogCommandListener {
      * "Scope"), and {@code continuation} incremented by one so {@link #MAX_CONTINUATIONS} can be
      * enforced across the whole chain.
      *
+     * <p>The continuation rides the tenant the current command was consumed under (ADR-0062 §3):
+     * the record interceptor bound it from the inbound {@code tenantId} header before {@link
+     * #onCommand}, and the replay primitives, the outbox rows they queue and the outbox
+     * publisher's header all follow that binding, so a follow-up page sent without the header
+     * would be consumed under the default tenant and continue another tenant's replay. A command
+     * consumed unbound (no header, no default tenant, enforcement off) continues unbound: the
+     * interceptor then treats the continuation exactly as it treated the original.
+     *
      * <p>A failed publish here is swallowed, not propagated — matching {@code
      * CatalogManifestListener}'s existing convention for this same topic: the chain simply stops:
      * no exception here should fail this listener or poison the partition over what is, at worst, a
@@ -408,7 +419,12 @@ public class CatalogCommandListener {
             String command =
                     objectMapper.writeValueAsString(new ReplayContinuationCommand(REPLAY_COMMAND_TYPE, payload));
             String key = since == null ? scope : scope + ":" + since;
-            kafkaTemplate.send(commandsTopic, key, command);
+            Optional<UUID> tenantId = TenantContext.current();
+            if (tenantId.isPresent()) {
+                kafkaTemplate.send(TenantKafkaHeaders.record(commandsTopic, key, command, tenantId.get()));
+            } else {
+                kafkaTemplate.send(commandsTopic, key, command);
+            }
         } catch (Exception e) {
             log.warn(
                     "Failed to publish replay continuation scope={} since={} continuation={} cursor={}",

@@ -78,7 +78,8 @@ The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_
 The outbox row carries the producing tenant as data (`tenant_id`, stamped from the bound tenant by
 `OutboxEventWriter`, added by `V2__event_outbox_tenant_id.sql`); `OutboxPublisher.publishPending` and
 `ManifestPublisher.publishDueManifest` are platform-scoped (they drain and summarise the global `event_outbox`;
-each manifest is a platform-tenant record until per-tenant manifests land in plan WS4-3). There are no native queries. The `pg` test profile is strict (the
+the manifest publisher groups the window's rows by `tenant_id` and publishes one manifest per tenant, stamped
+with that tenant, plus a zero-count one for every active registry tenant that published nothing). There are no native queries. The `pg` test profile is strict (the
 transitional `connection-init-sql` binding is gone); `FlywayMigrationIT` keeps its own `@ServiceConnection`
 container as the owner.
 

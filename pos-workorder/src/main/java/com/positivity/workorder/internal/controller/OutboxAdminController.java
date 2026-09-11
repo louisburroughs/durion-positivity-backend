@@ -40,6 +40,8 @@ public class OutboxAdminController {
                     instead of creating new state.
                     Preconditions: the caller must hold workorder:events:replay, and only events already in \
                     PUBLISHED state are re-queued.
+                    Tenant scope: the replay covers the caller's tenant only; a platform-tenant operator replays \
+                    every active tenant's events in turn, and the count reported spans all of them.
                     Required inputs: since (ISO-8601 instant) as an optional query parameter, defaulting to the \
                     epoch, meaning replay everything.
                     Emits a WORKORDER_OUTBOX_REPLAY audit event and re-queues matching outbox rows; consumers \
@@ -54,13 +56,14 @@ public class OutboxAdminController {
     public ResponseEntity<OutboxReplayResponse> replay(
             @Parameter(
                             description = "Re-emit events created at or after this instant (ISO-8601)."
-                                    + " Defaults to the epoch, i.e. replay everything.",
+                                    + " Defaults to the epoch, i.e. replay everything of the caller's tenant"
+                                    + " (every active tenant for a platform-tenant operator).",
                             example = "2026-07-01T00:00:00Z")
                     @RequestParam(name = "since", required = false)
                     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
                     Instant since) {
         Instant effectiveSince = since == null ? Instant.EPOCH : since;
-        int queued = outboxReplayService.replaySince(effectiveSince);
+        int queued = outboxReplayService.replaySinceForCaller(effectiveSince);
         return ResponseEntity.ok(new OutboxReplayResponse(effectiveSince, queued));
     }
 
@@ -69,6 +72,6 @@ public class OutboxAdminController {
             @Schema(description = "Effective lower bound used for the replay")
             Instant since,
 
-            @Schema(description = "Number of events re-queued for publication")
+            @Schema(description = "Number of events re-queued for publication, summed over the tenants replayed")
             int eventsQueued) {}
 }

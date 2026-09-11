@@ -1110,7 +1110,12 @@ curl -X POST "https://<gateway>/workorder/v1/outbox/replay?since=2026-07-01T00:0
 
 Seeding a brand-new replica: create the consumer's `ext_*` tables (Flyway), start the consumer,
 then call replay with `since` at the epoch (omit the parameter). Consumers skip anything already
-processed.
+processed. Replay is per tenant (ADR-0062 §3): a caller bound to an ordinary tenant re-emits only
+that tenant's outbox rows; a platform-tenant operator (`tid` = the platform tenant) re-emits every
+active tenant's rows in turn (`TenantIterator` over the owner's tenant registry — the platform
+tenant owns no domain rows of its own), and the response counts the rows queued across all of
+them. The Kafka `{domain}.outbox.replay-requested` command path always replays exactly the tenant
+on the command's header.
 
 #### pos-customer: seeding a party-identity replica
 
@@ -1472,23 +1477,54 @@ Run these in order. Steps 1–5 are safe to repeat; step 7 is the only one that 
 
 ### Reconciliation manifests and drift detection
 
-Owners publish a per-window summary (count + checksum of the window's eventIds) on
-`{domain}.manifest.v1`; consumers recompute it from their processing log and, on mismatch,
-publish a `{domain}.outbox.replay-requested` command themselves — repair is automatic and needs
-no operator action. Everything flows over the event channel; there are no synchronous
-domain-to-domain reconciliation calls (ADR-0044 §4). Reference pair: `pos-workorder`
-`ManifestPublisher` → `pos-customer` `WorkorderManifestListener`.
+Owners publish a per-tenant, per-window summary (count + checksum of the tenant's eventIds in
+the window) on `{domain}.manifest.v1`; consumers recompute it from that tenant's rows of their
+processing log (`processed_events.tenant_id`, stamped from the tenant bound when the fact was
+applied) and, on mismatch, publish a `{domain}.outbox.replay-requested` command themselves under
+the manifest's tenant header — the owner replays only that tenant's outbox rows for the window, so
+repair is automatic, per tenant, and needs no operator action (ADR-0062 §3, plan WS4-3). Every
+active tenant of the owner's `TenantRegistry` gets a manifest each window, zero-count when it
+published nothing, so absence can be alerted on per tenant. Everything flows over the event
+channel; there are no synchronous domain-to-domain reconciliation calls (ADR-0044 §4). Reference
+pair: `pos-workorder` `ManifestPublisher` → `pos-customer` `WorkorderManifestListener`.
+
+Ledger rows recorded before `processed_events.tenant_id` existed (2026-09-11) have
+`tenant_id IS NULL`: they belong to no tenant's manifest, and nothing re-stamps them at runtime — a
+replayed envelope hits the listener's `existsById(eventId)` short-circuit before `save`, so
+`@PrePersist` never runs, and the column is `updatable = false` besides
+(`ProcessedEventTenantStampTest` in pos-workorder pins this). That is deliberate, not a gap left
+for later: a drift-triggered replay covers one window at a time, so a self-heal on that path would
+still leave the backfill necessary, and pre-production policy is no compatibility shims (the same
+decision skips pre-WS4-3 manifests, below). Alpha databases are recreated from the baselines on
+deploy, which clears such rows. Where a database is kept, repair once by hand before the first
+per-tenant windows are compared, with the tenant the cell served (the alpha default tenant unless
+it was multi-tenant already). `processed_events` is a global table with no row-level security, so
+the statement sees every row whichever role runs it:
+`UPDATE processed_events SET tenant_id = '<tenant-id>' WHERE tenant_id IS NULL;`.
+
+Manifests published before the field existed carry no `tenantId`: they summarised every tenant's
+rows at once, which matches no single tenant's ledger, so a consumer that is behind at deploy time
+skips each one with a WARN line (`Skipping reconciliation manifest without tenantId`)
+and one `replica_manifest_skipped_total{owner,entity,reason="missing_tenant"}` increment, then
+resumes with the first per-tenant manifest. A counter that keeps growing after the deploy means an
+owner is still on the pre-WS4-3 publisher.
 
 Operational signals:
 
-- `replica_drift_total{owner,entity}` (consumer side) — one increment per mismatched window.
-  Occasional single increments self-heal via replay; a **steadily increasing** counter means the
-  repair loop is not converging (owner's command listener down, replay permission/topic issue, or
-  a poison message that can never be recorded) — check the consumer's warn log for the window
-  details (expected vs observed count/checksum) and the owner's `workorder.commands.v1` consumer.
-- `workorder.manifest.published` / `workorder.manifest.publish.failures` (owner side) — manifests
+- `replica_drift_total{owner,entity,tenant}` (consumer side) — one increment per mismatched
+  tenant window. Occasional single increments self-heal via replay; a **steadily increasing**
+  counter means the repair loop is not converging (owner's command listener down, replay
+  permission/topic issue, or a poison message that can never be recorded) — check the consumer's
+  warn log for the window details (tenant, expected vs observed count/checksum) and the owner's
+  `workorder.commands.v1` consumer. Drift confined to one `tenant` label points at that tenant's
+  traffic (or a replay command that arrived without its tenant header and was refused); drift on
+  every tenant at once points at the consumer.
+- `workorder.manifest.published` / `workorder.manifest.publish.failures` (owner side) — one
+  increment per tenant manifest, so the published rate is `active tenants / window`. Manifests
   stopping entirely means the owner's scheduler or broker connection is down; consumers see no
-  drift while blind, so alert on manifest absence too.
+  drift while blind, so alert on manifest absence too, per tenant. A failure part-way through a
+  window's tenants re-publishes the whole window next poll (harmless: the comparison is
+  stateless).
 - Tuning: `workorder.manifest.window` (default `PT1H`), `workorder.manifest.grace` (default
   `PT5M` — how long after a window closes before its manifest publishes; raise it if consumer lag
   causes false-positive drift), `workorder.manifest.poll-interval-ms`.
@@ -1497,8 +1533,9 @@ Manual drift drill (compose stack, both `WORKORDER_KAFKA_ENABLED=true` and
 `pos.customer.kafka.enabled=true`):
 
 1. Create/update a workorder so an event lands in `event_outbox` and the customer replica.
-2. Corrupt the consumer: `DELETE FROM processing_log WHERE event_id = '<eventId>'` (and the
-   projected row) in the customer schema.
+2. Corrupt the consumer: `DELETE FROM processed_events WHERE event_id = '<eventId>'` (and the
+   projected row) in the customer schema. The row's `tenant_id` is the tenant the fact was applied
+   under; the manifest that notices the gap is that tenant's.
 3. Wait one manifest cycle (or temporarily set `workorder.manifest.window=PT2M`,
    `workorder.manifest.grace=PT30S`). The customer logs `Replica drift detected`, increments
    `replica_drift_total`, and the owner re-emits; the event is reprocessed and the projection

@@ -3,9 +3,11 @@ package com.positivity.catalog.internal.service;
 import com.positivity.catalog.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.domainevents.UuidV7Timestamps;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -26,7 +28,10 @@ import tools.jackson.databind.ObjectMapper;
  * membership is the UUIDv7 timestamp embedded in each recorded eventId, exactly the definition
  * the owner used. On mismatch it increments {@code replica.drift} and publishes a
  * {@code inventory.outbox.replay-requested} command for the window; the replayed events are
- * deduplicated by the {@code processed_events} primary key, so repair is idempotent.
+ * deduplicated by the {@code processed_events} primary key, so repair is idempotent. Manifests are per
+ * tenant (ADR-0062 §3): the listener runs under the manifest\'s tenant, compares it against that
+ * tenant\'s ledger rows only, tags the drift metric with the tenant and sends the replay command
+ * with the tenant header so the owner replays only that tenant\'s events.
  *
  * <p>The owner's manifest counts every fact in the window (including storage-location on-hand facts this
  * module ignores), which is why {@link InventoryEventsListener} records every eventId it sees.
@@ -41,7 +46,7 @@ public class InventoryManifestListener {
     private final ProcessedEventRepository processedEventRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
-    private final Counter driftCounter;
+    private final @Nullable MeterRegistry meterRegistry;
 
     @Value("${pos.catalog.kafka.inventory-commands-topic:inventory.commands.v1}")
     private String locationCommandsTopic;
@@ -54,14 +59,7 @@ public class InventoryManifestListener {
         this.processedEventRepository = processedEventRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
-        MeterRegistry registry = meterRegistry.getIfAvailable();
-        this.driftCounter = registry == null
-                ? null
-                : Counter.builder("replica.drift")
-                        .description("Reconciliation manifests that did not match the local replica")
-                        .tag("owner", "inventory")
-                        .tag("entity", "inventory-events")
-                        .register(registry);
+        this.meterRegistry = meterRegistry.getIfAvailable();
     }
 
     @KafkaListener(
@@ -78,27 +76,42 @@ public class InventoryManifestListener {
             return;
         }
 
+        UUID tenantId = manifest.tenantId();
+        if (tenantId == null) {
+            // Manifests are per tenant from ADR-0062 WS4-3 on. One published before it carried a
+            // tenant summarised every tenant's rows at once, which no single tenant's ledger can be
+            // compared against, so it is skipped (and counted) rather than misread as one tenant's.
+            countManifestSkipped();
+            log.warn(
+                    "Skipping reconciliation manifest without tenantId owner=inventory window=[{}, {}): manifests"
+                            + " are per tenant from WS4-3 on",
+                    manifest.windowStartUtc(),
+                    manifest.windowEndUtc());
+            return;
+        }
+
         List<String> receivedIds = processedEventRepository.findEventIdsInRange(
                 InventoryEventsListener.OWNER,
+                tenantId,
                 UuidV7Timestamps.minStringAt(manifest.windowStartUtc()),
                 UuidV7Timestamps.minStringAt(manifest.windowEndUtc()));
         String observedChecksum = ReconciliationManifestV1.checksumOf(receivedIds);
 
         if (manifest.matches(receivedIds.size(), observedChecksum)) {
             log.debug(
-                    "Replica reconciled window=[{}, {}) events={}",
+                    "Replica reconciled tenant={} window=[{}, {}) events={}",
+                    tenantId,
                     manifest.windowStartUtc(),
                     manifest.windowEndUtc(),
                     manifest.eventCount());
             return;
         }
 
-        if (driftCounter != null) {
-            driftCounter.increment();
-        }
+        countDrift(tenantId);
         log.warn(
-                "Replica drift detected owner=inventory window=[{}, {}) expectedCount={} observedCount={}"
+                "Replica drift detected owner=inventory tenant={} window=[{}, {}) expectedCount={} observedCount={}"
                         + " expectedChecksum={} observedChecksum={} eventTypeCounts={} — requesting outbox replay",
+                tenantId,
                 manifest.windowStartUtc(),
                 manifest.windowEndUtc(),
                 manifest.eventCount(),
@@ -106,17 +119,52 @@ public class InventoryManifestListener {
                 manifest.eventIdsChecksum(),
                 observedChecksum,
                 manifest.eventTypeCounts());
-        requestReplay(manifest);
+        requestReplay(manifest, tenantId);
     }
 
-    private void requestReplay(@NonNull ReconciliationManifestV1 manifest) {
+    /**
+     * One {@code replica.drift} increment per mismatched manifest, tagged with the tenant it was
+     * published for, so one tenant's divergence is visible on its own.
+     */
+    private void countDrift(@NonNull UUID tenantId) {
+        if (meterRegistry == null) {
+            return;
+        }
+        Counter.builder("replica.drift")
+                .description("Reconciliation manifests that did not match the local replica")
+                .tag("owner", "inventory")
+                .tag("entity", "inventory-events")
+                .tag("tenant", tenantId.toString())
+                .register(meterRegistry)
+                .increment();
+    }
+
+    /**
+     * One {@code replica.manifest.skipped} increment per manifest that carries no tenant (one
+     * published before manifests were per tenant), so a consumer still receiving them is visible.
+     */
+    private void countManifestSkipped() {
+        if (meterRegistry == null) {
+            return;
+        }
+        Counter.builder("replica.manifest.skipped")
+                .description("Reconciliation manifests skipped because they carry no tenant")
+                .tag("owner", "inventory")
+                .tag("entity", "inventory-events")
+                .tag("reason", "missing_tenant")
+                .register(meterRegistry)
+                .increment();
+    }
+
+    private void requestReplay(@NonNull ReconciliationManifestV1 manifest, @NonNull UUID tenantId) {
         try {
             String command = objectMapper.writeValueAsString(new ReplayCommand(
                     REPLAY_COMMAND_TYPE,
                     new ReplayCommand.Payload(
                             manifest.windowStartUtc().toString(),
                             manifest.windowEndUtc().toString())));
-            kafkaTemplate.send(locationCommandsTopic, manifest.windowStartUtc().toString(), command);
+            kafkaTemplate.send(TenantKafkaHeaders.record(
+                    locationCommandsTopic, manifest.windowStartUtc().toString(), command, tenantId));
         } catch (Exception e) {
             // Best effort: the drift metric already fired, and the next manifest re-detects.
             log.warn("Failed to publish outbox replay request for window starting {}", manifest.windowStartUtc(), e);

@@ -1,6 +1,8 @@
 package com.positivity.shopmanager.internal.service;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -10,10 +12,12 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.shopmanager.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -68,13 +72,18 @@ class PeopleManifestListenerTest {
 
     private String manifestFor(List<String> eventIds) {
         ReconciliationManifestV1 manifest = new ReconciliationManifestV1(
-                WINDOW_START, WINDOW_END, eventIds.size(), ReconciliationManifestV1.checksumOf(eventIds), null);
+                TENANT_A,
+                WINDOW_START,
+                WINDOW_END,
+                eventIds.size(),
+                ReconciliationManifestV1.checksumOf(eventIds),
+                null);
         return "{\"eventType\":\"people.reconciliation.manifest\",\"payload\":"
                 + objectMapper.writeValueAsString(manifest) + "}";
     }
 
     private void replicaHas(List<String> eventIds) {
-        when(processedEvents.findEventIdsInRange(anyString(), anyString(), anyString()))
+        when(processedEvents.findEventIdsInRange(anyString(), any(), anyString(), anyString()))
                 .thenReturn(eventIds);
     }
 
@@ -91,7 +100,7 @@ class PeopleManifestListenerTest {
 
         listener.onManifest(manifestFor(ids));
 
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
         assertThat(driftCount()).isZero();
     }
 
@@ -102,12 +111,13 @@ class PeopleManifestListenerTest {
 
         listener.onManifest(manifestFor(List.of("id-1", "id-2")));
 
-        ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
-        verify(kafkaTemplate, org.mockito.Mockito.times(1)).send(eq(COMMANDS_TOPIC), key.capture(), body.capture());
-        assertThat(key.getValue()).isEqualTo(WINDOW_START.toString());
+        ProducerRecord<String, String> replay = capturedReplay();
 
-        JsonNode command = objectMapper.readTree(body.getValue());
+        assertThat(replay.topic()).isEqualTo(COMMANDS_TOPIC);
+
+        assertThat(replay.key()).isEqualTo(WINDOW_START.toString());
+
+        JsonNode command = objectMapper.readTree(replay.value());
         assertThat(command.path("commandType").stringValue()).isEqualTo("people.outbox.replay-requested");
         assertThat(command.path("payload").path("since").stringValue()).isEqualTo(WINDOW_START.toString());
         assertThat(command.path("payload").path("until").stringValue()).isEqualTo(WINDOW_END.toString());
@@ -122,7 +132,7 @@ class PeopleManifestListenerTest {
 
         listener.onManifest(manifestFor(List.of()));
 
-        verify(processedEvents).findEventIdsInRange(owner.capture(), anyString(), anyString());
+        verify(processedEvents).findEventIdsInRange(owner.capture(), eq(TENANT_A), anyString(), anyString());
         assertThat(owner.getValue()).isEqualTo(PeopleEventsListener.OWNER);
     }
 
@@ -131,15 +141,15 @@ class PeopleManifestListenerTest {
     void unparseableManifest_isDropped() {
         listener.onManifest("not a manifest");
 
-        verify(processedEvents, never()).findEventIdsInRange(anyString(), anyString(), anyString());
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        verify(processedEvents, never()).findEventIdsInRange(anyString(), any(), anyString(), anyString());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
     }
 
     @Test
     @DisplayName("swallows a failure to publish the replay request")
     void whenReplayPublishFails_doesNotPropagate() {
         replicaHas(List.of());
-        when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenThrow(new RuntimeException("broker down"));
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenThrow(new RuntimeException("broker down"));
 
         listener.onManifest(manifestFor(List.of("id-1")));
 
@@ -158,7 +168,49 @@ class PeopleManifestListenerTest {
 
         // Reprocessing yields the same verdict each time; a duplicate replay is harmless because
         // the owner's replay is deduplicated by the processed_events primary key downstream.
-        verify(kafkaTemplate, org.mockito.Mockito.times(2)).send(eq(COMMANDS_TOPIC), anyString(), anyString());
+        verify(kafkaTemplate, org.mockito.Mockito.times(2)).send(replayOn(COMMANDS_TOPIC));
         assertThat(driftCount()).isEqualTo(2d);
+    }
+
+    /** The one replay command handed to Kafka: it must ride the manifest's tenant header (ADR-0062 §3). */
+    @SuppressWarnings("unchecked")
+    private ProducerRecord<String, String> capturedReplay() {
+        ArgumentCaptor<ProducerRecord<String, String>> record = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(kafkaTemplate).send(record.capture());
+        assertThat(TenantKafkaHeaders.read(record.getValue().headers())).contains(TENANT_A);
+        return record.getValue();
+    }
+
+    /** Matches a replay command routed to {@code topic} under the manifest's tenant header. */
+    private static ProducerRecord<String, String> replayOn(String topic) {
+        return org.mockito.ArgumentMatchers.argThat(
+                (ProducerRecord<String, String> record) -> topic.equals(record.topic())
+                        && TenantKafkaHeaders.read(record.headers())
+                                .filter(TENANT_A::equals)
+                                .isPresent());
+    }
+
+    @Test
+    @DisplayName("skips a manifest without tenantId instead of reading it as any tenant's (WS4-3)")
+    void skipsAManifestWithoutTenant() {
+        // Published before manifests were per tenant (ADR-0062 WS4-3): it summarised every
+        // tenant's rows at once, so no single tenant's ledger can be compared against it.
+        String legacy = """
+                {"eventType":"x.reconciliation.manifest",
+                 "payload":{"windowStartUtc":"%s","windowEndUtc":"%s","eventCount":2,
+                   "eventIdsChecksum":"owner-checksum","eventTypeCounts":null}}
+                """.formatted(WINDOW_START, WINDOW_END);
+
+        listener.onManifest(legacy);
+
+        verify(processedEvents, never()).findEventIdsInRange(any(), any(), any(), any());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
+        assertThat(meterRegistry.find("replica.drift").counters()).isEmpty();
+        var skipped = meterRegistry
+                .find("replica.manifest.skipped")
+                .tag("reason", "missing_tenant")
+                .counter();
+        assertThat(skipped).isNotNull();
+        assertThat(skipped.count()).isEqualTo(1.0);
     }
 }
