@@ -453,10 +453,13 @@ name no tenant. The startup runners seed and embed platform tables only. The H2 
 | `AlphaEvalTraceRetentionScheduler.deleteExpiredTraces` (`alpha`, `mcp.eval.turn-trace.enabled`) | Per tenant (`TenantIterator`) | Deletes each tenant's expired `mcp_eval_turn_trace` rows |
 | `DiscoveryRefreshScheduler.refresh` | `@PlatformScoped` | Refreshes the platform tool catalog (`mcp_tool` and embeddings); overlay rows of a pruned tool go with it (`ON DELETE CASCADE`) |
 | `RolePersonaSyncRunner.scheduledRefresh` | `@PlatformScoped` | Refreshes the platform role personas (`system_prompt`) |
+| `SiteMapEmbeddingWarmupRunner.configureTasks` (programmatic, `SchedulingConfigurer`, cadence `mcp.sitemap.cache-ttl`) | `@PlatformScoped` on the registering method | Re-embeds the platform site map (`mcp_screen_registry` and the section embedding cache) |
 
 There is no session cleanup job: an NLTI session expires on resume (`pos.nlti.session.ttl-hours`, checked under the
 caller's tenant binding) and its row is retained. The module `ArchitectureTest` and `pos-archunit` both fail on a
-`@Scheduled` method that is neither per tenant nor `@PlatformScoped`.
+`@Scheduled` method that is neither per tenant nor `@PlatformScoped`; a job registered programmatically through
+`SchedulingConfigurer.configureTasks` carries no `@Scheduled`, so the module rule classifies the registering method
+instead (`programmatically_scheduled_jobs_should_be_classified_for_tenancy`).
 
 ### Per-tenant tool priorities
 
@@ -482,6 +485,12 @@ two tenants' rows, which RLS forbids for `pos_app`).
   (invocations, tools with history, proposals) and a summary. Tool invocation metrics are not tagged by tenant:
   `mcp.tool.execution.latency` is not tagged by tool either, so a tenant tag would have been a new dimension rather
   than a matching one.
+- **Which tenants the sweep visits.** `TenantIterator` reads the module's `TenantRegistry`, and the default
+  `pos.tenancy.registry.mode=STATIC` knows `pos.tenancy.tenants` or just the alpha default tenant. On that registry
+  the "global" rollup is one tenant's rollup, so the service logs a WARN at startup when tuning is `shadow` or
+  `live` on a static registry of one tenant. A multi-tenant deployment must set `pos.tenancy.registry.mode=REMOTE`
+  (with `pos.tenancy.registry.url` and `.secret`; `pos-tenancy-common/README.md`, "Tenant registry") before enabling
+  tuning. The module does not default to `REMOTE`: that needs the pos-tenant secret in every environment.
 
 ### Session scoping
 
@@ -492,9 +501,15 @@ query, and treats a row of another tenant as absent even if one were returned. A
 have is indistinguishable from one that never existed: `POST /v1/nlt/sessions/{sessionId}/workflow-state` and a
 write-plan confirm/cancel answer 404 `SESSION_NOT_FOUND` (403 `SESSION_ACCESS_DENIED` is reserved for this tenant's
 session owned by another subject), and `POST /v1/nlt/requests` starts a fresh session for the caller exactly as it
-does for an unknown id. Chat memory and the per-user rate counter of `SessionAgentManager` /
-`StreamingSessionAgentManager` are keyed `tenant::username::role[::conversationId]`: a username is unique within a
-tenant only, so the same login in two tenants never shares a history or a budget.
+does for an unknown id. `SessionAgentManager` / `StreamingSessionAgentManager` key their two per-user caches beneath
+the tenant, because a username is unique within a tenant only: the rate counter by the actor key
+`tenant::username`, and chat memory by `tenant::username::role` (the blocking manager adds `::conversationId` when
+the caller supplies one). `evict(username)` removes both for that actor in the bound tenant and nothing of the same
+username in another tenant. The streaming manager captures the request's tenant before assembling the Flux and
+re-binds it in every callback that writes tenant-scoped data (the audit row, the turn trace, the answer-source
+record), since the stream is subscribed and completed on Reactor threads that never carried the binding;
+`TenantContextPropagation` also registers the tenant with Micrometer's `ContextRegistry`, so wherever Reactor's
+automatic context propagation is on (alpha, for the eval turn) the tenant follows tool calls across thread hops too.
 
 Proof: `TenantIsolationIT` (tenant A's `nlti_session` row and `mcp_tool_priority` overlay are invisible to tenant B
 and to an unbound connection, through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every

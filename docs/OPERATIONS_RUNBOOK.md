@@ -390,7 +390,11 @@ the global ones.
 
 MCP tool priorities have the same shape. `pos-mcp-server` ranks tools on `mcp_tool.priority`, the global
 row, overridden tool by tool by the caller's tenant's overlay in `mcp_tool_priority` (row-level security:
-a tenant's connection sees its own overlay rows only). The nightly tuning job (`mcp.tuning.cron`,
+a tenant's connection sees its own overlay rows only). The sweep visits the tenants the module's registry
+knows: with the default `pos.tenancy.registry.mode=STATIC` that is `pos.tenancy.tenants` or just the alpha
+default tenant, and the service logs `mcp.tuning.mode=... with the STATIC tenant registry (1 tenant)` at
+startup when tuning is on — set `pos.tenancy.registry.mode=REMOTE` (`pos.tenancy.registry.url`, `.secret`)
+before enabling tuning on a multi-tenant deployment. The nightly tuning job (`mcp.tuning.cron`,
 `mcp.tuning.mode=off|shadow|live`) tunes each tenant's overlay from that tenant's own
 `mcp_tool_invocation_log` and then the global row from all tenants' logs summed; a tenant with no history
 keeps no overlay and ranks on the global set. It logs one `Tool priority tuning tenant=<uuid>
