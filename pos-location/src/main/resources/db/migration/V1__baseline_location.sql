@@ -153,6 +153,7 @@ CREATE TABLE public.mobile_units (
 
 CREATE TABLE public.processed_events (
     event_id character varying(36) NOT NULL,
+    tenant_id uuid,
     owner character varying(64) NOT NULL,
     processed_at timestamp(6) with time zone NOT NULL
 );
@@ -338,7 +339,7 @@ CREATE INDEX idx_event_outbox_unpublished ON public.event_outbox USING btree (id
 
 CREATE INDEX idx_loc_ext_person_last_name ON public.ext_people_contact_person USING btree (last_name);
 
-CREATE INDEX idx_processed_events_owner ON public.processed_events USING btree (owner, event_id);
+CREATE INDEX idx_processed_events_owner_tenant_event ON public.processed_events USING btree (owner, tenant_id, event_id);
 
 ALTER TABLE ONLY public.mobile_units
     ADD CONSTRAINT fk14tp7doak6ilc5rr8b7h0a310 FOREIGN KEY (tenant_id, base_location_id) REFERENCES public.location(tenant_id, id);

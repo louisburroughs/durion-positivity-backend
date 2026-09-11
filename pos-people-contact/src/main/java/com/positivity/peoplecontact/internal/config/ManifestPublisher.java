@@ -6,7 +6,7 @@ import com.positivity.domainevents.UuidV7Timestamps;
 import com.positivity.peoplecontact.internal.entity.OutboxEvent;
 import com.positivity.peoplecontact.internal.repository.OutboxEventRepository;
 import com.positivity.tenancy.PlatformScoped;
-import com.positivity.tenancy.PlatformTenant;
+import com.positivity.tenancy.TenantRegistry;
 import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -15,8 +15,11 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
@@ -33,10 +36,11 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Publishes reconciliation manifests for the people-contact fact topic (ADR-0044 §4, issue #874).
  *
- * <p>Each closed window gets one {@link ReconciliationManifestV1} on
+ * <p>Each closed window gets one {@link ReconciliationManifestV1} per tenant on
  * {@code people-contact.manifest.v1} summarizing the events published from {@code event_outbox} whose
  * eventId (UUIDv7) timestamp falls in the window. Consumers recompute the summary from their
- * processed-events log and request an outbox replay over {@code people-contact.commands.v1} on drift.
+ * processed-events log and request an outbox replay over {@code people-contact.commands.v1} on drift. Every active tenant of the
+ * {@link TenantRegistry} gets a manifest each window, zero-count when it published nothing (ADR-0062 §3).
  *
  * <p>Manifests are sent directly (no outbox): a lost manifest is self-healing — the next run
  * re-publishes it, and consumers can additionally alert on manifest absence. Publication waits
@@ -61,6 +65,7 @@ public class ManifestPublisher {
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final TenantRegistry tenantRegistry;
     private final Counter publishedCounter;
     private final Counter failedCounter;
 
@@ -89,11 +94,13 @@ public class ManifestPublisher {
             KafkaTemplate<String, String> kafkaTemplate,
             ObjectMapper objectMapper,
             Clock clock,
+            TenantRegistry tenantRegistry,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.outboxEventRepository = outboxEventRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         this.clock = clock;
+        this.tenantRegistry = tenantRegistry;
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.publishedCounter = registry == null
                 ? null
@@ -108,8 +115,9 @@ public class ManifestPublisher {
     }
 
     @PlatformScoped(
-            reason = "summarises event_outbox, a global table, per window across every tenant; consumers compare"
-                    + " against their global processed-events ledger (per-tenant manifests are plan WS4-3)")
+            reason = "reads event_outbox, a global table, for every tenant's rows of the window, then publishes one"
+                    + " manifest per tenant, each stamped with its tenant; the ledger it summarises carries the"
+                    + " tenant as data, so no tenant-scoped table is touched")
     @Scheduled(fixedDelayString = "${pos.people-contact.manifest.poll-interval-ms:300000}")
     public void publishDueManifest() {
         Instant latestClosed = latestClosedWindowEnd();
@@ -124,9 +132,8 @@ public class ManifestPublisher {
         while (!windowEnd.isAfter(latestClosed) && published < MAX_WINDOWS_PER_RUN) {
             Instant windowStart = windowEnd.minus(window);
             try {
-                publishManifest(windowStart, windowEnd);
+                publishManifests(windowStart, windowEnd);
                 lastPublishedWindowEnd = windowEnd;
-                increment(publishedCounter);
                 published++;
                 windowEnd = windowEnd.plus(window);
             } catch (InterruptedException e) {
@@ -152,12 +159,20 @@ public class ManifestPublisher {
         return aligned <= 0 ? null : Instant.ofEpochMilli(aligned);
     }
 
-    private void publishManifest(Instant windowStart, Instant windowEnd) throws Exception {
+    /**
+     * One manifest per tenant for the window (ADR-0062 §3): the window's published rows are grouped
+     * by the tenant each outbox row carries, and every active tenant of the registry gets a manifest
+     * too, zero-count when it published nothing, so a consumer can alert on manifest absence per
+     * tenant rather than reading silence as health.
+     */
+    private void publishManifests(Instant windowStart, Instant windowEnd) throws Exception {
         List<OutboxEvent> candidates = outboxEventRepository.findByTopicAndPublishedAtIsNotNullAndCreatedAtBetween(
                 eventsTopic, windowStart.minus(CREATED_AT_SLACK), windowEnd.plus(CREATED_AT_SLACK));
 
-        List<String> eventIds = new ArrayList<>();
-        TreeMap<String, Long> eventTypeCounts = new TreeMap<>();
+        Map<UUID, WindowSummary> perTenant = new LinkedHashMap<>();
+        for (UUID tenantId : new TreeSet<>(tenantRegistry.activeTenantIds())) {
+            perTenant.put(tenantId, new WindowSummary());
+        }
         for (OutboxEvent row : candidates) {
             // One malformed row must not block the window's manifest forever: skip it with a
             // warning; the consumer-side mismatch it may cause is visible drift.
@@ -171,31 +186,50 @@ public class ManifestPublisher {
                 if (!UuidV7Timestamps.isInWindow(UUID.fromString(eventId), windowStart, windowEnd)) {
                     continue;
                 }
-                eventIds.add(eventId);
+                UUID tenantId = row.getTenantId();
+                if (tenantId == null) {
+                    log.warn("Outbox row {} carries no tenant; excluded from manifest", row.getId());
+                    continue;
+                }
                 String eventType = envelope.path("eventType").stringValue(null);
-                eventTypeCounts.merge(eventType == null || eventType.isBlank() ? "unknown" : eventType, 1L, Long::sum);
+                perTenant.computeIfAbsent(tenantId, _ -> new WindowSummary()).add(eventId, eventType);
             } catch (Exception e) {
                 log.warn("Outbox row {} has an unparsable payload/eventId; excluded from manifest", row.getId(), e);
             }
         }
+        if (perTenant.isEmpty()) {
+            log.warn(
+                    "No manifest published for window=[{}, {}): the window has no rows and the tenant registry is empty",
+                    windowStart,
+                    windowEnd);
+            return;
+        }
 
+        for (Map.Entry<UUID, WindowSummary> entry : perTenant.entrySet()) {
+            publishManifest(entry.getKey(), windowStart, windowEnd, entry.getValue());
+        }
+    }
+
+    private void publishManifest(UUID tenantId, Instant windowStart, Instant windowEnd, WindowSummary summary)
+            throws Exception {
         ReconciliationManifestV1 manifest = new ReconciliationManifestV1(
+                tenantId,
                 windowStart,
                 windowEnd,
-                eventIds.size(),
-                ReconciliationManifestV1.checksumOf(eventIds),
-                eventTypeCounts.isEmpty() ? null : eventTypeCounts);
+                summary.eventIds.size(),
+                ReconciliationManifestV1.checksumOf(summary.eventIds),
+                summary.eventTypeCounts.isEmpty() ? null : summary.eventTypeCounts);
 
-        // A manifest summarises every tenant's rows of the window, so it is a platform-tenant
-        // record: envelope and Kafka header both carry PlatformTenant.ID and the consumer's
-        // listener runs under it (per-tenant manifests are plan WS4-3).
+        // A manifest is sent straight to Kafka, bypassing the outbox writer that would otherwise
+        // stamp the tenant: envelope and header both carry the manifest's tenant, so the
+        // consumer's record interceptor binds it and the listener compares that tenant's ledger.
         DomainEventEnvelope<ReconciliationManifestV1> envelope = DomainEventEnvelope.of(
                 ReconciliationManifestV1.eventTypeFor(DOMAIN),
                 ReconciliationManifestV1.SCHEMA_VERSION,
-                manifestAggregateId(windowStart),
+                manifestAggregateId(tenantId, windowStart),
                 windowStart.getEpochSecond(),
                 "pos-people-contact",
-                PlatformTenant.ID,
+                tenantId,
                 null,
                 null,
                 manifest,
@@ -203,23 +237,36 @@ public class ManifestPublisher {
 
         kafkaTemplate
                 .send(TenantKafkaHeaders.record(
-                        manifestTopic,
-                        envelope.recordKey(),
-                        objectMapper.writeValueAsString(envelope),
-                        PlatformTenant.ID))
+                        manifestTopic, envelope.recordKey(), objectMapper.writeValueAsString(envelope), tenantId))
                 .get(sendTimeoutMs, TimeUnit.MILLISECONDS);
+        increment(publishedCounter);
         log.info(
-                "Published reconciliation manifest window=[{}, {}) events={} topic={}",
+                "Published reconciliation manifest tenant={} window=[{}, {}) events={} topic={}",
+                tenantId,
                 windowStart,
                 windowEnd,
-                eventIds.size(),
+                summary.eventIds.size(),
                 manifestTopic);
     }
 
-    /** Deterministic per-window aggregate id, so re-published manifests key to the same partition. */
-    private UUID manifestAggregateId(Instant windowStart) {
-        return UUID.nameUUIDFromBytes(
-                (DOMAIN + ".manifest:" + eventsTopic + ":" + windowStart).getBytes(StandardCharsets.UTF_8));
+    /**
+     * Deterministic per-tenant, per-window aggregate id: re-published manifests key to the same
+     * partition, and one window's manifests for different tenants land on distinct keys.
+     */
+    private UUID manifestAggregateId(UUID tenantId, Instant windowStart) {
+        return UUID.nameUUIDFromBytes((DOMAIN + ".manifest:" + eventsTopic + ":" + windowStart + ":" + tenantId)
+                .getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** The eventIds and per-type counts of one tenant's events in a window. */
+    private static final class WindowSummary {
+        private final List<String> eventIds = new ArrayList<>();
+        private final TreeMap<String, Long> eventTypeCounts = new TreeMap<>();
+
+        void add(String eventId, @Nullable String eventType) {
+            eventIds.add(eventId);
+            eventTypeCounts.merge(eventType == null || eventType.isBlank() ? "unknown" : eventType, 1L, Long::sum);
+        }
     }
 
     private void recordFailure(Instant windowStart, Instant windowEnd, Exception e) {

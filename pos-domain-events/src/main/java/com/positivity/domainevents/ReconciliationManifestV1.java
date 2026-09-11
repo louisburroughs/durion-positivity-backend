@@ -9,24 +9,35 @@ import java.util.Collection;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Reconciliation manifest for one closed time window of a domain's fact topic (ADR-0044 §4).
+ * Reconciliation manifest for one tenant and one closed time window of a domain's fact topic
+ * (ADR-0044 §4, ADR-0062 §3).
  *
- * <p>Owners publish one manifest per window to {@code {domain}.manifest.v1} (see
- * {@link DomainTopics#manifest(String)}) summarizing the events they published whose
- * {@code eventId} (UUIDv7) timestamp falls in {@code [windowStartUtc, windowEndUtc)}. Consumers
- * recompute the same summary from their idempotency/processing log and, on mismatch, raise a drift
- * metric and request an outbox replay for the window over the owner's command topic. Comparison is
- * stateless and replay is idempotent, so reprocessing a manifest is always safe.
+ * <p>Owners publish one manifest per tenant per window to {@code {domain}.manifest.v1} (see
+ * {@link DomainTopics#manifest(String)}) summarizing the events they published for that tenant
+ * whose {@code eventId} (UUIDv7) timestamp falls in {@code [windowStartUtc, windowEndUtc)}. The
+ * manifest's envelope and Kafka header carry the same {@code tenantId}, so the consumer's listener
+ * runs under it. Consumers recompute the same summary from the rows of that tenant in their
+ * idempotency/processing log and, on mismatch, raise a drift metric tagged with the tenant and
+ * request an outbox replay of that tenant's events for the window over the owner's command topic.
+ * Comparison is stateless and replay is idempotent, so reprocessing a manifest is always safe.
  *
  * <p>Window membership is defined by the timestamp embedded in the event's UUIDv7 {@code eventId}
  * (see {@link UuidV7Timestamps}) — the only timestamp both sides observe identically — never by
- * publish or consume time. A zero-event window still gets a manifest so consumers can also alert
- * on manifest absence.
+ * publish or consume time, and never by tenant. A tenant with no events in a window still gets a
+ * zero-count manifest so consumers can also alert on manifest absence.
  *
+ * @param tenantId         tenant whose events the manifest summarizes; one manifest per tenant
+ *                         per window. Publishers always set it; it is nullable on the wire only
+ *                         because manifests published before it existed (2026-09-11) carry none
+ *                         (additive-nullable evolution within schema version 1, ADR-0044 §3).
+ *                         Such a manifest summarised every tenant's rows at once and matches no
+ *                         tenant's ledger, so consumers skip it (logged and counted as {@code
+ *                         replica.manifest.skipped}) rather than compare it as any one tenant's
  * @param windowStartUtc   inclusive start of the reconciled window
  * @param windowEndUtc     exclusive end of the reconciled window
  * @param eventCount       number of events published in the window
@@ -34,6 +45,7 @@ import org.jspecify.annotations.Nullable;
  * @param eventTypeCounts  optional per-eventType counts for drift diagnostics; may be null
  */
 public record ReconciliationManifestV1(
+        @Nullable UUID tenantId,
         @NonNull Instant windowStartUtc,
         @NonNull Instant windowEndUtc,
         long eventCount,

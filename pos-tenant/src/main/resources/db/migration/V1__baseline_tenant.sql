@@ -93,6 +93,7 @@ CREATE TABLE public.event_outbox (
 
 CREATE TABLE public.processed_events (
     event_id character varying(36) NOT NULL,
+    tenant_id uuid,
     owner character varying(64) NOT NULL,
     processed_at timestamp(6) with time zone NOT NULL
 );
@@ -145,7 +146,7 @@ CREATE INDEX idx_tenant_account ON public.tenant USING btree (tenant_id, account
 CREATE INDEX idx_tenant_status ON public.tenant USING btree (tenant_id, status);
 CREATE INDEX idx_event_outbox_unpublished ON public.event_outbox USING btree (id) WHERE (published_at IS NULL);
 CREATE INDEX idx_event_outbox_published_window ON public.event_outbox USING btree (topic, created_at) WHERE (published_at IS NOT NULL);
-CREATE INDEX idx_processed_events_owner ON public.processed_events USING btree (owner, event_id);
+CREATE INDEX idx_processed_events_owner_tenant_event ON public.processed_events USING btree (owner, tenant_id, event_id);
 
 ALTER TABLE public.account ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.account FORCE ROW LEVEL SECURITY;

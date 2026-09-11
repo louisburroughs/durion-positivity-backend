@@ -185,6 +185,7 @@ CREATE TABLE public.part_return (
 
 CREATE TABLE public.processed_events (
     event_id character varying(36) NOT NULL,
+    tenant_id uuid,
     owner character varying(64) NOT NULL,
     processed_at timestamp(6) with time zone NOT NULL
 );
@@ -498,7 +499,7 @@ CREATE INDEX idx_preturn_claim ON public.part_return USING btree (claim_id);
 
 CREATE INDEX idx_preturn_status ON public.part_return USING btree (status);
 
-CREATE INDEX idx_processed_events_owner_event ON public.processed_events USING btree (owner, event_id);
+CREATE INDEX idx_processed_events_owner_tenant_event ON public.processed_events USING btree (owner, tenant_id, event_id);
 
 CREATE INDEX idx_vreimb_provider ON public.vendor_reimbursement USING btree (provider_id);
 

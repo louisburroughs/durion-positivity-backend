@@ -167,6 +167,7 @@ CREATE TABLE public.message_template (
 
 CREATE TABLE public.processed_events (
     event_id character varying(36) NOT NULL,
+    tenant_id uuid,
     owner character varying(64) NOT NULL,
     processed_at timestamp(6) with time zone NOT NULL
 );
@@ -279,7 +280,7 @@ CREATE INDEX idx_ext_suppression_party ON public.ext_suppression USING btree (pa
 
 CREATE INDEX idx_message_template_channel ON public.message_template USING btree (channel, audience_type);
 
-CREATE INDEX idx_processed_events_owner_event ON public.processed_events USING btree (owner, event_id);
+CREATE INDEX idx_processed_events_owner_tenant_event ON public.processed_events USING btree (owner, tenant_id, event_id);
 
 CREATE UNIQUE INDEX uq_campaign_code ON public.campaign USING btree (tenant_id, lower((code)::text));
 
