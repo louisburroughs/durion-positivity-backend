@@ -361,7 +361,8 @@ this checklist is run or something under `deployment/alpha/` is merged.
 ### Per-tenant logs and event statistics (ADR-0062 plan WS6)
 
 Every `pos-*` module that carries `pos-tenancy-common` logs Boot's correlation bracket as
-`[<trace_id>,<span_id>,<tenantId>]` on every line: `TenantContext` mirrors the bound tenant into the
+`[<trace_id>,<span_id>,<tenantId>]` on every line (trace and span from the OpenTelemetry agent's `trace_id`/`span_id`
+or Micrometer Tracing's `traceId`/`spanId`, whichever the module uses): `TenantContext` mirrors the bound tenant into the
 `tenantId` MDC key, and `TenantLogPatternEnvironmentPostProcessor` supplies `logging.pattern.correlation`
 as the lowest-precedence property (a module's own `logging.pattern.correlation` or `logback-spring.xml`
 wins). Lines logged with no tenant bound — startup, `@PlatformScoped` schedulers, actuator — print an
@@ -630,8 +631,8 @@ Format: `domain:resource:action` (snake_case, lowercase)
 the platform role template into the new tenant, creates the first administrator named by
 `initialAdminEmail` on `ADMIN`, and answers `tenant.provisioned`, which moves the tenant to
 `ACTIVE`. **That administrator cannot sign in yet**: no credential rides on any event. The account
-is created credential-expired behind a discarded random password, and a login attempt answers the
-same 401 `INVALID_CREDENTIALS` as any wrong password. The first credential is set through an
+is created credential-expired and marked `awaiting_activation` behind a discarded random password, and a
+login attempt answers the same 401 `INVALID_CREDENTIALS` as any wrong password. The first credential is set through an
 operator-delivered activation token (decided 2026-09-10):
 
 ```bash
@@ -661,7 +662,7 @@ Rules and refusals:
 | Caller holds `platform:tenant:provision` but is bound to a tenant other than the platform tenant | 403 `PLATFORM_TENANT_REQUIRED`. Only `PLATFORM_ADMIN` in the platform tenant holds `platform:*` (`R__seed_tenant_template.sql`); never grant it to a tenant role. |
 | Caller lacks the permission | 403 `FORBIDDEN`. |
 | `USER_ID` is not a user of `TENANT_ID` | 404 `USER_NOT_FOUND`. |
-| The user has already activated or signed in (or is any other live account) | 409 `USER_NOT_AWAITING_ACTIVATION`. Only the credential-expired, never-signed-in account provisioning created can be activated with a token; a live account's password is never overwritten this way. |
+| The user is not awaiting activation (already activated, password set through `PUT /v1/users/{id}`, or any account provisioning did not create — including one whose credentials an administrator expired) | 409 `USER_NOT_AWAITING_ACTIVATION`. Only the account carrying the explicit `users.awaiting_activation` marker, which provisioning alone sets, can be activated with a token; a live account's password is never overwritten this way. |
 | Administrator wants a new password later | The ordinary account-state / password paths; the activation token is for the first credential only. The same token shape is the basis of the coming e-mail reset. |
 
 Audit: every mint writes an `AdministratorActivationTokenMinted` audit event on the user (actor,

@@ -14,9 +14,11 @@ import org.springframework.core.env.MapPropertySource;
  * <p>{@link TenantContext} mirrors the binding into the {@value TenantContext#MDC_KEY} MDC key;
  * this post-processor makes Spring Boot's default console and file patterns print it, by supplying
  * {@code logging.pattern.correlation} — the one slot the default patterns reserve for MDC values —
- * as the lowest-precedence property source. The bracket keeps the trace and span ids the
- * OpenTelemetry agent puts in MDC ({@code trace_id}, {@code span_id}) in front of the tenant, so a
- * line reads {@code [<trace_id>,<span_id>,<tenantId>]} with empty fields where nothing is bound;
+ * as the lowest-precedence property source. The bracket keeps the trace and span ids in front of
+ * the tenant under either MDC naming in use here: the OpenTelemetry agent's {@code trace_id} /
+ * {@code span_id} and Micrometer Tracing's {@code traceId} / {@code spanId} (the bridge modules,
+ * e.g. pos-accounting); each field concatenates both keys and only one is ever set, so a line reads
+ * {@code [<trace_id>,<span_id>,<tenantId>]} with empty fields where nothing is bound;
  * the Promtail pipeline and the Grafana Loki datasource key on that shape. A module that sets
  * {@code logging.pattern.correlation} itself, or a {@code logback-spring.xml} of its own, wins.
  *
@@ -31,7 +33,7 @@ public class TenantLogPatternEnvironmentPostProcessor implements EnvironmentPost
 
     /** Trace, span, tenant: fixed positions, comma-delimited, always bracketed. */
     public static final String CORRELATION_PATTERN =
-            "[%X{trace_id:-},%X{span_id:-},%X{" + TenantContext.MDC_KEY + ":-}] ";
+            "[%X{trace_id:-}%X{traceId:-},%X{span_id:-}%X{spanId:-},%X{" + TenantContext.MDC_KEY + ":-}] ";
 
     static final String PROPERTY_SOURCE_NAME = "tenantLogPattern";
 
