@@ -32,7 +32,10 @@ import org.jspecify.annotations.Nullable;
  * zero-count manifest so consumers can also alert on manifest absence.
  *
  * @param tenantId         tenant whose events the manifest summarizes; one manifest per tenant
- *                         per window
+ *                         per window. Publishers always set it; it is nullable on the wire only
+ *                         because manifests published before it existed (2026-09-11) carry none
+ *                         (additive-nullable evolution within schema version 1, ADR-0044 §3) —
+ *                         consumers read those through {@link #tenantIdOr(UUID)}
  * @param windowStartUtc   inclusive start of the reconciled window
  * @param windowEndUtc     exclusive end of the reconciled window
  * @param eventCount       number of events published in the window
@@ -40,7 +43,7 @@ import org.jspecify.annotations.Nullable;
  * @param eventTypeCounts  optional per-eventType counts for drift diagnostics; may be null
  */
 public record ReconciliationManifestV1(
-        @NonNull UUID tenantId,
+        @Nullable UUID tenantId,
         @NonNull Instant windowStartUtc,
         @NonNull Instant windowEndUtc,
         long eventCount,
@@ -54,9 +57,6 @@ public record ReconciliationManifestV1(
     public static final int SCHEMA_VERSION = 1;
 
     public ReconciliationManifestV1 {
-        if (tenantId == null) {
-            throw new IllegalArgumentException("tenantId must not be null");
-        }
         if (windowStartUtc == null || windowEndUtc == null) {
             throw new IllegalArgumentException("windowStartUtc and windowEndUtc must not be null");
         }
@@ -70,6 +70,16 @@ public record ReconciliationManifestV1(
         if (eventIdsChecksum == null || eventIdsChecksum.isBlank()) {
             throw new IllegalArgumentException("eventIdsChecksum must not be blank");
         }
+    }
+
+    /**
+     * The tenant this manifest is for. A manifest published before the field existed carries none:
+     * it summarised every tenant's rows as a platform-tenant record (the plan's WS4-1 stopgap) and
+     * rode the platform tenant's Kafka header, so a consumer passes the platform tenant id as
+     * {@code legacyTenantId} and compares it against that tenant's ledger, exactly as it did then.
+     */
+    public @NonNull UUID tenantIdOr(@NonNull UUID legacyTenantId) {
+        return tenantId != null ? tenantId : legacyTenantId;
     }
 
     /** Envelope eventType for a domain's manifests, e.g. {@code workorder.reconciliation.manifest}. */

@@ -53,13 +53,17 @@ class ReconciliationManifestV1Test {
     }
 
     @Test
-    void rejectsMissingTenant() {
+    void legacyManifestWithoutTenantResolvesToTheFallback() {
         String checksum = ReconciliationManifestV1.checksumOf(List.of());
-        // One manifest per tenant per window: a manifest that names no tenant cannot be compared
-        // against any tenant's ledger, so it is refused at construction rather than on the wire.
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> new ReconciliationManifestV1(null, START, END, 0, checksum, null))
-                .withMessageContaining("tenantId");
+        // A manifest published before the field existed carries no tenant: it summarised every
+        // tenant's rows as a platform-tenant record, so consumers read it as that tenant's.
+        ReconciliationManifestV1 legacy = new ReconciliationManifestV1(null, START, END, 0, checksum, null);
+        UUID platform = UUID.fromString("01900000-0000-7000-8000-000000000000");
+
+        assertThat(legacy.tenantId()).isNull();
+        assertThat(legacy.tenantIdOr(platform)).isEqualTo(platform);
+        assertThat(new ReconciliationManifestV1(TENANT, START, END, 0, checksum, null).tenantIdOr(platform))
+                .isEqualTo(TENANT);
     }
 
     @Test

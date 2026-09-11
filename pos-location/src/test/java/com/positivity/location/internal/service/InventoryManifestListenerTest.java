@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.location.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -145,6 +146,31 @@ class InventoryManifestListenerTest {
         listener.onManifest(envelope(EVENT_IDS.size(), ReconciliationManifestV1.checksumOf(EVENT_IDS)));
 
         verify(processedEventRepository).findEventIdsInRange(eq("inventory"), eq(TENANT_A), anyString(), anyString());
+    }
+
+    @Test
+    void readsAManifestWithoutTenantAsThePlatformTenants() {
+        // The WS4-1 stopgap shape: no tenantId, published (and header-stamped) as the platform
+        // tenant's record over every tenant's rows. It must still be compared, against the
+        // platform tenant's ledger, and its replay must ride the platform tenant header.
+        String legacy = "{\"payload\":{\"windowStartUtc\":\"" + WINDOW_START + "\",\"windowEndUtc\":\"" + WINDOW_END
+                + "\",\"eventCount\":2,\"eventIdsChecksum\":\"" + ReconciliationManifestV1.checksumOf(EVENT_IDS)
+                + "\",\"eventTypeCounts\":null}}";
+        when(processedEventRepository.findEventIdsInRange(anyString(), any(), anyString(), anyString()))
+                .thenReturn(List.of());
+
+        listener.onManifest(legacy);
+
+        verify(processedEventRepository)
+                .findEventIdsInRange(eq("inventory"), eq(PlatformTenant.ID), anyString(), anyString());
+        ArgumentCaptor<ProducerRecord<String, String>> record = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(kafkaTemplate).send(record.capture());
+        assertThat(TenantKafkaHeaders.read(record.getValue().headers())).contains(PlatformTenant.ID);
+        assertThat(meterRegistry
+                        .find("replica.drift")
+                        .tag("tenant", PlatformTenant.ID.toString())
+                        .counter())
+                .isNotNull();
     }
 
     @Test

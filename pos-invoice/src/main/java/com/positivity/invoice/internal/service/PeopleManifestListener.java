@@ -3,6 +3,7 @@ package com.positivity.invoice.internal.service;
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.domainevents.UuidV7Timestamps;
 import com.positivity.invoice.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -79,9 +80,12 @@ public class PeopleManifestListener {
             return;
         }
 
+        // A manifest published before it carried a tenant was the platform tenant's record.
+        UUID tenantId = manifest.tenantIdOr(PlatformTenant.ID);
+
         List<String> receivedIds = processedEventRepository.findEventIdsInRange(
                 PeopleEventsListener.OWNER,
-                manifest.tenantId(),
+                tenantId,
                 UuidV7Timestamps.minStringAt(manifest.windowStartUtc()),
                 UuidV7Timestamps.minStringAt(manifest.windowEndUtc()));
         String observedChecksum = ReconciliationManifestV1.checksumOf(receivedIds);
@@ -89,18 +93,18 @@ public class PeopleManifestListener {
         if (manifest.matches(receivedIds.size(), observedChecksum)) {
             log.debug(
                     "Replica reconciled tenant={} window=[{}, {}) events={}",
-                    manifest.tenantId(),
+                    tenantId,
                     manifest.windowStartUtc(),
                     manifest.windowEndUtc(),
                     manifest.eventCount());
             return;
         }
 
-        countDrift(manifest.tenantId());
+        countDrift(tenantId);
         log.warn(
                 "Replica drift detected owner=people tenant={} window=[{}, {}) expectedCount={} observedCount={}"
                         + " expectedChecksum={} observedChecksum={} eventTypeCounts={} — requesting outbox replay",
-                manifest.tenantId(),
+                tenantId,
                 manifest.windowStartUtc(),
                 manifest.windowEndUtc(),
                 manifest.eventCount(),
@@ -108,7 +112,7 @@ public class PeopleManifestListener {
                 manifest.eventIdsChecksum(),
                 observedChecksum,
                 manifest.eventTypeCounts());
-        requestReplay(manifest);
+        requestReplay(manifest, tenantId);
     }
 
     /**
@@ -128,7 +132,7 @@ public class PeopleManifestListener {
                 .increment();
     }
 
-    private void requestReplay(@NonNull ReconciliationManifestV1 manifest) {
+    private void requestReplay(@NonNull ReconciliationManifestV1 manifest, @NonNull UUID tenantId) {
         try {
             String command = objectMapper.writeValueAsString(new ReplayCommand(
                     REPLAY_COMMAND_TYPE,
@@ -136,7 +140,7 @@ public class PeopleManifestListener {
                             manifest.windowStartUtc().toString(),
                             manifest.windowEndUtc().toString())));
             kafkaTemplate.send(TenantKafkaHeaders.record(
-                    peopleCommandsTopic, manifest.windowStartUtc().toString(), command, manifest.tenantId()));
+                    peopleCommandsTopic, manifest.windowStartUtc().toString(), command, tenantId));
         } catch (Exception e) {
             // Best effort: the drift metric already fired, and the next manifest re-detects.
             log.warn("Failed to publish outbox replay request for window starting {}", manifest.windowStartUtc(), e);

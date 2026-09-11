@@ -15,7 +15,10 @@ tenant as it queues the row (`stampedWith`), the same tenant it writes on the ou
 bypasses the outbox (a reconciliation manifest, sent straight to Kafka) passes the tenant explicitly
 through the ten-argument `of(...)`. Manifests are per tenant: `ReconciliationManifestV1` carries the
 `tenantId` it summarizes, owners publish one per tenant per window, and consumers compare it against
-that tenant's rows of their processing ledger and request replay for that tenant only. This library has no dependency on `pos-tenancy-common`, which is
+that tenant's rows of their processing ledger and request replay for that tenant only. The field was
+added nullable within schema version 1 (additive evolution, no `.v2` topic): a manifest published
+before 2026-09-11 carries none and was the platform tenant's record, which consumers recover with
+`tenantIdOr(PlatformTenant.ID)`; publishers always set it. This library has no dependency on `pos-tenancy-common`, which is
 why the stamp lives in the writer and not in `of(...)`. Consumers tolerate a missing field only on
 messages published before it existed (2026-09-10).
 
