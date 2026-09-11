@@ -15,7 +15,7 @@ classification annotations. Conventions, the binding table and the add-a-table c
 | `unenforced-paths` | empty | Request path prefixes `TenantContextFilter` never refuses for lack of a tenant |
 | `datasource.enabled` | `true` | Wrap the module's `DataSource` so every checkout binds `app.current_tenant` |
 | `registry.mode` | `STATIC` | `STATIC` (`StaticTenantRegistry`) or `REMOTE` (`RemoteTenantRegistry`, below) |
-| `registry.url` | `http://tenant/internal/v1/tenants` | `pos-tenant`'s internal list endpoint |
+| `registry.url` | `http://tenant/internal/v1/tenants` | `pos-tenant`'s internal list endpoint; the default is the Eureka service id and needs a `@LoadBalanced` builder, otherwise set a DNS host (`http://pos-tenant:8080/...` in Compose) |
 | `registry.secret` | blank | Sent as `X-Tenant-Registry-Secret`; `pos.tenant.registry.api-secret` on the server |
 | `registry.refresh` | `PT60S` | Snapshot refreshed at most this often, lazily on read |
 | `registry.connect-timeout` / `registry.read-timeout` | `PT2S` / `PT5S` | Fetch timeouts |
@@ -42,7 +42,10 @@ module's `TenantRegistry` returns.
 
 The `REMOTE` client is built from the module's `@LoadBalanced RestClient.Builder` when it
 declares one (so `http://tenant/...` resolves through Eureka), else its single or `@Primary`
-builder, else a plain one; the configured timeouts are applied either way. With Micrometer on the
+builder, else a plain one; the configured timeouts are applied either way. A plain builder
+resolves the host through DNS only, so with one the default service-id URL is refused at startup
+and `registry.url` must name a resolvable host. Only a 2xx answer replaces the snapshot; a 3xx,
+like a 4xx or 5xx, keeps the last good one. With Micrometer on the
 classpath the registry exposes `tenancy.registry.tenants` (snapshot size) and
 `tenancy.registry.last_success_epoch_seconds` (`0` until the first successful fetch; alert on its
 age).

@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -233,12 +234,13 @@ class TenancyAutoConfigurationTest {
             context.register(PlainAndLoadBalancedBuilders.class);
             context.refresh();
 
-            RestClient.Builder chosen =
+            TenancyAutoConfiguration.RemoteRegistryConfiguration.ResolvedBuilder chosen =
                     TenancyAutoConfiguration.RemoteRegistryConfiguration.resolveBuilder(context.getBeanFactory());
 
-            assertThat(chosen)
+            assertThat(chosen.builder())
                     .as("http://tenant/... must resolve through the load balancer, not DNS")
                     .isSameAs(PlainAndLoadBalancedBuilders.LOAD_BALANCED);
+            assertThat(chosen.loadBalanced()).isTrue();
         }
     }
 
@@ -248,11 +250,31 @@ class TenancyAutoConfigurationTest {
             context.register(WatchedBuilder.class);
             context.refresh();
 
-            RestClient.Builder chosen =
+            TenancyAutoConfiguration.RemoteRegistryConfiguration.ResolvedBuilder chosen =
                     TenancyAutoConfiguration.RemoteRegistryConfiguration.resolveBuilder(context.getBeanFactory());
 
-            assertThat(chosen).isSameAs(context.getBean(RestClient.Builder.class));
+            assertThat(chosen.builder()).isSameAs(context.getBean(RestClient.Builder.class));
+            assertThat(chosen.loadBalanced()).isFalse();
         }
+    }
+
+    @Test
+    @DisplayName("the service-id default URL is refused when no @LoadBalanced builder can resolve it")
+    void theServiceIdDefaultUrlIsRefusedWithoutALoadBalancedBuilder() {
+        runner.withUserConfiguration(WatchedBuilder.class)
+                .withPropertyValues("pos.tenancy.registry.mode=REMOTE")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .rootCause()
+                            .hasMessageContaining("pos.tenancy.registry.url=http://tenant/internal/v1/tenants")
+                            .hasMessageContaining("@LoadBalanced");
+                });
+        runner.withPropertyValues("pos.tenancy.registry.mode=REMOTE")
+                .run(context -> assertThat(context).hasFailed());
+        runner.withUserConfiguration(PlainAndLoadBalancedBuilders.class)
+                .withPropertyValues("pos.tenancy.registry.mode=REMOTE")
+                .run(context -> assertThat(context).hasNotFailed());
     }
 
     @Configuration(proxyBeanMethods = false)

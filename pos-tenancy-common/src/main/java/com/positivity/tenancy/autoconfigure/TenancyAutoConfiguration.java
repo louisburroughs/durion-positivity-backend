@@ -11,6 +11,7 @@ import com.positivity.tenancy.TenantRegistry;
 import com.positivity.tenancy.TenantResolver;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.lang.annotation.Annotation;
+import java.net.URI;
 import java.time.Clock;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -105,6 +106,9 @@ public class TenancyAutoConfiguration {
 
         private static final String LOAD_BALANCED = "org.springframework.cloud.client.loadbalancer.LoadBalanced";
 
+        /** pos-tenant's {@code spring.application.name}, the host of the default registry URL. */
+        static final String SERVICE_ID = "tenant";
+
         @Bean
         @ConditionalOnMissingBean(TenantRegistry.class)
         public RemoteTenantRegistry remoteTenantRegistry(
@@ -115,10 +119,15 @@ public class TenancyAutoConfiguration {
             SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
             requestFactory.setConnectTimeout(config.getConnectTimeout());
             requestFactory.setReadTimeout(config.getReadTimeout());
-            RestClient restClient = resolveBuilder(beanFactory)
-                    .clone()
-                    .requestFactory(requestFactory)
-                    .build();
+            ResolvedBuilder resolved = resolveBuilder(beanFactory);
+            if (!resolved.loadBalanced() && namesServiceId(config.getUrl())) {
+                throw new IllegalStateException("pos.tenancy.registry.url=" + config.getUrl()
+                        + " names the Eureka service id '" + SERVICE_ID + "', but this module has no @LoadBalanced"
+                        + " RestClient.Builder to resolve it; set the url to a resolvable host, e.g."
+                        + " http://pos-tenant:8080/internal/v1/tenants in Compose");
+            }
+            RestClient restClient =
+                    resolved.builder().clone().requestFactory(requestFactory).build();
             log.info(
                     "TenantRegistry is remote: {} refreshed at most every {} (plan WS4-2)",
                     config.getUrl(),
@@ -126,31 +135,44 @@ public class TenancyAutoConfiguration {
             return new RemoteTenantRegistry(properties, restClient, clock.getIfAvailable(Clock::systemUTC));
         }
 
+        /** The builder the registry client is built from, and whether it resolves Eureka service ids. */
+        record ResolvedBuilder(RestClient.Builder builder, boolean loadBalanced) {}
+
         /**
          * The module's {@code @LoadBalanced RestClient.Builder} when it declares one (a {@code
          * http://tenant/...} URL then resolves through Eureka), else its single or primary builder,
-         * else a plain one.
+         * else a plain one. A plain builder resolves the URL's host through DNS only, so the caller
+         * refuses the service-id default with it ({@link #namesServiceId(String)}).
          */
-        static RestClient.Builder resolveBuilder(ConfigurableListableBeanFactory beanFactory) {
+        static ResolvedBuilder resolveBuilder(ConfigurableListableBeanFactory beanFactory) {
             String[] names = beanFactory.getBeanNamesForType(RestClient.Builder.class);
             Class<? extends Annotation> loadBalanced = loadBalancedAnnotation(beanFactory.getBeanClassLoader());
             if (loadBalanced != null) {
                 for (String name : names) {
                     if (beanFactory.findAnnotationOnBean(name, loadBalanced) != null) {
-                        return beanFactory.getBean(name, RestClient.Builder.class);
+                        return new ResolvedBuilder(beanFactory.getBean(name, RestClient.Builder.class), true);
                     }
                 }
             }
             if (names.length == 0) {
-                return RestClient.builder();
+                return new ResolvedBuilder(RestClient.builder(), false);
             }
             try {
-                return beanFactory.getBean(RestClient.Builder.class);
+                return new ResolvedBuilder(beanFactory.getBean(RestClient.Builder.class), false);
             } catch (NoUniqueBeanDefinitionException e) {
                 log.warn("Several RestClient.Builder beans and none is @LoadBalanced or @Primary; the tenant"
                         + " registry uses a plain builder, so pos.tenancy.registry.url must be a"
                         + " resolvable host");
-                return RestClient.builder();
+                return new ResolvedBuilder(RestClient.builder(), false);
+            }
+        }
+
+        /** Whether {@code url}'s host is pos-tenant's Eureka service id rather than a DNS name. */
+        static boolean namesServiceId(String url) {
+            try {
+                return SERVICE_ID.equalsIgnoreCase(URI.create(url).getHost());
+            } catch (IllegalArgumentException e) {
+                return false;
             }
         }
 

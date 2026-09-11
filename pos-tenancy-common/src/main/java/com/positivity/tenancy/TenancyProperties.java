@@ -125,10 +125,11 @@ public class TenancyProperties {
         private Mode mode = Mode.STATIC;
 
         /**
-         * Full URL of {@code pos-tenant}'s internal list endpoint, e.g. {@code
-         * http://tenant/internal/v1/tenants}. A service-name host is resolved by the module's
-         * {@code @LoadBalanced RestClient.Builder} when it declares one; otherwise the URL is used as
-         * is.
+         * Full URL of {@code pos-tenant}'s internal list endpoint. The default names the Eureka
+         * service id ({@code http://tenant/...}) and is only usable by a module that declares a
+         * {@code @LoadBalanced RestClient.Builder}; a module without one must set a DNS-resolvable
+         * host (in Compose, {@code http://pos-tenant:8080/internal/v1/tenants}) or the auto-configuration
+         * refuses to start in {@code REMOTE} mode.
          */
         private String url = "http://tenant/internal/v1/tenants";
 

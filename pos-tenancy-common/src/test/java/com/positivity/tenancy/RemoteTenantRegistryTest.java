@@ -182,6 +182,23 @@ class RemoteTenantRegistryTest {
     }
 
     @Test
+    @DisplayName("a 3xx carrying a valid JSON body is a failure too: only 2xx replaces the snapshot")
+    void redirectWithAValidBodyIsAFailure() {
+        expectSuccess(TWO_ACTIVE);
+        server.expect(requestTo(URL))
+                .andRespond(withStatus(HttpStatus.FOUND)
+                        .body("[{\"tenantId\":\"" + ACME + "\",\"status\":\"ACTIVE\"}]")
+                        .contentType(MediaType.APPLICATION_JSON));
+
+        registry.activeTenantIds();
+        clock.advance(Duration.ofMinutes(1));
+
+        assertThat(registry.activeTenantIds()).containsExactly(ACME, BOLT);
+        assertThat(registry.consecutiveFailures()).isEqualTo(1);
+        server.verify();
+    }
+
+    @Test
     @DisplayName("an empty list, or one with no ACTIVE tenant, is a failure and never an empty snapshot")
     void emptyOrInactiveListIsAFailure() {
         expectSuccess(TWO_ACTIVE);
