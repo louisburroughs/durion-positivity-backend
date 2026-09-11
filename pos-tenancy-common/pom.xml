@@ -17,7 +17,7 @@
              Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
              IT-inclusive measurement describes coverage the gate cannot see. -->
         <jacoco.line.min>0.91</jacoco.line.min>
-        <jacoco.branch.min>0.75</jacoco.branch.min>
+        <jacoco.branch.min>0.78</jacoco.branch.min>
     </properties>
     <dependencies>
         <dependency>
