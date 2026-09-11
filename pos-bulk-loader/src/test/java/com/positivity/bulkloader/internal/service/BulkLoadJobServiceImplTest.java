@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
@@ -95,7 +97,7 @@ class BulkLoadJobServiceImplTest {
 
         when(tenantBinding.resolveTarget(TENANT, DomainType.CATALOG_PRODUCT)).thenReturn(TENANT);
         when(jobRepository.countByOperatorIdAndStatusIn(any(), any())).thenReturn(0L);
-        when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> {
+        when(jobRepository.saveAndFlush(any(BulkLoadJob.class))).thenAnswer(invocation -> {
             boundDuringSave.set(TenantContext.current());
             return saved;
         });
@@ -115,7 +117,7 @@ class BulkLoadJobServiceImplTest {
                 .as("the binding is restored afterwards")
                 .isEmpty();
         verify(transactionManager).getTransaction(any());
-        verify(jobRepository).save(any(BulkLoadJob.class));
+        verify(jobRepository).saveAndFlush(any(BulkLoadJob.class));
     }
 
     @Test
@@ -129,7 +131,7 @@ class BulkLoadJobServiceImplTest {
 
         when(tenantBinding.resolveTarget(TENANT, DomainType.CATALOG_PRODUCT)).thenReturn(TENANT);
         when(jobRepository.countByOperatorIdAndStatusIn(any(), any())).thenReturn(0L);
-        when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> {
+        when(jobRepository.saveAndFlush(any(BulkLoadJob.class))).thenAnswer(invocation -> {
             boundDuringSave.set(TenantContext.current());
             return saved;
         });
@@ -215,6 +217,35 @@ class BulkLoadJobServiceImplTest {
         assertThat(job.getStartedAt()).isNotNull();
         verify(bulkLoadBatchLauncher).launch(job, "Bearer token-123");
         verify(jobRepository).save(job);
+    }
+
+    /**
+     * Copilot review of PR #1955, third round (Finding 2): the PROCESSING transition used to
+     * commit in the same transaction as the (synchronous) batch launch, so every chunk step —
+     * which opens its own transaction on this same {@code PlatformTransactionManager} bean —
+     * joined that already-open transaction under {@code REQUIRED} propagation instead of getting
+     * its own commit boundary. Moving the launch after {@code transactionTemplate.execute} returns
+     * means the PROCESSING transaction has already committed (this mock manager's {@code commit}
+     * stood in for that) before the launcher — and so the batch's own chunk transactions — ever
+     * run, so a chunk step now opens against a thread with no transaction already active on it.
+     */
+    @Test
+    void startProcessing_commitsTheProcessingTransitionBeforeLaunchingTheBatch() {
+        TenantContext.bind(TENANT);
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.UPLOADING);
+        job.setOriginalFilePath("00000000-0000-0000-0000-000000000001/products.csv");
+        job.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.startProcessing(JOB_ID, OPERATOR_ID, "Bearer token-123");
+
+        InOrder inOrder = inOrder(transactionManager, bulkLoadBatchLauncher);
+        inOrder.verify(transactionManager).getTransaction(any());
+        inOrder.verify(transactionManager).commit(any());
+        inOrder.verify(bulkLoadBatchLauncher).launch(job, "Bearer token-123");
+        inOrder.verifyNoMoreInteractions();
     }
 
     /**
