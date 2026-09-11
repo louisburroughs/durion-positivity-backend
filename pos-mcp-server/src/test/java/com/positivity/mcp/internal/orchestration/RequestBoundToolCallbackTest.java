@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.DefaultToolDefinition;
@@ -36,6 +37,8 @@ import org.springframework.ai.tool.definition.ToolDefinition;
  */
 class RequestBoundToolCallbackTest {
 
+    private static final String MDC_CORRELATION_ID_KEY = "correlationId";
+
     private static final CurrentUserContext CALLER = new CurrentUserContext(
             "alice",
             UUID.fromString("01900000-0000-7000-8000-00000000000a"),
@@ -50,6 +53,7 @@ class RequestBoundToolCallbackTest {
     void tearDown() {
         userContext.clear();
         TenantContext.clear();
+        MDC.remove(MDC_CORRELATION_ID_KEY);
     }
 
     @Test
@@ -97,6 +101,94 @@ class RequestBoundToolCallbackTest {
         assertThat(observedTenant.get()).isEqualTo(TENANT_A);
         assertThat(observedUser.get()).isEqualTo("alice");
         assertThat(observedAuth.get()).isEqualTo("Bearer token");
+    }
+
+    @Test
+    @DisplayName("a tool executed on another thread carries the request's MDC correlation id")
+    void toolExecution_offRequestThread_bindsCorrelationId() throws Exception {
+        String correlationId = UUID.randomUUID().toString();
+        List<ToolCallback> bound;
+        AtomicReference<String> observed = new AtomicReference<>();
+        MDC.put(MDC_CORRELATION_ID_KEY, correlationId);
+        try {
+            bound = RequestBoundToolCallback.bindCurrentRequest(
+                    List.of(callback(() -> {
+                        observed.set(MDC.get(MDC_CORRELATION_ID_KEY));
+                        return "ok";
+                    })),
+                    userContext);
+        } finally {
+            MDC.remove(MDC_CORRELATION_ID_KEY);
+        }
+
+        runOnAnotherThread(() -> bound.getFirst().call("{}"));
+
+        assertThat(observed.get())
+                .as("ToolAuditService and every other tool-execution log line on the worker thread must carry"
+                        + " the request's correlation id, not none at all — CorrelationIdMdcFilter set it on the"
+                        + " servlet thread only, and MDC does not cross the boundedElastic hop on its own")
+                .isEqualTo(correlationId);
+    }
+
+    @Test
+    @DisplayName("a correlation id with no caller or tenant bound still binds: worker logs still carry the"
+            + " request id even when the caller is unknown")
+    void bindCurrentRequest_correlationIdWithoutCallerOrTenant_stillBinds() throws Exception {
+        String correlationId = UUID.randomUUID().toString();
+        List<ToolCallback> bound;
+        AtomicReference<String> observed = new AtomicReference<>();
+        MDC.put(MDC_CORRELATION_ID_KEY, correlationId);
+        try {
+            bound = RequestBoundToolCallback.bindCurrentRequest(
+                    List.of(callback(() -> {
+                        observed.set(MDC.get(MDC_CORRELATION_ID_KEY));
+                        return "ok";
+                    })),
+                    userContext);
+        } finally {
+            MDC.remove(MDC_CORRELATION_ID_KEY);
+        }
+
+        runOnAnotherThread(() -> bound.getFirst().call("{}"));
+
+        assertThat(observed.get()).isEqualTo(correlationId);
+    }
+
+    @Test
+    @DisplayName("the executing thread's own MDC correlation id, if it already had one, is restored afterwards"
+            + " rather than left holding the request's — restoring composes, it must not clobber")
+    void toolExecution_offRequestThread_restoresWorkerCorrelationIdAfterwards() throws Exception {
+        String requestCorrelationId = UUID.randomUUID().toString();
+        List<ToolCallback> bound;
+        MDC.put(MDC_CORRELATION_ID_KEY, requestCorrelationId);
+        try {
+            bound = RequestBoundToolCallback.bindCurrentRequest(List.of(callback(() -> "ok")), userContext);
+        } finally {
+            MDC.remove(MDC_CORRELATION_ID_KEY);
+        }
+
+        String workerOwnCorrelationId = UUID.randomUUID().toString();
+        AtomicReference<String> afterCall = new AtomicReference<>();
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<String> result = executor.submit(() -> {
+                MDC.put(MDC_CORRELATION_ID_KEY, workerOwnCorrelationId);
+                try {
+                    return bound.getFirst().call("{}");
+                } finally {
+                    afterCall.set(MDC.get(MDC_CORRELATION_ID_KEY));
+                    MDC.remove(MDC_CORRELATION_ID_KEY);
+                }
+            });
+            assertThat(result.get(5, TimeUnit.SECONDS)).isNotNull();
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertThat(afterCall.get())
+                .as("the worker's own correlation id must survive the call, not be left cleared or holding the"
+                        + " request's id")
+                .isEqualTo(workerOwnCorrelationId);
     }
 
     @Test
