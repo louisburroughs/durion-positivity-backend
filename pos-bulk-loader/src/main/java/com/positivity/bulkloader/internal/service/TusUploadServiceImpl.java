@@ -158,28 +158,41 @@ public class TusUploadServiceImpl implements TusUploadService {
         Set<UUID> visited = new HashSet<>();
         tenantIterator.forEachActiveTenant(tenantId -> {
             visited.add(tenantId);
-            transactionTemplate.executeWithoutResult(status -> cleanupExpiredUploadsOfBoundTenant());
+            cleanupExpiredUploadsOfBoundTenant();
         });
         if (!visited.contains(PlatformTenant.ID)) {
-            TenantContext.runAs(
-                    PlatformTenant.ID,
-                    () -> transactionTemplate.executeWithoutResult(status -> cleanupExpiredUploadsOfBoundTenant()));
+            TenantContext.runAs(PlatformTenant.ID, this::cleanupExpiredUploadsOfBoundTenant);
         }
     }
 
+    /**
+     * Reads the tenant's expired uploads in one transaction, then deletes each in its own separate
+     * transaction (Copilot review of PR #1955, fourth round). A single transaction shared across
+     * the whole sweep does not give "one failure does not strand the rest" in a real database: when
+     * {@code tusUploadRepository.delete(upload)} throws — a foreign key or optimistic-lock failure
+     * on one row — Hibernate/Spring marks that transaction rollback-only, so every delete already
+     * done earlier in the same loop is undone at commit instead of kept, even though the {@code
+     * catch} below looks like it isolated the failure. Giving each deletion its own {@link
+     * TransactionTemplate} call means a failed row's rollback is scoped to that row alone.
+     */
     void cleanupExpiredUploadsOfBoundTenant() {
-        List<TusUpload> expired = tusUploadRepository.findByExpiresAtBeforeAndCompletedFalse(Instant.now(clock));
+        List<TusUpload> expired = transactionTemplate.execute(
+                status -> tusUploadRepository.findByExpiresAtBeforeAndCompletedFalse(Instant.now(clock)));
+        int cleaned = 0;
         for (TusUpload upload : expired) {
             try {
-                deleteTempFile(upload.getId());
-                tusUploadRepository.delete(upload);
+                transactionTemplate.executeWithoutResult(status -> {
+                    deleteTempFile(upload.getId());
+                    tusUploadRepository.delete(upload);
+                });
                 log.info("Cleaned up expired TUS upload: id={} jobId={}", upload.getId(), upload.getJobId());
+                cleaned++;
             } catch (Exception e) {
                 log.warn("Failed to clean up expired TUS upload {}: {}", upload.getId(), e.getMessage());
             }
         }
-        if (!expired.isEmpty()) {
-            log.info("TUS cleanup complete: {} expired uploads removed", expired.size());
+        if (cleaned > 0) {
+            log.info("TUS cleanup complete: {} expired uploads removed", cleaned);
         }
     }
 
