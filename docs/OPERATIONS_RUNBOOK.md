@@ -119,9 +119,11 @@ path), it does not fall back.
 | `POS_SECURITY_API_SECRET` | `pos-security-service` and every registering module | `X-Permissions-Api-Secret` on `/v1/permissions/register` |
 | `POS_TENANT_REGISTRY_API_SECRET` | `pos-tenant`, and any module with `pos.tenancy.registry.mode=REMOTE` (as `pos.tenancy.registry.secret`) | `X-Tenant-Registry-Secret` on `GET /internal/v1/tenants` (ADR-0062 plan WS4-2) |
 
-The root `docker-compose.yml` gives `POS_TENANT_REGISTRY_API_SECRET` a local default for the dev
-stack only; alpha must set it in `.env` (`openssl rand -hex 32`) before any module is switched to
-`REMOTE`, and the same value goes to those modules. Rotating it is two config syncs: change the
+The root `docker-compose.yml` passes `POS_TENANT_REGISTRY_API_SECRET` through from the environment
+with no default (like the other service secrets): unset, `pos-tenant` refuses every registry call
+with a 401, so the endpoint is closed until the secret exists. Set it in `.env` (`openssl rand -hex
+32`) locally and on alpha before any module is switched to `REMOTE`, and give the same value to
+those modules. Rotating it is two config syncs: change the
 entry, recreate `pos-tenant`, then the consumers (their `RemoteTenantRegistry` keeps the last good
 snapshot while the values disagree, logging one WARN per module until the next refresh succeeds).
 

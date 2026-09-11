@@ -116,5 +116,12 @@
             <artifactId>spring-boot-starter-web</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- @LoadBalanced, so the builder selection of the remote registry is tested against the real
+             annotation; the library itself never depends on Spring Cloud. -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-commons</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>
