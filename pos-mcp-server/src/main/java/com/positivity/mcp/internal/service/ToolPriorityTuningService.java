@@ -43,10 +43,17 @@ import org.springframework.stereotype.Service;
  * {@link #recomputeGlobalPriorities} step: the only way to see every tenant's history from a
  * non-owner connection is to add up what each tenant's binding showed, never a cross-tenant query.
  * A tenant with no history contributes nothing and keeps no overlay, so its requests fall back to
- * the global set. {@link TenantIterator} carries on past a tenant whose log could not be read; the
- * sweep then keeps the other tenants' overlays but skips the global rollup (a sum over part of the
- * fleet is not the global figure), logs the unread tenants at WARN and counts the run in
+ * the global set. {@link TenantIterator} carries on past a tenant that failed — an unreadable log,
+ * a rejected overlay write — and that tenant's aggregates never reach the rollup; the sweep then
+ * keeps the other tenants' overlays but skips the global rollup (a sum over part of the fleet is
+ * not the global figure), logs the failed tenants at WARN and counts the run in
  * {@code mcp.tuning.incomplete}.
+ *
+ * <p>The same holds when every tenant succeeded but the registry cannot vouch for the list it
+ * handed out ({@link TenantIterator#hasCompleteTenantList()}): a REMOTE registry answers from its
+ * static seed until {@code pos-tenant} replies once, and from its last good snapshot while a
+ * refresh is failing, so an outage would otherwise have a one-tenant sweep rewrite the global
+ * priorities as though it had covered the fleet.
  *
  * <p>Behavior is governed by {@code mcp.tuning.mode} ({@link TuningMode}): {@code off} skips the
  * run, {@code shadow} computes proposals and emits them to the structured logger
@@ -122,6 +129,11 @@ public class ToolPriorityTuningService {
      * is {@code pos.tenancy.registry.mode=REMOTE} (with {@code url} and {@code secret}), not a
      * module default (that needs the pos-tenant secret in every environment).
      *
+     * <p>This is startup configuration advice only, and deliberately silent for REMOTE: a remote
+     * registry also starts on that same static fallback and keeps it when a fetch fails, which no
+     * startup check can see. {@link #tuneToolPriorities()} covers that case per run, by skipping the
+     * global rollup while {@link TenantIterator#hasCompleteTenantList()} is false.
+     *
      * @return the warning to log, or empty when tuning is off, the registry is remote, or the static
      *     list names more than one tenant
      */
@@ -163,29 +175,47 @@ public class ToolPriorityTuningService {
         Instant cutoff = Instant.now(clock).minus(WINDOW_DAYS, ChronoUnit.DAYS);
 
         Map<UUID, ToolInvocationStats> global = new LinkedHashMap<>();
-        List<UUID> unreadTenants = new ArrayList<>();
+        List<UUID> failedTenants = new ArrayList<>();
         int tenants = tenantIterator.forEachActiveTenant(tenantId -> {
             List<ToolInvocationStats> stats;
             try {
                 stats = tenantInvocationStats(cutoff);
-            } catch (RuntimeException readFailure) {
+                tuneTenantOverlay(tenantId, stats, applyLive);
+            } catch (RuntimeException tenantFailure) {
                 // TenantIterator logs the failure and moves on to the next tenant; remember it here,
-                // because a rollup over the tenants that could be read would not be the global figure.
-                unreadTenants.add(tenantId);
-                throw readFailure;
+                // because a rollup over the tenants that did finish would not be the global figure.
+                // The whole per-tenant operation counts, not the read alone: a tenant whose overlay
+                // write failed half way is as much an unfinished part of this sweep as one whose log
+                // could not be read at all.
+                failedTenants.add(tenantId);
+                throw tenantFailure;
             }
+            // Merged only now, after this tenant's own tuning succeeded, so nothing a failed tenant
+            // contributed can reach the global rollup through an early merge.
             for (ToolInvocationStats stat : stats) {
                 global.merge(stat.toolId(), stat, ToolInvocationStats::plus);
             }
-            tuneTenantOverlay(tenantId, stats, applyLive);
         });
-        if (!unreadTenants.isEmpty()) {
+        if (!failedTenants.isEmpty()) {
             meterRegistry.counter(INCOMPLETE_COUNTER).increment();
             LOGGER.warn(
-                    "Tool priority tuning: the invocation log of {} tenant(s) could not be read ({}); the global"
+                    "Tool priority tuning: {} tenant(s) could not be tuned ({}); the global rollup is skipped"
+                            + " this run and mcp_tool.priority keeps its previous values",
+                    failedTenants.size(),
+                    failedTenants);
+            return;
+        }
+        if (!tenantIterator.hasCompleteTenantList()) {
+            // A REMOTE registry answers from its static seed until pos-tenant replies once, and from
+            // its last good snapshot while a refresh is failing. Either way the sweep visited the
+            // tenants it could name, not the fleet, so the per-tenant overlays above stand but the
+            // global row must not be rewritten from a sum over part of it.
+            meterRegistry.counter(INCOMPLETE_COUNTER).increment();
+            LOGGER.warn(
+                    "Tool priority tuning: the tenant registry has no complete snapshot (still on its static"
+                            + " fallback, or its last refresh failed); {} tenant(s) were tuned but the global"
                             + " rollup is skipped this run and mcp_tool.priority keeps its previous values",
-                    unreadTenants.size(),
-                    unreadTenants);
+                    tenants);
             return;
         }
         int globalProposals = recomputeGlobalPriorities(global, applyLive);

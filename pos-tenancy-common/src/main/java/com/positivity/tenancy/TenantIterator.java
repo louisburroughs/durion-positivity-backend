@@ -24,6 +24,20 @@ public class TenantIterator {
     }
 
     /**
+     * Whether the registry's current list names every active tenant.
+     *
+     * <p>Per-tenant work runs regardless — an incomplete list still deserves the tenants it does
+     * name. A job that then rolls the sweep up into one fleet-wide write asks this first: over a
+     * partial list that write is wrong rather than merely late. Registries that are authoritative by
+     * construction do not implement {@link TenantRegistryFreshness} and answer {@code true} here.
+     *
+     * @return {@code false} only when the registry declares its current snapshot incomplete
+     */
+    public boolean hasCompleteTenantList() {
+        return !(registry instanceof TenantRegistryFreshness freshness) || freshness.hasCompleteSnapshot();
+    }
+
+    /**
      * Invoke {@code work} for every active tenant, each with its tenant bound.
      *
      * @return the number of tenants for which {@code work} completed without throwing

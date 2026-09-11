@@ -491,6 +491,17 @@ two tenants' rows, which RLS forbids for `pos_app`).
   `live` on a static registry of one tenant. A multi-tenant deployment must set `pos.tenancy.registry.mode=REMOTE`
   (with `pos.tenancy.registry.url` and `.secret`; `pos-tenancy-common/README.md`, "Tenant registry") before enabling
   tuning. The module does not default to `REMOTE`: that needs the pos-tenant secret in every environment.
+- **When the rollup is skipped.** The global row is a statement about the whole fleet, so it is written only from a
+  sweep that covered it. Two things stop it, each counting the run in `mcp.tuning.incomplete` and logging a WARN
+  while leaving the per-tenant overlays that did succeed in place:
+  - a tenant that failed — an unreadable log, a rejected overlay write, anything `TenantIterator` caught and carried
+    on past. That tenant's aggregates never reach the rollup either: they are merged only once its own tuning
+    succeeded.
+  - a registry that cannot vouch for its list (`TenantIterator.hasCompleteTenantList()`). A `REMOTE` registry
+    answers from its static seed until pos-tenant replies once, and from its last good snapshot while a refresh is
+    failing, so during an outage the sweep would otherwise visit one tenant and rewrite `mcp_tool.priority` as
+    though it had visited all of them. The startup WARN above cannot see this — it is a run-time state — which is
+    why the check is per run. A `STATIC` registry is authoritative by construction and never trips it.
 
 ### Session scoping
 
@@ -507,16 +518,23 @@ the tenant, because a username is unique within a tenant only: the rate counter 
 the caller supplies one). `evict(username)` removes both for that actor in the bound tenant and nothing of the same
 username in another tenant. The streaming manager captures the request's tenant before assembling the Flux and
 re-binds it in every callback that writes tenant-scoped data (the audit row, the turn trace, the answer-source
-record), since the stream is subscribed and completed on Reactor threads that never carried the binding;
-`TenantContextPropagation` also registers the tenant with Micrometer's `ContextRegistry`, so wherever Reactor's
-automatic context propagation is on (alpha, for the eval turn) the tenant follows tool calls across thread hops too.
+record), since the stream is subscribed and completed on Reactor threads that never carried the binding. The tool
+executions themselves are covered the same way and independently: Spring AI's tool loop runs them on
+`boundedElastic`, so `RequestBoundToolCallback` captures the caller, their bearer token and their tenant when the
+per-request callback list is assembled and re-binds all three around each execution — that is what puts a streamed
+tool call's `mcp_tool_invocation_log` row under the caller's tenant instead of losing it to RLS (`ToolAuditService`
+logs such a failure at WARN and returns, so it would not surface). `TenantContextPropagation` also registers the
+tenant with Micrometer's `ContextRegistry`, so wherever Reactor's automatic context propagation is on it travels
+with a context snapshot as well — but that JVM-wide hook is switched on only by `EvalTurnTracePropagation` under the
+`alpha` profile, so nothing depends on it and the explicit re-binding above is what holds on every deployment.
 
 Proof: `TenantIsolationIT` (tenant A's `nlti_session` row and `mcp_tool_priority` overlay are invisible to tenant B
 and to an unbound connection, through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every
 non-whitelisted table has `tenant_id`, RLS enabled and forced, and the `tenant_isolation` policy; the pool is
 `pos_app` with no bypass), both on Testcontainers Postgres (`./mvnw -pl pos-mcp-server -am verify`); the
-service-level contract is unit-tested in `NltiSessionAccessTest`, `TenantToolPriorityResolverTest` and
-`ToolPriorityTuningServiceTest`.
+service-level contract is unit-tested in `NltiSessionAccessTest`, `TenantToolPriorityResolverTest`,
+`ToolPriorityTuningServiceTest` and `RequestBoundToolCallbackTest` (which executes callbacks on a plain executor,
+with no Reactor propagation, so it proves the non-alpha case).
 
 ## Dependencies
 

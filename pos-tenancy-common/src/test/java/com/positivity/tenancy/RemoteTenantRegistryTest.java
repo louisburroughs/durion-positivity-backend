@@ -176,6 +176,32 @@ class RemoteTenantRegistryTest {
     }
 
     @Test
+    @DisplayName("the snapshot is incomplete on the static seed and while a refresh is failing")
+    void hasCompleteSnapshotTracksTheFetchState() {
+        expectSuccess(TWO_ACTIVE);
+        server.expect(requestTo(URL)).andRespond(withException(new IOException("connection refused")));
+        expectSuccess(TWO_ACTIVE);
+
+        assertThat(registry.hasCompleteSnapshot())
+                .as("the static seed a remote registry starts on is not the fleet")
+                .isFalse();
+
+        registry.activeTenantIds();
+        assertThat(registry.hasCompleteSnapshot()).isTrue();
+
+        clock.advance(Duration.ofMinutes(1));
+        registry.activeTenantIds();
+        assertThat(registry.hasCompleteSnapshot())
+                .as("a snapshot kept through an outage cannot hold a tenant created since")
+                .isFalse();
+
+        clock.advance(Duration.ofMinutes(1));
+        registry.activeTenantIds();
+        assertThat(registry.hasCompleteSnapshot()).isTrue();
+        server.verify();
+    }
+
+    @Test
     void non2xxIsAFailure() {
         expectSuccess(TWO_ACTIVE);
         server.expect(requestTo(URL)).andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));

@@ -13,10 +13,15 @@ import org.springframework.stereotype.Component;
  * <p>Registers {@link TenantContext} with Micrometer's {@link ContextRegistry} as a {@code
  * ThreadLocalAccessor}, so a captured context snapshot restores the tenant on whichever thread runs
  * the continuation. This only registers the accessor: it does not switch on Reactor's JVM-wide
- * automatic propagation, which {@code EvalTurnTracePropagation} enables on alpha for the eval turn
- * (once that hook is on, the tenant follows the same hops, which is what puts a streamed tool call's
- * audit row under the caller's tenant). Everywhere else the streaming manager re-binds the captured
- * tenant explicitly in the callbacks it owns.
+ * automatic propagation, which {@code EvalTurnTracePropagation} enables on alpha for the eval turn.
+ *
+ * <p>So the accessor alone carries nothing on a normal deployment, and no code may depend on it
+ * doing so. Every off-request-thread write of a tenant-scoped row re-binds the tenant itself, on
+ * every profile: {@code StreamingSessionAgentManager} in the Flux callbacks it owns, and {@code
+ * RequestBoundToolCallback} around each tool execution the Spring AI tool loop runs on {@code
+ * boundedElastic} (that is what puts a streamed tool call's {@code mcp_tool_invocation_log} row
+ * under the caller's tenant). Where the hook is on, this accessor makes the same tenant travel with
+ * a captured context snapshot as well — belt and braces, never the only strap.
  */
 @Component
 public class TenantContextPropagation {

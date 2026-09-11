@@ -43,4 +43,32 @@ class TenantIteratorTest {
                 }))
                 .isZero();
     }
+
+    @Test
+    void aRegistryThatCannotVouchForItsListIsReportedIncomplete() {
+        TenancyProperties properties = new TenancyProperties();
+        properties.setTenants(List.of(A, B));
+
+        assertThat(new TenantIterator(new StaticTenantRegistry(properties)).hasCompleteTenantList())
+                .as("a registry that is authoritative by construction declares no freshness and counts as complete")
+                .isTrue();
+        assertThat(new TenantIterator(new FreshnessRegistry(List.of(A), false)).hasCompleteTenantList())
+                .isFalse();
+        assertThat(new TenantIterator(new FreshnessRegistry(List.of(A, B), true)).hasCompleteTenantList())
+                .isTrue();
+    }
+
+    private record FreshnessRegistry(List<UUID> tenants, boolean complete)
+            implements TenantRegistry, TenantRegistryFreshness {
+
+        @Override
+        public List<UUID> activeTenantIds() {
+            return tenants;
+        }
+
+        @Override
+        public boolean hasCompleteSnapshot() {
+            return complete;
+        }
+    }
 }

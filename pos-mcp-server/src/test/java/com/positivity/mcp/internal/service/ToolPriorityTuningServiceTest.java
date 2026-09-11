@@ -15,6 +15,8 @@ import com.positivity.tenancy.TenancyProperties;
 import com.positivity.tenancy.TenantAudited;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantIterator;
+import com.positivity.tenancy.TenantRegistry;
+import com.positivity.tenancy.TenantRegistryFreshness;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -76,16 +78,14 @@ class ToolPriorityTuningServiceTest {
 
     private ToolPriorityTuningService newService(String mode, String legacyEnabled, Path evalPath, UUID... tenants) {
         TenancyProperties tenancy = tenancy(tenants);
+        return newService(
+                mode, legacyEnabled, evalPath, new TenantIterator(new StaticTenantRegistry(tenancy)), tenancy);
+    }
+
+    private ToolPriorityTuningService newService(
+            String mode, String legacyEnabled, Path evalPath, TenantIterator iterator, TenancyProperties tenancy) {
         return new ToolPriorityTuningService(
-                repository,
-                clock,
-                meterRegistry,
-                mode,
-                legacyEnabled,
-                evalPath.toString(),
-                48L,
-                new TenantIterator(new StaticTenantRegistry(tenancy)),
-                tenancy);
+                repository, clock, meterRegistry, mode, legacyEnabled, evalPath.toString(), 48L, iterator, tenancy);
     }
 
     private Path passingFreshEval() throws IOException {
@@ -276,6 +276,89 @@ class ToolPriorityTuningServiceTest {
                 .isEqualTo(1.0);
         assertThat(meterRegistry
                         .counter("mcp.tuning.proposals", "mode", "live", "scope", "global")
+                        .count())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("a tenant whose overlay write fails is left out of the rollup, which is skipped")
+    void tuneToolPriorities_failedOverlayWrite_skipsGlobalRollup() throws IOException {
+        ToolInvocationStats aStats = stats(TOOL_1, 20, 20, 2_000, 0);
+        repository.log(TENANT_A, aStats);
+        // B's log reads cleanly -- it is the tuning of B's own overlay that fails, after the read
+        // the early-merge bug had already folded into the global sum.
+        repository.log(TENANT_B, stats(TOOL_1, 20, 0, 38_000, 20));
+        repository.failOverlayReadsFor.add(TENANT_B);
+        service = newService("live", null, passingFreshEval(), TENANT_A, TENANT_B);
+
+        service.tuneToolPriorities();
+
+        assertThat(repository.statsReadsByTenant)
+                .as("B's log was read; only its tuning failed")
+                .contains(TENANT_B);
+        assertThat(repository.overlays(TENANT_A).get(TOOL_1).priority())
+                .as("tenant A was tuned before B failed")
+                .isCloseTo(ToolPriorityTuningService.propose(aStats, 0.5).newPriority(), within(1e-9));
+        assertThat(repository.overlays(TENANT_B)).isEmpty();
+        assertThat(repository.globalPriority.get(TOOL_1))
+                .as("the sweep did not finish for B, so no rollup -- not even one that counted B's stats")
+                .isEqualTo(0.5);
+        assertThat(meterRegistry
+                        .counter(ToolPriorityTuningService.INCOMPLETE_COUNTER)
+                        .count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("a registry with no complete snapshot tunes its tenants but skips the global rollup")
+    void tuneToolPriorities_incompleteRegistrySnapshot_skipsGlobalRollup() throws IOException {
+        ToolInvocationStats aStats = stats(TOOL_1, 20, 20, 2_000, 0);
+        repository.log(TENANT_A, aStats);
+        TenancyProperties tenancy = tenancy(TENANT_A);
+        service = newService(
+                "live",
+                null,
+                passingFreshEval(),
+                new TenantIterator(new IncompleteSnapshotRegistry(List.of(TENANT_A))),
+                tenancy);
+
+        service.tuneToolPriorities();
+
+        assertThat(repository.overlays(TENANT_A).get(TOOL_1).priority())
+                .as("the tenants the registry did name are still worth tuning")
+                .isCloseTo(ToolPriorityTuningService.propose(aStats, 0.5).newPriority(), within(1e-9));
+        assertThat(repository.globalPriority.get(TOOL_1))
+                .as("a REMOTE registry on its static fallback sweeps one tenant; that is not the fleet")
+                .isEqualTo(0.5);
+        assertThat(meterRegistry
+                        .counter(ToolPriorityTuningService.INCOMPLETE_COUNTER)
+                        .count())
+                .isEqualTo(1.0);
+        assertThat(meterRegistry
+                        .counter("mcp.tuning.proposals", "mode", "live", "scope", "global")
+                        .count())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("a registry that reports a complete snapshot writes the global rollup as usual")
+    void tuneToolPriorities_completeRegistrySnapshot_writesGlobalRollup() throws IOException {
+        ToolInvocationStats aStats = stats(TOOL_1, 20, 20, 2_000, 0);
+        repository.log(TENANT_A, aStats);
+        TenancyProperties tenancy = tenancy(TENANT_A);
+        service = newService(
+                "live",
+                null,
+                passingFreshEval(),
+                new TenantIterator(new CompleteSnapshotRegistry(List.of(TENANT_A))),
+                tenancy);
+
+        service.tuneToolPriorities();
+
+        assertThat(repository.globalPriority.get(TOOL_1))
+                .isCloseTo(ToolPriorityTuningService.propose(aStats, 0.5).newPriority(), within(1e-9));
+        assertThat(meterRegistry
+                        .counter(ToolPriorityTuningService.INCOMPLETE_COUNTER)
                         .count())
                 .isZero();
     }
@@ -481,6 +564,7 @@ class ToolPriorityTuningServiceTest {
         final Map<UUID, Integer> globalLatency = new HashMap<>();
         final List<UUID> statsReadsByTenant = new ArrayList<>();
         final List<UUID> failReadsFor = new ArrayList<>();
+        final List<UUID> failOverlayReadsFor = new ArrayList<>();
 
         void log(UUID tenantId, ToolInvocationStats... rows) {
             logByTenant.computeIfAbsent(tenantId, ignored -> new ArrayList<>()).addAll(List.of(rows));
@@ -492,7 +576,11 @@ class ToolPriorityTuningServiceTest {
 
         @Override
         public @NonNull Map<UUID, ToolPriorityOverlay> findOverlayForCurrentTenant() {
-            return TenantContext.current().map(this::overlays).map(Map::copyOf).orElse(Map.of());
+            Optional<UUID> tenantId = TenantContext.current();
+            if (tenantId.isPresent() && failOverlayReadsFor.contains(tenantId.get())) {
+                throw new IllegalStateException("overlay unavailable for " + tenantId.get());
+            }
+            return tenantId.map(this::overlays).map(Map::copyOf).orElse(Map.of());
         }
 
         @Override
@@ -521,6 +609,34 @@ class ToolPriorityTuningServiceTest {
         public void updateGlobalPriority(@NonNull UUID toolId, double priority, int avgLatencyMs) {
             globalPriority.put(toolId, priority);
             globalLatency.put(toolId, avgLatencyMs);
+        }
+    }
+
+    /** A remote-style registry answering from a fallback snapshot, as during a pos-tenant outage. */
+    record IncompleteSnapshotRegistry(List<UUID> tenants) implements TenantRegistry, TenantRegistryFreshness {
+
+        @Override
+        public List<UUID> activeTenantIds() {
+            return tenants;
+        }
+
+        @Override
+        public boolean hasCompleteSnapshot() {
+            return false;
+        }
+    }
+
+    /** The same registry once pos-tenant has answered: the list is the fleet. */
+    record CompleteSnapshotRegistry(List<UUID> tenants) implements TenantRegistry, TenantRegistryFreshness {
+
+        @Override
+        public List<UUID> activeTenantIds() {
+            return tenants;
+        }
+
+        @Override
+        public boolean hasCompleteSnapshot() {
+            return true;
         }
     }
 }

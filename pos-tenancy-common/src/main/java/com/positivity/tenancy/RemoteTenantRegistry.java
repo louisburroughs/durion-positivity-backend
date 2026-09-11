@@ -26,12 +26,14 @@ import org.springframework.web.client.RestClient;
  * empty body, no {@code ACTIVE} tenant) keeps the last good snapshot: the registry answers with
  * what it last knew rather than starving every per-tenant job during an outage. Failures are
  * logged once on the transition to failing and once on recovery, each with the consecutive count.
+ * That fallback keeps per-tenant jobs alive but makes the list non-authoritative, which {@link
+ * #hasCompleteSnapshot()} reports so a fleet-wide job can hold off.
  *
  * <p>The endpoint returns {@code pos-domain-events}' {@code TenantProjectionV1} shape ({@code
  * tenantId}, {@code slug}, {@code displayName}, {@code status}); only {@code ACTIVE} entries make
  * the snapshot, in the order the registry returned them.
  */
-public class RemoteTenantRegistry implements TenantRegistry {
+public class RemoteTenantRegistry implements TenantRegistry, TenantRegistryFreshness {
 
     /** Header carrying the shared secret {@code pos-tenant} checks. */
     public static final String SECRET_HEADER = "X-Tenant-Registry-Secret";
@@ -108,6 +110,20 @@ public class RemoteTenantRegistry implements TenantRegistry {
     /** Fetch failures since the last success; {@code 0} while healthy. */
     public long consecutiveFailures() {
         return consecutiveFailures;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Complete means a fetch has succeeded <em>and</em> the most recent one did too. The static
+     * seed the snapshot starts from is not the fleet, and a snapshot kept through an outage cannot
+     * contain a tenant created since — either way a fleet-wide write over it would be wrong. It is
+     * deliberately not a staleness window: a snapshot refreshed on schedule is complete, one whose
+     * refresh is failing is not, however recently it last worked.
+     */
+    @Override
+    public boolean hasCompleteSnapshot() {
+        return lastSuccess != null && consecutiveFailures == 0;
     }
 
     private boolean isDue(Instant now) {
