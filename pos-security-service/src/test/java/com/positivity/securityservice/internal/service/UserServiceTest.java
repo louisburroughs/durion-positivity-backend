@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -304,7 +305,7 @@ class UserServiceTest {
         existing.setUsername("old");
         existing.setPassword("oldpass");
 
-        when(userRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(userRepository.findByIdForUpdate(id)).thenReturn(Optional.of(existing));
         when(roleRepository.findByName("MANAGER")).thenReturn(Optional.of(role));
         when(passwordEncoder.encode("newpass")).thenReturn("newEncoded");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -321,6 +322,11 @@ class UserServiceTest {
         assertThat(result.getUsername()).isEqualTo("newname");
         assertThat(result.getRoles()).contains("MANAGER");
         verify(userRoleGrantService).reconcile(eq(existing), eq(Set.of(role)), anyString());
+        // Pessimistic write lock (WS2b-3 review): the same lock AdministratorActivationService's
+        // mint/activate take, so this path cannot read the row before an in-flight activation
+        // exchange takes its lock and then commit a stale copy afterwards.
+        verify(userRepository).findByIdForUpdate(id);
+        verify(userRepository, never()).findById(any());
     }
 
     @Test
@@ -328,7 +334,7 @@ class UserServiceTest {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
         User existing = new User();
         existing.setUsername("alice");
-        when(userRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(userRepository.findByIdForUpdate(id)).thenReturn(Optional.of(existing));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
         UserUpdateRequest req = new UserUpdateRequest();
@@ -340,7 +346,7 @@ class UserServiceTest {
     @Test
     void updateUser_userNotFound_throws() {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000099");
-        when(userRepository.findById(id)).thenReturn(Optional.empty());
+        when(userRepository.findByIdForUpdate(id)).thenReturn(Optional.empty());
 
         UserUpdateRequest req = new UserUpdateRequest();
         // A user reference that does not resolve is UserNotFoundException (404) on every entry
@@ -355,7 +361,7 @@ class UserServiceTest {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
         User existing = new User();
         existing.setUsername("alice");
-        when(userRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(userRepository.findByIdForUpdate(id)).thenReturn(Optional.of(existing));
         when(roleRepository.findByName("GHOST")).thenReturn(Optional.empty());
 
         UserUpdateRequest req = new UserUpdateRequest();
@@ -437,7 +443,7 @@ class UserServiceTest {
         user.setCredentialsNonExpired(false);
         user.setCredentialsExpireAt(TEST_CLOCK.instant());
         user.setAwaitingActivation(true);
-        when(userRepository.findById(id)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(id)).thenReturn(Optional.of(user));
         when(passwordEncoder.encode("Sup3rS3cret!")).thenReturn("$2a$hashed");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
         UserUpdateRequest request = new UserUpdateRequest();
@@ -469,7 +475,7 @@ class UserServiceTest {
         user.setCredentialsNonExpired(false);
         user.setCredentialsExpireAt(adminSetExpiry);
         user.setAwaitingActivation(false);
-        when(userRepository.findById(id)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(id)).thenReturn(Optional.of(user));
         when(passwordEncoder.encode("Sup3rS3cret!")).thenReturn("$2a$hashed");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
         UserUpdateRequest request = new UserUpdateRequest();

@@ -179,8 +179,14 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserDto updateUser(UUID id, UserUpdateRequest request) {
-        User existingUser =
-                userRepository.findById(id).orElseThrow(() -> new UserNotFoundException("User not found: " + id));
+        // Pessimistic write lock (WS2b-3 review): the same lock AdministratorActivationService's
+        // mint/activate take on this row, so an ordinary password update that reads the row before
+        // an in-flight activation exchange takes its lock waits here instead of racing it — without
+        // this, this path could still read the pre-exchange row, then commit afterwards and
+        // overwrite the password and credential flags activation just set.
+        User existingUser = userRepository
+                .findByIdForUpdate(id)
+                .orElseThrow(() -> new UserNotFoundException("User not found: " + id));
 
         if (request.getUsername() != null && !request.getUsername().isBlank()) {
             existingUser.setUsername(request.getUsername());
