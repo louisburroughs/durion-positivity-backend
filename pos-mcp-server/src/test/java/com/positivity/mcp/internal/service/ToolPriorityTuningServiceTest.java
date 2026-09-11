@@ -244,6 +244,34 @@ class ToolPriorityTuningServiceTest {
     }
 
     @Test
+    @DisplayName("a tenant whose log cannot be read keeps the others' overlays but skips the global rollup")
+    void tuneToolPriorities_unreadableTenant_skipsGlobalRollup() throws IOException {
+        ToolInvocationStats aStats = stats(TOOL_1, 20, 20, 2_000, 0);
+        repository.log(TENANT_A, aStats);
+        repository.log(TENANT_B, stats(TOOL_1, 20, 0, 38_000, 20));
+        repository.failReadsFor.add(TENANT_B);
+        service = newService("live", null, passingFreshEval(), TENANT_A, TENANT_B);
+
+        service.tuneToolPriorities();
+
+        assertThat(repository.overlays(TENANT_A).get(TOOL_1).priority())
+                .as("tenant A was read and tuned before B failed")
+                .isCloseTo(ToolPriorityTuningService.propose(aStats, 0.5).newPriority(), within(1e-9));
+        assertThat(repository.overlays(TENANT_B)).isEmpty();
+        assertThat(repository.globalPriority.get(TOOL_1))
+                .as("no rollup over an incomplete sweep: the global row keeps its previous value")
+                .isEqualTo(0.5);
+        assertThat(meterRegistry
+                        .counter(ToolPriorityTuningService.INCOMPLETE_COUNTER)
+                        .count())
+                .isEqualTo(1.0);
+        assertThat(meterRegistry
+                        .counter("mcp.tuning.proposals", "mode", "live", "scope", "global")
+                        .count())
+                .isZero();
+    }
+
+    @Test
     @DisplayName("a tool that left the catalog is skipped in both scopes")
     void tuneToolPriorities_unknownTool_skipped() throws IOException {
         repository.log(TENANT_A, stats(UNKNOWN_TOOL, 20, 20, 2_000, 0));
@@ -404,6 +432,7 @@ class ToolPriorityTuningServiceTest {
         final Map<UUID, Double> globalPriority = new HashMap<>();
         final Map<UUID, Integer> globalLatency = new HashMap<>();
         final List<UUID> statsReadsByTenant = new ArrayList<>();
+        final List<UUID> failReadsFor = new ArrayList<>();
 
         void log(UUID tenantId, ToolInvocationStats... rows) {
             logByTenant.computeIfAbsent(tenantId, ignored -> new ArrayList<>()).addAll(List.of(rows));
@@ -429,6 +458,9 @@ class ToolPriorityTuningServiceTest {
         public @NonNull List<ToolInvocationStats> invocationStatsSince(@NonNull Instant cutoff) {
             Optional<UUID> tenantId = TenantContext.current();
             tenantId.ifPresent(statsReadsByTenant::add);
+            if (tenantId.isPresent() && failReadsFor.contains(tenantId.get())) {
+                throw new IllegalStateException("connection lost while reading the log of " + tenantId.get());
+            }
             return tenantId.map(id -> logByTenant.getOrDefault(id, List.of())).orElse(List.of());
         }
 

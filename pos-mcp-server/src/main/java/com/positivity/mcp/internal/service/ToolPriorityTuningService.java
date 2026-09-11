@@ -42,7 +42,10 @@ import org.springframework.stereotype.Service;
  * {@link #recomputeGlobalPriorities} step: the only way to see every tenant's history from a
  * non-owner connection is to add up what each tenant's binding showed, never a cross-tenant query.
  * A tenant with no history contributes nothing and keeps no overlay, so its requests fall back to
- * the global set.
+ * the global set. {@link TenantIterator} carries on past a tenant whose log could not be read; the
+ * sweep then keeps the other tenants' overlays but skips the global rollup (a sum over part of the
+ * fleet is not the global figure), logs the unread tenants at WARN and counts the run in
+ * {@code mcp.tuning.incomplete}.
  *
  * <p>Behavior is governed by {@code mcp.tuning.mode} ({@link TuningMode}): {@code off} skips the
  * run, {@code shadow} computes proposals and emits them to the structured logger
@@ -65,6 +68,10 @@ public class ToolPriorityTuningService {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String PROPOSALS_COUNTER = "mcp.tuning.proposals";
+
+    /** Runs whose global rollup was skipped because a tenant's log could not be read. */
+    static final String INCOMPLETE_COUNTER = "mcp.tuning.incomplete";
+
     private static final String SCOPE_TENANT = "tenant";
     private static final String SCOPE_GLOBAL = "global";
 
@@ -124,13 +131,31 @@ public class ToolPriorityTuningService {
         Instant cutoff = Instant.now(clock).minus(WINDOW_DAYS, ChronoUnit.DAYS);
 
         Map<UUID, ToolInvocationStats> global = new LinkedHashMap<>();
+        List<UUID> unreadTenants = new ArrayList<>();
         int tenants = tenantIterator.forEachActiveTenant(tenantId -> {
-            List<ToolInvocationStats> stats = tenantInvocationStats(cutoff);
+            List<ToolInvocationStats> stats;
+            try {
+                stats = tenantInvocationStats(cutoff);
+            } catch (RuntimeException readFailure) {
+                // TenantIterator logs the failure and moves on to the next tenant; remember it here,
+                // because a rollup over the tenants that could be read would not be the global figure.
+                unreadTenants.add(tenantId);
+                throw readFailure;
+            }
             for (ToolInvocationStats stat : stats) {
                 global.merge(stat.toolId(), stat, ToolInvocationStats::plus);
             }
             tuneTenantOverlay(tenantId, stats, applyLive);
         });
+        if (!unreadTenants.isEmpty()) {
+            meterRegistry.counter(INCOMPLETE_COUNTER).increment();
+            LOGGER.warn(
+                    "Tool priority tuning: the invocation log of {} tenant(s) could not be read ({}); the global"
+                            + " rollup is skipped this run and mcp_tool.priority keeps its previous values",
+                    unreadTenants.size(),
+                    unreadTenants);
+            return;
+        }
         int globalProposals = recomputeGlobalPriorities(global, applyLive);
         LOGGER.info(
                 "Tool priority tuning finished: tenants={} globalToolsWithHistory={} globalProposals={} mode={}",
