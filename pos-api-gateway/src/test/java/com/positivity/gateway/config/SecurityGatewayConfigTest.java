@@ -247,6 +247,36 @@ class SecurityGatewayConfigTest {
     }
 
     @Test
+    void internalServicePath_isNeverForwarded_evenWithAPlatformTokenAndTheSharedSecret() {
+        GlobalFilter filter = new SecurityGatewayConfig(
+                        TEST_SECRET, false, Set.of("HS256"), new GatewayAuthProperties(), new SimpleMeterRegistry())
+                .authFilter();
+        AtomicReference<Boolean> forwarded = new AtomicReference<>(false);
+        GatewayFilterChain chain = ex -> {
+            forwarded.set(true);
+            return Mono.empty();
+        };
+        MockServerWebExchange exchange =
+                MockServerWebExchange.from(MockServerHttpRequest.get("/tenant/internal/v1/tenants")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + buildTenantToken(TENANT_ID))
+                        .header("X-Tenant-Registry-Secret", "anything")
+                        .build());
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(forwarded.get()).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(exchange.getResponse().getBodyAsString().block()).contains("\"code\":\"INTERNAL_PATH\"");
+        // A public path and an ordinary versioned path are unaffected by the rule.
+        assertThat(forward(
+                        new GatewayAuthProperties(),
+                        MockServerHttpRequest.get("/people/v1/employees")
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + buildTenantToken(TENANT_ID))
+                                .build()))
+                .isNotNull();
+    }
+
+    @Test
     void tidClaim_isForwardedAsXTenantId_andInboundCopyIsReplaced() {
         HttpHeaders headers = forward(
                 new GatewayAuthProperties(),

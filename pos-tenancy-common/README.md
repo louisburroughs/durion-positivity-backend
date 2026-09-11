@@ -29,7 +29,10 @@ module's `TenantRegistry` returns.
   iterator logs a WARN when it visits no tenant).
 - **`REMOTE`**: `RemoteTenantRegistry` polls `pos-tenant`'s shared-secret
   `GET /internal/v1/tenants` (a JSON array of `{tenantId, slug, displayName, status}`) and keeps
-  the `ACTIVE` ids as its snapshot. The snapshot starts as the static list, so work can run before
+  the `ACTIVE` ids as its snapshot, minus the platform tenant: it is control-plane data owned by
+  `pos-tenant` and `pos-security-service`, which keep their own registries, and a domain module's
+  per-tenant work never runs under it. The endpoint is reachable inside the mesh only; the gateway
+  refuses every `/<service>/internal/**` path. The snapshot starts as the static list, so work can run before
   `pos-tenant` has answered once; a read older than `registry.refresh` triggers a refresh under a
   lock (one thread fetches, the others keep reading the old snapshot, no background thread). A
   transport error, a non-2xx, an empty body or a list with no `ACTIVE` tenant is a failure: the

@@ -170,7 +170,8 @@ class TenancyAutoConfigurationTest {
                             "pos.tenancy.tenants=01900000-0000-7000-8000-000000000001",
                             "pos.tenancy.registry.mode=REMOTE",
                             "pos.tenancy.registry.secret=s3cret",
-                            "pos.tenancy.registry.url=http://127.0.0.1:" + server.getAddress().getPort() + "/moved")
+                            "pos.tenancy.registry.url=http://127.0.0.1:"
+                                    + server.getAddress().getPort() + "/moved")
                     .run(context -> {
                         RemoteTenantRegistry registry = (RemoteTenantRegistry) context.getBean(TenantRegistry.class);
                         assertThat(registry.activeTenantIds())
