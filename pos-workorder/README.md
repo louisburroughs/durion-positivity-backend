@@ -304,7 +304,7 @@ The outbox row carries the producing tenant as data (`tenant_id`, stamped from t
 | Job | Classification | Why |
 | --- | --- | --- |
 | `OutboxPublisher.publishPending` | platform-scoped | Drains `event_outbox`; each row's `tenant_id` becomes the record header |
-| `ManifestPublisher.publishDueManifest` | platform-scoped | Summarises `event_outbox` per window across tenants; each manifest is a platform-tenant record until per-tenant manifests land in plan WS4-3 |
+| `ManifestPublisher.publishDueManifest` | platform-scoped | Groups the window's `event_outbox` rows by `tenant_id` and publishes one manifest per tenant, stamped with that tenant; every active tenant of the registry gets one, zero-count when it published nothing |
 | `OutboxPurgeJob.purge` | platform-scoped | Deletes published `event_outbox` rows across tenants |
 | `ApprovalExpirationJob.expirePendingApprovals` | per-tenant | `estimate` is scoped; one sweep per tenant of the registry, the service opening its own transaction inside the binding |
 | `FleetAuthorizationResourceReleaseRunner.releaseOverdue` | per-tenant | `workorder_fleet_authorization` is scoped; one sweep per tenant, each release in its own transaction |

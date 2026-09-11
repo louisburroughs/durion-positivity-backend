@@ -257,8 +257,9 @@ The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_
 The outbox row carries the producing tenant as data (`tenant_id`, stamped from the bound tenant by
 `OutboxEventWriter`). Both scheduled jobs are platform-scoped (they run unbound and touch only the
 global outbox): `OutboxPublisher.publishPending` drains `event_outbox` and puts each row's `tenant_id` on
-the record header; `ManifestPublisher.publishDueManifest` summarises `event_outbox` per window across
-tenants (each manifest is a platform-tenant record until per-tenant manifests land in plan WS4-3). The module has no per-tenant scheduler and no native
+the record header; `ManifestPublisher.publishDueManifest` groups the window's `event_outbox` rows by their `tenant_id` and
+publishes one manifest per tenant (envelope and header stamped with that tenant; every active tenant of the
+registry gets one, zero-count when it published nothing). The module has no per-tenant scheduler and no native
 queries.
 
 Proof: `TenantIsolationIT` (tenant A's `category` row is invisible to tenant B and to an unbound

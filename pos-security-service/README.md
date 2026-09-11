@@ -475,7 +475,7 @@ committed spec against the controllers' declarations and fails on drift in eithe
 | `SECURITY_SEED_ADMIN_PASSWORD_HASH` | required     | BCrypt hash for the seed admins (`admin.alpha`, `admin.platform`) |
 | `security.lockout.threshold`        | configurable | Failed login threshold before lockout |
 | `pos.security-service.kafka.people-events-topic` | `people.events.v1` | Staffing-assignment facts feeding the assigned-node read model (ADR-0061 §1) |
-| `pos.security-service.kafka.people-manifest-topic` | `people.manifest.v1` | Reconciliation manifests for that read model; drift requests a replay on `people-commands-topic` |
+| `pos.security-service.kafka.people-manifest-topic` | `people.manifest.v1` | Per-tenant reconciliation manifests for that read model; drift (compared against that tenant's `processed_events` rows) requests a replay on `people-commands-topic` under the manifest's tenant header |
 | `pos.security-service.location-scope.assigned-node-cap` | `8` | Assigned-node count above which `security.location-scope.assigned-nodes.cap-exceeded` fires (WARN + metric, never truncated) |
 | `pos.security-service.kafka.tenant-events-topic` | `tenant.events.v1` | Tenant registry facts (pos-tenant, ADR-0062 §7) feeding the `ext_tenant` replica |
 | `pos.tenancy.default-tenant-id` | alpha default tenant | Transitional binding for unbound requests and pre-WS2b tokens without `tid`; empty means strict |
