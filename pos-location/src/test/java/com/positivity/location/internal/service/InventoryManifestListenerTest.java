@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.location.internal.repository.ProcessedEventRepository;
-import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -149,28 +148,27 @@ class InventoryManifestListenerTest {
     }
 
     @Test
-    void readsAManifestWithoutTenantAsThePlatformTenants() {
-        // The WS4-1 stopgap shape: no tenantId, published (and header-stamped) as the platform
-        // tenant's record over every tenant's rows. It must still be compared, against the
-        // platform tenant's ledger, and its replay must ride the platform tenant header.
-        String legacy = "{\"payload\":{\"windowStartUtc\":\"" + WINDOW_START + "\",\"windowEndUtc\":\"" + WINDOW_END
-                + "\",\"eventCount\":2,\"eventIdsChecksum\":\"" + ReconciliationManifestV1.checksumOf(EVENT_IDS)
-                + "\",\"eventTypeCounts\":null}}";
-        when(processedEventRepository.findEventIdsInRange(anyString(), any(), anyString(), anyString()))
-                .thenReturn(List.of());
+    @DisplayName("skips a manifest without tenantId instead of reading it as any tenant's (WS4-3)")
+    void skipsAManifestWithoutTenant() {
+        // Published before manifests were per tenant (ADR-0062 WS4-3): it summarised every
+        // tenant's rows at once, so no single tenant's ledger can be compared against it.
+        String legacy = """
+                {"eventType":"x.reconciliation.manifest",
+                 "payload":{"windowStartUtc":"%s","windowEndUtc":"%s","eventCount":2,
+                   "eventIdsChecksum":"owner-checksum","eventTypeCounts":null}}
+                """.formatted(WINDOW_START, WINDOW_END);
 
         listener.onManifest(legacy);
 
-        verify(processedEventRepository)
-                .findEventIdsInRange(eq("inventory"), eq(PlatformTenant.ID), anyString(), anyString());
-        ArgumentCaptor<ProducerRecord<String, String>> record = ArgumentCaptor.forClass(ProducerRecord.class);
-        verify(kafkaTemplate).send(record.capture());
-        assertThat(TenantKafkaHeaders.read(record.getValue().headers())).contains(PlatformTenant.ID);
-        assertThat(meterRegistry
-                        .find("replica.drift")
-                        .tag("tenant", PlatformTenant.ID.toString())
-                        .counter())
-                .isNotNull();
+        verify(processedEventRepository, never()).findEventIdsInRange(any(), any(), any(), any());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
+        assertThat(meterRegistry.find("replica.drift").counters()).isEmpty();
+        var skipped = meterRegistry
+                .find("replica.manifest.skipped")
+                .tag("reason", "missing_tenant")
+                .counter();
+        assertThat(skipped).isNotNull();
+        assertThat(skipped.count()).isEqualTo(1.0);
     }
 
     @Test

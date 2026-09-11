@@ -569,6 +569,35 @@ class ReplicaAndManifestListenerContractTest {
             assertThat(driftCount("people")).isEqualTo(1.0);
             verify(kafkaTemplate).send(replayOn("people.commands.v1"));
         }
+
+        @Test
+        @DisplayName("customer and location manifests: a manifest without tenantId is skipped, not read as any"
+                + " tenant's (WS4-3)")
+        void manifestWithoutTenantIsSkipped() {
+            CustomerManifestListener customer = new CustomerManifestListener(
+                    processedEventRepository, kafkaTemplate, objectMapper, meterRegistryProvider);
+            ReflectionTestUtils.setField(customer, "customerCommandsTopic", "customer.commands.v1");
+            LocationManifestListener location = new LocationManifestListener(
+                    processedEventRepository, kafkaTemplate, objectMapper, meterRegistryProvider);
+            ReflectionTestUtils.setField(location, "locationCommandsTopic", "location.commands.v1");
+            // Published before manifests were per tenant (ADR-0062 WS4-3): it summarised every
+            // tenant's rows at once, so no single tenant's ledger can be compared against it.
+            String legacy = """
+                    {"eventType":"x.reconciliation.manifest",
+                     "payload":{"windowStartUtc":"%s","windowEndUtc":"%s","eventCount":2,
+                       "eventIdsChecksum":"owner-checksum","eventTypeCounts":null}}
+                    """.formatted(WINDOW_START, WINDOW_END);
+
+            customer.onManifest(legacy);
+            location.onManifest(legacy);
+
+            verify(processedEventRepository, never()).findEventIdsInRange(any(), any(), any(), any());
+            verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
+            assertThat(meterRegistry.find("replica.drift").counters()).isEmpty();
+            assertThat(meterRegistry.find("replica.manifest.skipped").counters())
+                    .extracting(c -> c.getId().getTag("owner"))
+                    .containsExactlyInAnyOrder("customer", "location");
+        }
     }
 
     /** The one replay command handed to Kafka: it must ride the manifest's tenant header (ADR-0062 §3). */

@@ -17,10 +17,11 @@ through the ten-argument `of(...)`. Manifests are per tenant: `ReconciliationMan
 `tenantId` it summarizes, owners publish one per tenant per window, and consumers compare it against
 that tenant's rows of their processing ledger and request replay for that tenant only. The field was
 added nullable within schema version 1 (additive evolution, no `.v2` topic): a manifest published
-before 2026-09-11 carries none and was the platform tenant's record, which consumers recover with
-`tenantIdOr(PlatformTenant.ID)`; publishers always set it. This library has no dependency on `pos-tenancy-common`, which is
-why the stamp lives in the writer and not in `of(...)`. Consumers tolerate a missing field only on
-messages published before it existed (2026-09-10).
+before 2026-09-11 carries none and summarised every tenant's rows at once, which matches no single
+tenant's ledger, so consumers skip it (a WARN line and one `replica.manifest.skipped` increment)
+rather than compare it as any tenant's; publishers always set it. This library has no dependency on
+`pos-tenancy-common`, which is why the stamp lives in the writer and not in `of(...)`. Consumers
+tolerate a missing field only on messages published before it existed (2026-09-10).
 
 ## Settlement contract (accounting parity, plan `plan-odoo-parity-pos-accounting.md` §7, story F1a)
 

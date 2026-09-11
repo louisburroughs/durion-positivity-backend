@@ -3,7 +3,6 @@ package com.positivity.inventory.internal.service;
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.domainevents.UuidV7Timestamps;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
-import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -75,8 +74,19 @@ public class WorkorderManifestListener {
             return;
         }
 
-        // A manifest published before it carried a tenant was the platform tenant's record.
-        UUID tenantId = manifest.tenantIdOr(PlatformTenant.ID);
+        UUID tenantId = manifest.tenantId();
+        if (tenantId == null) {
+            // Manifests are per tenant from ADR-0062 WS4-3 on. One published before it carried a
+            // tenant summarised every tenant's rows at once, which no single tenant's ledger can be
+            // compared against, so it is skipped (and counted) rather than misread as one tenant's.
+            countManifestSkipped();
+            log.warn(
+                    "Skipping reconciliation manifest without tenantId owner=workorder window=[{}, {}): manifests"
+                            + " are per tenant from WS4-3 on",
+                    manifest.windowStartUtc(),
+                    manifest.windowEndUtc());
+            return;
+        }
 
         List<String> receivedIds = processedEventRepository.findEventIdsInRange(
                 WorkorderEventsListener.OWNER,
@@ -123,6 +133,23 @@ public class WorkorderManifestListener {
                 .tag("owner", "workorder")
                 .tag("entity", "workorder-events")
                 .tag("tenant", tenantId.toString())
+                .register(meterRegistry)
+                .increment();
+    }
+
+    /**
+     * One {@code replica.manifest.skipped} increment per manifest that carries no tenant (one
+     * published before manifests were per tenant), so a consumer still receiving them is visible.
+     */
+    private void countManifestSkipped() {
+        if (meterRegistry == null) {
+            return;
+        }
+        Counter.builder("replica.manifest.skipped")
+                .description("Reconciliation manifests skipped because they carry no tenant")
+                .tag("owner", "workorder")
+                .tag("entity", "workorder-events")
+                .tag("reason", "missing_tenant")
                 .register(meterRegistry)
                 .increment();
     }

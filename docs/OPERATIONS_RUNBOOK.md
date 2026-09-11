@@ -1308,15 +1308,25 @@ channel; there are no synchronous domain-to-domain reconciliation calls (ADR-004
 pair: `pos-workorder` `ManifestPublisher` → `pos-customer` `WorkorderManifestListener`.
 
 Ledger rows recorded before `processed_events.tenant_id` existed (2026-09-11) have
-`tenant_id IS NULL`: they belong to no tenant's manifest, and a replay does **not** re-stamp them —
-the listener's `existsById(eventId)` short-circuit leaves an existing row untouched, so drift
-against such rows never self-heals. Alpha databases are recreated from the baselines on deploy,
-which clears them. Where a database is kept, repair once by hand before the first per-tenant
-windows are compared, with the tenant the cell served (the alpha default tenant unless it was
-multi-tenant already): `UPDATE processed_events SET tenant_id = '<tenant-id>' WHERE tenant_id IS
-NULL;`. Manifests published before the field existed carry no `tenantId` and are read as the
-platform tenant's (`ReconciliationManifestV1.tenantIdOr`), so a consumer that is behind at deploy
-time compares them exactly as it did before.
+`tenant_id IS NULL`: they belong to no tenant's manifest, and nothing re-stamps them at runtime — a
+replayed envelope hits the listener's `existsById(eventId)` short-circuit before `save`, so
+`@PrePersist` never runs, and the column is `updatable = false` besides
+(`ProcessedEventTenantStampTest` in pos-workorder pins this). That is deliberate, not a gap left
+for later: a drift-triggered replay covers one window at a time, so a self-heal on that path would
+still leave the backfill necessary, and pre-production policy is no compatibility shims (the same
+decision skips pre-WS4-3 manifests, below). Alpha databases are recreated from the baselines on
+deploy, which clears such rows. Where a database is kept, repair once by hand before the first
+per-tenant windows are compared, with the tenant the cell served (the alpha default tenant unless
+it was multi-tenant already). `processed_events` is a global table with no row-level security, so
+the statement sees every row whichever role runs it:
+`UPDATE processed_events SET tenant_id = '<tenant-id>' WHERE tenant_id IS NULL;`.
+
+Manifests published before the field existed carry no `tenantId`: they summarised every tenant's
+rows at once, which matches no single tenant's ledger, so a consumer that is behind at deploy time
+skips each one with a WARN line (`Skipping reconciliation manifest without tenantId`)
+and one `replica_manifest_skipped_total{owner,entity,reason="missing_tenant"}` increment, then
+resumes with the first per-tenant manifest. A counter that keeps growing after the deploy means an
+owner is still on the pre-WS4-3 publisher.
 
 Operational signals:
 
