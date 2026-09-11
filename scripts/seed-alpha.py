@@ -20,8 +20,13 @@ then reports one expected duplicate failure in the LOCATION job).
 
 Usage:
   scripts/seed-alpha.py --gateway https://alpha.example.com \
-      --token "$SEED_BEARER_TOKEN" [--location-code CLT-MAIN-001] \
+      --token "$SEED_BEARER_TOKEN" --tenant-id "$SEED_TENANT_ID" [--location-code CLT-MAIN-001] \
       [--bootstrap-location] [--only customer/person-customers.csv] [--dry-run]
+
+Every job loads into --tenant-id (ADR-0062, plan WS8): the token's own tenant, or, for a
+platform-tenant token, any active tenant. Loading security/roles.csv with a platform token and
+--tenant-id set to the platform tenant makes those roles the role template; see
+docs/OPERATIONS_RUNBOOK.md, "Bulk loading into a tenant".
 
 Seeded user accounts get a password generated inside pos-security-service and
 returned to no one, so they have no usable login until someone goes through the
@@ -97,6 +102,11 @@ PACK_FILES = [
 CATALOG_PRODUCTS_PACK = "catalog/products.csv"
 
 POLL_INTERVAL_SECONDS = 5
+
+# The tenant every job loads into (ADR-0062, plan WS8), from --tenant-id. None omits tenantId from
+# the create request, which the loader accepts only while its transitional default tenant is
+# configured (it then loads into that default and logs a WARN).
+TARGET_TENANT_ID = None
 # PARTIAL is terminal too: the batch finished, but the owning service rejected some rows. Without
 # it here the driver would poll a finished job forever and then report a timeout.
 TERMINAL_STATUSES = {"COMPLETED", "PARTIAL", "FAILED", "CANCELLED"}
@@ -294,10 +304,10 @@ def run_pack_file(gateway, relative_path, domain_type, location_id, poll_timeout
         file_bytes = fh.read()
     data_rows = max(0, len(file_bytes.decode("utf-8").strip().splitlines()) - 1)
 
-    _, job = gateway.post_json(
-        "/bulk-loader/bulk-jobs",
-        {"fileName": file_name, "domainType": domain_type, "locationId": location_id},
-    )
+    body = {"fileName": file_name, "domainType": domain_type, "locationId": location_id}
+    if TARGET_TENANT_ID:
+        body["tenantId"] = TARGET_TENANT_ID
+    _, job = gateway.post_json("/bulk-loader/bulk-jobs", body)
     job_id = job["id"]
     print(f"  job {job_id} created ({domain_type}, {data_rows} rows)")
 
@@ -338,10 +348,22 @@ def main():
                         help="Create the --location-code location from locations.csv when the roster lacks it")
     parser.add_argument("--only", action="append", default=None, metavar="PACK_FILE",
                         help="Run only these pack files (repeatable, e.g. customer/person-customers.csv)")
+    parser.add_argument("--tenant-id", default=os.environ.get("SEED_TENANT_ID"),
+                        help="Tenant every job loads into (ADR-0062; default: $SEED_TENANT_ID). Must be the "
+                             "token's own tenant, or any active tenant for a platform-tenant token; the platform "
+                             "tenant 01900000-0000-7000-8000-000000000000 makes security/roles.csv the role "
+                             "template. Omit only while the loader's transitional default tenant is configured.")
     parser.add_argument("--poll-timeout", type=int, default=600,
                         help="Seconds to wait for each job to finish (default: 600)")
     parser.add_argument("--dry-run", action="store_true", help="List planned actions without calling the gateway")
     args = parser.parse_args()
+
+    global TARGET_TENANT_ID
+    if args.tenant_id:
+        try:
+            TARGET_TENANT_ID = str(uuid.UUID(args.tenant_id))
+        except ValueError:
+            parser.error(f"--tenant-id is not a UUID: {args.tenant_id}")
 
     selected = [(p, d) for p, d in PACK_FILES if args.only is None or p in args.only]
     if args.only:
@@ -352,7 +374,8 @@ def main():
         parser.error("nothing selected")
 
     if args.dry_run:
-        print(f"dry-run against {args.gateway}; location code {args.location_id or args.location_code}")
+        print(f"dry-run against {args.gateway}; location code {args.location_id or args.location_code}; "
+              f"tenant {TARGET_TENANT_ID or '(loader default)'}")
         for path, domain in selected:
             print(f"  would load {path} as {domain}")
         return 0

@@ -26,13 +26,24 @@ they would for production traffic — none of which happens for direct SQL seeds
 The driver runs every pack in dependency order through the gateway:
 
 ```bash
-scripts/seed-alpha.py --gateway https://<alpha-gateway> --token "$SEED_BEARER_TOKEN"
+scripts/seed-alpha.py --gateway https://<alpha-gateway> --token "$SEED_BEARER_TOKEN" \
+    --tenant-id "$SEED_TENANT_ID"
 # subset / rehearsal:
 scripts/seed-alpha.py --gateway ... --only customer/person-customers.csv
 scripts/seed-alpha.py --gateway ... --dry-run
 # empty alpha (no locations yet):
 scripts/seed-alpha.py --gateway ... --bootstrap-location
+# the role template: roles.csv into the platform tenant, with a PLATFORM_ADMIN token
+scripts/seed-alpha.py --gateway ... --token "$PLATFORM_ACCESS_TOKEN" \
+    --tenant-id 01900000-0000-7000-8000-000000000000 --only security/roles.csv
 ```
+
+Every job loads into `--tenant-id` (ADR-0062, plan WS8): the alpha tenant
+`01900000-0000-7000-8000-000000000001` for the alpha data, which is also the token's own
+tenant. A token bound to a tenant may only name that tenant; a platform-tenant token may
+name any active tenant. Omitting `--tenant-id` is accepted only while the loader's
+transitional default tenant is configured (it then loads into the default and logs a WARN).
+Operator steps: `docs/OPERATIONS_RUNBOOK.md`, "Bulk loading into a tenant".
 
 Per pack file it creates a bulk-load job (`POST /bulk-loader/bulk-jobs`), uploads the
 CSV, starts processing, and polls the job to a terminal state, reporting the row
@@ -177,6 +188,15 @@ The seed file stays until the alpha reseed is verified (§5.4).
 | `roles.csv` | 15 roles with persona metadata | `SECURITY_ROLE` loader (`POST /v1/roles/bulk-ingest`) |
 | `role-permissions.csv` | 17 roles, 1078 grants | `SECURITY_ROLE_PERMISSION` loader (`POST /v1/roles/permissions/bulk-ingest`) |
 | `users.csv` | 25 users, 16 roles | gateway API pack (`POST /security-service/users` per row) |
+
+**Tenant tagging (ADR-0062, WS8).** Loaded into the alpha tenant, `roles.csv` provisions
+alpha's tenant-local roles as before. Loaded into the *platform* tenant (a `PLATFORM_ADMIN`
+token and `--tenant-id 01900000-0000-7000-8000-000000000000`), the same file is the
+platform role template: each role is created with `template_key` = its name, provisioning
+copies it into every tenant created afterwards, and
+`POST /security-service/v1/platform/tenants/{tenantId}/roles/reconcile-template` brings
+tenants created before it up to date. `role-permissions.csv` loaded into the platform
+tenant gives those template roles their grants the same way. `users.csv` is alpha data only.
 
 **Roles load before users, and grants between them** (#1613 D8). A user record names
 the roles it is assigned, so the roles have to exist first; grants come after the
