@@ -84,7 +84,8 @@ class TenantProvisioningServiceTest {
     }
 
     @Test
-    @DisplayName("copies the template, creates the administrator on ADMIN, and answers tenant.provisioned")
+    @DisplayName(
+            "copies the template, creates the administrator on ADMIN awaiting activation, and answers tenant.provisioned")
     void provisionsAFreshTenant() {
         when(outboxProvider.getIfAvailable()).thenReturn(outbox);
         when(roles.existsByName(anyString())).thenReturn(false);
@@ -116,7 +117,10 @@ class TenantProvisioningServiceTest {
                 .extracting(Permission::getName)
                 .as("an unregistered permission is skipped, not fatal")
                 .containsExactlyInAnyOrder("security:role:view", "order:order:view");
-        verify(userService).createUserWithGeneratedPassword("owner@acme.example", Set.of("ADMIN"));
+        // WS2b-3: the administrator cannot sign in until a platform operator mints an activation token
+        verify(userService).createUserAwaitingActivation("owner@acme.example", Set.of("ADMIN"));
+        verify(userService, never()).createUserWithGeneratedPassword(anyString(), any());
+        verify(userService, never()).createUser(anyString(), anyString(), any());
 
         ArgumentCaptor<DomainEventEnvelope<?>> envelope = ArgumentCaptor.captor();
         verify(outbox).publish(eq("tenant.events.v1"), envelope.capture());
@@ -139,7 +143,7 @@ class TenantProvisioningServiceTest {
 
         assertThat(outcome).isEqualTo(new TenantProvisioningService.Outcome(0, false));
         verify(roles, never()).save(any());
-        verify(userService, never()).createUserWithGeneratedPassword(anyString(), any());
+        verify(userService, never()).createUserAwaitingActivation(anyString(), any());
         verify(outbox).publish(eq("tenant.events.v1"), any());
     }
 
@@ -171,6 +175,6 @@ class TenantProvisioningServiceTest {
         service.provision(TENANT, "owner@acme.example", List.of(entry("ADMIN")));
 
         verify(roles).save(any(Role.class));
-        verify(userService).createUserWithGeneratedPassword("owner@acme.example", Set.of("ADMIN"));
+        verify(userService).createUserAwaitingActivation("owner@acme.example", Set.of("ADMIN"));
     }
 }

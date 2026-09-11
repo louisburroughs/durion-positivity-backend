@@ -9,7 +9,8 @@ This document covers operational procedures, RBAC framework usage, and permissio
 3. [Monitoring and Alerting](#monitoring-and-alerting)
 4. [Troubleshooting](#troubleshooting)
 5. [RBAC Framework](#rbac-framework)
-6. [Permission Registration](#permission-registration)
+6. [Tenant Provisioning](#tenant-provisioning)
+7. [Permission Registration](#permission-registration)
 
 ---
 
@@ -578,6 +579,52 @@ Format: `domain:resource:action` (snake_case, lowercase)
 | security  | role       | assign  | `security:role:assign`         |
 
 ---
+
+## Tenant Provisioning
+
+### Activating the first administrator (ADR-0062 §7, WS2b-3)
+
+`POST /tenant/v1/tenants` in `pos-tenant` publishes `tenant.created`; `pos-security-service` copies
+the platform role template into the new tenant, creates the first administrator named by
+`initialAdminEmail` on `ADMIN`, and answers `tenant.provisioned`, which moves the tenant to
+`ACTIVE`. **That administrator cannot sign in yet**: no credential rides on any event. The account
+is created credential-expired and marked `awaiting_activation` behind a discarded random password, and a
+login attempt answers the same 401 `INVALID_CREDENTIALS` as any wrong password. The first credential is set through an
+operator-delivered activation token (decided 2026-09-10):
+
+```bash
+# 1. As a platform operator (PLATFORM_ADMIN in the platform tenant, e.g. admin.platform), find the
+#    administrator's user id in the new tenant. The platform token carries tid = platform tenant.
+TENANT_ID=<id from POST /tenant/v1/tenants>
+USER_ID=<id of initialAdminEmail in that tenant>
+
+# 2. Mint the token. The response is the only copy: only its SHA-256 is stored.
+curl -sS -X POST "https://<gateway>/security-service/v1/platform/tenants/$TENANT_ID/administrators/$USER_ID/activation-token" \
+  -H "Authorization: Bearer $PLATFORM_ACCESS_TOKEN" -H "X-API-Version: 1"
+# → 201 {"token":"<43 URL-safe chars>","expiresAt":"2026-09-13T12:00:00Z"}
+
+# 3. Hand the token to the administrator out of band (no e-mail is sent). Within 72 hours they
+#    exchange it, unauthenticated, for their password:
+curl -sS -X POST "https://<gateway>/security-service/v1/auth/activate" -H "X-API-Version: 1" \
+  -H "Content-Type: application/json" -d '{"token":"<token>","newPassword":"<their password>"}'
+# → 204; then POST /v1/auth/login with the tenant's slug works.
+```
+
+Rules and refusals:
+
+| Situation | Answer |
+| --- | --- |
+| Token lost, expired or the administrator never activated | Mint again (step 2). Each mint closes every earlier open token for that user; there is no way to read a token back. |
+| Token reused, expired (72 h) or unknown | 401 `ACTIVATION_TOKEN_INVALID` — one code on purpose, so nothing about the account or the token's history leaks to an unauthenticated caller. |
+| Caller holds `platform:tenant:provision` but is bound to a tenant other than the platform tenant | 403 `PLATFORM_TENANT_REQUIRED`. Only `PLATFORM_ADMIN` in the platform tenant holds `platform:*` (`R__seed_tenant_template.sql`); never grant it to a tenant role. |
+| Caller lacks the permission | 403 `FORBIDDEN`. |
+| `USER_ID` is not a user of `TENANT_ID` | 404 `USER_NOT_FOUND`. |
+| The user is not awaiting activation (already activated, password set through `PUT /v1/users/{id}`, or any account provisioning did not create — including one whose credentials an administrator expired) | 409 `USER_NOT_AWAITING_ACTIVATION`. Only the account carrying the explicit `users.awaiting_activation` marker, which provisioning alone sets, can be activated with a token; a live account's password is never overwritten this way. |
+| Administrator wants a new password later | The ordinary account-state / password paths; the activation token is for the first credential only. The same token shape is the basis of the coming e-mail reset. |
+
+Audit: every mint writes an `AdministratorActivationTokenMinted` audit event on the user (actor,
+expiry, number of earlier tokens closed) and an INFO log line; every activation logs the user, tenant
+and token id. The token itself is never logged.
 
 ## Permission Registration
 

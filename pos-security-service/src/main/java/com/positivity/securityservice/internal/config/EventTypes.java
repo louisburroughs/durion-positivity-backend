@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the security module.
-     * Total: 38 event types.
+     * Total: 40 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -24,10 +24,20 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead("SECURITY_TENANT_ME_GET", "Read the caller's tenant from ext_tenant")
                         .build(),
 
-                // AuthController - 2 events
+                // AuthController - 3 events
                 EventTypeRegistration.write("SECURITY_AUTH_LOGIN", "User login via /v1/auth/login")
                         .build(),
                 EventTypeRegistration.write("SECURITY_AUTH_SELF_REGISTER", "Register a new self-service user account")
+                        .build(),
+                EventTypeRegistration.write(
+                                "SECURITY_AUTH_ACTIVATE",
+                                "Exchange a one-time activation token for the account's first password")
+                        .build(),
+
+                // PlatformAdministratorController - 1 event (ADR-0062 section 7, WS2b-3)
+                EventTypeRegistration.write(
+                                "SECURITY_PLATFORM_ADMINISTRATOR_ACTIVATION_TOKEN_MINT",
+                                "Mint a one-time activation token for a tenant's first administrator")
                         .build(),
 
                 // JwtController - 4 events

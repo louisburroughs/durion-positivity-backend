@@ -1038,7 +1038,22 @@ class GlobalExceptionHandlerTest {
                                     new CredentialsExpiredException("Credentials have expired"), request)),
                     Named.of("handleBadCredentialsException", (HandlerInvocation)
                             request -> handler.handleBadCredentialsException(
-                                    new BadCredentialsException("bad password"), request)));
+                                    new BadCredentialsException("bad password"), request)),
+                    Named.of("handleActivationTokenInvalidException", (HandlerInvocation)
+                            request -> handler.handleActivationTokenInvalidException(
+                                    new com.positivity.securityservice.internal.exception
+                                            .ActivationTokenInvalidException(),
+                                    request)),
+                    Named.of("handleUserNotAwaitingActivationException", (HandlerInvocation)
+                            request -> handler.handleUserNotAwaitingActivationException(
+                                    new com.positivity.securityservice.internal.exception
+                                            .UserNotAwaitingActivationException(UUID.randomUUID()),
+                                    request)),
+                    Named.of("handlePlatformTenantRequiredException", (HandlerInvocation)
+                            request -> handler.handlePlatformTenantRequiredException(
+                                    new com.positivity.securityservice.internal.exception
+                                            .PlatformTenantRequiredException(UUID.randomUUID()),
+                                    request)));
         }
 
         @ParameterizedTest

@@ -32,9 +32,12 @@ import org.springframework.transaction.annotation.Transactional;
  * redelivered event or a retry after a partial failure converges. The answer is emitted on every
  * successful run, and pos-tenant's handler is idempotent on tenant id.
  *
- * <p>The administrator's password is generated and discarded (never returned, logged or
- * persisted in plaintext), exactly as for bulk-provisioned users: the first credential reaches
- * the administrator through a password reset, not through this event.
+ * <p>The administrator is created awaiting activation (plan WS2b-3, decided 2026-09-10): the
+ * password is generated and discarded (never returned, logged or persisted in plaintext) and the
+ * credentials are marked expired, so the account cannot sign in until a platform operator mints an
+ * activation token ({@code POST /v1/platform/tenants/{tenantId}/administrators/{userId}/activation-token})
+ * and the administrator exchanges it at {@code POST /v1/auth/activate}. No credential ever rides
+ * on this event.
  */
 @Slf4j
 @Service
@@ -105,7 +108,7 @@ public class TenantProvisioningService {
 
         boolean administratorCreated = false;
         if (!userRepository.existsByUsername(initialAdminEmail)) {
-            userService.createUserWithGeneratedPassword(initialAdminEmail, Set.of(INITIAL_ADMIN_ROLE));
+            userService.createUserAwaitingActivation(initialAdminEmail, Set.of(INITIAL_ADMIN_ROLE));
             administratorCreated = true;
         }
 
