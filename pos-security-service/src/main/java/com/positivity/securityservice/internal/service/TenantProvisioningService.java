@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.service;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.tenant.TenantProvisionedV1;
 import com.positivity.securityservice.internal.config.OutboxEventWriter;
+import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -115,7 +116,14 @@ public class TenantProvisioningService {
 
         boolean administratorCreated = false;
         if (!userRepository.existsByUsername(initialAdminEmail)) {
-            userService.createUserAwaitingActivation(initialAdminEmail, Set.of(INITIAL_ADMIN_ROLE));
+            // The guard above is case-insensitive, so a tenant that already carried `admin` keeps
+            // that row and no ADMIN was created; the administrator must be given the name actually
+            // stored, because role resolution on the user path matches exactly.
+            String adminRole = roleRepository
+                    .findByNameIgnoreCase(INITIAL_ADMIN_ROLE)
+                    .map(Role::getName)
+                    .orElse(INITIAL_ADMIN_ROLE);
+            userService.createUserAwaitingActivation(initialAdminEmail, Set.of(adminRole));
             administratorCreated = true;
         }
 

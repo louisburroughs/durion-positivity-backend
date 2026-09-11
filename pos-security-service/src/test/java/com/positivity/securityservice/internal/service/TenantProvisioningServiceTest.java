@@ -178,6 +178,28 @@ class TenantProvisioningServiceTest {
     }
 
     @Test
+    @DisplayName("the first administrator gets the role name the tenant actually stores, whatever its case")
+    void theAdministratorGetsTheStoredRoleName() {
+        // The tenant already carries `admin`, so the case-insensitive guard above creates no ADMIN
+        // row. Handing the template's spelling to the user path would then fail: role resolution
+        // there matches exactly, and provisioning would die with "Role not found: ADMIN" after
+        // having already created the other template roles.
+        when(outboxProvider.getIfAvailable()).thenReturn(outbox);
+        when(roles.existsByNameIgnoreCase("ADMIN")).thenReturn(true);
+        Role stored = new Role();
+        stored.setName("admin");
+        when(roles.findByNameIgnoreCase("ADMIN")).thenReturn(Optional.of(stored));
+        when(users.existsByUsername("owner@acme.example")).thenReturn(false);
+
+        TenantContext.bind(TENANT);
+        TenantProvisioningService.Outcome outcome =
+                service.provision(TENANT, "owner@acme.example", List.of(entry("ADMIN", "order:order:view")));
+
+        assertThat(outcome).isEqualTo(new TenantProvisioningService.Outcome(0, true));
+        verify(userService).createUserAwaitingActivation("owner@acme.example", Set.of("admin"));
+    }
+
+    @Test
     @DisplayName("refuses to run under another binding or without an ADMIN template role")
     void guards() {
         List<RoleTemplateEntry> template = List.of(entry("ADMIN"));
