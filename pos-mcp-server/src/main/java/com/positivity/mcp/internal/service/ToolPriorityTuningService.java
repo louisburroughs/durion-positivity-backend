@@ -6,6 +6,7 @@ import com.positivity.mcp.internal.domain.ToolInvocationStats;
 import com.positivity.mcp.internal.domain.ToolPriorityOverlay;
 import com.positivity.mcp.internal.repository.ToolPriorityRepository;
 import com.positivity.tenancy.PlatformScoped;
+import com.positivity.tenancy.TenancyProperties;
 import com.positivity.tenancy.TenantAudited;
 import com.positivity.tenancy.TenantIterator;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -97,7 +98,8 @@ public class ToolPriorityTuningService {
             @Value("${mcp.tuning.eval-result-path:target/eval/baseline-live-python.json}") @NonNull
                     String evalResultPath,
             @Value("${mcp.tuning.eval-freshness-hours:48}") long evalFreshnessHours,
-            @NonNull TenantIterator tenantIterator) {
+            @NonNull TenantIterator tenantIterator,
+            @NonNull TenancyProperties tenancy) {
         this.repository = repository;
         this.tenantIterator = tenantIterator;
         this.clock = clock;
@@ -109,6 +111,36 @@ public class ToolPriorityTuningService {
             LOGGER.warn("mcp.tuning.enabled is deprecated; treating it as mcp.tuning.mode=live. "
                     + "Set mcp.tuning.mode=off|shadow|live (MCP_TUNING_MODE) instead.");
         }
+        staticRegistryWarning(mode, tenancy).ifPresent(LOGGER::warn);
+    }
+
+    /**
+     * Startup validation (ADR-0062 plan WS6): the sweep visits the tenants the module's registry
+     * knows, and the default {@code STATIC} registry knows {@code pos.tenancy.tenants} or just the
+     * default tenant. Tuning on a single-tenant static registry in a multi-tenant deployment would
+     * tune one tenant and call it the global rollup, so that combination is warned about; the fix
+     * is {@code pos.tenancy.registry.mode=REMOTE} (with {@code url} and {@code secret}), not a
+     * module default (that needs the pos-tenant secret in every environment).
+     *
+     * @return the warning to log, or empty when tuning is off, the registry is remote, or the static
+     *     list names more than one tenant
+     */
+    static @NonNull Optional<String> staticRegistryWarning(
+            @NonNull TuningMode mode, @NonNull TenancyProperties tenancy) {
+        if (mode == TuningMode.OFF || tenancy.getRegistry().getMode() != TenancyProperties.Registry.Mode.STATIC) {
+            return Optional.empty();
+        }
+        int staticTenants = tenancy.getTenants().isEmpty()
+                ? tenancy.getDefaultTenantId().map(ignored -> 1).orElse(0)
+                : tenancy.getTenants().size();
+        if (staticTenants > 1) {
+            return Optional.empty();
+        }
+        return Optional.of("mcp.tuning.mode=" + mode.name().toLowerCase(java.util.Locale.ROOT)
+                + " with the STATIC tenant registry (" + staticTenants
+                + " tenant): the nightly sweep tunes that tenant alone and its rollup is not a global one."
+                + " A multi-tenant deployment must set pos.tenancy.registry.mode=REMOTE"
+                + " (pos.tenancy.registry.url and .secret, pos-tenancy-common README) before enabling tuning.");
     }
 
     /** Effective mode after {@code mcp.tuning.mode} / legacy {@code mcp.tuning.enabled} resolution. */

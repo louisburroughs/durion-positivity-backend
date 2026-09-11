@@ -75,8 +75,17 @@ class ToolPriorityTuningServiceTest {
     }
 
     private ToolPriorityTuningService newService(String mode, String legacyEnabled, Path evalPath, UUID... tenants) {
+        TenancyProperties tenancy = tenancy(tenants);
         return new ToolPriorityTuningService(
-                repository, clock, meterRegistry, mode, legacyEnabled, evalPath.toString(), 48L, tenants(tenants));
+                repository,
+                clock,
+                meterRegistry,
+                mode,
+                legacyEnabled,
+                evalPath.toString(),
+                48L,
+                new TenantIterator(new StaticTenantRegistry(tenancy)),
+                tenancy);
     }
 
     private Path passingFreshEval() throws IOException {
@@ -378,6 +387,45 @@ class ToolPriorityTuningServiceTest {
     }
 
     // ------------------------------------------------------------------
+    // Startup validation: the tenant registry behind the sweep (ADR-0062 plan WS6)
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("tuning on the static single-tenant registry warns that the rollup is not global")
+    void staticRegistryWarning_singleStaticTenant_warns() {
+        TenancyProperties defaultOnly = new TenancyProperties();
+        defaultOnly.setDefaultTenantId(TENANT_A);
+
+        assertThat(ToolPriorityTuningService.staticRegistryWarning(TuningMode.SHADOW, defaultOnly))
+                .hasValueSatisfying(warning -> assertThat(warning)
+                        .contains("STATIC")
+                        .contains("1 tenant")
+                        .contains("pos.tenancy.registry.mode=REMOTE"));
+        assertThat(ToolPriorityTuningService.staticRegistryWarning(TuningMode.LIVE, tenancy(TENANT_A)))
+                .isPresent();
+    }
+
+    @Test
+    @DisplayName("no warning when tuning is off, the registry is remote, or the static list names several tenants")
+    void staticRegistryWarning_otherwiseSilent() {
+        assertThat(ToolPriorityTuningService.staticRegistryWarning(TuningMode.OFF, tenancy(TENANT_A)))
+                .isEmpty();
+        assertThat(ToolPriorityTuningService.staticRegistryWarning(TuningMode.LIVE, tenancy(TENANT_A, TENANT_B)))
+                .isEmpty();
+        TenancyProperties remote = tenancy(TENANT_A);
+        remote.getRegistry().setMode(TenancyProperties.Registry.Mode.REMOTE);
+        assertThat(ToolPriorityTuningService.staticRegistryWarning(TuningMode.LIVE, remote))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("the constructor logs the registry warning and still builds the service")
+    void construction_withSingleStaticTenant_logsWarningAndSucceeds() {
+        assertThat(newService("shadow", null, tempDir, TENANT_A).effectiveMode())
+                .isEqualTo(TuningMode.SHADOW);
+    }
+
+    // ------------------------------------------------------------------
     // Scheduler classification (ADR-0062 §3)
     // ------------------------------------------------------------------
 
@@ -415,10 +463,10 @@ class ToolPriorityTuningServiceTest {
     }
 
     /** The active tenants of the sweep, in order (ADR-0062). */
-    private static TenantIterator tenants(UUID... tenantIds) {
+    private static TenancyProperties tenancy(UUID... tenantIds) {
         TenancyProperties tenancy = new TenancyProperties();
         tenancy.setTenants(List.of(tenantIds));
-        return new TenantIterator(new StaticTenantRegistry(tenancy));
+        return tenancy;
     }
 
     /**
