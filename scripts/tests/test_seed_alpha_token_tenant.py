@@ -64,6 +64,16 @@ class TokenTenantIdTest(unittest.TestCase):
     def test_an_undecodable_payload_is_no_tenant(self):
         self.assertIsNone(seed_alpha.token_tenant_id("header.!!!not-base64!!!.signature"))
 
+    def test_a_payload_of_invalid_base64_length_is_no_tenant(self):
+        # Copilot review of PR #1955, third round: a payload segment whose length, after this
+        # function's own padding, is still not a multiple of 4 raises binascii.Error, not the
+        # character-set error test_an_undecodable_payload_is_no_tenant already covers -- a
+        # distinct input class. "A" pads to "A===", which base64.urlsafe_b64decode refuses with
+        # "number of data characters (1) cannot be 1 more than a multiple of 4". binascii.Error
+        # subclasses ValueError (confirmed via its MRO), so the existing
+        # `except (ValueError, UnicodeDecodeError)` already catches it; this pins that.
+        self.assertIsNone(seed_alpha.token_tenant_id("header.A.signature"))
+
 
 if __name__ == "__main__":
     unittest.main()
