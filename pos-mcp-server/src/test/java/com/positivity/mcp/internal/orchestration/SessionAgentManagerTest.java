@@ -1,5 +1,7 @@
 package com.positivity.mcp.internal.orchestration;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_B;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -296,6 +298,39 @@ class SessionAgentManagerTest {
 
         PosAssistant after = manager.getOrCreateAgent("user-1", "ROLE_CASHIER");
         assertThat(after).isSameAs(before);
+    }
+
+    @Test
+    @DisplayName("evict clears the actor's memory and rate entries within the bound tenant only")
+    void evict_clearsTheActorsEntriesWithinTheTenant() {
+        @SuppressWarnings("unchecked")
+        Cache<String, org.springframework.ai.chat.memory.ChatMemory> memory =
+                (Cache<String, org.springframework.ai.chat.memory.ChatMemory>)
+                        ReflectionTestUtils.getField(manager, "chatMemoryCache");
+        @SuppressWarnings("unchecked")
+        Cache<String, java.util.concurrent.atomic.AtomicInteger> counters =
+                (Cache<String, java.util.concurrent.atomic.AtomicInteger>)
+                        ReflectionTestUtils.getField(manager, "requestCountCache");
+        assertThat(memory).isNotNull();
+        assertThat(counters).isNotNull();
+        org.springframework.ai.chat.memory.ChatMemory chatMemory =
+                mock(org.springframework.ai.chat.memory.ChatMemory.class);
+        memory.put(SessionAgentManager.memoryKey(TENANT_A, "user-1", "ROLE_ADMIN", "c1"), chatMemory);
+        memory.put(SessionAgentManager.memoryKey(TENANT_A, "user-1", "ROLE_CASHIER", null), chatMemory);
+        memory.put(SessionAgentManager.memoryKey(TENANT_A, "user-2", "ROLE_ADMIN", "c1"), chatMemory);
+        memory.put(SessionAgentManager.memoryKey(TENANT_B, "user-1", "ROLE_ADMIN", "c1"), chatMemory);
+        counters.put(
+                SessionAgentManager.actorKey(TENANT_A, "user-1"), new java.util.concurrent.atomic.AtomicInteger(3));
+        counters.put(
+                SessionAgentManager.actorKey(TENANT_B, "user-1"), new java.util.concurrent.atomic.AtomicInteger(3));
+
+        manager.evict("user-1");
+
+        assertThat(memory.asMap().keySet())
+                .containsExactlyInAnyOrder(
+                        SessionAgentManager.memoryKey(TENANT_A, "user-2", "ROLE_ADMIN", "c1"),
+                        SessionAgentManager.memoryKey(TENANT_B, "user-1", "ROLE_ADMIN", "c1"));
+        assertThat(counters.asMap().keySet()).containsExactly(SessionAgentManager.actorKey(TENANT_B, "user-1"));
     }
 
     @Test

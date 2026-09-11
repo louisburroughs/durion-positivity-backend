@@ -570,8 +570,8 @@ public class SessionAgentManager implements AgentOrchestrationService, SessionAg
      * remain cached.
      */
     @Override
-    public void evict(@NonNull String userId) {
-        String actor = actorKey(TenantContext.require(), userId);
+    public void evict(@NonNull String username) {
+        String actor = actorKey(TenantContext.require(), username);
         chatMemoryCache.asMap().keySet().removeIf(key -> key.startsWith(actor + MEMORY_KEY_SEPARATOR));
         requestCountCache.invalidate(actor);
     }

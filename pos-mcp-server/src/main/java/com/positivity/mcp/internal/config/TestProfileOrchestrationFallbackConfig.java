@@ -27,7 +27,7 @@ public class TestProfileOrchestrationFallbackConfig {
             }
 
             @Override
-            public void evict(@NonNull String userId) {
+            public void evict(@NonNull String username) {
                 // No-op fallback for test-profile OpenAPI generation.
             }
         };
@@ -44,7 +44,7 @@ public class TestProfileOrchestrationFallbackConfig {
             }
 
             @Override
-            public void evict(@NonNull String userId) {
+            public void evict(@NonNull String username) {
                 // No-op fallback for test-profile OpenAPI generation.
             }
         };
