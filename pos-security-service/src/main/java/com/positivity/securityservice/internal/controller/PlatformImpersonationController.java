@@ -45,41 +45,28 @@ public class PlatformImpersonationController {
     private final PlatformImpersonationService impersonationService;
 
     @Operation(operationId = "mintImpersonationToken", summary = "Mint a Tenant Impersonation Token", description = """
-                    Mints a 15-minute, read-only access token that acts inside the named tenant and returns it \
-                    once, with its expiry, the tenant id and the tenant slug. The token carries tid = the tenant, \
-                    act = {sub, username} of the calling operator, token_use = impersonation and a synthetic \
-                    subject support:<operator>@<tenantSlug>; it has no refresh token and refreshTokenPair \
-                    refuses it.
-                    perm_bits is not the SUPPORT role verbatim: a tenant administrator can edit that role's \
-                    grants, so the mint intersects them with a read-only ceiling and encodes only what passes. \
-                    Admitted: a permission whose action is view or read, plus location:read. Refused, and so \
-                    absent from the token however the role is configured: every write, every platform:* \
-                    permission, and the named exclusions people:employee_pii:view, people:self:view, \
-                    nlti:audit:read, nlti:request:read, mcp:eval_trace:view, mcp:llm_api:view, \
-                    mcp:system_prompt:view and mcp:tool:view. Dropped grants do not fail the mint; they are \
-                    logged at WARN and recorded as droppedGrants on both audit events.
-                    The token ends early when the operator does: disabling or expiring the operator's account, \
-                    or revoking the role that carries platform:tenant:impersonate, revokes every token they \
-                    have minted, in every tenant.
-                    Use this tool when a platform operator must look at a tenant's data to support it; do not \
-                    grant an operator a role in the tenant, and do not use issueInternalToken, which binds the \
-                    caller's own tenant. SUPPORT itself cannot be granted to a user: every assignment path \
-                    refuses it with 409 ROLE_NOT_USER_ASSIGNABLE.
-                    Preconditions: the caller must hold platform:tenant:impersonate and be bound to the platform \
-                    tenant; the tenant must be ACTIVE in the ext_tenant replica and hold a SUPPORT role; the \
-                    caller must be a user of the platform tenant.
-                    Required inputs: tenantId as a path parameter; there is no request body. X-Correlation-Id, \
-                    when sent, is recorded on the audit events.
-                    Emits a SECURITY_PLATFORM_TENANT_IMPERSONATE event and a PlatformImpersonationTokenIssued \
-                    audit event in both the target tenant and the platform tenant (operator, subject, jti, \
-                    expiry, correlation id, droppedGrants), plus an INFO log line; the token itself is never \
-                    logged.
-                    Returns 201 with the token; 403 with PLATFORM_TENANT_REQUIRED when the caller is bound to a \
-                    tenant other than the platform tenant; 404 with TENANT_NOT_FOUND when the replica does not \
-                    know the tenant, or USER_NOT_FOUND when the authenticated operator has no user row in the \
-                    platform tenant; 409 with TENANT_NOT_IMPERSONABLE when the tenant is not ACTIVE (its status \
-                    is in the message) or has no SUPPORT role yet, or when the target is the platform tenant \
-                    itself.
+                    Mints a 15-minute, read-only access token that acts inside the named tenant and returns it once, with its \
+                    expiry, the tenant id and the tenant slug; it carries tid = the tenant, act = {sub, username} of the calling \
+                    operator, token_use = impersonation and a synthetic subject support:<operator>@<tenantSlug>, has no refresh \
+                    token, and refreshTokenPair refuses it. perm_bits is not the SUPPORT role verbatim: a tenant administrator \
+                    can edit that role's grants, so the mint intersects them with a read-only ceiling that admits only view and \
+                    read actions plus location:read and never a write, a platform:* permission or the documented exclusions; \
+                    dropped grants do not fail the mint, and are logged at WARN and recorded as droppedGrants on both audit \
+                    events. The token ends early when the operator does, because disabling or expiring their account, or \
+                    revoking the role that carries platform:tenant:impersonate, revokes every token they have minted in every \
+                    tenant; SUPPORT itself can never be granted to a user, which every assignment path refuses with 409 \
+                    ROLE_NOT_USER_ASSIGNABLE. Use this tool when a platform operator must look at a tenant's data to support it, \
+                    rather than granting an operator a role in the tenant or calling issueInternalToken, which binds the \
+                    caller's own tenant. Preconditions: the caller must hold platform:tenant:impersonate, be bound to the \
+                    platform tenant and be a user of it, and the target must be ACTIVE in the ext_tenant replica with a SUPPORT \
+                    role. Required inputs: tenantId as a path parameter and no request body; X-Correlation-Id, when sent, is \
+                    recorded on the audit events. Emits a SECURITY_PLATFORM_TENANT_IMPERSONATE event and a \
+                    PlatformImpersonationTokenIssued audit event in both the target tenant and the platform tenant (operator, \
+                    subject, jti, expiry, correlation id, droppedGrants), plus an INFO log line that never contains the token. \
+                    Returns 201 with the token; 403 PLATFORM_TENANT_REQUIRED when the caller is bound to another tenant; 404 \
+                    TENANT_NOT_FOUND when the replica does not know the tenant or USER_NOT_FOUND when the operator has no user \
+                    row in the platform tenant; 409 TENANT_NOT_IMPERSONABLE when the tenant is not ACTIVE (its status is in the \
+                    message), has no SUPPORT role, or is the platform tenant itself.
                     """)
     @ApiResponse(
             responseCode = "201",
