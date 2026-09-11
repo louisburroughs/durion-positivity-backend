@@ -20,7 +20,7 @@ then reports one expected duplicate failure in the LOCATION job).
 
 Usage:
   scripts/seed-alpha.py --gateway https://alpha.example.com \
-      --token "$SEED_BEARER_TOKEN" --tenant-id "$SEED_TENANT_ID" [--location-code CLT-MAIN-001] \
+      --token "$SEED_BEARER_TOKEN" [--tenant-id "$SEED_TENANT_ID"] [--location-code CLT-MAIN-001] \
       [--bootstrap-location] [--only customer/person-customers.csv] [--dry-run]
 
 Every job loads into --tenant-id (ADR-0062, plan WS8), which must be the token's own tenant

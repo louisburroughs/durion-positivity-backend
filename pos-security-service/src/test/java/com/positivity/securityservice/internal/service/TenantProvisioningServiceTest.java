@@ -231,6 +231,28 @@ class TenantProvisioningServiceTest {
         verify(permissions, never()).findByName("platform:tenant:create");
     }
 
+    /**
+     * Priority 3 (Copilot review, PR #1955): the required-ADMIN guard above the convergence loop
+     * must recognise a template's admin role the same way the loop below does -- case-insensitively,
+     * the same convention {@code RoleTemplateReconciliationService} and role creation both use
+     * (ADR-0062 section 6, plan WS8) -- rather than reject a template whose ADMIN entry happens to
+     * be stored under a different case before the tolerant logic below ever runs.
+     */
+    @Test
+    @DisplayName("the required-ADMIN guard matches the template's admin role case-insensitively")
+    void theAdminGuardMatchesCaseInsensitively() {
+        when(outboxProvider.getIfAvailable()).thenReturn(outbox);
+        when(roles.existsByNameIgnoreCase("admin")).thenReturn(false);
+        when(users.existsByUsername("owner@acme.example")).thenReturn(false);
+
+        TenantContext.bind(TENANT);
+        TenantProvisioningService.Outcome outcome =
+                service.provision(TENANT, "owner@acme.example", List.of(entry("admin")));
+
+        assertThat(outcome).isEqualTo(new TenantProvisioningService.Outcome(1, true));
+        verify(userService).createUserAwaitingActivation(anyString(), any());
+    }
+
     @Test
     @DisplayName("refuses to run under another binding or without an ADMIN template role")
     void guards() {

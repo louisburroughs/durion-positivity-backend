@@ -94,7 +94,13 @@ public class TenantProvisioningService {
         if (!tenantId.equals(TenantContext.require())) {
             throw new IllegalStateException("Provisioning of tenant " + tenantId + " must run under its own binding");
         }
-        if (template.stream().noneMatch(entry -> INITIAL_ADMIN_ROLE.equals(entry.name()))) {
+        // Case-insensitively, the same convention the convergence loop below and
+        // RoleTemplateReconciliationService both use: a template entry is the same role by name
+        // regardless of case (ADR-0062 section 6, plan WS8), and this guard must recognise exactly
+        // the entry the loop below would. An exact comparison here rejected a template whose ADMIN
+        // entry was provisioned under a different case (`roles.csv` resolves names case-insensitively
+        // too) before the convergence logic that does tolerate it ever ran.
+        if (template.stream().noneMatch(entry -> INITIAL_ADMIN_ROLE.equalsIgnoreCase(entry.name()))) {
             throw new IllegalStateException("The platform role template has no " + INITIAL_ADMIN_ROLE
                     + " role; nothing to give the administrator");
         }

@@ -12,6 +12,7 @@ import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.StaticTenantRegistry;
 import com.positivity.tenancy.TenancyProperties;
 import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.testing.TenantTestSupport;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -23,15 +24,16 @@ import org.springframework.http.HttpStatus;
 
 /**
  * The target-tenant rules of a bulk-load job (ADR-0062, plan WS8): named and active, or the
- * platform tenant; a caller may only load into its own tenant unless it is a platform-tenant
- * caller; no tenant at all is refused unless the transitional default applies, and then it is
+ * platform tenant, which is loadable as platform data whether or not the registry lists it
+ * active; a bound caller — the platform tenant's operator included — may only load into its own
+ * tenant; no tenant at all is refused unless the transitional default applies, and then it is
  * used with a WARN.
  */
 @DisplayName("BulkLoadTenantBinding: which tenant a job loads into")
 class BulkLoadTenantBindingTest {
 
-    private static final UUID ALPHA = UUID.fromString("01900000-0000-7000-8000-000000000001");
-    private static final UUID BETA = UUID.fromString("01900000-0000-7000-8000-000000000002");
+    private static final UUID ALPHA = TenantTestSupport.TENANT_A;
+    private static final UUID BETA = TenantTestSupport.TENANT_B;
     private static final UUID SUSPENDED = UUID.fromString("01900000-0000-7000-8000-000000000009");
 
     private final TenancyProperties properties = new TenancyProperties();
