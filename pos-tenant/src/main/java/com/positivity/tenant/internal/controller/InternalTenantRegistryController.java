@@ -1,8 +1,6 @@
 package com.positivity.tenant.internal.controller;
 
 import com.positivity.domainevents.tenant.TenantProjectionV1;
-import com.positivity.tenancy.PlatformTenant;
-import com.positivity.tenancy.TenantContext;
 import com.positivity.tenant.internal.dto.TenantResponse;
 import com.positivity.tenant.internal.enums.TenantStatus;
 import com.positivity.tenant.internal.service.TenantService;
@@ -25,9 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>Every registry row belongs to the platform tenant, and this path is unenforced for {@code
  * TenantContextFilter} ({@code pos.tenancy.unenforced-paths}) because the caller carries no
- * tenant, so the query is bound to {@link PlatformTenant#ID} explicitly: the same documented
- * exception {@code TenantEventsListener} makes, since pos-tenant's data is platform data by
- * definition.
+ * tenant; {@code TenantRegistrySecretFilter} binds the platform tenant at the request edge once
+ * the secret matches, and this controller only reads the binding.
  */
 @Hidden
 @RestController
@@ -44,7 +41,7 @@ public class InternalTenantRegistryController {
     @GetMapping
     public ResponseEntity<List<TenantProjectionV1>> list(
             @RequestParam(required = false, defaultValue = "ACTIVE") TenantStatus status) {
-        List<TenantResponse> tenants = TenantContext.callAs(PlatformTenant.ID, () -> tenantService.list(status));
+        List<TenantResponse> tenants = tenantService.list(status);
         return ResponseEntity.ok(tenants.stream()
                 .map(tenant -> new TenantProjectionV1(
                         tenant.getId(),
