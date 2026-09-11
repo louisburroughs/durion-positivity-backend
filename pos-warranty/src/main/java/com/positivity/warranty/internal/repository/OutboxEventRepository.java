@@ -40,24 +40,28 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
             @NonNull String topic, @NonNull Instant from, @NonNull Instant to);
 
     /**
-     * Mark already-published events created at or after {@code since} for re-publication
+     * Mark {@code tenantId}'s already-published events created at or after {@code since} for re-publication
      * (ADR-0044 backfill/drift repair). The publisher re-sends them; consumers dedupe by eventId.
      */
     @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
     @org.springframework.data.jpa.repository.Query(
             "update OutboxEvent e set e.publishedAt = null, e.attempts = 0, e.lastError = null"
-                    + " where e.publishedAt is not null and e.createdAt >= :since")
-    int markForReplaySince(@org.springframework.data.repository.query.Param("since") @NonNull Instant since);
+                    + " where e.publishedAt is not null and e.tenantId = :tenantId and e.createdAt >= :since")
+    int markForReplaySince(
+            @org.springframework.data.repository.query.Param("tenantId") @NonNull UUID tenantId,
+            @org.springframework.data.repository.query.Param("since") @NonNull Instant since);
 
     /**
-     * Bounded variant for manifest-driven drift repair: re-queue only the drifted window instead
-     * of everything since {@code since}.
+     * Bounded variant for manifest-driven drift repair: re-queue only {@code tenantId}'s rows of the
+     * drifted window instead of everything since {@code since}.
      */
     @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
     @org.springframework.data.jpa.repository.Query(
             "update OutboxEvent e set e.publishedAt = null, e.attempts = 0, e.lastError = null"
-                    + " where e.publishedAt is not null and e.createdAt >= :since and e.createdAt < :until")
+                    + " where e.publishedAt is not null and e.tenantId = :tenantId and e.createdAt >= :since"
+                    + " and e.createdAt < :until")
     int markForReplayBetween(
+            @org.springframework.data.repository.query.Param("tenantId") @NonNull UUID tenantId,
             @org.springframework.data.repository.query.Param("since") @NonNull Instant since,
             @org.springframework.data.repository.query.Param("until") @NonNull Instant until);
 }

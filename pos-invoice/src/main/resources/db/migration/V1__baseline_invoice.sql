@@ -234,6 +234,7 @@ CREATE TABLE public.payment_intents (
 
 CREATE TABLE public.processed_events (
     event_id character varying(36) NOT NULL,
+    tenant_id uuid,
     owner character varying(64) NOT NULL,
     processed_at timestamp(6) with time zone NOT NULL
 );
@@ -415,7 +416,7 @@ CREATE INDEX idx_invoice_line_tax_invoice ON public.invoice_line_tax USING btree
 
 CREATE INDEX idx_invoice_tax_summary_invoice ON public.invoice_tax_summary USING btree (invoice_id);
 
-CREATE INDEX idx_processed_events_owner_event ON public.processed_events USING btree (owner, event_id);
+CREATE INDEX idx_processed_events_owner_tenant_event ON public.processed_events USING btree (owner, tenant_id, event_id);
 
 CREATE INDEX ix_deposit_application_invoice ON public.deposit_credit_application USING btree (invoice_id);
 

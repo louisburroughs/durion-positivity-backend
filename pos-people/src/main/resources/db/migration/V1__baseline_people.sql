@@ -131,6 +131,7 @@ CREATE TABLE public.ext_workorder_job_time (
 
 CREATE TABLE public.processed_events (
     event_id character varying(36) NOT NULL,
+    tenant_id uuid,
     owner character varying(64) NOT NULL,
     processed_at timestamp(6) with time zone NOT NULL
 );
@@ -421,7 +422,7 @@ CREATE INDEX idx_ext_user_link_person ON public.ext_people_contact_user_link USI
 
 CREATE INDEX idx_ext_user_link_username ON public.ext_people_contact_user_link USING btree (username);
 
-CREATE INDEX idx_processed_events_owner_event ON public.processed_events USING btree (owner, event_id);
+CREATE INDEX idx_processed_events_owner_tenant_event ON public.processed_events USING btree (owner, tenant_id, event_id);
 
 CREATE INDEX idx_time_entry_attendance_window ON public.time_entry USING btree (attendance_start_at, attendance_end_at);
 

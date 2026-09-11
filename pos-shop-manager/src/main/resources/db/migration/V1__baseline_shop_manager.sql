@@ -309,6 +309,7 @@ CREATE TABLE public.override_record (
 
 CREATE TABLE public.processed_events (
     event_id character varying(36) NOT NULL,
+    tenant_id uuid,
     owner character varying(64) NOT NULL,
     processed_at timestamp(6) with time zone NOT NULL
 );
@@ -596,7 +597,7 @@ ALTER TABLE ONLY public.work_order_appointment_mapping
 
 CREATE INDEX idx_ext_vehicle_account ON public.ext_vehicle USING btree (account_id);
 
-CREATE INDEX idx_processed_events_owner_event ON public.processed_events USING btree (owner, event_id);
+CREATE INDEX idx_processed_events_owner_tenant_event ON public.processed_events USING btree (owner, tenant_id, event_id);
 
 CREATE INDEX idx_sm_ext_assignment_location ON public.ext_people_staffing_assignment USING btree (location_id, status);
 

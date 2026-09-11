@@ -425,6 +425,7 @@ CREATE TABLE public.idempotency_keys (
 
 CREATE TABLE public.processed_events (
     event_id character varying(36) NOT NULL,
+    tenant_id uuid,
     owner character varying(64) NOT NULL,
     processed_at timestamp(6) with time zone NOT NULL
 );
@@ -1144,7 +1145,7 @@ CREATE INDEX idx_part_adjustment_performed_at ON public.workorder_part_adjustmen
 
 CREATE INDEX idx_part_adjustment_workorder ON public.workorder_part_adjustment_event USING btree (workorder_id);
 
-CREATE INDEX idx_processed_events_owner_event ON public.processed_events USING btree (owner, event_id);
+CREATE INDEX idx_processed_events_owner_tenant_event ON public.processed_events USING btree (owner, tenant_id, event_id);
 
 CREATE INDEX idx_travel_segment_assignment_technician ON public.travel_segment USING btree (mobile_work_assignment_id, technician_id);
 

@@ -284,6 +284,7 @@ CREATE TABLE public.price_override (
 
 CREATE TABLE public.processed_events (
     event_id character varying(36) NOT NULL,
+    tenant_id uuid,
     owner character varying(64) NOT NULL,
     processed_at timestamp without time zone NOT NULL
 );

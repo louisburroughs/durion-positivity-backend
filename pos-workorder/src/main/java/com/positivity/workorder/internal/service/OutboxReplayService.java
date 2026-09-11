@@ -8,12 +8,15 @@ import org.jspecify.annotations.NonNull;
  *
  * <p>Used to seed a new consumer replica or repair drift: matching rows are marked unpublished so
  * the outbox publisher re-sends them. Consumers are idempotent by {@code eventId}, so replay is
- * harmless to consumers that already processed the events.
+ * harmless to consumers that already processed the events. Only the bound tenant's rows are
+ * replayed (ADR-0062 §3): the command carries the requesting manifest's tenant header, so one
+ * tenant's drift never re-sends another tenant's events.
  */
 public interface OutboxReplayService {
 
     /**
-     * Mark published outbox events created at or after {@code since} for re-publication.
+     * Mark the bound tenant's published outbox events created at or after {@code since} for
+     * re-publication.
      *
      * @param since lower bound (inclusive) on event creation time
      * @return the number of events queued for re-publication
@@ -21,7 +24,20 @@ public interface OutboxReplayService {
     int replaySince(@NonNull Instant since);
 
     /**
-     * Mark published outbox events created in {@code [since, until)} for re-publication — the
+     * Administrative replay for the calling operator (ADR-0062 §3): the bound tenant's published
+     * outbox events created at or after {@code since} — or, when the caller is bound to the platform
+     * tenant, which owns no workorder rows of its own, every active tenant's in turn through
+     * {@code TenantIterator}. This is the {@code POST /v1/outbox/replay} path; the Kafka
+     * {@code workorder.outbox.replay-requested} path always uses {@link #replaySince} for exactly
+     * the tenant on the command's header.
+     *
+     * @return the number of events queued for re-publication across the tenants replayed
+     */
+    int replaySinceForCaller(@NonNull Instant since);
+
+    /**
+     * Mark the bound tenant's published outbox events created in {@code [since, until)} for
+     * re-publication — the
      * bounded form used by manifest-driven drift repair, so one drifted window never triggers a
      * full-history replay.
      *
