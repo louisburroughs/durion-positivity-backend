@@ -21,6 +21,20 @@
         "sort": 1
       },
       {
+        "name": "tenant",
+        "label": "Tenant",
+        "description": "Bound tenant of the line (ADR-0062 plan WS6). All includes lines with no tenant (startup, schedulers).",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": "label_values({job=\"docker\"}, tenant)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "refresh": 2,
+        "sort": 1
+      },
+      {
         "name": "level",
         "label": "Level",
         "type": "custom",
@@ -164,7 +178,7 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "{job=\"docker\", service=~\"$service\", level=~\"$level\"} |~ \"(?i)$search\""
+          "expr": "{job=\"docker\", service=~\"$service\", level=~\"$level\", tenant=~\"$tenant\"} |~ \"(?i)$search\""
         }
       ],
       "options": {

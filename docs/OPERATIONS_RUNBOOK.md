@@ -358,6 +358,35 @@ Note that `build-push-ecr.yml` does **not** ship the agent files — only `sync-
 does. A rebuilt box that receives nothing but code deploys therefore stays unwatched until either
 this checklist is run or something under `deployment/alpha/` is merged.
 
+### Per-tenant logs and event statistics (ADR-0062 plan WS6)
+
+Every `pos-*` module that carries `pos-tenancy-common` logs Boot's correlation bracket as
+`[<trace_id>,<span_id>,<tenantId>]` on every line: `TenantContext` mirrors the bound tenant into the
+`tenantId` MDC key, and `TenantLogPatternEnvironmentPostProcessor` supplies `logging.pattern.correlation`
+as the lowest-precedence property (a module's own `logging.pattern.correlation` or `logback-spring.xml`
+wins). Lines logged with no tenant bound — startup, `@PlatformScoped` schedulers, actuator — print an
+empty third field. Nothing else about the line or its volume changes.
+
+Promtail (`observability/promtail-config.yml`) extracts that third field as the Loki label `tenant`
+(bounded cardinality: one value per tenant), so logs filter per tenant:
+
+```logql
+{job="docker", tenant="01900000-0000-7000-8000-000000000001"}                 # one tenant, every service
+{job="docker", service="pos-order", tenant="01900000-0000-7000-8000-000000000001"} |= "ERROR"
+sum by (service) (count_over_time({job="docker", tenant="<uuid>"}[5m]))    # a tenant's log volume
+```
+
+The **Durion Logs (Loki)** dashboard has a **Tenant** variable (All includes lines with no tenant), and
+the Loki datasource's TraceID derived field reads the leading `trace_id` of the same bracket.
+
+Event statistics have the same dimension. `pos-event-receiver`'s `emitted_event_hourly` continuous
+aggregate is grouped by `tenant_id`; the global view is the sum. `GET /event-receiver/v1/events/summary/
+{lastHour,lastDay,lastWeek}` reads the caller's own tenant, or — from the platform tenant only — the
+global rollup by default and one tenant with `?tenantId=<uuid>`; `tenantId` from any other tenant is a
+403 (`pos-event-receiver/README.md`, "Per-tenant statistics with global rollups"). The aggregate's
+refresh policy is unchanged (hourly, one-hour end offset), so per-tenant counts lag by up to an hour like
+the global ones.
+
 ### Dashboard Access
 
 | Dashboard  | URL                      | Credentials |
