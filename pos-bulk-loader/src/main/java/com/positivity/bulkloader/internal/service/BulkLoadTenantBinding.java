@@ -19,11 +19,23 @@ import org.springframework.stereotype.Component;
  *
  * <p>The target is the request's {@code tenantId}. It must be a tenant the module's {@link
  * TenantRegistry} lists as active, or the platform tenant (platform data: the role template's
- * {@code roles.csv}). A caller bound to a tenant may only load into that tenant; a caller bound
- * to the platform tenant may load into any of them. A request that names no tenant is refused
- * unless the transitional default tenant ({@code pos.tenancy.default-tenant-id}, ADR-0062 §9) is
- * configured, in which case the default is used and a WARN says so: the job will fail loudly
- * once the default is retired rather than silently landing somewhere.
+ * {@code roles.csv}). A bound caller may only load into its own tenant — the platform tenant's
+ * operator included, who therefore loads platform data and nothing else. A request that names no
+ * tenant is refused unless the transitional default tenant ({@code pos.tenancy.default-tenant-id},
+ * ADR-0062 §9) is configured, in which case the default is used and a WARN says so: the job will
+ * fail loudly once the default is retired rather than silently landing somewhere.
+ *
+ * <h2>Why a platform caller may not load into a tenant</h2>
+ *
+ * <p>A job is tenant-scoped data like everything else the loader writes, and it is owned by the
+ * operator who created it. A platform operator who created a job in tenant B could not then use
+ * it: upload, process and status run under the request's own binding and operator id, so the
+ * platform token — bound to the platform tenant — would not see the job at all (404), and a token
+ * of B would see it but fail the ownership check under a different operator id (403). The job
+ * would be a row nobody can continue. Refusing the target up front says so once, where the
+ * operator can read it, instead of three calls later. Loading into a tenant on that tenant's
+ * behalf needs an impersonation path — a credential that is genuinely bound to B — which is a
+ * separate decision and not part of WS8; when one lands, this is the single place that reopens.
  *
  * <p>The resolved tenant is what {@code BulkLoadJobServiceImpl} binds ({@code TenantContext.runAs})
  * around the job's create and around the whole batch run, so every row the loader writes and every
@@ -53,14 +65,16 @@ public class BulkLoadTenantBinding {
                     "Tenant " + target + " is not an active tenant of this cell; a bulk load must target an active"
                             + " tenant or the platform tenant");
         }
-        if (bound.isPresent()
-                && !PlatformTenant.isPlatform(bound.get())
-                && !bound.get().equals(target)) {
+        // Every bound caller, the platform operator included: see the class comment. An unbound
+        // caller is the transitional case only (no tid on the token yet, ADR-0062 section 9) and
+        // still names its target explicitly.
+        if (bound.isPresent() && !bound.get().equals(target)) {
             throw new BulkLoadTenantException(
                     BulkLoadTenantException.TENANT_FORBIDDEN,
                     HttpStatus.FORBIDDEN,
                     "A caller bound to tenant " + bound.get() + " cannot load into tenant " + target
-                            + "; only a platform-tenant caller loads into another tenant");
+                            + "; a bulk load job runs under the creating caller's own binding and operator, so a job"
+                            + " created in another tenant could not be uploaded, processed or polled by anyone");
         }
         return target;
     }

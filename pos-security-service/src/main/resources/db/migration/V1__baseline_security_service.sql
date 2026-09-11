@@ -431,6 +431,19 @@ CREATE INDEX idx_role_assignments_user_id ON public.role_assignments USING btree
 
 CREATE INDEX idx_roles_persona_rank ON public.roles USING btree (mcp_persona_rank, name) WHERE mcp_persona_eligible;
 
+-- Role names are unique within a tenant case-insensitively, not just byte-for-byte (ADR-0062 section 6,
+-- plan WS8). roles_name_key above is UNIQUE (tenant_id, name), which would let ADMIN and admin coexist
+-- in one tenant; the application has always treated them as one role -- RoleManagementService.createRole
+-- refuses a duplicate with existsByNameIgnoreCase, provisioning and template reconciliation resolve a
+-- template entry with findByNameIgnoreCase -- and a single-result lookup against two rows fails outright
+-- instead of converging. This index is what makes the at-most-one assumption true in the database rather
+-- than only in the code above it. Leads with tenant_id like every other unique key here, so the same
+-- role name in two tenants is still two roles. No de-duplication step precedes it: the baseline creates
+-- this table empty and every seed that fills it runs afterwards (the alpha floor roles, the platform
+-- template copy, roles.csv), so a case-variant pair can only arrive after the index exists, and then it
+-- is refused at insert.
+CREATE UNIQUE INDEX roles_tenant_lower_name_key ON public.roles USING btree (tenant_id, lower((name)::text));
+
 CREATE INDEX idx_sec_ext_person_last_name ON public.ext_people_contact_person USING btree (last_name);
 
 CREATE INDEX idx_sec_ext_person_primary_email ON public.ext_people_contact_person USING btree (primary_email);

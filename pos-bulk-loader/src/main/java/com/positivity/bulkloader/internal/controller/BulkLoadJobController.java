@@ -60,10 +60,9 @@ public class BulkLoadJobController {
                     PERSON, BASE_PRICE, VEHICLE or VEHICLE_FITMENT); locationId (UUID) is optional at creation but \
                     must be set before processing can start; tenantId (UUID) names the tenant the job loads into \
                     (ADR-0062): an active tenant of the cell, or the platform tenant for platform data such as the \
-                    role template's roles.csv; a caller bound to a tenant may only name its own tenant, a \
-                    platform-tenant caller may name any; the job, its audit rows and every call to a sibling \
-                    service are bound to that tenant, and the job is visible afterwards only under that tenant's \
-                    binding.
+                    role template's roles.csv; a bound caller may only name its own tenant, the platform \
+                    operator included; the job, its audit rows and every call to a sibling service are bound to \
+                    that tenant, and the job is visible afterwards only under that tenant's binding.
                     INVENTORY_STOCK_COUNT establishes opening on-hand stock: each line is filed and approved, so \
                     the token must carry inventory:adjustment:approve as well as inventory:adjustment:create.
                     Emits a BULK_LOADER_JOB_CREATE event; no file content is stored by this call.
@@ -81,8 +80,7 @@ public class BulkLoadJobController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
-            description = "BULK_JOB_TENANT_FORBIDDEN: the caller is bound to another tenant and is not a"
-                    + " platform-tenant caller",
+            description = "BULK_JOB_TENANT_FORBIDDEN: the caller is bound to a tenant other than the one named",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",

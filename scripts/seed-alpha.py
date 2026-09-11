@@ -29,14 +29,17 @@ status calls are scoped to the token's tenant. Loading security/roles.csv and
 security/role-permissions.csv with a PLATFORM_ADMIN token and --tenant-id set to the platform
 tenant (plus an explicit --location-id, the platform tenant having no locations) makes those
 roles the role template; see docs/OPERATIONS_RUNBOOK.md, "Bulk loading into a tenant".
+PLATFORM_ADMIN is seeded with exactly the four grants that load needs on top of its platform:*
+families -- bulkImport:upload:execute, bulkImport:status:read, security:role:create and
+security:role:edit (R__seed_tenant_template.sql) -- so no extra role is needed for it.
 
 Seeded user accounts get a password generated inside pos-security-service and
 returned to no one, so they have no usable login until someone goes through the
 reset path. That is deliberate: a bulk file is uploaded and stored, and a
 password column in it would exist at rest for as long as the upload does.
 
-The bearer token needs bulkImport:upload:execute plus the per-domain create
-permissions relayed to downstream services (location:read, location:write,
+The bearer token needs bulkImport:upload:execute and bulkImport:status:read plus the
+per-domain create permissions relayed to downstream services (location:read, location:write,
 crm:party:create, for the putaway-rules pack catalog:product:view plus
 inventory:putaway_rule:view/inventory:putaway_rule:manage, and for the on-hand
 pack inventory:adjustment:create and inventory:adjustment:approve, and for the
@@ -133,7 +136,10 @@ def token_tenant_id(token):
     tid = claims.get("tid") if isinstance(claims, dict) else None
     try:
         return str(uuid.UUID(tid)) if tid else None
-    except ValueError:
+    except (ValueError, AttributeError, TypeError):
+        # A claim that is not a UUID string at all -- a number, a list, an object -- reaches
+        # uuid.UUID() as the wrong type and raises AttributeError or TypeError rather than
+        # ValueError. Any of the three means the same thing here: this token names no tenant.
         return None
 # PARTIAL is terminal too: the batch finished, but the owning service rejected some rows. Without
 # it here the driver would poll a finished job forever and then report a timeout.

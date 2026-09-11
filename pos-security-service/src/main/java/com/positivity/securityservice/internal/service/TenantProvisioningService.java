@@ -100,7 +100,12 @@ public class TenantProvisioningService {
 
         int created = 0;
         for (RoleTemplateEntry entry : template) {
-            if (roleRepository.existsByName(entry.name())) {
+            // Case-insensitively, the same uniqueness createRole enforces and the same lookup
+            // RoleTemplateReconciliationService uses (ADR-0062 section 6, plan WS8): a tenant that
+            // already carries `admin` must not be given a second ADMIN, which the (tenant_id,
+            // lower(name)) index in the baseline would refuse anyway -- failing provisioning
+            // outright rather than converging on a redelivered tenant.created.
+            if (roleRepository.existsByNameIgnoreCase(entry.name())) {
                 continue;
             }
             roleRepository.save(
