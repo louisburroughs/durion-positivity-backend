@@ -1,5 +1,6 @@
 package com.positivity.tenancy;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -68,7 +69,12 @@ public class RemoteTenantRegistry implements TenantRegistry {
         this.secret = config.getSecret();
         this.refresh = config.getRefresh();
         this.clock = clock;
-        this.snapshot = new StaticTenantRegistry(properties).activeTenantIds();
+        // The seed is filtered exactly as a fetched list is: a failed first fetch must not leave the
+        // control-plane tenant in the snapshot either, and pos-tenant configures it as its default.
+        this.snapshot = new StaticTenantRegistry(properties)
+                .activeTenantIds().stream()
+                        .filter(tenantId -> !PlatformTenant.ID.equals(tenantId))
+                        .toList();
         if (secret.isBlank()) {
             log.warn(
                     "pos.tenancy.registry.secret is not set: every fetch from {} will be refused and the"
@@ -182,7 +188,12 @@ public class RemoteTenantRegistry implements TenantRegistry {
         return active;
     }
 
-    /** One entry of the list endpoint: the {@code TenantProjectionV1} projection. */
+    /**
+     * One entry of the list endpoint: the {@code TenantProjectionV1} projection, which allows
+     * additive fields, so an unknown property from a newer {@code pos-tenant} is ignored rather
+     * than failing the fetch and stranding every caller on a stale snapshot.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     record TenantSummary(
             @Nullable UUID tenantId,
             @Nullable String slug,
