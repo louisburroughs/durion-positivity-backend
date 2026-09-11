@@ -28,6 +28,7 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.cloud.client.loadbalancer.LoadBalanced;
@@ -256,6 +257,25 @@ class TenancyAutoConfigurationTest {
             assertThat(chosen.builder()).isSameAs(context.getBean(RestClient.Builder.class));
             assertThat(chosen.loadBalanced()).isFalse();
         }
+    }
+
+    @Test
+    @DisplayName("REMOTE without RestClient on the classpath fails at startup instead of staying static")
+    void remoteModeWithoutRestClientOnTheClasspathFailsFast() {
+        runner.withClassLoader(new FilteredClassLoader(RestClient.class))
+                .withPropertyValues(
+                        "pos.tenancy.tenants=01900000-0000-7000-8000-000000000001", "pos.tenancy.registry.mode=REMOTE")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .rootCause()
+                            .hasMessageContaining("pos.tenancy.registry.mode=REMOTE")
+                            .hasMessageContaining("RestClient");
+                });
+        runner.withClassLoader(new FilteredClassLoader(RestClient.class))
+                .withPropertyValues("pos.tenancy.tenants=01900000-0000-7000-8000-000000000001")
+                .run(context ->
+                        assertThat(context.getBean(TenantRegistry.class)).isInstanceOf(StaticTenantRegistry.class));
     }
 
     @Test

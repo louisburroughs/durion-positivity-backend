@@ -22,6 +22,7 @@ import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cache.annotation.CachingConfigurer;
@@ -92,6 +93,23 @@ public class TenancyAutoConfiguration {
     @ConditionalOnMissingBean
     public TenantContextTaskDecorator tenantContextTaskDecorator() {
         return new TenantContextTaskDecorator();
+    }
+
+    /**
+     * {@code pos.tenancy.registry.mode=REMOTE} without {@code RestClient} on the classpath is a
+     * configuration error, not a silent fall-back to the static list: a scheduled module that asked
+     * for the remote registry would otherwise iterate only its configured tenants without a word.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnMissingClass("org.springframework.web.client.RestClient")
+    @ConditionalOnProperty(prefix = "pos.tenancy.registry", name = "mode", havingValue = "REMOTE")
+    public static class RemoteRegistryWithoutRestClientConfiguration {
+
+        @Bean
+        public TenantRegistry remoteTenantRegistryUnavailable() {
+            throw new IllegalStateException("pos.tenancy.registry.mode=REMOTE needs spring-web's RestClient on the"
+                    + " classpath; add spring-boot-starter-web (or -webflux) to the module, or use mode STATIC");
+        }
     }
 
     /**
