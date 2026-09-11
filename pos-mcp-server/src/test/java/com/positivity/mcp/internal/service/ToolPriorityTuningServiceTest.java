@@ -10,6 +10,7 @@ import com.positivity.mcp.internal.domain.ToolInvocationStats;
 import com.positivity.mcp.internal.domain.ToolPriorityOverlay;
 import com.positivity.mcp.internal.repository.ToolPriorityRepository;
 import com.positivity.tenancy.PlatformScoped;
+import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.StaticTenantRegistry;
 import com.positivity.tenancy.TenancyProperties;
 import com.positivity.tenancy.TenantAudited;
@@ -601,6 +602,29 @@ class ToolPriorityTuningServiceTest {
         TenancyProperties remote = tenancy(TENANT_A);
         remote.getRegistry().setMode(TenancyProperties.Registry.Mode.REMOTE);
         assertThat(ToolPriorityTuningService.staticRegistryWarning(TuningMode.LIVE, remote))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("the warning counts the tenants the sweep sees, not the configured entries")
+    void staticRegistryWarning_countsThePlatformFilteredList() {
+        // StaticTenantRegistry excludes the platform tenant, so these two configurations name two
+        // and one entry respectively but sweep one and none. Counting the raw properties left the
+        // warning silent in exactly the deployments it exists for.
+        assertThat(ToolPriorityTuningService.staticRegistryWarning(
+                        TuningMode.LIVE, tenancy(PlatformTenant.ID, TENANT_A)))
+                .as("the platform tenant is not a tenant the sweep visits")
+                .hasValueSatisfying(warning -> assertThat(warning).contains("1 tenant"));
+
+        TenancyProperties platformOnlyDefault = new TenancyProperties();
+        platformOnlyDefault.setDefaultTenantId(PlatformTenant.ID);
+        assertThat(ToolPriorityTuningService.staticRegistryWarning(TuningMode.LIVE, platformOnlyDefault))
+                .as("a platform-only default leaves the sweep nothing to visit")
+                .hasValueSatisfying(warning -> assertThat(warning).contains("no tenant"));
+
+        assertThat(ToolPriorityTuningService.staticRegistryWarning(
+                        TuningMode.LIVE, tenancy(PlatformTenant.ID, TENANT_A, TENANT_B)))
+                .as("two ordinary tenants remain after the platform tenant is excluded")
                 .isEmpty();
     }
 

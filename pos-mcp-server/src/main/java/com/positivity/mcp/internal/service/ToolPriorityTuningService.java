@@ -6,6 +6,7 @@ import com.positivity.mcp.internal.domain.ToolInvocationStats;
 import com.positivity.mcp.internal.domain.ToolPriorityOverlay;
 import com.positivity.mcp.internal.repository.ToolPriorityRepository;
 import com.positivity.tenancy.PlatformScoped;
+import com.positivity.tenancy.StaticTenantRegistry;
 import com.positivity.tenancy.TenancyProperties;
 import com.positivity.tenancy.TenantAudited;
 import com.positivity.tenancy.TenantIterator;
@@ -170,22 +171,27 @@ public class ToolPriorityTuningService {
      * global rollup while {@link TenantIterator.Sweep#completeTenantList()} is false.
      *
      * @return the warning to log, or empty when tuning is off, the registry is remote, or the static
-     *     list names more than one tenant
+     *     list leaves more than one tenant once the platform tenant is excluded
      */
     static @NonNull Optional<String> staticRegistryWarning(
             @NonNull TuningMode mode, @NonNull TenancyProperties tenancy) {
         if (mode == TuningMode.OFF || tenancy.getRegistry().getMode() != TenancyProperties.Registry.Mode.STATIC) {
             return Optional.empty();
         }
-        int staticTenants = tenancy.getTenants().isEmpty()
-                ? tenancy.getDefaultTenantId().map(ignored -> 1).orElse(0)
-                : tenancy.getTenants().size();
+        // Ask the registry itself rather than counting the configured entries: StaticTenantRegistry
+        // excludes PlatformTenant.ID from both sources, so a list naming the platform tenant and one
+        // ordinary tenant configures two but sweeps one, and a platform-only default sweeps none.
+        // Counting the raw properties here would have stayed silent in exactly the deployments this
+        // warning exists for. One class decides what the sweep sees, so the two cannot drift apart.
+        int staticTenants = new StaticTenantRegistry(tenancy).activeTenantIds().size();
         if (staticTenants > 1) {
             return Optional.empty();
         }
+        String scope = staticTenants == 1
+                ? "1 tenant): the nightly sweep tunes that tenant alone and its rollup is not a global one."
+                : "no tenant): the nightly sweep visits nothing at all, so no overlay is tuned.";
         return Optional.of("mcp.tuning.mode=" + mode.name().toLowerCase(java.util.Locale.ROOT)
-                + " with the STATIC tenant registry (" + staticTenants
-                + " tenant): the nightly sweep tunes that tenant alone and its rollup is not a global one."
+                + " with the STATIC tenant registry (" + scope
                 + " A multi-tenant deployment must set pos.tenancy.registry.mode=REMOTE"
                 + " (pos.tenancy.registry.url and .secret, pos-tenancy-common README) before enabling tuning.");
     }
