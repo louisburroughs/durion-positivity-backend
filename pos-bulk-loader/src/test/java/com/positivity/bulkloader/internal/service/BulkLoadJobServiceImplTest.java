@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -284,6 +285,40 @@ class BulkLoadJobServiceImplTest {
         assertThat(job.getStatus()).isEqualTo(JobStatus.COMPLETED);
         assertThat(job.getStartedAt()).isNotNull();
         assertThat(job.getSuccessCount()).isEqualTo(12L);
+    }
+
+    /**
+     * Copilot review of PR #1955, fourth round (Finding 1): {@code stampProcessing}'s own
+     * transaction (the third-round fix) commits PROCESSING before the launch runs, so a launch
+     * failure — {@code SpringBatchBulkLoadLauncher.launch} converts {@code
+     * JobInstanceAlreadyCompleteException}, {@code JobRestartException} and the like into an {@code
+     * IllegalStateException} before Spring Batch ever calls {@code afterJob} — used to leave nothing
+     * to write a terminal status: the job was stranded in PROCESSING with no path to retry it. This
+     * pins that {@code startProcessing} now catches the launch failure, commits FAILED in its own
+     * transaction, and rethrows the original exception unchanged.
+     */
+    @Test
+    void startProcessing_whenLaunchFails_marksTheJobFailedAndRethrowsTheOriginalException() {
+        TenantContext.bind(TENANT);
+        BulkLoadJob job = savedJob(JOB_ID, OPERATOR_ID, JobStatus.UPLOADING);
+        job.setOriginalFilePath("00000000-0000-0000-0000-000000000001/products.csv");
+        job.setLocationId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
+
+        when(jobRepository.findById(JOB_ID)).thenReturn(Optional.of(job));
+        when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        IllegalStateException launchFailure = new IllegalStateException(
+                "Failed to launch Spring Batch job for bulk load job " + JOB_ID,
+                new RuntimeException("already running"));
+        doThrow(launchFailure).when(bulkLoadBatchLauncher).launch(any(BulkLoadJob.class), nullable(String.class));
+
+        assertThatThrownBy(() -> service.startProcessing(JOB_ID, OPERATOR_ID, "Bearer token-123"))
+                .as("the launch failure itself must still reach the caller unchanged")
+                .isSameAs(launchFailure);
+
+        assertThat(job.getStatus())
+                .as("a launch that never starts must not strand the job in PROCESSING")
+                .isEqualTo(JobStatus.FAILED);
+        assertThat(job.getCompletedAt()).isNotNull();
     }
 
     @Test

@@ -233,6 +233,15 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
      * (row-level security), so the tenant to run as is the one resolved for this request; it is
      * re-bound explicitly, around the transaction and the batch launch, so the run does not depend
      * on the request thread's binding surviving into the batch (it would not on an async executor).
+     *
+     * <p>A launch failure — {@code SpringBatchBulkLoadLauncher.launch} translates {@code
+     * JobInstanceAlreadyCompleteException}, {@code JobRestartException} and the like into an {@code
+     * IllegalStateException} before Spring Batch ever invokes {@code afterJob} — is caught here and
+     * turned into a committed {@code FAILED} transition before the exception is rethrown (Copilot
+     * review of PR #1955, fourth round). Without this, {@link #stampProcessing}'s commit already
+     * landed PROCESSING durably (that commit is the third-round fix this depends on), and a launch
+     * that never starts leaves nothing to write the terminal status: the job would be stranded in
+     * PROCESSING with no path to retry it.
      */
     @Override
     public void startProcessing(@NonNull UUID jobId, @NonNull String operatorId, @Nullable String authorizationHeader) {
@@ -240,8 +249,33 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
         TenantContext.runAs(tenantId, () -> {
             BulkLoadJob job = transactionTemplate.execute(status -> stampProcessing(jobId, operatorId, tenantId));
             log.info("Starting bulk load job {} domain {} in tenant {}", job.getId(), job.getDomainType(), tenantId);
-            bulkLoadBatchLauncher.launch(job, authorizationHeader);
+            try {
+                bulkLoadBatchLauncher.launch(job, authorizationHeader);
+            } catch (RuntimeException launchFailure) {
+                log.error(
+                        "Bulk load job {} failed to launch in tenant {}; marking FAILED: {}",
+                        job.getId(),
+                        tenantId,
+                        launchFailure.getMessage(),
+                        launchFailure);
+                transactionTemplate.executeWithoutResult(status -> markLaunchFailed(job.getId(), tenantId));
+                throw launchFailure;
+            }
         });
+    }
+
+    /**
+     * Stamps {@code FAILED} in its own committed transaction after a launch failure (see {@link
+     * #startProcessing}), the same shape {@link #stampProcessing} uses: a launch that never starts
+     * must still leave the job retryable, so this has to durably land before {@code
+     * startProcessing} rethrows to the caller.
+     */
+    private void markLaunchFailed(UUID jobId, UUID tenantId) {
+        BulkLoadJob job = findOrThrow(jobId);
+        job.setStatus(JobStatus.FAILED);
+        job.setCompletedAt(Instant.now(clock));
+        jobRepository.save(job);
+        log.warn("Bulk load job {} marked FAILED in tenant {} after a launch failure", job.getId(), tenantId);
     }
 
     /**
