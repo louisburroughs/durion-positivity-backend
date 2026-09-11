@@ -1,5 +1,7 @@
 package com.positivity.mcp.internal.orchestration;
 
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
+import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_B;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -47,6 +49,8 @@ import com.positivity.mcp.internal.service.RolePromptResolver;
 import com.positivity.mcp.internal.service.ToolInvocationRecorder;
 import com.positivity.mcp.internal.service.ToolRegistryService;
 import com.positivity.mcp.internal.telemetry.NltiTelemetryEmitter;
+import com.positivity.mcp.tenancy.BoundTenant;
+import com.positivity.tenancy.TenantContext;
 import java.lang.reflect.Member;
 import java.time.Clock;
 import java.time.Instant;
@@ -57,6 +61,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -94,6 +99,7 @@ import reactor.core.publisher.Flux;
  * calls.
  */
 @ExtendWith(MockitoExtension.class)
+@ExtendWith(BoundTenant.class)
 class StreamingSessionAgentManagerTest {
 
     private static final UUID USER_ID = UUID.fromString("00000000-0000-7000-8000-000000000302");
@@ -767,6 +773,77 @@ class StreamingSessionAgentManagerTest {
     }
 
     @Test
+    @DisplayName("a streamed audit write lands under the request's tenant when the stream completes on another thread")
+    void streamChat_auditWriteCarriesTheRequestTenantAcrossAThreadHop() {
+        // BoundTenant binds TENANT_A on this (request) thread only. The stream is published on
+        // boundedElastic, so the completion callback that writes the tenant-scoped audit row runs
+        // on a thread that never had the binding (ADR-0062 plan WS6).
+        ToolExecutionAuditLogger auditLogger = mock(ToolExecutionAuditLogger.class);
+        AtomicReference<Optional<UUID>> tenantAtWrite = new AtomicReference<>();
+        AtomicReference<Thread> threadAtWrite = new AtomicReference<>();
+        doAnswer(invocation -> {
+                    tenantAtWrite.set(TenantContext.current());
+                    threadAtWrite.set(Thread.currentThread());
+                    return null;
+                })
+                .when(auditLogger)
+                .logToolExecution(any(), anyString(), anyBoolean(), anyBoolean(), anyInt(), any());
+        when(streamingChatModel.stream(any(org.springframework.ai.chat.prompt.Prompt.class)))
+                .thenReturn(Flux.just(streamedChunk("Hi "), streamedChunk("there"))
+                        .publishOn(reactor.core.scheduler.Schedulers.boundedElastic()));
+
+        List<String> tokens = managerWith(auditLogger, null)
+                .streamChat(userContext("user-1", USER_ID, "ROLE_CASHIER"), "hello")
+                .collectList()
+                .block(java.time.Duration.ofSeconds(5));
+
+        assertThat(tokens).containsExactly("Hi ", "there");
+        verify(auditLogger, timeout(5_000)).logToolExecution(any(), eq("user-1"), eq(true), eq(false), anyInt(), any());
+        assertThat(threadAtWrite.get())
+                .as("the write happened off the request thread")
+                .isNotSameAs(Thread.currentThread());
+        assertThat(tenantAtWrite.get()).contains(TENANT_A);
+        assertThat(TenantContext.current())
+                .as("the request thread's binding is untouched")
+                .contains(TENANT_A);
+    }
+
+    @Test
+    @DisplayName("evict clears the actor's memory and rate entries within the bound tenant only")
+    void evict_clearsTheActorsEntriesWithinTheTenant() {
+        @SuppressWarnings("unchecked")
+        com.github.benmanes.caffeine.cache.Cache<String, org.springframework.ai.chat.memory.ChatMemory> memory =
+                (com.github.benmanes.caffeine.cache.Cache<String, org.springframework.ai.chat.memory.ChatMemory>)
+                        org.springframework.test.util.ReflectionTestUtils.getField(manager, "chatMemoryCache");
+        @SuppressWarnings("unchecked")
+        com.github.benmanes.caffeine.cache.Cache<String, java.util.concurrent.atomic.AtomicInteger> counters =
+                (com.github.benmanes.caffeine.cache.Cache<String, java.util.concurrent.atomic.AtomicInteger>)
+                        org.springframework.test.util.ReflectionTestUtils.getField(manager, "requestCountCache");
+        assertThat(memory).isNotNull();
+        assertThat(counters).isNotNull();
+        org.springframework.ai.chat.memory.ChatMemory chatMemory =
+                mock(org.springframework.ai.chat.memory.ChatMemory.class);
+        memory.put(StreamingSessionAgentManager.memoryKey(TENANT_A, "user-1", "ROLE_CASHIER"), chatMemory);
+        memory.put(StreamingSessionAgentManager.memoryKey(TENANT_A, "user-2", "ROLE_CASHIER"), chatMemory);
+        memory.put(StreamingSessionAgentManager.memoryKey(TENANT_B, "user-1", "ROLE_CASHIER"), chatMemory);
+        counters.put(
+                StreamingSessionAgentManager.actorKey(TENANT_A, "user-1"),
+                new java.util.concurrent.atomic.AtomicInteger(3));
+        counters.put(
+                StreamingSessionAgentManager.actorKey(TENANT_B, "user-1"),
+                new java.util.concurrent.atomic.AtomicInteger(3));
+
+        manager.evict("user-1");
+
+        assertThat(memory.asMap().keySet())
+                .containsExactlyInAnyOrder(
+                        StreamingSessionAgentManager.memoryKey(TENANT_A, "user-2", "ROLE_CASHIER"),
+                        StreamingSessionAgentManager.memoryKey(TENANT_B, "user-1", "ROLE_CASHIER"));
+        assertThat(counters.asMap().keySet())
+                .containsExactly(StreamingSessionAgentManager.actorKey(TENANT_B, "user-1"));
+    }
+
+    @Test
     @DisplayName("a real recorder writes a streamed turn's trace across a thread hop (#1850)")
     void streamChat_writesARealTraceAcrossAThreadHop() {
         // The mock-based tests above prove the calls happen; this one proves a trace is actually
@@ -872,6 +949,12 @@ class StreamingSessionAgentManagerTest {
 
     /** The same manager the suite builds, with an eval-trace recorder wired in (#1850). */
     private StreamingSessionAgentManager managerWithRecorder(ToolInvocationRecorder recorder) {
+        return managerWith(null, recorder);
+    }
+
+    private StreamingSessionAgentManager managerWith(
+            @org.jspecify.annotations.Nullable ToolExecutionAuditLogger auditLogger,
+            @org.jspecify.annotations.Nullable ToolInvocationRecorder recorder) {
         return new StreamingSessionAgentManager(
                 streamingChatModel,
                 toolRegistry,
@@ -880,7 +963,7 @@ class StreamingSessionAgentManagerTest {
                 scopedContentRetrieverFactory,
                 rolePromptResolver,
                 simpleChatFastPath,
-                null, // toolAuditService
+                auditLogger,
                 telemetryEmitter,
                 null, // openApiToolProvider
                 null, // requestScopedUserContext

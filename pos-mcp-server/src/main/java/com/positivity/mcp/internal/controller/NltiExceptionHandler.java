@@ -2,6 +2,7 @@ package com.positivity.mcp.internal.controller;
 
 import com.positivity.mcp.internal.exception.InvalidDocumentMetadataException;
 import com.positivity.mcp.internal.exception.RateLimitExceededException;
+import com.positivity.mcp.internal.exception.SessionNotFoundException;
 import com.positivity.mcp.internal.exception.SessionOwnershipViolationException;
 import com.positivity.mcp.internal.exception.WritePlanConflictException;
 import com.positivity.mcp.internal.exception.WritePlanExecutionException;
@@ -100,6 +101,24 @@ class NltiExceptionHandler {
                         "INVALID_DOCUMENT_METADATA",
                         ex.getMessage(),
                         HttpStatus.BAD_REQUEST.value(),
+                        Instant.now(clock).toString(),
+                        correlationId.toString()));
+    }
+
+    /**
+     * ADR-0062 plan WS6 (R-B6): a session id the bound tenant does not have — another tenant's or
+     * one that never existed — is a plain 404, never a cross-tenant read and never a 403 that would
+     * reveal the id exists elsewhere.
+     */
+    @ExceptionHandler(SessionNotFoundException.class)
+    ResponseEntity<ApiError> handleSessionNotFound(SessionNotFoundException ex, HttpServletRequest request) {
+        UUID correlationId = NltiCorrelationIdSupport.resolveFromRequest(request);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .header(NltiCorrelationIdSupport.CORRELATION_ID_HEADER, correlationId.toString())
+                .body(ApiError.of(
+                        "SESSION_NOT_FOUND",
+                        ex.getMessage(),
+                        HttpStatus.NOT_FOUND.value(),
                         Instant.now(clock).toString(),
                         correlationId.toString()));
     }

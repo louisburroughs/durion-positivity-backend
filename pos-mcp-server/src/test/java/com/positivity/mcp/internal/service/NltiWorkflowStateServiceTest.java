@@ -12,10 +12,12 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.mcp.internal.domain.WorkflowState;
 import com.positivity.mcp.internal.entity.NltiSession;
+import com.positivity.mcp.internal.exception.SessionNotFoundException;
 import com.positivity.mcp.internal.exception.SessionOwnershipViolationException;
 import com.positivity.mcp.internal.repository.NltiSessionRepository;
 import com.positivity.mcp.internal.telemetry.NltiWorkflowTransitionEmitter;
 import com.positivity.mcp.internal.telemetry.NltiWorkflowTransitionTelemetry;
+import com.positivity.mcp.tenancy.BoundTenant;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -30,6 +32,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@ExtendWith(BoundTenant.class)
 class NltiWorkflowStateServiceTest {
 
     private static final String SUBJECT = "alice";
@@ -48,7 +51,8 @@ class NltiWorkflowStateServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new NltiWorkflowStateService(sessionRepository, transitionEmitter, FIXED_CLOCK);
+        service = new NltiWorkflowStateService(
+                sessionRepository, new NltiSessionAccess(sessionRepository), transitionEmitter, FIXED_CLOCK);
     }
 
     private NltiSession ownedSession(WorkflowState state) {
@@ -81,7 +85,7 @@ class NltiWorkflowStateServiceTest {
     @DisplayName("advance sets and saves the new state on an owned session")
     void advance_setsAndSavesState_whenOwned() {
         NltiSession session = ownedSession(WorkflowState.IDLE);
-        when(sessionRepository.findByIdAndSubjectId(SESSION_ID, SUBJECT)).thenReturn(Optional.of(session));
+        when(sessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
         when(sessionRepository.save(any(NltiSession.class))).thenAnswer(inv -> inv.getArgument(0));
 
         WorkflowState result = service.advance(SESSION_ID, SUBJECT, WorkflowState.RECEIVING_ASN, CORRELATION_ID);
@@ -95,7 +99,7 @@ class NltiWorkflowStateServiceTest {
     @DisplayName("advance emits one nlti.workflow.transition telemetry event carrying from -> to")
     void advance_emitsTransitionTelemetry() {
         NltiSession session = ownedSession(WorkflowState.IDLE);
-        when(sessionRepository.findByIdAndSubjectId(SESSION_ID, SUBJECT)).thenReturn(Optional.of(session));
+        when(sessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
         when(sessionRepository.save(any(NltiSession.class))).thenAnswer(inv -> inv.getArgument(0));
 
         service.advance(SESSION_ID, SUBJECT, WorkflowState.PROCESSING_RETURN, CORRELATION_ID);
@@ -119,7 +123,7 @@ class NltiWorkflowStateServiceTest {
     @DisplayName("advance to the state already held emits the transition with changed=false")
     void advance_toSameState_emitsUnchangedTransition() {
         NltiSession session = ownedSession(WorkflowState.PROCESSING_RETURN);
-        when(sessionRepository.findByIdAndSubjectId(SESSION_ID, SUBJECT)).thenReturn(Optional.of(session));
+        when(sessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
         when(sessionRepository.save(any(NltiSession.class))).thenAnswer(inv -> inv.getArgument(0));
 
         service.advance(SESSION_ID, SUBJECT, WorkflowState.PROCESSING_RETURN, CORRELATION_ID);
@@ -136,7 +140,7 @@ class NltiWorkflowStateServiceTest {
     @DisplayName("a telemetry emitter failure never fails the persisted transition")
     void advance_telemetryFailure_doesNotFailRequest() {
         NltiSession session = ownedSession(WorkflowState.IDLE);
-        when(sessionRepository.findByIdAndSubjectId(SESSION_ID, SUBJECT)).thenReturn(Optional.of(session));
+        when(sessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
         when(sessionRepository.save(any(NltiSession.class))).thenAnswer(inv -> inv.getArgument(0));
         doThrow(new IllegalStateException("telemetry sink down"))
                 .when(transitionEmitter)
@@ -148,12 +152,28 @@ class NltiWorkflowStateServiceTest {
     }
 
     @Test
-    @DisplayName("advance rejects a session not owned by the subject (fail-closed, no telemetry)")
+    @DisplayName("advance rejects a session of this tenant owned by another subject (403, no telemetry)")
     void advance_throwsWhenNotOwned() {
-        when(sessionRepository.findByIdAndSubjectId(SESSION_ID, SUBJECT)).thenReturn(Optional.empty());
+        NltiSession session = ownedSession(WorkflowState.IDLE);
+        session.setSubjectId("someone-else");
+        when(sessionRepository.findById(SESSION_ID)).thenReturn(Optional.of(session));
 
         assertThatThrownBy(() -> service.advance(SESSION_ID, SUBJECT, WorkflowState.CREATING_PO, CORRELATION_ID))
                 .isInstanceOf(SessionOwnershipViolationException.class);
+        verify(sessionRepository, never()).save(any());
+        verifyNoInteractions(transitionEmitter);
+    }
+
+    @Test
+    @DisplayName(
+            "advance answers not-found for a session the bound tenant does not have (ADR-0062 WS6: 404, no telemetry)")
+    void advance_throwsNotFoundWhenAbsentInTenant() {
+        // Another tenant's session id looks exactly like this: Hibernate's tenant filter and RLS
+        // hide the row, so the repository answers empty under this tenant's binding.
+        when(sessionRepository.findById(SESSION_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.advance(SESSION_ID, SUBJECT, WorkflowState.CREATING_PO, CORRELATION_ID))
+                .isInstanceOf(SessionNotFoundException.class);
         verify(sessionRepository, never()).save(any());
         verifyNoInteractions(transitionEmitter);
     }

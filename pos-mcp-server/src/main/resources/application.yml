@@ -321,8 +321,10 @@ mcp:
     # (eval-result-path, produced by scripts/eval_live.py) reports thresholds.passed=true and is
     # younger than eval-freshness-hours — otherwise the run downgrades to shadow with a WARN.
     # Legacy mcp.tuning.enabled=true (deprecated, kept for operators still setting
-    # MCP_TUNING_ENABLED) is treated as mode=live when mode is unset.
-    mode: ${MCP_TUNING_MODE:off}
+    # MCP_TUNING_ENABLED) is treated as mode=live when mode is unset -- which is why the default
+    # here is blank rather than "off": TuningMode.resolve answers OFF only when both are absent
+    # (TuningModeConfigurationTest).
+    mode: ${MCP_TUNING_MODE:}
     enabled: ${MCP_TUNING_ENABLED:}
     eval-result-path: ${MCP_TUNING_EVAL_RESULT_PATH:target/eval/baseline-live-python.json}
     eval-freshness-hours: ${MCP_TUNING_EVAL_FRESHNESS_HOURS:48}

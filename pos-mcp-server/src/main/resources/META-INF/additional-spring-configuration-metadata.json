@@ -137,15 +137,39 @@
       "defaultValue": 2
     },
     {
+      "name": "mcp.tuning.mode",
+      "type": "java.lang.String",
+      "description": "Adaptive MCP tool priority tuning: off (the cron is a no-op), shadow (proposals are logged to mcp.tuning.shadow and counted, nothing is written) or live (per-tenant overlays and the global row are written, gated on a fresh, passing eval baseline). application.yml leaves this unset on purpose (MCP_TUNING_MODE with no fallback): TuningMode.resolve treats an unset mode as off only when the deprecated mcp.tuning.enabled is also unset or false, and as live when mcp.tuning.enabled=true, so a hard default here would shadow that legacy flag.",
+      "defaultValue": ""
+    },
+    {
       "name": "mcp.tuning.enabled",
       "type": "java.lang.Boolean",
-      "description": "Enable adaptive MCP tool priority tuning.",
-      "defaultValue": true
+      "description": "Deprecated boolean form of mcp.tuning.mode: true means live when the mode is unset.",
+      "defaultValue": false,
+      "deprecation": {
+        "level": "warning",
+        "reason": "Replaced by the three-state mcp.tuning.mode; true is read as mode=live only while mcp.tuning.mode is unset.",
+        "replacement": "mcp.tuning.mode"
+      }
     },
     {
       "name": "mcp.tuning.cron",
       "type": "java.lang.String",
-      "description": "Cron expression controlling MCP tuning schedule."
+      "description": "Cron expression controlling MCP tuning schedule.",
+      "defaultValue": "0 0 2 * * ?"
+    },
+    {
+      "name": "mcp.tuning.eval-result-path",
+      "type": "java.lang.String",
+      "description": "Eval baseline file the live tuning gate reads (thresholds.passed must be true); a missing, stale, unreadable or failing baseline downgrades a live run to shadow behaviour.",
+      "defaultValue": "target/eval/baseline-live-python.json"
+    },
+    {
+      "name": "mcp.tuning.eval-freshness-hours",
+      "type": "java.lang.Long",
+      "description": "Maximum age of the eval baseline for the live tuning gate; an older file downgrades the run to shadow behaviour.",
+      "defaultValue": 48
     },
     {
       "name": "mcp.model.fallback.enabled",
