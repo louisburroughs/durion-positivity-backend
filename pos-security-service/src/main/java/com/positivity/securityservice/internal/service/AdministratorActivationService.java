@@ -6,6 +6,7 @@ import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.entity.UserActivationToken;
 import com.positivity.securityservice.internal.exception.ActivationTokenInvalidException;
 import com.positivity.securityservice.internal.exception.PlatformTenantRequiredException;
+import com.positivity.securityservice.internal.exception.UserNotAwaitingActivationException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.UserActivationTokenRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -30,6 +31,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * First-administrator activation (ADR-0062 §7, plan WS2b-3, decided 2026-09-10). Provisioning
@@ -74,6 +77,8 @@ public class AdministratorActivationService {
      *
      * @throws PlatformTenantRequiredException when the caller is not bound to the platform tenant
      * @throws UserNotFoundException when the user does not exist in that tenant
+     * @throws UserNotAwaitingActivationException when the user is not the credential-expired,
+     *     never-signed-in account provisioning created (a live account keeps its password)
      */
     public @NonNull IssuedToken mint(@NonNull UUID tenantId, @NonNull UUID userId) {
         UUID bound = TenantContext.current().orElse(null);
@@ -150,9 +155,14 @@ public class AdministratorActivationService {
                 @NonNull Instant now,
                 @NonNull Instant expiresAt,
                 @NonNull String actor) {
+            // Locked for the rest of the transaction: two mints for the same administrator serialize
+            // here, so the second sees the first's row and closes it instead of leaving two live tokens.
             User user = userRepository
-                    .findById(userId)
+                    .findByIdForUpdate(userId)
                     .orElseThrow(() -> new UserNotFoundException("User not found: " + userId));
+            if (!isAwaitingActivation(user)) {
+                throw new UserNotAwaitingActivationException(userId);
+            }
             List<UserActivationToken> open = tokenRepository.findByTenantIdAndUserIdAndUsedAtIsNull(tenantId, userId);
             open.forEach(earlier -> earlier.setUsedAt(now));
             tokenRepository.saveAll(open);
@@ -164,7 +174,7 @@ public class AdministratorActivationService {
                     .createdBy(actor)
                     .createdAt(now)
                     .build());
-            audit(new AuditLogEventRequest(
+            auditAfterCommit(new AuditLogEventRequest(
                     "AdministratorActivationTokenMinted",
                     actor,
                     userId.toString(),
@@ -183,16 +193,25 @@ public class AdministratorActivationService {
         /** Under the token's tenant binding. Consumes the token first, so a concurrent second use fails. */
         @Transactional
         public void exchange(@NonNull UserActivationToken row, @NonNull String newPassword) {
+            // The user row is locked first, the same lock issue() takes: a mint running concurrently
+            // waits here and then finds this token consumed and the user activated, so it refuses
+            // (409) instead of committing a fresh token that could redeem against the live password.
+            // A user hidden by row-level security (the row's tenant no longer holds it), or one no
+            // longer awaiting activation, is the same refusal as an unknown token: nothing about the
+            // account is revealed to the unauthenticated caller.
+            User user =
+                    userRepository.findByIdForUpdate(row.getUserId()).orElseThrow(ActivationTokenInvalidException::new);
+            if (!isAwaitingActivation(user)) {
+                throw new ActivationTokenInvalidException();
+            }
             Instant now = Instant.now(clock);
             if (tokenRepository.consume(row.getId(), now) != 1) {
                 throw new ActivationTokenInvalidException();
             }
-            // A user hidden by row-level security (the row's tenant no longer holds it) is the same
-            // refusal as an unknown token: nothing about the account is revealed.
-            User user = userRepository.findById(row.getUserId()).orElseThrow(ActivationTokenInvalidException::new);
             user.setPassword(passwordEncoder.encode(newPassword));
             user.setCredentialsNonExpired(true);
             user.setCredentialsExpireAt(null);
+            user.setAwaitingActivation(false);
             userRepository.save(user);
             log.info(
                     "Administrator {} ({}) of tenant {} activated with token {}",
@@ -200,6 +219,37 @@ public class AdministratorActivationService {
                     user.getId(),
                     row.getTenantId(),
                     row.getId());
+        }
+
+        /**
+         * The account provisioning creates and nobody has activated yet, read from the explicit
+         * {@code users.awaiting_activation} marker that only {@code createUserAwaitingActivation}
+         * sets and that activation and every ordinary password set clear. Credential state alone
+         * cannot tell that account from a live one whose credentials an administrator expired
+         * before its first login, so the marker decides; the expired-credentials invariant of the
+         * provisioning state is kept as a defensive AND. A live account keeps its password — a
+         * token must never overwrite it.
+         */
+        static boolean isAwaitingActivation(@NonNull User user) {
+            return user.isAwaitingActivation() && !user.isCredentialsNonExpired();
+        }
+
+        /**
+         * Emits the audit event once the surrounding transaction has committed, so a failing audit
+         * write can neither block the mint nor mark the shared transaction rollback-only; outside a
+         * transaction it is emitted at once. Either way a failure is a WARN, never a fault.
+         */
+        private void auditAfterCommit(AuditLogEventRequest request) {
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        audit(request);
+                    }
+                });
+            } else {
+                audit(request);
+            }
         }
 
         private void audit(AuditLogEventRequest request) {

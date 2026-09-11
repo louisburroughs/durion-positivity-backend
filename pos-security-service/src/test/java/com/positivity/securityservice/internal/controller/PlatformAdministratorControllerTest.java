@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.securityservice.internal.exception.PlatformTenantRequiredException;
+import com.positivity.securityservice.internal.exception.UserNotAwaitingActivationException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import com.positivity.securityservice.internal.service.AdministratorActivationService;
@@ -128,6 +129,17 @@ class PlatformAdministratorControllerTest {
                         .with(user("admin.platform").authorities(() -> "platform:tenant:provision")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("a user that is not awaiting activation → 409 USER_NOT_AWAITING_ACTIVATION")
+    void liveUserIs409() throws Exception {
+        when(activationService.mint(TENANT, USER)).thenThrow(new UserNotAwaitingActivationException(USER));
+
+        mockMvc.perform(post(PATH, TENANT, USER)
+                        .with(user("admin.platform").authorities(() -> "platform:tenant:provision")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("USER_NOT_AWAITING_ACTIVATION"));
     }
 
     @TestConfiguration

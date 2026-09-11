@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.hasLength;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -11,6 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.securityservice.BaseContractIntegrationTest;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.entity.UserActivationToken;
+import com.positivity.securityservice.internal.exception.ActivationTokenInvalidException;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserActivationTokenRepository;
@@ -21,6 +24,7 @@ import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantHeaders;
 import com.positivity.tenancy.web.TenantContextFilter;
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -76,6 +80,9 @@ class AdministratorActivationIT extends BaseContractIntegrationTest {
     private AdministratorActivationService activationService;
 
     @Autowired
+    private AdministratorActivationService.BoundOperations boundOperations;
+
+    @Autowired
     private TenantContextFilter tenantContextFilter;
 
     @Value("${pos.tenancy.default-tenant-id}")
@@ -120,8 +127,9 @@ class AdministratorActivationIT extends BaseContractIntegrationTest {
 
     private void deleteUserIfPresent() {
         userRepository.findByUsername(USERNAME).ifPresent(user -> {
-            tokenRepository.deleteAll(
-                    tokenRepository.findByTenantIdAndUserIdAndUsedAtIsNull(defaultTenant, user.getId()));
+            tokenRepository.deleteAll(tokenRepository.findAll().stream()
+                    .filter(row -> user.getId().equals(row.getUserId()))
+                    .toList());
             roleAssignmentRepository.deleteAll(roleAssignmentRepository.findByUser(user));
             userRepository.delete(user);
         });
@@ -136,6 +144,7 @@ class AdministratorActivationIT extends BaseContractIntegrationTest {
     void activationRoundTrip() throws Exception {
         User before = userRepository.findById(userId).orElseThrow();
         assertThat(before.isCredentialsNonExpired()).isFalse();
+        assertThat(before.isAwaitingActivation()).as("provisioning marker set").isTrue();
 
         // 1. Nothing can sign in: the generated password was discarded, so this is a plain bad-password 401.
         login("anything-at-all")
@@ -167,13 +176,22 @@ class AdministratorActivationIT extends BaseContractIntegrationTest {
         User after = userRepository.findById(userId).orElseThrow();
         assertThat(after.isCredentialsNonExpired()).isTrue();
         assertThat(after.getCredentialsExpireAt()).isNull();
+        assertThat(after.isAwaitingActivation())
+                .as("provisioning marker cleared")
+                .isFalse();
 
         // 5. The administrator signs in with the password they chose.
         login(NEW_PASSWORD)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isString());
 
-        // 6. The token is dead: reuse is the same refusal as a bad token.
+        // 6. A live account cannot be re-issued a token: the operator's mint is 409 and the password stays.
+        mockMvc.perform(withAuth(post(mintPath()), PLATFORM_AUTHORITIES)
+                        .header(TenantHeaders.HTTP_TENANT_ID, PlatformTenant.ID.toString()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("USER_NOT_AWAITING_ACTIVATION"));
+
+        // 7. The token is dead: reuse is the same refusal as a bad token.
         activate(token, "An0therOne!")
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("ACTIVATION_TOKEN_INVALID"));
@@ -213,6 +231,34 @@ class AdministratorActivationIT extends BaseContractIntegrationTest {
                 .andExpect(jsonPath("$.code").value("ACTIVATION_TOKEN_INVALID"));
         activate("", NEW_PASSWORD).andExpect(status().isBadRequest());
         activate("abc", " ").andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName(
+            "the consume update itself refuses an expired token, so a token expiring between check and update is not consumed")
+    void consumeRefusesAnExpiredToken() {
+        String token = "expired-in-the-race";
+        UserActivationToken expired = tokenRepository.save(UserActivationToken.builder()
+                .tenantId(defaultTenant)
+                .userId(userId)
+                .tokenHash(AdministratorActivationService.hash(token))
+                .expiresAt(Instant.now().minusSeconds(1))
+                .createdBy("ws2b-3-test")
+                .createdAt(Instant.now().minusSeconds(3600))
+                .build());
+
+        // Straight at the transactional half, past the service's own expiry check.
+        assertThatThrownBy(
+                        () -> TenantContext.runAs(defaultTenant, () -> boundOperations.exchange(expired, NEW_PASSWORD)))
+                .isInstanceOf(ActivationTokenInvalidException.class);
+
+        assertThat(tokenRepository.findById(expired.getId()).orElseThrow().getUsedAt())
+                .as("an expired token is never marked used")
+                .isNull();
+        assertThat(userRepository.findById(userId).orElseThrow().isCredentialsNonExpired())
+                .as("the account is still awaiting activation")
+                .isFalse();
+        tokenRepository.delete(expired);
     }
 
     private org.springframework.test.web.servlet.ResultActions login(String password) throws Exception {

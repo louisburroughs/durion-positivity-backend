@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,13 +57,14 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public UserDto createUserAwaitingActivation(String username, Set<String> roleNames) {
+    public @NonNull UserDto createUserAwaitingActivation(@NonNull String username, @NonNull Set<String> roleNames) {
         UserDto created = createUser(username, generatePassword(), roleNames);
         User user = userRepository
                 .findById(created.getId())
                 .orElseThrow(() -> new IllegalStateException("User " + created.getId() + " vanished after creation"));
         user.setCredentialsNonExpired(false);
         user.setCredentialsExpireAt(Instant.now(clock));
+        user.setAwaitingActivation(true);
         userRepository.save(user);
         return created;
     }
@@ -185,6 +187,9 @@ public class UserServiceImpl implements UserService {
         }
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
             existingUser.setPassword(passwordEncoder.encode(request.getPassword()));
+            // An ordinary password set ends the awaiting-activation state (WS2b-3): a token minted
+            // before it can no longer overwrite this password.
+            existingUser.setAwaitingActivation(false);
         }
         if (request.getRoles() != null) {
             // A non-null roles list reconciles the effective set the same way assignRoles does,

@@ -17,6 +17,7 @@ import com.positivity.securityservice.internal.exception.SelfRegistrationReviewC
 import com.positivity.securityservice.internal.exception.TemplateRoleImmutableException;
 import com.positivity.securityservice.internal.exception.TenantNotFoundException;
 import com.positivity.securityservice.internal.exception.TokenUserIdMissingException;
+import com.positivity.securityservice.internal.exception.UserNotAwaitingActivationException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -578,6 +579,28 @@ public class GlobalExceptionHandler {
         String correlationId = extractCorrelationId(request);
         log.warn("Activation refused (correlationId={}): {}", correlationId, ex.getMessage());
         return respond(HttpStatus.UNAUTHORIZED, "ACTIVATION_TOKEN_INVALID", ex.getMessage(), correlationId);
+    }
+
+    /**
+     * Handles UserNotAwaitingActivationException: an activation token was requested for a user
+     * that is not the credential-expired, never-signed-in account provisioning creates (ADR-0062
+     * §7, WS2b-3) — a live account keeps its password.
+     *
+     * <p>
+     * <b>HTTP Status:</b> 409 Conflict (USER_NOT_AWAITING_ACTIVATION): the request is well formed
+     * and authorized but conflicts with the account's state.
+     *
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 409 status and correlation ID
+     */
+    @ExceptionHandler(UserNotAwaitingActivationException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ResponseEntity<ApiError> handleUserNotAwaitingActivationException(
+            UserNotAwaitingActivationException ex, WebRequest request) {
+        String correlationId = extractCorrelationId(request);
+        log.warn("Activation token refused (correlationId={}): {}", correlationId, ex.getMessage());
+        return respond(HttpStatus.CONFLICT, "USER_NOT_AWAITING_ACTIVATION", ex.getMessage(), correlationId);
     }
 
     /**

@@ -49,13 +49,15 @@ public class PlatformAdministratorController {
                     first ADMIN unable to sign in, or whenever that administrator has lost an unexchanged token; \
                     do not use updateUser to set a tenant's first password from the platform tenant.
                     Preconditions: the caller must hold platform:tenant:provision and be bound to the platform \
-                    tenant; the user must exist in the named tenant.
+                    tenant; the user must exist in the named tenant and still be awaiting activation (credentials \
+                    expired by provisioning, never signed in).
                     Required inputs: tenantId and userId as path parameters; there is no request body.
                     Emits a SECURITY_PLATFORM_ADMINISTRATOR_ACTIVATION_TOKEN_MINT event and an audit event on the \
                     user; only the token's SHA-256 is stored, so a lost token is replaced by minting again.
                     Returns 201 with the token and expiresAt (72 hours); 403 with PLATFORM_TENANT_REQUIRED when the \
                     caller is bound to a tenant other than the platform tenant; 404 with USER_NOT_FOUND when the \
-                    user is not in that tenant.
+                    user is not in that tenant; 409 with USER_NOT_AWAITING_ACTIVATION when the user has already \
+                    been activated or signed in, so a live account's password is never overwritten.
                     """)
     @ApiResponse(
             responseCode = "201",
@@ -68,6 +70,11 @@ public class PlatformAdministratorController {
     @ApiResponse(
             responseCode = "404",
             description = "USER_NOT_FOUND: no such user in that tenant",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "USER_NOT_AWAITING_ACTIVATION: the user has been activated or signed in already, or is "
+                    + "not the credential-expired account provisioning created; a live account keeps its password",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",

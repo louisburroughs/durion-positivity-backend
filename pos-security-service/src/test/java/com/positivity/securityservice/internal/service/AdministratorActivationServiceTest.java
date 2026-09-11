@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -16,6 +17,7 @@ import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.entity.UserActivationToken;
 import com.positivity.securityservice.internal.exception.ActivationTokenInvalidException;
 import com.positivity.securityservice.internal.exception.PlatformTenantRequiredException;
+import com.positivity.securityservice.internal.exception.UserNotAwaitingActivationException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.UserActivationTokenRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
@@ -34,8 +36,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * First-administrator activation (ADR-0062 §7, WS2b-3): mint under the platform binding only,
@@ -73,6 +78,7 @@ class AdministratorActivationServiceTest {
         user.setPassword("$2a$unmatchable");
         user.setCredentialsNonExpired(false);
         user.setCredentialsExpireAt(NOW.minus(Duration.ofDays(1)));
+        user.setAwaitingActivation(true);
         return user;
     }
 
@@ -119,9 +125,10 @@ class AdministratorActivationServiceTest {
         @DisplayName(
                 "stores only the hash under the target tenant's binding, closes earlier open tokens, 72 h validity")
         void mintsUnderTheTargetBinding() {
+            // No transaction here, so the audit is emitted at once; the deferral is proven below.
             when(auditProvider.getIfAvailable()).thenReturn(audit);
             AtomicReference<UUID> boundDuringLookup = new AtomicReference<>();
-            when(users.findById(USER)).thenAnswer(inv -> {
+            when(users.findByIdForUpdate(USER)).thenAnswer(inv -> {
                 boundDuringLookup.set(TenantContext.require());
                 return Optional.of(user());
             });
@@ -166,7 +173,7 @@ class AdministratorActivationServiceTest {
         @Test
         @DisplayName("two mints never produce the same token")
         void tokensAreRandom() {
-            when(users.findById(USER)).thenReturn(Optional.of(user()));
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(user()));
             when(tokens.findByTenantIdAndUserIdAndUsedAtIsNull(TENANT, USER)).thenReturn(List.of());
             TenantContext.bind(PlatformTenant.ID);
 
@@ -179,7 +186,7 @@ class AdministratorActivationServiceTest {
         @Test
         @DisplayName("a user the target tenant does not hold is 404 USER_NOT_FOUND, and nothing is written")
         void unknownUserIs404() {
-            when(users.findById(USER)).thenReturn(Optional.empty());
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.empty());
             TenantContext.bind(PlatformTenant.ID);
 
             assertThatThrownBy(() -> service.mint(TENANT, USER)).isInstanceOf(UserNotFoundException.class);
@@ -188,11 +195,77 @@ class AdministratorActivationServiceTest {
         }
 
         @Test
+        @DisplayName("a user whose credentials are live is 409: a token must never overwrite a live password")
+        void liveUserIs409() {
+            User live = user();
+            live.setCredentialsNonExpired(true);
+            live.setCredentialsExpireAt(null);
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(live));
+            TenantContext.bind(PlatformTenant.ID);
+
+            assertThatThrownBy(() -> service.mint(TENANT, USER))
+                    .isInstanceOf(UserNotAwaitingActivationException.class)
+                    .hasMessageContaining(USER.toString());
+            verify(tokens, never()).save(any());
+            verify(tokens, never()).saveAll(any());
+        }
+
+        @Test
+        @DisplayName("an ordinary account whose credentials an administrator expired before its first login is 409:"
+                + " only the explicit marker names the provisioning state")
+        void adminExpiredNeverSignedInUserIs409() {
+            User expiredByAdmin = user();
+            expiredByAdmin.setAwaitingActivation(false);
+            assertThat(expiredByAdmin.isCredentialsNonExpired()).isFalse();
+            assertThat(expiredByAdmin.getLastSuccessfulLoginAt()).isNull();
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(expiredByAdmin));
+            TenantContext.bind(PlatformTenant.ID);
+
+            assertThatThrownBy(() -> service.mint(TENANT, USER)).isInstanceOf(UserNotAwaitingActivationException.class);
+            verify(tokens, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("the marker alone is not enough: credentials that are live again make it 409 (defensive AND)")
+        void markerWithLiveCredentialsIs409() {
+            User inconsistent = user();
+            inconsistent.setCredentialsNonExpired(true);
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(inconsistent));
+            TenantContext.bind(PlatformTenant.ID);
+
+            assertThatThrownBy(() -> service.mint(TENANT, USER)).isInstanceOf(UserNotAwaitingActivationException.class);
+            verify(tokens, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("inside a transaction the audit event waits for the commit and its failure is only a WARN")
+        void auditIsEmittedAfterCommit() {
+            when(auditProvider.getIfAvailable()).thenReturn(audit);
+            when(audit.createEvent(any())).thenThrow(new IllegalStateException("audit down"));
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(user()));
+            when(tokens.findByTenantIdAndUserIdAndUsedAtIsNull(TENANT, USER)).thenReturn(List.of());
+            TenantContext.bind(PlatformTenant.ID);
+
+            TransactionSynchronizationManager.initSynchronization();
+            try {
+                assertThat(service.mint(TENANT, USER).token()).isNotBlank();
+                verify(audit, never()).createEvent(any());
+                List<TransactionSynchronization> registered = TransactionSynchronizationManager.getSynchronizations();
+                assertThat(registered).hasSize(1);
+                // A throwing audit after commit is swallowed, never surfaced to the caller.
+                registered.forEach(TransactionSynchronization::afterCommit);
+                verify(audit).createEvent(any());
+            } finally {
+                TransactionSynchronizationManager.clearSynchronization();
+            }
+        }
+
+        @Test
         @DisplayName("an audit failure does not fail the mint")
         void auditFailureIsSwallowed() {
             when(auditProvider.getIfAvailable()).thenReturn(audit);
             when(audit.createEvent(any())).thenThrow(new IllegalStateException("audit down"));
-            when(users.findById(USER)).thenReturn(Optional.of(user()));
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(user()));
             when(tokens.findByTenantIdAndUserIdAndUsedAtIsNull(TENANT, USER)).thenReturn(List.of());
             TenantContext.bind(PlatformTenant.ID);
 
@@ -216,7 +289,7 @@ class AdministratorActivationServiceTest {
             when(tokens.consume(row.getId(), NOW)).thenReturn(1);
             User user = user();
             AtomicReference<UUID> boundDuringUpdate = new AtomicReference<>();
-            when(users.findById(USER)).thenAnswer(inv -> {
+            when(users.findByIdForUpdate(USER)).thenAnswer(inv -> {
                 boundDuringUpdate.set(TenantContext.require());
                 return Optional.of(user);
             });
@@ -231,7 +304,33 @@ class AdministratorActivationServiceTest {
             assertThat(user.getPassword()).isEqualTo("$2a$hashed");
             assertThat(user.isCredentialsNonExpired()).isTrue();
             assertThat(user.getCredentialsExpireAt()).isNull();
+            assertThat(user.isAwaitingActivation()).as("the marker is cleared").isFalse();
             verify(users).save(user);
+            verify(users, never()).findById(any());
+            // The user lock is taken before the token is consumed, the same order issue() uses, so a
+            // concurrent mint cannot slip a fresh token in between the consume and the password write.
+            InOrder inOrder = inOrder(users, tokens);
+            inOrder.verify(users).findByIdForUpdate(USER);
+            inOrder.verify(tokens).consume(row.getId(), NOW);
+            inOrder.verify(users).save(user);
+        }
+
+        @Test
+        @DisplayName(
+                "a user no longer awaiting activation is refused before the token is consumed, as an invalid token")
+        void userNoLongerAwaitingIsInvalidAndTokenUntouched() {
+            UserActivationToken row = row(HASH, NOW.plus(Duration.ofHours(1)), null);
+            when(tokens.findByTokenHash(HASH)).thenReturn(Optional.of(row));
+            User activated = user();
+            activated.setAwaitingActivation(false);
+            activated.setCredentialsNonExpired(true);
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(activated));
+
+            assertThatThrownBy(() -> service.activate(TOKEN, "Sup3rS3cret!"))
+                    .isInstanceOf(ActivationTokenInvalidException.class);
+            verify(tokens, never()).consume(any(), any());
+            verify(users, never()).save(any());
+            verify(encoder, never()).encode(anyString());
         }
 
         @Test
@@ -241,7 +340,7 @@ class AdministratorActivationServiceTest {
 
             assertThatThrownBy(() -> service.activate("nope", "Sup3rS3cret!"))
                     .isInstanceOf(ActivationTokenInvalidException.class);
-            verify(users, never()).findById(any());
+            verify(users, never()).findByIdForUpdate(any());
             verify(encoder, never()).encode(anyString());
         }
 
@@ -271,6 +370,7 @@ class AdministratorActivationServiceTest {
         void raceOnConsumeIsInvalid() {
             UserActivationToken row = row(HASH, NOW.plus(Duration.ofHours(1)), null);
             when(tokens.findByTokenHash(HASH)).thenReturn(Optional.of(row));
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(user()));
             when(tokens.consume(row.getId(), NOW)).thenReturn(0);
 
             assertThatThrownBy(() -> service.activate(TOKEN, "Sup3rS3cret!"))
@@ -283,11 +383,11 @@ class AdministratorActivationServiceTest {
         void hiddenUserIsInvalid() {
             UserActivationToken row = row(HASH, NOW.plus(Duration.ofHours(1)), null);
             when(tokens.findByTokenHash(HASH)).thenReturn(Optional.of(row));
-            when(tokens.consume(eq(row.getId()), any())).thenReturn(1);
-            when(users.findById(USER)).thenReturn(Optional.empty());
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.activate(TOKEN, "Sup3rS3cret!"))
                     .isInstanceOf(ActivationTokenInvalidException.class);
+            verify(tokens, never()).consume(eq(row.getId()), any());
         }
     }
 }
