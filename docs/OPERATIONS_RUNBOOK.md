@@ -906,7 +906,12 @@ curl -X POST "https://<gateway>/workorder/v1/outbox/replay?since=2026-07-01T00:0
 
 Seeding a brand-new replica: create the consumer's `ext_*` tables (Flyway), start the consumer,
 then call replay with `since` at the epoch (omit the parameter). Consumers skip anything already
-processed.
+processed. Replay is per tenant (ADR-0062 §3): a caller bound to an ordinary tenant re-emits only
+that tenant's outbox rows; a platform-tenant operator (`tid` = the platform tenant) re-emits every
+active tenant's rows in turn (`TenantIterator` over the owner's tenant registry — the platform
+tenant owns no domain rows of its own), and the response counts the rows queued across all of
+them. The Kafka `{domain}.outbox.replay-requested` command path always replays exactly the tenant
+on the command's header.
 
 #### pos-customer: seeding a party-identity replica
 
@@ -1278,6 +1283,17 @@ active tenant of the owner's `TenantRegistry` gets a manifest each window, zero-
 published nothing, so absence can be alerted on per tenant. Everything flows over the event
 channel; there are no synchronous domain-to-domain reconciliation calls (ADR-0044 §4). Reference
 pair: `pos-workorder` `ManifestPublisher` → `pos-customer` `WorkorderManifestListener`.
+
+Ledger rows recorded before `processed_events.tenant_id` existed (2026-09-11) have
+`tenant_id IS NULL`: they belong to no tenant's manifest, and a replay does **not** re-stamp them —
+the listener's `existsById(eventId)` short-circuit leaves an existing row untouched, so drift
+against such rows never self-heals. Alpha databases are recreated from the baselines on deploy,
+which clears them. Where a database is kept, repair once by hand before the first per-tenant
+windows are compared, with the tenant the cell served (the alpha default tenant unless it was
+multi-tenant already): `UPDATE processed_events SET tenant_id = '<tenant-id>' WHERE tenant_id IS
+NULL;`. Manifests published before the field existed carry no `tenantId` and are read as the
+platform tenant's (`ReconciliationManifestV1.tenantIdOr`), so a consumer that is behind at deploy
+time compares them exactly as it did before.
 
 Operational signals:
 
