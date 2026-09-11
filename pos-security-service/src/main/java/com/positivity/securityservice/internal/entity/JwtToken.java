@@ -26,8 +26,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * - JwtService handles retries with exponential backoff
  *
  * **Storage:**
- * - token: Access token (unique, nullable if refresh-only)
- * - refreshToken: Refresh token (unique, nullable if access-only)
+ * - token: Access token (unique)
+ * - refreshToken: Refresh token (unique; null for an impersonation token, which has no
+ *   refresh half — ADR-0062 §7, WS2b-4)
  * - subject: Token subject (username or principal)
  * - issuedAt: Token creation timestamp
  * - expiresAt: Access token expiration
@@ -49,7 +50,8 @@ public class JwtToken extends TenantScopedEntity {
     @Column(nullable = false, unique = true, columnDefinition = "TEXT")
     private String token;
 
-    @Column(nullable = false, unique = true, columnDefinition = "TEXT")
+    /** {@code null} for an impersonation token: it is never refreshable (WS2b-4). */
+    @Column(unique = true, columnDefinition = "TEXT")
     private String refreshToken;
 
     @Column(nullable = false)
@@ -58,7 +60,7 @@ public class JwtToken extends TenantScopedEntity {
     @Column(nullable = false)
     private Instant expiresAt;
 
-    @Column(nullable = false)
+    /** {@code null} whenever {@link #refreshToken} is. */
     private Instant refreshExpiresAt;
 
     @Column(nullable = false)

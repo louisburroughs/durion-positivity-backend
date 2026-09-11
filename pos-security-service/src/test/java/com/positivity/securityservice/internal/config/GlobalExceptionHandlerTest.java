@@ -1053,6 +1053,17 @@ class GlobalExceptionHandlerTest {
                             request -> handler.handlePlatformTenantRequiredException(
                                     new com.positivity.securityservice.internal.exception
                                             .PlatformTenantRequiredException(UUID.randomUUID()),
+                                    request)),
+                    Named.of("handleTenantNotFoundException", (HandlerInvocation)
+                            request -> handler.handleTenantNotFoundException(
+                                    new com.positivity.securityservice.internal.exception.TenantNotFoundException(
+                                            UUID.randomUUID()),
+                                    request)),
+                    Named.of("handleTenantNotImpersonableException", (HandlerInvocation)
+                            request -> handler.handleTenantNotImpersonableException(
+                                    new com.positivity.securityservice.internal.exception
+                                            .TenantNotImpersonableException(
+                                            UUID.randomUUID(), "its status is SUSPENDED"),
                                     request)));
         }
 

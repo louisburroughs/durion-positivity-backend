@@ -81,14 +81,17 @@ CREATE TABLE public.ext_people_staffing_assignment (
     updated_at timestamp(6) with time zone NOT NULL
 );
 
+-- refresh_token and refresh_expires_at are nullable (ADR-0062 section 7, plan WS2b-4): an
+-- impersonation token is stored here like any access token, so validation and revocation reach
+-- it, but it has no refresh half — it is never refreshable. Every login pair still carries both.
 CREATE TABLE public.jwt_token (
     tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
     id uuid NOT NULL,
     token text NOT NULL,
-    refresh_token text NOT NULL,
+    refresh_token text,
     issued_at timestamp with time zone NOT NULL,
     expires_at timestamp with time zone NOT NULL,
-    refresh_expires_at timestamp with time zone NOT NULL,
+    refresh_expires_at timestamp with time zone,
     subject character varying(255) NOT NULL,
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,

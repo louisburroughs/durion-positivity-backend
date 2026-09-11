@@ -531,18 +531,81 @@ Flyway on the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`)
   hash, binds the row's tenant, sets the password, clears the credential expiry and consumes the token in one
   transaction. Unknown, expired and used tokens are one answer, 401 `ACTIVATION_TOKEN_INVALID`. The same token
   shape later drives e-mail reset. Operator steps: `docs/OPERATIONS_RUNBOOK.md` → "Tenant provisioning".
+- **Platform support access (WS2b-4, decided 2026-09-10: impersonation token, never a cross-tenant role).** A
+  platform operator holding `platform:tenant:impersonate`, bound to the platform tenant, calls
+  `POST /v1/platform/tenants/{tenantId}/impersonation-token` (`PlatformImpersonationController` →
+  `PlatformImpersonationService.issue`). It returns `{token, expiresAt, tenantId, tenantSlug}` exactly once. The
+  token is an ordinary signed access token to the gateway and every module, minted by
+  `JwtServiceImpl.generateImpersonationToken` under the *target* tenant's binding, with: `sub` / `username` =
+  `support:<operator>@<tenantSlug>` (a synthetic principal that matches no user), `uid` = the operator's user
+  id (so `X-User-Id` audit lineage names the human), `tid` = the target tenant, `roles` = `["ROLE_SUPPORT"]`,
+  `perm_bits` = the target tenant's own `SUPPORT` role's grants (resolved under that binding, so a tenant that
+  narrowed its `SUPPORT` role narrowed support), empty location-scope bitsets and no `loc_scope`,
+  `act` = `{"sub": <operator user id>, "username": <operator>}`, `token_use` = `"impersonation"`, and
+  `exp` = `iat` + 15 minutes. **No refresh token**: the `jwt_token` row has a null refresh half (the two
+  columns are nullable for exactly this row), `POST /v1/auth/refresh` answers 401 `INVALID_REFRESH_TOKEN` to a
+  token carrying `token_use=impersonation` before any lookup, and a longer session is a new mint. The gateway
+  needs no change — it reads `tid` and `perm_bits` and ignores `act` / `token_use` — and downstream modules see
+  `X-Tenant-Id` = the target tenant with the `SUPPORT` authorities, so `GET /v1/tenants/me` and every
+  tenant-scoped read answer inside that tenant. Refusals: 403 `PLATFORM_TENANT_REQUIRED` under any other
+  binding whatever the caller holds; 404 `TENANT_NOT_FOUND` when `ext_tenant` does not know the tenant; 409
+  `TENANT_NOT_IMPERSONABLE` when it is not `ACTIVE` (the status is in the message), has no `SUPPORT` role yet
+  (provisioned before WS2b-4 and not yet reconciled by WS8), or is the platform tenant itself; 404
+  `USER_NOT_FOUND` when the operator has no user row in the platform tenant. Audit: one
+  `PlatformImpersonationTokenIssued` event in the target tenant (the tenant's own log shows who read its data
+  and until when) and one in the platform tenant (the operator-side ledger), each with the operator, subject,
+  `jti`, expiry and the request's `X-Correlation-Id`, plus an INFO log line; the token itself is never logged.
+  The token holder cannot call this module's bearer-authenticated `/v1/auth/**` utilities (`revoke`, `roles`,
+  `subject`, `user-id`): `JwtAuthenticationFilter` resolves the subject to a user, and the synthetic principal
+  is none. Operator steps: `docs/OPERATIONS_RUNBOOK.md` → "Impersonating a tenant for support".
+- **`SUPPORT` role.** The fixed, read-only role an impersonation token carries. Seeded as an alpha floor role
+  (`R__seed_reference_security.sql`, `mcp_persona_eligible = false`, location scope `ALL` / `OTHER`), granted in
+  `R__seed_role_permissions.sql`, listed in the alpha bulk-load baseline (`roles.csv`, `role-permissions.csv`)
+  and marked `template_key` so `R__seed_tenant_template.sql` copies it into the platform role template and
+  provisioning gives it to every new tenant (existing tenants get it through the WS8 template reconcile). No
+  user is ever assigned it. Its grants are the `*:*:view` / `*:*:read` permissions of the six floor roles plus
+  `location:read` — nothing else: no write, no `platform:*`, not the assistant baseline (`mcp:chat:*`,
+  `nlti:request:*`), not the MCP administration surface, not `nlti:audit:read`, not `people:employee_pii:view`
+  and not `people:self:view`. `RolePermissionBaselineTest.supportIsReadOnly` pins the list to exactly that
+  rule, so a new read permission granted to a floor role must be added here too, deliberately. The grants
+  (133):
+
+  | Domain | Permissions |
+  | --- | --- |
+  | `accounting` | `accounting:analytics:view`, `accounting:ap:view`, `accounting:coa:view`, `accounting:credit-memo:read`, `accounting:customer-credit:view`, `accounting:default-mapping:view`, `accounting:events:view`, `accounting:export:view`, `accounting:je:view`, `accounting:mapping-key:view`, `accounting:period:view`, `accounting:posting-category:view`, `accounting:posting_rules:view`, `accounting:reconciliation:view` |
+  | `catalog` | `catalog:catalog_grouping:view`, `catalog:item_cost:read`, `catalog:labor_standard:view`, `catalog:location_price_override:read`, `catalog:msrp:read`, `catalog:non_inventory:view`, `catalog:price_book:read`, `catalog:product:view`, `catalog:product_uom:view`, `catalog:service_package:view`, `catalog:service_type:view`, `catalog:substitution_group:view`, `catalog:supplier_cost:read`, `catalog:tread_design:view`, `catalog:uom_conversion:view` |
+  | `crm` | `crm:consent:view`, `crm:contact:view`, `crm:contact_preference:view`, `crm:followup:view`, `crm:inquiry:view`, `crm:interaction:view`, `crm:party:view`, `crm:person:read`, `crm:processing_log:view`, `crm:promotion_redemption:view`, `crm:relationship:read`, `crm:segment:view`, `crm:suppression:view`, `crm:suspense:view`, `crm:tag:view`, `crm:vehicle:view` |
+  | `inventory` | `inventory:adjustment:view`, `inventory:asn:view`, `inventory:availability:read`, `inventory:cycle_count:view`, `inventory:goods_receipt:view`, `inventory:ledger:view`, `inventory:location:view`, `inventory:on_hand:view`, `inventory:pick_list:view`, `inventory:putaway:view`, `inventory:putaway_rule:view`, `inventory:receiving:view`, `inventory:return:view`, `inventory:scrap:view`, `inventory:shortage:view`, `inventory:supplier_stock_hint:view`, `inventory:transfer:view`, `inventory:valuation:view` |
+  | `invoice` | `invoice:analytics:view`, `invoice:invoice:view` |
+  | `location` | `location:bay:read`, `location:mobile-unit:read`, `location:read`, `location:service-area:read`, `location:travel-buffer-policy:read` |
+  | `marketing` | `marketing:campaign:view`, `marketing:stats:view`, `marketing:template:view` |
+  | `order` | `order:order:view`, `order:price_override:view`, `order:purchase_order:view`, `order:return:view`, `order:session:view` |
+  | `people` | `people:availability:view`, `people:compliance:view`, `people:employee:view`, `people:skill:view`, `people:timekeeping:view` |
+  | `people-contact` | `people-contact:organization:view`, `people-contact:person:view`, `people-contact:role:view` |
+  | `pricing` | `pricing:labor_rate:view`, `pricing:normalization:view`, `pricing:promotion:view`, `pricing:restrictions:view`, `pricing:rule:view` |
+  | `security` | `security:audit:view`, `security:permission:view`, `security:role:view`, `security:user:view`, `security:user_account_state:view` |
+  | `shop` | `shop:dashboard:view`, `shop:schedule:view`, `shop:technician:view` |
+  | `supplier` | `supplier:audit:read`, `supplier:pricecatalog:read`, `supplier:profile:read`, `supplier:stockavailability:read`, `supplier:stocksnapshot:read`, `supplier:transmission:read` |
+  | `tax` | `tax:exemption:view`, `tax:mode:view`, `tax:rates:view` |
+  | `vehicle-fitment` | `vehicle-fitment:catalog:view`, `vehicle-fitment:hint:view` |
+  | `vehicle-inventory` | `vehicle-inventory:registry:view`, `vehicle-inventory:search:view` |
+  | `warranty` | `warranty:claim:view`, `warranty:part-return:view`, `warranty:policy:view`, `warranty:provider:view`, `warranty:registration:view`, `warranty:reimbursement:view` |
+  | `workorder` | `workorder:analytics:view`, `workorder:approval_config:view`, `workorder:change_request:view`, `workorder:dashboard:view`, `workorder:estimate:view`, `workorder:estimate_item:view`, `workorder:estimate_snapshot:view`, `workorder:financials:view`, `workorder:invoice:view`, `workorder:labor:view`, `workorder:labor_intelligence:view`, `workorder:note:view`, `workorder:parts:view`, `workorder:wip:view`, `workorder:workorder:view` |
 - **Open-in-view is off** (`spring.jpa.open-in-view: false`): the Hibernate session fixes its `@TenantId` when it
   opens, so a request-scoped session would pin every query to the tenant bound when the request arrived. Login,
-  refresh, activation and the platform administrator endpoint all rebind mid-request (`TenantContext.callAs` /
-  `runAs`) around a `@Transactional` bean, and each transaction opens its own session under the binding in force.
+  refresh, activation and the platform administrator and support endpoints all rebind mid-request
+  (`TenantContext.callAs` / `runAs`) around a `@Transactional` bean, and each transaction opens its own session
+  under the binding in force.
 - **Role template and platform tenant** (`R__seed_tenant_template.sql`, tier 1). The six Flyway floor roles
-  (`ADMIN`, `SYSTEM_ADMINISTRATOR`, `DISPATCHER`, `SHOP_MANAGER`, `SELF_SERVICE_CUSTOMER`, `CONTROLLER`) carry
-  `template_key` in alpha and are copied, grants and scope included, into the platform tenant as the template.
+  (`ADMIN`, `SYSTEM_ADMINISTRATOR`, `DISPATCHER`, `SHOP_MANAGER`, `SELF_SERVICE_CUSTOMER`, `CONTROLLER`) and
+  `SUPPORT` carry `template_key` in alpha and are copied, grants and scope included, into the platform tenant as
+  the template.
   Roles the alpha bulk loader adds later (`roles.csv`) are not in the template yet (WS8 runs the loader against
   the platform tenant). A template role rejects delete for the life of its tenant (409 `ROLE_TEMPLATE_IMMUTABLE`);
   its grants may change and custom roles (`template_key` null) are unrestricted.
-- **`PLATFORM_ADMIN` / `admin.platform`** exist in the platform tenant only and hold the `platform:tenant:*` and
-  `platform:account:*` families; alpha's `ADMIN` no longer does. `generate-permissions.sh --sync` refuses to grant
+- **`PLATFORM_ADMIN` / `admin.platform`** exist in the platform tenant only and hold the `platform:tenant:*`
+  (including `platform:tenant:provision` and `platform:tenant:impersonate`) and `platform:account:*` families;
+  alpha's `ADMIN` no longer does. `generate-permissions.sh --sync` refuses to grant
   a `platform:*` permission through the alpha sources: add the tuple to the platform seed by hand.
 
 `ext_people_staffing_assignment` is a read model of pos-people's `employee_location_assignment` (ADR-0061 §1): one row per assignment keyed by `assignment_id`, storing the assigned location node *verbatim* (shop or District/Region/HQ — never expanded), `is_primary`, `status` (`ACTIVE`/`ENDED`, ended rows are kept), and effective dates. Written only by `PeopleEventsListener`; read through `StaffingAssignmentProjectionService` ("nodes effective on date D", "earliest `effective_to`").

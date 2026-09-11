@@ -85,7 +85,9 @@ public class PersonTokenRevocationServiceImpl implements PersonTokenRevocationSe
                 if (!revokeJtiInRedis(row.getToken(), row.getExpiresAt(), now, "access")) {
                     redisMisses++;
                 }
-                if (!revokeJtiInRedis(row.getRefreshToken(), row.getRefreshExpiresAt(), now, "refresh")) {
+                // An impersonation token row has no refresh half (WS2b-4).
+                if (row.getRefreshToken() != null
+                        && !revokeJtiInRedis(row.getRefreshToken(), row.getRefreshExpiresAt(), now, "refresh")) {
                     redisMisses++;
                 }
             }

@@ -22,6 +22,8 @@ tags:
   name: Tenant API
 - description: Platform-operator activation of a tenant's first administrator
   name: Platform Administrator API
+- description: Platform-operator support access to a tenant (impersonation tokens)
+  name: Platform Support API
 - description: Asynchronous audit export job management
   name: Audit Exports
 - description: Bulk provision roles with persona metadata
@@ -1905,6 +1907,69 @@ paths:
       - Platform Administrator API
       x-required-permissions:
       - platform:tenant:provision
+  /v1/platform/tenants/{tenantId}/impersonation-token:
+    post:
+      description: 'Mints a 15-minute, read-only access token that acts inside the named tenant and returns it once, with its expiry, the tenant id and the tenant slug. The token carries tid = the tenant, the tenant''s own SUPPORT role''s permissions as perm_bits, act = {sub, username} of the calling operator, token_use = impersonation and a synthetic subject support:<operator>@<tenantSlug>; it has no refresh token and refreshTokenPair refuses it.
+
+        Use this tool when a platform operator must look at a tenant''s data to support it; do not grant an operator a role in the tenant, and do not use issueInternalToken, which binds the caller''s own tenant.
+
+        Preconditions: the caller must hold platform:tenant:impersonate and be bound to the platform tenant; the tenant must be ACTIVE in the ext_tenant replica and hold a SUPPORT role; the caller must be a user of the platform tenant.
+
+        Required inputs: tenantId as a path parameter; there is no request body. X-Correlation-Id, when sent, is recorded on the audit events.
+
+        Emits a SECURITY_PLATFORM_TENANT_IMPERSONATE event and a PlatformImpersonationTokenIssued audit event in both the target tenant and the platform tenant (operator, subject, jti, expiry, correlation id), plus an INFO log line; the token itself is never logged.
+
+        Returns 201 with the token; 403 with PLATFORM_TENANT_REQUIRED when the caller is bound to a tenant other than the platform tenant; 404 with TENANT_NOT_FOUND when the replica does not know the tenant; 409 with TENANT_NOT_IMPERSONABLE when the tenant is not ACTIVE (its status is in the message) or has no SUPPORT role yet, or when the target is the platform tenant itself.
+
+        '
+      operationId: mintImpersonationToken
+      parameters:
+      - description: The tenant to act inside
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpersonationTokenResponse'
+          description: Token minted; it is shown here and never again
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'PLATFORM_TENANT_REQUIRED: the caller is bound to a tenant other than the platform tenant'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'TENANT_NOT_FOUND: the ext_tenant replica does not know the tenant'
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'TENANT_NOT_IMPERSONABLE: the tenant is not ACTIVE, has no SUPPORT role yet, or is the platform tenant'
+      security:
+      - bearerAuth:
+        - platform:tenant:impersonate
+      summary: Mint a Tenant Impersonation Token
+      tags:
+      - Platform Support API
+      x-required-permissions:
+      - platform:tenant:impersonate
   /v1/roles:
     get:
       description: 'Returns every role in the system with its permission set and audit metadata.
@@ -5221,6 +5286,32 @@ components:
       required:
       - field
       - message
+      type: object
+    ImpersonationTokenResponse:
+      description: A 15-minute, read-only SUPPORT impersonation token for a tenant, returned once
+      properties:
+        expiresAt:
+          description: When the token stops working (15 minutes after minting); there is no refresh
+          example: '2026-09-10T12:15:00Z'
+          format: date-time
+          type: string
+        tenantId:
+          description: The tenant the token acts inside (its tid claim)
+          format: uuid
+          type: string
+        tenantSlug:
+          description: That tenant's slug
+          example: acme-tire
+          type: string
+        token:
+          description: The signed access token; send it as the bearer token. It carries tid = tenantId, the SUPPORT role's permissions, act = the operator and token_use = impersonation, and cannot be refreshed
+          example: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBwb3J0OmFkbWluLnBsYXRmb3JtQGFjbWUifQ.sig
+          type: string
+      required:
+      - expiresAt
+      - tenantId
+      - tenantSlug
+      - token
       type: object
     InternalTokenRequest:
       description: Request to generate a single JWT token for an internal trusted caller

@@ -14,3 +14,4 @@ DISPATCHER,Canonical persona: Dispatcher,dispatcher,"scheduling, bay and mobile-
 TECHNICIAN,Canonical persona: Technician,service technician,"job cards, parts, and labor entries on assigned work","terse, task-focused, and light on narrative",80,true
 CUSTOMER,CUSTOMER seeded role,,,,,false
 SELF_SERVICE_CUSTOMER,SELF_SERVICE_CUSTOMER seeded role,,,,,false
+SUPPORT,Platform support: read-only access carried by an operator impersonation token (ADR-0062 section 7),,,,,false

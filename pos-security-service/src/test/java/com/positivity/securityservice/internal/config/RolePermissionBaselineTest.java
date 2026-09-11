@@ -404,12 +404,71 @@ class RolePermissionBaselineTest {
                 .isEmpty();
     }
 
+    /**
+     * The one role outside the assistant baseline: SUPPORT (ADR-0062 §7, WS2b-4) is carried by a
+     * platform operator's 15-minute impersonation token, is assigned to no user, and is read-only —
+     * a support read is not a chat session, and {@code nlti:request:submit} would be a write.
+     */
+    private static final Set<String> NO_ASSISTANT_ROLES = Set.of("SUPPORT");
+
     @Test
     @DisplayName("every role receives the assistant entrypoints")
     void everyRoleReceivesTheAssistantBaseline() {
         // Per role, so a failure names the role that is missing them rather than just failing.
-        seededGrants.forEach((role, granted) ->
-                assertThat(granted).as("assistant baseline for %s", role).containsAll(ASSISTANT_BASELINE));
+        seededGrants.forEach((role, granted) -> {
+            if (NO_ASSISTANT_ROLES.contains(role)) {
+                assertThat(granted)
+                        .as("%s is deliberately outside the assistant baseline", role)
+                        .doesNotContainAnyElementsOf(ASSISTANT_BASELINE);
+                return;
+            }
+            assertThat(granted).as("assistant baseline for %s", role).containsAll(ASSISTANT_BASELINE);
+        });
+    }
+
+    @Test
+    @DisplayName("SUPPORT holds the floor roles' read surface and nothing else (ADR-0062 §7, WS2b-4)")
+    void supportIsReadOnly() {
+        Set<String> support = seededGrants.get("SUPPORT");
+        assertThat(support).as("SUPPORT grants").isNotEmpty();
+
+        // Every grant is a read: the code's action is view or read (location:read has no resource).
+        assertThat(support)
+                .as("a write permission on SUPPORT is a defect, not a widening")
+                .allMatch(permission -> permission.endsWith(":view") || permission.endsWith(":read"));
+        assertThat(support).noneMatch(permission -> permission.startsWith("platform:"));
+
+        // Drawn from the six floor roles' own grants, so an impersonation token never reads more
+        // than the tenant's widest role could.
+        Set<String> floorGrants = new TreeSet<>();
+        for (String role : List.of(
+                "ADMIN", "CONTROLLER", "DISPATCHER", "SELF_SERVICE_CUSTOMER", "SHOP_MANAGER", "SYSTEM_ADMINISTRATOR")) {
+            floorGrants.addAll(sqlSeededGrants.get(role));
+        }
+        assertThat(support).isSubsetOf(floorGrants);
+
+        // The deliberate exclusions, each a disclosure the seed's SUPPORT bullet names.
+        assertThat(support)
+                .doesNotContain("people:employee_pii:view", "people:self:view", "nlti:audit:read", "nlti:request:read")
+                .doesNotContainAnyElementsOf(MCP_ADMINISTRATION_SURFACE)
+                .doesNotContain("mcp:eval_trace:view");
+
+        // And it is the read surface, not a hand-picked subset: every view/read the floor holds
+        // that is not on the exclusion list is granted, so a new read permission granted to a
+        // floor role is a conscious decision here too.
+        Set<String> expected = floorGrants.stream()
+                .filter(permission ->
+                        permission.matches("[a-z_\\-]+:[a-z_\\-]+:(view|read)") || permission.equals("location:read"))
+                .filter(permission -> !Set.of(
+                                "people:employee_pii:view",
+                                "people:self:view",
+                                "nlti:audit:read",
+                                "nlti:request:read",
+                                "mcp:eval_trace:view")
+                        .contains(permission))
+                .filter(permission -> !MCP_ADMINISTRATION_SURFACE.contains(permission))
+                .collect(Collectors.toCollection(TreeSet::new));
+        assertThat(support).containsExactlyInAnyOrderElementsOf(expected);
     }
 
     @Test
@@ -499,6 +558,7 @@ class RolePermissionBaselineTest {
                         "MANAGER",
                         "SERVICE_ADVISOR",
                         "SHOP_MANAGER",
+                        "SUPPORT",
                         "TECHNICIAN");
         assertThat(holders)
                 .as("the persona-ineligible customer roles must not read invoices")

@@ -15,6 +15,8 @@ import com.positivity.securityservice.internal.exception.SecurityValidationExcep
 import com.positivity.securityservice.internal.exception.SelfRegistrationConflictException;
 import com.positivity.securityservice.internal.exception.SelfRegistrationReviewCaseNotFoundException;
 import com.positivity.securityservice.internal.exception.TemplateRoleImmutableException;
+import com.positivity.securityservice.internal.exception.TenantNotFoundException;
+import com.positivity.securityservice.internal.exception.TenantNotImpersonableException;
 import com.positivity.securityservice.internal.exception.TokenUserIdMissingException;
 import com.positivity.securityservice.internal.exception.UserNotAwaitingActivationException;
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
@@ -621,6 +623,47 @@ public class GlobalExceptionHandler {
         String correlationId = extractCorrelationId(request);
         log.warn("Platform tenant required (correlationId={}): {}", correlationId, ex.getMessage());
         return respond(HttpStatus.FORBIDDEN, "PLATFORM_TENANT_REQUIRED", ex.getMessage(), correlationId);
+    }
+
+    /**
+     * Handles TenantNotFoundException: a platform operation named a tenant the {@code ext_tenant}
+     * replica does not hold (ADR-0062 §7, WS2b-4).
+     *
+     * <p>
+     * <b>HTTP Status:</b> 404 Not Found (TENANT_NOT_FOUND)
+     *
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 404 status and correlation ID
+     */
+    @ExceptionHandler(TenantNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ResponseEntity<ApiError> handleTenantNotFoundException(TenantNotFoundException ex, WebRequest request) {
+        String correlationId = extractCorrelationId(request);
+        log.warn("Tenant not found (correlationId={}): {}", correlationId, ex.getMessage());
+        return respond(HttpStatus.NOT_FOUND, "TENANT_NOT_FOUND", ex.getMessage(), correlationId);
+    }
+
+    /**
+     * Handles TenantNotImpersonableException: the tenant exists but is not {@code ACTIVE}, has no
+     * {@code SUPPORT} role yet, or is the platform tenant itself (ADR-0062 §7, WS2b-4). The
+     * message names the reason.
+     *
+     * <p>
+     * <b>HTTP Status:</b> 409 Conflict (TENANT_NOT_IMPERSONABLE) — the request is well-formed and
+     * authorised; the tenant's current state is what refuses it.
+     *
+     * @param ex      the exception
+     * @param request the web request
+     * @return error response with 409 status and correlation ID
+     */
+    @ExceptionHandler(TenantNotImpersonableException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ResponseEntity<ApiError> handleTenantNotImpersonableException(
+            TenantNotImpersonableException ex, WebRequest request) {
+        String correlationId = extractCorrelationId(request);
+        log.warn("Impersonation refused (correlationId={}): {}", correlationId, ex.getMessage());
+        return respond(HttpStatus.CONFLICT, "TENANT_NOT_IMPERSONABLE", ex.getMessage(), correlationId);
     }
 
     @ExceptionHandler(LockedException.class)
