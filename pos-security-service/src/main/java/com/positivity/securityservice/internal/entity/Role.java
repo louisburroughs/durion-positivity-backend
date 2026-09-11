@@ -107,9 +107,12 @@ public class Role extends TenantScopedEntity {
     /**
      * ADR-0062 §6: key of the platform template role this row was provisioned from (its canonical
      * name), or {@code null} for a custom role. A template role rejects delete for the life of the
-     * tenant; its grants may still change.
+     * tenant; its grants may still change. Set by provisioning, by the platform bulk load (a role
+     * loaded into the platform tenant joins the template under its own name) and by template
+     * reconciliation (a tenant role the template has since gained is marked); never cleared, and
+     * never exposed through the role update API.
      */
-    @Column(name = "template_key", length = 255, updatable = false)
+    @Column(name = "template_key", length = 255)
     private String templateKey;
 
     @CreatedDate

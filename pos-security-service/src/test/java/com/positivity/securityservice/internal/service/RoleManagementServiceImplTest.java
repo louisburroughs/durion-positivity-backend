@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -103,6 +104,54 @@ class RoleManagementServiceImplTest {
 
         assertThat(created.getCreatedBy()).isEqualTo("agent-user");
         assertThat(updated.getPermissions()).extracting("name").contains("security:role:grant");
+    }
+
+    /** ADR-0062 §6 (WS8): a role loaded into the platform tenant joins the template under its own name. */
+    @Test
+    void provisionTemplateRole_createsTheRoleWithItsNameAsTemplateKey() {
+        when(roleRepository.findByName("WARRANTY_CLERK")).thenReturn(Optional.empty());
+        when(roleRepository.existsByNameIgnoreCase("WARRANTY_CLERK")).thenReturn(false);
+        when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RoleDto created = roleManagementService.provisionTemplateRole(
+                new RoleCreateRequest("WARRANTY_CLERK", "Warranty claim intake", null, null, null, null, null));
+
+        assertThat(created.getTemplateKey()).isEqualTo("WARRANTY_CLERK");
+        assertThat(created.getName()).isEqualTo("WARRANTY_CLERK");
+        verify(rolePersonaEventEmitter).rolePersonaChanged(any(Role.class));
+    }
+
+    @Test
+    void provisionTemplateRole_marksAnExistingUnmarkedRoleAndLeavesTheRestAlone() {
+        Role role = new Role();
+        role.setId(UUID.fromString("00000000-0000-0000-0000-000000000007"));
+        role.setName("SHOP_MANAGER");
+        role.setDescription("as the platform wrote it");
+        when(roleRepository.findByName("SHOP_MANAGER")).thenReturn(Optional.of(role));
+        when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RoleDto marked = roleManagementService.provisionTemplateRole(
+                new RoleCreateRequest("SHOP_MANAGER", "a different description", null, null, null, null, null));
+
+        assertThat(marked.getTemplateKey()).isEqualTo("SHOP_MANAGER");
+        assertThat(role.getDescription()).isEqualTo("as the platform wrote it");
+        verify(roleRepository).save(role);
+        verify(rolePersonaEventEmitter, never()).rolePersonaChanged(any(Role.class));
+    }
+
+    @Test
+    void provisionTemplateRole_isANoOpForARoleAlreadyInTheTemplate() {
+        Role role = new Role();
+        role.setId(UUID.fromString("00000000-0000-0000-0000-000000000008"));
+        role.setName("ADMIN");
+        role.setTemplateKey("ADMIN");
+        when(roleRepository.findByName("ADMIN")).thenReturn(Optional.of(role));
+
+        RoleDto unchanged = roleManagementService.provisionTemplateRole(
+                new RoleCreateRequest("ADMIN", null, null, null, null, null, null));
+
+        assertThat(unchanged.getTemplateKey()).isEqualTo("ADMIN");
+        verify(roleRepository, never()).save(any(Role.class));
     }
 
     @Test

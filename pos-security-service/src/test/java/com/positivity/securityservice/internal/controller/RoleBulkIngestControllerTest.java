@@ -17,6 +17,8 @@ import com.positivity.securityservice.internal.exception.DuplicateRoleNameExcept
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import com.positivity.securityservice.internal.service.CustomUserDetailsService;
 import com.positivity.securityservice.internal.service.RoleManagementService;
+import com.positivity.tenancy.PlatformTenant;
+import com.positivity.tenancy.TenantContext;
 import jakarta.servlet.FilterChain;
 import java.time.Clock;
 import java.time.Instant;
@@ -118,6 +120,28 @@ class RoleBulkIngestControllerTest {
                 .isEqualTo("shop manager");
         org.assertj.core.api.Assertions.assertThat(captor.getValue().mcpPersonaRank())
                 .isEqualTo((short) 35);
+    }
+
+    /** ADR-0062 §6 (WS8): a batch loaded under the platform tenant is the role template itself. */
+    @Test
+    void roles_loadedIntoThePlatformTenant_joinTheTemplate() throws Exception {
+        when(roleManagementService.provisionTemplateRole(any(RoleCreateRequest.class)))
+                .thenReturn(role("SHOP_MANAGER"));
+
+        try {
+            TenantContext.bind(PlatformTenant.ID);
+            mockMvc.perform(post("/v1/roles/bulk-ingest")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(ROLES_BODY)
+                            .with(user("admin.platform").authorities(() -> "security:role:create")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.successCount").value(1));
+        } finally {
+            TenantContext.clear();
+        }
+
+        verify(roleManagementService).provisionTemplateRole(any(RoleCreateRequest.class));
+        verify(roleManagementService, org.mockito.Mockito.never()).createRole(any(RoleCreateRequest.class));
     }
 
     @Test

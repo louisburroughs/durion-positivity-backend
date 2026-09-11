@@ -248,6 +248,29 @@ class GlobalExceptionHandlerTest {
     }
 
     // ---------------------------------------------------------------
+    // handleTenantNotFoundException (ADR-0062 section 7, WS8)
+    // ---------------------------------------------------------------
+
+    @Nested
+    @DisplayName("handleTenantNotFoundException")
+    class HandleTenantNotFoundException {
+
+        @Test
+        @DisplayName("returns 404 TENANT_NOT_FOUND naming the tenant")
+        void returns404TenantNotFound() {
+            UUID tenantId = UUID.fromString("01990000-0000-7000-8000-000000000123");
+            var ex = new com.positivity.securityservice.internal.exception.TenantNotFoundException(tenantId);
+
+            ResponseEntity<ApiError> response = sut.handleTenantNotFoundException(ex, requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("TENANT_NOT_FOUND");
+            assertThat(response.getBody().message()).contains(tenantId.toString());
+        }
+    }
+
+    // ---------------------------------------------------------------
     // handleUserNotFoundException
     // ---------------------------------------------------------------
 
@@ -1053,6 +1076,11 @@ class GlobalExceptionHandlerTest {
                             request -> handler.handlePlatformTenantRequiredException(
                                     new com.positivity.securityservice.internal.exception
                                             .PlatformTenantRequiredException(UUID.randomUUID()),
+                                    request)),
+                    Named.of("handleTenantNotFoundException", (HandlerInvocation)
+                            request -> handler.handleTenantNotFoundException(
+                                    new com.positivity.securityservice.internal.exception.TenantNotFoundException(
+                                            UUID.randomUUID()),
                                     request)));
         }
 

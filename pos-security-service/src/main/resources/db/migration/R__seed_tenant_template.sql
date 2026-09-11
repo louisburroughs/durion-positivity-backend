@@ -10,8 +10,10 @@
 --   2. Holds the role template as data in the platform tenant: a copy of the floor roles, their
 --      grants and their ADR-0061 location-scope attributes, keyed by template_key.
 --      TenantProvisioningService reads this copy under the platform binding and applies it to a
---      new tenant on tenant.created. Roles the alpha bulk loader adds after startup (roles.csv)
---      are not part of the template yet; WS8 runs that loader against the platform tenant.
+--      new tenant on tenant.created. Roles the bulk loader adds after startup (roles.csv) join
+--      the template when the job targets the platform tenant (WS8: RoleBulkIngestController sets
+--      template_key under the platform binding), and reach existing tenants through
+--      POST /v1/platform/tenants/{tenantId}/roles/reconcile-template.
 --   3. Bootstraps PLATFORM_ADMIN and admin.platform in the platform tenant: the only role holding
 --      the platform:tenant:* and platform:account:* families (section 7), and the one user that
 --      can reach pos-tenant's registry. The alpha ADMIN no longer holds those grants.

@@ -40,6 +40,12 @@ public final class EventTypes {
                                 "Mint a one-time activation token for a tenant's first administrator")
                         .build(),
 
+                // PlatformRoleTemplateController - 1 event (ADR-0062 section 6, WS8)
+                EventTypeRegistration.write(
+                                "SECURITY_PLATFORM_ROLE_TEMPLATE_RECONCILE",
+                                "Reconcile a tenant's roles against the platform role template")
+                        .build(),
+
                 // JwtController - 4 events
                 EventTypeRegistration.write(
                                 "SECURITY_AUTH_INTERNAL_TOKEN_ISSUE", "Issue JWT token for internal trusted caller")
