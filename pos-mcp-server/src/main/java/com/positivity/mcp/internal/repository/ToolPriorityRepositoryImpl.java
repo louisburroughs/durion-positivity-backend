@@ -11,7 +11,6 @@ import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -111,11 +110,20 @@ public class ToolPriorityRepositoryImpl implements ToolPriorityRepository {
     }
 
     @Override
-    public @NonNull Optional<Double> findGlobalPriority(@NonNull UUID toolId) {
-        List<Double> priorities = jdbcTemplate.query(
-                "SELECT priority FROM mcp_tool WHERE id = ?", (rs, rowNum) -> rs.getDouble("priority"), toolId);
-        return priorities.isEmpty() ? Optional.empty() : Optional.of(priorities.get(0));
+    public @NonNull Map<UUID, Double> findGlobalPriorities() {
+        // One scan of the global catalog for the whole tuning run. getDouble reads a SQL NULL
+        // priority as 0.0, which is what the per-tool lookup this replaced also returned.
+        List<GlobalPriority> rows = jdbcTemplate.query(
+                "SELECT id, priority FROM mcp_tool",
+                (rs, rowNum) -> new GlobalPriority(rs.getObject("id", UUID.class), rs.getDouble("priority")));
+        Map<UUID, Double> byTool = new HashMap<>();
+        for (GlobalPriority row : rows) {
+            byTool.put(row.toolId(), row.priority());
+        }
+        return byTool;
     }
+
+    private record GlobalPriority(UUID toolId, double priority) {}
 
     @Override
     public void updateGlobalPriority(@NonNull UUID toolId, double priority, int avgLatencyMs) {

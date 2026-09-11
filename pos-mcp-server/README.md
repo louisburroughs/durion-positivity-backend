@@ -449,7 +449,7 @@ name no tenant. The startup runners seed and embed platform tables only. The H2 
 
 | Job | Classification | What it touches |
 | --- | --- | --- |
-| `ToolPriorityTuningService.tuneToolPriorities` (`mcp.tuning.cron`) | Per tenant (`TenantIterator`), then the `@PlatformScoped` global rollup `recomputeGlobalPriorities` | Reads each tenant's `mcp_tool_invocation_log` under its binding and writes that tenant's `mcp_tool_priority` overlay; the rollup writes `mcp_tool.priority` (global) from the per-tenant aggregates summed in memory |
+| `ToolPriorityTuningService.tuneToolPriorities` (`mcp.tuning.cron`) | Per tenant (`TenantIterator`), then the `@PlatformScoped` global rollup `recomputeGlobalPriorities` | Reads each tenant's `mcp_tool_invocation_log` under its binding and writes that tenant's `mcp_tool_priority` overlay, in a `TransactionTemplate` opened inside the binding; the rollup writes `mcp_tool.priority` (global) from the per-tenant aggregates summed in memory, in one transaction of its own |
 | `AlphaEvalTraceRetentionScheduler.deleteExpiredTraces` (`alpha`, `mcp.eval.turn-trace.enabled`) | Per tenant (`TenantIterator`) | Deletes each tenant's expired `mcp_eval_turn_trace` rows |
 | `DiscoveryRefreshScheduler.refresh` | `@PlatformScoped` | Refreshes the platform tool catalog (`mcp_tool` and embeddings); overlay rows of a pruned tool go with it (`ON DELETE CASCADE`) |
 | `RolePersonaSyncRunner.scheduledRefresh` | `@PlatformScoped` | Refreshes the platform role personas (`system_prompt`) |
@@ -491,6 +491,20 @@ two tenants' rows, which RLS forbids for `pos_app`).
   `live` on a static registry of one tenant. A multi-tenant deployment must set `pos.tenancy.registry.mode=REMOTE`
   (with `pos.tenancy.registry.url` and `.secret`; `pos-tenancy-common/README.md`, "Tenant registry") before enabling
   tuning. The module does not default to `REMOTE`: that needs the pos-tenant secret in every environment.
+- **Atomicity and the catalog snapshot.** `JdbcTemplate` commits every statement on its own, so the run
+  opens its own transactions. Each tenant's log read and overlay upserts are one `TransactionTemplate`
+  unit executed *inside* the `TenantIterator` binding (a transaction opened around the sweep would
+  check its connection out before a tenant is bound and run unbound -- `docs/TENANCY_SCHEMA.md`,
+  "Per-tenant schedulers and transactions"); a failure on the third of five proposals rolls the first
+  two back, and that tenant still counts as unfinished. The live rollup's `mcp_tool` updates are one
+  transaction too, because the rollup is a single fleet-wide result: a failure part way through leaves
+  the previous global set intact rather than a mixture of recomputed and stale priorities. Proposal
+  counters are incremented only after the matching transaction commits. The global priorities are read
+  once per run and that snapshot serves both the per-tenant seeding and the rollup arithmetic --
+  `mcp_tool` is global, so the per-tool alternative cost O(tenants x tools) serial lookups. The
+  snapshot cannot mask a value the same run wrote: the sweep only reads, and the rollup computes every
+  proposal before opening its write transaction, so no read of the global priority ever follows a write
+  of it. A run that cannot read the catalog at all tunes nothing and counts `mcp.tuning.incomplete`.
 - **When the rollup is skipped.** The global row is a statement about the whole fleet, so it is written only from a
   sweep that covered it. Two things stop it, each counting the run in `mcp.tuning.incomplete` and logging a WARN
   while leaving the per-tenant overlays that did succeed in place:

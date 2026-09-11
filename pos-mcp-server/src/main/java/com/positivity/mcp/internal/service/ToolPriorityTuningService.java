@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -30,6 +31,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Nightly adaptive tool-priority tuning (Gate 7, #1195), per tenant with a global rollup (ADR-0062
@@ -48,6 +51,21 @@ import org.springframework.stereotype.Service;
  * keeps the other tenants' overlays but skips the global rollup (a sum over part of the fleet is
  * not the global figure), logs the failed tenants at WARN and counts the run in
  * {@code mcp.tuning.incomplete}.
+ *
+ * <p>Two atomicity rules, both because {@code JdbcTemplate} commits each statement on its own:
+ * each tenant's read and overlay writes run in one transaction opened inside its binding, and the
+ * global rollup's writes run in one transaction of their own. A tenant that fails is rolled back
+ * whole (and still counts as an unfinished part of the sweep), and a rollup that fails leaves the
+ * previous global set intact instead of a mixture no run ever produced.
+ *
+ * <p>The global priorities are read once per run, before the sweep, and that snapshot serves both
+ * the per-tenant seeding and the rollup's own arithmetic — {@code mcp_tool} is global, so the
+ * per-lookup alternative costs O(tenants x tools) serial round trips. The snapshot cannot mask a
+ * value this run wrote, because no read of it ever follows a write of it: the sweep only reads, and
+ * the rollup computes every proposal before it opens its write transaction. It also cannot miss a
+ * qualifying tool: a tool row added mid-run has no invocation history in the window, and
+ * re-discovery upserts {@code mcp_tool} by name without touching {@code priority} or the id. If the
+ * snapshot itself cannot be read the run tunes nothing and counts {@code mcp.tuning.incomplete}.
  *
  * <p>The same holds when every tenant succeeded but the registry cannot vouch for the list it
  * handed out ({@link TenantIterator#hasCompleteTenantList()}): a REMOTE registry answers from its
@@ -96,6 +114,19 @@ public class ToolPriorityTuningService {
     private final long evalFreshnessHours;
     private final TenantIterator tenantIterator;
 
+    /**
+     * One unit of work per tenant, and one for the global rollup's writes.
+     *
+     * <p>{@code JdbcTemplate} commits every statement on its own, so without this a tenant that
+     * failed after its third of five overlay upserts kept the first two, and a rollup that failed
+     * mid-loop left {@code mcp_tool} holding a mixture of recomputed and stale priorities. The
+     * template is executed <em>inside</em> the {@link TenantIterator} binding for the per-tenant
+     * unit, never around the whole sweep: a transaction opened outside checks its connection out
+     * before a tenant is bound, and the work would run unbound (docs/TENANCY_SCHEMA.md,
+     * "Per-tenant schedulers and transactions"; the pos-inventory verifiers are the example).
+     */
+    private final TransactionTemplate transaction;
+
     public ToolPriorityTuningService(
             @NonNull ToolPriorityRepository repository,
             @NonNull Clock clock,
@@ -106,9 +137,11 @@ public class ToolPriorityTuningService {
                     String evalResultPath,
             @Value("${mcp.tuning.eval-freshness-hours:48}") long evalFreshnessHours,
             @NonNull TenantIterator tenantIterator,
-            @NonNull TenancyProperties tenancy) {
+            @NonNull TenancyProperties tenancy,
+            @NonNull PlatformTransactionManager transactionManager) {
         this.repository = repository;
         this.tenantIterator = tenantIterator;
+        this.transaction = new TransactionTemplate(transactionManager);
         this.clock = clock;
         this.meterRegistry = meterRegistry;
         this.mode = TuningMode.resolve(configuredMode, legacyEnabled);
@@ -174,25 +207,46 @@ public class ToolPriorityTuningService {
         boolean applyLive = mode == TuningMode.LIVE && evalGateAllowsLive();
         Instant cutoff = Instant.now(clock).minus(WINDOW_DAYS, ChronoUnit.DAYS);
 
+        Map<UUID, Double> globalPriorities;
+        try {
+            globalPriorities = repository.findGlobalPriorities();
+        } catch (RuntimeException catalogFailure) {
+            meterRegistry.counter(INCOMPLETE_COUNTER).increment();
+            LOGGER.warn(
+                    "Tool priority tuning: the global tool catalog could not be read; nothing is tuned this run",
+                    catalogFailure);
+            return;
+        }
+
         Map<UUID, ToolInvocationStats> global = new LinkedHashMap<>();
         List<UUID> failedTenants = new ArrayList<>();
         int tenants = tenantIterator.forEachActiveTenant(tenantId -> {
-            List<ToolInvocationStats> stats;
+            TenantSweep sweep;
             try {
-                stats = tenantInvocationStats(cutoff);
-                tuneTenantOverlay(tenantId, stats, applyLive);
+                // The transaction opens inside the tenant binding, so its connection carries the
+                // tenant. Read and overlay writes are one unit: a failure on the third of five
+                // proposals rolls the first two back instead of leaving the overlay half rewritten.
+                sweep = Objects.requireNonNull(transaction.execute(status -> {
+                    List<ToolInvocationStats> read = tenantInvocationStats(cutoff);
+                    return new TenantSweep(read, tuneTenantOverlay(tenantId, read, globalPriorities, applyLive));
+                }));
             } catch (RuntimeException tenantFailure) {
                 // TenantIterator logs the failure and moves on to the next tenant; remember it here,
                 // because a rollup over the tenants that did finish would not be the global figure.
-                // The whole per-tenant operation counts, not the read alone: a tenant whose overlay
-                // write failed half way is as much an unfinished part of this sweep as one whose log
-                // could not be read at all.
+                // The whole per-tenant operation counts, not the read alone: a tenant whose
+                // transaction rolled back is as much an unfinished part of this sweep as one whose
+                // log could not be read at all.
                 failedTenants.add(tenantId);
                 throw tenantFailure;
             }
-            // Merged only now, after this tenant's own tuning succeeded, so nothing a failed tenant
-            // contributed can reach the global rollup through an early merge.
-            for (ToolInvocationStats stat : stats) {
+            // Both of these happen only after the tenant's transaction committed: nothing a
+            // rolled-back tenant proposed is counted, and nothing it read reaches the rollup.
+            if (sweep.proposals() > 0) {
+                meterRegistry
+                        .counter(PROPOSALS_COUNTER, "mode", applyLive ? "live" : "shadow", "scope", SCOPE_TENANT)
+                        .increment(sweep.proposals());
+            }
+            for (ToolInvocationStats stat : sweep.stats()) {
                 global.merge(stat.toolId(), stat, ToolInvocationStats::plus);
             }
         });
@@ -218,7 +272,7 @@ public class ToolPriorityTuningService {
                     tenants);
             return;
         }
-        int globalProposals = recomputeGlobalPriorities(global, applyLive);
+        int globalProposals = recomputeGlobalPriorities(global, globalPriorities, applyLive);
         LOGGER.info(
                 "Tool priority tuning finished: tenants={} globalToolsWithHistory={} globalProposals={} mode={}",
                 tenants,
@@ -238,10 +292,17 @@ public class ToolPriorityTuningService {
 
     /**
      * Tunes the bound tenant's overlay from that tenant's own aggregates. A new overlay row starts
-     * from the global priority; an existing one drifts from its own previous value.
+     * from the global priority; an existing one drifts from its own previous value. Runs inside the
+     * caller's transaction, so every upsert here commits together or not at all.
+     *
+     * @param globalPriorities the run's snapshot of {@code mcp_tool} (see {@link #tuneToolPriorities()})
+     * @return the number of proposals made, for the caller to count once the transaction committed
      */
-    private void tuneTenantOverlay(
-            @NonNull UUID tenantId, @NonNull List<ToolInvocationStats> stats, boolean applyLive) {
+    private int tuneTenantOverlay(
+            @NonNull UUID tenantId,
+            @NonNull List<ToolInvocationStats> stats,
+            @NonNull Map<UUID, Double> globalPriorities,
+            boolean applyLive) {
         Map<UUID, ToolPriorityOverlay> overlay = repository.findOverlayForCurrentTenant();
         List<PriorityProposal> proposals = new ArrayList<>();
         for (ToolInvocationStats stat : stats) {
@@ -249,8 +310,9 @@ public class ToolPriorityTuningService {
                 continue;
             }
             ToolPriorityOverlay existing = overlay.get(stat.toolId());
-            Optional<Double> current =
-                    existing == null ? repository.findGlobalPriority(stat.toolId()) : Optional.of(existing.priority());
+            Optional<Double> current = existing == null
+                    ? Optional.ofNullable(globalPriorities.get(stat.toolId()))
+                    : Optional.of(existing.priority());
             current.ifPresent(priority -> proposals.add(propose(stat, priority)));
         }
         for (PriorityProposal proposal : proposals) {
@@ -260,9 +322,6 @@ public class ToolPriorityTuningService {
             } else {
                 logShadowProposal(SCOPE_TENANT, tenantId, proposal);
             }
-            meterRegistry
-                    .counter(PROPOSALS_COUNTER, "mode", applyLive ? "live" : "shadow", "scope", SCOPE_TENANT)
-                    .increment();
         }
         long invocations =
                 stats.stream().mapToLong(ToolInvocationStats::totalCalls).sum();
@@ -274,7 +333,11 @@ public class ToolPriorityTuningService {
                 proposals.size(),
                 overlay.size(),
                 applyLive ? "live" : "shadow");
+        return proposals.size();
     }
+
+    /** One tenant's finished sweep: what its log said, and how many proposals its tuning made. */
+    private record TenantSweep(@NonNull List<ToolInvocationStats> stats, int proposals) {}
 
     /**
      * The global rollup: recomputes {@code mcp_tool.priority} from the sum of every tenant's
@@ -286,24 +349,39 @@ public class ToolPriorityTuningService {
     @PlatformScoped(
             reason = "writes mcp_tool.priority, the global catalog row, from the per-tenant aggregates summed in"
                     + " memory during the TenantIterator sweep; reads no tenant-scoped table")
-    int recomputeGlobalPriorities(@NonNull Map<UUID, ToolInvocationStats> global, boolean applyLive) {
+    int recomputeGlobalPriorities(
+            @NonNull Map<UUID, ToolInvocationStats> global,
+            @NonNull Map<UUID, Double> globalPriorities,
+            boolean applyLive) {
         List<PriorityProposal> proposals = new ArrayList<>();
         for (ToolInvocationStats stat : global.values()) {
             if (stat.totalCalls() < MIN_CALLS) {
                 continue;
             }
-            repository.findGlobalPriority(stat.toolId()).ifPresent(priority -> proposals.add(propose(stat, priority)));
+            Optional.ofNullable(globalPriorities.get(stat.toolId()))
+                    .ifPresent(priority -> proposals.add(propose(stat, priority)));
         }
-        for (PriorityProposal proposal : proposals) {
-            if (applyLive) {
-                repository.updateGlobalPriority(proposal.stats().toolId(), proposal.newPriority(), (int)
-                        Math.round(proposal.stats().avgLatencyMs()));
-            } else {
+        if (applyLive) {
+            // The rollup is one fleet-wide result, so it is written as one: a failure part way
+            // through leaves the previous global set intact rather than committing a mixture of
+            // recomputed and stale priorities that no run ever produced.
+            transaction.executeWithoutResult(status -> {
+                for (PriorityProposal proposal : proposals) {
+                    repository.updateGlobalPriority(proposal.stats().toolId(), proposal.newPriority(), (int)
+                            Math.round(proposal.stats().avgLatencyMs()));
+                }
+            });
+        } else {
+            for (PriorityProposal proposal : proposals) {
                 logShadowProposal(SCOPE_GLOBAL, null, proposal);
             }
+        }
+        // Counted after the write, for the same reason the per-tenant proposals are: a rolled-back
+        // rollup proposed nothing that stuck.
+        if (!proposals.isEmpty()) {
             meterRegistry
                     .counter(PROPOSALS_COUNTER, "mode", applyLive ? "live" : "shadow", "scope", SCOPE_GLOBAL)
-                    .increment();
+                    .increment(proposals.size());
         }
         if (applyLive) {
             LOGGER.info("Tuned global priorities for {} tools (mode=live, eval gate passed)", proposals.size());

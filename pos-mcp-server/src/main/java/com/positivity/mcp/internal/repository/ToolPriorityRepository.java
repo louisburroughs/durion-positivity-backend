@@ -5,7 +5,6 @@ import com.positivity.mcp.internal.domain.ToolPriorityOverlay;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
@@ -35,9 +34,16 @@ public interface ToolPriorityRepository {
     @NonNull
     List<ToolInvocationStats> invocationStatsSince(@NonNull Instant cutoff);
 
-    /** The global priority of a tool from {@code mcp_tool}; empty when the tool no longer exists. */
+    /**
+     * Every tool's global priority from {@code mcp_tool}, keyed by tool id; a tool missing from the
+     * map no longer exists.
+     *
+     * <p>The whole catalog in one query rather than a lookup per tool: {@code mcp_tool} is global and
+     * small, while the caller needs a priority per qualifying tool <em>per tenant</em>, so a
+     * per-lookup API costs O(tenants x tools) serial round trips for a table that answers in one.
+     */
     @NonNull
-    Optional<Double> findGlobalPriority(@NonNull UUID toolId);
+    Map<UUID, Double> findGlobalPriorities();
 
     /** Writes the global priority and latency of a tool on {@code mcp_tool}. */
     void updateGlobalPriority(@NonNull UUID toolId, double priority, int avgLatencyMs);

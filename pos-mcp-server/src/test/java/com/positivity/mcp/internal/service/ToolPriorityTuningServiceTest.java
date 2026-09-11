@@ -39,6 +39,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 /**
  * Unit tests for {@link ToolPriorityTuningService} (Gate 7, #1195; per tenant with a global rollup,
@@ -63,6 +67,7 @@ class ToolPriorityTuningServiceTest {
     private final Clock clock = Clock.fixed(Instant.parse("2026-04-13T02:00:00Z"), ZoneOffset.UTC);
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     private final FakeToolPriorityRepository repository = new FakeToolPriorityRepository();
+    private final JournallingTransactionManager transactionManager = new JournallingTransactionManager(repository);
 
     @TempDir
     Path tempDir;
@@ -85,7 +90,16 @@ class ToolPriorityTuningServiceTest {
     private ToolPriorityTuningService newService(
             String mode, String legacyEnabled, Path evalPath, TenantIterator iterator, TenancyProperties tenancy) {
         return new ToolPriorityTuningService(
-                repository, clock, meterRegistry, mode, legacyEnabled, evalPath.toString(), 48L, iterator, tenancy);
+                repository,
+                clock,
+                meterRegistry,
+                mode,
+                legacyEnabled,
+                evalPath.toString(),
+                48L,
+                iterator,
+                tenancy,
+                transactionManager);
     }
 
     private Path passingFreshEval() throws IOException {
@@ -364,6 +378,95 @@ class ToolPriorityTuningServiceTest {
     }
 
     @Test
+    @DisplayName("a tenant whose second overlay write fails rolls the first one back too")
+    void tuneToolPriorities_overlayWriteFailsMidTenant_rollsTheTenantBack() throws IOException {
+        // Both tools qualify, so the tenant makes two proposals; the second write is rejected.
+        repository.log(TENANT_A, stats(TOOL_1, 20, 20, 2_000, 0), stats(TOOL_2, 20, 20, 2_000, 0));
+        repository.failOverlayWriteForTool.add(TOOL_2);
+        service = newService("live", null, passingFreshEval(), TENANT_A);
+
+        service.tuneToolPriorities();
+
+        assertThat(repository.overlays(TENANT_A))
+                .as("TOOL_1's upsert had already run; the rollback must discard it rather than leave it half written")
+                .isEmpty();
+        assertThat(transactionManager.rollbacks).isEqualTo(1);
+        assertThat(transactionManager.commits).isZero();
+        assertThat(repository.globalPriority.get(TOOL_1))
+                .as("the tenant is an unfinished part of the sweep, so no rollup (round 3 behaviour, kept)")
+                .isEqualTo(0.5);
+        assertThat(meterRegistry
+                        .counter(ToolPriorityTuningService.INCOMPLETE_COUNTER)
+                        .count())
+                .isEqualTo(1.0);
+        assertThat(meterRegistry
+                        .counter("mcp.tuning.proposals", "mode", "live", "scope", "tenant")
+                        .count())
+                .as("a rolled-back tenant proposed nothing that stuck")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("a rollup that fails mid-loop leaves every previous global priority intact")
+    void tuneToolPriorities_globalWriteFailsMidLoop_leavesThePreviousGlobalSet() throws IOException {
+        repository.log(TENANT_A, stats(TOOL_1, 20, 20, 2_000, 0), stats(TOOL_2, 20, 20, 2_000, 0));
+        repository.failGlobalWriteForTool.add(TOOL_2);
+        service = newService("live", null, passingFreshEval(), TENANT_A);
+
+        assertThatThrownBy(() -> service.tuneToolPriorities())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("global write rejected");
+
+        assertThat(repository.globalPriority.get(TOOL_1))
+                .as("TOOL_1's update had already run; a rollup is one result, so it is rolled back with TOOL_2's")
+                .isEqualTo(0.5);
+        assertThat(repository.globalPriority.get(TOOL_2)).isEqualTo(0.9);
+        assertThat(repository.overlays(TENANT_A))
+                .as("the tenant's own transaction committed before the rollup was attempted")
+                .containsKey(TOOL_1);
+        assertThat(transactionManager.rollbacks).isEqualTo(1);
+        assertThat(meterRegistry
+                        .counter("mcp.tuning.proposals", "mode", "live", "scope", "global")
+                        .count())
+                .as("a rolled-back rollup proposed nothing that stuck")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("the global catalog is read once per run, not once per tenant and tool")
+    void tuneToolPriorities_readsTheGlobalCatalogOncePerRun() throws IOException {
+        repository.log(TENANT_A, stats(TOOL_1, 20, 20, 2_000, 0), stats(TOOL_2, 20, 20, 2_000, 0));
+        repository.log(TENANT_B, stats(TOOL_1, 20, 20, 2_000, 0), stats(TOOL_2, 20, 20, 2_000, 0));
+        service = newService("live", null, passingFreshEval(), TENANT_A, TENANT_B);
+
+        service.tuneToolPriorities();
+
+        assertThat(repository.globalPriorityQueries)
+                .as("one snapshot serves both tenants' seeding and the rollup's own arithmetic")
+                .isEqualTo(1);
+        assertThat(repository.overlays(TENANT_A)).containsKeys(TOOL_1, TOOL_2);
+        assertThat(repository.overlays(TENANT_B)).containsKeys(TOOL_1, TOOL_2);
+        assertThat(repository.globalPriority.get(TOOL_1)).isNotEqualTo(0.5);
+    }
+
+    @Test
+    @DisplayName("an unreadable global catalog tunes nothing and marks the run incomplete")
+    void tuneToolPriorities_unreadableCatalog_tunesNothing() throws IOException {
+        repository.log(TENANT_A, stats(TOOL_1, 20, 20, 2_000, 0));
+        repository.failGlobalReads = true;
+        service = newService("live", null, passingFreshEval(), TENANT_A);
+
+        service.tuneToolPriorities();
+
+        assertThat(repository.statsReadsByTenant).isEmpty();
+        assertThat(repository.overlays(TENANT_A)).isEmpty();
+        assertThat(meterRegistry
+                        .counter(ToolPriorityTuningService.INCOMPLETE_COUNTER)
+                        .count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
     @DisplayName("a tool that left the catalog is skipped in both scopes")
     void tuneToolPriorities_unknownTool_skipped() throws IOException {
         repository.log(TENANT_A, stats(UNKNOWN_TOOL, 20, 20, 2_000, 0));
@@ -522,7 +625,7 @@ class ToolPriorityTuningServiceTest {
                 .isFalse();
 
         Method rollup = ToolPriorityTuningService.class.getDeclaredMethod(
-                "recomputeGlobalPriorities", Map.class, boolean.class);
+                "recomputeGlobalPriorities", Map.class, Map.class, boolean.class);
         assertThat(rollup.getAnnotation(PlatformScoped.class)).isNotNull();
         assertThat(rollup.getAnnotation(PlatformScoped.class).reason()).contains("mcp_tool");
 
@@ -565,6 +668,40 @@ class ToolPriorityTuningServiceTest {
         final List<UUID> statsReadsByTenant = new ArrayList<>();
         final List<UUID> failReadsFor = new ArrayList<>();
         final List<UUID> failOverlayReadsFor = new ArrayList<>();
+        final List<UUID> failOverlayWriteForTool = new ArrayList<>();
+        final List<UUID> failGlobalWriteForTool = new ArrayList<>();
+        int globalPriorityQueries;
+        boolean failGlobalReads;
+
+        // Writes made inside a transaction are held here until the manager commits them, so a
+        // rolled-back tenant or rollup leaves the committed state exactly as it was. The service
+        // reads the overlay before it writes any of it, so read-your-own-writes is not modelled.
+        private final List<Runnable> pending = new ArrayList<>();
+        private boolean inTransaction;
+
+        void beginTransaction() {
+            inTransaction = true;
+            pending.clear();
+        }
+
+        void commitTransaction() {
+            pending.forEach(Runnable::run);
+            pending.clear();
+            inTransaction = false;
+        }
+
+        void rollbackTransaction() {
+            pending.clear();
+            inTransaction = false;
+        }
+
+        private void write(Runnable change) {
+            if (inTransaction) {
+                pending.add(change);
+            } else {
+                change.run();
+            }
+        }
 
         void log(UUID tenantId, ToolInvocationStats... rows) {
             logByTenant.computeIfAbsent(tenantId, ignored -> new ArrayList<>()).addAll(List.of(rows));
@@ -587,7 +724,10 @@ class ToolPriorityTuningServiceTest {
         public void upsertOverlay(@NonNull UUID toolId, double priority, int avgLatencyMs) {
             UUID tenantId = TenantContext.current()
                     .orElseThrow(() -> new IllegalStateException("unbound insert into a scoped table"));
-            overlays(tenantId).put(toolId, new ToolPriorityOverlay(toolId, priority, avgLatencyMs));
+            if (failOverlayWriteForTool.contains(toolId)) {
+                throw new IllegalStateException("overlay write rejected for tool " + toolId);
+            }
+            write(() -> overlays(tenantId).put(toolId, new ToolPriorityOverlay(toolId, priority, avgLatencyMs)));
         }
 
         @Override
@@ -601,14 +741,56 @@ class ToolPriorityTuningServiceTest {
         }
 
         @Override
-        public @NonNull Optional<Double> findGlobalPriority(@NonNull UUID toolId) {
-            return Optional.ofNullable(globalPriority.get(toolId));
+        public @NonNull Map<UUID, Double> findGlobalPriorities() {
+            globalPriorityQueries++;
+            if (failGlobalReads) {
+                throw new IllegalStateException("connection lost while reading the tool catalog");
+            }
+            return Map.copyOf(globalPriority);
         }
 
         @Override
         public void updateGlobalPriority(@NonNull UUID toolId, double priority, int avgLatencyMs) {
-            globalPriority.put(toolId, priority);
-            globalLatency.put(toolId, avgLatencyMs);
+            if (failGlobalWriteForTool.contains(toolId)) {
+                throw new IllegalStateException("global write rejected for tool " + toolId);
+            }
+            write(() -> {
+                globalPriority.put(toolId, priority);
+                globalLatency.put(toolId, avgLatencyMs);
+            });
+        }
+    }
+
+    /**
+     * Drives the fake repository's journal, so a rolled-back {@code TransactionTemplate} block
+     * really discards the writes it made rather than merely being counted.
+     */
+    static final class JournallingTransactionManager implements PlatformTransactionManager {
+
+        private final FakeToolPriorityRepository repository;
+        int commits;
+        int rollbacks;
+
+        JournallingTransactionManager(FakeToolPriorityRepository repository) {
+            this.repository = repository;
+        }
+
+        @Override
+        public @NonNull TransactionStatus getTransaction(TransactionDefinition definition) {
+            repository.beginTransaction();
+            return new SimpleTransactionStatus(true);
+        }
+
+        @Override
+        public void commit(@NonNull TransactionStatus status) {
+            commits++;
+            repository.commitTransaction();
+        }
+
+        @Override
+        public void rollback(@NonNull TransactionStatus status) {
+            rollbacks++;
+            repository.rollbackTransaction();
         }
     }
 
