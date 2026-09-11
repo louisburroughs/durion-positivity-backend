@@ -4,6 +4,7 @@ import com.positivity.bulkloader.internal.entity.TusUpload;
 import com.positivity.bulkloader.internal.exception.TusOffsetConflictException;
 import com.positivity.bulkloader.internal.exception.TusUploadExpiredException;
 import com.positivity.bulkloader.internal.repository.TusUploadRepository;
+import com.positivity.tenancy.TenantIterator;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -23,7 +24,9 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @Slf4j
@@ -35,19 +38,25 @@ public class TusUploadServiceImpl implements TusUploadService {
     private final Path tusRoot;
     private final int expiryHours;
     private final Clock clock;
+    private final TenantIterator tenantIterator;
+    private final TransactionTemplate transactionTemplate;
 
     public TusUploadServiceImpl(
             TusUploadRepository tusUploadRepository,
             BulkLoadJobService bulkLoadJobService,
             @Value("${bulk-loader.storage.local-root:/tmp/bulk-loader}") String storageRootPath,
             @Value("${bulk-loader.tus.expiry-hours:24}") int expiryHours,
-            Clock clock) {
+            Clock clock,
+            TenantIterator tenantIterator,
+            PlatformTransactionManager transactionManager) {
         this.tusUploadRepository = tusUploadRepository;
         this.bulkLoadJobService = bulkLoadJobService;
         this.storageRoot = Paths.get(storageRootPath);
         this.tusRoot = this.storageRoot.resolve(".tus");
         this.expiryHours = expiryHours;
         this.clock = clock;
+        this.tenantIterator = tenantIterator;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
         try {
             Files.createDirectories(this.tusRoot);
         } catch (IOException e) {
@@ -132,9 +141,19 @@ public class TusUploadServiceImpl implements TusUploadService {
         log.info("TUS upload deleted: id={}", uploadId);
     }
 
+    /**
+     * Per-tenant sweep (ADR-0062 §3): {@code tus_upload} is tenant-scoped, so the expired rows are
+     * visible only under their tenant's binding. Each tenant's transaction opens inside the
+     * binding ({@link TransactionTemplate}, not {@code @Transactional}: a transaction begun before
+     * the iterator binds would run unbound and see nothing).
+     */
     @Scheduled(fixedDelayString = "${bulk-loader.tus.cleanup-interval-ms:3600000}")
-    @Transactional
     public void cleanupExpiredUploads() {
+        tenantIterator.forEachActiveTenant(
+                tenantId -> transactionTemplate.executeWithoutResult(status -> cleanupExpiredUploadsOfBoundTenant()));
+    }
+
+    void cleanupExpiredUploadsOfBoundTenant() {
         List<TusUpload> expired = tusUploadRepository.findByExpiresAtBeforeAndCompletedFalse(Instant.now(clock));
         for (TusUpload upload : expired) {
             try {

@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.positivity.bulkloader.internal.exception.BulkLoadTenantException;
 import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.internal.exception.TusOffsetConflictException;
 import com.positivity.bulkloader.internal.exception.TusUploadExpiredException;
@@ -105,6 +106,27 @@ class BulkLoaderExceptionHandlerTest {
             assertThat(result.getBody()).isNotNull();
             assertThat(result.getBody().code()).isEqualTo("FORBIDDEN");
             assertThat(result.getBody().message()).isEqualTo("Access denied");
+            assertThat(result.getHeaders().getFirst("X-Correlation-Id")).isEqualTo(CORRELATION_ID);
+        }
+    }
+
+    @Nested
+    @DisplayName("handleTenantBinding")
+    class HandleTenantBinding {
+
+        @Test
+        @DisplayName("answers the exception's own status and code and sets the correlation id header")
+        void returnsTheExceptionsStatusAndCode() {
+            BulkLoadTenantException ex = new BulkLoadTenantException(
+                    BulkLoadTenantException.TENANT_FORBIDDEN, HttpStatus.FORBIDDEN, "not your tenant");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            ResponseEntity<ApiError> result = sut.handleTenantBinding(ex, requestWithHeader(), response);
+
+            assertThat(result.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(result.getBody()).isNotNull();
+            assertThat(result.getBody().code()).isEqualTo("BULK_JOB_TENANT_FORBIDDEN");
+            assertThat(result.getBody().message()).isEqualTo("not your tenant");
             assertThat(result.getHeaders().getFirst("X-Correlation-Id")).isEqualTo(CORRELATION_ID);
         }
     }
@@ -240,6 +262,14 @@ class BulkLoaderExceptionHandlerTest {
                     Named.of("handleOwnershipViolation", (HandlerInvocation)
                             (request, response) -> handler.handleOwnershipViolation(
                                     new JobOwnershipViolationException("job-1"), request, response)),
+                    Named.of("handleTenantBinding", (HandlerInvocation)
+                            (request, response) -> handler.handleTenantBinding(
+                                    new BulkLoadTenantException(
+                                            BulkLoadTenantException.TENANT_REQUIRED,
+                                            HttpStatus.BAD_REQUEST,
+                                            "tenantId is required"),
+                                    request,
+                                    response)),
                     Named.of("handleNotFound", (HandlerInvocation) (request, response) ->
                             handler.handleNotFound(new NoSuchElementException("Job not found"), request, response)),
                     Named.of("handleConflict", (HandlerInvocation) (request, response) -> handler.handleConflict(

@@ -37,6 +37,13 @@ public class BulkLoadJobResponse {
     private UUID locationId;
 
     @Schema(
+            description = "Tenant the job loads into (ADR-0062): the tenant every row it writes and every sibling"
+                    + " call it makes is bound to",
+            example = "01900000-0000-7000-8000-000000000001",
+            requiredMode = NOT_REQUIRED)
+    private UUID tenantId;
+
+    @Schema(
             description = "Original name of the uploaded source file",
             example = "products-2026-01.csv",
             requiredMode = REQUIRED)

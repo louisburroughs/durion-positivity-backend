@@ -6,6 +6,8 @@ import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.JobStatus;
 import com.positivity.bulkloader.internal.exception.JobOwnershipViolationException;
 import com.positivity.bulkloader.internal.repository.BulkLoadJobRepository;
+import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.TenantResolver;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.EnumSet;
@@ -13,7 +15,6 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -21,10 +22,22 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
+/**
+ * Job lifecycle. Two operations rebind the tenant (ADR-0062, plan WS8): {@link #createJob} runs
+ * under the job's target tenant so the row lands there, and {@link #startProcessing} runs under
+ * the job's tenant so the whole batch, every audit row and every sibling call carries it. Both
+ * open their transaction <em>inside</em> the binding through a {@link TransactionTemplate} rather
+ * than {@code @Transactional}: the connection binds {@code app.current_tenant} at checkout and the
+ * Hibernate session fixes its {@code @TenantId} when it opens, so a transaction begun before the
+ * rebind would write as the caller's tenant (the pattern {@code docs/TENANCY_SCHEMA.md} prescribes
+ * for per-tenant work). Every other operation reads and writes under the request's own binding,
+ * which row-level security and the Hibernate filter scope like any other read.
+ */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class BulkLoadJobServiceImpl implements BulkLoadJobService {
 
@@ -50,10 +63,38 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
     private final BulkLoadJobRepository jobRepository;
     private final BulkLoadBatchLauncher bulkLoadBatchLauncher;
     private final Clock clock;
+    private final TransactionTemplate transactionTemplate;
+    private final BulkLoadTenantBinding tenantBinding;
+    private final TenantResolver tenantResolver;
 
+    public BulkLoadJobServiceImpl(
+            BulkLoadJobRepository jobRepository,
+            BulkLoadBatchLauncher bulkLoadBatchLauncher,
+            Clock clock,
+            PlatformTransactionManager transactionManager,
+            BulkLoadTenantBinding tenantBinding,
+            TenantResolver tenantResolver) {
+        this.jobRepository = jobRepository;
+        this.bulkLoadBatchLauncher = bulkLoadBatchLauncher;
+        this.clock = clock;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.tenantBinding = tenantBinding;
+        this.tenantResolver = tenantResolver;
+    }
+
+    /**
+     * Resolves the target tenant first (a 400 or 403 before anything is written), then creates the
+     * job under that tenant's binding.
+     */
     @Override
-    @Transactional
     public BulkLoadJobResponse createJob(@NonNull BulkLoadJobCreateRequest request, @NonNull String operatorId) {
+        UUID tenantId = tenantBinding.resolveTarget(request.getTenantId());
+        return TenantContext.callAs(
+                tenantId,
+                () -> transactionTemplate.execute(status -> createJobInTenant(request, operatorId, tenantId)));
+    }
+
+    private BulkLoadJobResponse createJobInTenant(BulkLoadJobCreateRequest request, String operatorId, UUID tenantId) {
         long activeCount = jobRepository.countByOperatorIdAndStatusIn(operatorId, ACTIVE_STATUSES);
         if (activeCount > 0) {
             throw new IllegalStateException("Operator already has an active bulk load job in progress");
@@ -73,10 +114,11 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
             throw new IllegalStateException("Operator already has an active bulk load job in progress", ex);
         }
         log.info(
-                "Created bulk load job {} for operator {} domain {}",
+                "Created bulk load job {} for operator {} domain {} in tenant {}",
                 saved.getId(),
                 operatorId,
-                request.getDomainType());
+                request.getDomainType(),
+                tenantId);
         return toResponse(saved);
     }
 
@@ -163,9 +205,23 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
         return toResponse(jobRepository.save(job));
     }
 
+    /**
+     * Runs the whole job under its tenant. The job is visible only under the binding that owns it
+     * (row-level security), so the tenant to run as is the one resolved for this request; it is
+     * re-bound explicitly, around the transaction and the batch launch, so the run does not depend
+     * on the request thread's binding surviving into the batch (it would not on an async executor).
+     */
     @Override
-    @Transactional
     public void startProcessing(@NonNull UUID jobId, @NonNull String operatorId, @Nullable String authorizationHeader) {
+        UUID tenantId = tenantResolver.require();
+        TenantContext.runAs(
+                tenantId,
+                () -> transactionTemplate.executeWithoutResult(
+                        status -> startProcessingInTenant(jobId, operatorId, authorizationHeader, tenantId)));
+    }
+
+    private void startProcessingInTenant(
+            UUID jobId, String operatorId, @Nullable String authorizationHeader, UUID tenantId) {
         BulkLoadJob job = findOrThrow(jobId);
         if (!job.getOperatorId().equals(operatorId)) {
             throw new JobOwnershipViolationException(jobId.toString());
@@ -189,18 +245,21 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
         // managed entity instance, so every finished job read as PROCESSING for ever while its
         // row counts said otherwise. In this order the listener has the last word.
         //
-        // What this does NOT do is make PROCESSING observable to anyone else. This method is
-        // @Transactional and save() on an already-managed entity is a merge, not a flush: the
-        // UPDATE lands at commit, by which time the listener has already replaced the status. A
-        // second connection polling the job during the import still reads CREATED or UPLOADING.
-        // That is a consequence of running the import inside the request transaction, and it goes
-        // away with the same change that makes processing genuinely asynchronous — at which point
-        // the launch must also move after this transaction commits, or the batch thread will race
-        // a row it cannot yet see, and contend with the lock this one would then hold for the
-        // length of the import. See the note on FileUploadController#startProcessing.
+        // What this does NOT do is make PROCESSING observable to anyone else. This method runs
+        // inside the TransactionTemplate startProcessing opened under the job's tenant, and save()
+        // on an already-managed entity is a merge, not a flush: the UPDATE lands at commit, by
+        // which time the listener has already replaced the status. A second connection polling the
+        // job during the import still reads CREATED or UPLOADING. That is a consequence of running
+        // the import inside the request transaction, and it goes away with the same change that
+        // makes processing genuinely asynchronous — at which point the launch must also move after
+        // this transaction commits (still inside the tenant binding, which the task decorator then
+        // carries to the batch thread), or the batch thread will race a row it cannot yet see, and
+        // contend with the lock this one would then hold for the length of the import. See the
+        // note on FileUploadController#startProcessing.
         job.setStatus(JobStatus.PROCESSING);
         job.setStartedAt(Instant.now(clock));
         jobRepository.save(job);
+        log.info("Starting bulk load job {} domain {} in tenant {}", job.getId(), job.getDomainType(), tenantId);
         bulkLoadBatchLauncher.launch(job, authorizationHeader);
     }
 
@@ -221,6 +280,7 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
                 .id(job.getId())
                 .operatorId(job.getOperatorId())
                 .locationId(job.getLocationId())
+                .tenantId(job.getTenantId())
                 .fileName(job.getFileName())
                 .domainType(job.getDomainType())
                 .status(job.getStatus())
