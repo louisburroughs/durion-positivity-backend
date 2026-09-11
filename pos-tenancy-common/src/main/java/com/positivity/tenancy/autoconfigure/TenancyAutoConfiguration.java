@@ -11,6 +11,8 @@ import com.positivity.tenancy.TenantRegistry;
 import com.positivity.tenancy.TenantResolver;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.lang.annotation.Annotation;
+import java.net.URI;
+import java.net.http.HttpClient;
 import java.time.Clock;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -21,13 +23,14 @@ import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cache.annotation.CachingConfigurer;
 import org.springframework.cache.interceptor.KeyGenerator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.util.ClassUtils;
 import org.springframework.web.client.RestClient;
 
@@ -94,6 +97,24 @@ public class TenancyAutoConfiguration {
     }
 
     /**
+     * {@code pos.tenancy.registry.mode=REMOTE} without {@code RestClient} on the classpath is a
+     * configuration error, not a silent fall-back to the static list: a scheduled module that asked
+     * for the remote registry would otherwise iterate only its configured tenants without a word.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnMissingClass("org.springframework.web.client.RestClient")
+    @ConditionalOnProperty(prefix = "pos.tenancy.registry", name = "mode", havingValue = "REMOTE")
+    public static class RemoteRegistryWithoutRestClientConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean(TenantRegistry.class)
+        public TenantRegistry remoteTenantRegistryUnavailable() {
+            throw new IllegalStateException("pos.tenancy.registry.mode=REMOTE needs spring-web's RestClient on the"
+                    + " classpath; add spring-boot-starter-web (or -webflux) to the module, or use mode STATIC");
+        }
+    }
+
+    /**
      * {@code pos.tenancy.registry.mode=REMOTE}: {@link RemoteTenantRegistry} replaces the static
      * registry (plan WS4-2). Still {@code @ConditionalOnMissingBean}, so a module with its own
      * {@link TenantRegistry} bean keeps it.
@@ -105,6 +126,9 @@ public class TenancyAutoConfiguration {
 
         private static final String LOAD_BALANCED = "org.springframework.cloud.client.loadbalancer.LoadBalanced";
 
+        /** pos-tenant's {@code spring.application.name}, the host of the default registry URL. */
+        static final String SERVICE_ID = "tenant";
+
         @Bean
         @ConditionalOnMissingBean(TenantRegistry.class)
         public RemoteTenantRegistry remoteTenantRegistry(
@@ -112,13 +136,24 @@ public class TenancyAutoConfiguration {
                 ConfigurableListableBeanFactory beanFactory,
                 ObjectProvider<Clock> clock) {
             TenancyProperties.Registry config = properties.getRegistry();
-            SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-            requestFactory.setConnectTimeout(config.getConnectTimeout());
-            requestFactory.setReadTimeout(config.getReadTimeout());
-            RestClient restClient = resolveBuilder(beanFactory)
-                    .clone()
-                    .requestFactory(requestFactory)
+            // java.net.http.HttpClient with redirects off: HttpURLConnection (SimpleClientHttpRequestFactory)
+            // follows a GET redirect before RestClient sees the status, which would accept a redirected
+            // 200 as a snapshot and replay the shared secret to the Location host.
+            HttpClient httpClient = HttpClient.newBuilder()
+                    .connectTimeout(config.getConnectTimeout())
+                    .followRedirects(HttpClient.Redirect.NEVER)
                     .build();
+            JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+            requestFactory.setReadTimeout(config.getReadTimeout());
+            ResolvedBuilder resolved = resolveBuilder(beanFactory);
+            if (!resolved.loadBalanced() && namesServiceId(config.getUrl())) {
+                throw new IllegalStateException("pos.tenancy.registry.url=" + config.getUrl()
+                        + " names the Eureka service id '" + SERVICE_ID + "', but this module has no @LoadBalanced"
+                        + " RestClient.Builder to resolve it; set the url to a resolvable host, e.g."
+                        + " http://pos-tenant:8080/internal/v1/tenants in Compose");
+            }
+            RestClient restClient =
+                    resolved.builder().clone().requestFactory(requestFactory).build();
             log.info(
                     "TenantRegistry is remote: {} refreshed at most every {} (plan WS4-2)",
                     config.getUrl(),
@@ -126,31 +161,44 @@ public class TenancyAutoConfiguration {
             return new RemoteTenantRegistry(properties, restClient, clock.getIfAvailable(Clock::systemUTC));
         }
 
+        /** The builder the registry client is built from, and whether it resolves Eureka service ids. */
+        record ResolvedBuilder(RestClient.Builder builder, boolean loadBalanced) {}
+
         /**
          * The module's {@code @LoadBalanced RestClient.Builder} when it declares one (a {@code
          * http://tenant/...} URL then resolves through Eureka), else its single or primary builder,
-         * else a plain one.
+         * else a plain one. A plain builder resolves the URL's host through DNS only, so the caller
+         * refuses the service-id default with it ({@link #namesServiceId(String)}).
          */
-        static RestClient.Builder resolveBuilder(ConfigurableListableBeanFactory beanFactory) {
+        static ResolvedBuilder resolveBuilder(ConfigurableListableBeanFactory beanFactory) {
             String[] names = beanFactory.getBeanNamesForType(RestClient.Builder.class);
             Class<? extends Annotation> loadBalanced = loadBalancedAnnotation(beanFactory.getBeanClassLoader());
             if (loadBalanced != null) {
                 for (String name : names) {
                     if (beanFactory.findAnnotationOnBean(name, loadBalanced) != null) {
-                        return beanFactory.getBean(name, RestClient.Builder.class);
+                        return new ResolvedBuilder(beanFactory.getBean(name, RestClient.Builder.class), true);
                     }
                 }
             }
             if (names.length == 0) {
-                return RestClient.builder();
+                return new ResolvedBuilder(RestClient.builder(), false);
             }
             try {
-                return beanFactory.getBean(RestClient.Builder.class);
+                return new ResolvedBuilder(beanFactory.getBean(RestClient.Builder.class), false);
             } catch (NoUniqueBeanDefinitionException e) {
                 log.warn("Several RestClient.Builder beans and none is @LoadBalanced or @Primary; the tenant"
                         + " registry uses a plain builder, so pos.tenancy.registry.url must be a"
                         + " resolvable host");
-                return RestClient.builder();
+                return new ResolvedBuilder(RestClient.builder(), false);
+            }
+        }
+
+        /** Whether {@code url}'s host is pos-tenant's Eureka service id rather than a DNS name. */
+        static boolean namesServiceId(String url) {
+            try {
+                return SERVICE_ID.equalsIgnoreCase(URI.create(url).getHost());
+            } catch (IllegalArgumentException e) {
+                return false;
             }
         }
 
