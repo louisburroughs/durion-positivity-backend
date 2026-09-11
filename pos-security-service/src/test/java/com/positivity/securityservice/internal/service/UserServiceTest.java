@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -304,7 +305,7 @@ class UserServiceTest {
         existing.setUsername("old");
         existing.setPassword("oldpass");
 
-        when(userRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(userRepository.findByIdForUpdate(id)).thenReturn(Optional.of(existing));
         when(roleRepository.findByName("MANAGER")).thenReturn(Optional.of(role));
         when(passwordEncoder.encode("newpass")).thenReturn("newEncoded");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -321,6 +322,11 @@ class UserServiceTest {
         assertThat(result.getUsername()).isEqualTo("newname");
         assertThat(result.getRoles()).contains("MANAGER");
         verify(userRoleGrantService).reconcile(eq(existing), eq(Set.of(role)), anyString());
+        // Pessimistic write lock (WS2b-3 review): the same lock AdministratorActivationService's
+        // mint/activate take, so this path cannot read the row before an in-flight activation
+        // exchange takes its lock and then commit a stale copy afterwards.
+        verify(userRepository).findByIdForUpdate(id);
+        verify(userRepository, never()).findById(any());
     }
 
     @Test
@@ -328,7 +334,7 @@ class UserServiceTest {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
         User existing = new User();
         existing.setUsername("alice");
-        when(userRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(userRepository.findByIdForUpdate(id)).thenReturn(Optional.of(existing));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
         UserUpdateRequest req = new UserUpdateRequest();
@@ -340,7 +346,7 @@ class UserServiceTest {
     @Test
     void updateUser_userNotFound_throws() {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000099");
-        when(userRepository.findById(id)).thenReturn(Optional.empty());
+        when(userRepository.findByIdForUpdate(id)).thenReturn(Optional.empty());
 
         UserUpdateRequest req = new UserUpdateRequest();
         // A user reference that does not resolve is UserNotFoundException (404) on every entry
@@ -355,7 +361,7 @@ class UserServiceTest {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
         User existing = new User();
         existing.setUsername("alice");
-        when(userRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(userRepository.findByIdForUpdate(id)).thenReturn(Optional.of(existing));
         when(roleRepository.findByName("GHOST")).thenReturn(Optional.empty());
 
         UserUpdateRequest req = new UserUpdateRequest();
@@ -388,5 +394,102 @@ class UserServiceTest {
         assertThatThrownBy(() -> userService.assignRoles("alice", Set.of("GHOST")))
                 .isInstanceOf(RoleNotFoundException.class)
                 .hasMessageContaining("Role not found");
+    }
+
+    @Test
+    void createUserAwaitingActivation_hashesAGeneratedPasswordAndExpiresTheCredentials() {
+        Role admin = new Role();
+        admin.setName("ADMIN");
+        when(userRepository.existsByUsername("owner@acme.example")).thenReturn(false);
+        when(roleRepository.findByName("ADMIN")).thenReturn(Optional.of(admin));
+        when(passwordEncoder.encode(anyString())).thenAnswer(inv -> "hashed:" + inv.getArgument(0));
+        UUID id = UUID.fromString("01990000-0000-7000-8000-000000000501");
+        User[] stored = new User[1];
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+            User saved = inv.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(id);
+            }
+            stored[0] = saved;
+            return saved;
+        });
+        when(userRepository.findById(id)).thenAnswer(inv -> Optional.ofNullable(stored[0]));
+
+        UserDto created = userService.createUserAwaitingActivation("owner@acme.example", Set.of("ADMIN"));
+
+        assertThat(created.getId()).isEqualTo(id);
+        verify(userRepository, org.mockito.Mockito.atLeast(2)).save(any(User.class));
+        User user = stored[0];
+        assertThat(user.isCredentialsNonExpired())
+                .as("cannot sign in until activated")
+                .isFalse();
+        assertThat(user.getCredentialsExpireAt()).isEqualTo(TEST_CLOCK.instant());
+        assertThat(user.isAwaitingActivation())
+                .as("the explicit provisioning marker")
+                .isTrue();
+        assertThat(user.getPassword()).startsWith("hashed:");
+        // 32 random bytes, URL-safe base64 without padding: 43 characters, never a caller-chosen value
+        assertThat(user.getPassword().substring("hashed:".length())).hasSize(43).matches("[A-Za-z0-9_-]+");
+        verify(userRoleGrantService).grant(eq(user), eq(admin), anyString());
+    }
+
+    @Test
+    void updateUser_settingAPasswordEndsTheAwaitingActivationState() {
+        UUID id = UUID.fromString("01990000-0000-7000-8000-000000000502");
+        User user = new User();
+        user.setId(id);
+        user.setUsername("owner@acme.example");
+        user.setPassword("$2a$unmatchable");
+        user.setCredentialsNonExpired(false);
+        user.setCredentialsExpireAt(TEST_CLOCK.instant());
+        user.setAwaitingActivation(true);
+        when(userRepository.findByIdForUpdate(id)).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode("Sup3rS3cret!")).thenReturn("$2a$hashed");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        UserUpdateRequest request = new UserUpdateRequest();
+        request.setPassword("Sup3rS3cret!");
+
+        userService.updateUser(id, request);
+
+        assertThat(user.getPassword()).isEqualTo("$2a$hashed");
+        assertThat(user.isAwaitingActivation())
+                .as("a token minted before this password set can no longer overwrite it")
+                .isFalse();
+        assertThat(user.isCredentialsNonExpired())
+                .as("the documented fallback (setting the first password through PUT /v1/users/{id}) must not "
+                        + "still fail login with CredentialsExpiredException")
+                .isTrue();
+        assertThat(user.getCredentialsExpireAt())
+                .as("the provisioning expiry no longer applies once the account is activated")
+                .isNull();
+    }
+
+    @Test
+    void updateUser_settingAPasswordOnALiveAccountAnAdministratorExpired_keepsItExpired() {
+        UUID id = UUID.fromString("01990000-0000-7000-8000-000000000503");
+        Instant adminSetExpiry = TEST_CLOCK.instant();
+        User user = new User();
+        user.setId(id);
+        user.setUsername("live-user@acme.example");
+        user.setPassword("$2a$old");
+        user.setCredentialsNonExpired(false);
+        user.setCredentialsExpireAt(adminSetExpiry);
+        user.setAwaitingActivation(false);
+        when(userRepository.findByIdForUpdate(id)).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode("Sup3rS3cret!")).thenReturn("$2a$hashed");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        UserUpdateRequest request = new UserUpdateRequest();
+        request.setPassword("Sup3rS3cret!");
+
+        userService.updateUser(id, request);
+
+        assertThat(user.getPassword()).isEqualTo("$2a$hashed");
+        assertThat(user.isAwaitingActivation()).isFalse();
+        assertThat(user.isCredentialsNonExpired())
+                .as("a live account an administrator deliberately expired keeps its current behaviour")
+                .isFalse();
+        assertThat(user.getCredentialsExpireAt())
+                .as("the administrator's expiry is untouched by an ordinary password set")
+                .isEqualTo(adminSetExpiry);
     }
 }

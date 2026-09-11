@@ -670,6 +670,7 @@ FROM (VALUES
     ('platform:tenant:read', 'platform', 'tenant', 'read', 526),
     ('platform:tenant:suspend', 'platform', 'tenant', 'suspend', 527),
     ('platform:tenant:update', 'platform', 'tenant', 'update', 528),
+    ('platform:tenant:provision', 'platform', 'tenant', 'provision', 529),
     ('pricing:base_price:create', 'pricing', 'base_price', 'create', 245),
     ('pricing:labor_rate:manage', 'pricing', 'labor_rate', 'manage', 510),
     ('pricing:labor_rate:quote', 'pricing', 'labor_rate', 'quote', 512),

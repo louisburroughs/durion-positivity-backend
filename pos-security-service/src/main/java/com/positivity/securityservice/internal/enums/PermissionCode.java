@@ -989,13 +989,16 @@ public enum PermissionCode {
     PLATFORM__TENANT__REACTIVATE(525, "platform:tenant:reactivate"),
     PLATFORM__TENANT__READ(526, "platform:tenant:read"),
     PLATFORM__TENANT__SUSPEND(527, "platform:tenant:suspend"),
-    PLATFORM__TENANT__UPDATE(528, "platform:tenant:update");
+    PLATFORM__TENANT__UPDATE(528, "platform:tenant:update"),
+    // ADR-0062 §7, WS2b-3: mint a first-administrator activation token (pos-security-service,
+    // platform tenant only)
+    PLATFORM__TENANT__PROVISION(529, "platform:tenant:provision");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 84;
+    public static final int CATALOG_VERSION = 85;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

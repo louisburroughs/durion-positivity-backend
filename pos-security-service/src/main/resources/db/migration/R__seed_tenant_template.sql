@@ -122,6 +122,7 @@ FROM (VALUES
     ('PLATFORM_ADMIN', 'platform:account:update'),
     ('PLATFORM_ADMIN', 'platform:tenant:create'),
     ('PLATFORM_ADMIN', 'platform:tenant:decommission'),
+    ('PLATFORM_ADMIN', 'platform:tenant:provision'),
     ('PLATFORM_ADMIN', 'platform:tenant:reactivate'),
     ('PLATFORM_ADMIN', 'platform:tenant:read'),
     ('PLATFORM_ADMIN', 'platform:tenant:suspend'),
@@ -159,7 +160,7 @@ BEGIN
       FROM role_permissions rp
       JOIN roles r ON r.id = rp.role_id
      WHERE r.name = 'PLATFORM_ADMIN';
-    IF platform_grants < 9 THEN
-        RAISE EXCEPTION 'PLATFORM_ADMIN holds % platform grants, expected 9 (permission rows missing?)', platform_grants;
+    IF platform_grants < 10 THEN
+        RAISE EXCEPTION 'PLATFORM_ADMIN holds % platform grants, expected 10 (permission rows missing?)', platform_grants;
     END IF;
 END $$;
