@@ -21,6 +21,20 @@
         "sort": 1
       },
       {
+        "name": "tenant",
+        "label": "Tenant",
+        "description": "Bound tenant of the line (ADR-0062 plan WS6). All includes lines with no tenant (startup, schedulers).",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": "label_values({job=\"docker\"}, tenant)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "refresh": 2,
+        "sort": 1
+      },
+      {
         "name": "level",
         "label": "Level",
         "type": "custom",
@@ -49,7 +63,7 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "sum(rate({job=\"docker\", service=~\"$service\"}[$__rate_interval]))"
+          "expr": "sum(rate({job=\"docker\", service=~\"$service\", tenant=~\"$tenant\"}[$__rate_interval]))"
         }
       ],
       "fieldConfig": {
@@ -67,7 +81,7 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "sum(rate({job=\"docker\", service=~\"$service\", level=~\"ERROR|FATAL\"}[$__rate_interval]))"
+          "expr": "sum(rate({job=\"docker\", service=~\"$service\", level=~\"ERROR|FATAL\", tenant=~\"$tenant\"}[$__rate_interval]))"
         }
       ],
       "fieldConfig": {
@@ -96,7 +110,7 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "sum(rate({job=\"docker\", service=~\"$service\", level=\"WARN\"}[$__rate_interval]))"
+          "expr": "sum(rate({job=\"docker\", service=~\"$service\", level=\"WARN\", tenant=~\"$tenant\"}[$__rate_interval]))"
         }
       ],
       "fieldConfig": {
@@ -124,7 +138,7 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "sum by (service) (count_over_time({job=\"docker\", service=~\"$service\"}[1m]))",
+          "expr": "sum by (service) (count_over_time({job=\"docker\", service=~\"$service\", tenant=~\"$tenant\"}[1m]))",
           "legendFormat": "{{service}}"
         }
       ],
@@ -143,13 +157,13 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "sum by (service) (count_over_time({job=\"docker\", service=~\"$service\", level=~\"ERROR|FATAL\"}[1m]))",
+          "expr": "sum by (service) (count_over_time({job=\"docker\", service=~\"$service\", level=~\"ERROR|FATAL\", tenant=~\"$tenant\"}[1m]))",
           "legendFormat": "ERROR {{service}}"
         },
         {
           "refId": "B",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "sum by (service) (count_over_time({job=\"docker\", service=~\"$service\", level=\"WARN\"}[1m]))",
+          "expr": "sum by (service) (count_over_time({job=\"docker\", service=~\"$service\", level=\"WARN\", tenant=~\"$tenant\"}[1m]))",
           "legendFormat": "WARN {{service}}"
         }
       ]
@@ -164,7 +178,7 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "{job=\"docker\", service=~\"$service\", level=~\"$level\"} |~ \"(?i)$search\""
+          "expr": "{job=\"docker\", service=~\"$service\", level=~\"$level\", tenant=~\"$tenant\"} |~ \"(?i)$search\""
         }
       ],
       "options": {
