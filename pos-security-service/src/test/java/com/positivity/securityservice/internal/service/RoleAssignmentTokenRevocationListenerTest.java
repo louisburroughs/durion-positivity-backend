@@ -38,6 +38,9 @@ class RoleAssignmentTokenRevocationListenerTest {
     @Mock
     private JwtService jwtService;
 
+    @Mock
+    private ImpersonationTokenRevocationService impersonationTokenRevocationService;
+
     @InjectMocks
     private RoleAssignmentTokenRevocationListener sut;
 
@@ -52,6 +55,10 @@ class RoleAssignmentTokenRevocationListenerTest {
         sut.onRoleAssignmentRevoked(new RoleAssignmentRevokedEvent(this, USER_ID));
 
         verify(jwtService).revokeAllTokensForUser("alice");
+        // The operator half: an impersonation token this user minted is stored in the tenant they
+        // were supporting, under a synthetic subject, so the username-keyed revocation above
+        // cannot see it (ADR-0062 §7, WS2b-4).
+        verify(impersonationTokenRevocationService).revokeForOperator(USER_ID);
     }
 
     @Test
@@ -62,5 +69,6 @@ class RoleAssignmentTokenRevocationListenerTest {
         sut.onRoleAssignmentRevoked(new RoleAssignmentRevokedEvent(this, USER_ID));
 
         verify(jwtService, never()).revokeAllTokensForUser(any());
+        verify(impersonationTokenRevocationService, never()).revokeForOperator(any());
     }
 }

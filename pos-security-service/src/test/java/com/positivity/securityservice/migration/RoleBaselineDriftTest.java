@@ -61,6 +61,15 @@ class RoleBaselineDriftTest {
             Set.of("DISPATCHER", "SHOP_MANAGER", "SELF_SERVICE_CUSTOMER", "CONTROLLER");
 
     /**
+     * Roles Flyway creates on purpose after the move because they must exist before any load runs:
+     * SUPPORT (ADR-0062 §7, WS2b-4) is the read-only role a platform operator's impersonation token
+     * carries, and it joins the platform role template through {@code R__seed_tenant_template.sql},
+     * which copies alpha's template roles — so it has to be a Flyway floor role, and its grants
+     * stay in the SQL seed. The baseline file lists it too, as for the residue.
+     */
+    private static final Set<String> TEMPLATE_FLOOR = Set.of("SUPPORT");
+
+    /**
      * Every role the platform is expected to have. Pinned here because after the move no single
      * source holds the whole set: Flyway owns the floor, the baseline file owns the rest. Adding a
      * role means editing this list, which is the forcing function — it is exactly the silent
@@ -82,6 +91,7 @@ class RoleBaselineDriftTest {
             "SELF_SERVICE_CUSTOMER",
             "SERVICE_ADVISOR",
             "SHOP_MANAGER",
+            "SUPPORT",
             "SYSTEM_ADMINISTRATOR",
             "TECHNICIAN");
 
@@ -187,6 +197,7 @@ class RoleBaselineDriftTest {
         // grant left behind for a moved role is not a silent no-op — it fails the migration.
         Set<String> allowed = new TreeSet<>(BOOTSTRAP_FLOOR);
         allowed.addAll(VERSIONED_RESIDUE);
+        allowed.addAll(TEMPLATE_FLOOR);
 
         assertThat(seededGrants().keySet()).isSubsetOf(allowed);
         assertThat(seededRoleNames()).isSubsetOf(allowed);

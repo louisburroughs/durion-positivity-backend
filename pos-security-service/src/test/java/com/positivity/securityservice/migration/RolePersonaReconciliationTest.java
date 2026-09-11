@@ -84,8 +84,10 @@ class RolePersonaReconciliationTest {
         // Decision 2: CUSTOMER and SELF_SERVICE_CUSTOMER have no MCP access in the near term. Pinning
         // the set means a future exclusion is a deliberate edit here rather than a quiet addition —
         // an excluded role's users silently land on the generic persona, which is exactly the outcome
-        // this issue set out to stop happening by accident.
-        assertThat(ineligibleRoles()).containsExactlyInAnyOrder("CUSTOMER", "SELF_SERVICE_CUSTOMER");
+        // this issue set out to stop happening by accident. SUPPORT (ADR-0062 §7, WS2b-4) joins them:
+        // it is the read-only role an operator impersonation token carries, holds no assistant
+        // entrypoint, and is assigned to no user.
+        assertThat(ineligibleRoles()).containsExactlyInAnyOrder("CUSTOMER", "SELF_SERVICE_CUSTOMER", "SUPPORT");
     }
 
     @Test
