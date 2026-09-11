@@ -8,7 +8,11 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -16,6 +20,9 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -179,6 +186,89 @@ class RemoteTenantRegistryTest {
         assertThat(registry.activeTenantIds()).containsExactly(ACME, BOLT);
         assertThat(registry.consecutiveFailures()).isEqualTo(1);
         server.verify();
+    }
+
+    @Test
+    @DisplayName("a 3xx carrying a valid JSON body is a failure too: only 2xx replaces the snapshot")
+    void redirectWithAValidBodyIsAFailure() {
+        expectSuccess(TWO_ACTIVE);
+        server.expect(requestTo(URL))
+                .andRespond(withStatus(HttpStatus.FOUND)
+                        .body("[{\"tenantId\":\"" + ACME + "\",\"status\":\"ACTIVE\"}]")
+                        .contentType(MediaType.APPLICATION_JSON));
+
+        registry.activeTenantIds();
+        clock.advance(Duration.ofMinutes(1));
+
+        assertThat(registry.activeTenantIds()).containsExactly(ACME, BOLT);
+        assertThat(registry.consecutiveFailures()).isEqualTo(1);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("the platform tenant is never part of the snapshot, ACTIVE or not")
+    void platformTenantIsExcluded() {
+        expectSuccess("[{\"tenantId\":\"" + PlatformTenant.ID + "\",\"slug\":\"platform\",\"status\":\"ACTIVE\"},"
+                + "{\"tenantId\":\"" + ACME + "\",\"slug\":\"acme\",\"status\":\"ACTIVE\"}]");
+
+        assertThat(registry.activeTenantIds()).containsExactly(ACME);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("a slow refresh on one thread never blocks another reader, which keeps the old snapshot")
+    void aSlowRefreshNeverBlocksOtherReaders() throws Exception {
+        HttpServer httpServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger hits = new AtomicInteger();
+        httpServer.createContext("/internal/v1/tenants", exchange -> {
+            hits.incrementAndGet();
+            entered.countDown();
+            try {
+                release.await(10, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            byte[] body = TWO_ACTIVE.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            try (OutputStream out = exchange.getResponseBody()) {
+                out.write(body);
+            }
+        });
+        httpServer.start();
+        try {
+            TenancyProperties properties = new TenancyProperties();
+            properties.setDefaultTenantId(STATIC_TENANT);
+            properties.getRegistry().setMode(TenancyProperties.Registry.Mode.REMOTE);
+            properties
+                    .getRegistry()
+                    .setUrl("http://127.0.0.1:" + httpServer.getAddress().getPort() + "/internal/v1/tenants");
+            properties.getRegistry().setSecret("registry-secret");
+            RemoteTenantRegistry slow =
+                    new RemoteTenantRegistry(properties, RestClient.builder().build(), clock);
+
+            Thread refresher = new Thread(slow::activeTenantIds, "slow-refresh");
+            refresher.start();
+            assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+
+            long started = System.nanoTime();
+            List<UUID> whileRefreshing = slow.activeTenantIds();
+            Duration waited = Duration.ofNanos(System.nanoTime() - started);
+
+            assertThat(whileRefreshing).containsExactly(STATIC_TENANT);
+            assertThat(waited).isLessThan(Duration.ofSeconds(2));
+            assertThat(hits.get())
+                    .as("the second reader issued no request of its own")
+                    .isEqualTo(1);
+
+            release.countDown();
+            refresher.join(Duration.ofSeconds(5).toMillis());
+            assertThat(slow.activeTenantIds()).containsExactly(ACME, BOLT);
+        } finally {
+            httpServer.stop(0);
+        }
     }
 
     @Test

@@ -79,7 +79,8 @@ pos:
   tenancy:
     default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000000}
     # The internal registry endpoint is called by other services with a shared secret, not by a
-    # user, so no tenant arrives with the request; the controller binds the platform tenant itself.
+    # user, so no tenant arrives with the request; TenantRegistrySecretFilter binds the platform
+    # tenant at the request edge once the secret matches, and the controller only reads it.
     unenforced-paths:
       - /internal/v1/tenants
   tenant:

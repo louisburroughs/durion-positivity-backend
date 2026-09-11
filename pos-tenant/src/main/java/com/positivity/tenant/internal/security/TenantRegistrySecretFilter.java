@@ -2,6 +2,8 @@ package com.positivity.tenant.internal.security;
 
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.tenancy.PlatformTenant;
+import com.positivity.tenancy.TenantContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,7 +31,10 @@ import tools.jackson.databind.ObjectMapper;
  * carries {@value #SECRET_HEADER}, compared in constant time against {@code
  * pos.tenant.registry.api-secret}. A blank configured secret or a wrong header is a 401 {@link
  * ApiError}; a matching one authenticates the request as {@value #PRINCIPAL} so the internal
- * security chain's {@code authenticated()} rule passes.
+ * security chain's {@code authenticated()} rule passes, and binds {@link PlatformTenant#ID} for
+ * the rest of the chain: the path is unenforced for {@code TenantContextFilter} because the caller
+ * carries no tenant, every registry row is platform data, and the tenancy rule keeps bindings at
+ * the request edge (application code only reads {@code TenantContext}).
  *
  * <p>Runs inside the security filter chain (see {@code SecurityConfig}), never as a plain servlet
  * filter: an authentication set ahead of {@code SecurityContextHolderFilter} would be discarded.
@@ -83,7 +88,14 @@ public class TenantRegistrySecretFilter extends OncePerRequestFilter {
         }
         SecurityContextHolder.getContext()
                 .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(PRINCIPAL, null, List.of()));
-        chain.doFilter(request, response);
+        // The caller is a service with no tenant of its own and every registry row is platform
+        // data, so the request edge binds the platform tenant here; the controller only reads it.
+        TenantContext.bind(PlatformTenant.ID);
+        try {
+            chain.doFilter(request, response);
+        } finally {
+            TenantContext.clear();
+        }
     }
 
     private void reject(HttpServletRequest request, HttpServletResponse response, String code, String message)
