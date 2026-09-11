@@ -3,6 +3,7 @@ package com.positivity.poseventreceiver.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.poseventreceiver.internal.dto.EventSummaryResponse;
 import com.positivity.poseventreceiver.internal.service.EventSummaryService;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -86,9 +87,13 @@ public class EventSummaryController {
             description = "Summary returned successfully",
             content = @Content(array = @ArraySchema(schema = @Schema(implementation = EventSummaryResponse.class))))
     @ApiResponse(
+            responseCode = "401",
+            description = "no tenant binding on the request (strict tenancy refuses an unbound call)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "403",
             description = "tenantId named by a caller that is not the platform tenant",
-            content = @Content)
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<EventSummaryResponse>> getLastHourSummary(
             @Parameter(description = TENANT_ID_DESCRIPTION, example = "01900000-0000-7000-8000-000000000001")
                     @RequestParam(required = false)
@@ -124,9 +129,13 @@ public class EventSummaryController {
             description = "Summary returned successfully",
             content = @Content(array = @ArraySchema(schema = @Schema(implementation = EventSummaryResponse.class))))
     @ApiResponse(
+            responseCode = "401",
+            description = "no tenant binding on the request (strict tenancy refuses an unbound call)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "403",
             description = "tenantId named by a caller that is not the platform tenant",
-            content = @Content)
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<EventSummaryResponse>> getLastDaySummary(
             @Parameter(description = TENANT_ID_DESCRIPTION, example = "01900000-0000-7000-8000-000000000001")
                     @RequestParam(required = false)
@@ -162,9 +171,13 @@ public class EventSummaryController {
             description = "Summary returned successfully",
             content = @Content(array = @ArraySchema(schema = @Schema(implementation = EventSummaryResponse.class))))
     @ApiResponse(
+            responseCode = "401",
+            description = "no tenant binding on the request (strict tenancy refuses an unbound call)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "403",
             description = "tenantId named by a caller that is not the platform tenant",
-            content = @Content)
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<List<EventSummaryResponse>> getLastWeekSummary(
             @Parameter(description = TENANT_ID_DESCRIPTION, example = "01900000-0000-7000-8000-000000000001")
                     @RequestParam(required = false)

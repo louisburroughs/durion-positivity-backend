@@ -120,6 +120,16 @@ class TenantLogPatternEnvironmentPostProcessorTest {
 
         assertThat(micrometer).isEqualTo("[4bf92f3577b34da6a3ce929d0e0e4736,00f067aa0ba902b7,] bridge");
         assertThat(agent).isEqualTo("[4bf92f3577b34da6a3ce929d0e0e4736,00f067aa0ba902b7,] agent");
+
+        // Both injectors in one JVM (agent + Micrometer bridge) put the same ids under both names:
+        // the field renders the id once, not twice.
+        MDC.clear();
+        MDC.put("trace_id", "4bf92f3577b34da6a3ce929d0e0e4736");
+        MDC.put("traceId", "4bf92f3577b34da6a3ce929d0e0e4736");
+        MDC.put("span_id", "00f067aa0ba902b7");
+        MDC.put("spanId", "00f067aa0ba902b7");
+        String both = layout.doLayout(event("both"));
+        assertThat(both).isEqualTo("[4bf92f3577b34da6a3ce929d0e0e4736,00f067aa0ba902b7,] both");
     }
 
     @Test

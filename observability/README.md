@@ -163,7 +163,8 @@ every container on the host and push them to Loki.
 (`TRACE|DEBUG|INFO|WARN|ERROR|FATAL`) and `tenant`, the bound tenant's UUID (ADR-0062 plan WS6).
 Every `pos-*` module logs Boot's correlation bracket as `[<trace_id>,<span_id>,<tenantId>]` (the trace and span
 ids come from the OpenTelemetry agent's `trace_id`/`span_id` or Micrometer Tracing's `traceId`/`spanId`,
-whichever the module uses)
+whichever the module uses; a module running both, such as `pos-accounting`, keeps one injector, and the
+pattern collapses an id present under both names to one)
 (`pos-tenancy-common`'s `TenantLogPatternEnvironmentPostProcessor` supplies
 `logging.pattern.correlation`; `TenantContext` mirrors the binding into the `tenantId` MDC key);
 lines logged with no tenant bound (startup, schedulers, unbound infrastructure paths) carry no

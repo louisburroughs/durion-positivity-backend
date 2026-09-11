@@ -17,8 +17,11 @@ import org.springframework.core.env.MapPropertySource;
  * as the lowest-precedence property source. The bracket keeps the trace and span ids in front of
  * the tenant under either MDC naming in use here: the OpenTelemetry agent's {@code trace_id} /
  * {@code span_id} and Micrometer Tracing's {@code traceId} / {@code spanId} (the bridge modules,
- * e.g. pos-accounting); each field concatenates both keys and only one is ever set, so a line reads
- * {@code [<trace_id>,<span_id>,<tenantId>]} with empty fields where nothing is bound;
+ * e.g. pos-accounting); each field concatenates both keys, and a value present under both names
+ * (a module running the agent and the bridge together) collapses to one, so a line reads
+ * {@code [<trace_id>,<span_id>,<tenantId>]} with empty fields where nothing is bound. A module that
+ * ships both injectors should still keep one: pos-accounting's Dockerfile turns the agent's MDC
+ * instrumentation off ({@code OTEL_INSTRUMENTATION_LOGBACK_MDC_ENABLED=false}) and logs the bridge's keys;
  * the Promtail pipeline and the Grafana Loki datasource key on that shape. A module that sets
  * {@code logging.pattern.correlation} itself, or a {@code logback-spring.xml} of its own, wins.
  *
@@ -33,7 +36,9 @@ public class TenantLogPatternEnvironmentPostProcessor implements EnvironmentPost
 
     /** Trace, span, tenant: fixed positions, comma-delimited, always bracketed. */
     public static final String CORRELATION_PATTERN =
-            "[%X{trace_id:-}%X{traceId:-},%X{span_id:-}%X{spanId:-},%X{" + TenantContext.MDC_KEY + ":-}] ";
+            "[%replace(%X{trace_id:-}%X{traceId:-}){'^([0-9a-fA-F]{32})\\1$', '$1'}"
+                    + ",%replace(%X{span_id:-}%X{spanId:-}){'^([0-9a-fA-F]{16})\\1$', '$1'}"
+                    + ",%X{" + TenantContext.MDC_KEY + ":-}] ";
 
     static final String PROPERTY_SOURCE_NAME = "tenantLogPattern";
 
