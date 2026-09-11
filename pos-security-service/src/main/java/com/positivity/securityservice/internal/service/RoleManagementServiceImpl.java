@@ -190,6 +190,11 @@ public class RoleManagementServiceImpl implements RoleManagementService {
                 request.getEffectiveStartDate() != null ? request.getEffectiveStartDate() : LocalDateTime.now(clock);
         LocalDateTime requestEnd = request.getEffectiveEndDate();
 
+        // SUPPORT (and any future role like it) is never a user's role: it exists so an
+        // impersonation token can name it (ADR-0062 §7, WS2b-4). This path writes its own dated
+        // assignment row instead of going through UserRoleGrantService, so it repeats the check.
+        UserRoleGrantServiceImpl.refuseReservedRole(role);
+
         validateNoOverlappingAssignment(user.getId(), role.getId(), requestStart, requestEnd);
 
         RoleAssignment assignment = new RoleAssignment();

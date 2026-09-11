@@ -24,8 +24,11 @@
 --   DISPATCHER            LOCATION        OTHER
 --   SELF_SERVICE_CUSTOMER ALL             OTHER
 --
--- ACCOUNTING_ASSOCIATE, INVENTORY_LEAD and CUSTOMER are not named by the ADR table and keep the
--- column defaults (ALL / OTHER). Narrowing any of them is a product decision, not a default.
+-- ACCOUNTING_ASSOCIATE, INVENTORY_LEAD, CUSTOMER and SUPPORT (the read-only role an operator
+-- impersonation token carries, ADR-0062 section 7 / WS2b-4: an impersonation token reads the whole
+-- tenant) are not named by the ADR table and keep the column defaults (ALL / OTHER), which
+-- R__seed_reference_security.sql sets explicitly for SUPPORT. Narrowing any of them is a product
+-- decision, not a default.
 SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', true);
 
 UPDATE roles SET location_scope = 'ALL', location_hierarchy = 'OTHER'
