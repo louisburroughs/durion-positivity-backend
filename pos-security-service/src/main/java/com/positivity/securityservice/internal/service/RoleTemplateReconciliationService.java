@@ -20,6 +20,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,14 +34,22 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Per template role: missing in the tenant, it is created exactly as provisioning would have;
  * present, it keeps its tenant-local grants and gains any grant the template carries that it does
- * not (union, never removal), and it gets {@code template_key} when it had none. Description,
- * persona and location scope of an existing role are left alone: they may be tenant edits.
- * Idempotent: a second run changes nothing and reports empty lists.
+ * not (union, never removal), and it gets {@code template_key} when it had none. A role is matched
+ * by name case-insensitively, the uniqueness role creation enforces, and keeps the tenant's stored
+ * name: the template's name is the canonical key ({@code template_key}), the row's name is the
+ * tenant's. Description, persona and location scope of an existing role are left alone: they may
+ * be tenant edits. Idempotent: a second run changes nothing and reports empty lists.
  *
  * <p>Tenant bindings: the caller holds the platform binding (any other is refused with 403
  * {@code PLATFORM_TENANT_REQUIRED}), the template is read under it, and the target tenant is
  * rebound <em>around</em> the transaction in {@link BoundOperations}, because the Hibernate
  * session fixes its tenant at open time.
+ *
+ * <p>Two reconciliations of one tenant at once race on the create branch: both find a role missing
+ * and one insert loses to the {@code (tenant_id, name)} key. The losing transaction rolls back and
+ * the run is retried from the top (at most {@value #MAX_ATTEMPTS} attempts); the retry finds the
+ * winner's rows and converges, so idempotence holds under concurrent calls without a lock the
+ * database has to hold across the run.
  */
 @Slf4j
 @Service
@@ -49,6 +58,9 @@ public class RoleTemplateReconciliationService {
 
     /** Actor recorded on the rows reconciliation writes. */
     static final String ACTOR = "role-template-reconcile";
+
+    /** Runs of the transactional half before a persistent unique-key collision is given up on. */
+    static final int MAX_ATTEMPTS = 3;
 
     private final RoleTemplateService roleTemplateService;
     private final ExtTenantRepository extTenantRepository;
@@ -69,7 +81,7 @@ public class RoleTemplateReconciliationService {
         }
         List<RoleTemplateEntry> template = roleTemplateService.snapshot();
         RoleTemplateReconcileResponse outcome =
-                TenantContext.callAs(tenantId, () -> boundOperations.apply(tenantId, template));
+                TenantContext.callAs(tenantId, () -> applyWithRetry(tenantId, template));
         log.info(
                 "Reconciled the role template into tenant {}: {} role(s) created {}, {} grant(s) added {}, {} role(s)"
                         + " marked as template {}",
@@ -81,6 +93,24 @@ public class RoleTemplateReconciliationService {
                 outcome.templateKeysAssigned().size(),
                 outcome.templateKeysAssigned());
         return outcome;
+    }
+
+    private RoleTemplateReconcileResponse applyWithRetry(UUID tenantId, List<RoleTemplateEntry> template) {
+        DataIntegrityViolationException last = null;
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            try {
+                return boundOperations.apply(tenantId, template);
+            } catch (DataIntegrityViolationException e) {
+                last = e;
+                log.info(
+                        "Reconciling the role template into tenant {} collided with a concurrent write (attempt {} of"
+                                + " {}); re-reading",
+                        tenantId,
+                        attempt,
+                        MAX_ATTEMPTS);
+            }
+        }
+        throw last;
     }
 
     /**
@@ -106,9 +136,19 @@ public class RoleTemplateReconciliationService {
             List<String> templateKeysAssigned = new ArrayList<>();
 
             for (RoleTemplateEntry entry : template) {
-                Optional<Role> existing = roleRepository.findByName(entry.name());
+                Optional<Role> existing = roleRepository.findByNameIgnoreCase(entry.name());
                 if (existing.isEmpty()) {
-                    roleRepository.save(RoleTemplateApplier.fromTemplate(entry, permissionRepository, now, ACTOR));
+                    Role created = roleRepository.save(
+                            RoleTemplateApplier.fromTemplate(entry, permissionRepository, now, ACTOR));
+                    if (!created.getPermissions().isEmpty()) {
+                        roleRepository.recordGrantProvenance(
+                                created.getId(),
+                                created.getPermissions().stream()
+                                        .map(Permission::getId)
+                                        .toList(),
+                                ACTOR,
+                                now);
+                    }
                     rolesCreated.add(entry.name());
                     continue;
                 }
