@@ -168,6 +168,21 @@ public class ArchitectureTest {
             .because("ADR-0062 section 3: a scheduled job is per-tenant (TenantIterator.forEachActiveTenant) or"
                     + " @PlatformScoped, so an unclassified job cannot silently run unbound");
 
+    // Jobs registered programmatically (SchedulingConfigurer.configureTasks -> addFixedDelayTask and
+    // friends) carry no @Scheduled and would slip past the rule above; the registering method is
+    // classified instead (SiteMapEmbeddingWarmupRunner).
+    @ArchTest
+    static final ArchRule programmatically_scheduled_jobs_should_be_classified_for_tenancy = methods()
+            .that()
+            .haveName("configureTasks")
+            .and()
+            .areDeclaredInClassesThat()
+            .implement("org.springframework.scheduling.annotation.SchedulingConfigurer")
+            .should(bePlatformScopedOrIterateTenants())
+            .allowEmptyShould(true)
+            .because("ADR-0062 section 3: a job registered through SchedulingConfigurer is classified on the"
+                    + " registering method, per-tenant (TenantIterator.forEachActiveTenant) or @PlatformScoped");
+
     private static ArchCondition<JavaMethod> bePlatformScopedOrIterateTenants() {
         return new ArchCondition<>("be annotated with @PlatformScoped or call TenantIterator.forEachActiveTenant") {
             @Override
@@ -181,8 +196,7 @@ public class ArchitectureTest {
                                 && target.getName().equals("forEachActiveTenant"));
                 if (!iterates) {
                     events.add(SimpleConditionEvent.violated(
-                            method,
-                            method.getFullName() + " is @Scheduled but neither @PlatformScoped nor per-tenant"));
+                            method, method.getFullName() + " is scheduled but neither @PlatformScoped nor per-tenant"));
                 }
             }
         };
