@@ -3,9 +3,11 @@ package com.positivity.securityservice.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.domain.ReservedRoles;
 import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
 import com.positivity.securityservice.internal.dto.RoleCreateRequest;
 import com.positivity.securityservice.internal.dto.RoleDto;
@@ -15,6 +17,7 @@ import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.RoleAssignment;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.event.RoleAssignmentRevokedEvent;
+import com.positivity.securityservice.internal.exception.RoleNotUserAssignableException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
@@ -29,6 +32,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -153,6 +157,31 @@ class RoleManagementServiceImplTest {
                 ArgumentCaptor.forClass(RoleAssignmentRevokedEvent.class);
         verify(eventPublisher).publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().getUserId()).isEqualTo(userId);
+    }
+
+    @Test
+    @DisplayName("createRoleAssignment refuses SUPPORT: the dated-assignment path is a grant path too")
+    void createRoleAssignment_supportRole_isRefused() {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000011");
+        UUID roleId = UUID.fromString("00000000-0000-0000-0000-000000000012");
+
+        User user = new User();
+        user.setId(userId);
+        user.setUsername("alice");
+
+        Role support = new Role();
+        support.setId(roleId);
+        support.setName(ReservedRoles.SUPPORT);
+
+        RoleAssignmentRequest request = new RoleAssignmentRequest(userId, roleId, null, null);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(roleRepository.findById(roleId)).thenReturn(Optional.of(support));
+
+        assertThatThrownBy(() -> roleManagementService.createRoleAssignment(request))
+                .isInstanceOf(RoleNotUserAssignableException.class)
+                .hasMessageContaining(ReservedRoles.SUPPORT);
+
+        verify(roleAssignmentRepository, never()).save(any(RoleAssignment.class));
     }
 
     @Test

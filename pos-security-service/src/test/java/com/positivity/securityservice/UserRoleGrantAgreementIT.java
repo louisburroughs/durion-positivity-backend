@@ -1,18 +1,22 @@
 package com.positivity.securityservice;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.domain.ReservedRoles;
 import com.positivity.securityservice.internal.dto.PermissionDto;
 import com.positivity.securityservice.internal.dto.RoleAssignmentDto;
+import com.positivity.securityservice.internal.dto.RoleAssignmentRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationResponse;
 import com.positivity.securityservice.internal.entity.Permission;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.exception.RoleNotUserAssignableException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
@@ -186,6 +190,41 @@ class UserRoleGrantAgreementIT extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("SUPPORT is refused by every user-facing grant path: creation, reconcile and the "
+            + "dated-assignment API (ADR-0062 §7, WS2b-4)")
+    void supportRoleIsNeverAssignableToAUser() {
+        Role support = roleNamed(ReservedRoles.SUPPORT);
+        Role ordinary = roleWithPermission("IT_ORDINARY", permissionName("ordinary"));
+        String username = "it-support-" + uniqueSuffix();
+
+        // 1. User creation — the path the bulk ingest and the alpha CSV loader both take.
+        assertThatThrownBy(() -> userService.createUser(username, "Sup3rS3cret!1", Set.of(support.getName())))
+                .isInstanceOf(RoleNotUserAssignableException.class)
+                .hasMessageContaining(ReservedRoles.SUPPORT);
+        assertThat(userRepository.findByUsername(username)).isEmpty();
+
+        // 2. Reconcile — PUT /v1/users/{username}/roles and updateUser.
+        var created = userService.createUser(username, "Sup3rS3cret!1", Set.of(ordinary.getName()));
+        assertThatThrownBy(() -> userService.assignRoles(username, Set.of(ordinary.getName(), support.getName())))
+                .isInstanceOf(RoleNotUserAssignableException.class);
+        assertThat(roleManagementService.getEffectiveRoleAssignments(created.getId()))
+                .as("the refused reconcile left the user's real role alone")
+                .extracting(RoleAssignmentDto::getRoleId)
+                .containsExactly(ordinary.getId());
+
+        // 3. The dated-assignment API — createRoleAssignment writes its own row.
+        assertThatThrownBy(() -> roleManagementService.createRoleAssignment(
+                        new RoleAssignmentRequest(created.getId(), support.getId(), null, null)))
+                .isInstanceOf(RoleNotUserAssignableException.class);
+        assertThat(roleManagementService.getAssignmentsForUser(created.getId(), true))
+                .extracting(RoleAssignmentDto::getRoleId)
+                .containsExactly(ordinary.getId());
+
+        // And the role itself is untouched: an impersonation token still has something to resolve.
+        assertThat(roleRepository.findByName(ReservedRoles.SUPPORT)).isPresent();
+    }
+
+    @Test
     @DisplayName("self-registration grants an effective assignment of the default role")
     void selfRegistration_producesEffectiveAssignment() {
         ensureSelfServiceCustomerRoleExists();
@@ -230,6 +269,18 @@ class UserRoleGrantAgreementIT extends BaseIntegrationTest {
 
     private String uniqueSuffix() {
         return UUIDv7Generator.generate().toString().replace("-", "");
+    }
+
+    /** A role under its exact name, for the invariants that are keyed on the name itself. */
+    private Role roleNamed(String roleName) {
+        return roleRepository.findByName(roleName).orElseGet(() -> {
+            Role role = new Role();
+            role.setId(UUIDv7Generator.generate());
+            role.setName(roleName);
+            role.setDescription("User-role grant agreement fixture role");
+            role.setCreatedBy("test");
+            return roleRepository.save(role);
+        });
     }
 
     private Role roleWithPermission(String roleNamePrefix, String permissionName) {

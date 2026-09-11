@@ -21,6 +21,7 @@ public class AdminAccountStateServiceImpl implements AdminAccountStateService {
     private final UserRepository userRepository;
     private final Clock clock;
     private final JwtService jwtService;
+    private final ImpersonationTokenRevocationService impersonationTokenRevocationService;
 
     @Override
     @Transactional
@@ -49,7 +50,7 @@ public class AdminAccountStateServiceImpl implements AdminAccountStateService {
         user.setDisabledBy(resolveActor());
         user.setDisabledAt(clock.instant());
         userRepository.save(user);
-        jwtService.revokeAllTokensForUser(user.getUsername());
+        revokeLiveTokens(user);
     }
 
     @Override
@@ -59,7 +60,7 @@ public class AdminAccountStateServiceImpl implements AdminAccountStateService {
         user.setAccountNonExpired(false);
         user.setAccountExpiresAt(clock.instant());
         userRepository.save(user);
-        jwtService.revokeAllTokensForUser(user.getUsername());
+        revokeLiveTokens(user);
     }
 
     @Override
@@ -69,7 +70,7 @@ public class AdminAccountStateServiceImpl implements AdminAccountStateService {
         user.setCredentialsNonExpired(false);
         user.setCredentialsExpireAt(clock.instant());
         userRepository.save(user);
-        jwtService.revokeAllTokensForUser(user.getUsername());
+        revokeLiveTokens(user);
     }
 
     @Override
@@ -90,6 +91,18 @@ public class AdminAccountStateServiceImpl implements AdminAccountStateService {
                 .accountExpiresAt(user.getAccountExpiresAt())
                 .credentialsExpireAt(user.getCredentialsExpireAt())
                 .build();
+    }
+
+    /**
+     * Ends every token the user can still present. {@link JwtService#revokeAllTokensForUser} covers
+     * the ones stored under their own username in the bound tenant; an impersonation token this
+     * user minted as a platform operator is stored in another tenant under a synthetic subject and
+     * is reached only by operator id (ADR-0062 §7, WS2b-4) — without the second call, disabling or
+     * expiring an operator left their support tokens usable until their own 15-minute expiry.
+     */
+    private void revokeLiveTokens(User user) {
+        jwtService.revokeAllTokensForUser(user.getUsername());
+        impersonationTokenRevocationService.revokeForOperator(user.getId());
     }
 
     private User findUser(UUID userId) {

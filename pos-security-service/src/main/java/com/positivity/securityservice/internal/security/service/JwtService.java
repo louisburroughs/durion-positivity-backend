@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.security.service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -77,6 +78,22 @@ public interface JwtService {
      * the gateway injects {@code X-Tenant-Id} from it and a refresh exchange cannot change tenant.
      */
     public static final String TID = "tid";
+    /**
+     * Actor claim of an impersonation token (ADR-0062 §7, WS2b-4): a JSON object
+     * {@code {"sub": "<operator user id>", "username": "<operator username>"}} naming the platform
+     * operator the token was minted for. Absent from every other token.
+     */
+    public static final String ACT = "act";
+    /**
+     * Token-use discriminator. Present only on an impersonation token, with the value
+     * {@link #TOKEN_USE_IMPERSONATION}; the refresh exchange refuses such a token outright, and the
+     * issuer never pairs one with a refresh token.
+     */
+    public static final String TOKEN_USE = "token_use";
+    /** The {@link #TOKEN_USE} value of an impersonation token. */
+    public static final String TOKEN_USE_IMPERSONATION = "impersonation";
+    /** Lifetime of an impersonation token; there is no refresh, so this is the whole session. */
+    public static final Duration IMPERSONATION_TOKEN_VALIDITY = Duration.ofMinutes(15);
     /**
      * Discriminator value of the {@link #LOC_SCOPE} object. Deliberate: a denser node encoding can
      * be introduced under a new value without a {@code CATALOG_VERSION} bump.
@@ -242,9 +259,32 @@ public interface JwtService {
      * transitions (disable, expireAccount, expireCredentials) to ensure no
      * active token survives an account deactivation.
      *
+     * <p><b>Does not reach an impersonation token.</b> Such a row is stored in the target tenant
+     * under a synthetic subject, so neither the binding nor the subject this method queries on
+     * matches it; {@link #revokeImpersonationTokensMintedBy} is the path that does, and {@code
+     * ImpersonationTokenRevocationService} is what calls it for every tenant.
+     *
      * @param username the subject (username) of the user whose tokens should be revoked
      */
     void revokeAllTokensForUser(@NonNull String username);
+
+    /**
+     * Revokes the impersonation tokens {@code operatorUserId} minted <em>in the tenant currently
+     * bound</em> (ADR-0062 §7, WS2b-4): deletes each {@code jwt_token} row whose {@code
+     * impersonated_by_user_id} is the operator and marks its still-live JTI revoked, exactly as
+     * {@link #revokeAllTokensForUser} does for an ordinary token.
+     *
+     * <p>Tenant-scoped by design — it is the per-tenant half of a sweep. Callers must not use it
+     * directly to end an operator's support access: an operator may hold a live token in any
+     * tenant, so {@code ImpersonationTokenRevocationService.revokeForOperator} rebinds this call
+     * onto every tenant in turn. This method opens its own transaction
+     * ({@code REQUIRES_NEW}) so that the rebind reaches the database session, which fixes its
+     * tenant when it opens.
+     *
+     * @param operatorUserId the platform operator whose support tokens should end
+     * @return how many token rows were deleted in the bound tenant
+     */
+    int revokeImpersonationTokensMintedBy(@NonNull UUID operatorUserId);
 
     /**
      * Record representing a pair of access and refresh tokens.
@@ -332,10 +372,66 @@ public interface JwtService {
      * 3. Revocation status in Redis
      * 4. Presence in database
      *
+     * <p>An impersonation token ({@link #TOKEN_USE} = {@link #TOKEN_USE_IMPERSONATION}) is never a
+     * valid refresh token, whatever else it carries.
+     *
      * @param refreshToken the refresh token string to validate
      * @return true if the refresh token is valid and not expired, false otherwise
      */
     boolean validateRefreshToken(@NonNull String refreshToken);
+
+    /**
+     * A freshly minted impersonation token (ADR-0062 §7, WS2b-4).
+     *
+     * @param token              the signed access token; there is no refresh token
+     * @param jti                its JWT id
+     * @param expiresAt          its {@code exp}, {@link #IMPERSONATION_TOKEN_VALIDITY} after minting
+     * @param droppedAuthorities the codes the role granted that the read-only ceiling
+     *                           ({@code SupportReadOnlyCeiling}) kept out of {@code perm_bits};
+     *                           empty when the role is exactly as seeded
+     */
+    record IssuedImpersonationToken(
+            @NonNull String token,
+            @NonNull String jti,
+            @NonNull Instant expiresAt,
+            @NonNull Set<String> droppedAuthorities) {}
+
+    /**
+     * Mints an impersonation token for the bound tenant (ADR-0062 §7, plan WS2b-4, decided
+     * 2026-09-10): a platform operator's short-lived, read-only session inside a tenant.
+     *
+     * <p>The caller binds the <em>target</em> tenant first; as for every token this service signs,
+     * {@code tid} is the bound tenant, and the token row is stored under it so that
+     * {@link #validateToken} finds it there. Claims: {@code sub} = {@code subject} (the synthetic
+     * principal, e.g. {@code support:admin.platform@acme}), {@code uid} = {@code operatorUserId}
+     * (so downstream audit lineage names the human behind the request), {@code tid},
+     * {@code username} = {@code subject}, {@code roles}, {@code perm_bits} / {@code perm_ver}
+     * resolved from {@code roles} under the bound tenant and then intersected with the read-only
+     * ceiling ({@code SupportReadOnlyCeiling}: a grant a tenant administrator added to the role
+     * that is not a read never reaches the token; it is reported in {@code droppedAuthorities}
+     * instead), empty {@code loc_fin_bits} /
+     * {@code loc_oth_bits} and no {@code loc_scope} (a support token is never location-scoped),
+     * {@link #ACT} = {@code {sub, username}} of the operator, {@link #TOKEN_USE} =
+     * {@link #TOKEN_USE_IMPERSONATION}, {@code iat}, {@code exp} = {@code iat} +
+     * {@link #IMPERSONATION_TOKEN_VALIDITY}, {@code jti}. No refresh token is issued, no
+     * assignment or location clamp applies (the lifetime is already the floor), and
+     * {@link #refreshAccessToken} refuses the token.
+     *
+     * @param subject          the synthetic principal the token authenticates as
+     * @param operatorUserId   the platform operator's user id
+     * @param operatorUsername the platform operator's username
+     * @param roles            the tenant roles whose grants make up {@code perm_bits}; the
+     *                         {@code SUPPORT} template role in practice
+     * @return the token, its id and its expiry
+     * @throws com.positivity.securityservice.internal.exception.SecurityValidationException if
+     *         {@code subject} is blank or {@code roles} is empty
+     */
+    @NonNull
+    IssuedImpersonationToken generateImpersonationToken(
+            @NonNull String subject,
+            @NonNull UUID operatorUserId,
+            @NonNull String operatorUsername,
+            @NonNull Set<String> roles);
 
     /**
      * Refreshes the access token using the given refresh token.
@@ -354,6 +450,9 @@ public interface JwtService {
      * @return a new TokenPair with fresh access and refresh tokens
      *
      * @throws IllegalArgumentException if the refresh token is invalid or not found
+     * @throws com.positivity.securityservice.internal.exception.InvalidRefreshTokenException if the
+     *         token is an impersonation token ({@link #TOKEN_USE_IMPERSONATION}): such a token is
+     *         never refreshable, and the answer is 401 {@code INVALID_REFRESH_TOKEN}
      */
     TokenPair refreshAccessToken(@NonNull String refreshToken);
 }

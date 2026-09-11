@@ -61,6 +61,22 @@ VALUES ('e9b3e6ba-af10-08ff-0376-1f2fa60d5093'::uuid, 'SYSTEM_ADMINISTRATOR', 'C
         10)
 ON CONFLICT (tenant_id, name) DO NOTHING;
 
+-- SUPPORT (ADR-0062 section 7, plan WS2b-4): the fixed tenant role a platform operator's
+-- impersonation token carries. A floor role so that R__seed_tenant_template.sql copies it into
+-- the platform role template and provisioning gives it to every tenant; existing tenants get it
+-- from the template reconcile (WS8). Read-only grants in R__seed_role_permissions.sql. No MCP
+-- persona (mcp_persona_eligible false): the token holds no assistant entrypoint, and a support
+-- read is not a chat session. No user is ever assigned it — the impersonation token names it
+-- directly, and every user-role grant, reconcile and import refuses it with 409
+-- ROLE_NOT_USER_ASSIGNABLE (ReservedRoles, UserRoleGrantServiceImpl.refuseReservedRole). Id is
+-- UUIDv5 of "durion-positivity://roles/SUPPORT" (NAMESPACE_URL).
+INSERT INTO roles (id, name, description, created_at, created_by, mcp_persona_eligible,
+                   location_scope, location_hierarchy)
+VALUES ('ad025890-d2da-5f34-8dfc-5ef19bf73b42'::uuid, 'SUPPORT',
+        'Platform support: read-only access carried by an operator impersonation token (ADR-0062 section 7)',
+        NOW(), 'seed-generator', false, 'ALL', 'OTHER')
+ON CONFLICT (tenant_id, name) DO NOTHING;
+
 -- Users
 -- person_id mirrors the authoritative pos-people user_person_links row (ADR-0043);
 -- required so admin.alpha's JWT carries a personId claim (ADR-0022) and is not a
