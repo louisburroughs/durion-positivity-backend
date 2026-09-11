@@ -45,6 +45,15 @@ public class User extends TenantScopedEntity {
     @Column(name = "credentials_non_expired", nullable = false)
     private boolean credentialsNonExpired = true;
 
+    /**
+     * The first-administrator state provisioning creates (ADR-0062 §7, WS2b-3): a discarded password,
+     * expired credentials and this marker, which is the only thing an activation token may act on.
+     * Cleared by activation and by any ordinary password set; an administrator expiring a live
+     * account's credentials never sets it.
+     */
+    @Column(name = "awaiting_activation", nullable = false)
+    private boolean awaitingActivation = false;
+
     @Column(name = "failed_login_attempts", nullable = false)
     private int failedLoginAttempts = 0;
 

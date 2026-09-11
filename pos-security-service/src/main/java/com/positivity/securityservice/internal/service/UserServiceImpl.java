@@ -64,6 +64,7 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new IllegalStateException("User " + created.getId() + " vanished after creation"));
         user.setCredentialsNonExpired(false);
         user.setCredentialsExpireAt(Instant.now(clock));
+        user.setAwaitingActivation(true);
         userRepository.save(user);
         return created;
     }
@@ -186,6 +187,9 @@ public class UserServiceImpl implements UserService {
         }
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
             existingUser.setPassword(passwordEncoder.encode(request.getPassword()));
+            // An ordinary password set ends the awaiting-activation state (WS2b-3): a token minted
+            // before it can no longer overwrite this password.
+            existingUser.setAwaitingActivation(false);
         }
         if (request.getRoles() != null) {
             // A non-null roles list reconciles the effective set the same way assignRoles does,

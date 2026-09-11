@@ -144,6 +144,7 @@ class AdministratorActivationIT extends BaseContractIntegrationTest {
     void activationRoundTrip() throws Exception {
         User before = userRepository.findById(userId).orElseThrow();
         assertThat(before.isCredentialsNonExpired()).isFalse();
+        assertThat(before.isAwaitingActivation()).as("provisioning marker set").isTrue();
 
         // 1. Nothing can sign in: the generated password was discarded, so this is a plain bad-password 401.
         login("anything-at-all")
@@ -175,6 +176,9 @@ class AdministratorActivationIT extends BaseContractIntegrationTest {
         User after = userRepository.findById(userId).orElseThrow();
         assertThat(after.isCredentialsNonExpired()).isTrue();
         assertThat(after.getCredentialsExpireAt()).isNull();
+        assertThat(after.isAwaitingActivation())
+                .as("provisioning marker cleared")
+                .isFalse();
 
         // 5. The administrator signs in with the password they chose.
         login(NEW_PASSWORD)
