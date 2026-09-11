@@ -221,7 +221,8 @@ public class StreamingSessionAgentManager
             toolInvocationRecorder.beginTurn(currentUserContext, message);
         }
         try {
-            return streamChatWithTurn(currentUserContext, message, username, role, memoryId, messagePreview, startMs);
+            return streamChatWithTurn(
+                    currentUserContext, message, username, role, memoryId, messagePreview, startMs, tenantId);
         } catch (RuntimeException failure) {
             if (toolInvocationRecorder != null) {
                 toolInvocationRecorder.failTurn(failure);
@@ -244,7 +245,8 @@ public class StreamingSessionAgentManager
             @NonNull String role,
             @NonNull String memoryId,
             @NonNull String messagePreview,
-            long startMs) {
+            long startMs,
+            @NonNull UUID tenantId) {
         // Gate 4 / Gate 2A closure: shared T0 rule fast-path (previously blocking-only) — pure
         // social chat streams straight from the default model with no tool selection or RAG.
         if (simpleChatFastPath.isSimpleChat(message)) {
@@ -256,7 +258,7 @@ public class StreamingSessionAgentManager
             if (toolInvocationRecorder != null) {
                 toolInvocationRecorder.recordSimpleChat(true);
             }
-            return simpleStreamChat(currentUserContext, message, startMs);
+            return simpleStreamChat(currentUserContext, message, startMs, tenantId);
         }
 
         // Gate 4 (#1192): classify with the T1 router (temperature 0) and select the executor tier.
@@ -318,20 +320,26 @@ public class StreamingSessionAgentManager
         // re-bound in the completion callbacks for the write.
         Object turnHandle = toolInvocationRecorder == null ? null : toolInvocationRecorder.currentTurnHandle();
         StringBuilder streamedText = new StringBuilder();
+        // ADR-0062 plan WS6: only the request thread carries the tenant; the Flux is subscribed and
+        // completes on Reactor threads, so every callback that writes tenant-scoped data (the audit
+        // row, the turn trace) re-binds the tenant captured above, the way the turn handle travels.
         Flux<String> streamed = terminatingTurn(
-                        Flux.<String>create(emitter -> streamTokens(
-                                agent,
-                                memoryId,
-                                message,
-                                userContext,
-                                currentUserContext,
-                                authorizationHeader,
-                                writeCapableToolsPresent,
-                                turnHandle,
-                                emitter)),
+                        Flux.<String>create(emitter -> TenantContext.runAs(
+                                tenantId,
+                                () -> streamTokens(
+                                        agent,
+                                        memoryId,
+                                        message,
+                                        userContext,
+                                        currentUserContext,
+                                        authorizationHeader,
+                                        writeCapableToolsPresent,
+                                        turnHandle,
+                                        emitter))),
                         turnHandle,
-                        streamedText)
-                .doOnComplete(() -> {
+                        streamedText,
+                        tenantId)
+                .doOnComplete(() -> TenantContext.runAs(tenantId, () -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
                     LOGGER.debug(
                             "MCP streaming chat completed username={} role={} totalElapsedMs={} preview=\"{}\"",
@@ -355,8 +363,8 @@ public class StreamingSessionAgentManager
                             false,
                             tierRouting,
                             writeCapable);
-                })
-                .doOnError(exception -> {
+                }))
+                .doOnError(exception -> TenantContext.runAs(tenantId, () -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
                     LOGGER.warn(
                             "MCP streaming chat failed username={} role={} preview=\"{}\" error={}",
@@ -385,7 +393,7 @@ public class StreamingSessionAgentManager
                             false,
                             tierRouting,
                             writeCapableToolsPresent.get());
-                });
+                }));
         return streamed;
     }
 
@@ -394,7 +402,10 @@ public class StreamingSessionAgentManager
      * no RAG, no memory. Mirrors the blocking manager's {@code simpleChat} (Gate 2A closure).
      */
     private @NonNull Flux<String> simpleStreamChat(
-            @NonNull CurrentUserContext currentUserContext, @NonNull String message, long startMs) {
+            @NonNull CurrentUserContext currentUserContext,
+            @NonNull String message,
+            long startMs,
+            @NonNull UUID tenantId) {
         String username = currentUserContext.username();
         String role = currentUserContext.primaryRole();
         String correlationId = resolveCorrelationId();
@@ -416,13 +427,17 @@ public class StreamingSessionAgentManager
         return terminatingTurn(
                         StreamingAnswerGuard.guard(tokens, source -> {
                             if (toolInvocationRecorder != null) {
-                                toolInvocationRecorder.runWithTurn(
-                                        turnHandle, () -> toolInvocationRecorder.recordAnswerSource(source.name()));
+                                TenantContext.runAs(
+                                        tenantId,
+                                        () -> toolInvocationRecorder.runWithTurn(
+                                                turnHandle,
+                                                () -> toolInvocationRecorder.recordAnswerSource(source.name())));
                             }
                         }),
                         turnHandle,
-                        streamedText)
-                .doOnComplete(() -> {
+                        streamedText,
+                        tenantId)
+                .doOnComplete(() -> TenantContext.runAs(tenantId, () -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
                     LOGGER.debug(
                             "MCP streaming simple chat completed username={} role={} totalElapsedMs={}",
@@ -444,8 +459,8 @@ public class StreamingSessionAgentManager
                             true,
                             null,
                             false);
-                })
-                .doOnError(exception -> {
+                }))
+                .doOnError(exception -> TenantContext.runAs(tenantId, () -> {
                     int elapsedMs = (int) (System.currentTimeMillis() - startMs);
                     LOGGER.warn(
                             "MCP streaming simple chat failed username={} role={} error={}",
@@ -473,7 +488,7 @@ public class StreamingSessionAgentManager
                             true,
                             null,
                             false);
-                });
+                }));
     }
 
     /**
@@ -519,8 +534,8 @@ public class StreamingSessionAgentManager
 
     /** Evicts a user's conversation state and rate counter within the bound tenant. */
     @Override
-    public void evict(@NonNull String userId) {
-        String actor = actorKey(TenantContext.require(), userId);
+    public void evict(@NonNull String username) {
+        String actor = actorKey(TenantContext.require(), username);
         chatMemoryCache.asMap().keySet().removeIf(key -> key.startsWith(actor + MEMORY_KEY_SEPARATOR));
         requestCountCache.invalidate(actor);
     }
@@ -666,7 +681,10 @@ public class StreamingSessionAgentManager
      * was streamed before it. The flag guards against a terminal signal arriving twice.
      */
     private Flux<String> terminatingTurn(
-            @NonNull Flux<String> stream, @Nullable Object turnHandle, @NonNull StringBuilder streamedText) {
+            @NonNull Flux<String> stream,
+            @Nullable Object turnHandle,
+            @NonNull StringBuilder streamedText,
+            @NonNull UUID tenantId) {
         if (toolInvocationRecorder == null) {
             return stream;
         }
@@ -679,14 +697,17 @@ public class StreamingSessionAgentManager
             if (!terminated.compareAndSet(false, true)) {
                 return;
             }
-            toolInvocationRecorder.runWithTurn(turnHandle, () -> {
-                Throwable error = failure.get();
-                if (error != null) {
-                    toolInvocationRecorder.failTurn(error);
-                } else {
-                    toolInvocationRecorder.completeTurn(streamedText.toString());
-                }
-            });
+            // The trace is a tenant-scoped row: re-bind the request's tenant on the terminating thread.
+            TenantContext.runAs(
+                    tenantId,
+                    () -> toolInvocationRecorder.runWithTurn(turnHandle, () -> {
+                        Throwable error = failure.get();
+                        if (error != null) {
+                            toolInvocationRecorder.failTurn(error);
+                        } else {
+                            toolInvocationRecorder.completeTurn(streamedText.toString());
+                        }
+                    }));
         });
     }
 
