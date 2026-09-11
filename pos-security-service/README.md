@@ -515,8 +515,8 @@ Flyway on the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`)
   password, the first `role_assignments` row, then `tenant.provisioned` through the outbox, which moves the
   tenant to `ACTIVE` in pos-tenant. Idempotent on tenant: existing roles and users are left alone, so a
   redelivery converges. No credential rides on any event: the administrator is created *awaiting activation*
-  (`UserService.createUserAwaitingActivation`, `credentials_non_expired = false` behind a discarded random
-  password), and a login attempt is the same 401 `INVALID_CREDENTIALS` as any wrong password.
+  (`UserService.createUserAwaitingActivation`: `credentials_non_expired = false` and `awaiting_activation = true`
+  behind a discarded random password), and a login attempt is the same 401 `INVALID_CREDENTIALS` as any wrong password.
 - **First-administrator activation (WS2b-3, decided 2026-09-10: operator-delivered activation token).** A
   platform operator holding `platform:tenant:provision`, bound to the platform tenant, calls
   `POST /v1/platform/tenants/{tenantId}/administrators/{userId}/activation-token` (`PlatformAdministratorController`
@@ -524,8 +524,12 @@ Flyway on the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`)
   bytes, URL-safe base64, valid 72 hours; only its SHA-256 is stored (`user_activation_tokens`, a global table
   carrying `tenant_id` as data), and any earlier open token for the user is closed. A caller bound to another
   tenant is refused with 403 `PLATFORM_TENANT_REQUIRED` whatever it holds; an unknown user in that tenant is 404
-  `USER_NOT_FOUND`; a user that is not awaiting activation (credentials not expired, or ever signed in) is 409
-  `USER_NOT_AWAITING_ACTIVATION`, so a live account's password is never overwritten. Mints for one user serialize on
+  `USER_NOT_FOUND`; a user that is not awaiting activation is 409 `USER_NOT_AWAITING_ACTIVATION`, so a live
+  account's password is never overwritten. "Awaiting activation" is the explicit `users.awaiting_activation`
+  marker only `createUserAwaitingActivation` sets (credential state alone cannot tell that account from one whose
+  credentials an administrator expired before its first login); activation and any ordinary password set
+  (`PUT /v1/users/{id}`) clear it, and activation locks the user row and re-checks the marker before consuming
+  the token. Mints for one user serialize on
   a pessimistic lock of the user row; the audit event is emitted after commit. The operator hands the token over out of band; the administrator exchanges it, unauthenticated,
   at `POST /v1/auth/activate` `{token, newPassword}` (on `pos.tenancy.unenforced-paths`), which finds the row by
   hash, binds the row's tenant, sets the password, clears the credential expiry and consumes the token in one
