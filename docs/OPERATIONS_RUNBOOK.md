@@ -634,13 +634,20 @@ job's create and around the whole batch run, so the job row, its audit and mappi
 makes to the owning services (`X-Tenant-Id` on each `/bulk-ingest` and lookup call) land in that tenant.
 
 ```bash
-# Tenant data (the alpha packs): a token of that tenant, naming that tenant.
+# Tenant data (the alpha packs): a token of that tenant, naming that tenant. The token needs
+# bulkImport:upload:execute and bulkImport:status:read, the per-domain create permissions, and the
+# read permissions the business-key lookups use (location:read, catalog:product:view): the loader
+# calls its siblings as the operator, relaying the caller's own gateway authorities.
 scripts/seed-alpha.py --gateway https://<gateway> --token "$SEED_BEARER_TOKEN" \
     --tenant-id 01900000-0000-7000-8000-000000000001
 
-# Platform data (the role template): a PLATFORM_ADMIN token, naming the platform tenant. The
-# platform tenant has no locations, and a job needs one, so the location is given explicitly:
-# the role and grant ingests carry it along and ignore it, so the nil UUID will do.
+# Platform data (the role template): a PLATFORM_ADMIN token, naming the platform tenant -- the
+# operator's own tenant, which is the only one it may load into. PLATFORM_ADMIN is seeded with
+# bulkImport:upload:execute and bulkImport:status:read (the loader's own gates) and
+# security:role:create / security:role:edit (the two ingest endpoints these packs reach), so no
+# separate credential is needed. The platform tenant has no locations, and a job needs one, so the
+# location is given explicitly: the role and grant ingests carry it along and ignore it, so the
+# nil UUID will do.
 scripts/seed-alpha.py --gateway https://<gateway> --token "$PLATFORM_ACCESS_TOKEN" \
     --tenant-id 01900000-0000-7000-8000-000000000000 \
     --location-id 00000000-0000-0000-0000-000000000000 \
@@ -649,15 +656,16 @@ scripts/seed-alpha.py --gateway https://<gateway> --token "$PLATFORM_ACCESS_TOKE
 
 The driver requires `--tenant-id` to be the token's own tenant (its `tid` claim, which is also
 the default when the flag is omitted), refuses the platform tenant for any pack but the two
-security role packs, and insists on `--location-id` there. The API itself is wider (a platform
-caller may create a job in any active tenant); the rows below say what each answer means.
+security role packs, and insists on `--location-id` there. The API enforces the same rule: a bound
+caller loads into its own tenant and nowhere else, the platform operator included. The rows below
+say what each answer means.
 
 | Situation | Answer |
 | --- | --- |
 | `tenantId` omitted | 400 `BULK_JOB_TENANT_REQUIRED`, unless the loader's transitional default tenant (`pos.tenancy.default-tenant-id`) is configured: the job then loads into the default and the loader logs a WARN. Name the tenant; the fallback goes away with the default. |
 | `tenantId` is not an active tenant of the cell | 400 `BULK_JOB_TENANT_UNKNOWN`. The loader asks its `TenantRegistry`: `pos.tenancy.tenants`, else the default tenant, or pos-tenant's list with `pos.tenancy.registry.mode=REMOTE`. The platform tenant is always allowed. |
-| Caller's token is bound to tenant A, `tenantId` is B | 403 `BULK_JOB_TENANT_FORBIDDEN`. Only a caller bound to the platform tenant (`PLATFORM_ADMIN`) loads into another tenant. |
-| A platform operator created a job in tenant B and wants to upload, process or poll it | Job endpoints are tenant-scoped reads: the job is visible only under B's binding. Continue with a token bound to B (the tenant's own administrator, or the platform impersonation token once WS2b-4 lands). `seed-alpha.py` refuses this mode up front for that reason. |
+| Caller's token is bound to tenant A, `tenantId` is B | 403 `BULK_JOB_TENANT_FORBIDDEN`, for every caller including a platform operator. A job is continued under the creating caller's own binding and operator id, so a job created in another tenant is one nobody could upload to, process or poll; it is refused at create rather than left as an unusable row. Loading into a tenant on its behalf needs a credential genuinely bound to it (an impersonation path), which is not part of WS8. |
+| A platform operator wants to load data into tenant B | Not possible today, by design (see the row above): use a token of B — B's own administrator. `seed-alpha.py` refuses the mode up front for the same reason. |
 | `roles.csv` loaded into the platform tenant | The roles become the platform role template (`template_key` = name); see "Reconciling the role template" to push them to existing tenants. |
 
 The job's tenant is recorded as the non-identifying `tenantId` batch parameter and on every log line (MDC

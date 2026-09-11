@@ -54,8 +54,9 @@ Base path: `/v1/bulk-jobs`
 
 Every bulk-load job targets one tenant. `POST /v1/bulk-jobs` takes `tenantId`; `BulkLoadTenantBinding`
 accepts an active tenant of the module's `TenantRegistry` (`pos.tenancy.tenants`, or pos-tenant's list in
-`REMOTE` mode) or the platform tenant (platform data: the role template's `roles.csv`), refuses a tenant the
-caller is not bound to unless the caller is bound to the platform tenant (403 `BULK_JOB_TENANT_FORBIDDEN`),
+`REMOTE` mode) or the platform tenant (platform data: the role template's `roles.csv`), refuses any tenant the
+caller is not itself bound to (403 `BULK_JOB_TENANT_FORBIDDEN`) — the platform operator included, so it loads
+platform data and nothing else —
 and refuses a request with no `tenantId` (400 `BULK_JOB_TENANT_REQUIRED`) unless the transitional default
 tenant is configured, in which case the default is used and logged at WARN. An unknown tenant is 400
 `BULK_JOB_TENANT_UNKNOWN`.
@@ -63,12 +64,18 @@ tenant is configured, in which case the default is used and logged at WARN. An u
 `BulkLoadJobServiceImpl` binds the target (`TenantContext.runAs`) around the job's create, so the job row lands
 in that tenant, and around the whole batch run (`startProcessing`), so every audit and mapping row and every
 call to a sibling service carries it: `AuthorizationHeaderRelay` puts the bound tenant on each outbound call as
-`X-Tenant-Id` beside the operator's bearer token, and the launch records it as a non-identifying `tenantId`
+`X-Tenant-Id` beside the operator's bearer token and the caller's own gateway authority headers
+(`GatewayCallerHeaders` — a sibling is called directly, so those headers are the only thing it authenticates
+with; a header the call site already set, such as an ingest writer's per-target `X-Authorities`, is left
+alone), and the launch records the tenant as a non-identifying `tenantId`
 batch parameter. Both open their transaction inside the binding through a `TransactionTemplate` (the
 connection binds `app.current_tenant` at checkout and the Hibernate session fixes its tenant when it opens).
 Every other endpoint — status, listing, upload, mappings, review queue, cancel, retry — reads and writes under
-the request's own binding, so a job is visible only to callers bound to its tenant: a platform operator who
-created a job in another tenant continues it with a token bound to that tenant.
+the request's own binding, so a job is visible only to callers bound to its tenant, and is continued by the
+operator who created it. That is why a cross-tenant target is refused at create rather than allowed and left
+stranded: the creator could not see the job afterwards, and a caller who could would fail its ownership check.
+Loading into a tenant on its behalf needs a credential genuinely bound to that tenant, which is out of scope
+for WS8.
 
 This module depends on `pos-tenancy-common`: every entity (`bulk_load_job`, `bulk_load_record_audit`,
 `bulk_load_column_mapping`, `tus_upload`) extends `TenantScopedEntity`; the Spring Batch metadata tables are

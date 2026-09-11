@@ -1,10 +1,12 @@
 package com.positivity.bulkloader.internal.config;
 
+import com.positivity.bulkloader.internal.security.GatewayCallerHeaders;
 import com.positivity.bulkloader.internal.service.BulkLoadAuthorizationContext;
 import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantHeaders;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
@@ -26,6 +28,13 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  * <p>Shared by the ingest writers and by business-key resolution: both act as the operator, and a
  * resolver that lost the token would report every name as unresolvable rather than as forbidden.
  *
+ * <p>What travels is the bearer token <em>and</em> the caller's gateway authentication headers
+ * ({@link GatewayCallerHeaders}). The sibling is called directly rather than through the gateway,
+ * so nothing on that path would turn the token into authorities: without those headers the sibling
+ * authenticates nobody and answers 401, which resolution then reports as an unresolved business
+ * key rather than as a refusal. Nothing is minted here — the loader can reach exactly what the
+ * operator who launched the job can reach.
+ *
  * <p>The job's tenant travels the same way (ADR-0062, plan WS8): the batch runs inside {@code
  * TenantContext.runAs(job tenant)}, and every call carries that tenant as {@code X-Tenant-Id} so
  * the owning service binds it before writing. The sibling is called directly (load-balanced, not
@@ -43,8 +52,9 @@ public class AuthorizationHeaderRelay {
     private final BulkLoadAuthorizationContext bulkLoadAuthorizationContext;
 
     /**
-     * Adds the tenant header from the bound {@link TenantContext}, then the bearer and gateway-token
-     * headers, or no credential headers when no credential can be found.
+     * Adds the tenant header from the bound {@link TenantContext}, then the caller's gateway
+     * authority headers, then the bearer and gateway-token headers — leaving out any of the three
+     * that is unknown rather than inventing one.
      */
     public void apply(RestClient.RequestHeadersSpec<?> requestSpec) {
         TenantContext.current()
@@ -53,12 +63,44 @@ public class AuthorizationHeaderRelay {
                         () -> log.warn(
                                 "Outbound bulk-load call with no tenant bound: {} is not sent (ADR-0062)",
                                 TenantHeaders.HTTP_TENANT_ID));
+        applyGatewayHeaders(requestSpec);
         String authorizationHeader = resolveAuthorizationHeader();
         if (!StringUtils.hasText(authorizationHeader)) {
             return;
         }
         requestSpec.header(HttpHeaders.AUTHORIZATION, authorizationHeader);
         requestSpec.header(GatewaySecurityConstants.HEADER_TOKEN, extractTokenValue(authorizationHeader));
+    }
+
+    /**
+     * The caller's authorities, as the gateway wrote them: from the launch capture, else from the
+     * current request. Logged at WARN when neither has any, because the call is then anonymous to
+     * the sibling and a protected lookup will come back 401 — which resolution would otherwise
+     * report as a business key that does not exist.
+     *
+     * <p>A header the call site already set wins. {@code BulkIngestWriterFactory} names the one
+     * authority its target endpoint enforces, and the operator the row is filed under; that is a
+     * deliberate, narrower choice than the operator's whole authority set, and relaying over it
+     * would widen every ingest call as a side effect of fixing resolution. So this fills gaps
+     * rather than overwriting — which is also why it sets rather than appends: appending would
+     * leave two {@code X-Authorities} values whose winner depends on how the sibling's servlet
+     * container folds repeated headers.
+     */
+    private void applyGatewayHeaders(RestClient.RequestHeadersSpec<?> requestSpec) {
+        Map<String, String> captured = bulkLoadAuthorizationContext.getGatewayHeaders();
+        Map<String, String> headers = captured.isEmpty() ? GatewayCallerHeaders.fromCurrentRequest() : captured;
+        if (headers.isEmpty()) {
+            log.warn(
+                    "Outbound bulk-load call with no gateway authority headers ({}): the sibling authenticates"
+                            + " nobody and refuses every protected endpoint (ADR-0062 plan WS8)",
+                    GatewayCallerHeaders.RELAYED);
+            return;
+        }
+        requestSpec.headers(httpHeaders -> headers.forEach((name, value) -> {
+            if (!httpHeaders.containsHeader(name)) {
+                httpHeaders.set(name, value);
+            }
+        }));
     }
 
     @Nullable

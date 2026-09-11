@@ -88,7 +88,7 @@ class TenantProvisioningServiceTest {
             "copies the template, creates the administrator on ADMIN awaiting activation, and answers tenant.provisioned")
     void provisionsAFreshTenant() {
         when(outboxProvider.getIfAvailable()).thenReturn(outbox);
-        when(roles.existsByName(anyString())).thenReturn(false);
+        when(roles.existsByNameIgnoreCase(anyString())).thenReturn(false);
         when(permissions.findByName("security:role:view")).thenReturn(Optional.of(permission("security:role:view")));
         when(permissions.findByName("order:order:view")).thenReturn(Optional.of(permission("order:order:view")));
         when(permissions.findByName("not:registered:yet")).thenReturn(Optional.empty());
@@ -134,7 +134,7 @@ class TenantProvisioningServiceTest {
     @DisplayName("a redelivery leaves existing roles and the administrator alone but still answers")
     void redeliveryConverges() {
         when(outboxProvider.getIfAvailable()).thenReturn(outbox);
-        when(roles.existsByName("ADMIN")).thenReturn(true);
+        when(roles.existsByNameIgnoreCase("ADMIN")).thenReturn(true);
         when(users.existsByUsername("owner@acme.example")).thenReturn(true);
 
         TenantContext.bind(TENANT);
@@ -145,6 +145,36 @@ class TenantProvisioningServiceTest {
         verify(roles, never()).save(any());
         verify(userService, never()).createUserAwaitingActivation(anyString(), any());
         verify(outbox).publish(eq("tenant.events.v1"), any());
+    }
+
+    @Test
+    @DisplayName("a tenant already carrying a differently-cased role keeps it: no second copy is created")
+    void aDifferentlyCasedExistingRoleIsTheSameRole() {
+        // The tenant was provisioned, or hand-edited, with `admin` rather than ADMIN. The template
+        // entry is ADMIN. Matching case-sensitively would create a second row, which the baseline's
+        // UNIQUE (tenant_id, lower(name)) index refuses -- so provisioning would fail rather than
+        // converge, and findByNameIgnoreCase everywhere else would then have two rows to choose
+        // between. Both readings of the name resolve to the one role (ADR-0062 section 6, WS8).
+        when(outboxProvider.getIfAvailable()).thenReturn(outbox);
+        when(roles.existsByNameIgnoreCase("ADMIN")).thenReturn(true);
+        when(roles.existsByNameIgnoreCase("DISPATCHER")).thenReturn(false);
+        when(permissions.findByName("order:order:view")).thenReturn(Optional.of(permission("order:order:view")));
+        when(users.existsByUsername("owner@acme.example")).thenReturn(true);
+
+        TenantContext.bind(TENANT);
+        TenantProvisioningService.Outcome outcome = service.provision(
+                TENANT,
+                "owner@acme.example",
+                List.of(entry("ADMIN", "order:order:view"), entry("DISPATCHER", "order:order:view")));
+
+        assertThat(outcome).isEqualTo(new TenantProvisioningService.Outcome(1, false));
+        ArgumentCaptor<Role> saved = ArgumentCaptor.forClass(Role.class);
+        verify(roles).save(saved.capture());
+        assertThat(saved.getAllValues())
+                .as("only the role the tenant genuinely lacks is created")
+                .extracting(Role::getName)
+                .containsExactly("DISPATCHER");
+        verify(roles, never()).existsByName(anyString());
     }
 
     @Test
@@ -168,7 +198,7 @@ class TenantProvisioningServiceTest {
     @DisplayName("without Kafka the rows are still written and the missing answer is logged")
     void noOutboxWhenKafkaIsOff() {
         when(outboxProvider.getIfAvailable()).thenReturn(null);
-        when(roles.existsByName("ADMIN")).thenReturn(false);
+        when(roles.existsByNameIgnoreCase("ADMIN")).thenReturn(false);
         when(users.existsByUsername("owner@acme.example")).thenReturn(false);
 
         TenantContext.bind(TENANT);

@@ -34,7 +34,9 @@ scripts/seed-alpha.py --gateway ... --dry-run
 # empty alpha (no locations yet):
 scripts/seed-alpha.py --gateway ... --bootstrap-location
 # the role template: roles.csv and its grants into the platform tenant, with a PLATFORM_ADMIN
-# token; the platform tenant has no locations, so the (ignored) job location is given explicitly
+# token (which holds bulkImport:upload:execute, bulkImport:status:read, security:role:create and
+# security:role:edit for exactly this); the platform tenant has no locations, so the (ignored) job
+# location is given explicitly
 scripts/seed-alpha.py --gateway ... --token "$PLATFORM_ACCESS_TOKEN" \
     --tenant-id 01900000-0000-7000-8000-000000000000 \
     --location-id 00000000-0000-0000-0000-000000000000 \
@@ -56,8 +58,11 @@ Per pack file it creates a bulk-load job (`POST /bulk-loader/bulk-jobs`), upload
 CSV, starts processing, and polls the job to a terminal state, reporting the row
 counters. A job that finished but rejected rows reports `PARTIAL` rather than `COMPLETED`;
 every rejected row has an audit record naming what the owning service said about it
-(`GET /bulk-loader/bulk-jobs/{id}/audit`), and those rows can be corrected and retried. The token needs `bulkImport:upload:execute` plus the relayed per-domain
-create permissions (`location:write`, `crm:party:create`). Bulk-load jobs require a
+(`GET /bulk-loader/bulk-jobs/{id}/audit`), and those rows can be corrected and retried. The token needs `bulkImport:upload:execute` and `bulkImport:status:read` plus the relayed per-domain
+create permissions (`location:write`, `crm:party:create`) and the read permissions the business-key
+lookups go through (`location:read`, `catalog:product:view`): the loader calls its siblings as the
+operator, relaying the caller's own gateway authorities, so a lookup the token may not make comes
+back as an unresolved name. Bulk-load jobs require a
 `locationId`: the driver resolves `--location-code` (default `CLT-MAIN-001`) against
 the location roster, and `--bootstrap-location` creates it from `locations.csv` via
 the gateway API when the roster is empty (that row then reports one expected

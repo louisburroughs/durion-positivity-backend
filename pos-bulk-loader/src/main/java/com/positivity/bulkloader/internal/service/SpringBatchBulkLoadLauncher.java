@@ -2,6 +2,7 @@ package com.positivity.bulkloader.internal.service;
 
 import com.positivity.bulkloader.internal.entity.BulkLoadJob;
 import com.positivity.bulkloader.internal.enums.DomainType;
+import com.positivity.bulkloader.internal.security.GatewayCallerHeaders;
 import com.positivity.tenancy.TenantContext;
 import java.util.Map;
 import java.util.UUID;
@@ -74,6 +75,12 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
         }
         try {
             bulkLoadAuthorizationContext.setAuthorizationHeader(authorizationHeader);
+            // The caller's gateway authorities, captured here for the same reason the token is:
+            // this runs on the HTTP thread, and the writers and resolvers that need them run on
+            // whatever thread the batch gives them. Without these a direct sibling call carries a
+            // bearer token nothing downstream authenticates with, and every protected endpoint
+            // answers 401 (see GatewayCallerHeaders).
+            bulkLoadAuthorizationContext.setGatewayHeaders(GatewayCallerHeaders.fromCurrentRequest());
             JobParametersBuilder parameters = new JobParametersBuilder()
                     .addString("jobId", job.getId().toString())
                     .addString("storagePath", job.getOriginalFilePath())

@@ -563,6 +563,12 @@ Flyway on the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`)
 - **`PLATFORM_ADMIN` / `admin.platform`** exist in the platform tenant only and hold the `platform:tenant:*` and
   `platform:account:*` families; alpha's `ADMIN` no longer does. `generate-permissions.sh --sync` refuses to grant
   a `platform:*` permission through the alpha sources: add the tuple to the platform seed by hand.
+  The role also holds four non-`platform:` grants, and only these: `bulkImport:upload:execute`,
+  `bulkImport:status:read`, `security:role:create` and `security:role:edit`. They are what the documented
+  platform role-template bulk load goes through (`docs/OPERATIONS_RUNBOOK.md` → "Bulk loading into a tenant"),
+  and the load stays inside the platform tenant like everything else this role does, so the roles it writes are
+  the template's own. `PlatformOperatorGrantsTest` in pos-bulk-loader pins them against the authorities those
+  endpoints actually enforce.
 
 `ext_people_staffing_assignment` is a read model of pos-people's `employee_location_assignment` (ADR-0061 §1): one row per assignment keyed by `assignment_id`, storing the assigned location node *verbatim* (shop or District/Region/HQ — never expanded), `is_primary`, `status` (`ACTIVE`/`ENDED`, ended rows are kept), and effective dates. Written only by `PeopleEventsListener`; read through `StaffingAssignmentProjectionService` ("nodes effective on date D", "earliest `effective_to`").
 

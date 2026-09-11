@@ -132,14 +132,25 @@ class BulkLoadTenantBindingTest {
     }
 
     @Test
-    @DisplayName("a platform-tenant caller may load into any active tenant")
-    void platformCallerMayLoadIntoAnyActiveTenant() {
+    @DisplayName("a platform-tenant caller loads platform data only: another tenant is 403, not an impersonation")
+    void platformCallerMayNotLoadIntoAnotherTenant() {
+        // A job created in tenant B by a platform-bound caller could never be continued: upload,
+        // process and status run under the request's own binding and operator id, so the platform
+        // token cannot see the job and a token of B fails its ownership check. Refused here rather
+        // than left as a row nobody can use; reopening it needs an impersonation credential, which
+        // is outside WS8 (see BulkLoadTenantBinding's class comment).
         TenantContext.bind(PlatformTenant.ID);
         BulkLoadTenantBinding binding = binding();
 
-        assertThat(binding.resolveTarget(BETA)).isEqualTo(BETA);
+        assertThatThrownBy(() -> binding.resolveTarget(BETA))
+                .isInstanceOfSatisfying(BulkLoadTenantException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo(BulkLoadTenantException.TENANT_FORBIDDEN);
+                    assertThat(e.getStatus()).isEqualTo(HttpStatus.FORBIDDEN);
+                });
+        assertThat(binding.resolveTarget(PlatformTenant.ID))
+                .as("its own tenant, the role template's home, is what it may load")
+                .isEqualTo(PlatformTenant.ID);
         assertThatThrownBy(() -> binding.resolveTarget(SUSPENDED))
-                .as("but still only into an active one")
                 .isInstanceOfSatisfying(
                         BulkLoadTenantException.class,
                         e -> assertThat(e.getCode()).isEqualTo(BulkLoadTenantException.TENANT_UNKNOWN));

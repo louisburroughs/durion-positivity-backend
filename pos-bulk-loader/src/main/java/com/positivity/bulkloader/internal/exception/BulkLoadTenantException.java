@@ -17,7 +17,7 @@ public class BulkLoadTenantException extends RuntimeException {
     /** The requested tenant is neither an active tenant of the registry nor the platform tenant. */
     public static final String TENANT_UNKNOWN = "BULK_JOB_TENANT_UNKNOWN";
 
-    /** The caller is bound to another tenant and is not a platform-tenant caller. */
+    /** The caller is bound to a tenant other than the one the request names. */
     public static final String TENANT_FORBIDDEN = "BULK_JOB_TENANT_FORBIDDEN";
 
     private final String code;
