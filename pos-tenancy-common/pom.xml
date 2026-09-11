@@ -80,6 +80,12 @@
             <artifactId>pos-shared-dtos</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- RemoteTenantRegistry gauges (tenancy.registry.*); optional so a module without Micrometer is unaffected -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+            <optional>true</optional>
+        </dependency>
         <!-- Spring cache KeyGenerator -->
         <dependency>
             <groupId>org.springframework</groupId>
@@ -108,6 +114,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- @LoadBalanced, so the builder selection of the remote registry is tested against the real
+             annotation; the library itself never depends on Spring Cloud. -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-commons</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

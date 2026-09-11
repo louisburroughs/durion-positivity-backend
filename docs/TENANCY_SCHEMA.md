@@ -62,7 +62,7 @@ A module that depends on `pos-tenancy-common` gets the ADR-0062 runtime by auto-
 | --- | --- | --- |
 | HTTP request | `TenantContextFilter` (order -110, ahead of Spring Security) | Binds `TenantContext` from `X-Tenant-Id`, which the gateway strips from inbound traffic and (WS2b) injects from the JWT `tid` claim. A malformed header, or no tenant at all in strict mode, is a 401 `ApiError` with code `TENANT_REQUIRED`. |
 | Kafka record | `TenantRecordInterceptor` | Binds from the `tenantId` record header before the `@KafkaListener` runs and clears after. Producers stamp the header with `TenantKafkaHeaders.record(...)`; the outbox row carries `tenant_id` as data for the unbound poller. |
-| Scheduled job | `TenantIterator.forEachActiveTenant(...)` or `@PlatformScoped` | Per-tenant jobs bind each active tenant in turn (from `TenantRegistry`, `pos.tenancy.tenants` until the `ext_tenant` replica exists); platform jobs run unbound and touch only global tables. |
+| Scheduled job | `TenantIterator.forEachActiveTenant(...)` or `@PlatformScoped` | Per-tenant jobs bind each active tenant in turn (from `TenantRegistry`: the static `pos.tenancy.tenants` list, or `pos-tenant` through `RemoteTenantRegistry`, see below); platform jobs run unbound and touch only global tables. |
 | Connection | `TenantAwareDataSource` | Every checkout runs `set_config('app.current_tenant', ?, false)` with the resolved tenant, or `RESET` when none; `close()` resets again. PostgreSQL only (pass-through on H2). |
 | Hibernate | `TenantContextIdentifierResolver` | `@TenantId` on `TenantScopedEntity` gets the same tenant: stamped on persist, appended to every query, mismatches rejected. `isRoot` is never true. An unbound session resolves to the nil UUID (`NO_TENANT`), never `null`: Hibernate refuses a session with no tenant once any entity carries `@TenantId` (Spring Data could not derive its queries at boot, and a `@PlatformScoped` job could not read a global table), and the nil tenant matches no scoped row and passes no policy. |
 | Executors | `TenantContextTaskDecorator` | `@Async` and `TaskExecutor` work inherits the submitter's tenant. |
@@ -83,6 +83,21 @@ through `ALTER ROLE ... SET app.current_tenant`; adopted modules connect as `pos
 (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`). Adopted so far: `pos-location`, `pos-tenant`,
 `pos-security-service`, `pos-inventory` (WS3 wave 1), `pos-accounting` (wave 2), `pos-workorder` (wave 3), `pos-catalog` (wave 4), `pos-shop-manager` and
 `pos-order` (wave 5), `pos-customer` (wave 6), `pos-supplier` (wave 7), `pos-warranty` (wave 8), `pos-people` and `pos-invoice` (wave 9), `pos-marketing`, `pos-vehicle-inventory`, `pos-price` and `pos-vehicle-fitment` (wave 10), `pos-people-contact`, `pos-tax`, `pos-image`, `pos-vehicle-reference-nhtsa` and `pos-vehicle-reference-carapi` (wave 11), `pos-mcp-server` (wave 12), `pos-event-receiver` (wave 13; `pos-bulk-loader` is plan WS8).
+
+**Tenant registry (WS4-2, decided 2026-09-10).** `TenantIterator` reads the active tenants from
+the module's `TenantRegistry`. The default, `pos.tenancy.registry.mode=STATIC`, is
+`StaticTenantRegistry`: `pos.tenancy.tenants`, else the default tenant. `mode=REMOTE` swaps in
+`RemoteTenantRegistry`, a cached lookup against `pos-tenant`'s internal, shared-secret
+`GET /internal/v1/tenants` (`pos.tenancy.registry.url`, `.secret`, `.refresh` default `PT60S`,
+`.connect-timeout` / `.read-timeout` default 2 s / 5 s; the URL resolves through the module's
+`@LoadBalanced RestClient.Builder` when it declares one). The snapshot starts as the static list,
+refreshes lazily on read at most once per interval (one thread fetches, the rest keep reading), and
+survives outages: a transport error, a non-2xx, an empty body or a list with no `ACTIVE` tenant
+keeps the last good snapshot and is logged once on the transition to failing and once on recovery.
+Gauges `tenancy.registry.tenants` and `tenancy.registry.last_success_epoch_seconds` show what the
+module is iterating and how stale it is. No module keeps an `ext_tenant` replica for this;
+`pos-security-service`, which has one for login, declares its own `TenantRegistry` bean and the
+auto-configured one backs off. No module is switched to `REMOTE` yet.
 
 **Per-tenant schedulers and transactions.** A job wrapped in `TenantIterator.forEachActiveTenant`
 must open its transaction inside the binding: a `@Transactional` scheduled method checks its
