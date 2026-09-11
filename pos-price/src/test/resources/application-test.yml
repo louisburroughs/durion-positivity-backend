@@ -2,7 +2,9 @@ spring:
   application:
     name: pos-customer-test
   datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    # MODE=PostgreSQL matches this module's own dev profile. Without it these tests ran on plain H2
+    # dialect while production and dev are Postgres, so H2-only behaviour could pass here unnoticed.
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
     username: sa
     password: 

@@ -2,7 +2,10 @@ spring:
   application:
     name: pos-customer-test
   datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    # MODE=PostgreSQL restored. This profile file shadows application.yml in the same directory,
+    # which sets it; dropping the mode here silently put every test on the "test" profile onto plain
+    # H2 dialect while the base config, this module's dev profile and production are all Postgres.
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
     username: sa
     password: 
