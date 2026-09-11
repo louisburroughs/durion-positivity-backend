@@ -3,7 +3,7 @@ package com.positivity.mcp.internal.repository;
 import com.positivity.mcp.internal.domain.ToolInvocationStats;
 import com.positivity.mcp.internal.domain.ToolPriorityOverlay;
 import com.positivity.tenancy.TenantAudited;
-import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Savepoint;
@@ -13,16 +13,16 @@ import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
-import javax.sql.DataSource;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.UncategorizedSQLException;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -38,6 +38,9 @@ import org.springframework.stereotype.Repository;
 public class ToolPriorityRepositoryImpl implements ToolPriorityRepository {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolPriorityRepositoryImpl.class);
+
+    private static final String INSERT_OVERLAY_SQL =
+            "INSERT INTO mcp_tool_priority (tool_id, priority, avg_latency_ms) VALUES (?, ?, ?)";
 
     private final JdbcTemplate jdbcTemplate;
     private final Clock clock;
@@ -79,44 +82,90 @@ public class ToolPriorityRepositoryImpl implements ToolPriorityRepository {
         // down the rest of this tenant's sweep and forcing the global rollup to skip. A JDBC
         // savepoint taken immediately before the INSERT confines that abort: rolling back to it
         // undoes only the failed insert attempt, leaving the rest of the transaction — and
-        // everything this tenant's sweep already wrote in it — intact for the retry update.
+        // everything this tenant's sweep already wrote in it — intact for the retry update. See
+        // insertOverlayRow for why that savepoint and the INSERT must run through one
+        // ConnectionCallback rather than a manually acquired connection plus a plain
+        // jdbcTemplate.update(...) call.
         if (updateOverlay(toolId, priority, avgLatencyMs) > 0) {
             return;
         }
-        DataSource dataSource = Objects.requireNonNull(jdbcTemplate.getDataSource(), "JdbcTemplate has no DataSource");
-        Connection connection = DataSourceUtils.getConnection(dataSource);
-        try {
-            Savepoint savepoint;
-            try {
-                savepoint = connection.setSavepoint("mcpToolPriorityUpsert");
-            } catch (SQLException settingSavepointFailed) {
-                throw new UncategorizedSQLException("setSavepoint", null, settingSavepointFailed);
+        Optional<DuplicateKeyException> raced = insertOverlayRow(toolId, priority, avgLatencyMs);
+        if (raced.isPresent()) {
+            LOGGER.debug(
+                    "Overlay row for tool {} was inserted concurrently; rolling back to the pre-insert"
+                            + " savepoint (when one was taken) and applying this run's values by update",
+                    toolId);
+            if (updateOverlay(toolId, priority, avgLatencyMs) == 0) {
+                throw new IllegalStateException(
+                        "Overlay row for tool " + toolId + " vanished between a duplicate insert and its update",
+                        raced.get());
             }
-            try {
-                jdbcTemplate.update(
-                        "INSERT INTO mcp_tool_priority (tool_id, priority, avg_latency_ms) VALUES (?, ?, ?)",
-                        toolId,
-                        priority,
-                        avgLatencyMs);
-            } catch (DuplicateKeyException raced) {
-                LOGGER.debug(
-                        "Overlay row for tool {} was inserted concurrently; rolling back to the pre-insert"
-                                + " savepoint and applying this run's values by update",
-                        toolId);
-                try {
-                    connection.rollback(savepoint);
-                } catch (SQLException rollbackFailed) {
-                    throw new UncategorizedSQLException("rollback to savepoint", null, rollbackFailed);
-                }
-                if (updateOverlay(toolId, priority, avgLatencyMs) == 0) {
-                    throw new IllegalStateException(
-                            "Overlay row for tool " + toolId + " vanished between a duplicate insert and its update",
-                            raced);
-                }
-            }
-        } finally {
-            DataSourceUtils.releaseConnection(connection, dataSource);
         }
+    }
+
+    /**
+     * Inserts the overlay row, recovering from a concurrent duplicate by rolling back to a
+     * pre-insert savepoint, all inside one {@link ConnectionCallback} so the savepoint and the
+     * INSERT are guaranteed to share one physical connection.
+     *
+     * <p>That guarantee does not hold for a manually acquired connection plus a separate {@code
+     * jdbcTemplate.update(...)} call: {@code DataSourceUtils.getConnection(DataSource)} — which
+     * {@code JdbcTemplate} itself uses internally — returns the same connection across calls only
+     * when Spring transaction synchronization is bound to the current thread. {@link
+     * ToolPriorityTuningService} always calls {@link #upsertOverlay} inside one, but a caller
+     * outside a transaction (e.g. a direct test, or any future non-transactional caller) would
+     * silently take the savepoint on one pooled connection while the INSERT — and a duplicate-key
+     * retry's UPDATE — ran on another, leaving the savepoint protecting nothing.
+     *
+     * <p>Outside a transaction the connection is also in autocommit mode, where PostgreSQL refuses
+     * to create a savepoint at all ("cannot establish a savepoint in auto-commit mode"), and none is
+     * needed there anyway: a failed INSERT in autocommit mode is its own complete unit of work and
+     * cannot poison a later statement the way it can inside a multi-statement transaction. This
+     * method takes a savepoint only when the connection is not in autocommit mode.
+     *
+     * @return the duplicate-key failure, when a concurrent insert of the same row raced this one;
+     *     {@link Optional#empty()} when the row was inserted cleanly
+     */
+    private @NonNull Optional<DuplicateKeyException> insertOverlayRow(
+            @NonNull UUID toolId, double priority, int avgLatencyMs) {
+        return jdbcTemplate.execute((ConnectionCallback<Optional<DuplicateKeyException>>) connection -> {
+            boolean transactional = !connection.getAutoCommit();
+            Savepoint savepoint = null;
+            if (transactional) {
+                try {
+                    savepoint = connection.setSavepoint("mcpToolPriorityUpsert");
+                } catch (SQLException settingSavepointFailed) {
+                    throw translate("setSavepoint", settingSavepointFailed);
+                }
+            }
+            try (PreparedStatement insert = connection.prepareStatement(INSERT_OVERLAY_SQL)) {
+                insert.setObject(1, toolId);
+                insert.setDouble(2, priority);
+                insert.setInt(3, avgLatencyMs);
+                insert.executeUpdate();
+                return Optional.empty();
+            } catch (SQLException insertFailed) {
+                DataAccessException translated = translate("mcpToolPriorityUpsertInsert", insertFailed);
+                if (!(translated instanceof DuplicateKeyException duplicate)) {
+                    throw translated;
+                }
+                if (savepoint != null) {
+                    try {
+                        connection.rollback(savepoint);
+                    } catch (SQLException rollbackFailed) {
+                        throw translate("rollback to savepoint", rollbackFailed);
+                    }
+                }
+                return Optional.of(duplicate);
+            }
+        });
+    }
+
+    /** Translates a raw {@link SQLException} the way {@code JdbcTemplate} itself would. */
+    private @NonNull DataAccessException translate(@NonNull String task, @NonNull SQLException exception) {
+        DataAccessException translated =
+                jdbcTemplate.getExceptionTranslator().translate(task, INSERT_OVERLAY_SQL, exception);
+        return translated != null ? translated : new UncategorizedSQLException(task, INSERT_OVERLAY_SQL, exception);
     }
 
     private int updateOverlay(@NonNull UUID toolId, double priority, int avgLatencyMs) {

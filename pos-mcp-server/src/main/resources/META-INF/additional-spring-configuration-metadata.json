@@ -139,8 +139,8 @@
     {
       "name": "mcp.tuning.mode",
       "type": "java.lang.String",
-      "description": "Adaptive MCP tool priority tuning: off (the cron is a no-op), shadow (proposals are logged to mcp.tuning.shadow and counted, nothing is written) or live (per-tenant overlays and the global row are written, gated on a fresh, passing eval baseline).",
-      "defaultValue": "off"
+      "description": "Adaptive MCP tool priority tuning: off (the cron is a no-op), shadow (proposals are logged to mcp.tuning.shadow and counted, nothing is written) or live (per-tenant overlays and the global row are written, gated on a fresh, passing eval baseline). application.yml leaves this unset on purpose (MCP_TUNING_MODE with no fallback): TuningMode.resolve treats an unset mode as off only when the deprecated mcp.tuning.enabled is also unset or false, and as live when mcp.tuning.enabled=true, so a hard default here would shadow that legacy flag.",
+      "defaultValue": ""
     },
     {
       "name": "mcp.tuning.enabled",
