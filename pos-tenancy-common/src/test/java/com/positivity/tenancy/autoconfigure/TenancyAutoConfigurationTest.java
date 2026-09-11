@@ -155,9 +155,30 @@ class TenancyAutoConfigurationTest {
                 out.write(body);
             }
         });
+        server.createContext("/moved", exchange -> {
+            exchange.getResponseHeaders().add("Location", "/internal/v1/tenants");
+            exchange.sendResponseHeaders(302, -1);
+            exchange.close();
+        });
         server.start();
         WatchedBuilder.SEEN_SECRETS.clear();
         try {
+            // A redirect to a valid list is not followed: the snapshot stays static and the secret
+            // is sent once, to the configured URL only.
+            runner.withUserConfiguration(WatchedBuilder.class)
+                    .withPropertyValues(
+                            "pos.tenancy.tenants=01900000-0000-7000-8000-000000000001",
+                            "pos.tenancy.registry.mode=REMOTE",
+                            "pos.tenancy.registry.secret=s3cret",
+                            "pos.tenancy.registry.url=http://127.0.0.1:" + server.getAddress().getPort() + "/moved")
+                    .run(context -> {
+                        RemoteTenantRegistry registry = (RemoteTenantRegistry) context.getBean(TenantRegistry.class);
+                        assertThat(registry.activeTenantIds())
+                                .containsExactly(UUID.fromString("01900000-0000-7000-8000-000000000001"));
+                        assertThat(registry.consecutiveFailures()).isEqualTo(1);
+                        assertThat(WatchedBuilder.SEEN_SECRETS).containsExactly("s3cret");
+                    });
+            WatchedBuilder.SEEN_SECRETS.clear();
             runner.withUserConfiguration(WatchedBuilder.class)
                     .withPropertyValues(
                             "pos.tenancy.default-tenant-id=01900000-0000-7000-8000-000000000001",
@@ -314,6 +335,15 @@ class TenancyAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasSingleBean(TenantRegistry.class);
                     assertThat(context).doesNotHaveBean(RemoteTenantRegistry.class);
+                    assertThat(context.getBean(TenantRegistry.class).activeTenantIds())
+                            .containsExactly(OwnRegistry.OWN);
+                });
+        // ... and also without RestClient on the classpath: the fail-fast guard yields to it.
+        runner.withUserConfiguration(OwnRegistry.class)
+                .withClassLoader(new FilteredClassLoader(RestClient.class))
+                .withPropertyValues("pos.tenancy.registry.mode=REMOTE")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
                     assertThat(context.getBean(TenantRegistry.class).activeTenantIds())
                             .containsExactly(OwnRegistry.OWN);
                 });

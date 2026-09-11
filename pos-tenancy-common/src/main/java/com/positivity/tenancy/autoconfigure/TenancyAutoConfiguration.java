@@ -12,6 +12,7 @@ import com.positivity.tenancy.TenantResolver;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.lang.annotation.Annotation;
 import java.net.URI;
+import java.net.http.HttpClient;
 import java.time.Clock;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -29,7 +30,7 @@ import org.springframework.cache.annotation.CachingConfigurer;
 import org.springframework.cache.interceptor.KeyGenerator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.util.ClassUtils;
 import org.springframework.web.client.RestClient;
 
@@ -106,6 +107,7 @@ public class TenancyAutoConfiguration {
     public static class RemoteRegistryWithoutRestClientConfiguration {
 
         @Bean
+        @ConditionalOnMissingBean(TenantRegistry.class)
         public TenantRegistry remoteTenantRegistryUnavailable() {
             throw new IllegalStateException("pos.tenancy.registry.mode=REMOTE needs spring-web's RestClient on the"
                     + " classpath; add spring-boot-starter-web (or -webflux) to the module, or use mode STATIC");
@@ -134,8 +136,14 @@ public class TenancyAutoConfiguration {
                 ConfigurableListableBeanFactory beanFactory,
                 ObjectProvider<Clock> clock) {
             TenancyProperties.Registry config = properties.getRegistry();
-            SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-            requestFactory.setConnectTimeout(config.getConnectTimeout());
+            // java.net.http.HttpClient with redirects off: HttpURLConnection (SimpleClientHttpRequestFactory)
+            // follows a GET redirect before RestClient sees the status, which would accept a redirected
+            // 200 as a snapshot and replay the shared secret to the Location host.
+            HttpClient httpClient = HttpClient.newBuilder()
+                    .connectTimeout(config.getConnectTimeout())
+                    .followRedirects(HttpClient.Redirect.NEVER)
+                    .build();
+            JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
             requestFactory.setReadTimeout(config.getReadTimeout());
             ResolvedBuilder resolved = resolveBuilder(beanFactory);
             if (!resolved.loadBalanced() && namesServiceId(config.getUrl())) {
