@@ -1,0 +1,217 @@
+package com.positivity.securityservice.internal.service;
+
+import com.positivity.securityservice.internal.config.AuditEventService;
+import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
+import com.positivity.securityservice.internal.entity.User;
+import com.positivity.securityservice.internal.entity.UserActivationToken;
+import com.positivity.securityservice.internal.exception.ActivationTokenInvalidException;
+import com.positivity.securityservice.internal.exception.PlatformTenantRequiredException;
+import com.positivity.securityservice.internal.exception.UserNotFoundException;
+import com.positivity.securityservice.internal.repository.UserActivationTokenRepository;
+import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.tenancy.PlatformTenant;
+import com.positivity.tenancy.TenantContext;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * First-administrator activation (ADR-0062 §7, plan WS2b-3, decided 2026-09-10). Provisioning
+ * leaves a tenant's first {@code ADMIN} credential-expired behind an unmatchable password; a
+ * platform operator {@link #mint mints} a one-time token for that user and hands it over out of
+ * band; the administrator {@link #activate exchanges} it, unauthenticated, for the first password.
+ * No mail is involved, and the same token shape later drives e-mail reset.
+ *
+ * <p>Tokens are 32 random bytes, URL-safe base64; only the SHA-256 hex of a token is stored, so a
+ * lost token is replaced by minting another (which closes the earlier one), never recovered. A
+ * token is exchangeable once, for 72 hours.
+ *
+ * <p>Tenant bindings: minting runs under the caller's platform binding and rebinds the target
+ * tenant for the user lookup and the token row; activation starts unbound (the request is on
+ * {@code pos.tenancy.unenforced-paths}), finds the row by hash in the global table, and binds the
+ * row's tenant for the user update. Both rebind <em>around</em> the transaction, in
+ * {@link BoundOperations}, because the Hibernate session fixes its tenant at open time.
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class AdministratorActivationService {
+
+    /** How long a minted token stays exchangeable. */
+    public static final Duration TOKEN_VALIDITY = Duration.ofHours(72);
+
+    static final int TOKEN_BYTES = 32;
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+    private final UserActivationTokenRepository tokenRepository;
+    private final BoundOperations boundOperations;
+    private final Clock clock;
+
+    /** A freshly minted token: the only time the token itself exists outside the operator's hands. */
+    public record IssuedToken(
+            @NonNull String token, @NonNull Instant expiresAt) {}
+
+    /**
+     * Mints an activation token for {@code userId} of tenant {@code tenantId}, closing any earlier
+     * open token for the user.
+     *
+     * @throws PlatformTenantRequiredException when the caller is not bound to the platform tenant
+     * @throws UserNotFoundException when the user does not exist in that tenant
+     */
+    public @NonNull IssuedToken mint(@NonNull UUID tenantId, @NonNull UUID userId) {
+        UUID bound = TenantContext.current().orElse(null);
+        if (!PlatformTenant.isPlatform(bound)) {
+            throw new PlatformTenantRequiredException(bound);
+        }
+        String actor = CurrentActor.resolve();
+        String token = generateToken();
+        Instant now = Instant.now(clock);
+        Instant expiresAt = now.plus(TOKEN_VALIDITY);
+        TenantContext.runAs(
+                tenantId, () -> boundOperations.issue(tenantId, userId, hash(token), now, expiresAt, actor));
+        log.info(
+                "Activation token minted for administrator {} of tenant {} by {}; expires {}",
+                userId,
+                tenantId,
+                actor,
+                expiresAt);
+        return new IssuedToken(token, expiresAt);
+    }
+
+    /**
+     * Exchanges {@code token} for {@code newPassword}: sets the password, clears the credential
+     * expiry and marks the token used, in one transaction under the token's tenant.
+     *
+     * @throws ActivationTokenInvalidException when the token is unknown, expired or already used
+     */
+    public void activate(@NonNull String token, @NonNull String newPassword) {
+        UserActivationToken row =
+                tokenRepository.findByTokenHash(hash(token)).orElseThrow(ActivationTokenInvalidException::new);
+        if (!row.isExchangeableAt(Instant.now(clock))) {
+            throw new ActivationTokenInvalidException();
+        }
+        TenantContext.runAs(row.getTenantId(), () -> boundOperations.exchange(row, newPassword));
+    }
+
+    private static String generateToken() {
+        byte[] entropy = new byte[TOKEN_BYTES];
+        SECURE_RANDOM.nextBytes(entropy);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(entropy);
+    }
+
+    /** Lower-case hex SHA-256 of the token: what the table stores and what lookups are keyed by. */
+    public static @NonNull String hash(@NonNull String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(token.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is not available", e);
+        }
+    }
+
+    /**
+     * The transactional halves, a separate bean so the {@code @Transactional} proxy is honoured
+     * when the outer service calls them from inside a tenant rebind.
+     */
+    @Slf4j
+    @Component
+    @RequiredArgsConstructor
+    public static class BoundOperations {
+
+        private final UserRepository userRepository;
+        private final UserActivationTokenRepository tokenRepository;
+        private final PasswordEncoder passwordEncoder;
+        private final ObjectProvider<AuditEventService> auditEventService;
+        private final Clock clock;
+
+        /** Under the target tenant's binding: the user must be visible there. */
+        @Transactional
+        public void issue(
+                @NonNull UUID tenantId,
+                @NonNull UUID userId,
+                @NonNull String tokenHash,
+                @NonNull Instant now,
+                @NonNull Instant expiresAt,
+                @NonNull String actor) {
+            User user = userRepository
+                    .findById(userId)
+                    .orElseThrow(() -> new UserNotFoundException("User not found: " + userId));
+            List<UserActivationToken> open = tokenRepository.findByTenantIdAndUserIdAndUsedAtIsNull(tenantId, userId);
+            open.forEach(earlier -> earlier.setUsedAt(now));
+            tokenRepository.saveAll(open);
+            tokenRepository.save(UserActivationToken.builder()
+                    .tenantId(tenantId)
+                    .userId(userId)
+                    .tokenHash(tokenHash)
+                    .expiresAt(expiresAt)
+                    .createdBy(actor)
+                    .createdAt(now)
+                    .build());
+            audit(new AuditLogEventRequest(
+                    "AdministratorActivationTokenMinted",
+                    actor,
+                    userId.toString(),
+                    "User",
+                    open.isEmpty() ? "" : open.size() + " earlier open token(s) closed",
+                    "expiresAt=" + expiresAt,
+                    null));
+            log.info(
+                    "Administrator {} ({}) of tenant {}: activation token issued, {} earlier open token(s) closed",
+                    user.getUsername(),
+                    userId,
+                    tenantId,
+                    open.size());
+        }
+
+        /** Under the token's tenant binding. Consumes the token first, so a concurrent second use fails. */
+        @Transactional
+        public void exchange(@NonNull UserActivationToken row, @NonNull String newPassword) {
+            Instant now = Instant.now(clock);
+            if (tokenRepository.consume(row.getId(), now) != 1) {
+                throw new ActivationTokenInvalidException();
+            }
+            // A user hidden by row-level security (the row's tenant no longer holds it) is the same
+            // refusal as an unknown token: nothing about the account is revealed.
+            User user = userRepository.findById(row.getUserId()).orElseThrow(ActivationTokenInvalidException::new);
+            user.setPassword(passwordEncoder.encode(newPassword));
+            user.setCredentialsNonExpired(true);
+            user.setCredentialsExpireAt(null);
+            userRepository.save(user);
+            log.info(
+                    "Administrator {} ({}) of tenant {} activated with token {}",
+                    user.getUsername(),
+                    user.getId(),
+                    row.getTenantId(),
+                    row.getId());
+        }
+
+        private void audit(AuditLogEventRequest request) {
+            AuditEventService service = auditEventService.getIfAvailable();
+            if (service == null) {
+                return;
+            }
+            try {
+                service.createEvent(request);
+            } catch (RuntimeException e) {
+                log.warn("Audit event emission failed: {}", e.getMessage());
+            }
+        }
+    }
+}

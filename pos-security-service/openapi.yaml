@@ -20,6 +20,8 @@ tags:
   name: User Bulk Ingest API
 - description: The calling user's tenant
   name: Tenant API
+- description: Platform-operator activation of a tenant's first administrator
+  name: Platform Administrator API
 - description: Asynchronous audit export job management
   name: Audit Exports
 - description: Bulk provision roles with persona metadata
@@ -672,6 +674,55 @@ paths:
       - Audit
       x-required-permissions:
       - security:audit:view
+  /v1/auth/activate:
+    post:
+      description: 'Exchanges a one-time activation token for the account''s first password: sets the password, clears the credential expiry provisioning left on the account, and marks the token used, all in one transaction under the token''s tenant.
+
+        Use this tool when a tenant''s first administrator has received an activation token from a platform operator (mintAdministratorActivationToken); do not use loginUser, which cannot succeed until the account is activated, and do not use updateUser, which needs an authenticated caller.
+
+        Preconditions: none on the caller — the endpoint is unauthenticated and binds no tenant; the token must be unexpired (72 hours from minting) and unused.
+
+        Required inputs: token and newPassword, both non-blank.
+
+        Emits a SECURITY_AUTH_ACTIVATE event; no tokens are issued, so a follow-up loginUser call is required.
+
+        Returns 204 on success; 400 on a blank field; 401 with ACTIVATION_TOKEN_INVALID when the token is unknown, expired or already used (one code on purpose, so nothing about the account or the token''s history is revealed).
+
+        '
+      operationId: activateAccount
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Activation:
+                description: Activation
+                value:
+                  newPassword: Sup3rS3cret!
+                  token: Qm9iIGlzIG5vdCBhIHJlYWwgdG9rZW4gYnV0IGxvb2tzIGxpa2Ugb25l
+            schema:
+              $ref: '#/components/schemas/ActivateAccountRequest'
+        description: The activation token and the password to set.
+        required: true
+      responses:
+        '204':
+          description: Password set; the account can sign in
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or blank token/newPassword
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'ACTIVATION_TOKEN_INVALID: the token is unknown, expired or already used'
+      summary: Activate an Account with a One-Time Token
+      tags:
+      - Auth API
+      x-required-permissions:
+      - PUBLIC
   /v1/auth/internal/token:
     post:
       description: 'Issues a single JWT access token (1-hour expiry) for an existing user''s username on behalf of a trusted internal caller, without checking a password.
@@ -1786,6 +1837,70 @@ paths:
       - Permission Registry
       x-required-permissions:
       - security:permission:view
+  /v1/platform/tenants/{tenantId}/administrators/{userId}/activation-token:
+    post:
+      description: 'Mints a one-time activation token for the named user of the named tenant and returns it once, together with its expiry. Any earlier token still open for that user is closed. The operator hands the token to the administrator out of band; the administrator exchanges it, unauthenticated, at activateAccount (POST /v1/auth/activate) for the account''s first password.
+
+        Use this tool after tenant provisioning (tenant.created → tenant.provisioned) leaves the first ADMIN unable to sign in, or whenever that administrator has lost an unexchanged token; do not use updateUser to set a tenant''s first password from the platform tenant.
+
+        Preconditions: the caller must hold platform:tenant:provision and be bound to the platform tenant; the user must exist in the named tenant.
+
+        Required inputs: tenantId and userId as path parameters; there is no request body.
+
+        Emits a SECURITY_PLATFORM_ADMINISTRATOR_ACTIVATION_TOKEN_MINT event and an audit event on the user; only the token''s SHA-256 is stored, so a lost token is replaced by minting again.
+
+        Returns 201 with the token and expiresAt (72 hours); 403 with PLATFORM_TENANT_REQUIRED when the caller is bound to a tenant other than the platform tenant; 404 with USER_NOT_FOUND when the user is not in that tenant.
+
+        '
+      operationId: mintAdministratorActivationToken
+      parameters:
+      - description: The provisioned tenant
+        in: path
+        name: tenantId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: The administrator, a user of that tenant
+        in: path
+        name: userId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivationTokenResponse'
+          description: Token minted; it is shown here and never again
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'PLATFORM_TENANT_REQUIRED: the caller is bound to a tenant other than the platform tenant'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'USER_NOT_FOUND: no such user in that tenant'
+      security:
+      - bearerAuth:
+        - platform:tenant:provision
+      summary: Mint a First-Administrator Activation Token
+      tags:
+      - Platform Administrator API
+      x-required-permissions:
+      - platform:tenant:provision
   /v1/roles:
     get:
       description: 'Returns every role in the system with its permission set and audit metadata.
@@ -4502,6 +4617,36 @@ components:
       - enabled
       - failedLoginAttempts
       - userId
+      type: object
+    ActivateAccountRequest:
+      description: Exchange a one-time activation token for the account's first password
+      properties:
+        newPassword:
+          description: The password to set; hashed server-side before storage
+          example: Sup3rS3cret!
+          type: string
+        token:
+          description: The activation token the operator handed over
+          type: string
+      required:
+      - newPassword
+      - token
+      type: object
+    ActivationTokenResponse:
+      description: A one-time activation token for a tenant's first administrator, returned once
+      properties:
+        expiresAt:
+          description: When the token stops being exchangeable (72 hours after minting)
+          example: '2026-09-13T12:00:00Z'
+          format: date-time
+          type: string
+        token:
+          description: The token to hand to the administrator out of band; exchanged at POST /v1/auth/activate
+          example: Qm9iIGlzIG5vdCBhIHJlYWwgdG9rZW4gYnV0IGxvb2tzIGxpa2Ugb25l
+          type: string
+      required:
+      - expiresAt
+      - token
       type: object
     ApiError:
       description: Standard error response envelope returned by all Durion backend APIs

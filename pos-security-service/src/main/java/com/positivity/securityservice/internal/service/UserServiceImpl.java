@@ -51,12 +51,30 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserDto createUserWithGeneratedPassword(String username, Set<String> roleNames) {
-        // 32 bytes from a cryptographically strong source, hashed by createUser like any other
-        // password and then dropped: it is never returned, logged, or persisted in plaintext.
+        return createUser(username, generatePassword(), roleNames);
+    }
+
+    @Override
+    @Transactional
+    public UserDto createUserAwaitingActivation(String username, Set<String> roleNames) {
+        UserDto created = createUser(username, generatePassword(), roleNames);
+        User user = userRepository
+                .findById(created.getId())
+                .orElseThrow(() -> new IllegalStateException("User " + created.getId() + " vanished after creation"));
+        user.setCredentialsNonExpired(false);
+        user.setCredentialsExpireAt(Instant.now(clock));
+        userRepository.save(user);
+        return created;
+    }
+
+    /**
+     * 32 bytes from a cryptographically strong source, hashed by {@link #createUser} like any other
+     * password and then dropped: it is never returned, logged, or persisted in plaintext.
+     */
+    private static String generatePassword() {
         byte[] entropy = new byte[GENERATED_PASSWORD_BYTES];
         SECURE_RANDOM.nextBytes(entropy);
-        String generated = Base64.getUrlEncoder().withoutPadding().encodeToString(entropy);
-        return createUser(username, generated, roleNames);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(entropy);
     }
 
     /**

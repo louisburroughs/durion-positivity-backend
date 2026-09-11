@@ -71,6 +71,13 @@ public final class SecurityPermissions {
     /** View user account state and lockout metadata. */
     public static final String USER_ACCOUNT_STATE_VIEW = "security:user_account_state:view";
 
+    /**
+     * Mint a first-administrator activation token for a provisioned tenant (ADR-0062 §7, WS2b-3).
+     * A {@code platform:*} permission: held by {@code PLATFORM_ADMIN} in the platform tenant only
+     * ({@code R__seed_tenant_template.sql}), never by a tenant role.
+     */
+    public static final String PLATFORM_TENANT_PROVISION = "platform:tenant:provision";
+
     private SecurityPermissions() {
         // Utility class - prevent instantiation
     }

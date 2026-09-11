@@ -23,6 +23,16 @@ public interface UserService {
      */
     UserDto createUserWithGeneratedPassword(String username, Set<String> roleNames);
 
+    /**
+     * Creates a user that cannot sign in until activated (ADR-0062 §7, WS2b-3): the password is
+     * generated here and returned to no one, exactly as in {@link #createUserWithGeneratedPassword},
+     * and the credentials are marked expired. A login attempt fails on the unmatchable password
+     * with the same 401 as any wrong password, so the account's state is not observable from
+     * outside. {@code POST /v1/auth/activate} with an operator-minted activation token sets the
+     * first password and clears the flag.
+     */
+    UserDto createUserAwaitingActivation(String username, Set<String> roleNames);
+
     Optional<UserAuthContext> getUserByUsername(String username);
 
     Optional<UserDto> getUserById(UUID id);

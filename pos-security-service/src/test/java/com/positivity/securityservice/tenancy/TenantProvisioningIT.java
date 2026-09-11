@@ -81,7 +81,7 @@ class TenantProvisioningIT extends PostgresTenancyTestBase {
         assertThat(owner.queryForObject("""
                         SELECT count(*) FROM role_permissions rp JOIN roles r ON r.id = rp.role_id
                          WHERE r.tenant_id = ? AND r.name = 'PLATFORM_ADMIN'
-                        """, Integer.class, PlatformTenant.ID)).isEqualTo(9);
+                        """, Integer.class, PlatformTenant.ID)).isEqualTo(10);
         assertThat(owner.queryForObject("""
                         SELECT count(*) FROM role_assignments ra
                           JOIN users u ON u.id = ra.user_id JOIN roles r ON r.id = ra.role_id

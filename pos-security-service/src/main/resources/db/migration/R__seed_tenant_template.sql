@@ -122,6 +122,7 @@ FROM (VALUES
     ('PLATFORM_ADMIN', 'platform:account:update'),
     ('PLATFORM_ADMIN', 'platform:tenant:create'),
     ('PLATFORM_ADMIN', 'platform:tenant:decommission'),
+    ('PLATFORM_ADMIN', 'platform:tenant:provision'),
     ('PLATFORM_ADMIN', 'platform:tenant:reactivate'),
     ('PLATFORM_ADMIN', 'platform:tenant:read'),
     ('PLATFORM_ADMIN', 'platform:tenant:suspend'),

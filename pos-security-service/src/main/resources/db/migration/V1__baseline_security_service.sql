@@ -266,6 +266,27 @@ CREATE TABLE public.users (
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+-- ADR-0062 section 7 (plan WS2b-3, decided 2026-09-10): one-time activation tokens for a tenant's
+-- first administrator. Global table (db/tenancy-global-tables.txt): POST /v1/auth/activate is
+-- unauthenticated and binds no tenant, so the row must be findable by hash without one; tenant_id
+-- is carried as data and the service binds it before touching users. Only the SHA-256 of the token
+-- is stored, never the token.
+CREATE TABLE public.user_activation_tokens (
+    id uuid NOT NULL,
+    tenant_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    token_hash character varying(64) NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    used_at timestamp with time zone,
+    created_by character varying(255) NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+COMMENT ON COLUMN public.user_activation_tokens.tenant_id IS
+    'ADR-0062: the user''s tenant, carried as data (global table, no policy); bound by the activation service before the user is updated.';
+COMMENT ON COLUMN public.user_activation_tokens.token_hash IS
+    'Lower-case hex SHA-256 of the URL-safe base64 token handed to the operator; the token itself is never stored.';
+
 ALTER TABLE ONLY public.audit_log_events
     ADD CONSTRAINT audit_log_events_pkey PRIMARY KEY (event_id);
 
@@ -371,6 +392,17 @@ ALTER TABLE ONLY public.users
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_username_key UNIQUE (tenant_id, username);
 
+ALTER TABLE ONLY public.user_activation_tokens
+    ADD CONSTRAINT user_activation_tokens_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.user_activation_tokens
+    ADD CONSTRAINT user_activation_tokens_token_hash_key UNIQUE (token_hash);
+
+-- Composite: foreign-key checks bypass row-level security, so the key names the tenant too.
+ALTER TABLE ONLY public.user_activation_tokens
+    ADD CONSTRAINT user_activation_tokens_user_fkey
+    FOREIGN KEY (tenant_id, user_id) REFERENCES public.users (tenant_id, id) ON DELETE CASCADE;
+
 CREATE INDEX idx_audit_log_events_actor_id ON public.audit_log_events USING btree (actor_id);
 
 CREATE INDEX idx_audit_log_events_entity_id ON public.audit_log_events USING btree (entity_id);
@@ -447,6 +479,8 @@ CREATE INDEX self_registration_attempts_tenant_idx ON public.self_registration_a
 CREATE INDEX self_registration_review_cases_tenant_idx ON public.self_registration_review_cases USING btree (tenant_id);
 
 CREATE INDEX users_tenant_idx ON public.users USING btree (tenant_id);
+
+CREATE INDEX idx_user_activation_tokens_open ON public.user_activation_tokens USING btree (tenant_id, user_id) WHERE (used_at IS NULL);
 
 ALTER TABLE public.audit_log_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_log_events FORCE ROW LEVEL SECURITY;

@@ -23,6 +23,12 @@ spring:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: validate
+    # ADR-0062 (WS2b-3): the Hibernate session fixes its @TenantId at open time, so a request-scoped
+    # session would pin every query to the tenant bound when the request arrived. Login, refresh,
+    # activation and the platform administrator endpoints all rebind mid-request
+    # (TenantContext.callAs/runAs); with open-in-view off each @Transactional method opens its own
+    # session under the binding in force at that moment.
+    open-in-view: false
   # flyway:
   #   placeholders:
   #     # Injected via env var at runtime/deploy time; do not commit real hash in SQL.

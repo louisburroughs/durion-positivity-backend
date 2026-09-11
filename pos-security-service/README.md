@@ -319,6 +319,8 @@ those claims.
 ## API Endpoints
 
 - `POST /v1/auth/login` — authenticate and receive JWT (tenant from `X-Tenant-Slug` or the form's `tenantSlug`, ADR-0062 §3)
+- `POST /v1/auth/activate` — exchange a one-time activation token for the account's first password (unauthenticated; ADR-0062 §7, WS2b-3)
+- `POST /v1/platform/tenants/{tenantId}/administrators/{userId}/activation-token` — platform tenant only, `platform:tenant:provision`: mint a first-administrator activation token, returned once
 - `GET /v1/tenants/me` — the caller's tenant (`tid`) as the `ext_tenant` replica knows it; 404 while the replica is behind
 - `GET /v1/auth/validate` — validate a JWT
 - `GET /v1/auth/subject` — extract subject from JWT
@@ -493,8 +495,8 @@ Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`. Se
 
 ## Tenancy (ADR-0062, WS2b)
 
-Every row but the global tables (`ext_tenant`, `permissions`, `processed_events`, `event_outbox`; see
-`db/tenancy-global-tables.txt`) belongs to a tenant and is read under row-level security as `pos_app`, with
+Every row but the global tables (`ext_tenant`, `permissions`, `processed_events`, `event_outbox`,
+`user_activation_tokens`; see `db/tenancy-global-tables.txt`) belongs to a tenant and is read under row-level security as `pos_app`, with
 Flyway on the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`). Usernames are unique per tenant.
 
 - **Login resolves the tenant first** (`LoginTenantResolver`): the gateway's `X-Tenant-Slug` (derived from the
@@ -512,8 +514,25 @@ Flyway on the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`)
   `template_key`), the initial administrator named by `initialAdminEmail` on `ADMIN` with a generated, discarded
   password, the first `role_assignments` row, then `tenant.provisioned` through the outbox, which moves the
   tenant to `ACTIVE` in pos-tenant. Idempotent on tenant: existing roles and users are left alone, so a
-  redelivery converges. The administrator's first credential is not carried by any event; until a reset or
-  invite flow exists, an operator sets it through `PUT /v1/users/{id}` from inside that tenant.
+  redelivery converges. No credential rides on any event: the administrator is created *awaiting activation*
+  (`UserService.createUserAwaitingActivation`, `credentials_non_expired = false` behind a discarded random
+  password), and a login attempt is the same 401 `INVALID_CREDENTIALS` as any wrong password.
+- **First-administrator activation (WS2b-3, decided 2026-09-10: operator-delivered activation token).** A
+  platform operator holding `platform:tenant:provision`, bound to the platform tenant, calls
+  `POST /v1/platform/tenants/{tenantId}/administrators/{userId}/activation-token` (`PlatformAdministratorController`
+  → `AdministratorActivationService.mint`). It returns `{token, expiresAt}` exactly once: the token is 32 random
+  bytes, URL-safe base64, valid 72 hours; only its SHA-256 is stored (`user_activation_tokens`, a global table
+  carrying `tenant_id` as data), and any earlier open token for the user is closed. A caller bound to another
+  tenant is refused with 403 `PLATFORM_TENANT_REQUIRED` whatever it holds; an unknown user in that tenant is 404
+  `USER_NOT_FOUND`. The operator hands the token over out of band; the administrator exchanges it, unauthenticated,
+  at `POST /v1/auth/activate` `{token, newPassword}` (on `pos.tenancy.unenforced-paths`), which finds the row by
+  hash, binds the row's tenant, sets the password, clears the credential expiry and consumes the token in one
+  transaction. Unknown, expired and used tokens are one answer, 401 `ACTIVATION_TOKEN_INVALID`. The same token
+  shape later drives e-mail reset. Operator steps: `docs/OPERATIONS_RUNBOOK.md` → "Tenant provisioning".
+- **Open-in-view is off** (`spring.jpa.open-in-view: false`): the Hibernate session fixes its `@TenantId` when it
+  opens, so a request-scoped session would pin every query to the tenant bound when the request arrived. Login,
+  refresh, activation and the platform administrator endpoint all rebind mid-request (`TenantContext.callAs` /
+  `runAs`) around a `@Transactional` bean, and each transaction opens its own session under the binding in force.
 - **Role template and platform tenant** (`R__seed_tenant_template.sql`, tier 1). The six Flyway floor roles
   (`ADMIN`, `SYSTEM_ADMINISTRATOR`, `DISPATCHER`, `SHOP_MANAGER`, `SELF_SERVICE_CUSTOMER`, `CONTROLLER`) carry
   `template_key` in alpha and are copied, grants and scope included, into the platform tenant as the template.

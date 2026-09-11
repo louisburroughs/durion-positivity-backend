@@ -389,4 +389,38 @@ class UserServiceTest {
                 .isInstanceOf(RoleNotFoundException.class)
                 .hasMessageContaining("Role not found");
     }
+
+    @Test
+    void createUserAwaitingActivation_hashesAGeneratedPasswordAndExpiresTheCredentials() {
+        Role admin = new Role();
+        admin.setName("ADMIN");
+        when(userRepository.existsByUsername("owner@acme.example")).thenReturn(false);
+        when(roleRepository.findByName("ADMIN")).thenReturn(Optional.of(admin));
+        when(passwordEncoder.encode(anyString())).thenAnswer(inv -> "hashed:" + inv.getArgument(0));
+        UUID id = UUID.fromString("01990000-0000-7000-8000-000000000501");
+        User[] stored = new User[1];
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+            User saved = inv.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(id);
+            }
+            stored[0] = saved;
+            return saved;
+        });
+        when(userRepository.findById(id)).thenAnswer(inv -> Optional.ofNullable(stored[0]));
+
+        UserDto created = userService.createUserAwaitingActivation("owner@acme.example", Set.of("ADMIN"));
+
+        assertThat(created.getId()).isEqualTo(id);
+        verify(userRepository, org.mockito.Mockito.atLeast(2)).save(any(User.class));
+        User user = stored[0];
+        assertThat(user.isCredentialsNonExpired())
+                .as("cannot sign in until activated")
+                .isFalse();
+        assertThat(user.getCredentialsExpireAt()).isEqualTo(TEST_CLOCK.instant());
+        assertThat(user.getPassword()).startsWith("hashed:");
+        // 32 random bytes, URL-safe base64 without padding: 43 characters, never a caller-chosen value
+        assertThat(user.getPassword().substring("hashed:".length())).hasSize(43).matches("[A-Za-z0-9_-]+");
+        verify(userRoleGrantService).grant(eq(user), eq(admin), anyString());
+    }
 }
