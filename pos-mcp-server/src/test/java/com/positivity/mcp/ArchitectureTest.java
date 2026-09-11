@@ -156,7 +156,7 @@ public class ArchitectureTest {
             .because("cyclic dependencies make modules harder to maintain and evolve");
 
     // ADR-0062 §3 (plan WS6): every scheduled job in this module is classified — per tenant through
-    // TenantIterator.forEachActiveTenant, or @PlatformScoped over global tables only. pos-archunit
+    // TenantIterator.forEachActiveTenant or sweep, or @PlatformScoped over global tables only. pos-archunit
     // enforces the same rule across modules; this copy keeps the module's own suite red on a new
     // unclassified job. The scheduler table in README.md lists each job's classification.
     @ArchTest
@@ -165,8 +165,9 @@ public class ArchitectureTest {
             .areAnnotatedWith("org.springframework.scheduling.annotation.Scheduled")
             .should(bePlatformScopedOrIterateTenants())
             .allowEmptyShould(true)
-            .because("ADR-0062 section 3: a scheduled job is per-tenant (TenantIterator.forEachActiveTenant) or"
-                    + " @PlatformScoped, so an unclassified job cannot silently run unbound");
+            .because(
+                    "ADR-0062 section 3: a scheduled job is per-tenant (TenantIterator.forEachActiveTenant or sweep) or"
+                            + " @PlatformScoped, so an unclassified job cannot silently run unbound");
 
     // Jobs registered programmatically (SchedulingConfigurer.configureTasks -> addFixedDelayTask and
     // friends) carry no @Scheduled and would slip past the rule above; the registering method is
@@ -180,20 +181,29 @@ public class ArchitectureTest {
             .implement("org.springframework.scheduling.annotation.SchedulingConfigurer")
             .should(bePlatformScopedOrIterateTenants())
             .allowEmptyShould(true)
-            .because("ADR-0062 section 3: a job registered through SchedulingConfigurer is classified on the"
-                    + " registering method, per-tenant (TenantIterator.forEachActiveTenant) or @PlatformScoped");
+            .because(
+                    "ADR-0062 section 3: a job registered through SchedulingConfigurer is classified on the"
+                            + " registering method, per-tenant (TenantIterator.forEachActiveTenant or sweep) or @PlatformScoped");
+
+    /** The {@link TenantIterator} entry points that bind each active tenant in turn. */
+    private static final java.util.Set<String> PER_TENANT_ITERATION = java.util.Set.of("forEachActiveTenant", "sweep");
 
     private static ArchCondition<JavaMethod> bePlatformScopedOrIterateTenants() {
-        return new ArchCondition<>("be annotated with @PlatformScoped or call TenantIterator.forEachActiveTenant") {
+        return new ArchCondition<>(
+                "be annotated with @PlatformScoped or call TenantIterator.forEachActiveTenant or sweep") {
             @Override
             public void check(JavaMethod method, ConditionEvents events) {
                 if (method.isAnnotatedWith(PlatformScoped.class)) {
                     return;
                 }
+                // Either entry point classifies a job as per-tenant: forEachActiveTenant and sweep read
+                // the same active-tenant list and bind each tenant in turn. sweep additionally reports
+                // whether that list was complete, which a caller needs before writing a cross-tenant
+                // rollup (plan WS6-b); it is the same iteration, so it satisfies the same rule.
                 boolean iterates = method.getMethodCallsFromSelf().stream()
                         .map(JavaMethodCall::getTarget)
                         .anyMatch(target -> target.getOwner().isEquivalentTo(TenantIterator.class)
-                                && target.getName().equals("forEachActiveTenant"));
+                                && PER_TENANT_ITERATION.contains(target.getName()));
                 if (!iterates) {
                     events.add(SimpleConditionEvent.violated(
                             method, method.getFullName() + " is scheduled but neither @PlatformScoped nor per-tenant"));
