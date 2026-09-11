@@ -186,10 +186,20 @@ public class UserServiceImpl implements UserService {
             existingUser.setUsername(request.getUsername());
         }
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            boolean wasAwaitingActivation = existingUser.isAwaitingActivation();
             existingUser.setPassword(passwordEncoder.encode(request.getPassword()));
             // An ordinary password set ends the awaiting-activation state (WS2b-3): a token minted
             // before it can no longer overwrite this password.
             existingUser.setAwaitingActivation(false);
+            if (wasAwaitingActivation) {
+                // This is exactly the documented fallback for the first password on an account
+                // provisioning left credential-expired awaiting an activation token (WS2b-3): also
+                // clear the expiry, or the password just set still fails login with
+                // CredentialsExpiredException. An ordinary account an administrator deliberately
+                // expired was never awaiting activation, so it keeps its expiry untouched here.
+                existingUser.setCredentialsNonExpired(true);
+                existingUser.setCredentialsExpireAt(null);
+            }
         }
         if (request.getRoles() != null) {
             // A non-null roles list reconciles the effective set the same way assignRoles does,
