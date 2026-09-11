@@ -9,8 +9,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.tenancy.TenantAudited;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +34,7 @@ import org.springframework.jdbc.core.RowMapper;
 class ToolPriorityRepositoryImplTest {
 
     private static final UUID TOOL_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-09-10T12:00:00Z"), ZoneOffset.UTC);
 
     @Mock
     private JdbcTemplate jdbcTemplate;
@@ -43,7 +46,7 @@ class ToolPriorityRepositoryImplTest {
         when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(LocalDateTime.class)))
                 .thenReturn(List.of());
 
-        new ToolPriorityRepositoryImpl(jdbcTemplate).invocationStatsSince(Instant.parse("2026-09-01T00:00:00Z"));
+        new ToolPriorityRepositoryImpl(jdbcTemplate, CLOCK).invocationStatsSince(Instant.parse("2026-09-01T00:00:00Z"));
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         verify(jdbcTemplate).query(sql.capture(), any(RowMapper.class), any(LocalDateTime.class));
@@ -60,7 +63,7 @@ class ToolPriorityRepositoryImplTest {
     void overlayReadNamesNoTenant() {
         when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenReturn(List.of());
 
-        assertThat(new ToolPriorityRepositoryImpl(jdbcTemplate).findOverlayForCurrentTenant())
+        assertThat(new ToolPriorityRepositoryImpl(jdbcTemplate, CLOCK).findOverlayForCurrentTenant())
                 .isEmpty();
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
@@ -73,7 +76,7 @@ class ToolPriorityRepositoryImplTest {
     void upsertIsUpdateThenInsert() {
         when(jdbcTemplate.update(anyString(), any(), any(), any(), eq(TOOL_ID))).thenReturn(0);
 
-        new ToolPriorityRepositoryImpl(jdbcTemplate).upsertOverlay(TOOL_ID, 0.42, 150);
+        new ToolPriorityRepositoryImpl(jdbcTemplate, CLOCK).upsertOverlay(TOOL_ID, 0.42, 150);
 
         ArgumentCaptor<String> insert = ArgumentCaptor.forClass(String.class);
         verify(jdbcTemplate).update(insert.capture(), eq(TOOL_ID), eq(0.42), eq(150));
@@ -87,7 +90,7 @@ class ToolPriorityRepositoryImplTest {
     void upsertExistingRowUpdatesOnly() {
         when(jdbcTemplate.update(anyString(), any(), any(), any(), eq(TOOL_ID))).thenReturn(1);
 
-        new ToolPriorityRepositoryImpl(jdbcTemplate).upsertOverlay(TOOL_ID, 0.42, 150);
+        new ToolPriorityRepositoryImpl(jdbcTemplate, CLOCK).upsertOverlay(TOOL_ID, 0.42, 150);
 
         verify(jdbcTemplate, never()).update(anyString(), eq(TOOL_ID), any(), any());
     }

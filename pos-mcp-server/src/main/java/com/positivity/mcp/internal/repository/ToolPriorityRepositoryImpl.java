@@ -5,6 +5,7 @@ import com.positivity.mcp.internal.domain.ToolPriorityOverlay;
 import com.positivity.tenancy.TenantAudited;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -29,9 +30,11 @@ import org.springframework.stereotype.Repository;
 public class ToolPriorityRepositoryImpl implements ToolPriorityRepository {
 
     private final JdbcTemplate jdbcTemplate;
+    private final Clock clock;
 
-    public ToolPriorityRepositoryImpl(@NonNull JdbcTemplate jdbcTemplate) {
+    public ToolPriorityRepositoryImpl(@NonNull JdbcTemplate jdbcTemplate, @NonNull Clock clock) {
         this.jdbcTemplate = jdbcTemplate;
+        this.clock = clock;
     }
 
     @Override
@@ -54,7 +57,7 @@ public class ToolPriorityRepositoryImpl implements ToolPriorityRepository {
                 "UPDATE mcp_tool_priority SET priority = ?, avg_latency_ms = ?, updated_at = ? WHERE tool_id = ?",
                 priority,
                 avgLatencyMs,
-                Instant.now().atOffset(ZoneOffset.UTC),
+                Instant.now(clock).atOffset(ZoneOffset.UTC),
                 toolId);
         if (updated == 0) {
             jdbcTemplate.update(
