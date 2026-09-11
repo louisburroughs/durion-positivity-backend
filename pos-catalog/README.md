@@ -258,7 +258,7 @@ The outbox row carries the producing tenant as data (`tenant_id`, stamped from t
 `OutboxEventWriter`). Both scheduled jobs are platform-scoped (they run unbound and touch only the
 global outbox): `OutboxPublisher.publishPending` drains `event_outbox` and puts each row's `tenant_id` on
 the record header; `ManifestPublisher.publishDueManifest` summarises `event_outbox` per window across
-tenants (per-tenant manifests are plan WS8). The module has no per-tenant scheduler and no native
+tenants (each manifest is a platform-tenant record until per-tenant manifests land in plan WS4-3). The module has no per-tenant scheduler and no native
 queries.
 
 Proof: `TenantIsolationIT` (tenant A's `category` row is invisible to tenant B and to an unbound

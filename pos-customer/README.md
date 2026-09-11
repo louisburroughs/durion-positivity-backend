@@ -74,7 +74,7 @@ The outbox row carries the producing tenant as data (`tenant_id`, stamped from t
 | Job | Classification | Why |
 | --- | --- | --- |
 | `OutboxPublisher.publishPending` | platform-scoped | Drains `event_outbox`; each row's `tenant_id` becomes the record header |
-| `ManifestPublisher.publishDueManifest` | platform-scoped | Summarises `event_outbox` per window across tenants; per-tenant manifests are plan WS8 |
+| `ManifestPublisher.publishDueManifest` | platform-scoped | Summarises `event_outbox` per window across tenants; each manifest is a platform-tenant record until per-tenant manifests land in plan WS4-3 |
 | `ServiceDueReminderJob.generateReminders` | per-tenant | `service_history` and `follow_up_task` are scoped; one run per tenant of the registry |
 
 The one native query, `CommercialPartyRepository`'s `nextval('commercial_party_customer_number_seq')`, carries

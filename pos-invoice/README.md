@@ -150,7 +150,7 @@ The outbox row carries the producing tenant as data (`tenant_id`, stamped from t
 | Job | Classification | Why |
 | --- | --- | --- |
 | `OutboxPublisher.publishPending` | platform-scoped | Drains `event_outbox`; each row's `tenant_id` becomes the record header |
-| `ManifestPublisher.publishDueManifest` | platform-scoped | Summarises `event_outbox` per window across tenants; per-tenant manifests are plan WS8 |
+| `ManifestPublisher.publishDueManifest` | platform-scoped | Summarises `event_outbox` per window across tenants; each manifest is a platform-tenant record until per-tenant manifests land in plan WS4-3 |
 | `InvoicePartyIdBackfillService.backfill` | per-tenant | `invoices` and the `ext_workorder` replica are scoped; the bulk UPDATE runs per tenant with its transaction inside the binding |
 The one native query, `InvoiceRepository.backfillPartyIdFromWorkorderReplica`, carries `@TenantAudited`: it
 names no tenant because the backfill runs per tenant, so row-level security confines it to the bound tenant.

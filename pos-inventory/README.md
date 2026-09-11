@@ -420,7 +420,7 @@ Platform-scoped schedulers (run with no tenant bound; touch only global tables):
 | Job | Why |
 | --- | --- |
 | `OutboxPublisher.publishPending` | Drains `event_outbox`; each row's `tenant_id` becomes the record header |
-| `ManifestPublisher.publishDueManifest` | Summarises `event_outbox` per window across tenants; per-tenant manifests are plan WS8 |
+| `ManifestPublisher.publishDueManifest` | Summarises `event_outbox` per window across tenants; each manifest is a platform-tenant record until per-tenant manifests land in plan WS4-3 |
 
 Per-tenant schedulers run once per tenant of the registry (`TenantIterator.forEachActiveTenant`; the
 static registry lists the default tenant until the `ext_tenant` replica lands per module): the cycle-count

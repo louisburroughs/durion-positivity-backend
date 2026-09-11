@@ -112,7 +112,7 @@ The outbox row carries the producing tenant as data (`tenant_id`, stamped from t
 | Job | Classification | Why |
 | --- | --- | --- |
 | `OutboxPublisher.publishPending` | platform-scoped | Drains `event_outbox`; each row's `tenant_id` becomes the record header |
-| `ManifestPublisher.publishDueManifest` | platform-scoped | Summarises `event_outbox` per window across tenants; per-tenant manifests are plan WS8 |
+| `ManifestPublisher.publishDueManifest` | platform-scoped | Summarises `event_outbox` per window across tenants; each manifest is a platform-tenant record until per-tenant manifests land in plan WS4-3 |
 | `TimePeriodRolloverScheduler.runScheduledRollover` | per-tenant | `time_period` and the entries it closes are scoped; one rollover per tenant of the registry |
 There are no native queries. The `pg` test profile is strict (the transitional `connection-init-sql` binding
 is gone); `FlywayMigrationIT` keeps its own `@ServiceConnection` container as the owner.
