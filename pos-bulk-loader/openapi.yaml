@@ -1395,6 +1395,7 @@ components:
       - fileName
       - id
       - status
+      - tenantId
       type: object
     ColumnMappingApproveRequest:
       description: Request to approve the finalized set of column mappings for a bulk load job
