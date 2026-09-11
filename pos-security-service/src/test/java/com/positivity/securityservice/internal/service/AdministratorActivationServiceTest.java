@@ -21,6 +21,7 @@ import com.positivity.securityservice.internal.exception.UserNotAwaitingActivati
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.UserActivationTokenRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.internal.security.service.JwtService;
 import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.TenantContext;
 import java.time.Clock;
@@ -57,13 +58,17 @@ class AdministratorActivationServiceTest {
     private final UserActivationTokenRepository tokens = mock(UserActivationTokenRepository.class);
     private final PasswordEncoder encoder = mock(PasswordEncoder.class);
     private final AuditEventService audit = mock(AuditEventService.class);
+    private final JwtService jwtService = mock(JwtService.class);
 
     @SuppressWarnings("unchecked")
     private final ObjectProvider<AuditEventService> auditProvider = mock(ObjectProvider.class);
 
     private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+    private final AdministratorActivationService.MintAuditWriter mintAuditWriter =
+            new AdministratorActivationService.MintAuditWriter(auditProvider);
     private final AdministratorActivationService.BoundOperations bound =
-            new AdministratorActivationService.BoundOperations(users, tokens, encoder, auditProvider, clock);
+            new AdministratorActivationService.BoundOperations(
+                    users, tokens, encoder, mintAuditWriter, jwtService, clock);
     private final AdministratorActivationService service = new AdministratorActivationService(tokens, bound, clock);
 
     @AfterEach
@@ -238,6 +243,19 @@ class AdministratorActivationServiceTest {
         }
 
         @Test
+        @DisplayName("an account that has already signed in is 409 even with the marker set and credentials "
+                + "expired: the never-signed-in invariant is not the marker alone")
+        void alreadySignedInAccountIs409EvenWithTheMarkerAndExpiredCredentials() {
+            User signedInBefore = user();
+            signedInBefore.setLastSuccessfulLoginAt(NOW.minus(Duration.ofDays(1)));
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(signedInBefore));
+            TenantContext.bind(PlatformTenant.ID);
+
+            assertThatThrownBy(() -> service.mint(TENANT, USER)).isInstanceOf(UserNotAwaitingActivationException.class);
+            verify(tokens, never()).save(any());
+        }
+
+        @Test
         @DisplayName("inside a transaction the audit event waits for the commit and its failure is only a WARN")
         void auditIsEmittedAfterCommit() {
             when(auditProvider.getIfAvailable()).thenReturn(audit);
@@ -288,6 +306,14 @@ class AdministratorActivationServiceTest {
             when(tokens.findByTokenHash(HASH)).thenReturn(Optional.of(row));
             when(tokens.consume(row.getId(), NOW)).thenReturn(1);
             User user = user();
+            // Attempts made against the unmatchable provisioning password before activation (WS2b-3
+            // review): the login pre-flight lockout check runs before AuthenticationManager rejects
+            // the credentials, so this bookkeeping accrues even while the account is awaiting
+            // activation.
+            user.setFailedLoginAttempts(3);
+            user.setAccountNonLocked(false);
+            user.setLockedAt(NOW.minus(Duration.ofMinutes(5)));
+            user.setLockedUntil(NOW.plus(Duration.ofMinutes(10)));
             AtomicReference<UUID> boundDuringUpdate = new AtomicReference<>();
             when(users.findByIdForUpdate(USER)).thenAnswer(inv -> {
                 boundDuringUpdate.set(TenantContext.require());
@@ -305,14 +331,41 @@ class AdministratorActivationServiceTest {
             assertThat(user.isCredentialsNonExpired()).isTrue();
             assertThat(user.getCredentialsExpireAt()).isNull();
             assertThat(user.isAwaitingActivation()).as("the marker is cleared").isFalse();
+            assertThat(user.isAccountNonLocked())
+                    .as("pre-activation lockout must not survive activation")
+                    .isTrue();
+            assertThat(user.getFailedLoginAttempts()).isZero();
+            assertThat(user.getLockedAt()).isNull();
+            assertThat(user.getLockedUntil()).isNull();
             verify(users).save(user);
             verify(users, never()).findById(any());
+            // Every token minted for the username before activation (JwtController#issueInternalToken
+            // / #generateTokenPair, which check neither password nor awaiting-activation state) must
+            // not keep authenticating once credentialsNonExpired flips true.
+            verify(jwtService).revokeAllTokensForUser(user.getUsername());
             // The user lock is taken before the token is consumed, the same order issue() uses, so a
             // concurrent mint cannot slip a fresh token in between the consume and the password write.
             InOrder inOrder = inOrder(users, tokens);
             inOrder.verify(users).findByIdForUpdate(USER);
             inOrder.verify(tokens).consume(row.getId(), NOW);
             inOrder.verify(users).save(user);
+        }
+
+        @Test
+        @DisplayName("an account that has already signed in is refused even with the marker set and credentials "
+                + "expired: the never-signed-in invariant is not the marker alone")
+        void alreadySignedInAccountIsInvalidEvenWithTheMarkerAndExpiredCredentials() {
+            UserActivationToken row = row(HASH, NOW.plus(Duration.ofHours(1)), null);
+            when(tokens.findByTokenHash(HASH)).thenReturn(Optional.of(row));
+            User signedInBefore = user();
+            signedInBefore.setLastSuccessfulLoginAt(NOW.minus(Duration.ofDays(1)));
+            when(users.findByIdForUpdate(USER)).thenReturn(Optional.of(signedInBefore));
+
+            assertThatThrownBy(() -> service.activate(TOKEN, "Sup3rS3cret!"))
+                    .isInstanceOf(ActivationTokenInvalidException.class);
+            verify(tokens, never()).consume(any(), any());
+            verify(users, never()).save(any());
+            verify(jwtService, never()).revokeAllTokensForUser(anyString());
         }
 
         @Test

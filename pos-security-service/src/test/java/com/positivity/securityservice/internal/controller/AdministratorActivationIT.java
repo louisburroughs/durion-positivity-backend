@@ -10,14 +10,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.securityservice.BaseContractIntegrationTest;
+import com.positivity.securityservice.internal.dto.UserUpdateRequest;
+import com.positivity.securityservice.internal.entity.ExtTenant;
 import com.positivity.securityservice.internal.entity.Role;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.entity.UserActivationToken;
 import com.positivity.securityservice.internal.exception.ActivationTokenInvalidException;
+import com.positivity.securityservice.internal.repository.AuditLogEventRepository;
+import com.positivity.securityservice.internal.repository.ExtTenantRepository;
 import com.positivity.securityservice.internal.repository.RoleAssignmentRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
 import com.positivity.securityservice.internal.repository.UserActivationTokenRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.internal.security.service.JwtService;
 import com.positivity.securityservice.internal.service.AdministratorActivationService;
 import com.positivity.securityservice.internal.service.UserService;
 import com.positivity.tenancy.PlatformTenant;
@@ -27,6 +32,8 @@ import com.positivity.tenancy.web.TenantContextFilter;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -37,6 +44,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -74,6 +83,9 @@ class AdministratorActivationIT extends BaseContractIntegrationTest {
     private UserActivationTokenRepository tokenRepository;
 
     @Autowired
+    private AuditLogEventRepository auditLogEventRepository;
+
+    @Autowired
     private UserService userService;
 
     @Autowired
@@ -81,6 +93,15 @@ class AdministratorActivationIT extends BaseContractIntegrationTest {
 
     @Autowired
     private AdministratorActivationService.BoundOperations boundOperations;
+
+    @Autowired
+    private ExtTenantRepository extTenantRepository;
+
+    @Autowired
+    private JwtService jwtService;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Autowired
     private TenantContextFilter tenantContextFilter;
@@ -165,6 +186,14 @@ class AdministratorActivationIT extends BaseContractIntegrationTest {
                 .as("only the hash is stored")
                 .isPresent();
         assertThat(tokenRepository.findAll()).noneMatch(row -> token.equals(row.getTokenHash()));
+        // The mint audit row is written from an afterCommit callback in a dedicated REQUIRES_NEW
+        // transaction (AdministratorActivationService.MintAuditWriter); querying it back here,
+        // after the HTTP call that minted the token has already returned, is the proof that the
+        // insert actually committed rather than silently joining the already-completed mint
+        // transaction and being discarded.
+        assertThat(auditLogEventRepository.findByEventTypeOrderByTimestampDesc("AdministratorActivationTokenMinted"))
+                .as("the mint audit row is durable")
+                .anyMatch(event -> userId.toString().equals(event.getEntityId()));
 
         // 3. Still no login: a token is not a password.
         login(token)
@@ -259,6 +288,179 @@ class AdministratorActivationIT extends BaseContractIntegrationTest {
                 .as("the account is still awaiting activation")
                 .isFalse();
         tokenRepository.delete(expired);
+    }
+
+    @Test
+    @DisplayName("a token minted for the account before activation is revoked by activation, not usable afterwards")
+    void preActivationTokenIsRevokedByActivation() throws Exception {
+        // A trusted internal caller can mint an access token for the still-awaiting-activation
+        // username with no password or awaiting-activation check at all
+        // (JwtController#issueInternalToken / #generateTokenPair mint this way).
+        String preActivationToken = jwtService.generateToken(USERNAME, userId, Set.of("ADMIN"));
+
+        // Before activation: JwtAuthenticationFilter's account-status check rejects it — the same
+        // 401 as a bad credential — because credentialsNonExpired is still false.
+        mockMvc.perform(get("/v1/auth/subject").header("Authorization", "Bearer " + preActivationToken))
+                .andExpect(status().isUnauthorized());
+
+        String token = mintToken();
+        activate(token, NEW_PASSWORD).andExpect(status().isNoContent());
+
+        // After activation: without revocation this same token would now authenticate, since
+        // credentialsNonExpired flipped true — bypassing the operator-delivered token the
+        // administrator was required to exchange. It must still be refused.
+        mockMvc.perform(get("/v1/auth/subject").header("Authorization", "Bearer " + preActivationToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName(
+            "PUT /v1/users/{id} takes the same pessimistic lock mint/activate take, so it cannot race the exchange")
+    void updateUserSerializesAgainstTheActivationLock() throws Exception {
+        CountDownLatch lockHeld = new CountDownLatch(1);
+        CountDownLatch releaseLock = new CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicLong releasedAtNanos = new java.util.concurrent.atomic.AtomicLong();
+        java.util.concurrent.atomic.AtomicLong updateDoneAtNanos = new java.util.concurrent.atomic.AtomicLong();
+        java.util.concurrent.atomic.AtomicReference<Throwable> updateFailure =
+                new java.util.concurrent.atomic.AtomicReference<>();
+
+        // Holds the same PESSIMISTIC_WRITE lock issue()/exchange() take, in its own open
+        // transaction, until told to let go.
+        Thread holder = new Thread(
+                () -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                    userRepository.findByIdForUpdate(userId);
+                    lockHeld.countDown();
+                    try {
+                        releaseLock.await(10, TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }),
+                "ws2b3-lock-holder");
+        holder.start();
+        assertThat(lockHeld.await(5, TimeUnit.SECONDS))
+                .as("the holder thread took the pessimistic lock")
+                .isTrue();
+
+        UserUpdateRequest request = new UserUpdateRequest();
+        request.setPassword("Ra3cedButSerialized!");
+        Thread updater = new Thread(
+                () -> {
+                    try {
+                        userService.updateUser(userId, request);
+                    } catch (Throwable t) {
+                        updateFailure.set(t);
+                    } finally {
+                        updateDoneAtNanos.set(System.nanoTime());
+                    }
+                },
+                "ws2b3-concurrent-update-user");
+        updater.start();
+
+        // Give the updater a real chance to reach and block on the same row lock before releasing
+        // it; the actual proof below is the happens-before ordering, not this sleep.
+        Thread.sleep(500);
+        releasedAtNanos.set(System.nanoTime());
+        releaseLock.countDown();
+
+        holder.join(10_000);
+        updater.join(10_000);
+
+        assertThat(updateFailure.get())
+                .as("the update must succeed once it can finally take the lock")
+                .isNull();
+        assertThat(updateDoneAtNanos.get())
+                .as("the password update cannot have completed before the activation-shaped lock was released — "
+                        + "without findByIdForUpdate it would have read the row and raced past instead")
+                .isGreaterThanOrEqualTo(releasedAtNanos.get());
+    }
+
+    @Test
+    @DisplayName("activation with no X-Tenant-Id rebinds to the token's own tenant, not the request's ambient default")
+    void activationRebindsToTheTokenTenantAcrossTenants() throws Exception {
+        UUID otherTenant = UUID.fromString("01990000-0000-7000-8000-0000000000aa");
+        assertThat(otherTenant)
+                .as("distinct from the ambient default the H2 request filter binds on every unbound request")
+                .isNotEqualTo(defaultTenant);
+        String otherUsername = "ws2b3.other-tenant.owner@acme.example";
+        extTenantRepository.save(ExtTenant.builder()
+                .tenantId(otherTenant)
+                .slug("ws2b3-other-tenant")
+                .displayName("WS2b-3 other tenant")
+                .status("ACTIVE")
+                .aggregateVersion(1L)
+                .updatedAt(Instant.now())
+                .build());
+
+        // A distinct role name, not "ADMIN": the H2 test schema maps Role#name with a plain unique
+        // column (create-drop from the entity), while the real Postgres baseline scopes it
+        // (tenant_id, name) (V1__baseline_security_service.sql); reusing "ADMIN" here would collide
+        // with the row the outer @BeforeEach already created for defaultTenant.
+        String otherTenantRoleName = "WS2B3_OTHER_TENANT_ADMIN";
+        UUID otherUserId = TenantContext.callAs(otherTenant, () -> {
+            if (!roleRepository.existsByName(otherTenantRoleName)) {
+                Role role = new Role();
+                role.setName(otherTenantRoleName);
+                role.setDescription("WS2b-3 cross-tenant test role");
+                role.setCreatedBy("ws2b-3-test");
+                roleRepository.save(role);
+            }
+            return userService
+                    .createUserAwaitingActivation(otherUsername, Set.of(otherTenantRoleName))
+                    .getId();
+        });
+
+        try {
+            String otherToken = TenantContext.callAs(
+                            PlatformTenant.ID, () -> activationService.mint(otherTenant, otherUserId))
+                    .token();
+
+            // No X-Tenant-Id header at all: the H2 profile's request filter binds only the ambient
+            // default (defaultTenant) here, a different tenant than the token's own. If activation
+            // used that ambient binding instead of rebinding to row.getTenantId(), the pessimistic
+            // lookup's Hibernate @TenantId filter would not find otherUserId's row, and this would
+            // answer 401 ACTIVATION_TOKEN_INVALID instead.
+            activate(otherToken, NEW_PASSWORD).andExpect(status().isNoContent());
+
+            User activated = TenantContext.callAs(
+                    otherTenant, () -> userRepository.findById(otherUserId).orElseThrow());
+            assertThat(activated.isAwaitingActivation()).isFalse();
+            assertThat(activated.isCredentialsNonExpired()).isTrue();
+
+            // And the administrator can now sign in bound to that tenant via its slug, not the
+            // ambient default.
+            JsonNode loginBody = objectMapper
+                    .createObjectNode()
+                    .put("username", otherUsername)
+                    .put("password", NEW_PASSWORD)
+                    .put("tenantSlug", "ws2b3-other-tenant");
+            mockMvc.perform(post("/v1/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(loginBody)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.accessToken").isString());
+        } finally {
+            TenantContext.runAs(otherTenant, () -> {
+                tokenRepository.deleteAll(tokenRepository.findAll().stream()
+                        .filter(row -> otherUserId.equals(row.getUserId()))
+                        .toList());
+                userRepository.findById(otherUserId).ifPresent(user -> {
+                    roleAssignmentRepository.deleteAll(roleAssignmentRepository.findByUser(user));
+                    userRepository.delete(user);
+                });
+            });
+            extTenantRepository.deleteById(otherTenant);
+        }
+    }
+
+    private String mintToken() throws Exception {
+        String body = mockMvc.perform(withAuth(post(mintPath()), PLATFORM_AUTHORITIES)
+                        .header(TenantHeaders.HTTP_TENANT_ID, PlatformTenant.ID.toString()))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return objectMapper.readTree(body).path("token").stringValue();
     }
 
     private org.springframework.test.web.servlet.ResultActions login(String password) throws Exception {

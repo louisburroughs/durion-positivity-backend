@@ -104,8 +104,14 @@ public class SecurityGatewayConfig {
     private static final String ERROR_CODE_UNAUTHORIZED = "UNAUTHORIZED";
     private static final String ERROR_CODE_INTERNAL_PATH = "INTERNAL_PATH";
     private static final String ERROR_MESSAGE_INTERNAL_PATH = "Internal service paths are not exposed by the gateway";
-    /** {@code /<service>/internal/...}: every module's service-to-service surface lives there. */
-    private static final Pattern INTERNAL_SERVICE_PATH = Pattern.compile("^/[^/]+/internal(?:/.*)?$");
+    /**
+     * Every module's service-to-service surface lives under {@code /<service>/internal/...}.
+     * {@link com.positivity.gateway.filter.ApiVersionHeaderToPathFilter} runs first and injects the
+     * {@code X-API-Version} segment, so the same request also reaches this filter as {@code
+     * /<service>/v1/internal/...}; both spellings are refused, and the refusal therefore does not
+     * depend on where the version filter happens to run in the chain.
+     */
+    private static final Pattern INTERNAL_SERVICE_PATH = Pattern.compile("^/[^/]+(?:/v\\d+)?/internal(?:/.*)?$");
 
     private static final String ERROR_MESSAGE_TOKEN_REVOKED = "Access token has been revoked";
     private static final String ERROR_MESSAGE_UNAUTHORIZED = "Authentication is required to access this resource";

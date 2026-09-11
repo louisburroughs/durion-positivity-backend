@@ -10,6 +10,7 @@ import com.positivity.securityservice.internal.exception.UserNotAwaitingActivati
 import com.positivity.securityservice.internal.exception.UserNotFoundException;
 import com.positivity.securityservice.internal.repository.UserActivationTokenRepository;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.internal.security.service.JwtService;
 import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.TenantContext;
 import java.nio.charset.StandardCharsets;
@@ -30,6 +31,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -143,7 +145,8 @@ public class AdministratorActivationService {
         private final UserRepository userRepository;
         private final UserActivationTokenRepository tokenRepository;
         private final PasswordEncoder passwordEncoder;
-        private final ObjectProvider<AuditEventService> auditEventService;
+        private final MintAuditWriter mintAuditWriter;
+        private final JwtService jwtService;
         private final Clock clock;
 
         /** Under the target tenant's binding: the user must be visible there. */
@@ -198,7 +201,9 @@ public class AdministratorActivationService {
             // (409) instead of committing a fresh token that could redeem against the live password.
             // A user hidden by row-level security (the row's tenant no longer holds it), or one no
             // longer awaiting activation, is the same refusal as an unknown token: nothing about the
-            // account is revealed to the unauthenticated caller.
+            // account is revealed to the unauthenticated caller. An ordinary password update through
+            // PUT /v1/users/{id} takes the same lock (UserServiceImpl#updateUser, WS2b-3 review), so
+            // it cannot read this row before this exchange and commit its own, stale copy afterwards.
             User user =
                     userRepository.findByIdForUpdate(row.getUserId()).orElseThrow(ActivationTokenInvalidException::new);
             if (!isAwaitingActivation(user)) {
@@ -212,7 +217,28 @@ public class AdministratorActivationService {
             user.setCredentialsNonExpired(true);
             user.setCredentialsExpireAt(null);
             user.setAwaitingActivation(false);
+            // Lockout bookkeeping (WS2b-3 review): AuthenticationServiceImpl records failed
+            // attempts against this userId even while the account is awaiting activation (the
+            // pre-flight lockout check runs before AuthenticationManager, which is what rejects the
+            // unmatchable password), so attempts made before activation can otherwise leave the
+            // freshly activated administrator still locked out. Reset the same fields
+            // AdminAccountStateServiceImpl#unlock clears.
+            user.setAccountNonLocked(true);
+            user.setFailedLoginAttempts(0);
+            user.setLockedAt(null);
+            user.setLockedUntil(null);
             userRepository.save(user);
+            // Token revocation (WS2b-3 review): JwtController#issueInternalToken and
+            // #generateTokenPair mint tokens for an existing username with no password or
+            // awaiting-activation check at all (trusted internal callers only). Such a token minted
+            // before activation is rejected by JwtAuthenticationFilter's account-status check only
+            // while credentialsNonExpired is false; the moment this method sets it true, that same
+            // pre-activation token starts authenticating, bypassing the operator-delivered token the
+            // administrator was required to exchange for their own password. Revoking every stored
+            // token for the username the same way AdminAccountStateServiceImpl#disable /
+            // #expireAccount / #expireCredentials already do closes that window: nothing minted
+            // before this commit survives it.
+            jwtService.revokeAllTokensForUser(user.getUsername());
             log.info(
                     "Administrator {} ({}) of tenant {} activated with token {}",
                     user.getUsername(),
@@ -227,11 +253,17 @@ public class AdministratorActivationService {
          * sets and that activation and every ordinary password set clear. Credential state alone
          * cannot tell that account from a live one whose credentials an administrator expired
          * before its first login, so the marker decides; the expired-credentials invariant of the
-         * provisioning state is kept as a defensive AND. A live account keeps its password — a
-         * token must never overwrite it.
+         * provisioning state is kept as a defensive AND. The never-signed-in invariant is kept the
+         * same way (WS2b-3 review): the marker alone does not prove the account has never
+         * authenticated — a defect or a hand-edited row could carry the marker with a non-null
+         * {@code lastSuccessfulLoginAt} — and a token or a mint must never replace the password of
+         * an account that has already signed in. A live account keeps its password — a token must
+         * never overwrite it.
          */
         static boolean isAwaitingActivation(@NonNull User user) {
-            return user.isAwaitingActivation() && !user.isCredentialsNonExpired();
+            return user.isAwaitingActivation()
+                    && !user.isCredentialsNonExpired()
+                    && user.getLastSuccessfulLoginAt() == null;
         }
 
         /**
@@ -253,14 +285,43 @@ public class AdministratorActivationService {
         }
 
         private void audit(AuditLogEventRequest request) {
-            AuditEventService service = auditEventService.getIfAvailable();
-            if (service == null) {
-                return;
-            }
             try {
-                service.createEvent(request);
+                mintAuditWriter.write(request);
             } catch (RuntimeException e) {
                 log.warn("Audit event emission failed: {}", e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Commits the mint audit row in its own transaction, a dedicated bean so the {@code
+     * @Transactional} proxy applies (the same reason {@link BoundOperations} is split out of the
+     * outer service).
+     *
+     * <p>{@link AuditEventService#createEvent} is {@code @Transactional} with the default {@code
+     * REQUIRED} propagation, and {@link BoundOperations#auditAfterCommit} runs it from an {@code
+     * afterCommit} synchronization callback. At that point the just-committed transaction's
+     * resources (its {@code EntityManagerHolder}) are still thread-bound — Spring only unbinds
+     * them once every {@code afterCommit} synchronization has run — so a plain {@code REQUIRED}
+     * call here would "join" that already-committed, about-to-be-discarded transaction instead of
+     * opening a fresh one: the insert would land in the stale persistence context but never
+     * actually be committed, since only the transaction that started it calls commit. {@code
+     * REQUIRES_NEW} suspends whatever is still thread-bound and opens a genuinely new transaction
+     * on its own connection, so this write gets its own real commit. See {@link
+     * RoleAssignmentTokenRevocationListener}'s javadoc for the same mechanism applied to token
+     * revocation, the pattern this follows.
+     */
+    @Component
+    @RequiredArgsConstructor
+    static class MintAuditWriter {
+
+        private final ObjectProvider<AuditEventService> auditEventService;
+
+        @Transactional(propagation = Propagation.REQUIRES_NEW)
+        void write(@NonNull AuditLogEventRequest request) {
+            AuditEventService service = auditEventService.getIfAvailable();
+            if (service != null) {
+                service.createEvent(request);
             }
         }
     }
