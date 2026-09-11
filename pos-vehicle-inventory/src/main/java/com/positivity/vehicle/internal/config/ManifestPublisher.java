@@ -4,6 +4,8 @@ import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.ReconciliationManifestV1;
 import com.positivity.domainevents.UuidV7Timestamps;
 import com.positivity.tenancy.PlatformScoped;
+import com.positivity.tenancy.PlatformTenant;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import com.positivity.vehicle.internal.entity.OutboxEvent;
 import com.positivity.vehicle.internal.repository.OutboxEventRepository;
 import io.micrometer.core.instrument.Counter;
@@ -107,7 +109,7 @@ public class ManifestPublisher {
 
     @PlatformScoped(
             reason = "summarises event_outbox, a global table, per window across every tenant; consumers compare"
-                    + " against their global processed-events ledger (per-tenant manifests are plan WS8)")
+                    + " against their global processed-events ledger (per-tenant manifests are plan WS4-3)")
     @Scheduled(fixedDelayString = "${pos.vehicle-inventory.manifest.poll-interval-ms:300000}")
     public void publishDueManifest() {
         Instant latestClosed = latestClosedWindowEnd();
@@ -184,19 +186,27 @@ public class ManifestPublisher {
                 ReconciliationManifestV1.checksumOf(eventIds),
                 eventTypeCounts.isEmpty() ? null : eventTypeCounts);
 
+        // A manifest summarises every tenant's rows of the window, so it is a platform-tenant
+        // record: envelope and Kafka header both carry PlatformTenant.ID and the consumer's
+        // listener runs under it (per-tenant manifests are plan WS4-3).
         DomainEventEnvelope<ReconciliationManifestV1> envelope = DomainEventEnvelope.of(
                 ReconciliationManifestV1.eventTypeFor(DOMAIN),
                 ReconciliationManifestV1.SCHEMA_VERSION,
                 manifestAggregateId(windowStart),
                 windowStart.getEpochSecond(),
                 "pos-vehicle-inventory",
+                PlatformTenant.ID,
                 null,
                 null,
                 manifest,
                 clock);
 
         kafkaTemplate
-                .send(manifestTopic, envelope.recordKey(), objectMapper.writeValueAsString(envelope))
+                .send(TenantKafkaHeaders.record(
+                        manifestTopic,
+                        envelope.recordKey(),
+                        objectMapper.writeValueAsString(envelope),
+                        PlatformTenant.ID))
                 .get(sendTimeoutMs, TimeUnit.MILLISECONDS);
         log.info(
                 "Published reconciliation manifest window=[{}, {}) events={} topic={}",

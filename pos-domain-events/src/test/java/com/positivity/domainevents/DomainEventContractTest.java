@@ -175,7 +175,17 @@ class DomainEventContractTest {
         // dropped in production and no consumer ever saw one (#1289). A regex cannot catch that;
         // only the real constructor can.
         assertThatCode(() -> new DomainEventEnvelope<>(
-                        SAMPLE_UUID, type, 1, SAMPLE_UUID, 0L, SAMPLE_INSTANT, "pos-sample", null, null, "payload"))
+                        SAMPLE_UUID,
+                        type,
+                        1,
+                        SAMPLE_UUID,
+                        0L,
+                        SAMPLE_INSTANT,
+                        "pos-sample",
+                        SAMPLE_UUID,
+                        null,
+                        null,
+                        "payload"))
                 .as(
                         "%s.EVENT_TYPE (%s) is rejected by DomainEventEnvelope, so publishing it throws."
                                 + " Event types are dotted lowercase with hyphens, never underscores.",

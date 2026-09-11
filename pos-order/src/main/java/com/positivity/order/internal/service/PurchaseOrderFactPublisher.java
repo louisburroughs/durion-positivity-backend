@@ -74,6 +74,8 @@ public class PurchaseOrderFactPublisher {
                         versionOf(order),
                         Instant.now(clock),
                         SOURCE,
+                        // tenantId: stamped by the outbox writer from the bound tenant (ADR-0062 §3)
+                        null,
                         null,
                         order.getUpdatedBy(),
                         toFact(order, lines, Instant.now(clock))));

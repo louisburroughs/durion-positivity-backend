@@ -10,6 +10,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.ReconciliationManifestV1;
+import com.positivity.tenancy.PlatformTenant;
+import com.positivity.tenancy.kafka.TenantKafkaHeaders;
 import com.positivity.workorder.internal.config.ManifestPublisher;
 import com.positivity.workorder.internal.entity.OutboxEvent;
 import com.positivity.workorder.internal.repository.OutboxEventRepository;
@@ -21,6 +23,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -60,7 +63,7 @@ class ManifestPublisherTest {
         ReflectionTestUtils.setField(publisher, "window", Duration.ofHours(1));
         ReflectionTestUtils.setField(publisher, "grace", Duration.ofMinutes(5));
         ReflectionTestUtils.setField(publisher, "sendTimeoutMs", 1000L);
-        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+        when(kafkaTemplate.send(any(ProducerRecord.class)))
                 .thenReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
     }
 
@@ -97,11 +100,9 @@ class ManifestPublisherTest {
 
         publisher.publishDueManifest();
 
-        ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
-        verify(kafkaTemplate)
-                .send(org.mockito.ArgumentMatchers.eq("workorder.manifest.v1"), anyString(), json.capture());
+        String json = capturedRecords(1).get(0).value();
 
-        JsonNode envelope = objectMapper.readTree(json.getValue());
+        JsonNode envelope = objectMapper.readTree(json);
         assertThat(envelope.path("eventType").stringValue()).isEqualTo("workorder.reconciliation.manifest");
         assertThat(envelope.path("sourceService").stringValue()).isEqualTo("pos-workorder");
         JsonNode manifest = envelope.path("payload");
@@ -124,9 +125,8 @@ class ManifestPublisherTest {
 
         publisher.publishDueManifest();
 
-        ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
-        verify(kafkaTemplate).send(anyString(), anyString(), json.capture());
-        JsonNode manifest = objectMapper.readTree(json.getValue()).path("payload");
+        String json = capturedRecords(1).get(0).value();
+        JsonNode manifest = objectMapper.readTree(json).path("payload");
         assertThat(manifest.path("eventCount").longValue()).isZero();
         assertThat(manifest.path("eventIdsChecksum").stringValue())
                 .isEqualTo(ReconciliationManifestV1.checksumOf(List.of()));
@@ -141,7 +141,7 @@ class ManifestPublisherTest {
         publisher.publishDueManifest();
         publisher.publishDueManifest();
 
-        verify(kafkaTemplate, times(1)).send(anyString(), anyString(), anyString());
+        verify(kafkaTemplate, times(1)).send(any(ProducerRecord.class));
     }
 
     @Test
@@ -149,14 +149,14 @@ class ManifestPublisherTest {
     void retriesWindowAfterSendFailure() {
         when(repository.findByTopicAndPublishedAtIsNotNullAndCreatedAtBetween(anyString(), any(), any()))
                 .thenReturn(List.of());
-        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+        when(kafkaTemplate.send(any(ProducerRecord.class)))
                 .thenReturn(CompletableFuture.failedFuture(new RuntimeException("broker down")))
                 .thenReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
 
         publisher.publishDueManifest();
         publisher.publishDueManifest();
 
-        verify(kafkaTemplate, times(2)).send(anyString(), anyString(), anyString());
+        verify(kafkaTemplate, times(2)).send(any(ProducerRecord.class));
     }
 
     @Test
@@ -170,9 +170,8 @@ class ManifestPublisherTest {
 
         // 12:10 with 15m grace → [11:00, 12:00) not yet eligible; the eligible window is the
         // previous one, so the manifest published covers [10:00, 11:00).
-        ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
-        verify(kafkaTemplate).send(anyString(), anyString(), json.capture());
-        JsonNode manifest = objectMapper.readTree(json.getValue()).path("payload");
+        String json = capturedRecords(1).get(0).value();
+        JsonNode manifest = objectMapper.readTree(json).path("payload");
         assertThat(manifest.path("windowEndUtc").stringValue()).isEqualTo("2026-07-08T11:00:00Z");
     }
 
@@ -193,10 +192,9 @@ class ManifestPublisherTest {
 
         publisher.publishDueManifest();
 
-        ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
-        verify(kafkaTemplate).send(anyString(), anyString(), json.capture());
+        String json = capturedRecords(1).get(0).value();
         assertThat(objectMapper
-                        .readTree(json.getValue())
+                        .readTree(json)
                         .path("payload")
                         .path("eventCount")
                         .longValue())
@@ -212,9 +210,8 @@ class ManifestPublisherTest {
 
         publisher.publishDueManifest();
 
-        ArgumentCaptor<String> messages = ArgumentCaptor.forClass(String.class);
-        verify(kafkaTemplate, times(3)).send(anyString(), anyString(), messages.capture());
-        List<String> ends = messages.getAllValues().stream()
+        List<String> ends = capturedRecords(3).stream()
+                .map(ProducerRecord::value)
                 .map(m -> objectMapper
                         .readTree(m)
                         .path("payload")
@@ -254,9 +251,26 @@ class ManifestPublisherTest {
 
         publisher.publishDueManifest();
 
-        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
-        verify(kafkaTemplate).send(anyString(), anyString(), message.capture());
-        JsonNode manifest = objectMapper.readTree(message.getValue()).path("payload");
+        String message = capturedRecords(1).get(0).value();
+        JsonNode manifest = objectMapper.readTree(message).path("payload");
         assertThat(manifest.path("eventCount").intValue()).isEqualTo(1);
+    }
+
+    /**
+     * The records handed to Kafka, after checking each carries the platform tenant on the header
+     * and in the envelope: a manifest summarises every tenant's rows, so it is a platform-tenant
+     * record until plan WS4-3 makes it per tenant (ADR-0062 §3).
+     */
+    @SuppressWarnings("unchecked")
+    private List<ProducerRecord<String, String>> capturedRecords(int expected) {
+        ArgumentCaptor<ProducerRecord<String, String>> records = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(kafkaTemplate, times(expected)).send(records.capture());
+        for (ProducerRecord<String, String> record : records.getAllValues()) {
+            assertThat(record.topic()).isEqualTo("workorder.manifest.v1");
+            assertThat(TenantKafkaHeaders.read(record.headers())).contains(PlatformTenant.ID);
+            assertThat(objectMapper.readTree(record.value()).path("tenantId").stringValue())
+                    .isEqualTo(PlatformTenant.ID.toString());
+        }
+        return records.getAllValues();
     }
 }

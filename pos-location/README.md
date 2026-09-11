@@ -232,7 +232,7 @@ Platform-scoped schedulers (run with no tenant bound; touch only global tables):
 | Job | Why |
 | --- | --- |
 | `OutboxPublisher.publishPending` | Drains `event_outbox`; each row's `tenant_id` becomes the record header |
-| `ManifestPublisher.publishDueManifest` | Summarises `event_outbox` per window across tenants; per-tenant manifests are plan WS8 |
+| `ManifestPublisher.publishDueManifest` | Summarises `event_outbox` per window across tenants; each manifest is a platform-tenant record until per-tenant manifests land in plan WS4-3 |
 
 Proof: `TenantIsolationIT` (tenant A's row is invisible to tenant B and to an unbound connection,
 through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every non-whitelisted

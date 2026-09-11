@@ -103,6 +103,8 @@ public class WorkorderAuthorizationPublisher {
                         0L,
                         occurredAt,
                         SOURCE,
+                        // tenantId: stamped by the outbox writer from the bound tenant (ADR-0062 §3)
+                        null,
                         null,
                         SOURCE,
                         payload));
