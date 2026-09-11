@@ -1,11 +1,14 @@
 package com.positivity.bulkloader.internal.service;
 
+import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.exception.BulkLoadTenantException;
 import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.TenancyProperties;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantRegistry;
+import java.util.EnumSet;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,11 +22,23 @@ import org.springframework.stereotype.Component;
  *
  * <p>The target is the request's {@code tenantId}. It must be a tenant the module's {@link
  * TenantRegistry} lists as active, or the platform tenant (platform data: the role template's
- * {@code roles.csv}). A bound caller may only load into its own tenant — the platform tenant's
- * operator included, who therefore loads platform data and nothing else. A request that names no
- * tenant is refused unless the transitional default tenant ({@code pos.tenancy.default-tenant-id},
- * ADR-0062 §9) is configured, in which case the default is used and a WARN says so: the job will
- * fail loudly once the default is retired rather than silently landing somewhere.
+ * {@code roles.csv} / {@code role-permissions.csv}, {@link #PLATFORM_TENANT_DOMAIN_TYPES}). A bound
+ * caller may only load into its own tenant — the platform tenant's operator included, who therefore
+ * loads platform data and nothing else. A request that names no tenant is refused unless the
+ * transitional default tenant ({@code pos.tenancy.default-tenant-id}, ADR-0062 §9) is configured, in
+ * which case the default is used and a WARN says so: the job will fail loudly once the default is
+ * retired rather than silently landing somewhere.
+ *
+ * <h2>Why the platform tenant is restricted to specific domain types</h2>
+ *
+ * <p>{@code scripts/seed-alpha.py} refuses to target the platform tenant for any pack but the two
+ * security role packs, but a client-side allow-list enforces nothing on its own: a direct API caller
+ * bound to the platform tenant could otherwise create a job of any {@link DomainType} there, and
+ * {@code BulkLoadJobServiceImpl} would relay that platform binding into a sibling service that has
+ * no idea the tenant is special, writing control-plane data as though it were an ordinary tenant's.
+ * This class is what makes the documented restriction (ADR-0062 §7; {@code
+ * docs/OPERATIONS_RUNBOOK.md} "Bulk loading into a tenant") true at the server, not only in the
+ * driver script (Copilot review of PR #1955, Finding 5).
  *
  * <h2>Why a platform caller may not load into a tenant</h2>
  *
@@ -46,16 +61,28 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class BulkLoadTenantBinding {
 
+    /**
+     * The only {@link DomainType}s a job may target when it resolves to the platform tenant: the
+     * role-template packs {@code security/roles.csv} and {@code security/role-permissions.csv}
+     * ({@code docs/OPERATIONS_RUNBOOK.md} "Bulk loading into a tenant"). Every other domain writes
+     * data the platform tenant does not own.
+     */
+    private static final Set<DomainType> PLATFORM_TENANT_DOMAIN_TYPES =
+            EnumSet.of(DomainType.SECURITY_ROLE, DomainType.SECURITY_ROLE_PERMISSION);
+
     private final TenantRegistry tenantRegistry;
     private final TenancyProperties tenancyProperties;
 
     /**
      * @param requested the request's {@code tenantId}, or null when the request named none
+     * @param domainType the job's domain type, checked against {@link #PLATFORM_TENANT_DOMAIN_TYPES}
+     *     when the target resolves to the platform tenant
      * @return the tenant to bind the job to
      * @throws BulkLoadTenantException when no tenant can be resolved, the tenant is not one the
-     *     module knows as active, or the caller may not load into it
+     *     module knows as active, the caller may not load into it, or the target is the platform
+     *     tenant and {@code domainType} is not one of its packs
      */
-    public @NonNull UUID resolveTarget(@Nullable UUID requested) {
+    public @NonNull UUID resolveTarget(@Nullable UUID requested, @NonNull DomainType domainType) {
         Optional<UUID> bound = TenantContext.current();
         UUID target = requested != null ? requested : transitionalDefault();
         if (!isLoadable(target)) {
@@ -75,6 +102,14 @@ public class BulkLoadTenantBinding {
                     "A caller bound to tenant " + bound.get() + " cannot load into tenant " + target
                             + "; a bulk load job runs under the creating caller's own binding and operator, so a job"
                             + " created in another tenant could not be uploaded, processed or polled by anyone");
+        }
+        if (PlatformTenant.isPlatform(target) && !PLATFORM_TENANT_DOMAIN_TYPES.contains(domainType)) {
+            throw new BulkLoadTenantException(
+                    BulkLoadTenantException.TENANT_DOMAIN_FORBIDDEN,
+                    HttpStatus.FORBIDDEN,
+                    "The platform tenant only accepts " + PLATFORM_TENANT_DOMAIN_TYPES + " jobs; " + domainType
+                            + " writes data the platform tenant does not own. Target the caller's own tenant"
+                            + " instead.");
         }
         return target;
     }

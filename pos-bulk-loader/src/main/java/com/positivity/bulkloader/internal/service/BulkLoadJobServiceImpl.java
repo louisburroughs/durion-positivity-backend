@@ -88,7 +88,7 @@ public class BulkLoadJobServiceImpl implements BulkLoadJobService {
      */
     @Override
     public BulkLoadJobResponse createJob(@NonNull BulkLoadJobCreateRequest request, @NonNull String operatorId) {
-        UUID tenantId = tenantBinding.resolveTarget(request.getTenantId());
+        UUID tenantId = tenantBinding.resolveTarget(request.getTenantId(), request.getDomainType());
         return TenantContext.callAs(
                 tenantId,
                 () -> transactionTemplate.execute(status -> createJobInTenant(request, operatorId, tenantId)));

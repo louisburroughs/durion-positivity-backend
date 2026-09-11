@@ -93,7 +93,7 @@ class BulkLoadJobServiceImplTest {
         BulkLoadJob saved = savedJob(JOB_ID, OPERATOR_ID, JobStatus.CREATED);
         AtomicReference<Optional<UUID>> boundDuringSave = new AtomicReference<>();
 
-        when(tenantBinding.resolveTarget(TENANT)).thenReturn(TENANT);
+        when(tenantBinding.resolveTarget(TENANT, DomainType.CATALOG_PRODUCT)).thenReturn(TENANT);
         when(jobRepository.countByOperatorIdAndStatusIn(any(), any())).thenReturn(0L);
         when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> {
             boundDuringSave.set(TenantContext.current());
@@ -127,7 +127,7 @@ class BulkLoadJobServiceImplTest {
         BulkLoadJob saved = savedJob(JOB_ID, OPERATOR_ID, JobStatus.CREATED);
         AtomicReference<Optional<UUID>> boundDuringSave = new AtomicReference<>();
 
-        when(tenantBinding.resolveTarget(TENANT)).thenReturn(TENANT);
+        when(tenantBinding.resolveTarget(TENANT, DomainType.CATALOG_PRODUCT)).thenReturn(TENANT);
         when(jobRepository.countByOperatorIdAndStatusIn(any(), any())).thenReturn(0L);
         when(jobRepository.save(any(BulkLoadJob.class))).thenAnswer(invocation -> {
             boundDuringSave.set(TenantContext.current());
@@ -148,7 +148,7 @@ class BulkLoadJobServiceImplTest {
         request.setFileName("products.csv");
         request.setDomainType(DomainType.CATALOG_PRODUCT);
 
-        when(tenantBinding.resolveTarget(null))
+        when(tenantBinding.resolveTarget(null, DomainType.CATALOG_PRODUCT))
                 .thenThrow(new BulkLoadTenantException(
                         BulkLoadTenantException.TENANT_REQUIRED, HttpStatus.BAD_REQUEST, "tenantId is required"));
 
@@ -165,7 +165,7 @@ class BulkLoadJobServiceImplTest {
         request.setDomainType(DomainType.CATALOG_PRODUCT);
         request.setTenantId(TENANT);
 
-        when(tenantBinding.resolveTarget(TENANT)).thenReturn(TENANT);
+        when(tenantBinding.resolveTarget(TENANT, DomainType.CATALOG_PRODUCT)).thenReturn(TENANT);
         when(jobRepository.countByOperatorIdAndStatusIn(any(), any())).thenReturn(1L);
 
         assertThatThrownBy(() -> service.createJob(request, OPERATOR_ID))

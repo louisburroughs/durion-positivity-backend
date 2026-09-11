@@ -7,6 +7,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.exception.BulkLoadTenantException;
 import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.StaticTenantRegistry;
@@ -27,7 +28,8 @@ import org.springframework.http.HttpStatus;
  * platform tenant, which is loadable as platform data whether or not the registry lists it
  * active; a bound caller — the platform tenant's operator included — may only load into its own
  * tenant; no tenant at all is refused unless the transitional default applies, and then it is
- * used with a WARN.
+ * used with a WARN. When the target resolves to the platform tenant, the job's domain type must
+ * also be one of the platform's own packs (Copilot review of PR #1955, Finding 5).
  */
 @DisplayName("BulkLoadTenantBinding: which tenant a job loads into")
 class BulkLoadTenantBindingTest {
@@ -35,6 +37,9 @@ class BulkLoadTenantBindingTest {
     private static final UUID ALPHA = TenantTestSupport.TENANT_A;
     private static final UUID BETA = TenantTestSupport.TENANT_B;
     private static final UUID SUSPENDED = UUID.fromString("01900000-0000-7000-8000-000000000009");
+
+    /** An ordinary tenant-data domain, used wherever the domain type itself is not what the test pins. */
+    private static final DomainType ORDINARY_DOMAIN = DomainType.CATALOG_PRODUCT;
 
     private final TenancyProperties properties = new TenancyProperties();
     private final ListAppender<ILoggingEvent> logs = new ListAppender<>();
@@ -62,7 +67,7 @@ class BulkLoadTenantBindingTest {
     void noTenantAndNoDefaultIsRejected() {
         BulkLoadTenantBinding binding = binding();
 
-        assertThatThrownBy(() -> binding.resolveTarget(null))
+        assertThatThrownBy(() -> binding.resolveTarget(null, ORDINARY_DOMAIN))
                 .isInstanceOfSatisfying(BulkLoadTenantException.class, e -> {
                     assertThat(e.getCode()).isEqualTo(BulkLoadTenantException.TENANT_REQUIRED);
                     assertThat(e.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -75,7 +80,7 @@ class BulkLoadTenantBindingTest {
         properties.setDefaultTenantId(ALPHA);
         BulkLoadTenantBinding binding = binding();
 
-        assertThat(binding.resolveTarget(null)).isEqualTo(ALPHA);
+        assertThat(binding.resolveTarget(null, ORDINARY_DOMAIN)).isEqualTo(ALPHA);
         assertThat(logs.list).anySatisfy(event -> {
             assertThat(event.getLevel()).isEqualTo(Level.WARN);
             assertThat(event.getFormattedMessage()).contains("transitional default tenant " + ALPHA);
@@ -85,7 +90,7 @@ class BulkLoadTenantBindingTest {
     @Test
     @DisplayName("an unbound caller (no request binding) may name any active tenant")
     void unboundCallerMayNameAnActiveTenant() {
-        assertThat(binding().resolveTarget(BETA)).isEqualTo(BETA);
+        assertThat(binding().resolveTarget(BETA, ORDINARY_DOMAIN)).isEqualTo(BETA);
         assertThat(logs.list).isEmpty();
     }
 
@@ -94,7 +99,7 @@ class BulkLoadTenantBindingTest {
     void unknownTenantIsRejected() {
         BulkLoadTenantBinding binding = binding();
 
-        assertThatThrownBy(() -> binding.resolveTarget(SUSPENDED))
+        assertThatThrownBy(() -> binding.resolveTarget(SUSPENDED, ORDINARY_DOMAIN))
                 .isInstanceOfSatisfying(BulkLoadTenantException.class, e -> {
                     assertThat(e.getCode()).isEqualTo(BulkLoadTenantException.TENANT_UNKNOWN);
                     assertThat(e.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -105,14 +110,15 @@ class BulkLoadTenantBindingTest {
     @DisplayName("the platform tenant is loadable (platform data) although no registry lists it as active")
     void platformTenantIsLoadable() {
         TenantContext.bind(PlatformTenant.ID);
-        assertThat(binding().resolveTarget(PlatformTenant.ID)).isEqualTo(PlatformTenant.ID);
+        assertThat(binding().resolveTarget(PlatformTenant.ID, DomainType.SECURITY_ROLE))
+                .isEqualTo(PlatformTenant.ID);
     }
 
     @Test
     @DisplayName("a caller bound to a tenant loads into that tenant")
     void boundCallerLoadsIntoItsOwnTenant() {
         TenantContext.bind(ALPHA);
-        assertThat(binding().resolveTarget(ALPHA)).isEqualTo(ALPHA);
+        assertThat(binding().resolveTarget(ALPHA, ORDINARY_DOMAIN)).isEqualTo(ALPHA);
     }
 
     @Test
@@ -121,12 +127,12 @@ class BulkLoadTenantBindingTest {
         TenantContext.bind(ALPHA);
         BulkLoadTenantBinding binding = binding();
 
-        assertThatThrownBy(() -> binding.resolveTarget(BETA))
+        assertThatThrownBy(() -> binding.resolveTarget(BETA, ORDINARY_DOMAIN))
                 .isInstanceOfSatisfying(BulkLoadTenantException.class, e -> {
                     assertThat(e.getCode()).isEqualTo(BulkLoadTenantException.TENANT_FORBIDDEN);
                     assertThat(e.getStatus()).isEqualTo(HttpStatus.FORBIDDEN);
                 });
-        assertThatThrownBy(() -> binding.resolveTarget(PlatformTenant.ID))
+        assertThatThrownBy(() -> binding.resolveTarget(PlatformTenant.ID, DomainType.SECURITY_ROLE))
                 .as("nor into the platform tenant")
                 .isInstanceOfSatisfying(
                         BulkLoadTenantException.class,
@@ -144,15 +150,15 @@ class BulkLoadTenantBindingTest {
         TenantContext.bind(PlatformTenant.ID);
         BulkLoadTenantBinding binding = binding();
 
-        assertThatThrownBy(() -> binding.resolveTarget(BETA))
+        assertThatThrownBy(() -> binding.resolveTarget(BETA, ORDINARY_DOMAIN))
                 .isInstanceOfSatisfying(BulkLoadTenantException.class, e -> {
                     assertThat(e.getCode()).isEqualTo(BulkLoadTenantException.TENANT_FORBIDDEN);
                     assertThat(e.getStatus()).isEqualTo(HttpStatus.FORBIDDEN);
                 });
-        assertThat(binding.resolveTarget(PlatformTenant.ID))
+        assertThat(binding.resolveTarget(PlatformTenant.ID, DomainType.SECURITY_ROLE))
                 .as("its own tenant, the role template's home, is what it may load")
                 .isEqualTo(PlatformTenant.ID);
-        assertThatThrownBy(() -> binding.resolveTarget(SUSPENDED))
+        assertThatThrownBy(() -> binding.resolveTarget(SUSPENDED, ORDINARY_DOMAIN))
                 .isInstanceOfSatisfying(
                         BulkLoadTenantException.class,
                         e -> assertThat(e.getCode()).isEqualTo(BulkLoadTenantException.TENANT_UNKNOWN));
@@ -168,9 +174,48 @@ class BulkLoadTenantBindingTest {
         TenantContext.bind(BETA);
         BulkLoadTenantBinding binding = binding();
 
-        assertThatThrownBy(() -> binding.resolveTarget(null))
+        assertThatThrownBy(() -> binding.resolveTarget(null, ORDINARY_DOMAIN))
                 .isInstanceOfSatisfying(
                         BulkLoadTenantException.class,
                         e -> assertThat(e.getCode()).isEqualTo(BulkLoadTenantException.TENANT_FORBIDDEN));
+    }
+
+    /**
+     * Finding 5, Copilot review of PR #1955: the platform tenant is platform data's home (the role
+     * template packs) and nothing else. Without this check a caller bound to the platform tenant
+     * could create a job of any domain type there, and the batch would relay the platform binding
+     * into a sibling service that has no idea the tenant is special.
+     */
+    @Test
+    @DisplayName(
+            "the platform tenant refuses a domain type outside its own packs: 403 BULK_JOB_TENANT_DOMAIN_FORBIDDEN")
+    void platformTenantRefusesADomainTypeItDoesNotOwn() {
+        TenantContext.bind(PlatformTenant.ID);
+        BulkLoadTenantBinding binding = binding();
+
+        assertThatThrownBy(() -> binding.resolveTarget(PlatformTenant.ID, DomainType.CATALOG_PRODUCT))
+                .isInstanceOfSatisfying(BulkLoadTenantException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo(BulkLoadTenantException.TENANT_DOMAIN_FORBIDDEN);
+                    assertThat(e.getStatus()).isEqualTo(HttpStatus.FORBIDDEN);
+                });
+    }
+
+    @Test
+    @DisplayName("the platform tenant accepts both role-template pack domain types")
+    void platformTenantAcceptsBothRoleTemplateDomainTypes() {
+        TenantContext.bind(PlatformTenant.ID);
+        BulkLoadTenantBinding binding = binding();
+
+        assertThat(binding.resolveTarget(PlatformTenant.ID, DomainType.SECURITY_ROLE))
+                .isEqualTo(PlatformTenant.ID);
+        assertThat(binding.resolveTarget(PlatformTenant.ID, DomainType.SECURITY_ROLE_PERMISSION))
+                .isEqualTo(PlatformTenant.ID);
+    }
+
+    @Test
+    @DisplayName("an ordinary tenant accepts any domain type: the platform restriction is platform-only")
+    void ordinaryTenantAcceptsAnyDomainType() {
+        TenantContext.bind(ALPHA);
+        assertThat(binding().resolveTarget(ALPHA, DomainType.CATALOG_PRODUCT)).isEqualTo(ALPHA);
     }
 }
