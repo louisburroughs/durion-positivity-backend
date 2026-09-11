@@ -33,17 +33,24 @@ scripts/seed-alpha.py --gateway ... --only customer/person-customers.csv
 scripts/seed-alpha.py --gateway ... --dry-run
 # empty alpha (no locations yet):
 scripts/seed-alpha.py --gateway ... --bootstrap-location
-# the role template: roles.csv into the platform tenant, with a PLATFORM_ADMIN token
+# the role template: roles.csv and its grants into the platform tenant, with a PLATFORM_ADMIN
+# token; the platform tenant has no locations, so the (ignored) job location is given explicitly
 scripts/seed-alpha.py --gateway ... --token "$PLATFORM_ACCESS_TOKEN" \
-    --tenant-id 01900000-0000-7000-8000-000000000000 --only security/roles.csv
+    --tenant-id 01900000-0000-7000-8000-000000000000 \
+    --location-id 00000000-0000-0000-0000-000000000000 \
+    --only security/roles.csv --only security/role-permissions.csv
 ```
 
 Every job loads into `--tenant-id` (ADR-0062, plan WS8): the alpha tenant
-`01900000-0000-7000-8000-000000000001` for the alpha data, which is also the token's own
-tenant. A token bound to a tenant may only name that tenant; a platform-tenant token may
-name any active tenant. Omitting `--tenant-id` is accepted only while the loader's
-transitional default tenant is configured (it then loads into the default and logs a WARN).
-Operator steps: `docs/OPERATIONS_RUNBOOK.md`, "Bulk loading into a tenant".
+`01900000-0000-7000-8000-000000000001` for the alpha data. It must be the token's own tenant
+(its `tid` claim, which is also the default when `--tenant-id` is omitted): the loader's upload,
+process and status endpoints are scoped to the token's tenant, so the driver refuses a target the
+token is not bound to rather than create a job it could not continue. A token without a `tid`
+and no `--tenant-id` omits the tenant, which the loader accepts only while its transitional
+default tenant is configured (it then loads into the default and logs a WARN). Into the platform
+tenant only the two security role packs load, with an explicit `--location-id` (the role ingest
+carries the id along and ignores it). Operator steps: `docs/OPERATIONS_RUNBOOK.md`, "Bulk loading
+into a tenant".
 
 Per pack file it creates a bulk-load job (`POST /bulk-loader/bulk-jobs`), uploads the
 CSV, starts processing, and polls the job to a terminal state, reporting the row
@@ -191,8 +198,8 @@ The seed file stays until the alpha reseed is verified (§5.4).
 
 **Tenant tagging (ADR-0062, WS8).** Loaded into the alpha tenant, `roles.csv` provisions
 alpha's tenant-local roles as before. Loaded into the *platform* tenant (a `PLATFORM_ADMIN`
-token and `--tenant-id 01900000-0000-7000-8000-000000000000`), the same file is the
-platform role template: each role is created with `template_key` = its name, provisioning
+token, `--tenant-id 01900000-0000-7000-8000-000000000000` and an explicit `--location-id`),
+the same file is the platform role template: each role is created with `template_key` = its name, provisioning
 copies it into every tenant created afterwards, and
 `POST /security-service/v1/platform/tenants/{tenantId}/roles/reconcile-template` brings
 tenants created before it up to date. `role-permissions.csv` loaded into the platform

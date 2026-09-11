@@ -638,18 +638,26 @@ makes to the owning services (`X-Tenant-Id` on each `/bulk-ingest` and lookup ca
 scripts/seed-alpha.py --gateway https://<gateway> --token "$SEED_BEARER_TOKEN" \
     --tenant-id 01900000-0000-7000-8000-000000000001
 
-# Platform data (the role template): a PLATFORM_ADMIN token, naming the platform tenant.
+# Platform data (the role template): a PLATFORM_ADMIN token, naming the platform tenant. The
+# platform tenant has no locations, and a job needs one, so the location is given explicitly:
+# the role and grant ingests carry it along and ignore it, so the nil UUID will do.
 scripts/seed-alpha.py --gateway https://<gateway> --token "$PLATFORM_ACCESS_TOKEN" \
     --tenant-id 01900000-0000-7000-8000-000000000000 \
+    --location-id 00000000-0000-0000-0000-000000000000 \
     --only security/roles.csv --only security/role-permissions.csv
 ```
+
+The driver requires `--tenant-id` to be the token's own tenant (its `tid` claim, which is also
+the default when the flag is omitted), refuses the platform tenant for any pack but the two
+security role packs, and insists on `--location-id` there. The API itself is wider (a platform
+caller may create a job in any active tenant); the rows below say what each answer means.
 
 | Situation | Answer |
 | --- | --- |
 | `tenantId` omitted | 400 `BULK_JOB_TENANT_REQUIRED`, unless the loader's transitional default tenant (`pos.tenancy.default-tenant-id`) is configured: the job then loads into the default and the loader logs a WARN. Name the tenant; the fallback goes away with the default. |
 | `tenantId` is not an active tenant of the cell | 400 `BULK_JOB_TENANT_UNKNOWN`. The loader asks its `TenantRegistry`: `pos.tenancy.tenants`, else the default tenant, or pos-tenant's list with `pos.tenancy.registry.mode=REMOTE`. The platform tenant is always allowed. |
 | Caller's token is bound to tenant A, `tenantId` is B | 403 `BULK_JOB_TENANT_FORBIDDEN`. Only a caller bound to the platform tenant (`PLATFORM_ADMIN`) loads into another tenant. |
-| A platform operator created a job in tenant B and wants to upload, process or poll it | Job endpoints are tenant-scoped reads: the job is visible only under B's binding. Continue with a token bound to B (the tenant's own administrator, or the platform impersonation token once WS2b-4 lands). |
+| A platform operator created a job in tenant B and wants to upload, process or poll it | Job endpoints are tenant-scoped reads: the job is visible only under B's binding. Continue with a token bound to B (the tenant's own administrator, or the platform impersonation token once WS2b-4 lands). `seed-alpha.py` refuses this mode up front for that reason. |
 | `roles.csv` loaded into the platform tenant | The roles become the platform role template (`template_key` = name); see "Reconciling the role template" to push them to existing tenants. |
 
 The job's tenant is recorded as the non-identifying `tenantId` batch parameter and on every log line (MDC
