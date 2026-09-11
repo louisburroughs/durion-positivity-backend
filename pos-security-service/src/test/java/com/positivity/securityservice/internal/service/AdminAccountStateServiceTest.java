@@ -57,6 +57,9 @@ class AdminAccountStateServiceTest {
     @Mock
     JwtService jwtService;
 
+    @Mock
+    ImpersonationTokenRevocationService impersonationTokenRevocationService;
+
     @InjectMocks
     AdminAccountStateServiceImpl service;
 
@@ -176,6 +179,9 @@ class AdminAccountStateServiceTest {
 
             verify(userRepository).save(any(User.class));
             verify(jwtService).revokeAllTokensForUser(active.getUsername());
+            // An impersonation token this operator minted lives in another tenant under a
+            // synthetic subject; only the operator-id sweep reaches it (ADR-0062 §7, WS2b-4).
+            verify(impersonationTokenRevocationService).revokeForOperator(active.getId());
             assertThat(active.isEnabled()).isFalse();
             assertThat(active.getDisabledBy()).isEqualTo("admin-user");
             assertThat(active.getDisabledAt()).isEqualTo(TEST_CLOCK.instant());
@@ -206,6 +212,9 @@ class AdminAccountStateServiceTest {
             service.disable(USER_ID);
 
             verify(jwtService).revokeAllTokensForUser(active.getUsername());
+            // An impersonation token this operator minted lives in another tenant under a
+            // synthetic subject; only the operator-id sweep reaches it (ADR-0062 §7, WS2b-4).
+            verify(impersonationTokenRevocationService).revokeForOperator(active.getId());
             assertThat(active.isEnabled()).isFalse();
             assertThat(active.getDisabledBy()).isEqualTo("system");
             assertThat(active.getDisabledAt()).isEqualTo(TEST_CLOCK.instant());
@@ -237,6 +246,7 @@ class AdminAccountStateServiceTest {
 
             verify(userRepository).save(any(User.class));
             verify(jwtService).revokeAllTokensForUser(user.getUsername());
+            verify(impersonationTokenRevocationService).revokeForOperator(user.getId());
             assertThat(user.isAccountNonExpired()).isFalse();
             assertThat(user.getAccountExpiresAt()).isEqualTo(TEST_CLOCK.instant());
         }
@@ -275,6 +285,7 @@ class AdminAccountStateServiceTest {
 
             verify(userRepository).save(any(User.class));
             verify(jwtService).revokeAllTokensForUser(user.getUsername());
+            verify(impersonationTokenRevocationService).revokeForOperator(user.getId());
             assertThat(user.isCredentialsNonExpired()).isFalse();
             assertThat(user.getCredentialsExpireAt()).isEqualTo(TEST_CLOCK.instant());
         }

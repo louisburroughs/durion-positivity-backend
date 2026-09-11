@@ -12,6 +12,7 @@ import java.util.BitSet;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -303,6 +304,57 @@ class SecurityGatewayConfigTest {
 
         assertThat(headers).isNotNull();
         assertThat(headers.getFirst("X-Tenant-Id")).isEqualTo(TENANT_ID);
+    }
+
+    /**
+     * ADR-0062 §7 (plan WS2b-4): an impersonation token differs from a login token only in three
+     * claims it adds — {@code act} (an object naming the operator), {@code token_use} and a synthetic
+     * subject. The gateway reads the claims it knows and ignores the rest, so the token is accepted
+     * unchanged and its {@code tid} — the target tenant — becomes {@code X-Tenant-Id}.
+     */
+    private static String buildImpersonationToken(String tid) {
+        return Jwts.builder()
+                .subject("support:admin.platform@acme")
+                .issuer(TEST_ISSUER)
+                .audience()
+                .add(TEST_AUDIENCE)
+                .and()
+                .claim("uid", "01900000-0000-7000-8000-0000000a0101")
+                .claim("username", "support:admin.platform@acme")
+                .claim("roles", List.of("ROLE_SUPPORT"))
+                .claim("perm_bits", encodePermBits(27, 103))
+                .claim("perm_ver", GatewayPermissionCatalog.CATALOG_VERSION)
+                .claim("loc_fin_bits", "")
+                .claim("loc_oth_bits", "")
+                .claim("tid", tid)
+                .claim("act", Map.of("sub", "01900000-0000-7000-8000-0000000a0101", "username", "admin.platform"))
+                .claim("token_use", "impersonation")
+                .expiration(new Date(System.currentTimeMillis() + 900_000))
+                .signWith(TEST_KEY)
+                .compact();
+    }
+
+    @Test
+    void impersonationToken_withActAndTokenUseClaims_isAcceptedAndItsTidIsForwarded() {
+        HttpHeaders headers = forward(
+                new GatewayAuthProperties(),
+                MockServerHttpRequest.get("/order/v1/orders")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + buildImpersonationToken(TENANT_ID))
+                        .header("X-Tenant-Id", "01900000-0000-7000-8000-000000000000")
+                        .build());
+
+        assertThat(headers).isNotNull();
+        // The target tenant, never the operator's: an inbound copy naming the platform tenant is replaced.
+        assertThat(headers.getFirst("X-Tenant-Id")).isEqualTo(TENANT_ID);
+        assertThat(headers.getFirst("X-User")).isEqualTo("support:admin.platform@acme");
+        assertThat(headers.getFirst("X-User-Id")).isEqualTo("01900000-0000-7000-8000-0000000a0101");
+        assertThat(headers.getFirst("X-Roles")).isEqualTo("ROLE_SUPPORT");
+        assertThat(headers.getFirst("X-Perm-Bits")).isEqualTo(encodePermBits(27, 103));
+        assertThat(headers.getFirst("X-Perm-Ver")).isEqualTo(String.valueOf(GatewayPermissionCatalog.CATALOG_VERSION));
+        // Unknown claims are not forwarded as headers: nothing downstream needs act or token_use.
+        assertThat(headers.headerNames())
+                .noneMatch(name -> name.toLowerCase(Locale.ROOT).contains("act")
+                        || name.toLowerCase(Locale.ROOT).contains("token-use"));
     }
 
     @Test
@@ -1350,9 +1402,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 85")
+    @DisplayName("CATALOG_VERSION is 86")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(85);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(86);
     }
 
     @Test
@@ -1657,8 +1709,11 @@ class SecurityGatewayConfigTest {
         // catalog v85 (ADR-0062 §7, WS2b-3): first-administrator activation tokens, minted by
         // pos-security-service for the platform tenant only (bit 529)
         assertThat(GatewayPermissionCatalog.authorityForBit(529)).isEqualTo("PERM_platform:tenant:provision");
+        // catalog v86 (ADR-0062 §7, WS2b-4): tenant impersonation tokens, minted by
+        // pos-security-service for the platform tenant only (bit 530)
+        assertThat(GatewayPermissionCatalog.authorityForBit(530)).isEqualTo("PERM_platform:tenant:impersonate");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(530)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(531)).isNull();
     }
 
     @Test

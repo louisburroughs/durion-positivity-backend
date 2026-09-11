@@ -12,6 +12,10 @@ permissions:
   # ADR-0062 section 7, WS2b-3); listed here because the platform domain owns the platform:* family.
   - name: "platform:tenant:provision"
     description: "Mint a first-administrator activation token for a provisioned tenant"
+  # Enforced by pos-security-service (POST /v1/platform/tenants/{tenantId}/impersonation-token, ADR-0062
+  # section 7, WS2b-4): a 15-minute, no-refresh SUPPORT token for an ACTIVE tenant, audited on issuance.
+  - name: "platform:tenant:impersonate"
+    description: "Mint a short-lived read-only SUPPORT impersonation token for a tenant"
   - name: "platform:tenant:suspend"
     description: "Suspend an active tenant"
   - name: "platform:tenant:reactivate"

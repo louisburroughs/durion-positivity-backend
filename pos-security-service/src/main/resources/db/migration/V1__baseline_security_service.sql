@@ -81,18 +81,26 @@ CREATE TABLE public.ext_people_staffing_assignment (
     updated_at timestamp(6) with time zone NOT NULL
 );
 
+-- refresh_token and refresh_expires_at are nullable (ADR-0062 section 7, plan WS2b-4): an
+-- impersonation token is stored here like any access token, so validation and revocation reach
+-- it, but it has no refresh half — it is never refreshable. Every login pair still carries both.
 CREATE TABLE public.jwt_token (
     tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
     id uuid NOT NULL,
     token text NOT NULL,
-    refresh_token text NOT NULL,
+    refresh_token text,
     issued_at timestamp with time zone NOT NULL,
     expires_at timestamp with time zone NOT NULL,
-    refresh_expires_at timestamp with time zone NOT NULL,
+    refresh_expires_at timestamp with time zone,
     subject character varying(255) NOT NULL,
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,
-    version bigint
+    version bigint,
+    -- The platform operator behind an impersonation token (ADR-0062 section 7, WS2b-4). NULL on
+    -- every ordinary token: its subject already names its user. An impersonation row lives in the
+    -- target tenant under a synthetic subject, so this is the only link back to the operator and
+    -- the only key a tenant-independent revocation can use.
+    impersonated_by_user_id uuid
 );
 
 CREATE TABLE public.permissions (
@@ -468,6 +476,11 @@ CREATE INDEX ext_people_contact_person_tenant_idx ON public.ext_people_contact_p
 CREATE INDEX ext_people_staffing_assignment_tenant_idx ON public.ext_people_staffing_assignment USING btree (tenant_id);
 
 CREATE INDEX jwt_token_tenant_idx ON public.jwt_token USING btree (tenant_id);
+
+-- Revocation of a platform operator's impersonation tokens sweeps every tenant by operator id
+-- (ADR-0062 section 7, WS2b-4); partial, because the column is NULL on every ordinary token.
+CREATE INDEX jwt_token_impersonated_by_user_idx ON public.jwt_token USING btree (impersonated_by_user_id)
+    WHERE impersonated_by_user_id IS NOT NULL;
 
 CREATE INDEX pricing_rule_trace_entries_tenant_idx ON public.pricing_rule_trace_entries USING btree (tenant_id);
 
