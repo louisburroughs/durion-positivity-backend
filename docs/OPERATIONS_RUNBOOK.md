@@ -387,6 +387,19 @@ global rollup by default and one tenant with `?tenantId=<uuid>`; `tenantId` from
 refresh policy is unchanged (hourly, one-hour end offset), so per-tenant counts lag by up to an hour like
 the global ones.
 
+MCP tool priorities have the same shape. `pos-mcp-server` ranks tools on `mcp_tool.priority`, the global
+row, overridden tool by tool by the caller's tenant's overlay in `mcp_tool_priority` (row-level security:
+a tenant's connection sees its own overlay rows only). The nightly tuning job (`mcp.tuning.cron`,
+`mcp.tuning.mode=off|shadow|live`) tunes each tenant's overlay from that tenant's own
+`mcp_tool_invocation_log` and then the global row from all tenants' logs summed; a tenant with no history
+keeps no overlay and ranks on the global set. It logs one `Tool priority tuning tenant=<uuid>
+invocations=… proposals=…` line per tenant and a `Tool priority tuning finished: tenants=…` summary, the
+`mcp.tuning.proposals` counter is tagged `mode` and `scope` (`tenant`/`global`), and shadow proposals on
+the `mcp.tuning.shadow` logger carry `scope` and `tenant_id`. To reset one tenant's tuning, delete its
+`mcp_tool_priority` rows as that tenant (`SELECT set_config('app.current_tenant', '<uuid>', true)`):
+its requests fall back to the global row until the next live run (`pos-mcp-server/README.md`,
+"Per-tenant tool priorities").
+
 ### Dashboard Access
 
 | Dashboard  | URL                      | Credentials |
