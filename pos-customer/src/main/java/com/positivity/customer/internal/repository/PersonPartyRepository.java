@@ -6,15 +6,18 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /**
  * Repository for PersonParty entities (CAP:091 Story #104).
  */
-public interface PersonPartyRepository extends JpaRepository<PersonParty, UUID> {
+public interface PersonPartyRepository extends JpaRepository<PersonParty, UUID>, JpaSpecificationExecutor<PersonParty> {
     Optional<PersonParty> findByPersonId(@NonNull UUID personId);
 
     /**
@@ -45,6 +48,9 @@ public interface PersonPartyRepository extends JpaRepository<PersonParty, UUID> 
     @Query("SELECT p FROM PersonParty p WHERE :vin MEMBER OF p.vehicleVins")
     List<PersonParty> findByVehicleVin(@Param("vin") @NonNull String vin);
 
+    /** Replay order: by id, so a cursor can resume exactly where the previous page stopped. */
+    Sort BY_PARTY_ID = Sort.by(Sort.Order.asc("partyId"));
+
     /**
      * A page of parties for fact replay (issue #1893), ordered by id so a cursor can resume where
      * the previous page stopped.
@@ -53,13 +59,29 @@ public interface PersonPartyRepository extends JpaRepository<PersonParty, UUID> 
      * several requests, and offsets shift under concurrent party writes — a party created
      * mid-replay would silently displace another out of the window and leave a replica short of
      * exactly the fact the replay was meant to deliver.
+     *
+     * <p>The filter is a {@link PartyReplaySearch} specification rather than a JPQL string of
+     * {@code (:param IS NULL OR …)} clauses: see that class for why the string form returned 500
+     * from PostgreSQL for every call while passing on H2.
+     *
+     * @param afterId resume cursor, or null to start at the beginning
+     * @param updatedSince only parties changed at or after this instant, or null for every party
+     * <p>Read through {@code findBy(...).limit(...).all()} rather than {@code findAll(spec,
+     * pageable)}: this contract returns a list, the replay service never asks for a total, and a
+     * {@code Page} return would have Spring Data run a count query per page — two potentially
+     * full-table scans on every cursor request. The catalog replay repositories read the same way.
+     *
+     * @param pageable supplies the page size only — the replay is positioned by {@code afterId},
+     *     not by an offset — or {@code Pageable.unpaged()} for every match; the order is always
+     *     {@link #BY_PARTY_ID}
+     * @return the matching parties, in id order
      */
-    @Query("""
-      SELECT p FROM PersonParty p
-      WHERE (:afterId IS NULL OR p.partyId > :afterId)
-        AND (:updatedSince IS NULL OR p.updatedAt >= :updatedSince)
-      ORDER BY p.partyId ASC
-      """)
-    List<PersonParty> findForReplay(
-            @Param("afterId") UUID afterId, @Param("updatedSince") Instant updatedSince, Pageable pageable);
+    @NonNull
+    default List<PersonParty> findForReplay(
+            @Nullable UUID afterId, @Nullable Instant updatedSince, @NonNull Pageable pageable) {
+        return findBy(PartyReplaySearch.<PersonParty>matching(afterId, updatedSince), query -> {
+            var sorted = query.sortBy(BY_PARTY_ID);
+            return (pageable.isUnpaged() ? sorted : sorted.limit(pageable.getPageSize())).all();
+        });
+    }
 }

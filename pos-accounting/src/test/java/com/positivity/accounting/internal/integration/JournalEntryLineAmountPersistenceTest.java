@@ -2,7 +2,7 @@ package com.positivity.accounting.internal.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.PostgresIntegrationTestBase;
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.entity.GLAccount;
@@ -36,7 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Transactional
 @DisplayName("JournalEntryLine amount persistence — omitted request amounts")
-class JournalEntryLineAmountPersistenceTest extends BaseIntegrationTest {
+class JournalEntryLineAmountPersistenceTest extends PostgresIntegrationTestBase {
 
     @Autowired
     private JournalEntryService journalEntryService;

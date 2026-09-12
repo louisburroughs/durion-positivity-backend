@@ -3,7 +3,7 @@ package com.positivity.customer.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.positivity.customer.BaseContractIntegrationTest;
+import com.positivity.customer.PostgresIntegrationTestBase;
 import com.positivity.customer.internal.dto.GetCommunicationPreferencesResponse;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesRequest;
 import com.positivity.customer.internal.dto.UpsertCommunicationPreferencesResponse;
@@ -19,8 +19,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -34,10 +32,8 @@ import org.springframework.web.server.ResponseStatusException;
  * @author Durion Platform
  * @since CAP-090
  */
-@SpringBootTest
-@ActiveProfiles("test")
 @Transactional
-class CommunicationPreferenceServiceContractBehaviorIT extends BaseContractIntegrationTest {
+class CommunicationPreferenceServiceContractBehaviorIT extends PostgresIntegrationTestBase {
 
     private static final AtomicLong TEST_SEQUENCE = new AtomicLong(1L);
 

@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.accounting.PostgresIntegrationTestBase;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.PostingResult;
 import com.positivity.accounting.internal.dto.PostingRuleSetCreateRequest;
@@ -20,26 +21,21 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * H2-backed end-to-end test for E1 proportional split lines (issue #945):
+ * End-to-end test for E1 proportional split lines (issue #945):
  * a split rule set is created and published through
  * {@link PostingRuleService} (exercising the publish-time split validation
  * on the real persistence path), then the {@link PostingRuleEvaluator} loads
  * it from the database and produces a balanced journal entry whose split
  * lines sum exactly to the source amount.
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @Transactional
 @Import(TestSecurityConfig.class)
-@DisplayName("Posting rule split lifecycle (E1, H2 end-to-end)")
-class PostingRuleSplitLifecycleTest {
+@DisplayName("Posting rule split lifecycle (E1, end-to-end)")
+class PostingRuleSplitLifecycleTest extends PostgresIntegrationTestBase {
 
     private static final String EVENT_TYPE = "parity.e1.laborCharge";
 

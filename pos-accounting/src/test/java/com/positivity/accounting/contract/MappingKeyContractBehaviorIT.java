@@ -3,7 +3,7 @@ package com.positivity.accounting.contract;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.positivity.accounting.BaseContractIntegrationTest;
+import com.positivity.accounting.PostgresIntegrationTestBase;
 import com.positivity.accounting.internal.dto.MappingKeyCreateRequest;
 import com.positivity.accounting.internal.dto.MappingKeyListResponse;
 import com.positivity.accounting.internal.dto.MappingKeyResponse;
@@ -30,7 +30,7 @@ import org.springframework.web.server.ResponseStatusException;
  * - Deactivation rules (no active mappings check)
  */
 @Transactional
-public class MappingKeyContractBehaviorIT extends BaseContractIntegrationTest {
+public class MappingKeyContractBehaviorIT extends PostgresIntegrationTestBase {
 
     @Autowired
     private MappingKeyService mappingKeyService;

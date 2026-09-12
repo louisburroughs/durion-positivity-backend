@@ -2,16 +2,15 @@ package com.positivity.customer.migration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.customer.CustomerPostgresContainer;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * Boots the full application context against a real Postgres (Testcontainers) so that
@@ -23,14 +22,19 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * field mismatches) were untested SQL because the default tests use H2 with Flyway
  * disabled. This test exercises the real DDL + seed in CI. Requires Docker.
  */
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("pg")
-@Testcontainers
 class FlywayMigrationIT {
 
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    /**
+     * Connected as the schema owner rather than as {@code pos_app}: this test reads the catalog and
+     * counts seeded rows, neither of which the application role can do unscoped under row-level
+     * security.
+     */
+    @DynamicPropertySource
+    static void datasource(DynamicPropertyRegistry registry) {
+        CustomerPostgresContainer.registerOwnerDataSourceProperties(registry);
+    }
 
     @Autowired
     private DataSource dataSource;

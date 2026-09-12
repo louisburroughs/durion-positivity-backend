@@ -2,7 +2,7 @@ package com.positivity.accounting.internal.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.PostgresIntegrationTestBase;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.AccountType;
@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Transactional
 @DisplayName("GLAccount Metadata Persistence Tests")
-class GLAccountMetadataPersistenceTest extends BaseIntegrationTest {
+class GLAccountMetadataPersistenceTest extends PostgresIntegrationTestBase {
 
     @Autowired
     private GLAccountRepository glAccountRepository;
