@@ -20,9 +20,10 @@ follow and the checklist for adding a table. The decision record is
 No module carries a parallel `db/h2-migration` set any more. `pos-mcp-server` and
 `pos-supplier` each kept one — a hand-maintained second copy of the schema that nothing held in
 sync with the baseline — and both were retired under plan WS5 once their tests moved to
-Testcontainers. The H2 `dev` and `test` profiles run no Flyway at all and let Hibernate build
-the entity-mapped tables; the baselines below are the only schema definition, and the
-`pg`-profile tests validate the entities against them on a real PostgreSQL.
+Testcontainers. Where a module still runs on H2 — its `dev` profile, and `test`
+where that is H2-backed — Flyway is off and Hibernate builds the entity-mapped tables. Flyway runs the
+baselines below wherever Postgres does, the `pg` test profile included, and it is there that the entities are
+validated against them.
 `pos-inquiry` has no Flyway migrations (Hibernate `ddl-auto: update`) and is outside this contract.
 
 ## What every tenant-scoped table has
