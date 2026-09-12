@@ -2,7 +2,7 @@ package com.positivity.accounting.internal.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.PostgresIntegrationTestBase;
 import com.positivity.accounting.internal.entity.PaymentApplication;
 import com.positivity.accounting.internal.entity.PaymentApplicationReversal;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
@@ -52,7 +52,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Transactional
 @DisplayName("PaymentApplicationReversal window query — movement basis (ADR-0057 D3)")
-class PaymentApplicationReversalWindowPersistenceTest extends BaseIntegrationTest {
+class PaymentApplicationReversalWindowPersistenceTest extends PostgresIntegrationTestBase {
 
     /** The original application lands in January... */
     private static final Instant APPLIED_AT = Instant.parse("2031-01-15T10:00:00Z");

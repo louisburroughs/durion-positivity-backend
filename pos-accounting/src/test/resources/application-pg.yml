@@ -4,6 +4,13 @@
 spring:
   application:
     name: pos-accounting-pg-test
+  datasource:
+    hikari:
+      # Every Spring context this JVM caches keeps its pool for the whole run, and this module has
+      # a dozen-odd Postgres-backed context shapes. Hikari's default of 10 apiece exhausts even a
+      # generously configured server; these tests need one connection at a time.
+      maximum-pool-size: 8
+      minimum-idle: 1
   autoconfigure:
     exclude: org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
   jpa:

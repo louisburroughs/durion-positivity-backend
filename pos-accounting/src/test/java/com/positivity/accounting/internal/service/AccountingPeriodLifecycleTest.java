@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.accounting.PostgresIntegrationTestBase;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.AccountingPeriodResponse;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
@@ -26,12 +27,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.transaction.AfterTransaction;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,12 +41,10 @@ import org.springframework.transaction.annotation.Transactional;
  * state-conflict rejection, mandatory reopen justification, and audit rows
  * written with the acting user (ADR-0018).
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @Transactional
 @Import(TestSecurityConfig.class)
 @DisplayName("AccountingPeriod Lifecycle Tests (B1)")
-class AccountingPeriodLifecycleTest {
+class AccountingPeriodLifecycleTest extends PostgresIntegrationTestBase {
 
     private static final String ACTOR = "controller-user";
     private static final String AUDIT_ENTITY_TYPE = "ACCOUNTING_PERIOD";

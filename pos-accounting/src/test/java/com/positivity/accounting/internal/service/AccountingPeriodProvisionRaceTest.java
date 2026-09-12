@@ -3,6 +3,8 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doAnswer;
 
+import com.positivity.accounting.AccountingPostgresContainer;
+import com.positivity.accounting.PostgresCommittingTestBase;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.AccountingPeriodResponse;
 import com.positivity.accounting.internal.entity.AccountingPeriod;
@@ -16,10 +18,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
@@ -42,11 +43,16 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
  * {@code UnexpectedRollbackException}, and the pre-committed winner row must
  * be visible to the inner insert transaction.
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @Import(TestSecurityConfig.class)
 @DisplayName("AccountingPeriod auto-provision race (real unique constraint)")
-class AccountingPeriodProvisionRaceTest {
+class AccountingPeriodProvisionRaceTest extends PostgresCommittingTestBase {
+
+    /** This class commits, so it gets a database of its own inside the shared container. */
+    @DynamicPropertySource
+    static void database(DynamicPropertyRegistry registry) {
+        AccountingPostgresContainer.registerIsolatedDatabase(registry, "accounting-period-provision-race");
+        registerCommonProperties(registry);
+    }
 
     @Autowired
     private AccountingPeriodService periodService;

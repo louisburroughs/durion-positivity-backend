@@ -3,19 +3,17 @@ package com.positivity.accounting.migration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.accounting.AccountingPostgresContainer;
 import java.math.BigDecimal;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Proves the Story A1 (issue #935) DB-level balance backstop added in
@@ -28,18 +26,20 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * to close. The service-layer check ({@code JournalEntryServiceImpl.validateBalance})
  * remains the friendly API-level validation and is untouched by this story.
  *
- * <p>Skipped cleanly when Docker is unavailable ({@code disabledWithoutDocker}).
+ * <p>Requires Docker.
  */
-@Testcontainers(disabledWithoutDocker = true)
 class JournalEntryBalanceTriggerIT {
 
-    @Container
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
+    /**
+     * A database of this IT's own inside the shared container: it drives raw SQL against the ledger
+     * and commits, so it must not share the default database with tests that read the seed.
+     */
+    private static final DataSource DATABASE = AccountingPostgresContainer.ownerDataSource("journal-entry-balance");
 
     @BeforeAll
     static void migrate() {
         Flyway.configure()
-                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .dataSource(DATABASE)
                 .locations("classpath:db/migration")
                 .load()
                 .migrate();
@@ -166,8 +166,7 @@ class JournalEntryBalanceTriggerIT {
     private static final String TENANT_ID = "01900000-0000-7000-8000-000000000001";
 
     private static Connection open() throws SQLException {
-        Connection c =
-                DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+        Connection c = DATABASE.getConnection();
         try (PreparedStatement ps = c.prepareStatement("SELECT set_config('app.current_tenant', ?, false)")) {
             ps.setString(1, TENANT_ID);
             ps.execute();

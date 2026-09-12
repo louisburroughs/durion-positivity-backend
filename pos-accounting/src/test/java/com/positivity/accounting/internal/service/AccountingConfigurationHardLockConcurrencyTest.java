@@ -3,11 +3,14 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.accounting.AccountingPostgresContainer;
+import com.positivity.accounting.PostgresCommittingTestBase;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.entity.AccountingConfiguration;
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.AccountingConfigurationRepository;
+import com.positivity.tenancy.TenantContext;
 import java.time.LocalDate;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -19,10 +22,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -45,11 +47,16 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>Deliberately NOT {@code @Transactional}: both participants must run in
  * real, independently committing transactions on separate threads.
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @Import(TestSecurityConfig.class)
 @DisplayName("Hard-lock date setter concurrency (B2 hardening)")
-class AccountingConfigurationHardLockConcurrencyTest {
+class AccountingConfigurationHardLockConcurrencyTest extends PostgresCommittingTestBase {
+
+    /** This class commits, so it gets a database of its own inside the shared container. */
+    @DynamicPropertySource
+    static void database(DynamicPropertyRegistry registry) {
+        AccountingPostgresContainer.registerIsolatedDatabase(registry, "accounting-configuration-hard-lock");
+        registerCommonProperties(registry);
+    }
 
     private static final String HARD_LOCK_DATE_KEY = "HARD_LOCK_DATE";
     private static final LocalDate SEED_DATE = LocalDate.of(2020, 1, 1);
@@ -87,23 +94,29 @@ class AccountingConfigurationHardLockConcurrencyTest {
 
             // Holder: acquire the FOR UPDATE row lock, hold it until released,
             // then advance the hard-lock date and commit.
-            Future<?> holder = executor.submit(() -> txTemplate.execute(status -> {
-                AccountingConfiguration config = configurationRepository
-                        .findWithLockByConfigKey(HARD_LOCK_DATE_KEY)
-                        .orElseThrow();
-                lockHeld.countDown();
-                awaitOrFail(releaseLock);
-                config.setConfigValue(ADVANCED_DATE.toString());
-                configurationRepository.saveAndFlush(config);
-                return null;
-            }));
+            // The tenant is bound inside each worker, not inherited from the test thread:
+            // TenantContext is thread-bound and the pg profile has no default tenant to fall back
+            // on, so an unbound worker would write and read as the nil tenant. Production does the
+            // same through TenantContextTaskDecorator for its managed executors.
+            Future<?> holder = executor.submit(() -> TenantContext.callAs(
+                    TENANT,
+                    () -> txTemplate.execute(status -> {
+                        AccountingConfiguration config = configurationRepository
+                                .findWithLockByConfigKey(HARD_LOCK_DATE_KEY)
+                                .orElseThrow();
+                        lockHeld.countDown();
+                        awaitOrFail(releaseLock);
+                        config.setConfigValue(ADVANCED_DATE.toString());
+                        configurationRepository.saveAndFlush(config);
+                        return null;
+                    })));
 
             assertThat(lockHeld.await(10, TimeUnit.SECONDS)).isTrue();
 
             // Latecomer: starts strictly after the lock is held, so its locked
             // read must wait for the holder's commit.
-            Future<LocalDate> latecomer =
-                    executor.submit(() -> configurationService.setHardLockDate(STALE_EARLIER_DATE, "stale attempt"));
+            Future<LocalDate> latecomer = executor.submit(() -> TenantContext.callAs(
+                    TENANT, () -> configurationService.setHardLockDate(STALE_EARLIER_DATE, "stale attempt")));
 
             // The latecomer is blocked on the row lock while the holder holds it.
             Thread.sleep(300);

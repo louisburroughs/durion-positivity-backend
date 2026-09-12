@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.accounting.PostgresIntegrationTestBase;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.PostingResult;
 import com.positivity.accounting.internal.dto.PostingRuleSetCreateRequest;
@@ -18,14 +19,11 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * H2-backed end-to-end test for E2 condition predicates (issue #946): a
+ * End-to-end test for E2 condition predicates (issue #946): a
  * rule set whose conditions discriminate on {@code payload.paymentMethod}
  * is created and published through {@link PostingRuleService} (exercising
  * the publish-time predicate validation on the real persistence path), then
@@ -33,12 +31,10 @@ import org.springframework.transaction.annotation.Transactional;
  * CASH and CARD events to different GL accounts. A malformed predicate must
  * be rejected at publish, never reaching evaluation.
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @Transactional
 @Import(TestSecurityConfig.class)
-@DisplayName("Posting rule predicate lifecycle (E2, H2 end-to-end)")
-class PostingRulePredicateLifecycleTest {
+@DisplayName("Posting rule predicate lifecycle (E2, end-to-end)")
+class PostingRulePredicateLifecycleTest extends PostgresIntegrationTestBase {
 
     private static final String EVENT_TYPE = "parity.e2.paymentReceived";
 

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.positivity.accounting.PostgresIntegrationTestBase;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.InvoiceStatusResponse;
 import com.positivity.accounting.internal.dto.PaymentAppliedRequest;
@@ -28,21 +29,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Integration tests for InvoicePaymentStatusService.
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @Transactional
 @Import(TestSecurityConfig.class)
 @DisplayName("Phase 3 Integration Tests - Invoice Payment Status Service Wrappers")
-class InvoicePaymentStatusServiceTest {
+class InvoicePaymentStatusServiceTest extends PostgresIntegrationTestBase {
 
     @Autowired
     private InvoicePaymentStatusServiceImpl paymentStatusService;
