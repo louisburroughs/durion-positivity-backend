@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.supplier.PostgresSliceTestBase;
 import com.positivity.supplier.TestClockConfig;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
@@ -11,7 +12,10 @@ import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
 import com.positivity.supplier.internal.entity.SupplierScheduleLeaseEntity;
 import com.positivity.supplier.internal.enums.ProfileSourceOfTruth;
+import com.positivity.tenancy.testing.TenantTestSupport;
 import jakarta.persistence.EntityManager;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,43 +28,36 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.hibernate.id.IdentifierGenerationException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.jpa.JpaSystemException;
+import org.springframework.test.context.TestPropertySource;
 
 /**
  * Lease correctness under contention (binding decision 4).
  *
- * <p>These run against a real H2 database with <strong>real concurrent threads on their own JDBC
- * connections</strong>, not a mocked repository. A lease is a claim about what happens when two
+ * <p>These run against a real PostgreSQL database with <strong>real concurrent threads on their own
+ * JDBC connections</strong>, not a mocked repository. A lease is a claim about what happens when two
  * instances race; asserting it against a mock proves only that a method was called. Every interesting
  * assertion here is "exactly one winner" or "the loser cannot write".
  *
  * <p>Time is never supplied by the test either: expiry is forced with SQL-computed timestamps, so the
  * tests exercise the same database-time authority production relies on.
  */
-@DataJpaTest(
+@TestPropertySource(
         properties = {
-            "spring.datasource.url=jdbc:h2:mem:pos_supplier_lease;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-            "spring.datasource.driver-class-name=org.h2.Driver",
-            "spring.datasource.username=sa",
-            "spring.datasource.password=",
-            "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate",
-            "spring.flyway.locations=classpath:db/h2-migration",
             // 16 contenders each hold a connection while racing, plus the test's own. Without an
             // explicit ceiling the pool default can be smaller, and threads then block acquiring a
             // connection instead of racing -- which made a deliberately broken claim fail on the
             // readiness latch rather than on the winner count, hiding what the test proves.
             "spring.datasource.hikari.maximum-pool-size=24"
         })
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({JpaConfig.class, TestClockConfig.class})
-class SupplierScheduleLeaseRepositoryTest {
+class SupplierScheduleLeaseRepositoryTest extends PostgresSliceTestBase {
 
     /** Audit instant the caller binds; lease liveness still comes from database time. */
     private static final Instant AUDIT_NOW = Instant.parse("2026-08-20T12:00:00Z");
@@ -85,6 +82,17 @@ class SupplierScheduleLeaseRepositoryTest {
 
     private UUID bindingId;
     private UUID profileId;
+
+    /** The profile of the committed contention fixture, so its cleanup can name it directly. */
+    private UUID contestedProfileId;
+
+    /**
+     * The binding of the committed contention fixture, or null when the test never created one.
+     * Held on the instance so {@link #removeCommittedFixture()} owns the removal: doing it in the
+     * test's own {@code finally} would let a cleanup failure replace the assertion error that
+     * caused it, whereas an @AfterEach failure is reported alongside the test's.
+     */
+    private UUID committedFixtureBinding;
 
     @BeforeEach
     void setUp() {
@@ -180,6 +188,7 @@ class SupplierScheduleLeaseRepositoryTest {
     @Test
     void exactlyOneOfManyConcurrentClaimsWins() throws Exception {
         UUID contestedBinding = insertCommittedLeaseFixture();
+        committedFixtureBinding = contestedBinding;
         int contenders = 16;
         CountDownLatch ready = new CountDownLatch(contenders);
         CountDownLatch go = new CountDownLatch(1);
@@ -204,7 +213,6 @@ class SupplierScheduleLeaseRepositoryTest {
                     .isEqualTo(1);
         } finally {
             pool.shutdownNow();
-            deleteCommittedFixture(contestedBinding);
         }
     }
 
@@ -213,8 +221,9 @@ class SupplierScheduleLeaseRepositoryTest {
      *
      * @return the binding id whose lease will be contested
      */
-    private UUID insertCommittedLeaseFixture() throws java.sql.SQLException {
+    private UUID insertCommittedLeaseFixture() throws SQLException {
         UUID profileId = UUID.randomUUID();
+        contestedProfileId = profileId;
         UUID contestedBinding = UUID.randomUUID();
         try (var connection = dataSource.getConnection()) {
             connection.setAutoCommit(true);
@@ -248,16 +257,35 @@ class SupplierScheduleLeaseRepositoryTest {
         return contestedBinding;
     }
 
-    private void deleteCommittedFixture(UUID contestedBinding) {
+    /**
+     * Deletes the whole committed fixture, child first so the foreign keys allow it.
+     *
+     * <p>A failure here fails the test rather than being swallowed. The fixture is committed and
+     * this class's database is shared with every other Postgres-backed class in the module, under
+     * the same tenant, so a row left behind is a row another class sees —
+     * {@code ExchangeAuditWriterTest} asserts on {@code profileRepository.findAll()} and would
+     * count it. Swallowing the failure would convert this into an order-dependent failure over
+     * there, which is far harder to read than a failure here.
+     */
+    @AfterEach
+    void removeCommittedFixture() throws SQLException {
+        if (committedFixtureBinding == null) {
+            return;
+        }
         try (var connection = dataSource.getConnection()) {
             connection.setAutoCommit(true);
-            try (var statement =
-                    connection.prepareStatement("DELETE FROM supplier_schedule_lease WHERE binding_id = ?")) {
-                statement.setObject(1, contestedBinding);
-                statement.executeUpdate();
-            }
-        } catch (java.sql.SQLException ignored) {
-            // Cleanup only; the in-memory database is discarded after the class anyway.
+            delete(connection, "DELETE FROM supplier_schedule_lease WHERE binding_id = ?", committedFixtureBinding);
+            delete(connection, "DELETE FROM supplier_endpoint_binding WHERE id = ?", committedFixtureBinding);
+            delete(connection, "DELETE FROM supplier_profile WHERE vendor_profile_id = ?", contestedProfileId);
+        } finally {
+            committedFixtureBinding = null;
+        }
+    }
+
+    private static void delete(Connection connection, String sql, UUID id) throws SQLException {
+        try (var statement = connection.prepareStatement(sql)) {
+            statement.setObject(1, id);
+            statement.executeUpdate();
         }
     }
 
@@ -268,7 +296,12 @@ class SupplierScheduleLeaseRepositoryTest {
      */
     private Callable<Integer> claimInOwnConnection(
             UUID targetBinding, String owner, CountDownLatch ready, CountDownLatch go) {
-        return () -> {
+        // asTenant, not the test thread's binding: TenantContext is deliberately not inheritable, and
+        // TenantAwareDataSource binds the tenant at checkout. An unbound contender would get a
+        // connection with no app.current_tenant, and row-level security would hide the contested
+        // lease from it -- reporting 0 winners, which is exactly how this test fails when its fixture
+        // is invisible.
+        return () -> TenantTestSupport.asTenant(TENANT, () -> {
             try (var connection = dataSource.getConnection();
                     var statement = connection.prepareStatement("UPDATE supplier_schedule_lease SET owner_token = ?,"
                             + " leased_until = now() + CAST(? AS INTEGER) * INTERVAL '1' SECOND,"
@@ -284,7 +317,7 @@ class SupplierScheduleLeaseRepositoryTest {
                 go.await(10, TimeUnit.SECONDS);
                 return statement.executeUpdate();
             }
-        };
+        });
     }
 
     // ── Stolen lease: the loser must not be able to write ───────────────────────────
@@ -491,11 +524,16 @@ class SupplierScheduleLeaseRepositoryTest {
                 .capability(SupplierCapability.STOCK_REPORT)
                 .build();
 
+        // The named constraint, not the driver's exception class: PostgreSQL reports an integrity
+        // violation as a plain PSQLException with SQLSTATE 23503, never as the
+        // java.sql.SQLIntegrityConstraintViolationException the H2 fork this class used to run on
+        // threw. Spring's translation to DataIntegrityViolationException is the portable assertion,
+        // and the constraint name pins which rule fired.
         assertThatThrownBy(() -> leaseRepository.saveAndFlush(orphan))
                 .as("a binding id referencing no binding must not become a permanently unclaimable lease")
-                .hasRootCauseInstanceOf(java.sql.SQLIntegrityConstraintViolationException.class)
+                .isInstanceOf(DataIntegrityViolationException.class)
                 .rootCause()
-                .hasMessageContaining("FK_SLEASE_BINDING");
+                .hasMessageContaining("fk_slease_binding");
     }
 
     @Test

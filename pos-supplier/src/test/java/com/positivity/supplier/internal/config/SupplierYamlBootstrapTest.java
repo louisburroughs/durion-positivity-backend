@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.supplier.PostgresSliceTestBase;
 import com.positivity.supplier.TestClockConfig;
 import com.positivity.supplier.internal.config.SupplierProfileProperties.Accounts;
 import com.positivity.supplier.internal.config.SupplierProfileProperties.AuthSpec;
@@ -37,8 +38,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -49,19 +48,8 @@ import org.springframework.transaction.PlatformTransactionManager;
  * actor {@code system:yaml-bootstrap}, and startup rejection of plaintext-looking secrets and
  * ADMIN collisions.
  */
-@DataJpaTest(
-        properties = {
-            "spring.datasource.url=jdbc:h2:mem:pos_supplier_bootstrap;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-            "spring.datasource.driver-class-name=org.h2.Driver",
-            "spring.datasource.username=sa",
-            "spring.datasource.password=",
-            "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate",
-            "spring.flyway.locations=classpath:db/h2-migration"
-        })
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({JpaConfig.class, TestClockConfig.class})
-class SupplierYamlBootstrapTest {
+class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
 
     private static final UUID LOCATION_A = UUID.fromString("018f0000-0000-7000-8000-0000000000a1");
     private static final UUID LOCATION_B = UUID.fromString("018f0000-0000-7000-8000-0000000000b2");

@@ -8,36 +8,24 @@ import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
 import com.positivity.supplier.internal.registry.AdapterRegistry;
 import com.positivity.supplier.internal.registry.AdapterResolution;
+import com.positivity.supplier.tenancy.PostgresTenancyTestBase;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Boots the full application context against H2 in PostgreSQL mode with Flyway enabled,
- * proving the module scaffold holds together: the V1 baseline
- * ({@code V1__baseline_supplier_schema.sql}) applies, and the {@link AdapterRegistry}
- * collects Spring-registered {@code SupplierAdapterCodec} beans and resolves them by triple
- * (ADR-0051 §3).
+ * Boots the full application context against the real PostgreSQL baseline
+ * ({@code V1__baseline_supplier.sql}) with Flyway enabled, proving the module scaffold holds
+ * together: the baseline applies, and the {@link AdapterRegistry} collects Spring-registered
+ * {@code SupplierAdapterCodec} beans and resolves them by triple (ADR-0051 §3).
  */
-@SpringBootTest(
-        properties = {
-            "spring.datasource.url=jdbc:h2:mem:pos_supplier_smoke;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-            "spring.datasource.driver-class-name=org.h2.Driver",
-            "spring.datasource.username=sa",
-            "spring.datasource.password=",
-            "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate",
-            "spring.flyway.locations=classpath:db/h2-migration",
-            "eureka.client.enabled=false"
-        })
 @Import(PosSupplierApplicationSmokeTest.TestCodecConfig.class)
-class PosSupplierApplicationSmokeTest {
+class PosSupplierApplicationSmokeTest extends PostgresTenancyTestBase {
 
     @TestConfiguration
     static class TestCodecConfig {
@@ -55,6 +43,8 @@ class PosSupplierApplicationSmokeTest {
 
     @Test
     void flywayBaselineCreatesProcessedEventsTable() {
+        // processed_events is tenant-global (db/tenancy-global-tables.txt): no policy, so it reads
+        // the same with no tenant bound as with one.
         Integer rows = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM processed_events", Integer.class);
         assertThat(rows).isZero();
     }
@@ -67,36 +57,40 @@ class PosSupplierApplicationSmokeTest {
         // index the per-tenant manifest comparison reads.
         List<Map<String, Object>> columns =
                 jdbcTemplate.queryForList("SELECT column_name, data_type, character_maximum_length, is_nullable"
-                        + " FROM information_schema.columns WHERE table_name = 'PROCESSED_EVENTS'"
+                        + " FROM information_schema.columns WHERE table_name = 'processed_events'"
                         + " ORDER BY ordinal_position");
 
         assertThat(columns)
                 .extracting(
-                        c -> c.get("COLUMN_NAME"),
-                        c -> c.get("DATA_TYPE"),
-                        c -> c.get("CHARACTER_MAXIMUM_LENGTH"),
-                        c -> c.get("IS_NULLABLE"))
+                        c -> c.get("column_name"),
+                        c -> c.get("data_type"),
+                        c -> c.get("character_maximum_length"),
+                        c -> c.get("is_nullable"))
                 .containsExactly(
-                        tuple("EVENT_ID", "CHARACTER VARYING", 36L, "NO"),
-                        tuple("TENANT_ID", "UUID", null, "YES"),
-                        tuple("OWNER", "CHARACTER VARYING", 64L, "NO"),
-                        tuple("PROCESSED_AT", "TIMESTAMP WITH TIME ZONE", null, "NO"));
+                        tuple("event_id", "character varying", 36, "NO"),
+                        tuple("tenant_id", "uuid", null, "YES"),
+                        tuple("owner", "character varying", 64, "NO"),
+                        tuple("processed_at", "timestamp with time zone", null, "NO"));
 
         List<String> primaryKeyColumns = jdbcTemplate.queryForList(
                 "SELECT kcu.column_name FROM information_schema.table_constraints tc"
                         + " JOIN information_schema.key_column_usage kcu"
                         + " ON tc.constraint_name = kcu.constraint_name"
-                        + " WHERE tc.table_name = 'PROCESSED_EVENTS' AND tc.constraint_type = 'PRIMARY KEY'",
+                        + " WHERE tc.table_name = 'processed_events' AND tc.constraint_type = 'PRIMARY KEY'",
                 String.class);
-        assertThat(primaryKeyColumns).containsExactly("EVENT_ID");
+        assertThat(primaryKeyColumns).containsExactly("event_id");
 
+        // pg_index rather than information_schema: PostgreSQL exposes no portable view of the
+        // columns of a plain (non-constraint) index.
         List<String> ownerIndexColumns = jdbcTemplate.queryForList(
-                "SELECT column_name FROM information_schema.index_columns"
-                        + " WHERE table_name = 'PROCESSED_EVENTS'"
-                        + " AND index_name = 'IDX_PROCESSED_EVENTS_OWNER_TENANT_EVENT'"
-                        + " ORDER BY ordinal_position",
+                "SELECT a.attname FROM pg_class t"
+                        + " JOIN pg_index ix ON t.oid = ix.indrelid"
+                        + " JOIN pg_class i ON i.oid = ix.indexrelid"
+                        + " JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY (ix.indkey)"
+                        + " WHERE i.relname = 'idx_processed_events_owner_tenant_event'"
+                        + " ORDER BY array_position(ix.indkey::smallint[], a.attnum)",
                 String.class);
-        assertThat(ownerIndexColumns).containsExactly("OWNER", "TENANT_ID", "EVENT_ID");
+        assertThat(ownerIndexColumns).containsExactly("owner", "tenant_id", "event_id");
     }
 
     @Test

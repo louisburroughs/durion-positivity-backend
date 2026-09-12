@@ -2,6 +2,7 @@ package com.positivity.supplier.internal.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.supplier.PostgresSliceTestBase;
 import com.positivity.supplier.TestClockConfig;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
@@ -15,31 +16,19 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 /**
  * Database-level behaviour of the PRICAT import-run read surface (#1637 decisions 3-5): the V19
  * run-metadata columns round-trip through the entity mapping, the filterable search switches each
  * null predicate off, and the freshness aggregates answer over the right subsets.
  */
-@DataJpaTest(
-        properties = {
-            "spring.datasource.url=jdbc:h2:mem:pos_supplier_pricatimport;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-            "spring.datasource.driver-class-name=org.h2.Driver",
-            "spring.datasource.username=sa",
-            "spring.datasource.password=",
-            "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate",
-            "spring.flyway.locations=classpath:db/h2-migration"
-        })
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({JpaConfig.class, TestClockConfig.class})
 @DisplayName("PRICAT import-run persistence and search (#1637)")
-class PriceCatalogImportRepositoryTest {
+class PriceCatalogImportRepositoryTest extends PostgresSliceTestBase {
 
     private static final UUID PROFILE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b");
     private static final UUID OTHER_PROFILE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c");
@@ -148,6 +137,26 @@ class PriceCatalogImportRepositoryTest {
             seed();
 
             Page<PriceCatalogImportEntity> page = search(null, null, null, null);
+
+            assertThat(page.getTotalElements()).isEqualTo(4);
+            assertThat(page.getContent())
+                    .extracting(PriceCatalogImportEntity::getFetchedAt)
+                    .containsExactly(
+                            at("2026-08-13T09:00:00Z"),
+                            at("2026-08-12T09:00:00Z"),
+                            at("2026-08-11T09:00:00Z"),
+                            at("2026-08-10T09:00:00Z"));
+        }
+
+        @Test
+        void unpagedReturnsEveryMatchStillNewestFirst() {
+            seed();
+
+            // Pageable.unpaged() is a valid argument to the repository signature. It reports a page
+            // size of zero, which PageRequest.of rejects, so an unpaged request has to bypass it --
+            // otherwise the search throws before it runs. The imposed sort still applies.
+            Page<PriceCatalogImportEntity> page =
+                    repository.search(PROFILE_ID, null, null, null, null, Pageable.unpaged());
 
             assertThat(page.getTotalElements()).isEqualTo(4);
             assertThat(page.getContent())

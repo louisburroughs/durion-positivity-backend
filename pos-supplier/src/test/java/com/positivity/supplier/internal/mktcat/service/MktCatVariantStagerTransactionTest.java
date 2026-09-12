@@ -7,6 +7,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
 import com.positivity.domainevents.supplier.SupplierCatalogEnrichmentText;
+import com.positivity.supplier.PostgresSliceTestBase;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.domain.model.MarketingVariant;
 import com.positivity.supplier.internal.domain.model.SupplierRef;
@@ -24,8 +25,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -53,21 +52,10 @@ import tools.jackson.databind.json.JsonMapper;
  * whether the inner write ever committed. {@code Propagation.NOT_SUPPORTED} lets the bean manage its
  * own transaction, and cleanup goes over a plain JDBC connection.
  */
-@DataJpaTest(
-        properties = {
-            "spring.datasource.url=jdbc:h2:mem:pos_supplier_mktcat_tx;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-            "spring.datasource.driver-class-name=org.h2.Driver",
-            "spring.datasource.username=sa",
-            "spring.datasource.password=",
-            "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate",
-            "spring.flyway.locations=classpath:db/h2-migration"
-        })
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({JpaConfig.class, MktCatVariantStager.class, MktCatVariantStagerTransactionTest.StagerSupportConfig.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @DisplayName("MktCatVariantStager — the staged row and the outbox event commit together")
-class MktCatVariantStagerTransactionTest {
+class MktCatVariantStagerTransactionTest extends PostgresSliceTestBase {
 
     @TestConfiguration
     static class StagerSupportConfig {

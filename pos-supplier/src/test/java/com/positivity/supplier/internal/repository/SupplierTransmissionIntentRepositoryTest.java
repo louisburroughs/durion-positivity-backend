@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.supplier.PostgresSliceTestBase;
 import com.positivity.supplier.TestClockConfig;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.domain.model.SupplierPurchaseOrder;
@@ -19,12 +20,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.test.context.TestPropertySource;
 
 /**
  * The two database-level guarantees of the transmission ledger, asserted against a real schema
@@ -34,23 +35,15 @@ import org.springframework.data.domain.PageRequest;
  * about either. The unique index is the last line of defence against a second physical order, and
  * the ordering is where a null sorts — which is a dialect behaviour, not application logic.
  */
-@DataJpaTest(
+@TestPropertySource(
         properties = {
-            "spring.datasource.url=jdbc:h2:mem:pos_supplier_intent;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-            "spring.datasource.driver-class-name=org.h2.Driver",
-            "spring.datasource.username=sa",
-            "spring.datasource.password=",
-            "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate",
-            "spring.flyway.locations=classpath:db/h2-migration",
             "spring.jpa.properties.hibernate.session_factory.statement_inspector="
                     + "com.positivity.supplier.internal.repository.SupplierTransmissionIntentRepositoryTest"
                     + "$CapturedSql"
         })
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({JpaConfig.class, TestClockConfig.class})
 @DisplayName("Transmission ledger persistence (ADR-0052, #1226/#1318)")
-class SupplierTransmissionIntentRepositoryTest {
+class SupplierTransmissionIntentRepositoryTest extends PostgresSliceTestBase {
 
     private static final UUID PROFILE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5c");
     private static final UUID PURCHASE_ORDER_ID = UUID.fromString("0198f3a2-4c7e-7a1b-9c2d-000000000001");
@@ -305,13 +298,41 @@ class SupplierTransmissionIntentRepositoryTest {
         }
 
         @Test
+        void unpagedReturnsEveryIntentStillNewestFirst() {
+            searchable(
+                    TransmissionAttemptState.CONFIRMED,
+                    PROFILE_ID,
+                    "PO-1",
+                    null,
+                    Instant.parse("2026-08-01T00:00:00Z"));
+            searchable(
+                    TransmissionAttemptState.CONFIRMED,
+                    PROFILE_ID,
+                    "PO-2",
+                    null,
+                    Instant.parse("2026-08-02T00:00:00Z"));
+
+            // Pageable.unpaged() is a valid argument to the repository signature. It reports a page
+            // size of zero, which PageRequest.of rejects, so an unpaged request has to bypass it --
+            // otherwise the search throws before it runs. The imposed sort still applies.
+            Page<SupplierTransmissionIntentEntity> page =
+                    intentRepository.search(null, null, null, null, null, Pageable.unpaged());
+
+            assertThat(page.getTotalElements()).isEqualTo(2);
+            assertThat(page.getContent())
+                    .extracting(SupplierTransmissionIntentEntity::getPurchaseOrderNumber)
+                    .containsExactly("PO-2", "PO-1");
+        }
+
+        @Test
         void emitsNoUntypedPlaceholderForAnAbsentFilter() {
-            // The regression guard for issue #1891, and the one assertion here that H2 cannot make
-            // on its own. Written as `(:param IS NULL OR column = :param)`, this search emitted a
-            // bare `? is null`, which H2 accepts and PostgreSQL rejects at parse time -- before any
-            // value is bound, so every call to the endpoint was a 500 while this test class stayed
-            // green. CI has no PostgreSQL to fail on it, so what is asserted instead is the shape
-            // of the SQL: an absent filter must contribute no placeholder at all.
+            // The regression guard for issue #1891. Written as `(:param IS NULL OR column = :param)`,
+            // this search emitted a bare `? is null`, which the H2 fork this class used to run on
+            // accepted and PostgreSQL rejects at parse time -- before any value is bound, so every
+            // call to the endpoint was a 500 while this test class stayed green. The class now runs
+            // on PostgreSQL, so the other tests here would fail on a reintroduction too; the SQL
+            // shape is still asserted directly because it names the defect exactly: an absent filter
+            // must contribute no placeholder at all.
             CapturedSql.clear();
 
             intentRepository.search(null, null, null, null, null, PageRequest.of(0, 10));

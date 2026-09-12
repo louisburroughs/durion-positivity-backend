@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.supplier.PostgresSliceTestBase;
 import com.positivity.supplier.TestClockConfig;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
@@ -24,8 +25,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,17 +36,6 @@ import org.springframework.transaction.annotation.Transactional;
  * checkpoint that can commit independently of its page is how a window gets silently skipped, and no
  * error surfaces when it happens. Everything else in this class is scaffolding around proving that.
  */
-@DataJpaTest(
-        properties = {
-            "spring.datasource.url=jdbc:h2:mem:pos_supplier_coord;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-            "spring.datasource.driver-class-name=org.h2.Driver",
-            "spring.datasource.username=sa",
-            "spring.datasource.password=",
-            "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate",
-            "spring.flyway.locations=classpath:db/h2-migration"
-        })
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({JpaConfig.class, TestClockConfig.class, SupplierScheduleCoordinator.class})
 // Test-managed transactions OFF, and this is a requirement of what is under test rather than a preference.
 // The coordinator's claim/heartbeat/stillOwns/release each run REQUIRES_NEW, so inside @DataJpaTest's own
@@ -55,7 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
 // match zero rows -- every test would fail for a reason that has nothing to do with lease semantics. Fixtures
 // here therefore commit (each repository call is its own transaction) and are cleaned up over plain JDBC.
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-class SupplierScheduleCoordinatorTest {
+class SupplierScheduleCoordinatorTest extends PostgresSliceTestBase {
 
     private static final Instant WINDOW_END = Instant.parse("2026-08-11T03:00:00Z");
 
@@ -333,9 +321,9 @@ class SupplierScheduleCoordinatorTest {
 
     /**
      * The lease lifecycle operations must each run in their own transaction, and this is pinned structurally
-     * because H2 <em>cannot</em> reproduce the hazard: H2's {@code now()} is statement-scoped, while
-     * <strong>PostgreSQL's {@code now()} is {@code transaction_timestamp()} and does not advance for the
-     * transaction's lifetime</strong>.
+     * rather than behaviourally: <strong>PostgreSQL's {@code now()} is {@code transaction_timestamp()} and
+     * does not advance for the transaction's lifetime</strong>, so the hazard needs a page transaction that
+     * really lasts minutes to show itself, which no test can afford to reproduce.
      *
      * <p>On PostgreSQL, joining a long page transaction would break each one differently. A heartbeat five
      * minutes into a ten-minute page would compute its new expiry from the moment the page STARTED — so the
@@ -344,10 +332,9 @@ class SupplierScheduleCoordinatorTest {
      * reading and report an expired lease as live. {@code release} would roll back with a failed page, holding
      * the lease until natural expiry — the one case where prompt release matters most.
      *
-     * <p>Every behavioural test of these passes on H2 either way, which is exactly why the annotation is what
-     * gets asserted. {@code clock_timestamp()} was rejected as the alternative fix: it is PostgreSQL-only, so
-     * every contention test that establishes this lease's correctness would stop running, and it would not fix
-     * the release-rollback half at all.
+     * <p>Every behavioural test of these passes either way, which is exactly why the annotation is what gets
+     * asserted. {@code clock_timestamp()} was rejected as the alternative fix: it does not fix the
+     * release-rollback half at all.
      *
      * <p>{@code runPage} is asserted to be {@code REQUIRED}, because binding decision 4 requires the
      * checkpoint to commit with the page it describes; a checkpoint committing independently would mark a
