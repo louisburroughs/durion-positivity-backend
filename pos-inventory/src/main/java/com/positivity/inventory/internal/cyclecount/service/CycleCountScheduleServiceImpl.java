@@ -21,7 +21,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -102,7 +101,9 @@ public class CycleCountScheduleServiceImpl implements CycleCountScheduleService 
     public @NonNull List<CycleCountScheduleResponse> listSchedules(
             UUID locationId, Boolean active, boolean dueOnly, int page, int size) {
         LocalDate dueOnOrBefore = dueOnly ? LocalDate.now(clock) : null;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        // The listing order is the repository's to impose (CycleCountScheduleRepository.NEWEST_FIRST),
+        // because it is part of the endpoint's contract rather than this caller's preference.
+        Pageable pageable = PageRequest.of(page, size);
         // ADR-0061 §3 (#1872): a named location is gated; none narrows a scoped caller to their reach.
         Optional<Set<UUID>> reach =
                 locationScopeService.narrowTo(locationId, InventoryPermissionRegistry.CYCLE_COUNT_VIEW);

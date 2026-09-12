@@ -6,24 +6,39 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface ProductMsrpRepository extends JpaRepository<ProductMsrpEntity, UUID> {
+public interface ProductMsrpRepository
+        extends JpaRepository<ProductMsrpEntity, UUID>, JpaSpecificationExecutor<ProductMsrpEntity> {
 
-    @Query("""
-            select m from ProductMsrpEntity m
-                                                where m.product.id = :productId
-              and (m.effectiveEndDate is null or m.effectiveEndDate >= :startDate)
-              and (:endDate is null or m.effectiveStartDate <= :endDate)
-              and (:excludeMsrpId is null or m.msrpId <> :excludeMsrpId)
-            """)
-    List<ProductMsrpEntity> findOverlapping(
-            @Param("productId") UUID productId,
-            @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate,
-            @Param("excludeMsrpId") UUID excludeMsrpId);
+    /**
+     * The MSRP records of one product whose effective window overlaps a candidate's — the check a
+     * create or an update is admitted by.
+     *
+     * <p>The filter is a {@link ProductMsrpOverlapSearch} specification rather than a JPQL string of
+     * {@code (:param IS NULL OR …)} clauses: see that class for why the string form made PostgreSQL
+     * reject the statement — for a candidate carrying an {@code endDate}, and only for one (issue
+     * #1891).
+     *
+     * @param productId the product whose MSRP history is being checked
+     * @param startDate the candidate's inclusive start
+     * @param endDate the candidate's inclusive end, or null for an open-ended candidate
+     * @param excludeMsrpId the record being updated, so it cannot overlap itself, or null
+     * @return the overlapping records, empty when the candidate is admissible
+     */
+    @NonNull
+    default List<ProductMsrpEntity> findOverlapping(
+            @NonNull UUID productId,
+            @NonNull LocalDate startDate,
+            @Nullable LocalDate endDate,
+            @Nullable UUID excludeMsrpId) {
+        return findAll(ProductMsrpOverlapSearch.matching(productId, startDate, endDate, excludeMsrpId));
+    }
 
     @Query("""
             select m from ProductMsrpEntity m
