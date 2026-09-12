@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Pins that creating a purchase order through the service - the path the REST endpoint takes -
@@ -30,6 +31,13 @@ import org.springframework.test.context.jdbc.Sql;
  */
 @SpringBootTest
 @ActiveProfiles("test")
+// Rolled back. This class shares its in-memory database with every other class on the "test"
+// profile, and the order it creates carries currency USD -- which is exactly the population
+// PurchaseOrderListFilterIT counts. Committing it made that class assert 10 and see 11, and 20 and
+// see 21, in three tests, whenever this one ran first. Rollback costs this test nothing: the
+// service call joins the test transaction, so the flush still fires the created_by NOT NULL
+// constraint this exists to prove, and the read-back below still sees the row.
+@Transactional
 // The test schema comes from ddl-auto, which creates sequences only for @GeneratedValue
 // mappings. PO numbers are drawn from a standalone sequence that V14 creates and Hibernate
 // therefore does not - so it is declared here rather than the create path being untestable.
