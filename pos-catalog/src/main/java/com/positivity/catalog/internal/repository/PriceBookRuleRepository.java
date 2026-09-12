@@ -7,11 +7,15 @@ import com.positivity.catalog.internal.entity.PriceBookRuleTargetType;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface PriceBookRuleRepository extends JpaRepository<PriceBookRuleEntity, UUID> {
+public interface PriceBookRuleRepository
+        extends JpaRepository<PriceBookRuleEntity, UUID>, JpaSpecificationExecutor<PriceBookRuleEntity> {
 
     @Query("""
             select r from PriceBookRuleEntity r
@@ -20,27 +24,45 @@ public interface PriceBookRuleRepository extends JpaRepository<PriceBookRuleEnti
             """)
     List<PriceBookRuleEntity> findAllByPriceBookId(@Param("priceBookId") UUID priceBookId);
 
-    @Query("""
-            select r from PriceBookRuleEntity r
-            where r.priceBook.priceBookId = :priceBookId
-              and r.status <> com.positivity.catalog.internal.entity.PriceBookRuleStatus.INACTIVE
-              and r.targetType = :targetType
-              and ((r.targetId is null and :targetId is null) or r.targetId = :targetId)
-              and r.conditionType = :conditionType
-              and ((r.conditionValue is null and :conditionValue is null) or r.conditionValue = :conditionValue)
-              and r.effectiveStartAt <= :windowEnd
-              and (:windowStart is null or r.effectiveEndAt is null or r.effectiveEndAt >= :windowStart)
-              and (:excludeRuleId is null or r.ruleId <> :excludeRuleId)
-            """)
-    List<PriceBookRuleEntity> findConflicts(
-            @Param("priceBookId") UUID priceBookId,
-            @Param("targetType") PriceBookRuleTargetType targetType,
-            @Param("targetId") UUID targetId,
-            @Param("conditionType") PriceBookRuleConditionType conditionType,
-            @Param("conditionValue") String conditionValue,
-            @Param("windowStart") Instant windowStart,
-            @Param("windowEnd") Instant windowEnd,
-            @Param("excludeRuleId") UUID excludeRuleId);
+    /**
+     * The active rules of one price book that would overlap a candidate rule's window on the same
+     * target and condition — the check a create or an update is admitted by.
+     *
+     * <p>The filter is a {@link PriceBookRuleConflictSearch} specification rather than a JPQL string
+     * of {@code (:param IS NULL OR …)} clauses: see that class for why the string form returned 500
+     * from PostgreSQL for every call while passing on H2 (issue #1891).
+     *
+     * @param priceBookId the book the candidate rule belongs to
+     * @param targetType the candidate's target type
+     * @param targetId the candidate's target, or null for an untargeted rule — matched null-safely,
+     *     because two untargeted rules do conflict with each other
+     * @param conditionType the candidate's condition type
+     * @param conditionValue the candidate's condition value, or null — matched null-safely
+     * @param windowStart inclusive lower bound of the candidate's window, or null for no lower bound
+     * @param windowEnd inclusive upper bound of the candidate's window
+     * @param excludeRuleId the rule being updated, so it cannot conflict with itself, or null
+     * @return the conflicting rules, empty when the candidate is admissible
+     */
+    @NonNull
+    default List<PriceBookRuleEntity> findConflicts(
+            @NonNull UUID priceBookId,
+            @NonNull PriceBookRuleTargetType targetType,
+            @Nullable UUID targetId,
+            @NonNull PriceBookRuleConditionType conditionType,
+            @Nullable String conditionValue,
+            @Nullable Instant windowStart,
+            @NonNull Instant windowEnd,
+            @Nullable UUID excludeRuleId) {
+        return findAll(PriceBookRuleConflictSearch.matching(
+                priceBookId,
+                targetType,
+                targetId,
+                conditionType,
+                conditionValue,
+                windowStart,
+                windowEnd,
+                excludeRuleId));
+    }
 
     @Query("""
             select r from PriceBookRuleEntity r
