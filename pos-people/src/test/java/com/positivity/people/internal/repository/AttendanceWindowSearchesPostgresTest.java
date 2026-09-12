@@ -35,6 +35,13 @@ import org.springframework.data.domain.Pageable;
  * statement to PostgreSQL can see it. Both the bound and the unbound case of each optional filter is
  * exercised, because the failure is not always symmetric.
  *
+ * <p>What decides it is inferability rather than the parameter's Java type: a placeholder fails when
+ * the statement gives PostgreSQL nothing to infer from. A temporal lands there because pgjdbc sends
+ * it with an unspecified OID, and a {@code String} lands there too when its only appearances are an
+ * {@code IS NULL} test and a function call such as {@code upper(…)} — how pos-tax's exemption lookup
+ * failed with {@code function upper(bytea) does not exist}. Each optional filter here is compared
+ * against a column, which is what makes it inferable.
+ *
  * <p>The window bounds themselves are never null: an absent day filter widens them to a bounding
  * instant instead, which is what keeps a temporal placeholder out of every {@code IS NULL} here.
  */

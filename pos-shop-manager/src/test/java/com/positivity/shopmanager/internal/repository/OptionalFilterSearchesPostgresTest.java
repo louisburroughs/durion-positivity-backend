@@ -42,7 +42,19 @@ import org.springframework.data.domain.Pageable;
  * they are harmless only because a comparison gives the server an operand to infer from, where an
  * {@code IS NULL} would not.
  *
- * <p>Each filter is exercised absent and supplied, because the failure is not always symmetric.
+ * <h2>What actually decides it is inferability, not the parameter's type</h2>
+ *
+ * A placeholder is rejected when the statement gives PostgreSQL nothing to infer its type from. A
+ * temporal lands there because pgjdbc sends it with an unspecified type OID; a {@code String} lands
+ * there too if its only appearances are an {@code IS NULL} test and a function call such as {@code
+ * upper(…)}, which is how pos-tax's exemption lookup failed with {@code function upper(bytea) does
+ * not exist}. Every optional filter here is compared against a column — the roster's {@code
+ * skillCode} inside the {@code EXISTS} subquery, the audit search's six beside their own columns —
+ * which is what makes them inferable, and it is what this test would stop anyone quietly removing.
+ *
+ * <p>Each filter is exercised absent and supplied, because the failure is not symmetric in either
+ * direction: the temporal case fails on every call, and the {@code upper(bytea)} case failed only
+ * when the filter was null.
  */
 @DisplayName("All-optional-filter searches on PostgreSQL (#1891)")
 class OptionalFilterSearchesPostgresTest extends PostgresSliceTestBase {

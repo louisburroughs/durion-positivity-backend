@@ -7,8 +7,10 @@ import com.positivity.vehicle.internal.entity.VehicleRecord;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
@@ -135,5 +137,56 @@ class VehicleFactReplayRepositoryTest extends PostgresSliceTestBase {
         // that rebuilds the pageable has to carry the unpaged case through rather than throw.
         assertThat(idsOf(vehicles.findForReplay(null, FIXTURE_STAMP, Pageable.unpaged())))
                 .containsExactly(ids.get(0), ids.get(1), ids.get(2));
+    }
+
+    /**
+     * {@link VehicleRecordRepository#searchByQuery} — the prefix search behind {@code GET
+     * /v1/vehicles/search}.
+     *
+     * <p>Here for the second half of the inference rule rather than the first: {@code :query} is
+     * never compared with a column. Its only appearances are inside {@code LOWER(CONCAT(:query,
+     * '%'))}, which is the shape that made a {@code String} parameter fail in pos-tax with {@code
+     * function upper(bytea) does not exist} — Hibernate had no column to infer from and bound the
+     * placeholder as opaque binary. It does not fail here, because {@code CONCAT} resolves the
+     * operand against its other, literal argument; that is a fact about the statement PostgreSQL
+     * receives, so only PostgreSQL can confirm it.
+     */
+    @Nested
+    @DisplayName("prefix search (function-only placeholder)")
+    class PrefixSearch {
+
+        @Test
+        @DisplayName("matches a VIN, a unit number and a plate by prefix, and is case-insensitive")
+        void matchesByPrefix() {
+            VehicleRecord saved = vehicles.saveAndFlush(vehicle("S"));
+
+            assertThat(idsOf(vehicles.searchByQuery(saved.getVinNormalized().substring(0, 6))))
+                    .contains(saved.getVehicleId());
+            assertThat(idsOf(vehicles.searchByQuery(
+                            saved.getVinNormalized().substring(0, 6).toLowerCase(Locale.ROOT))))
+                    .as("the search folds case on both sides")
+                    .contains(saved.getVehicleId());
+            assertThat(idsOf(vehicles.searchByQuery("UNIT-S")))
+                    .as("the unit number is searched too")
+                    .contains(saved.getVehicleId());
+        }
+
+        @Test
+        @DisplayName("a query matching nothing is an empty result, not a failure")
+        void unmatchedQueryIsEmpty() {
+            vehicles.saveAndFlush(vehicle("T"));
+
+            assertThat(vehicles.searchByQuery("ZZZZ-no-such-vehicle")).isEmpty();
+        }
+
+        @Test
+        @DisplayName("an empty query is still a legal statement")
+        void emptyQueryIsLegal() {
+            VehicleRecord saved = vehicles.saveAndFlush(vehicle("U"));
+
+            // CONCAT('', '%') is the everything pattern; what matters is that PostgreSQL accepts
+            // the statement rather than rejecting the placeholder's type.
+            assertThat(idsOf(vehicles.searchByQuery(""))).contains(saved.getVehicleId());
+        }
     }
 }
