@@ -2,18 +2,13 @@ package com.positivity.customer.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.customer.PostgresIntegrationTestBase;
 import com.positivity.customer.internal.dto.CreateCommercialAccountRequest;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.test.context.ActiveProfiles;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * Pins that commercial accounts created in quick succession each get their own customer number.
@@ -27,15 +22,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * <p>Runs against a real Postgres so the sequence and the unique constraint are the ones that
  * ship: the default H2 profile disables Flyway, so neither exists there.
  */
-@SpringBootTest
-@ActiveProfiles("pg")
-@Testcontainers
 @DisplayName("Commercial customer numbers are unique within a single timestamp window")
-class CommercialCustomerNumberIT {
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+class CommercialCustomerNumberIT extends PostgresIntegrationTestBase {
 
     @Autowired
     private PartyService partyService;

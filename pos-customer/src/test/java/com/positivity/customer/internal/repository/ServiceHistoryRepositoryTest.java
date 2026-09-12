@@ -2,6 +2,9 @@ package com.positivity.customer.internal.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.customer.PostgresSliceTestBase;
+import com.positivity.customer.TestClockConfig;
+import com.positivity.customer.internal.config.JpaAuditingConfig;
 import com.positivity.customer.internal.entity.FollowUpTask;
 import com.positivity.customer.internal.entity.ServiceHistory;
 import com.positivity.customer.internal.enums.FollowUpStatus;
@@ -9,22 +12,19 @@ import com.positivity.customer.internal.enums.FollowUpType;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.test.context.ActiveProfiles;
 
 /**
  * Query semantics of {@link ServiceHistoryRepository#findServiceDueCandidates} (Story #1153):
  * only the latest completion per party/vehicle qualifies, only past the cutoff, and never once
  * a reminder keyed to that completion exists.
  */
-@SpringBootTest
-@ActiveProfiles("test")
-class ServiceHistoryRepositoryTest {
+@Import({JpaAuditingConfig.class, TestClockConfig.class})
+class ServiceHistoryRepositoryTest extends PostgresSliceTestBase {
 
     private static final String SOURCE_PREFIX = "service-due:";
     private static final Instant CUTOFF = Instant.parse("2026-01-20T12:00:00Z");
@@ -36,12 +36,6 @@ class ServiceHistoryRepositoryTest {
 
     @Autowired
     private FollowUpTaskRepository followUpTaskRepository;
-
-    @BeforeEach
-    void setUp() {
-        followUpTaskRepository.deleteAll();
-        serviceHistoryRepository.deleteAll();
-    }
 
     private ServiceHistory saveHistory(UUID partyId, UUID vehicleId, Instant completedAt) {
         return serviceHistoryRepository.saveAndFlush(ServiceHistory.builder()
