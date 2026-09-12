@@ -10,13 +10,17 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /** Import-manifest bookkeeping for PRICAT fetches (ADR-0053 §7). */
-public interface PriceCatalogImportRepository extends JpaRepository<PriceCatalogImportEntity, UUID> {
+public interface PriceCatalogImportRepository
+        extends JpaRepository<PriceCatalogImportEntity, UUID>, JpaSpecificationExecutor<PriceCatalogImportEntity> {
 
     Optional<PriceCatalogImportEntity> findFirstByVendorProfileIdAndStatusOrderByFetchedAtDesc(
             UUID vendorProfileId, PriceCatalogImportStatus status);
@@ -29,38 +33,41 @@ public interface PriceCatalogImportRepository extends JpaRepository<PriceCatalog
     boolean existsByVendorProfileIdAndStatus(UUID vendorProfileId, PriceCatalogImportStatus status);
 
     /**
-     * The shared filter of the import-run search (#1637 decisions 4/6), factored out so the page
-     * query and its count cannot drift apart. Every clause but the profile scope is optional: a
-     * null parameter switches its predicate off rather than matching nothing.
-     *
-     * <p>The window binds against {@code fetchedAt} — when the vendor was called, the axis an
-     * operator reads a feed's history by — and is half-open ({@code from} inclusive, {@code to}
-     * exclusive) so adjacent windows tile without listing a boundary run twice. {@code bindingId}
-     * narrows a profile's history to one feed; pre-V19 rows carry a null binding and therefore
-     * never match a binding filter, which is the documented forward-only semantics.
+     * The listing's documented order: newest first by {@code fetchedAt}, with the UUIDv7 manifest
+     * id as the deterministic tie-break for runs recorded in the same instant. Imposed by the
+     * search rather than taken from the caller, because it is part of the endpoint's contract.
      */
-    String SEARCH_WHERE = " WHERE i.vendorProfileId = :vendorProfileId"
-            + " AND (:bindingId IS NULL OR i.bindingId = :bindingId)"
-            + " AND (:status IS NULL OR i.status = :status)"
-            + " AND (:fetchedFrom IS NULL OR i.fetchedAt >= :fetchedFrom)"
-            + " AND (:fetchedTo IS NULL OR i.fetchedAt < :fetchedTo)";
+    Sort NEWEST_FIRST = Sort.by(Sort.Order.desc("fetchedAt"), Sort.Order.desc("importManifestId"));
 
     /**
-     * The filterable import-run listing, newest first by {@code fetchedAt} with the UUIDv7 manifest
-     * id as the deterministic tie-break for runs recorded in the same instant.
+     * The filterable import-run listing (#1637 decisions 4/6). Every clause but the profile scope
+     * is optional: a null argument switches its predicate off rather than matching nothing.
+     *
+     * <p>The filter is a {@link PriceCatalogImportSearch} specification rather than a JPQL string
+     * of {@code (:param IS NULL OR …)} clauses: see that class for why the string form returned 500
+     * from PostgreSQL for every call while passing on H2. Spring Data derives the count query from
+     * the same specification, so page and count cannot drift apart.
+     *
+     * @param vendorProfileId the profile whose history is being read
+     * @param bindingId only runs of this feed, or null for every feed
+     * @param status only runs in this state, or null for every state
+     * @param fetchedFrom inclusive lower bound on {@code fetchedAt}, or null
+     * @param fetchedTo exclusive upper bound on {@code fetchedAt}, or null
+     * @param pageable the page to return; its sort is replaced by {@link #NEWEST_FIRST}
+     * @return one page of matching import runs, newest first
      */
-    @Query(
-            value = "SELECT i FROM PriceCatalogImportEntity i" + SEARCH_WHERE
-                    + " ORDER BY i.fetchedAt DESC, i.importManifestId DESC",
-            countQuery = "SELECT COUNT(i) FROM PriceCatalogImportEntity i" + SEARCH_WHERE)
     @NonNull
-    Page<PriceCatalogImportEntity> search(
-            @Param("vendorProfileId") @NonNull UUID vendorProfileId,
-            @Param("bindingId") @Nullable UUID bindingId,
-            @Param("status") @Nullable PriceCatalogImportStatus status,
-            @Param("fetchedFrom") @Nullable Instant fetchedFrom,
-            @Param("fetchedTo") @Nullable Instant fetchedTo,
-            @NonNull Pageable pageable);
+    default Page<PriceCatalogImportEntity> search(
+            @NonNull UUID vendorProfileId,
+            @Nullable UUID bindingId,
+            @Nullable PriceCatalogImportStatus status,
+            @Nullable Instant fetchedFrom,
+            @Nullable Instant fetchedTo,
+            @NonNull Pageable pageable) {
+        return findAll(
+                PriceCatalogImportSearch.matching(vendorProfileId, bindingId, status, fetchedFrom, fetchedTo),
+                PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), NEWEST_FIRST));
+    }
 
     /**
      * The vendor's own latest catalog document date over completed imports (#1637 decision 3):

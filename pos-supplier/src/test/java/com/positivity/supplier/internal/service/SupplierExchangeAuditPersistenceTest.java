@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.security.common.GatewaySecurityConstants;
+import com.positivity.supplier.PostgresSliceTestBase;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
 import com.positivity.supplier.internal.domain.model.SupplierCapability;
@@ -36,8 +37,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -62,17 +61,6 @@ import org.springframework.transaction.support.TransactionTemplate;
  * class therefore declares {@code Propagation.NOT_SUPPORTED} so each call manages its own transaction,
  * and cleans up over a plain JDBC connection.
  */
-@DataJpaTest(
-        properties = {
-            "spring.datasource.url=jdbc:h2:mem:pos_supplier_audit_read;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-            "spring.datasource.driver-class-name=org.h2.Driver",
-            "spring.datasource.username=sa",
-            "spring.datasource.password=",
-            "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate",
-            "spring.flyway.locations=classpath:db/h2-migration"
-        })
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({
     JpaConfig.class,
     AuditAccessRecorder.class,
@@ -80,7 +68,7 @@ import org.springframework.transaction.support.TransactionTemplate;
     SupplierExchangeAuditPersistenceTest.FixedClockConfig.class
 })
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-class SupplierExchangeAuditPersistenceTest {
+class SupplierExchangeAuditPersistenceTest extends PostgresSliceTestBase {
 
     @TestConfiguration
     static class FixedClockConfig {

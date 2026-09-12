@@ -559,7 +559,7 @@ alpha default tenant on every unbound path (tokens issued before `tid`, records 
 
 The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_DATASOURCE_USERNAME`
 / `POS_APP_PASSWORD`); Flyway alone uses the owner credential (`SPRING_FLYWAY_USER` /
-`SPRING_FLYWAY_PASSWORD`, `FlywayConfig`, which also honours `spring.flyway.locations` for the H2 chain).
+`SPRING_FLYWAY_PASSWORD`, `FlywayConfig`).
 
 The outbox row carries the producing tenant as data (`tenant_id`, stamped from the bound tenant by
 `SupplierOutboxEventWriter`, added by `V2__supplier_event_outbox_tenant_id.sql`); `SupplierOutboxPublisher`
@@ -573,8 +573,12 @@ virtual-thread leg, since virtual threads do not inherit the binding. The schedu
 statements are native and carry `@TenantAudited`: they name no tenant because the sweeps that run them are
 per tenant, so row-level security confines each to the bound tenant's leases.
 
-The H2 slices (`db/h2-migration`, `V21__tenancy.sql`) carry `tenant_id` with a fixed default standing in
-for `app_current_tenant()`; they run as the alpha default tenant and prove nothing about isolation.
+Every persistence test in this module runs against real PostgreSQL in Testcontainers: the
+`@SpringBootTest` ones on `PostgresTenancyTestBase`, the `@DataJpaTest` slices on
+`PostgresSliceTestBase`, both sharing one container through `SupplierPostgresContainer`, the pool
+connected as `pos_app` and the tenant bound by `TenantBindingTestExecutionListener`. The slices
+therefore boot the same baseline the application meets, row-level security included; the hand-forked
+H2 chain they used to boot (`db/h2-migration`) is gone.
 
 Proof: `TenantIsolationIT` (tenant A's `ext_product_code` row is invisible to tenant B and to an unbound
 connection, through the repository and through raw SQL) and `TenancySchemaConformanceIT` (every
@@ -625,6 +629,4 @@ nothing), then update the Angular SDK.
 - Re-publication accounting (`republish_count`, `last_republished_at`) is visible only in the logs and
   the table. An import stuck at the attempt cap is the signal an operator most needs and the admin API
   does not surface it yet.
-- V5 (`protocol_version` widened to 64) has run against H2 in PostgreSQL mode only; this environment has
-  no Docker daemon for `FlywayMigrationIT`.
 - `EndpointBindingRequest.version` is bounded but not validated against the adapter registry.
