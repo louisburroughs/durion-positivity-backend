@@ -83,8 +83,16 @@ final class PriceBookRuleConflictSearch {
         return (root, query, builder) -> {
             List<Predicate> predicates = new ArrayList<>(8);
             predicates.add(builder.equal(root.get(PRICE_BOOK).get(PRICE_BOOK_ID), priceBookId));
-            // An inactive rule is history: it can neither be conflicted with nor conflict.
-            predicates.add(builder.notEqual(root.get(STATUS), PriceBookRuleStatus.INACTIVE));
+            // Only an ACTIVE rule can be conflicted with. This was `<> INACTIVE`, which is the same
+            // set today but says something weaker: PriceBookRuleStatus carries a third constant,
+            // NOT_APPLICABLE_MISSING_BASE, and `<> INACTIVE` would let such a rule block a create or
+            // update. Nothing can produce that status — PriceBookServiceImpl writes ACTIVE on create
+            // (:119) and INACTIVE on deactivate (:157), those are its only two writes, and
+            // PriceBookRuleCreateRequestDto has no status field, so no client can supply one. The
+            // constant is reachable only from the baseline's check constraint and the response
+            // schema. Naming ACTIVE keeps this query correct whichever way that constant is
+            // resolved, and matches how findActiveRulesForBooks states its own filter.
+            predicates.add(builder.equal(root.get(STATUS), PriceBookRuleStatus.ACTIVE));
             predicates.add(builder.equal(root.get(TARGET_TYPE), targetType));
             predicates.add(
                     targetId == null

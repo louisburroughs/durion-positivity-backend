@@ -124,6 +124,33 @@ class PriceBookRuleConflictSearchTest extends PostgresSliceTestBase {
     }
 
     @Test
+    void aRuleThatIsNeitherActiveNorInactiveDoesNotBlock() {
+        // PriceBookRuleStatus has a third constant, NOT_APPLICABLE_MISSING_BASE. No production path
+        // can produce it — PriceBookServiceImpl writes only ACTIVE on create and INACTIVE on
+        // deactivate, and PriceBookRuleCreateRequestDto carries no status field — so this fixture
+        // sets it on the entity directly, which is the only way such a row can exist at all. It is
+        // pinned rather than left to chance because the constant IS reachable from outside the
+        // application: the baseline's price_book_rule_status_check admits it and the response schema
+        // publishes it, so a data fix or an import could put one in the table.
+        //
+        // The decision this records: a rule whose base is missing is not in force, so it does not
+        // block a create or an update. Under the previous `status <> INACTIVE` filter it would have.
+        rule(PriceBookRuleTargetType.SKU, TARGET, null, JAN, FEB, PriceBookRuleStatus.NOT_APPLICABLE_MISSING_BASE);
+
+        assertThat(rules.findConflicts(
+                        book.getPriceBookId(),
+                        PriceBookRuleTargetType.SKU,
+                        TARGET,
+                        PriceBookRuleConditionType.NONE,
+                        null,
+                        JAN,
+                        FEB,
+                        null))
+                .as("a rule that is not in force must not block an overlapping one")
+                .isEmpty();
+    }
+
+    @Test
     void treatsAnAbsentTargetAndConditionValueAsAValueToMatch() {
         PriceBookRuleEntity untargeted =
                 rule(PriceBookRuleTargetType.GLOBAL, null, null, JAN, FEB, PriceBookRuleStatus.ACTIVE);
