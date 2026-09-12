@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -82,6 +81,26 @@ class CatalogLookupUriTest {
     }
 
     @Test
+    void thePutawayRuleSearchUsesTheSamePrefix() {
+        // Asserted on the URI the strategy actually requests, not on what a stub chooses to answer.
+        // ConvertedPackStrategiesTest exercises this path through a fake catalog, and a fake can
+        // always be adjusted to agree with the caller — which is how the wrong prefix survived. This
+        // captures the request instead.
+        RecordingContext context = new RecordingContext();
+        PutawayRuleLoaderRecord rule = new PutawayRuleLoaderRecord();
+        rule.setMatchType("CATEGORY");
+        rule.setMatchName("Engine Parts");
+
+        new PutawayRuleLoaderStrategy().resolve(rule, context);
+
+        assertThat(context.uris)
+                .as("the putaway class lookup reads products, which pos-catalog serves at /v1/products")
+                .isNotEmpty()
+                .allSatisfy(u -> assertThat(u).startsWith("/v1/products/"))
+                .anyMatch(u -> u.startsWith("/v1/products/search"));
+    }
+
+    @Test
     void translatesTheFilesOwnerWordIntoTheCustomerApisPartyType() {
         RecordingContext context = new RecordingContext();
 
@@ -103,15 +122,5 @@ class CatalogLookupUriTest {
         CustomerResolutions.partyId(context, "COMMERCIAL", "Already Correct Co", "Vehicle owner");
 
         assertThat(context.uris).singleElement().asString().contains("partyType=COMMERCIAL");
-    }
-
-    @Test
-    void catalogBulkIngestPathsAreLeftAlone() {
-        // The read paths moved; the ingest paths did not, and this records why the two differ.
-        assertThat(Map.of(
-                        "products", "/v1/products/search",
-                        "ingest", "/v1/catalog/bulk-ingest"))
-                .containsEntry("products", "/v1/products/search")
-                .containsEntry("ingest", "/v1/catalog/bulk-ingest");
     }
 }
