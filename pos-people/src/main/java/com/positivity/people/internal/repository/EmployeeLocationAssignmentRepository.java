@@ -7,11 +7,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface EmployeeLocationAssignmentRepository extends JpaRepository<EmployeeLocationAssignment, UUID> {
+public interface EmployeeLocationAssignmentRepository
+        extends JpaRepository<EmployeeLocationAssignment, UUID>, JpaSpecificationExecutor<EmployeeLocationAssignment> {
 
     List<EmployeeLocationAssignment> findByEmployee_PersonId(@NonNull UUID personId);
 
@@ -42,37 +45,51 @@ public interface EmployeeLocationAssignmentRepository extends JpaRepository<Empl
     List<EmployeeLocationAssignment> findActiveByPersonIdAndDate(
             @Param("personId") @NonNull UUID personId, @Param("date") @NonNull LocalDate date);
 
-    @Query("""
-            SELECT COUNT(a) > 0 FROM EmployeeLocationAssignment a
-            WHERE a.employee.personId = :personId
-              AND a.locationId = :locationId
-              AND a.role = :role
-              AND a.status = 'ACTIVE'
-              AND (a.effectiveTo IS NULL OR a.effectiveTo >= :effectiveFrom)
-              AND (:effectiveTo IS NULL OR a.effectiveFrom <= :effectiveTo)
-            """)
-    boolean existsOverlapping(
-            @Param("personId") @NonNull UUID personId,
-            @Param("locationId") @NonNull UUID locationId,
-            @Param("role") @NonNull String role,
-            @Param("effectiveFrom") @NonNull LocalDate effectiveFrom,
-            @Param("effectiveTo") LocalDate effectiveTo);
+    /**
+     * Whether an active assignment of this person, location and role already covers any part of the
+     * candidate's effective window.
+     *
+     * <p>The check is an {@link AssignmentOverlapSearch} specification rather than a JPQL string of
+     * {@code (:effectiveTo IS NULL OR …)} clauses: see that class for why the string form made
+     * PostgreSQL reject the statement whenever the caller supplied an {@code effectiveTo}, while the
+     * same call without one succeeded (issue #1891).
+     *
+     * @param personId the person being assigned
+     * @param locationId the location being assigned to
+     * @param role the role being assigned
+     * @param effectiveFrom the candidate's inclusive start
+     * @param effectiveTo the candidate's inclusive end, or null for an open-ended candidate
+     * @return whether any active assignment overlaps
+     */
+    default boolean existsOverlapping(
+            @NonNull UUID personId,
+            @NonNull UUID locationId,
+            @NonNull String role,
+            @NonNull LocalDate effectiveFrom,
+            @Nullable LocalDate effectiveTo) {
+        return exists(AssignmentOverlapSearch.matching(personId, locationId, role, effectiveFrom, effectiveTo, null));
+    }
 
-    @Query("""
-            SELECT COUNT(a) > 0 FROM EmployeeLocationAssignment a
-            WHERE a.id <> :assignmentId
-              AND a.employee.personId = :personId
-              AND a.locationId = :locationId
-              AND a.role = :role
-              AND a.status = 'ACTIVE'
-              AND (a.effectiveTo IS NULL OR a.effectiveTo >= :effectiveFrom)
-              AND (:effectiveTo IS NULL OR a.effectiveFrom <= :effectiveTo)
-            """)
-    boolean existsOverlappingExcludingId(
-            @Param("assignmentId") @NonNull UUID assignmentId,
-            @Param("personId") @NonNull UUID personId,
-            @Param("locationId") @NonNull UUID locationId,
-            @Param("role") @NonNull String role,
-            @Param("effectiveFrom") @NonNull LocalDate effectiveFrom,
-            @Param("effectiveTo") LocalDate effectiveTo);
+    /**
+     * {@link #existsOverlapping} for an assignment being updated: the assignment itself is excluded,
+     * so it cannot conflict with its own current window.
+     *
+     * @param assignmentId the assignment being updated
+     * @param personId the person being assigned
+     * @param locationId the location being assigned to
+     * @param role the role being assigned
+     * @param effectiveFrom the candidate's inclusive start
+     * @param effectiveTo the candidate's inclusive end, or null for an open-ended candidate
+     * @return whether any other active assignment overlaps
+     */
+    default boolean existsOverlappingExcludingId(
+            @NonNull UUID assignmentId,
+            @NonNull UUID personId,
+            @NonNull UUID locationId,
+            @NonNull String role,
+            @NonNull LocalDate effectiveFrom,
+            @Nullable LocalDate effectiveTo) {
+        return exists(
+                AssignmentOverlapSearch.matching(personId, locationId, role, effectiveFrom, effectiveTo, assignmentId));
+    }
 }
