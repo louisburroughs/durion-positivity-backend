@@ -32,7 +32,7 @@ public class FlywayConfig {
             @Value("${spring.flyway.password:}") String flywayPassword,
             @Value("${spring.datasource.url:}") String datasourceUrl,
             @Value("${spring.flyway.locations:classpath:db/migration}") String[] locations) {
-        // Honours spring.flyway.locations: the H2 slices point it at db/h2-migration (see its README).
+        // Honours spring.flyway.locations, which only application.yml sets, to the db/migration default.
         FluentConfiguration configuration = Flyway.configure().locations(locations);
         if (flywayUser != null && !flywayUser.isBlank()) {
             String url = flywayUrl == null || flywayUrl.isBlank() ? datasourceUrl : flywayUrl;

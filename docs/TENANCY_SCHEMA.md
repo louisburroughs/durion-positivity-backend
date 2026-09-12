@@ -17,9 +17,12 @@ follow and the checklist for adding a table. The decision record is
 | `R__seed_*.sql` | Repeatable seeds, unchanged in content; each now opens with the tenant binding below and its `ON CONFLICT` targets lead with `tenant_id`. |
 | `../tenancy-global-tables.txt` | The module's global tables with a reason each. Everything else is tenant-scoped. |
 
-`pos-mcp-server` still carries a parallel `db/h2-migration` set for its H2 `dev`/`test` profiles.
-It was not flattened, and it goes away when that module moves to Testcontainers (plan WS5), as
-`pos-supplier` has.
+No module carries a parallel `db/h2-migration` set any more. `pos-mcp-server` and
+`pos-supplier` each kept one — a hand-maintained second copy of the schema that nothing held in
+sync with the baseline — and both were retired under plan WS5 once their tests moved to
+Testcontainers. The H2 `dev` and `test` profiles run no Flyway at all and let Hibernate build
+the entity-mapped tables; the baselines below are the only schema definition, and the
+`pg`-profile tests validate the entities against them on a real PostgreSQL.
 `pos-inquiry` has no Flyway migrations (Hibernate `ddl-auto: update`) and is outside this contract.
 
 ## What every tenant-scoped table has
