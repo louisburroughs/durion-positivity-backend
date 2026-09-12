@@ -40,12 +40,6 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class InvoiceSearchServiceImpl implements InvoiceSearchService {
 
-    /** Sentinel that cannot match a real party id, keeping the JPQL IN clause non-empty. */
-    private static final String NO_PARTY_SENTINEL = "__none__";
-
-    /** Sentinel that cannot match a real workorder id, keeping the JPQL IN clause non-empty. */
-    private static final UUID NO_WORKORDER_SENTINEL = new UUID(0L, 0L);
-
     private final InvoiceRepository invoiceRepository;
     private final InvoiceItemRepository invoiceItemRepository;
     private final CustomerReferenceService customerReferenceService;
@@ -64,17 +58,16 @@ public class InvoiceSearchServiceImpl implements InvoiceSearchService {
         }
 
         // The free-text leg (and its two sibling-service resolution calls) only runs when a
-        // query term is actually present; a filters-only call skips both remote calls.
-        List<String> customerIds = List.of(NO_PARTY_SENTINEL);
-        List<UUID> workorderIds = List.of(NO_WORKORDER_SENTINEL);
+        // query term is actually present; a filters-only call skips both remote calls. An empty
+        // resolution simply drops its leg from the specification — the never-matching sentinels
+        // this used to pass existed only to keep a JPQL IN clause non-empty (#1891).
+        List<String> customerIds = List.of();
+        List<UUID> workorderIds = List.of();
         String likeQuery = "";
         if (hasQuery) {
             // Resolve the query against customer names and workorder numbers in sibling services.
-            List<String> nameMatchPartyIds = customerReferenceService.searchIdsByName(q, 10);
-            List<UUID> numberMatchWorkorderIds = workorderReferenceService.searchIdsByNumber(q, 10);
-
-            customerIds = nameMatchPartyIds.isEmpty() ? List.of(NO_PARTY_SENTINEL) : nameMatchPartyIds;
-            workorderIds = numberMatchWorkorderIds.isEmpty() ? List.of(NO_WORKORDER_SENTINEL) : numberMatchWorkorderIds;
+            customerIds = customerReferenceService.searchIdsByName(q, 10);
+            workorderIds = workorderReferenceService.searchIdsByNumber(q, 10);
             // Escape LIKE wildcards so a query containing % or _ matches literally.
             likeQuery = escapeLike(q);
         }
