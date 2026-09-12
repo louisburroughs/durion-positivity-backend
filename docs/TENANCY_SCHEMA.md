@@ -17,10 +17,9 @@ follow and the checklist for adding a table. The decision record is
 | `R__seed_*.sql` | Repeatable seeds, unchanged in content; each now opens with the tenant binding below and its `ON CONFLICT` targets lead with `tenant_id`. |
 | `../tenancy-global-tables.txt` | The module's global tables with a reason each. Everything else is tenant-scoped. |
 
-`pos-mcp-server` still carries a parallel `db/h2-migration` set for its H2 `dev`/`test` profiles,
-and `pos-supplier` carries one (its retired chain, verbatim) for the H2 test slices that validate
-the entities against real DDL and prove its unique, check and foreign-key constraints. Neither set
-was flattened; both go away when those modules move to Testcontainers (plan WS5).
+`pos-mcp-server` still carries a parallel `db/h2-migration` set for its H2 `dev`/`test` profiles.
+It was not flattened, and it goes away when that module moves to Testcontainers (plan WS5), as
+`pos-supplier` has.
 `pos-inquiry` has no Flyway migrations (Hibernate `ddl-auto: update`) and is outside this contract.
 
 ## What every tenant-scoped table has

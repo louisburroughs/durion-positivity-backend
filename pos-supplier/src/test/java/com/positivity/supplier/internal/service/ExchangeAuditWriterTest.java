@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import com.positivity.supplier.PostgresSliceTestBase;
 import com.positivity.supplier.TestClockConfig;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.domain.model.ProtocolFamily;
@@ -24,8 +25,6 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.annotation.Propagation;
@@ -43,20 +42,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * why the defect survived a full test suite. This class runs with test-managed transactions disabled and
  * drives real commit boundaries through a {@link TransactionTemplate}.
  */
-@DataJpaTest(
-        properties = {
-            "spring.datasource.url=jdbc:h2:mem:pos_supplier_audit_writer;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-            "spring.datasource.driver-class-name=org.h2.Driver",
-            "spring.datasource.username=sa",
-            "spring.datasource.password=",
-            "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            "spring.jpa.hibernate.ddl-auto=validate",
-            "spring.flyway.locations=classpath:db/h2-migration"
-        })
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({JpaConfig.class, TestClockConfig.class, ExchangeAuditWriter.class, ExchangeAuditObserver.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-class ExchangeAuditWriterTest {
+class ExchangeAuditWriterTest extends PostgresSliceTestBase {
 
     private static final UUID PROFILE_ID = UUID.fromString("018f0000-0000-7000-8000-0000000009a1");
 
