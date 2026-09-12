@@ -83,8 +83,16 @@ final class PriceBookRuleConflictSearch {
         return (root, query, builder) -> {
             List<Predicate> predicates = new ArrayList<>(8);
             predicates.add(builder.equal(root.get(PRICE_BOOK).get(PRICE_BOOK_ID), priceBookId));
-            // An inactive rule is history: it can neither be conflicted with nor conflict.
-            predicates.add(builder.notEqual(root.get(STATUS), PriceBookRuleStatus.INACTIVE));
+            // Only an ACTIVE rule can be conflicted with. This was `<> INACTIVE`, and with
+            // PriceBookRuleStatus down to two constants the two forms now select exactly the same
+            // rows — no test can tell them apart, and none pretends to. The reason to say ACTIVE is
+            // that it states the rule this query enforces instead of the complement of one status,
+            // so adding a third status later is a decision made here rather than a default this
+            // query takes silently; it also matches how findActiveRulesForBooks states its filter.
+            // The third constant that made the difference material, NOT_APPLICABLE_MISSING_BASE,
+            // was removed in the same change as unreachable (V3 drops it from the check constraint
+            // too).
+            predicates.add(builder.equal(root.get(STATUS), PriceBookRuleStatus.ACTIVE));
             predicates.add(builder.equal(root.get(TARGET_TYPE), targetType));
             predicates.add(
                     targetId == null
