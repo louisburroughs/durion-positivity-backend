@@ -23,9 +23,16 @@ import org.springframework.data.domain.Pageable;
  * schema, exercising every combination of its all-optional filters.
  *
  * <p>This is a database test rather than a mocked one because what it guards is a property of the
- * database: the query used to be one JPQL string of {@code (:param IS NULL OR column = :param)}
- * clauses, which PostgreSQL rejects at parse time for every call (issue #1891, PR #1961) while H2
- * accepts it. Only a test that issues the statement to PostgreSQL can see that.
+ * database, and the property is the opposite of the one that broke the party replay. {@code
+ * findQueue} is still one JPQL string of {@code (:param IS NULL OR column = :param)} clauses and it
+ * is deliberately left that way: PostgreSQL rejects that shape at parse time only when the
+ * placeholder's type cannot be inferred, which is the case for a temporal parameter and not for
+ * these three — an enum, a {@code String} and another enum, all bound as varchar with a concrete
+ * type OID (issue #1891, PR #1961, PR #1963). The query works, so it was not rewritten.
+ *
+ * <p>What this test pins is that it goes on working. Adding an optional filter of a type the driver
+ * leaves untyped — any {@code Instant}, {@code LocalDate} or other temporal — would break every call
+ * to the CSR queue, and only a test that issues the statement to PostgreSQL can see it.
  */
 @Import({JpaAuditingConfig.class, TestClockConfig.class})
 @DisplayName("Follow-up queue search on PostgreSQL")

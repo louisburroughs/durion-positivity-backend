@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 /**
  * The party fact-replay cursor queries ({@code findForReplay} on both party repositories, issue
@@ -72,8 +73,11 @@ class PartyReplayQueryTest extends PostgresSliceTestBase {
                 .sorted((left, right) -> left.getPartyId().compareTo(right.getPartyId()))
                 .toList();
 
+        // containsExactly, not contains: the replay service merges the two tables by relying on
+        // each repository returning partyId ASC, so a reversed result would corrupt the merge while
+        // a membership assertion stayed green.
         assertThat(commercialParties.findForReplay(ordered.get(0).getPartyId(), null, PageRequest.of(0, 100)))
-                .contains(ordered.get(1), ordered.get(2))
+                .containsExactly(ordered.get(1), ordered.get(2))
                 .doesNotContain(ordered.get(0));
     }
 
@@ -100,6 +104,36 @@ class PartyReplayQueryTest extends PostgresSliceTestBase {
 
         assertThat(personParties.findForReplay(cursor, after.getUpdatedAt().minusSeconds(1), PageRequest.of(0, 100)))
                 .containsExactly(after);
+    }
+
+    @Test
+    @DisplayName("the person cursor returns its matches in party-id order")
+    void personCursorReturnsMatchesInIdOrder() {
+        // The person side promises the same partyId ASC ordering as the commercial side, and the
+        // merge depends on both. A single-row expectation cannot see a reversal, so this seeds
+        // three and reads two.
+        List<PersonParty> ordered = List.of(person("o1"), person("o2"), person("o3")).stream()
+                .sorted((left, right) -> left.getPartyId().compareTo(right.getPartyId()))
+                .toList();
+
+        assertThat(personParties.findForReplay(ordered.get(0).getPartyId(), null, PageRequest.of(0, 100)))
+                .containsExactly(ordered.get(1), ordered.get(2));
+    }
+
+    @Test
+    @DisplayName("an unpaged replay reads every match, still in party-id order")
+    void unpagedReplayReadsEveryMatch() {
+        // Both repositories special-case Pageable.unpaged() and document it as supported: it
+        // reports a page size of zero, so the bounded read has to skip the limit rather than ask
+        // for zero rows. Without this case a refactor that always applied the page size would
+        // return nothing for an unpaged request and no test would notice.
+        List<CommercialParty> ordered = List.of(commercial("u1"), commercial("u2"), commercial("u3")).stream()
+                .sorted((left, right) -> left.getPartyId().compareTo(right.getPartyId()))
+                .toList();
+
+        assertThat(commercialParties.findForReplay(ordered.get(0).getPartyId(), null, Pageable.unpaged()))
+                .containsExactly(ordered.get(1), ordered.get(2));
+        assertThat(personParties.findForReplay(null, null, Pageable.unpaged())).isNotEmpty();
     }
 
     @Test

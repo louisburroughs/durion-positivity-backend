@@ -9,6 +9,7 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Pins that commercial accounts created in quick succession each get their own customer number.
@@ -21,7 +22,14 @@ import org.springframework.beans.factory.annotation.Autowired;
  *
  * <p>Runs against a real Postgres so the sequence and the unique constraint are the ones that
  * ship: the default H2 profile disables Flyway, so neither exists there.
+ *
+ * <p>Rolled back rather than committed. This class shares its database with every other
+ * Postgres-backed class in the module, under one tenant, so ten committed parties would be ten rows
+ * the next class sees — enough to make any unfiltered party assertion order-dependent. Rollback
+ * costs this test nothing: a sequence advances outside the transaction, so the numbers are still
+ * drawn the way production draws them and still have to be distinct.
  */
+@Transactional
 @DisplayName("Commercial customer numbers are unique within a single timestamp window")
 class CommercialCustomerNumberIT extends PostgresIntegrationTestBase {
 

@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -67,18 +66,22 @@ public interface CommercialPartyRepository
      *
      * @param afterId resume cursor, or null to start at the beginning
      * @param updatedSince only parties changed at or after this instant, or null for every party
-     * @param pageable the page to read, or {@code Pageable.unpaged()} for every match; its sort is
-     *     replaced by {@link #BY_PARTY_ID} either way
+     * <p>Read through {@code findBy(...).limit(...).all()} rather than {@code findAll(spec,
+     * pageable)}: this contract returns a list, the replay service never asks for a total, and a
+     * {@code Page} return would have Spring Data run a count query per page — two potentially
+     * full-table scans on every cursor request. The catalog replay repositories read the same way.
+     *
+     * @param pageable supplies the page size only — the replay is positioned by {@code afterId},
+     *     not by an offset — or {@code Pageable.unpaged()} for every match; the order is always
+     *     {@link #BY_PARTY_ID}
      * @return the matching parties, in id order
      */
     @NonNull
     default List<CommercialParty> findForReplay(
             @Nullable UUID afterId, @Nullable Instant updatedSince, @NonNull Pageable pageable) {
-        return findAll(
-                        PartyReplaySearch.<CommercialParty>matching(afterId, updatedSince),
-                        pageable.isUnpaged()
-                                ? Pageable.unpaged(BY_PARTY_ID)
-                                : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), BY_PARTY_ID))
-                .getContent();
+        return findBy(PartyReplaySearch.<CommercialParty>matching(afterId, updatedSince), query -> {
+            var sorted = query.sortBy(BY_PARTY_ID);
+            return (pageable.isUnpaged() ? sorted : sorted.limit(pageable.getPageSize())).all();
+        });
     }
 }
