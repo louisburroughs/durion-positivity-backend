@@ -413,7 +413,7 @@ is already running — rather than on the next restart.
 
 ## Data Model
 
-Key tables (Flyway migrations under `src/main/resources/db/migration`, H2 variants under `db/h2-migration`):
+Key tables (Flyway migrations under `src/main/resources/db/migration`):
 
 - `system_prompt`, `llm_api_config` — prompt and model-config CRUD.
 - `nlti_session`, `nlti_request`, `nlti_intent`, `nlti_audit_event` — NLTI session/request/intent tracking + audit.
@@ -441,9 +441,10 @@ auto-configuration).
 
 The three JDBC-written scoped tables, `mcp_tool_invocation_log`, `mcp_tool_priority` and `mcp_eval_turn_trace`, take
 their `tenant_id` from the Postgres default of the bound connection; their repositories carry `@TenantAudited` and
-name no tenant. The startup runners seed and embed platform tables only. The H2 chain (`db/h2-migration`,
-`V29__tenancy.sql`, `V30__tool_priority_overlay.sql`) carries `tenant_id` with a fixed default standing in for
-`app_current_tenant()`.
+name no tenant. The startup runners seed and embed platform tables only. There is no H2 equivalent: the `dev` and
+`test` profiles run no Flyway at all and let Hibernate build the entity-mapped tables, so these three JDBC-written
+tables — like the tool catalog they feed — exist only on Postgres. `TenancySchemaConformanceIT` and
+`TenantIsolationIT` (profile `pg`, Testcontainers) cover them against the real baseline.
 
 ### Schedulers
 

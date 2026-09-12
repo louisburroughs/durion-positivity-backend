@@ -54,7 +54,11 @@ class ToolPriorityRepositoryImplUpsertAbortRecoveryTest {
                 "jdbc:h2:mem:upsert-abort-" + UUID.randomUUID() + ";MODE=PostgreSQL;DB_CLOSE_DELAY=-1");
         h2.setAutoCommit(false);
         try (Statement ddl = h2.createStatement()) {
-            // Mirrors db/h2-migration/V30__tool_priority_overlay.sql.
+            // Mirrors public.mcp_tool_priority in db/migration/V1__baseline_mcp_server.sql: same column
+            // types and the same tenant-led primary key. Two deliberate substitutions for H2: the
+            // tenant_id default is the alpha default tenant literal because H2 has no
+            // app_current_tenant(), and the tool_id foreign key to mcp_tool is dropped because this
+            // test creates no other table.
             ddl.execute("CREATE TABLE mcp_tool_priority ("
                     + " tenant_id UUID DEFAULT '01900000-0000-7000-8000-000000000001' NOT NULL,"
                     + " tool_id UUID NOT NULL,"
