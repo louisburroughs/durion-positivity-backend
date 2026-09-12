@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.accounting.AccountingPostgresContainer;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
@@ -29,9 +30,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Concurrent-post IT for posted-entry numbering (story A2, issue #942)
@@ -47,26 +45,24 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * ({@code findMissingEntryNumbers}): gapless after the posts, and a
  * synthetically skipped counter value is reported missing.
  *
- * <p>Skipped cleanly when Docker is unavailable ({@code disabledWithoutDocker}).
+ * <p>Requires Docker.
  */
-@Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Import(TestSecurityConfig.class)
 @DisplayName("JournalEntry numbering concurrency (A2, real Postgres)")
 class JournalEntryNumberingConcurrencyIT {
 
-    @Container
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
-
+    /**
+     * A database of this IT's own inside the shared container: it commits its fixtures and clears
+     * whole tables, so it must not share the default database with tests that read the seed.
+     */
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.username", POSTGRES::getUsername);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
+        AccountingPostgresContainer.registerIsolatedDatabase(registry, "journal-entry-numbering");
         registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
-        // Schema comes from the real Flyway chain, not Hibernate DDL.
+        // Schema + seed come from the real Flyway chain, not Hibernate DDL.
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "none");
         registry.add("spring.flyway.enabled", () -> "true");
     }

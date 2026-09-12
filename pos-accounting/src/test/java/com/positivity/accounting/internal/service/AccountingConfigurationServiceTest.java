@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.accounting.PostgresIntegrationTestBase;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
@@ -17,12 +18,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.transaction.AfterTransaction;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,12 +30,10 @@ import org.springframework.transaction.annotation.Transactional;
  * monotonic-forward-only enforcement, and HARD_LOCK_SET audit rows with the
  * acting user (ADR-0018).
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @Transactional
 @Import(TestSecurityConfig.class)
 @DisplayName("AccountingConfiguration hard-lock tests (B2)")
-class AccountingConfigurationServiceTest {
+class AccountingConfigurationServiceTest extends PostgresIntegrationTestBase {
 
     private static final String ACTOR = "hard-lock-admin";
 

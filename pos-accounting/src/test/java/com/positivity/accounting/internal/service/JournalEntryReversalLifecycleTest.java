@@ -3,6 +3,8 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.accounting.AccountingPostgresContainer;
+import com.positivity.accounting.PostgresCommittingTestBase;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
@@ -20,6 +22,7 @@ import com.positivity.accounting.internal.repository.AccountingSequenceRepositor
 import com.positivity.accounting.internal.repository.EventOutboxRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.tenancy.TenantContext;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -36,10 +39,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * H2-backed behavior tests for the journal-entry reversal lifecycle
@@ -60,11 +62,16 @@ import org.springframework.test.context.ActiveProfiles;
  * other test classes sharing the Spring context, except where the current
  * open period is the intended reversal-date fallback.
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @Import(TestSecurityConfig.class)
 @DisplayName("JournalEntry reversal lifecycle (A3)")
-class JournalEntryReversalLifecycleTest {
+class JournalEntryReversalLifecycleTest extends PostgresCommittingTestBase {
+
+    /** This class commits, so it gets a database of its own inside the shared container. */
+    @DynamicPropertySource
+    static void database(DynamicPropertyRegistry registry) {
+        AccountingPostgresContainer.registerIsolatedDatabase(registry, "journal-entry-reversal-lifecycle");
+        registerCommonProperties(registry);
+    }
 
     @Autowired
     private JournalEntryService journalEntryService;
@@ -306,10 +313,17 @@ class JournalEntryReversalLifecycleTest {
         assertThat(reloadedOriginal.getReversedByJournalEntryId()).isNotNull();
     }
 
+    /**
+     * The tenant is bound inside the worker, not inherited from the test thread: {@link
+     * TenantContext} is thread-bound and the {@code pg} profile has no default tenant to fall back
+     * on, so an unbound worker would write and read as the nil tenant. Production does the same
+     * thing through {@code TenantContextTaskDecorator} for its managed executors; a raw
+     * {@link java.util.concurrent.ExecutorService} has to do it itself.
+     */
     private JournalEntryResponse reverseAfter(CountDownLatch start, UUID originalId, String reason)
             throws InterruptedException {
         start.await();
-        return journalEntryService.reverseJournalEntry(originalId, reason, null);
+        return TenantContext.callAs(TENANT, () -> journalEntryService.reverseJournalEntry(originalId, reason, null));
     }
 
     private JournalEntryResponse createPosted(LocalDateTime transactionDate) {

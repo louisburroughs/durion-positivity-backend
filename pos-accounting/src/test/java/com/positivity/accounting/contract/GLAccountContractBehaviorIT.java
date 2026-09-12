@@ -3,7 +3,7 @@ package com.positivity.accounting.contract;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.positivity.accounting.BaseContractIntegrationTest;
+import com.positivity.accounting.PostgresIntegrationTestBase;
 import com.positivity.accounting.internal.dto.GLAccountBalanceResponse;
 import com.positivity.accounting.internal.dto.GLAccountCreateRequest;
 import com.positivity.accounting.internal.dto.GLAccountListResponse;
@@ -41,7 +41,14 @@ import org.springframework.transaction.annotation.Transactional;
  * - Balance queries
  */
 @Transactional
-public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
+public class GLAccountContractBehaviorIT extends PostgresIntegrationTestBase {
+
+    /**
+     * Account codes are prefixed so they cannot collide with the chart of accounts the repeatable
+     * seed ships (1000, 2000, 2200, …). On H2 the seed never ran — Flyway was disabled there — so
+     * these fixtures could claim the real codes; against the schema and data the application
+     * actually meets, creating account 1000 is a duplicate.
+     */
     private static final Clock TEST_CLOCK = Clock.systemUTC();
 
     @Autowired
@@ -55,7 +62,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testCreateGLAccount_Success() {
         // Given
         GLAccountCreateRequest request = GLAccountCreateRequest.builder()
-                .accountCode("1000")
+                .accountCode("IT-1000")
                 .accountName("Cash")
                 .accountType(AccountType.ASSET)
                 .accountSubtype(AccountSubtype.BANK_CASH)
@@ -69,7 +76,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
         // Then
         assertThat(response).isNotNull();
         assertThat(response.getGlAccountId()).isNotNull();
-        assertThat(response.getAccountCode()).isEqualTo("1000");
+        assertThat(response.getAccountCode()).isEqualTo("IT-1000");
         assertThat(response.getAccountName()).isEqualTo("Cash");
         assertThat(response.getAccountType()).isEqualTo(AccountType.ASSET);
         assertThat(response.getAccountSubtype()).isEqualTo(AccountSubtype.BANK_CASH);
@@ -89,7 +96,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testCreateGLAccount_MetadataDefaults() {
         // Given - request without accountSubtype/reconcilable
         GLAccountCreateRequest request = GLAccountCreateRequest.builder()
-                .accountCode("1010")
+                .accountCode("IT-1010")
                 .accountName("Petty Cash")
                 .accountType(AccountType.ASSET)
                 .build();
@@ -111,7 +118,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testCreateGLAccount_DuplicateCode() {
         // Given - create first account
         GLAccountCreateRequest request1 = GLAccountCreateRequest.builder()
-                .accountCode("2000")
+                .accountCode("IT-2000")
                 .accountName("Accounts Receivable")
                 .accountType(AccountType.ASSET)
                 .build();
@@ -119,14 +126,14 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
 
         // When/Then - attempt to create duplicate
         GLAccountCreateRequest request2 = GLAccountCreateRequest.builder()
-                .accountCode("2000") // duplicate
+                .accountCode("IT-2000") // duplicate
                 .accountName("Duplicate AR")
                 .accountType(AccountType.ASSET)
                 .build();
 
         assertThatThrownBy(() -> glAccountService.createGLAccount(request2))
                 .isInstanceOf(DuplicateAccountCodeException.class)
-                .hasMessageContaining("2000");
+                .hasMessageContaining("IT-2000");
     }
 
     @Test
@@ -134,7 +141,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testGetGLAccount_Success() {
         // Given - create account
         GLAccountCreateRequest request = GLAccountCreateRequest.builder()
-                .accountCode("3000")
+                .accountCode("IT-3000")
                 .accountName("Inventory")
                 .accountType(AccountType.ASSET)
                 .build();
@@ -146,7 +153,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
         // Then
         assertThat(retrieved).isNotNull();
         assertThat(retrieved.getGlAccountId()).isEqualTo(created.getGlAccountId());
-        assertThat(retrieved.getAccountCode()).isEqualTo("3000");
+        assertThat(retrieved.getAccountCode()).isEqualTo("IT-3000");
         assertThat(retrieved.getStatus()).isEqualTo(GLAccountStatus.ACTIVE);
     }
 
@@ -167,7 +174,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testUpdateGLAccount_Success() {
         // Given - create account
         GLAccountCreateRequest createRequest = GLAccountCreateRequest.builder()
-                .accountCode("4000")
+                .accountCode("IT-4000")
                 .accountName("Equipment")
                 .accountType(AccountType.ASSET)
                 .description("Original description")
@@ -184,7 +191,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
         // Then
         assertThat(updated.getAccountName()).isEqualTo("Equipment - Updated");
         assertThat(updated.getDescription()).isEqualTo("Updated description");
-        assertThat(updated.getAccountCode()).isEqualTo("4000"); // immutable
+        assertThat(updated.getAccountCode()).isEqualTo("IT-4000"); // immutable
         assertThat(updated.getAccountType()).isEqualTo(AccountType.ASSET); // immutable
     }
 
@@ -193,7 +200,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testUpdateGLAccount_MetadataRoundTrip() {
         // Given - account created without metadata
         GLAccountResponse created = glAccountService.createGLAccount(GLAccountCreateRequest.builder()
-                .accountCode("4100")
+                .accountCode("IT-4100")
                 .accountName("Undeposited Funds")
                 .accountType(AccountType.ASSET)
                 .build());
@@ -211,7 +218,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
         assertThat(updated.getAccountSubtype()).isEqualTo(AccountSubtype.UNDEPOSITED_FUNDS);
         assertThat(updated.isReconcilable()).isTrue();
         assertThat(updated.getAccountName()).isEqualTo("Undeposited Funds");
-        assertThat(updated.getAccountCode()).isEqualTo("4100");
+        assertThat(updated.getAccountCode()).isEqualTo("IT-4100");
 
         // And visible on subsequent GET
         GLAccountResponse retrieved = glAccountService.getGLAccount(created.getGlAccountId());
@@ -224,7 +231,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testActivateGLAccount_Success() {
         // Given - create account with future activation date
         GLAccountCreateRequest request = GLAccountCreateRequest.builder()
-                .accountCode("5000")
+                .accountCode("IT-5000")
                 .accountName("Future Account")
                 .accountType(AccountType.ASSET)
                 .activationDate(LocalDateTime.now(TEST_CLOCK).plusDays(10))
@@ -245,7 +252,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testDeactivateGLAccount_Success() {
         // Given - create active account with zero balance
         GLAccountCreateRequest request = GLAccountCreateRequest.builder()
-                .accountCode("6000")
+                .accountCode("IT-6000")
                 .accountName("Temp Account")
                 .accountType(AccountType.EXPENSE)
                 .build();
@@ -265,14 +272,14 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testDeactivateGLAccount_NonZeroBalance() {
         // Given — create the account under test
         GLAccountResponse created = glAccountService.createGLAccount(GLAccountCreateRequest.builder()
-                .accountCode("7000")
+                .accountCode("IT-7000")
                 .accountName("Account with Balance")
                 .accountType(AccountType.ASSET)
                 .build());
 
         // A second active account to hold the offsetting credit (entry must be balanced)
         GLAccountResponse counterpart = glAccountService.createGLAccount(GLAccountCreateRequest.builder()
-                .accountCode("7001")
+                .accountCode("IT-7001")
                 .accountName("Counterpart Account")
                 .accountType(AccountType.LIABILITY)
                 .build());
@@ -307,7 +314,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
         UUID accountId = created.getGlAccountId();
         assertThatThrownBy(() -> glAccountService.deactivateGLAccount(accountId))
                 .isInstanceOf(AccountNotZeroBalanceException.class)
-                .hasMessageContaining("7000")
+                .hasMessageContaining("IT-7000")
                 .hasMessageContaining("500");
 
         // Account must remain ACTIVE — state should not have changed
@@ -321,7 +328,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testArchiveGLAccount_Success() {
         // Given - create and deactivate account
         GLAccountCreateRequest request = GLAccountCreateRequest.builder()
-                .accountCode("8000")
+                .accountCode("IT-8000")
                 .accountName("Old Account")
                 .accountType(AccountType.EXPENSE)
                 .build();
@@ -341,7 +348,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testArchiveGLAccount_NotInactive() {
         // Given - create active account
         GLAccountCreateRequest request = GLAccountCreateRequest.builder()
-                .accountCode("9000")
+                .accountCode("IT-9000")
                 .accountName("Active Account")
                 .accountType(AccountType.REVENUE)
                 .build();
@@ -350,7 +357,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
         // When/Then - attempt to archive active account
         assertThatThrownBy(() -> glAccountService.archiveGLAccount(created.getGlAccountId()))
                 .isInstanceOf(AccountNotInactiveException.class)
-                .hasMessageContaining("9000");
+                .hasMessageContaining("IT-9000");
     }
 
     @Test
@@ -358,7 +365,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testGetAccountBalance_ZeroBalance() {
         // Given - create account with no postings
         GLAccountCreateRequest request = GLAccountCreateRequest.builder()
-                .accountCode("1100")
+                .accountCode("IT-1100")
                 .accountName("Cash - Test Balance")
                 .accountType(AccountType.ASSET)
                 .build();
@@ -370,7 +377,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
         // Then
         assertThat(balance).isNotNull();
         assertThat(balance.getGlAccountId()).isEqualTo(created.getGlAccountId());
-        assertThat(balance.getAccountCode()).isEqualTo("1100");
+        assertThat(balance.getAccountCode()).isEqualTo("IT-1100");
         assertThat(balance.getBalance()).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(balance.getAsOfDate()).isNotNull();
     }
@@ -381,7 +388,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
         // Given - create multiple accounts
         for (int i = 0; i < 5; i++) {
             GLAccountCreateRequest request = GLAccountCreateRequest.builder()
-                    .accountCode("1" + i + "00")
+                    .accountCode("IT-1" + i + "00")
                     .accountName("Test Account " + i)
                     .accountType(AccountType.ASSET)
                     .build();
@@ -403,14 +410,14 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testListGLAccounts_FilterByStatus() {
         // Given - create active and inactive accounts
         GLAccountCreateRequest activeRequest = GLAccountCreateRequest.builder()
-                .accountCode("1200")
+                .accountCode("IT-1200")
                 .accountName("Active Account")
                 .accountType(AccountType.ASSET)
                 .build();
         glAccountService.createGLAccount(activeRequest);
 
         GLAccountCreateRequest inactiveRequest = GLAccountCreateRequest.builder()
-                .accountCode("1300")
+                .accountCode("IT-1300")
                 .accountName("Inactive Account")
                 .accountType(AccountType.ASSET)
                 .build();
@@ -430,7 +437,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testDerivedStatus_Active() {
         // Given - account with activation date in past, no deactivation
         GLAccountCreateRequest request = GLAccountCreateRequest.builder()
-                .accountCode("2100")
+                .accountCode("IT-2100")
                 .accountName("Currently Active")
                 .accountType(AccountType.ASSET)
                 .activationDate(LocalDateTime.now(TEST_CLOCK).minusDays(1))
@@ -448,7 +455,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testDerivedStatus_NotYetActive() {
         // Given - account with activation date in future
         GLAccountCreateRequest request = GLAccountCreateRequest.builder()
-                .accountCode("2200")
+                .accountCode("IT-2200")
                 .accountName("Future Active")
                 .accountType(AccountType.ASSET)
                 .activationDate(LocalDateTime.now(TEST_CLOCK).plusDays(5))
@@ -466,7 +473,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testDerivedStatus_Inactive() {
         // Given - create and immediately deactivate account
         GLAccountCreateRequest request = GLAccountCreateRequest.builder()
-                .accountCode("2300")
+                .accountCode("IT-2300")
                 .accountName("Quickly Deactivated")
                 .accountType(AccountType.EXPENSE)
                 .build();
@@ -484,7 +491,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testValidateAccountForPosting_Active() {
         // Given - create active account
         GLAccountCreateRequest request = GLAccountCreateRequest.builder()
-                .accountCode("3100")
+                .accountCode("IT-3100")
                 .accountName("Postable Account")
                 .accountType(AccountType.EXPENSE)
                 .build();
@@ -499,7 +506,7 @@ public class GLAccountContractBehaviorIT extends BaseContractIntegrationTest {
     void testValidateAccountForPosting_Inactive() {
         // Given - create and deactivate account
         GLAccountCreateRequest request = GLAccountCreateRequest.builder()
-                .accountCode("3200")
+                .accountCode("IT-3200")
                 .accountName("Inactive Account")
                 .accountType(AccountType.EXPENSE)
                 .build();

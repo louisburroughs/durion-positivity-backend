@@ -3,7 +3,7 @@ package com.positivity.accounting.contract;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.positivity.accounting.BaseContractIntegrationTest;
+import com.positivity.accounting.PostgresIntegrationTestBase;
 import com.positivity.accounting.internal.dto.PostingCategoryCreateRequest;
 import com.positivity.accounting.internal.dto.PostingCategoryListResponse;
 import com.positivity.accounting.internal.dto.PostingCategoryResponse;
@@ -26,7 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
  * - Pagination and filtering
  */
 @Transactional
-public class PostingCategoryContractBehaviorIT extends BaseContractIntegrationTest {
+public class PostingCategoryContractBehaviorIT extends PostgresIntegrationTestBase {
 
     @Autowired
     private PostingCategoryService postingCategoryService;

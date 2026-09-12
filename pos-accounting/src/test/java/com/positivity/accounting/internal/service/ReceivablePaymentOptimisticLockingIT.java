@@ -3,7 +3,8 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.positivity.accounting.BaseIntegrationTest;
+import com.positivity.accounting.AccountingPostgresContainer;
+import com.positivity.accounting.PostgresCommittingTestBase;
 import com.positivity.accounting.internal.dto.PaymentApplicationRequest;
 import com.positivity.accounting.internal.dto.PaymentApplicationResponse;
 import com.positivity.accounting.internal.entity.ExtInvoice;
@@ -13,6 +14,7 @@ import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
+import com.positivity.tenancy.TenantContext;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -29,6 +31,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -47,7 +51,14 @@ import org.springframework.web.server.ResponseStatusException;
  * {@link PaymentApplicationServiceImpl}.
  */
 @DisplayName("ReceivablePayment Optimistic Locking Concurrency IT")
-class ReceivablePaymentOptimisticLockingIT extends BaseIntegrationTest {
+class ReceivablePaymentOptimisticLockingIT extends PostgresCommittingTestBase {
+
+    /** This class commits, so it gets a database of its own inside the shared container. */
+    @DynamicPropertySource
+    static void database(DynamicPropertyRegistry registry) {
+        AccountingPostgresContainer.registerIsolatedDatabase(registry, "receivable-payment-locking");
+        registerCommonProperties(registry);
+    }
 
     private static final AtomicInteger UUID_COUNTER = new AtomicInteger(0xC400);
 
@@ -248,10 +259,20 @@ class ReceivablePaymentOptimisticLockingIT extends BaseIntegrationTest {
         }
     }
 
+    /**
+     * The tenant is bound inside the worker, not inherited from the test thread: {@link
+     * TenantContext} is thread-bound and the {@code pg} profile has no default tenant to fall back
+     * on, so an unbound worker would write and read as the nil tenant. Production does the same
+     * through {@code TenantContextTaskDecorator} for its managed executors; a raw
+     * {@link java.util.concurrent.ExecutorService} has to do it itself.
+     */
     private Outcome applyOnce(CountDownLatch startLatch, PaymentApplicationRequest request) throws Exception {
         startLatch.await(30, TimeUnit.SECONDS);
         try {
-            return new Outcome(paymentApplicationService.applyPaymentToInvoices(paymentId, request), null);
+            return new Outcome(
+                    TenantContext.callAs(
+                            TENANT, () -> paymentApplicationService.applyPaymentToInvoices(paymentId, request)),
+                    null);
         } catch (RuntimeException ex) {
             return new Outcome(null, ex);
         }

@@ -2,6 +2,8 @@ package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.accounting.AccountingPostgresContainer;
+import com.positivity.accounting.PostgresCommittingTestBase;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.dto.PaymentApplicationReversalGLPostingEvent;
@@ -30,10 +32,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -52,11 +53,16 @@ import org.springframework.transaction.support.TransactionTemplate;
  * production; state is cleaned up explicitly. Historic months isolate period
  * state from sibling test classes sharing the Spring context.
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @Import(TestSecurityConfig.class)
 @DisplayName("PaymentApplication reversal GL posting lifecycle (C2)")
-class PaymentApplicationReversalGLPostingLifecycleIT {
+class PaymentApplicationReversalGLPostingLifecycleIT extends PostgresCommittingTestBase {
+
+    /** This class commits, so it gets a database of its own inside the shared container. */
+    @DynamicPropertySource
+    static void database(DynamicPropertyRegistry registry) {
+        AccountingPostgresContainer.registerIsolatedDatabase(registry, "payment-application-reversal");
+        registerCommonProperties(registry);
+    }
 
     @Autowired
     private PaymentApplicationReversalGLPostingEventHandler handler;

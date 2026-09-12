@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.accounting.AccountingPostgresContainer;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.TaxLiabilitySnapshotResponse;
 import com.positivity.accounting.internal.dto.TaxLiabilitySnapshotVerification;
@@ -34,9 +35,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Real-Postgres IT for the tax-liability period-close freeze (issue #998, Phase-2 scope item 2).
@@ -45,9 +43,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * figures matching the live report, hash-based verify (consistent, then inconsistent after
  * post-freeze data movement), and the conflict/supersede flow.
  *
- * <p>Skipped cleanly when Docker is unavailable ({@code disabledWithoutDocker}).
+ * <p>Requires Docker.
  */
-@Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Import(TestSecurityConfig.class)
@@ -55,17 +52,16 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @DisplayName("Tax-liability period-close freeze (issue #998, real Postgres)")
 class TaxLiabilitySnapshotIT {
 
-    @Container
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
-
+    /**
+     * A database of this IT's own inside the shared container: it commits its fixtures and clears
+     * whole tables, so it must not share the default database with tests that read the seed.
+     */
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.username", POSTGRES::getUsername);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
+        AccountingPostgresContainer.registerIsolatedDatabase(registry, "tax-liability-snapshot");
         registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
-        // Schema comes from the real Flyway chain (incl. V23), not Hibernate DDL.
+        // Schema + seed come from the real Flyway chain, not Hibernate DDL.
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "none");
         registry.add("spring.flyway.enabled", () -> "true");
     }

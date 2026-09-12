@@ -3,6 +3,8 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.accounting.AccountingPostgresContainer;
+import com.positivity.accounting.PostgresCommittingTestBase;
 import com.positivity.accounting.internal.config.TestSecurityConfig;
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
@@ -22,15 +24,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * H2-backed behavior tests for posted-entry numbering (story A2, issue #942,
+ * Behavior tests for posted-entry numbering (story A2, issue #942,
  * decision D-1): {@code JE-{YYYYMM}-{seq}} assigned at POST time from the
  * per-transaction-month {@code accounting_sequence} counter.
  *
@@ -39,14 +40,19 @@ import org.springframework.test.context.ActiveProfiles;
  * ({@code REQUIRES_NEW}) and the same-transaction increment interact exactly
  * as in production; state is cleaned up explicitly. Concurrency (FOR UPDATE
  * serialization) is covered by the Docker-gated
- * {@code JournalEntryNumberingConcurrencyIT} and the PG16 migration
- * validation — H2 here proves the assignment semantics.
+ * {@code JournalEntryNumberingConcurrencyIT}; this test proves the assignment
+ * semantics, against the same real schema.
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @Import(TestSecurityConfig.class)
 @DisplayName("JournalEntry posted-entry numbering (A2)")
-class JournalEntryNumberingTest {
+class JournalEntryNumberingTest extends PostgresCommittingTestBase {
+
+    /** This class commits, so it gets a database of its own inside the shared container. */
+    @DynamicPropertySource
+    static void database(DynamicPropertyRegistry registry) {
+        AccountingPostgresContainer.registerIsolatedDatabase(registry, "journal-entry-numbering-semantics");
+        registerCommonProperties(registry);
+    }
 
     @Autowired
     private JournalEntryService journalEntryService;
