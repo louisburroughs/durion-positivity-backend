@@ -33,9 +33,18 @@ import org.springframework.data.jpa.domain.Specification;
  * parse. What has no type here is the parameter itself: {@code :stateScope} never appears beside a
  * column Hibernate could read a type from, only in {@code IS NULL} and inside {@code upper(…)}, so
  * Hibernate falls back to binding it as an opaque binary and PostgreSQL is asked for an
- * {@code upper(bytea)} that does not exist. The rule the specification form obeys is the general
- * one behind both variants: <em>a parameter that appears only in an {@code IS NULL} test has no
- * type to infer</em>.
+ * {@code upper(bytea)} that does not exist.
+ *
+ * <p>The rule behind both variants is inferability, not {@code IS NULL} and not temporals: <em>a
+ * bind parameter needs something to give it a type — a typed column beside it, a typed literal
+ * operand, or a driver binding that carries a concrete OID — and one with none of those is
+ * untyped whatever its Java type</em>. An {@code IS NULL} test on its own supplies nothing, which
+ * is why it is where the failures show up, but it is not by itself the fault: most parameters in
+ * this repository survive one, because a UUID, enum or {@code String} is bound with a concrete OID
+ * even when null, and because they also appear beside their own column. What decides the case is
+ * what else the parameter touches. Two shapes have no route to a type: a temporal, which pgjdbc
+ * sends with the OID unspecified, so it fails on every call; and a parameter used only inside a
+ * function, as {@code stateScope} is here, which fails on the calls that leave it absent.
  *
  * <p>Building the predicate list removes the failure by construction rather than by casting each
  * placeholder: an absent filter contributes no predicate, so there is no untyped placeholder for

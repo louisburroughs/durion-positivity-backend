@@ -2,6 +2,7 @@ package com.positivity.invoice.tenancy;
 
 import com.positivity.invoice.InvoicePostgresContainer;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -17,6 +18,7 @@ import org.springframework.test.context.DynamicPropertySource;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("pg")
+@ResourceLock(InvoicePostgresContainer.RESOURCE_LOCK)
 public abstract class PostgresTenancyTestBase {
 
     static final String APP_ROLE = InvoicePostgresContainer.APP_ROLE;

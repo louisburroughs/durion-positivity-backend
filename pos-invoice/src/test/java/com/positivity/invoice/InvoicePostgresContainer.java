@@ -29,6 +29,15 @@ import org.testcontainers.containers.PostgreSQLContainer;
  */
 public final class InvoicePostgresContainer {
 
+    /**
+     * JUnit resource-lock key every Postgres-backed test class in this module holds
+     * ({@code @ResourceLock}). The module runs test classes concurrently
+     * ({@code junit-platform.properties}), and these classes share one database: a class that
+     * commits — and then deletes what it committed — would otherwise wipe a concurrent class's
+     * fixtures. Unrelated (non-Postgres) classes still run alongside them.
+     */
+    public static final String RESOURCE_LOCK = "pos-invoice-postgres";
+
     /** The non-owner role the application pool connects as; it holds no BYPASSRLS. */
     public static final String APP_ROLE = "pos_app";
 

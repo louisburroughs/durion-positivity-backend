@@ -2,6 +2,7 @@ package com.positivity.warranty;
 
 import com.positivity.tenancy.testing.TenantTestSupport;
 import java.util.UUID;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.test.context.ActiveProfiles;
@@ -44,6 +45,7 @@ import org.springframework.test.context.TestExecutionListeners;
 @TestExecutionListeners(
         value = TenantBindingTestExecutionListener.class,
         mergeMode = TestExecutionListeners.MergeMode.MERGE_WITH_DEFAULTS)
+@ResourceLock(WarrantyPostgresContainer.RESOURCE_LOCK)
 public abstract class PostgresSliceTestBase {
 
     /** The tenant every slice in this module writes and reads as. */
