@@ -22,7 +22,7 @@ public final class CatalogResolutions {
     public static Optional<String> productId(@NonNull ResolutionContext context, @NonNull String sku) {
         String trimmed = sku.trim();
         return context.memoize("product:" + trimmed.toLowerCase(Locale.ROOT), () -> {
-            String uri = UriComponentsBuilder.fromPath("/v1/catalog/products/search")
+            String uri = UriComponentsBuilder.fromPath("/v1/products/search")
                     .queryParam("sku", trimmed)
                     .queryParam("limit", 1)
                     .encode(StandardCharsets.UTF_8)
