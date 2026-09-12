@@ -115,7 +115,7 @@ public class PutawayRuleLoaderStrategy implements DomainLoaderStrategy<PutawayRu
     private Optional<Map<String, Object>> findExemplarProduct(
             ResolutionContext context, String field, String matchName) {
 
-        String searchUri = UriComponentsBuilder.fromPath("/v1/catalog/products/search")
+        String searchUri = UriComponentsBuilder.fromPath("/v1/products/search")
                 .queryParam(field, matchName)
                 .queryParam("limit", 1)
                 .encode(StandardCharsets.UTF_8)
@@ -132,7 +132,7 @@ public class PutawayRuleLoaderStrategy implements DomainLoaderStrategy<PutawayRu
         if (productId == null) {
             return Optional.empty();
         }
-        return context.get(CATALOG_SERVICE_ID, "/v1/catalog/products/" + productId, Map.class)
+        return context.get(CATALOG_SERVICE_ID, "/v1/products/" + productId, Map.class)
                 .map(this::castToMap);
     }
 
