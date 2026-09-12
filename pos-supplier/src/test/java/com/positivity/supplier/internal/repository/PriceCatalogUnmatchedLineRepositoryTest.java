@@ -85,6 +85,23 @@ class PriceCatalogUnmatchedLineRepositoryTest extends PostgresSliceTestBase {
     }
 
     @Test
+    void unpagedReturnsEveryOpenLine() {
+        save("4001861234567", null, null, UnmatchedLineReason.NO_CATALOG_MATCH, at("2026-08-10T09:00:00Z"), null);
+        save("4001861234568", null, null, UnmatchedLineReason.NO_CATALOG_MATCH, at("2026-08-11T09:00:00Z"), null);
+
+        // Pageable.unpaged() is a valid argument to the repository signature. It reports a page size
+        // of zero, which PageRequest.of rejects, so an unpaged request has to bypass it -- otherwise
+        // the search throws before it runs. The imposed newest-first sort still applies.
+        Page<PriceCatalogUnmatchedLineEntity> page =
+                repository.search(PROFILE_ID, false, null, null, null, null, Pageable.unpaged());
+
+        assertThat(page.getTotalElements()).isEqualTo(2);
+        assertThat(page.getContent())
+                .extracting(PriceCatalogUnmatchedLineEntity::getArticleEan)
+                .containsExactly("4001861234568", "4001861234567");
+    }
+
+    @Test
     void theDefaultWorklistListsOnlyOpenLines() {
         save("4001861234567", null, null, UnmatchedLineReason.NO_CATALOG_MATCH, at("2026-08-10T09:00:00Z"), null);
         save(

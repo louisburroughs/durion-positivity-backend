@@ -53,7 +53,8 @@ public interface PriceCatalogImportRepository
      * @param status only runs in this state, or null for every state
      * @param fetchedFrom inclusive lower bound on {@code fetchedAt}, or null
      * @param fetchedTo exclusive upper bound on {@code fetchedAt}, or null
-     * @param pageable the page to return; its sort is replaced by {@link #NEWEST_FIRST}
+     * @param pageable the page to return, or {@code Pageable.unpaged()} for all matches; its sort is
+     *     replaced by {@link #NEWEST_FIRST} either way
      * @return one page of matching import runs, newest first
      */
     @NonNull
@@ -66,7 +67,9 @@ public interface PriceCatalogImportRepository
             @NonNull Pageable pageable) {
         return findAll(
                 PriceCatalogImportSearch.matching(vendorProfileId, bindingId, status, fetchedFrom, fetchedTo),
-                PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), NEWEST_FIRST));
+                pageable.isUnpaged()
+                        ? Pageable.unpaged(NEWEST_FIRST)
+                        : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), NEWEST_FIRST));
     }
 
     /**

@@ -22,8 +22,9 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * Ryuk reaps the container at JVM exit.
  *
  * <p>It exists as its own type rather than as fields on a base class because two different base
- * classes need it — the {@code @SpringBootTest} {@link com.positivity.supplier.tenancy
- * .PostgresTenancyTestBase} and the {@code @DataJpaTest} {@link PostgresSliceTestBase} — and the
+ * classes need it — the {@code @SpringBootTest}
+ * {@link com.positivity.supplier.tenancy.PostgresTenancyTestBase} and the {@code @DataJpaTest}
+ * {@link PostgresSliceTestBase} — and the
  * module already pays for one copy of this bootstrap too many across the repository.
  *
  * <p>Requires Docker.

@@ -92,7 +92,8 @@ public interface SupplierTransmissionIntentRepository
      *     {@code !}) matched against the buyer's and the vendor's order numbers, or null
      * @param createdFrom inclusive lower bound on {@code createdAt}, or null
      * @param createdTo exclusive upper bound on {@code createdAt}, or null
-     * @param pageable the page to return; its sort is replaced by {@link #NEWEST_FIRST}
+     * @param pageable the page to return, or {@code Pageable.unpaged()} for all matches; its sort is
+     *     replaced by {@link #NEWEST_FIRST} either way
      * @return one page of matching intents, newest first
      */
     @NonNull
@@ -105,6 +106,8 @@ public interface SupplierTransmissionIntentRepository
             @NonNull Pageable pageable) {
         return findAll(
                 TransmissionLedgerSearch.matching(attemptState, vendorProfileId, searchPattern, createdFrom, createdTo),
-                PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), NEWEST_FIRST));
+                pageable.isUnpaged()
+                        ? Pageable.unpaged(NEWEST_FIRST)
+                        : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), NEWEST_FIRST));
     }
 }

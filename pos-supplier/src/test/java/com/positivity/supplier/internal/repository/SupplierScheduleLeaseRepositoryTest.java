@@ -14,6 +14,8 @@ import com.positivity.supplier.internal.entity.SupplierScheduleLeaseEntity;
 import com.positivity.supplier.internal.enums.ProfileSourceOfTruth;
 import com.positivity.tenancy.testing.TenantTestSupport;
 import jakarta.persistence.EntityManager;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,6 +28,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.hibernate.id.IdentifierGenerationException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -82,6 +85,14 @@ class SupplierScheduleLeaseRepositoryTest extends PostgresSliceTestBase {
 
     /** The profile of the committed contention fixture, so its cleanup can name it directly. */
     private UUID contestedProfileId;
+
+    /**
+     * The binding of the committed contention fixture, or null when the test never created one.
+     * Held on the instance so {@link #removeCommittedFixture()} owns the removal: doing it in the
+     * test's own {@code finally} would let a cleanup failure replace the assertion error that
+     * caused it, whereas an @AfterEach failure is reported alongside the test's.
+     */
+    private UUID committedFixtureBinding;
 
     @BeforeEach
     void setUp() {
@@ -177,6 +188,7 @@ class SupplierScheduleLeaseRepositoryTest extends PostgresSliceTestBase {
     @Test
     void exactlyOneOfManyConcurrentClaimsWins() throws Exception {
         UUID contestedBinding = insertCommittedLeaseFixture();
+        committedFixtureBinding = contestedBinding;
         int contenders = 16;
         CountDownLatch ready = new CountDownLatch(contenders);
         CountDownLatch go = new CountDownLatch(1);
@@ -201,7 +213,6 @@ class SupplierScheduleLeaseRepositoryTest extends PostgresSliceTestBase {
                     .isEqualTo(1);
         } finally {
             pool.shutdownNow();
-            deleteCommittedFixture(contestedBinding);
         }
     }
 
@@ -210,7 +221,7 @@ class SupplierScheduleLeaseRepositoryTest extends PostgresSliceTestBase {
      *
      * @return the binding id whose lease will be contested
      */
-    private UUID insertCommittedLeaseFixture() throws java.sql.SQLException {
+    private UUID insertCommittedLeaseFixture() throws SQLException {
         UUID profileId = UUID.randomUUID();
         contestedProfileId = profileId;
         UUID contestedBinding = UUID.randomUUID();
@@ -247,24 +258,31 @@ class SupplierScheduleLeaseRepositoryTest extends PostgresSliceTestBase {
     }
 
     /**
-     * Deletes the whole committed fixture, child first so the foreign keys allow it. It is
-     * committed and this class's database is shared with every other Postgres-backed class in the
-     * module, so a profile left behind here is a row another class sees —
+     * Deletes the whole committed fixture, child first so the foreign keys allow it.
+     *
+     * <p>A failure here fails the test rather than being swallowed. The fixture is committed and
+     * this class's database is shared with every other Postgres-backed class in the module, under
+     * the same tenant, so a row left behind is a row another class sees —
      * {@code ExchangeAuditWriterTest} asserts on {@code profileRepository.findAll()} and would
-     * count it.
+     * count it. Swallowing the failure would convert this into an order-dependent failure over
+     * there, which is far harder to read than a failure here.
      */
-    private void deleteCommittedFixture(UUID contestedBinding) {
+    @AfterEach
+    void removeCommittedFixture() throws SQLException {
+        if (committedFixtureBinding == null) {
+            return;
+        }
         try (var connection = dataSource.getConnection()) {
             connection.setAutoCommit(true);
-            delete(connection, "DELETE FROM supplier_schedule_lease WHERE binding_id = ?", contestedBinding);
-            delete(connection, "DELETE FROM supplier_endpoint_binding WHERE id = ?", contestedBinding);
+            delete(connection, "DELETE FROM supplier_schedule_lease WHERE binding_id = ?", committedFixtureBinding);
+            delete(connection, "DELETE FROM supplier_endpoint_binding WHERE id = ?", committedFixtureBinding);
             delete(connection, "DELETE FROM supplier_profile WHERE vendor_profile_id = ?", contestedProfileId);
-        } catch (java.sql.SQLException ignored) {
-            // Cleanup only; a leftover row is confined to this test's tenant either way.
+        } finally {
+            committedFixtureBinding = null;
         }
     }
 
-    private static void delete(java.sql.Connection connection, String sql, UUID id) throws java.sql.SQLException {
+    private static void delete(Connection connection, String sql, UUID id) throws SQLException {
         try (var statement = connection.prepareStatement(sql)) {
             statement.setObject(1, id);
             statement.executeUpdate();

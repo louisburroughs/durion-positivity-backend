@@ -24,6 +24,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.TestPropertySource;
 
 /**
@@ -294,6 +295,33 @@ class SupplierTransmissionIntentRepositoryTest extends PostgresSliceTestBase {
             assertThat(intentRepository.search(null, null, null, null, null, PageRequest.of(1, 2)))
                     .extracting(SupplierTransmissionIntentEntity::getPurchaseOrderNumber)
                     .containsExactly("PO-OLDEST");
+        }
+
+        @Test
+        void unpagedReturnsEveryIntentStillNewestFirst() {
+            searchable(
+                    TransmissionAttemptState.CONFIRMED,
+                    PROFILE_ID,
+                    "PO-1",
+                    null,
+                    Instant.parse("2026-08-01T00:00:00Z"));
+            searchable(
+                    TransmissionAttemptState.CONFIRMED,
+                    PROFILE_ID,
+                    "PO-2",
+                    null,
+                    Instant.parse("2026-08-02T00:00:00Z"));
+
+            // Pageable.unpaged() is a valid argument to the repository signature. It reports a page
+            // size of zero, which PageRequest.of rejects, so an unpaged request has to bypass it --
+            // otherwise the search throws before it runs. The imposed sort still applies.
+            Page<SupplierTransmissionIntentEntity> page =
+                    intentRepository.search(null, null, null, null, null, Pageable.unpaged());
+
+            assertThat(page.getTotalElements()).isEqualTo(2);
+            assertThat(page.getContent())
+                    .extracting(SupplierTransmissionIntentEntity::getPurchaseOrderNumber)
+                    .containsExactly("PO-2", "PO-1");
         }
 
         @Test

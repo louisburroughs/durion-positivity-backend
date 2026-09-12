@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 /**
  * Database-level behaviour of the PRICAT import-run read surface (#1637 decisions 3-5): the V19
@@ -136,6 +137,26 @@ class PriceCatalogImportRepositoryTest extends PostgresSliceTestBase {
             seed();
 
             Page<PriceCatalogImportEntity> page = search(null, null, null, null);
+
+            assertThat(page.getTotalElements()).isEqualTo(4);
+            assertThat(page.getContent())
+                    .extracting(PriceCatalogImportEntity::getFetchedAt)
+                    .containsExactly(
+                            at("2026-08-13T09:00:00Z"),
+                            at("2026-08-12T09:00:00Z"),
+                            at("2026-08-11T09:00:00Z"),
+                            at("2026-08-10T09:00:00Z"));
+        }
+
+        @Test
+        void unpagedReturnsEveryMatchStillNewestFirst() {
+            seed();
+
+            // Pageable.unpaged() is a valid argument to the repository signature. It reports a page
+            // size of zero, which PageRequest.of rejects, so an unpaged request has to bypass it --
+            // otherwise the search throws before it runs. The imposed sort still applies.
+            Page<PriceCatalogImportEntity> page =
+                    repository.search(PROFILE_ID, null, null, null, null, Pageable.unpaged());
 
             assertThat(page.getTotalElements()).isEqualTo(4);
             assertThat(page.getContent())
