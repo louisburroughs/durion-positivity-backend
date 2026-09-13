@@ -6,6 +6,7 @@ import com.positivity.customer.internal.dto.GetPersonResponse;
 import com.positivity.customer.internal.security.CrmPermissionRegistry;
 import com.positivity.customer.internal.service.PersonService;
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -101,7 +102,10 @@ public class CrmPersonController {
     @ApiResponse(responseCode = "400", description = "Invalid request - validation failed")
     @ApiResponse(responseCode = "401", description = "Unauthorized")
     @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
-    @ApiResponse(responseCode = "409", description = "The supplied customerNumber already belongs to another party")
+    @ApiResponse(
+            responseCode = "409",
+            description = "The supplied customerNumber already belongs to another party",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<CreatePersonResponse> createCrmPerson(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =
