@@ -21,6 +21,7 @@ import org.mockito.Answers;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriBuilderFactory;
 
 /**
  * One business-key lookup, from the resolver down to the headers that leave the process
@@ -55,6 +56,7 @@ class RestResolutionContextTest {
         RestClient.RequestHeadersUriSpec<?> uriSpec = mock(RestClient.RequestHeadersUriSpec.class);
         RestClient.RequestHeadersSpec<?> headersSpec = mock(RestClient.RequestHeadersSpec.class, Answers.RETURNS_SELF);
         RestClient.ResponseSpec responseSpec = mock(RestClient.ResponseSpec.class);
+        when(builder.clone()).thenReturn(builder);
         when(builder.build()).thenReturn(client);
         when(client.get()).thenAnswer(invocation -> uriSpec);
         when(uriSpec.uri(anyString())).thenAnswer(invocation -> headersSpec);
@@ -72,7 +74,13 @@ class RestResolutionContextTest {
         Optional<String> resolved = resolution.get("LOCATION", "/v1/locations?code=CLT-MAIN-001", String.class);
 
         assertThat(resolved).contains("CLT-MAIN-001");
-        verify(builder).baseUrl("http://LOCATION");
+        // The base URI now travels on the UriBuilderFactory rather than on baseUrl(), because the
+        // factory is also where encoding is turned off: callers hand the context an already-encoded
+        // URI, and the default mode encoded it a second time (RestResolutionContextUriEncodingTest).
+        ArgumentCaptor<UriBuilderFactory> uriFactory = ArgumentCaptor.captor();
+        verify(builder).uriBuilderFactory(uriFactory.capture());
+        assertThat(uriFactory.getValue().uriString("/v1/locations").build())
+                .hasToString("http://LOCATION/v1/locations");
         verify(uriSpec).uri("/v1/locations?code=CLT-MAIN-001");
         verify(headersSpec).header(HttpHeaders.AUTHORIZATION, "Bearer token-seed");
         verify(headersSpec).header(TenantHeaders.HTTP_TENANT_ID, TENANT.toString());
