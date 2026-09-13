@@ -33,6 +33,10 @@ public final class EventTypes {
                                 "SECURITY_AUTH_ACTIVATE",
                                 "Exchange a one-time activation token for the account's first password")
                         .build(),
+                EventTypeRegistration.write(
+                                "SECURITY_AUTH_ACTIVATE_STARTER",
+                                "Exchange a bulk-provisioned account's starter password for its own password")
+                        .build(),
 
                 // PlatformAdministratorController - 1 event (ADR-0062 section 7, WS2b-3)
                 EventTypeRegistration.write(

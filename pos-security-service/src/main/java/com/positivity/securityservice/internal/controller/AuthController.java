@@ -2,6 +2,7 @@ package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.ActivateAccountRequest;
+import com.positivity.securityservice.internal.dto.ActivateWithStarterRequest;
 import com.positivity.securityservice.internal.dto.LoginRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationResponse;
@@ -9,6 +10,7 @@ import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import com.positivity.securityservice.internal.service.AdministratorActivationService;
 import com.positivity.securityservice.internal.service.AuthenticationService;
 import com.positivity.securityservice.internal.service.SelfRegistrationService;
+import com.positivity.securityservice.internal.service.StarterPasswordExchangeService;
 import com.positivity.shared.error.ApiError;
 import com.positivity.tenancy.TenantHeaders;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,6 +22,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -46,6 +49,7 @@ public class AuthController {
     private final AuthenticationService authenticationService;
     private final SelfRegistrationService selfRegistrationService;
     private final AdministratorActivationService administratorActivationService;
+    private final StarterPasswordExchangeService starterPasswordExchangeService;
 
     @Operation(operationId = "loginUser", summary = "Authenticate User and Issue Tokens", description = """
                     Authenticates a user with username and password and returns a JWT access token (1-hour) and \
@@ -203,6 +207,33 @@ public class AuthController {
                     @RequestBody
                     ActivateAccountRequest request) {
         administratorActivationService.activate(request.token(), request.newPassword());
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Claim a bulk-provisioned account with its starter password", description = """
+                    Trades the shared starter password an account was loaded with for a password of its own. \
+                    Answers 204 and no token: the caller then signs in normally with the password they just set. \
+                    The starter password itself can never authenticate — accounts provisioned this way are \
+                    created with their credentials expired, so POST /v1/auth/login refuses them until this \
+                    exchange has run. Every failure answers the same 401 ACTIVATION_TOKEN_INVALID, so an \
+                    unauthenticated caller learns nothing about which accounts exist or are still unclaimed.""")
+    @ApiResponse(responseCode = "204", description = "The password was set; sign in with it")
+    @ApiResponse(
+            responseCode = "401",
+            description = "ACTIVATION_TOKEN_INVALID: unknown account, wrong starter password, or already claimed",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @EmitEvent(id = "SECURITY_AUTH_ACTIVATE_STARTER", apiVersion = "1")
+    @PostMapping("/activate-starter")
+    @PreAuthorize("permitAll()")
+    public ResponseEntity<Void> activateWithStarter(
+            @RequestHeader(value = "X-Tenant-Slug", required = false) @Nullable String tenantSlugHeader,
+            @Valid @RequestBody ActivateWithStarterRequest request) {
+        starterPasswordExchangeService.exchange(
+                tenantSlugHeader,
+                request.tenantSlug(),
+                request.username(),
+                request.starterPassword(),
+                request.newPassword());
         return ResponseEntity.noContent().build();
     }
 }

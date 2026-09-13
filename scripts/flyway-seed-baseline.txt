@@ -29,5 +29,4 @@ pos-price/R__seed_reference_price.sql tier1
 pos-security-service/R__seed_reference_security.sql tier1
 pos-security-service/R__seed_role_location_scope.sql tier1
 pos-security-service/R__seed_role_permissions.sql tier1
-pos-security-service/R__seed_security_operational_data.sql tier2
 pos-security-service/R__seed_tenant_template.sql tier1

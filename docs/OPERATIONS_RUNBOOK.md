@@ -638,6 +638,38 @@ Format: `domain:resource:action` (snake_case, lowercase)
 
 ## Tenant Provisioning
 
+### Claiming a bulk-provisioned account (starter password)
+
+Accounts loaded from `scripts/fixtures/seed/alpha/security/users.csv` are created awaiting
+activation, with their credentials already expired. When `SECURITY_STARTER_PASSWORD_HASH` is set,
+they hold that shared starter password; when it is not, they hold a generated password nobody holds
+and only an operator-minted activation token opens them.
+
+**The starter password is not a login.** `POST /v1/auth/login` checks account state before it
+compares a password, so it answers `401 CREDENTIALS_EXPIRED` for these accounts whatever is
+presented. The one thing the starter password opens is the exchange below, which returns no token —
+the person then signs in with the password they just chose.
+
+```bash
+# The operator hands out the starter password out of band, once, for everyone.
+curl -sS -X POST "https://<gateway>/security-service/v1/auth/activate-starter" \
+  -H 'Content-Type: application/json' -H 'X-API-Version: 1' \
+  -d '{"username":"marcus.webb","starterPassword":"<the shared starter>",
+       "newPassword":"<their own>","tenantSlug":"alpha"}'
+# -> 204; then POST /v1/auth/login with the new password works.
+```
+
+| Situation | Answer |
+| --- | --- |
+| Unknown username, wrong starter password, an account the loader did not provision, or one already claimed | `401 ACTIVATION_TOKEN_INVALID` — one code on purpose, so an unauthenticated caller learns nothing about which accounts exist or remain unclaimed |
+| The account was already claimed | The same 401. The exchange clears `awaiting_activation`, so a starter password works once per account and never again |
+| `SECURITY_STARTER_PASSWORD_HASH` unset | No account can be claimed this way; use the activation-token path above |
+
+Rotating the starter password changes it only for accounts provisioned after the change: it is
+stored as each account's password at load time, not read at exchange time. To rotate for accounts
+already loaded, re-provision them or mint activation tokens.
+
+
 ### Activating the first administrator (ADR-0062 §7, WS2b-3)
 
 `POST /tenant/v1/tenants` in `pos-tenant` publishes `tenant.created`; `pos-security-service` copies
