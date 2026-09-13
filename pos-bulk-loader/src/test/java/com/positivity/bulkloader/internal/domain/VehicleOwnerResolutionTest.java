@@ -167,7 +167,11 @@ class VehicleOwnerResolutionTest {
 
         assertThat(context.requestedUris.getFirst())
                 .startsWith("/v1/crm/accounts/parties?")
-                .contains("partyType=ORGANIZATION")
+                // The file says ORGANIZATION; pos-customer's PartyType enum is
+                // PERSON/COMMERCIAL/UNKNOWN. This previously asserted the file's own word, which is
+                // a value the query cannot bind — the assertion agreed with the caller instead of
+                // with pos-customer, so the mismatch reached alpha and lost all 329 vehicles.
+                .contains("partyType=COMMERCIAL")
                 .doesNotContain("Smith & Sons");
     }
 

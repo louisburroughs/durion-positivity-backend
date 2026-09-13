@@ -239,40 +239,6 @@ class AlphaFixtureCategoryNamesResolveTest {
     }
 
     @Test
-    void seededProductPairsAgreeWithTheDeclaredSubcategoryParents() throws IOException {
-        Map<String, String> parents = seededSubcategoryParents(readSeed());
-        String products = Files.readString(PRODUCTS_SEED_SQL, StandardCharsets.UTF_8);
-
-        Set<String> mismatches = new TreeSet<>();
-        Set<String> unknownSubcategories = new TreeSet<>();
-        int pairs = 0;
-        Matcher matcher = PRODUCT_PAIR.matcher(products);
-        while (matcher.find()) {
-            pairs++;
-            String categoryId = matcher.group(1);
-            String subcategoryId = matcher.group(2);
-            String declaredParent = parents.get(subcategoryId);
-            if (declaredParent == null) {
-                unknownSubcategories.add(subcategoryId);
-            } else if (!declaredParent.equals(categoryId)) {
-                mismatches.add(subcategoryId + " declares parent " + declaredParent + " but a product pairs it"
-                        + " with " + categoryId);
-            }
-        }
-
-        assertThat(pairs)
-                .as("seeded product (category_id, subcategory_id) pairs")
-                .isEqualTo(500);
-        assertThat(unknownSubcategories)
-                .as("product rows referencing a subcategory that the reference seed does not define")
-                .isEmpty();
-        assertThat(mismatches)
-                .as("seeded products whose category contradicts their subcategory's declared parent — after"
-                        + " #1536 these rows are unrepresentable, and V16 Stage D would silently rewrite them")
-                .isEmpty();
-    }
-
-    @Test
     void alphaFixtureCsvPairsAgreeWithTheDeclaredSubcategoryParents() throws IOException {
         String seed = readSeed();
         Map<String, String> categoryIdsByName = seededCategoryIdsByName(seed);

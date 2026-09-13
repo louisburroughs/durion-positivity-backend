@@ -5,12 +5,16 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.UUID;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Schema(description = "Per-record outcome of a bulk ingest submission")
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class BulkIngestResult {
 
     @Schema(

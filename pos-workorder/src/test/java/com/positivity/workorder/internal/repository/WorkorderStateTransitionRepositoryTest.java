@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.workorder.PostgresSliceTestBase;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
@@ -12,15 +13,27 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.data.domain.PageRequest;
 
 /**
- * DataJpaTest for the E7 date-range finder (#1595). {@code work_order_state_transitions} already
- * existed; this proves only the new query method against a real (H2) JPA provider.
+ * The E7 date-range finder (#1595) against the real PostgreSQL baseline.
+ *
+ * <p>It runs on PostgreSQL rather than the H2 schema it used to boot because what it now also pins
+ * is a property of PostgreSQL. {@code findByTransitionedAtRangeAndStatuses} is one JPQL string
+ * containing two {@code (:param IS NULL OR column = :param)} clauses, and it is deliberately left
+ * that way: PostgreSQL rejects that shape at parse time only when the placeholder's type cannot be
+ * inferred, which is the case for a temporal parameter and not for these two — both are enums, bound
+ * as varchar with a concrete type OID for a value and for {@code setNull} alike (issue #1891). The
+ * query works, so it was not rewritten. Its {@code start}/{@code end} bounds are temporal but
+ * mandatory, compared directly with no {@code IS NULL} branch, which is why they infer fine too.
+ *
+ * <p>What this pins is that it goes on working. Making either bound optional, or adding an optional
+ * filter of any temporal type, would break every call to {@code GET /v1/workorders/status-transitions}
+ * and the E5/E6 analytics endpoints built on it — and only a statement issued to PostgreSQL can see
+ * it.
  */
-@DataJpaTest(properties = {"spring.flyway.enabled=false"})
-class WorkorderStateTransitionRepositoryTest {
+@DisplayName("Workorder state-transition range finder on PostgreSQL")
+class WorkorderStateTransitionRepositoryTest extends PostgresSliceTestBase {
 
     @Autowired
     private WorkorderStateTransitionRepository repository;
@@ -38,6 +51,9 @@ class WorkorderStateTransitionRepositoryTest {
         Instant now = Instant.parse("2026-01-01T00:00:00Z");
         Workorder workorder = new Workorder();
         workorder.setStatus(WorkorderStatus.DRAFT);
+        // workorder.workorder_number is NOT NULL in the baseline; the H2 schema this test used to
+        // boot was generated from the mapping, which does not say so, and let the column go unset.
+        workorder.setWorkorderNumber("WO-2026-TRANSITIONS");
         workorder.setCreatedAt(now);
         workorder.setUpdatedAt(now);
         workorder = workorderRepository.save(workorder);

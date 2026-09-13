@@ -41,7 +41,7 @@ import org.springframework.data.domain.Pageable;
 /**
  * Unit tests for the free-text/structured-filter invoice search service (#1599, E11). Covers
  * the customer-name and workorder-number resolution legs (with row enrichment), the
- * empty-match sentinel path, the structured-filter combinations, and the filters-only
+ * empty-match path, the structured-filter combinations, and the filters-only
  * (blank {@code q}) path.
  */
 @ExtendWith(MockitoExtension.class)
@@ -109,7 +109,7 @@ class InvoiceSearchServiceImplTest {
     }
 
     @Test
-    void search_noReferenceMatches_passesSentinelsToRepository() {
+    void search_noReferenceMatches_passesEmptyCollectionsToRepository() {
         Pageable pageable = PageRequest.of(0, 25);
 
         when(customerReferenceClient.searchIdsByName(anyString(), anyInt())).thenReturn(List.of());
@@ -135,9 +135,11 @@ class InvoiceSearchServiceImplTest {
                         isNull(),
                         eq(pageable));
 
-        // Empty reference matches → non-matching sentinels keep the JPQL IN clauses non-empty.
-        assertThat(customerIdsCaptor.getValue()).containsExactly("__none__");
-        assertThat(workorderIdsCaptor.getValue()).containsExactly(new UUID(0L, 0L));
+        // Empty reference matches are passed through as empty collections: the specification
+        // simply drops that leg. The never-matching sentinels this used to assert existed only to
+        // keep a JPQL IN clause non-empty, and went with the JPQL (#1891).
+        assertThat(customerIdsCaptor.getValue()).isEmpty();
+        assertThat(workorderIdsCaptor.getValue()).isEmpty();
     }
 
     @Test

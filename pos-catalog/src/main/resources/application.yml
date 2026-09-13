@@ -1,4 +1,12 @@
 spring:
+  flyway:
+    # R__seed_reference_catalog_2_products.sql, R__seed_reference_catalog_3_services.sql and R__seed_reference_catalog_4_pricing.sql
+    # were retired in favour of the alpha fixture packs
+    # (docs/DATA_SEED_STRATEGY.md, #1968). Environments that ran them keep the
+    # flyway_schema_history rows, which default validation flags as "applied migration
+    # not resolved locally" and which fails startup. Ignore missing repeatables only -
+    # versioned-migration validation stays fully enforced.
+    ignore-migration-patterns: "repeatable:missing"
   application:
     name: catalog
   kafka:

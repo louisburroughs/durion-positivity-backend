@@ -7,10 +7,9 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, UUID> {
+public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, UUID>, JpaSpecificationExecutor<InvoiceItem> {
 
     @NonNull
     List<InvoiceItem> findByInvoice_Id(@NonNull UUID invoiceId);
@@ -22,14 +21,25 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, UUID> 
      * unbounded result. The owning invoice is join-fetched (to-one, so pagination stays in SQL)
      * because the mapping reads its number/status/createdAt outside a lazy-loading session.
      *
+     * <p>The filter is an {@link InvoiceLineSearch} specification rather than a JPQL string with an
+     * {@code (:q IS NULL OR …)} clause: see that class for why the string form returned 500 from
+     * PostgreSQL on every unfiltered call — the endpoint's ordinary case — while passing on H2 and
+     * whenever a term happened to be supplied (issue #1891).
+     *
+     * <p>A list rather than a {@code Page}: the caller wants one capped batch, and asking for a
+     * {@code Page} would make Spring Data run a count query over the party's whole billing history
+     * to populate a total nobody reads.
+     *
      * @param partyId the customer party id (invoices store it as a string column)
      * @param q       optional case-insensitive description filter, pre-escaped for LIKE
+     * @param pageable supplies the result bound only; the order is fixed by the search
      * @return matching line items ordered by owning-invoice creation time descending
      */
-    @Query("SELECT ii FROM InvoiceItem ii JOIN FETCH ii.invoice i WHERE i.partyId = :partyId "
-            + "AND (:q IS NULL OR LOWER(ii.description) LIKE LOWER(CONCAT('%', :q, '%')) ESCAPE '\\') "
-            + "ORDER BY i.createdAt DESC, ii.id ASC")
     @NonNull
-    List<InvoiceItem> findByInvoicePartyId(
-            @Param("partyId") @NonNull String partyId, @Param("q") @Nullable String q, @NonNull Pageable pageable);
+    default List<InvoiceItem> findByInvoicePartyId(
+            @NonNull String partyId, @Nullable String q, @NonNull Pageable pageable) {
+        return findBy(
+                InvoiceLineSearch.matching(partyId, q),
+                query -> (pageable.isUnpaged() ? query : query.limit(pageable.getPageSize())).all());
+    }
 }

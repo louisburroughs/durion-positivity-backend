@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the security module.
-     * Total: 42 event types.
+     * Total: 43 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -35,6 +35,10 @@ public final class EventTypes {
                 EventTypeRegistration.write(
                                 "SECURITY_AUTH_ACTIVATE",
                                 "Exchange a one-time activation token for the account's first password")
+                        .build(),
+                EventTypeRegistration.write(
+                                "SECURITY_AUTH_ACTIVATE_STARTER",
+                                "Exchange a bulk-provisioned account's starter password for its own password")
                         .build(),
 
                 // PlatformAdministratorController - 1 event (ADR-0062 section 7, WS2b-3)

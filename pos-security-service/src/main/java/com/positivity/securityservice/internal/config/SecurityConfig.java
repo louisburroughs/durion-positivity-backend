@@ -42,6 +42,14 @@ public class SecurityConfig {
     /** Unauthenticated by design: the login form searches it before any tenant is bound (ADR-0062 §3). */
     private static final String V1_AUTH_TENANTS = "/v1/auth/tenants";
 
+    /**
+     * Unauthenticated by design: the shared starter password is the credential, and it buys nothing
+     * but a password of the account's own. Listed here as well as carrying {@code permitAll()} on the
+     * method, because this chain ends in {@code anyRequest().authenticated()} — a path absent from
+     * this list is refused here, before the controller's annotation is ever consulted.
+     */
+    private static final String V1_AUTH_ACTIVATE_STARTER = "/v1/auth/activate-starter";
+
     private static final String METRICS_ROLE = "ROLE_ACTUATOR_METRICS";
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final UserDetailsService userDetailsService;
@@ -72,6 +80,7 @@ public class SecurityConfig {
                                     V1_AUTH_LOGIN,
                                     V1_AUTH_SELF_REGISTER,
                                     V1_AUTH_ACTIVATE,
+                                    V1_AUTH_ACTIVATE_STARTER,
                                     V1_AUTH_TENANTS)
                             .permitAll()
                             .anyRequest()

@@ -2,10 +2,9 @@ package com.positivity.people.internal.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.positivity.people.internal.config.JpaAuditingConfig;
+import com.positivity.people.PostgresSliceTestBase;
 import com.positivity.people.internal.entity.TimeEntry;
 import com.positivity.people.internal.enums.TimeEntryStatus;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -13,40 +12,28 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 
 /**
- * {@link TimeEntryRepository#findForApprovalQueue} against a real database (#1573).
+ * {@link TimeEntryRepository#findForApprovalQueue} against the real PostgreSQL schema (#1573).
  *
- * <h2>Why this runs against a database rather than a mock</h2>
+ * <h2>Why this runs against a database rather than a mock, and against PostgreSQL rather than H2</h2>
  *
  * The query is the whole feature: optional filters expressed as {@code :param IS NULL OR ...}, a
  * half-open instant window, {@code NULLS LAST} ordering and a hand-written count query. None of
  * that is exercised by a mocked repository — a typo in the JPQL, an untyped parameter, or a count
  * query that drifts from the selection all fail only when a database parses them.
+ *
+ * <p>And only PostgreSQL parses them the way production does. H2 accepts a bare {@code ? IS NULL}
+ * that PostgreSQL rejects at parse time with {@code could not determine data type of parameter $n}
+ * whenever it cannot infer the placeholder's type, which is the case for every temporal parameter
+ * (issue #1891). This query's three optional filters are an enum and two {@code UUID}s, all bound
+ * with a concrete type OID, so it works and was left as it is; running it here is what keeps it
+ * that way, because adding a temporal filter to it would break every call to the approvals queue.
  */
-@DataJpaTest(
-        properties = {
-            "spring.datasource.url=jdbc:h2:mem:pos_people_queue;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-            "spring.datasource.driver-class-name=org.h2.Driver",
-            "spring.datasource.username=sa",
-            "spring.datasource.password=",
-            "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-            // Flyway off, schema from the entities: the module's documented test footing, because
-            // the Postgres-only baseline SQL will not run on H2 (see TimeEntryExceptionAuditingTest).
-            "spring.flyway.enabled=false",
-            "spring.jpa.hibernate.ddl-auto=create-drop"
-        })
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({JpaAuditingConfig.class, TimeEntryApprovalQueueTest.ClockConfig.class})
 @DisplayName("TimeEntryRepository.findForApprovalQueue — filters, order and paging")
-class TimeEntryApprovalQueueTest {
+class TimeEntryApprovalQueueTest extends PostgresSliceTestBase {
 
     private static final Instant DAY_START = Instant.parse("2026-01-15T00:00:00Z");
 
@@ -222,14 +209,5 @@ class TimeEntryApprovalQueueTest {
                 null, null, null, UNBOUNDED_START, UNBOUNDED_END, PageRequest.of(0, 20));
 
         assertThat(idsOf(page)).doesNotContain(id);
-    }
-
-    /** {@link JpaAuditingConfig} needs a clock; the values it stamps are not what this test asserts. */
-    @TestConfiguration
-    static class ClockConfig {
-        @Bean
-        Clock clock() {
-            return Clock.systemUTC();
-        }
     }
 }

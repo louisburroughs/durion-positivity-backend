@@ -49,6 +49,14 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
 
+    /**
+     * Bcrypt hash of the shared starter password, or blank when none is configured. Blank is the
+     * safe default: bulk-provisioned accounts then hold a password nobody knows and can only be
+     * opened with an operator-minted activation token.
+     */
+    @org.springframework.beans.factory.annotation.Value("${SECURITY_STARTER_PASSWORD_HASH:}")
+    private String starterPasswordHash;
+
     @Override
     @Transactional
     public UserDto createUserWithGeneratedPassword(String username, Set<String> roleNames) {
@@ -62,6 +70,28 @@ public class UserServiceImpl implements UserService {
         User user = userRepository
                 .findById(created.getId())
                 .orElseThrow(() -> new IllegalStateException("User " + created.getId() + " vanished after creation"));
+        user.setCredentialsNonExpired(false);
+        user.setCredentialsExpireAt(Instant.now(clock));
+        user.setAwaitingActivation(true);
+        userRepository.save(user);
+        return created;
+    }
+
+    @Override
+    @Transactional
+    public @NonNull UserDto createUserAwaitingStarterExchange(
+            @NonNull String username, @NonNull Set<String> roleNames) {
+        UserDto created = createUser(username, generatePassword(), roleNames);
+        User user = userRepository
+                .findById(created.getId())
+                .orElseThrow(() -> new IllegalStateException("User " + created.getId() + " vanished after creation"));
+        // Held in its own column, never as the password. The password stays the discarded random
+        // value createUser wrote, so login matches nothing for this account and answers the same
+        // INVALID_CREDENTIALS for every password including the starter — the starter is incapable of
+        // authenticating rather than merely rejected late. See V6__users_starter_password_hash.sql.
+        if (starterPasswordHash != null && !starterPasswordHash.isBlank()) {
+            user.setStarterPasswordHash(starterPasswordHash);
+        }
         user.setCredentialsNonExpired(false);
         user.setCredentialsExpireAt(Instant.now(clock));
         user.setAwaitingActivation(true);

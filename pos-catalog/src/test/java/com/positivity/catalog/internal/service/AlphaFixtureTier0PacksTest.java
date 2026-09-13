@@ -13,8 +13,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -45,12 +43,6 @@ class AlphaFixtureTier0PacksTest {
     private static final Path STANDARDS = FIXTURE_ROOT.resolve("catalog/tier0-labor-standards.csv");
     private static final Path PACKAGES = FIXTURE_ROOT.resolve("catalog/tier0-service-packages.csv");
     private static final Path MEMBERS = FIXTURE_ROOT.resolve("catalog/tier0-service-package-members.csv");
-
-    /** The 50 general services the catalog reference seed still owns; Tier 0 rows may name them. */
-    private static final Path GENERAL_SERVICES_SEED =
-            MODULE_ROOT.resolve("src/main/resources/db/migration/R__seed_reference_catalog_3_services.sql");
-
-    private static final Pattern SEEDED_OPERATION_CODE = Pattern.compile("'[0-9a-f-]{36}'::uuid,\\s*'([A-Z0-9-]+)'");
 
     private static final Set<String> TIME_TYPES =
             Set.of("DURION_STANDARD", "MANUFACTURER_INSTALL", "RETAIL_FLAT_RATE", "WARRANTY_FLAT_RATE");
@@ -257,19 +249,22 @@ class AlphaFixtureTier0PacksTest {
                 .isLessThanOrEqualTo(1);
     }
 
-    /** Codes the Tier 0 pack creates, plus the ones the reference seed already assigned. */
+    /**
+     * Every operation code the Tier 0 pack creates.
+     *
+     * <p>This used to union the pack with R__seed_reference_catalog_3_services.sql, because three
+     * codes the packs name — TIRE-ROTATION, WHEEL-BALANCE-SET-4 and TIRE-INSTALL-SET-4 — existed
+     * only in that Flyway seed. The seed is retired (demo data does not belong in the production
+     * load path) and those three services moved into tier0-services.csv with their seeded names and
+     * descriptions intact, so the pack is now the whole source of truth and is read as such.
+     */
     private static Set<String> knownOperationCodes() throws IOException {
         Set<String> codes = readRows(SERVICES).stream()
                 .map(row -> row.get("operationCode"))
                 .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
 
-        String seed = Files.readString(GENERAL_SERVICES_SEED, StandardCharsets.UTF_8);
-        Matcher matcher = SEEDED_OPERATION_CODE.matcher(seed);
-        while (matcher.find()) {
-            codes.add(matcher.group(1));
-        }
         assertThat(codes)
-                .as("the reference seed's operation codes were not found — has the seed's shape changed?")
+                .as("the three services carried over from the retired seed must stay in the pack")
                 .contains("TIRE-ROTATION", "WHEEL-BALANCE-SET-4", "TIRE-INSTALL-SET-4");
         return codes;
     }

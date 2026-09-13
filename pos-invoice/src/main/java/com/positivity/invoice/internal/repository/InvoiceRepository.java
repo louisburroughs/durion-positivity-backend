@@ -14,11 +14,12 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
+public interface InvoiceRepository extends JpaRepository<Invoice, UUID>, JpaSpecificationExecutor<Invoice> {
 
     @NonNull
     Optional<Invoice> findByWorkorderId(@NonNull UUID workorderId);
@@ -40,16 +41,17 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
      * {@code issuedTo}), and exact {@code customerId} (party id). Every structured filter is
      * independently optional and combinable with the free-text leg and with each other.
      *
-     * <p>JPQL {@code IN} requires non-empty collections; callers pass a non-matching
-     * sentinel when a leg yields no ids. The free-text leg itself is skipped (never forced
-     * to match) when {@code q} is the empty string — the {@code :q = ''} disjunct makes the
-     * whole free-text group vacuously true so a caller can filter by structured fields alone
-     * without supplying a query term.
+     * <p>The filter is an {@link InvoiceSearch} specification rather than a JPQL string of
+     * {@code (:param IS NULL OR …)} clauses: see that class for why the string form returned 500
+     * from PostgreSQL for every call while passing on H2 (issue #1891). An absent filter now
+     * contributes no SQL, so an empty {@code partyIds} or {@code workorderIds} collection simply
+     * drops its leg and no caller has to keep a never-matching sentinel alive to satisfy
+     * {@code IN}.
      *
-     * @param q            free-text query matched against the invoice number; empty string
-     *                     disables the free-text leg entirely (structured filters only)
-     * @param customerIds  party ids resolved from the customer-name leg
-     * @param workorderIds workorder ids resolved from the workorder-number leg
+     * @param q            free-text query matched against the invoice number; blank disables the
+     *                     free-text leg entirely (structured filters only)
+     * @param customerIds  party ids resolved from the customer-name leg; empty drops that leg
+     * @param workorderIds workorder ids resolved from the workorder-number leg; empty drops that leg
      * @param status       exact status match; null disables the filter
      * @param issuedFrom   {@code finalizedAt} lower bound (inclusive); null disables the filter
      * @param issuedTo     {@code finalizedAt} upper bound (inclusive); null disables the filter
@@ -57,28 +59,20 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
      * @param pageable     pagination and sorting configuration
      * @return page of matching invoices
      */
-    @Query("""
-            SELECT i FROM Invoice i
-            WHERE ((:q <> '' AND (
-                       LOWER(i.invoiceNumber) LIKE LOWER(CONCAT('%', :q, '%')) ESCAPE '\\'
-                       OR i.partyId IN :customerIds
-                       OR i.workorderId IN :workorderIds))
-                   OR :q = '')
-              AND (:status IS NULL OR i.status = :status)
-              AND (:issuedFrom IS NULL OR i.finalizedAt >= :issuedFrom)
-              AND (:issuedTo IS NULL OR i.finalizedAt <= :issuedTo)
-              AND (:customerId IS NULL OR i.partyId = :customerId)
-            """)
     @NonNull
-    Page<Invoice> searchByQuery(
-            @Param("q") @NonNull String q,
-            @Param("customerIds") @NonNull Collection<String> customerIds,
-            @Param("workorderIds") @NonNull Collection<UUID> workorderIds,
-            @Param("status") @Nullable InvoiceStatus status,
-            @Param("issuedFrom") @Nullable Instant issuedFrom,
-            @Param("issuedTo") @Nullable Instant issuedTo,
-            @Param("customerId") @Nullable String customerId,
-            @NonNull Pageable pageable);
+    default Page<Invoice> searchByQuery(
+            @Nullable String q,
+            @NonNull Collection<String> customerIds,
+            @NonNull Collection<UUID> workorderIds,
+            @Nullable InvoiceStatus status,
+            @Nullable Instant issuedFrom,
+            @Nullable Instant issuedTo,
+            @Nullable String customerId,
+            @NonNull Pageable pageable) {
+        return findAll(
+                InvoiceSearch.matching(q, customerIds, workorderIds, status, issuedFrom, issuedTo, customerId),
+                pageable);
+    }
 
     /**
      * Backfills {@code invoices.customer_id} for pre-#920 invoices (NULL party) from the

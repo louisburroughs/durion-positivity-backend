@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.util.DefaultUriBuilderFactory;
 
 /**
  * A {@link ResolutionContext} backed by load-balanced REST calls to sibling services.
@@ -49,8 +50,7 @@ public class RestResolutionContext implements ResolutionContext {
     @Override
     @NonNull
     public <R> Optional<R> get(@NonNull String serviceId, @NonNull String uri, @NonNull Class<R> responseType) {
-        RestClient client = clientsByServiceId.computeIfAbsent(
-                serviceId, id -> restClientBuilder.baseUrl("http://" + id).build());
+        RestClient client = clientsByServiceId.computeIfAbsent(serviceId, this::clientFor);
         try {
             RestClient.RequestHeadersSpec<?> spec = client.get().uri(uri);
             headerRelay.apply(spec);
@@ -63,6 +63,27 @@ public class RestResolutionContext implements ResolutionContext {
             log.warn("Resolution lookup failed: GET http://{}{} — {}", serviceId, uri, e.getMessage());
             return Optional.empty();
         }
+    }
+
+    /**
+     * A client that sends the URI it is given, unchanged.
+     *
+     * <p>Every caller builds its URI through {@code UriComponentsBuilder.encode()}, so what arrives
+     * here is already percent-encoded. {@code RestClient}'s default
+     * {@link DefaultUriBuilderFactory.EncodingMode#TEMPLATE_AND_VALUES} would encode it a second
+     * time, turning the {@code %} of an escape into {@code %25}: a lookup for {@code Phyllis Long}
+     * left this service as {@code name=Phyllis%2520Long} and reached pos-customer as the literal
+     * string {@code Phyllis%20Long}, which matches no party. Every owner name containing a space
+     * failed that way, and the rows failed with "accountId is required" -- a message about the
+     * fixture, for a fault in this client. All 329 vehicle rows were lost to it on alpha.
+     *
+     * <p>The builder is cloned because it is shared across service ids; configuring the original
+     * would leak one service's base URI into the next client built from it.
+     */
+    private RestClient clientFor(String serviceId) {
+        DefaultUriBuilderFactory uriFactory = new DefaultUriBuilderFactory("http://" + serviceId);
+        uriFactory.setEncodingMode(DefaultUriBuilderFactory.EncodingMode.NONE);
+        return restClientBuilder.clone().uriBuilderFactory(uriFactory).build();
     }
 
     /**

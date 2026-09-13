@@ -6794,7 +6794,6 @@ components:
           enum:
           - ACTIVE
           - INACTIVE
-          - NOT_APPLICABLE_MISSING_BASE
           example: ACTIVE
           type: string
         targetId:

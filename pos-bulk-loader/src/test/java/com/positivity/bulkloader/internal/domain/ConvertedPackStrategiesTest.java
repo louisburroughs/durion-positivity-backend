@@ -54,10 +54,17 @@ class ConvertedPackStrategiesTest {
                         "content",
                         List.of(Map.of("id", BIN_A, "name", "Bin A-01"), Map.of("id", BIN_B, "name", "Bin A-02"))));
             }
-            if (uri.contains("/products/search")) {
+            // Strict on the prefix, not just the suffix: contains("/products/search") also accepts
+            // the old /v1/catalog/products/search, so a regression of the search path would have
+            // stayed green here while the real service returned 404.
+            if (uri.startsWith("/v1/products/search")) {
                 return (Optional<R>) Optional.of(Map.of("data", List.of(Map.of("productId", PRODUCT_ID))));
             }
-            if (uri.contains("/catalog/products/")) {
+            // The detail read, /v1/products/{id}. This fake previously matched "/catalog/products/",
+            // agreeing with a bug in the caller: pos-catalog's ProductController is
+            // @RequestMapping("/v1/products"), so the real service answered 404 while this stub
+            // answered happily. Match what pos-catalog serves, not what the caller happened to ask.
+            if (uri.startsWith("/v1/products/")) {
                 return (Optional<R>) Optional.of(Map.of("category", Map.of("id", CATEGORY_ID, "name", categoryName)));
             }
             return Optional.empty();

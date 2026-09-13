@@ -7,6 +7,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -77,7 +79,20 @@ public interface EstimateRepository extends JpaRepository<Estimate, UUID> {
      * Searches estimates by free-text query matching the estimate number (case-insensitive),
      * a set of customer ids resolved from a customer-name search, or the estimate id directly.
      *
-     * @param q           free-text query matched against the estimate number
+     * <p>{@code q} must not be null, and the {@code @NonNull} is load-bearing rather than
+     * decorative. It is the one parameter here that is never compared with a column — it only ever
+     * reaches PostgreSQL inside {@code LOWER(CONCAT(…))} — so there is nothing for the server to
+     * infer its type from except the value itself. A bound varchar types the concatenation and the
+     * statement parses; a null would leave Hibernate to bind it opaquely, PostgreSQL to resolve
+     * {@code unknown || unknown} as {@code bytea}, and the whole statement to be rejected at parse
+     * time with {@code function lower(bytea) does not exist} — the second failure mode of issue
+     * #1891, and the one that {@code pos-invoice}'s line search was actually suffering. The caller
+     * guarantees it: {@code EstimateSearchController} only takes this path for a non-blank query.
+     *
+     * <p>{@code idQuery} is safe null or not, because it is compared with {@code e.id} — a UUID
+     * column the server can infer the placeholder's type from in either direction.
+     *
+     * @param q           free-text query matched against the estimate number; never null
      * @param customerIds customer ids resolved from a name search (must be non-empty for JPQL IN)
      * @param idQuery     the query parsed as a UUID, or {@code null} if not a UUID
      * @param pageable    pagination configuration
@@ -86,8 +101,8 @@ public interface EstimateRepository extends JpaRepository<Estimate, UUID> {
     @Query("SELECT e FROM Estimate e WHERE LOWER(e.estimateNumber) LIKE LOWER(CONCAT('%', :q, '%')) "
             + "OR e.customerId IN :customerIds OR (:idQuery IS NOT NULL AND e.id = :idQuery)")
     Page<Estimate> searchByQuery(
-            @Param("q") String q,
+            @Param("q") @NonNull String q,
             @Param("customerIds") Collection<UUID> customerIds,
-            @Param("idQuery") UUID idQuery,
+            @Param("idQuery") @Nullable UUID idQuery,
             Pageable pageable);
 }

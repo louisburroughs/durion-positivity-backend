@@ -725,6 +725,61 @@ paths:
       summary: Activate an Account with a One-Time Token
       tags:
       - Auth API
+  /v1/auth/activate-starter:
+    post:
+      description: 'Trades the shared starter password an account was loaded with for a password of its own: sets the password, clears the starter hash and the credential expiry provisioning left on the account, and releases any lockout, all in one transaction under the account''s tenant.
+
+        Use this tool when an operator has bulk-loaded accounts from users.csv and handed their holders the one starter password those accounts share; do not use loginUser, which cannot succeed until the exchange has run, do not use activateAccount, which needs a one-time token no bulk-provisioned account is given, and do not use updateUser, which needs an authenticated caller.
+
+        Preconditions: none on the caller — the endpoint is unauthenticated; the account must still be awaiting activation, and the starter password must match the hash it was loaded with.
+
+        Required inputs: username, starterPassword and newPassword, all non-blank; tenantSlug only when the request host does not already name the tenant.
+
+        Emits a SECURITY_AUTH_ACTIVATE_STARTER event and revokes every token already minted for the account; no token is issued, so a follow-up loginUser call with the new password is required.
+
+        Returns 204 on success; 400 on a blank field; 401 with ACTIVATION_TOKEN_INVALID when the account is unknown, the starter password is wrong, or the account has already been claimed (one code on purpose, so an unauthenticated caller learns nothing about which accounts exist or are still unclaimed).
+
+        '
+      operationId: activateAccountWithStarterPassword
+      parameters:
+      - in: header
+        name: X-Tenant-Slug
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Starter password exchange:
+                description: Starter password exchange
+                value:
+                  newPassword: Sup3rS3cret!
+                  starterPassword: Ch4ngeM3Now!
+                  tenantSlug: alpha
+                  username: marcus.webb
+            schema:
+              $ref: '#/components/schemas/ActivateWithStarterRequest'
+        description: The account to claim, the starter password it was loaded with, and the password to set.
+        required: true
+      responses:
+        '204':
+          description: The password was set; sign in with it
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or blank username/starterPassword/newPassword
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'ACTIVATION_TOKEN_INVALID: unknown account, wrong starter password, or already claimed'
+      summary: Claim a Bulk-Provisioned Account with Its Starter Password
+      tags:
+      - Auth API
   /v1/auth/internal/token:
     post:
       description: 'Issues a single JWT access token (1-hour expiry) for an existing user''s username on behalf of a trusted internal caller, without checking a password.
@@ -4816,6 +4871,33 @@ components:
       required:
       - newPassword
       - token
+      type: object
+    ActivateWithStarterRequest:
+      description: Exchange a bulk-provisioned account's starter password for its own password
+      properties:
+        newPassword:
+          description: The password to set; hashed server-side before storage
+          example: Sup3rS3cret!
+          minLength: 1
+          type: string
+        starterPassword:
+          description: The shared starter password the operator handed out
+          minLength: 1
+          type: string
+        tenantSlug:
+          description: Slug of the tenant to claim the account in; optional when the request host already names it
+          example: alpha
+          pattern: ^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])$
+          type: string
+        username:
+          description: The account to claim
+          example: marcus.webb
+          minLength: 1
+          type: string
+      required:
+      - newPassword
+      - starterPassword
+      - username
       type: object
     ActivationTokenResponse:
       description: A one-time activation token for a tenant's first administrator, returned once

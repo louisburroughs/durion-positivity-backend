@@ -116,7 +116,7 @@ public class UserBulkIngestController extends AbstractBulkIngestController<UserB
         for (int i = 0; i < request.getRecords().size(); i++) {
             UserBulkIngestRecord record = request.getRecords().get(i);
             try {
-                UserDto created = userService.createUserWithGeneratedPassword(record.username(), record.roles());
+                UserDto created = userService.createUserAwaitingStarterExchange(record.username(), record.roles());
                 results.add(BulkIngestResult.builder()
                         .rowIndex(i)
                         .entityId(created.getId())

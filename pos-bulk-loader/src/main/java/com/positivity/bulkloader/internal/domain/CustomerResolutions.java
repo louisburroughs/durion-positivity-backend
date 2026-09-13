@@ -46,11 +46,30 @@ public final class CustomerResolutions {
             @NonNull String name,
             @NonNull String subject) {
 
-        String type = partyType.trim();
+        String type = partyApiType(partyType.trim());
         String trimmed = name.trim();
         return context.memoize(
                 "party:" + type + ':' + trimmed.toLowerCase(Locale.ROOT),
                 () -> lookUpParty(context, type, trimmed, subject));
+    }
+
+    /**
+     * The {@code partyType} pos-customer answers to, from the word a fixture file uses.
+     *
+     * <p>Files name an owner the way a person would — {@code INDIVIDUAL} or {@code ORGANIZATION}
+     * ({@link VehicleBulkRecord#getOwnerType()}) — while pos-customer's {@code PartyType} enum is
+     * {@code PERSON} / {@code COMMERCIAL} / {@code UNKNOWN}. Passing the file's word straight
+     * through sent a value the query could not bind, so every lookup came back empty and the row
+     * failed with "accountId is required (or an ownerType and ownerName that resolve to one)" — a
+     * message about the data, for a fault in the caller. Anything already spelled the API's way is
+     * passed through unchanged, so a file that knows the enum keeps working.
+     */
+    private static String partyApiType(String fileType) {
+        return switch (fileType.toUpperCase(Locale.ROOT)) {
+            case "INDIVIDUAL" -> "PERSON";
+            case "ORGANIZATION" -> "COMMERCIAL";
+            default -> fileType;
+        };
     }
 
     private static Optional<String> lookUpParty(

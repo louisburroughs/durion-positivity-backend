@@ -147,7 +147,18 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
      * restricted to an exact customer, vehicle, status, creation-date window, and/or
      * technician (E12, #1600).
      *
-     * @param q            free-text term matched against workorderNumber (case-insensitive contains)
+     * <p>{@code q} must not be null — {@code WorkorderSearchController} substitutes the empty string
+     * for an absent query term, and the {@code :q = ''} disjunct is what turns that into "no
+     * free-text restriction". The non-nullness is load-bearing rather than decorative: apart from
+     * that comparison with a literal, this parameter only ever reaches PostgreSQL inside
+     * {@code LOWER(CONCAT(…))}, never beside a column, so a null would leave the server resolving
+     * {@code unknown || unknown} as {@code bytea} and rejecting the statement at parse time with
+     * {@code function lower(bytea) does not exist} — the second failure mode of issue #1891. Every
+     * other optional filter here is a UUID or a boolean compared with a column, which the server can
+     * type in either direction, which is why they are safe as {@code (:param IS NULL OR …)} clauses.
+     *
+     * @param q            free-text term matched against workorderNumber (case-insensitive contains);
+     *                     never null — an absent term is the empty string
      * @param customerIds  customer ids resolved from a name search (must be non-empty for JPQL IN)
      * @param idQuery      the query parsed as a UUID, or {@code null} if not a UUID
      * @param customerId   exact customer filter, or {@code null} for no restriction
@@ -193,7 +204,7 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
             // rows. A caller-supplied Pageable sort is appended after this.
             + "ORDER BY w.createdAt DESC")
     Page<Workorder> searchByQuery(
-            @Param("q") String q,
+            @Param("q") @NonNull String q,
             @Param("customerIds") Collection<UUID> customerIds,
             @Param("idQuery") @Nullable UUID idQuery,
             @Param("customerId") @Nullable UUID customerId,
