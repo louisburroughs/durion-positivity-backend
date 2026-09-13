@@ -47,6 +47,7 @@ DECLARE
     suffix          TEXT;
     candidate_name  TEXT;
     candidate_key   TEXT;
+    renamed         INTEGER := 0;
 BEGIN
     FOR dup IN
         SELECT id, tenant_id, display_name, display_name_key
@@ -82,8 +83,21 @@ BEGIN
                display_name_key = candidate_key
          WHERE id = dup.id;
 
-        RAISE NOTICE 'V3: renamed tenant % to "%" so display names can be made unique', dup.id, candidate_name;
+        renamed := renamed + 1;
+        -- WARNING, not NOTICE: a rename here does NOT publish tenant.updated. Flyway cannot reach
+        -- TenantFactPublisher, and hand-writing the envelope JSON would risk emitting something
+        -- TenantProjectionEvent.parse silently drops — which looks handled and is not. Every
+        -- ext_tenant replica therefore keeps the pre-rename name until this tenant is next updated
+        -- through the API, which republishes the projection properly.
+        RAISE WARNING 'V3: renamed tenant % to "%" to make display names unique. The ext_tenant '
+                      'replicas still hold its previous name: PATCH this tenant through '
+                      '/tenant/v1/platform/tenants/% to republish tenant.updated.',
+                      dup.id, candidate_name, dup.id;
     END LOOP;
+
+    IF renamed = 0 THEN
+        RAISE NOTICE 'V3: no display-name collisions; every tenant kept its name.';
+    END IF;
 END $$;
 
 ALTER TABLE public.tenant
