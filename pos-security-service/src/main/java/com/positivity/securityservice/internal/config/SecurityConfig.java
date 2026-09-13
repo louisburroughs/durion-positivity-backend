@@ -32,13 +32,15 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@EnableConfigurationProperties(LockoutPolicy.class)
+@EnableConfigurationProperties({LockoutPolicy.class, TenantSearchProperties.class})
 @RequiredArgsConstructor
 public class SecurityConfig {
     private static final String V1_AUTH_LOGIN = "/v1/auth/login";
     private static final String V1_AUTH_SELF_REGISTER = "/v1/auth/self-register";
     /** Unauthenticated by design: the one-time activation token is the credential (ADR-0062 §7, WS2b-3). */
     private static final String V1_AUTH_ACTIVATE = "/v1/auth/activate";
+    /** Unauthenticated by design: the login form searches it before any tenant is bound (ADR-0062 §3). */
+    private static final String V1_AUTH_TENANTS = "/v1/auth/tenants";
 
     private static final String METRICS_ROLE = "ROLE_ACTUATOR_METRICS";
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -69,7 +71,8 @@ public class SecurityConfig {
                                     "/v1/auth/validate",
                                     V1_AUTH_LOGIN,
                                     V1_AUTH_SELF_REGISTER,
-                                    V1_AUTH_ACTIVATE)
+                                    V1_AUTH_ACTIVATE,
+                                    V1_AUTH_TENANTS)
                             .permitAll()
                             .anyRequest()
                             .authenticated())

@@ -1,20 +1,19 @@
 package com.positivity.tenant.internal.service;
 
+import com.positivity.tenancy.replica.TenantDisplayName;
 import com.positivity.tenant.internal.exception.DuplicateResourceException;
-import java.text.Normalizer;
-import java.util.Locale;
 import java.util.function.Predicate;
-import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
 
 /**
  * Normalizes tenant display names and seeds one for a tenant registered without a name.
  *
  * <p>A display name is what a user picks their organization by at login, so two tenants may not
- * hold names that differ only in case or spacing. {@link #normalize} produces the key the unique
- * constraint is built on: NFKC, trimmed, internal whitespace collapsed to one space, case-folded.
- * The application writes that key on every tenant write — see
- * {@code V3__tenant_display_name_key.sql} for why it is not a database-generated column.
+ * hold names that differ only in case or spacing. The normalization itself is {@link
+ * TenantDisplayName}, shared with every module's {@code ext_tenant} replica so the key the registry
+ * writes and the key the login search matches on can never drift apart. The application writes that
+ * key on every tenant write — see {@code V3__tenant_display_name_key.sql} for why it is not a
+ * database-generated column.
  *
  * <p>{@link #allocate} is the fallback for a registration that supplies no name: the owning
  * account's legal name, which is required and already unique across the registry, suffixed
@@ -29,12 +28,10 @@ import org.jspecify.annotations.NonNull;
 public final class TenantDisplayNameAllocator {
 
     /** Matches the {@code display_name} / {@code display_name_key} column length. */
-    static final int MAX_LENGTH = 200;
+    static final int MAX_LENGTH = TenantDisplayName.MAX_LENGTH;
 
     /** Ceiling on the suffix search, so a pathological registry fails fast instead of looping. */
     static final int MAX_ATTEMPTS = 50;
-
-    private static final Pattern WHITESPACE = Pattern.compile("\\s+");
 
     private TenantDisplayNameAllocator() {
         // Utility class
@@ -46,8 +43,7 @@ public final class TenantDisplayNameAllocator {
      * {@code "acme tire & auto"}.
      */
     public static @NonNull String normalize(@NonNull String displayName) {
-        String nfkc = Normalizer.normalize(displayName, Normalizer.Form.NFKC);
-        return WHITESPACE.matcher(nfkc).replaceAll(" ").strip().toLowerCase(Locale.ROOT);
+        return TenantDisplayName.normalize(displayName);
     }
 
     /**
@@ -55,11 +51,7 @@ public final class TenantDisplayNameAllocator {
      * truncated to the column length. Casing is the operator's and is left alone.
      */
     public static @NonNull String displayForm(@NonNull String displayName) {
-        String nfkc = Normalizer.normalize(displayName, Normalizer.Form.NFKC);
-        String collapsed = WHITESPACE.matcher(nfkc).replaceAll(" ").strip();
-        return collapsed.length() <= MAX_LENGTH
-                ? collapsed
-                : collapsed.substring(0, MAX_LENGTH).strip();
+        return TenantDisplayName.displayForm(displayName);
     }
 
     /**

@@ -137,3 +137,17 @@ pos:
       backoff-multiplier: 2
       max-backoff-window: 30m
     path: /swagger-ui.html
+
+# ADR-0062 section 3: the organization directory the login form searches, so a user picks their
+# organization by name instead of typing a tenant slug. Anonymous by necessity and therefore a
+# tenant-enumeration surface by design; the limits below are what bound it. Enabled in every
+# profile, production included — with no tenant-bearing host configured the search IS the login
+# path, so disabling it would put every user back to typing a slug. `enabled` is an incident lever:
+# turn it off and login still works for anyone who knows their slug.
+auth:
+  tenant-search:
+    enabled: ${AUTH_TENANT_SEARCH_ENABLED:true}
+    # Shortest query that is searched; shorter answers an empty list while the user is still typing.
+    min-query-length: 3
+    # Never offer more than this; no total is returned, since a total says how much is left.
+    max-results: 10

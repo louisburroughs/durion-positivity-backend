@@ -25,6 +25,9 @@ public final class EventTypes {
                         .build(),
 
                 // AuthController - 3 events
+                EventTypeRegistration.search(
+                                "SECURITY_TENANT_SEARCH", "Organization search for the login form via /v1/auth/tenants")
+                        .build(),
                 EventTypeRegistration.write("SECURITY_AUTH_LOGIN", "User login via /v1/auth/login")
                         .build(),
                 EventTypeRegistration.write("SECURITY_AUTH_SELF_REGISTER", "Register a new self-service user account")
