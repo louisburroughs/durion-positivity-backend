@@ -1229,6 +1229,8 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1audit~1pricing-snapshots~1{snapshotId}
   /v1/auth/activate:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1auth~1activate
+  /v1/auth/activate-starter:
+    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1auth~1activate-starter
   /v1/auth/internal/token:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1auth~1internal~1token
   /v1/auth/login:

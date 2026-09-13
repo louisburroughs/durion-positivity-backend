@@ -210,13 +210,29 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "Claim a bulk-provisioned account with its starter password", description = """
-                    Trades the shared starter password an account was loaded with for a password of its own. \
-                    Answers 204 and no token: the caller then signs in normally with the password they just set. \
-                    The starter password itself can never authenticate — accounts provisioned this way are \
-                    created with their credentials expired, so POST /v1/auth/login refuses them until this \
-                    exchange has run. Every failure answers the same 401 ACTIVATION_TOKEN_INVALID, so an \
-                    unauthenticated caller learns nothing about which accounts exist or are still unclaimed.""")
+    @Operation(
+            operationId = "activateAccountWithStarterPassword",
+            summary = "Claim a Bulk-Provisioned Account with Its Starter Password",
+            description = """
+                    Trades the shared starter password an account was loaded with for a password of its own: \
+                    sets the password, clears the starter hash and the credential expiry provisioning left on the \
+                    account, and releases any lockout, all in one transaction under the account's tenant.
+                    Use this tool when an operator has bulk-loaded accounts from users.csv and handed their \
+                    holders the one starter password those accounts share; do not use loginUser, which cannot \
+                    succeed until the exchange has run, do not use activateAccount, which needs a one-time token \
+                    no bulk-provisioned account is given, and do not use updateUser, which needs an authenticated \
+                    caller.
+                    Preconditions: none on the caller — the endpoint is unauthenticated; the account must still be \
+                    awaiting activation, and the starter password must match the hash it was loaded with.
+                    Required inputs: username, starterPassword and newPassword, all non-blank; tenantSlug only \
+                    when the request host does not already name the tenant.
+                    Emits a SECURITY_AUTH_ACTIVATE_STARTER event and revokes every token already minted for the \
+                    account; no token is issued, so a follow-up loginUser call with the new password is required.
+                    Returns 204 on success; 400 on a blank field; 401 with ACTIVATION_TOKEN_INVALID when the \
+                    account is unknown, the starter password is wrong, or the account has already been claimed \
+                    (one code on purpose, so an unauthenticated caller learns nothing about which accounts exist \
+                    or are still unclaimed).
+                    """)
     @ApiResponse(responseCode = "204", description = "The password was set; sign in with it")
     @ApiResponse(
             responseCode = "400",
@@ -231,7 +247,22 @@ public class AuthController {
     @PreAuthorize("permitAll()")
     public ResponseEntity<Void> activateWithStarter(
             @RequestHeader(value = "X-Tenant-Slug", required = false) @Nullable String tenantSlugHeader,
-            @Valid @RequestBody ActivateWithStarterRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "The account to claim, the starter password it was loaded with, and the password to set.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Starter password exchange", value = """
+                                                                    {"username":"marcus.webb",
+                                                                     "starterPassword":"Ch4ngeM3Now!",
+                                                                     "newPassword":"Sup3rS3cret!",
+                                                                     "tenantSlug":"alpha"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    ActivateWithStarterRequest request) {
         starterPasswordExchangeService.exchange(
                 tenantSlugHeader,
                 request.tenantSlug(),
