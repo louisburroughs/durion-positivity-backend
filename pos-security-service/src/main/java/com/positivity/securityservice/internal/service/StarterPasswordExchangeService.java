@@ -78,7 +78,7 @@ public class StarterPasswordExchangeService {
         private final JwtService jwtService;
 
         @Transactional
-        public void exchange(String username, String starterPassword, String newPassword) {
+        public void exchange(@NonNull String username, @NonNull String starterPassword, @NonNull String newPassword) {
             UUID userId = userRepository
                     .findByUsername(username)
                     .map(User::getId)

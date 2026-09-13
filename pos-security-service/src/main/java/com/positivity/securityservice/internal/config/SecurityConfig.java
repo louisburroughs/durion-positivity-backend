@@ -40,6 +40,14 @@ public class SecurityConfig {
     /** Unauthenticated by design: the one-time activation token is the credential (ADR-0062 §7, WS2b-3). */
     private static final String V1_AUTH_ACTIVATE = "/v1/auth/activate";
 
+    /**
+     * Unauthenticated by design: the shared starter password is the credential, and it buys nothing
+     * but a password of the account's own. Listed here as well as carrying {@code permitAll()} on the
+     * method, because this chain ends in {@code anyRequest().authenticated()} — a path absent from
+     * this list is refused here, before the controller's annotation is ever consulted.
+     */
+    private static final String V1_AUTH_ACTIVATE_STARTER = "/v1/auth/activate-starter";
+
     private static final String METRICS_ROLE = "ROLE_ACTUATOR_METRICS";
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final UserDetailsService userDetailsService;
@@ -69,7 +77,8 @@ public class SecurityConfig {
                                     "/v1/auth/validate",
                                     V1_AUTH_LOGIN,
                                     V1_AUTH_SELF_REGISTER,
-                                    V1_AUTH_ACTIVATE)
+                                    V1_AUTH_ACTIVATE,
+                                    V1_AUTH_ACTIVATE_STARTER)
                             .permitAll()
                             .anyRequest()
                             .authenticated())
