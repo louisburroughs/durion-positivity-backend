@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.tenant.internal.dto.TenantCreateRequest;
 import com.positivity.tenant.internal.dto.TenantResponse;
 import com.positivity.tenant.internal.dto.TenantUpdateRequest;
+import com.positivity.tenant.internal.entity.AccountEntity;
 import com.positivity.tenant.internal.entity.TenantEntity;
 import com.positivity.tenant.internal.enums.TenantStatus;
 import com.positivity.tenant.internal.exception.DuplicateResourceException;
@@ -66,11 +67,16 @@ class TenantServiceImplTest {
                 .build();
     }
 
+    private AccountEntity account(String legalName) {
+        return AccountEntity.builder().id(ACCOUNT).legalName(legalName).build();
+    }
+
     private TenantEntity existing(TenantStatus status) {
         TenantEntity entity = TenantEntity.builder()
                 .id(UUID.randomUUID())
                 .slug("acme")
                 .displayName("Acme")
+                .displayNameKey("acme")
                 .status(status)
                 .accountId(ACCOUNT)
                 .initialAdminEmail("owner@acme.example")
@@ -139,20 +145,115 @@ class TenantServiceImplTest {
         DataIntegrityViolationException nested = new DataIntegrityViolationException(
                 "could not execute statement",
                 new RuntimeException("duplicate key value violates unique constraint \"tenant_slug_key\""));
-        assertThat(TenantServiceImpl.isSlugCollision(nested)).isTrue();
-        assertThat(TenantServiceImpl.isSlugCollision(new DataIntegrityViolationException("fk_tenant_account")))
+        assertThat(TenantServiceImpl.isConstraintViolation(nested, TenantServiceImpl.SLUG_CONSTRAINT))
+                .isTrue();
+        assertThat(TenantServiceImpl.isConstraintViolation(
+                        new DataIntegrityViolationException("fk_tenant_account"), TenantServiceImpl.SLUG_CONSTRAINT))
                 .isFalse();
+    }
+
+    @Test
+    @DisplayName("create stores the normalized key alongside the display name")
+    void createStoresTheNormalizedKey() {
+        when(accounts.existsById(ACCOUNT)).thenReturn(true);
+        when(tenants.existsBySlug("acme")).thenReturn(false);
+        TenantCreateRequest request = createRequest();
+        request.setDisplayName("  Acme   Tire & Auto  ");
+
+        service.create(request);
+
+        ArgumentCaptor<TenantEntity> saved = ArgumentCaptor.forClass(TenantEntity.class);
+        verify(facts).tenantCreated(saved.capture());
+        assertThat(saved.getValue().getDisplayName()).isEqualTo("Acme Tire & Auto");
+        assertThat(saved.getValue().getDisplayNameKey()).isEqualTo("acme tire & auto");
+    }
+
+    @Test
+    @DisplayName("a registration with no display name is seeded from the account's legal name")
+    void createSeedsFromTheAccountLegalName() {
+        when(accounts.existsById(ACCOUNT)).thenReturn(true);
+        when(tenants.existsBySlug("acme")).thenReturn(false);
+        when(accounts.findById(ACCOUNT)).thenReturn(Optional.of(account("Acme Tire & Auto LLC")));
+        when(tenants.existsByDisplayNameKey("acme tire & auto llc")).thenReturn(false);
+        TenantCreateRequest request = createRequest();
+        request.setDisplayName(null);
+
+        TenantResponse response = service.create(request);
+
+        assertThat(response.getDisplayName()).isEqualTo("Acme Tire & Auto LLC");
+    }
+
+    @Test
+    @DisplayName("a second tenant on one account is seeded with the #2 suffix")
+    void createSeedsSecondTenantWithSuffix() {
+        when(accounts.existsById(ACCOUNT)).thenReturn(true);
+        when(tenants.existsBySlug("acme")).thenReturn(false);
+        when(accounts.findById(ACCOUNT)).thenReturn(Optional.of(account("Acme Tire & Auto LLC")));
+        when(tenants.existsByDisplayNameKey("acme tire & auto llc")).thenReturn(true);
+        when(tenants.existsByDisplayNameKey("acme tire & auto llc #2")).thenReturn(false);
+        TenantCreateRequest request = createRequest();
+        request.setDisplayName("   ");
+
+        TenantResponse response = service.create(request);
+
+        assertThat(response.getDisplayName()).isEqualTo("Acme Tire & Auto LLC #2");
+    }
+
+    @Test
+    @DisplayName("an explicit display name is never auto-suffixed; a collision is a 409")
+    void createNeverSuffixesAnExplicitName() {
+        when(accounts.existsById(ACCOUNT)).thenReturn(true);
+        when(tenants.existsBySlug("acme")).thenReturn(false);
+        doThrow(new DataIntegrityViolationException(
+                        "duplicate key value violates unique constraint \"tenant_display_name_key\""))
+                .when(tenants)
+                .saveAndFlush(any());
+
+        assertThatThrownBy(() -> service.create(createRequest()))
+                .isInstanceOf(DuplicateResourceException.class)
+                .hasMessageContaining("display name");
+        verifyNoInteractions(facts);
+        verify(tenants, never()).existsByDisplayNameKey(any());
+    }
+
+    @Test
+    @DisplayName("renaming onto another tenant's name is a 409, not a rename")
+    void updateRejectsATakenDisplayName() {
+        TenantEntity tenant = existing(TenantStatus.ACTIVE);
+        when(tenants.existsByDisplayNameKey("acme tire")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.update(
+                        tenant.getId(),
+                        TenantUpdateRequest.builder().displayName("Acme Tire").build()))
+                .isInstanceOf(DuplicateResourceException.class);
+        verify(tenants, never()).saveAndFlush(any());
+        verifyNoInteractions(facts);
+    }
+
+    @Test
+    @DisplayName("a rename that only changes case or spacing keeps the key and publishes nothing")
+    void updateIgnoresACaseOnlyRename() {
+        TenantEntity tenant = existing(TenantStatus.ACTIVE);
+
+        service.update(
+                tenant.getId(),
+                TenantUpdateRequest.builder().displayName("  Acme  ").build());
+
+        verify(tenants, never()).saveAndFlush(any());
+        verifyNoInteractions(facts);
     }
 
     @Test
     void updateChangesDescriptorsAndPublishesUpdated() {
         TenantEntity tenant = existing(TenantStatus.ACTIVE);
+        when(tenants.existsByDisplayNameKey("acme tire")).thenReturn(false);
 
         TenantResponse response = service.update(
                 tenant.getId(),
                 TenantUpdateRequest.builder().displayName("Acme Tire").build());
 
         assertThat(response.getDisplayName()).isEqualTo("Acme Tire");
+        assertThat(tenant.getDisplayNameKey()).isEqualTo("acme tire");
         verify(facts).tenantUpdated(tenant);
     }
 

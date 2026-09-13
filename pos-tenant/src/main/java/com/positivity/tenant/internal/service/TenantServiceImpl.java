@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class TenantServiceImpl implements TenantService {
 
     static final String SLUG_CONSTRAINT = "tenant_slug_key";
+    static final String DISPLAY_NAME_CONSTRAINT = "tenant_display_name_key";
 
     private final TenantRepository tenantRepository;
     private final AccountRepository accountRepository;
@@ -48,9 +49,11 @@ public class TenantServiceImpl implements TenantService {
         if (tenantRepository.existsBySlug(request.getSlug())) {
             throw new DuplicateResourceException("Tenant slug already taken: " + request.getSlug());
         }
+        String displayName = resolveDisplayName(request);
         TenantEntity tenant = TenantEntity.builder()
                 .slug(request.getSlug())
-                .displayName(request.getDisplayName())
+                .displayName(displayName)
+                .displayNameKey(TenantDisplayNameAllocator.normalize(displayName))
                 .status(TenantStatus.PENDING)
                 .accountId(request.getAccountId())
                 .cell(request.getCell())
@@ -60,8 +63,11 @@ public class TenantServiceImpl implements TenantService {
         try {
             saved = tenantRepository.saveAndFlush(tenant);
         } catch (DataIntegrityViolationException e) {
-            if (isSlugCollision(e)) {
+            if (isConstraintViolation(e, SLUG_CONSTRAINT)) {
                 throw new DuplicateResourceException("Tenant slug already taken: " + request.getSlug());
+            }
+            if (isConstraintViolation(e, DISPLAY_NAME_CONSTRAINT)) {
+                throw new DuplicateResourceException("Tenant display name already taken: " + displayName);
             }
             throw e;
         }
@@ -93,9 +99,17 @@ public class TenantServiceImpl implements TenantService {
             throw new InvalidStatusTransitionException(tenantId, tenant.getStatus(), tenant.getStatus());
         }
         boolean changed = false;
-        if (request.getDisplayName() != null && !request.getDisplayName().equals(tenant.getDisplayName())) {
-            tenant.setDisplayName(request.getDisplayName());
-            changed = true;
+        if (request.getDisplayName() != null) {
+            String displayName = TenantDisplayNameAllocator.displayForm(request.getDisplayName());
+            if (!displayName.equals(tenant.getDisplayName())) {
+                String key = TenantDisplayNameAllocator.normalize(displayName);
+                if (!key.equals(tenant.getDisplayNameKey()) && tenantRepository.existsByDisplayNameKey(key)) {
+                    throw new DuplicateResourceException("Tenant display name already taken: " + displayName);
+                }
+                tenant.setDisplayName(displayName);
+                tenant.setDisplayNameKey(key);
+                changed = true;
+            }
         }
         if (request.getCell() != null && !request.getCell().equals(tenant.getCell())) {
             tenant.setCell(request.getCell());
@@ -104,7 +118,15 @@ public class TenantServiceImpl implements TenantService {
         if (!changed) {
             return toResponse(tenant);
         }
-        TenantEntity saved = tenantRepository.saveAndFlush(tenant);
+        TenantEntity saved;
+        try {
+            saved = tenantRepository.saveAndFlush(tenant);
+        } catch (DataIntegrityViolationException e) {
+            if (isConstraintViolation(e, DISPLAY_NAME_CONSTRAINT)) {
+                throw new DuplicateResourceException("Tenant display name already taken: " + tenant.getDisplayName());
+            }
+            throw e;
+        }
         factPublisher.tenantUpdated(saved);
         return toResponse(saved);
     }
@@ -163,17 +185,32 @@ public class TenantServiceImpl implements TenantService {
     }
 
     /**
-     * Only the tenant-scoped slug key ({@code tenant_slug_key} in the baseline) is a "slug taken"
-     * conflict; any other integrity failure is a bug and must surface as such.
+     * True when the integrity failure names {@code constraint}. Only a named unique key is a
+     * "already taken" conflict; any other integrity failure is a bug and must surface as such.
      */
-    static boolean isSlugCollision(DataIntegrityViolationException e) {
+    static boolean isConstraintViolation(DataIntegrityViolationException e, String constraint) {
         for (Throwable t = e; t != null; t = t.getCause()) {
             String message = t.getMessage();
-            if (message != null && message.toLowerCase(Locale.ROOT).contains(SLUG_CONSTRAINT)) {
+            if (message != null && message.toLowerCase(Locale.ROOT).contains(constraint)) {
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * The requested display name, or one seeded from the owning account's legal name when the
+     * request carries none (the registration is expected to name the tenant; this is the fallback).
+     */
+    private String resolveDisplayName(TenantCreateRequest request) {
+        if (request.getDisplayName() != null && !request.getDisplayName().isBlank()) {
+            return TenantDisplayNameAllocator.displayForm(request.getDisplayName());
+        }
+        String legalName = accountRepository
+                .findById(request.getAccountId())
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + request.getAccountId()))
+                .getLegalName();
+        return TenantDisplayNameAllocator.allocate(legalName, tenantRepository::existsByDisplayNameKey);
     }
 
     private TenantEntity transition(UUID tenantId, TenantStatus target) {
