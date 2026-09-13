@@ -62,10 +62,15 @@ class RolePermissionSeedIT {
     private static final String SEED = "db/migration/R__seed_role_permissions.sql";
 
     /**
-     * Re-applied after the baseline role load, because it links seeded users to roles by name and
-     * Flyway ran it while eleven of those roles did not yet exist. See {@link #loadBaseline()}.
+     * The bulk-load baseline for the operational users and the roles they hold. These accounts used
+     * to arrive from {@code R__seed_security_operational_data.sql}; #1968 retired that migration
+     * because its twenty-five demo accounts are test data that must never reach a production
+     * database, and the {@code SECURITY_USER} loader reads this fixture instead. Reading the
+     * fixture rather than replaying a migration is also what the other two baselines below already
+     * do, so this IT now sources every non-floor row from the same place the real pipeline does.
      */
-    private static final String OPERATIONAL = "db/migration/R__seed_security_operational_data.sql";
+    private static final Path BASELINE_USERS =
+            Path.of("..", "scripts", "fixtures", "seed", "alpha", "security", "users.csv");
 
     /** The bulk-load baseline: canonical for every role outside the bootstrap floor (#1613 D8). */
     private static final Path BASELINE_ROLES =
@@ -75,8 +80,6 @@ class RolePermissionSeedIT {
             Path.of("..", "scripts", "fixtures", "seed", "alpha", "security", "role-permissions.csv");
 
     private static String seedSql;
-
-    private static String operationalSql;
 
     @Autowired
     private DataSource dataSource;
@@ -97,7 +100,6 @@ class RolePermissionSeedIT {
     @BeforeAll
     static void loadSeed() throws IOException {
         seedSql = classpathSql(SEED);
-        operationalSql = classpathSql(OPERATIONAL);
     }
 
     private static String classpathSql(String resource) throws IOException {
@@ -166,10 +168,40 @@ class RolePermissionSeedIT {
             }
         }
 
-        // Flyway ran this while eleven of the roles above did not exist, so its role_assignments
-        // insert resolved only for the floor. Re-running it now links the rest -- the same ordering the
-        // real pipeline gets by loading users after roles.
-        jdbc().execute(operationalSql);
+        // Users load after roles, the same ordering the real pipeline gets: the SECURITY_USER loader
+        // resolves each role by name, so every role above has to exist first. The password is a
+        // throwaway literal -- nothing authenticates as these accounts here, and the real loader
+        // stamps the starter password hash onto them instead (see StarterPasswordExchangeService).
+        for (String[] row : csvRows(BASELINE_USERS)) {
+            if (row.length < 2) {
+                continue;
+            }
+            jdbc().update(
+                            "INSERT INTO users (id, username, password, enabled) "
+                                    + "VALUES (gen_random_uuid(), ?, 'x', true) "
+                                    + "ON CONFLICT (tenant_id, username) DO NOTHING",
+                            row[0]);
+            for (String roleName : row[1].split(";")) {
+                if (roleName.isBlank()) {
+                    continue;
+                }
+                // role_assignments has no (user_id, role_id) uniqueness, so the guard is NOT EXISTS
+                // rather than ON CONFLICT: this method runs before every test.
+                jdbc().update(
+                                "INSERT INTO role_assignments (id, user_id, role_id, effective_start_date, "
+                                        + "created_at, created_by) "
+                                        + "SELECT gen_random_uuid(), u.id, r.id, NOW(), NOW(), 'baseline-load-it' "
+                                        + "FROM users u, roles r "
+                                        + "WHERE u.username = ? AND r.name = ? "
+                                        + "AND u.tenant_id = app_current_tenant() "
+                                        + "AND r.tenant_id = app_current_tenant() "
+                                        + "AND NOT EXISTS (SELECT 1 FROM role_assignments ra "
+                                        + "WHERE ra.user_id = u.id AND ra.role_id = r.id "
+                                        + "AND ra.tenant_id = app_current_tenant())",
+                                row[0],
+                                roleName.trim());
+            }
+        }
     }
 
     /** Minimal CSV split: these fixtures quote only embedded commas. */

@@ -63,9 +63,12 @@ class FlywayMigrationIT {
                 Integer.class);
         assertThat(nameColumns).isZero();
 
-        // Seed still loads the person_party rows (FK targets for party_relationship).
-        Integer persons = jdbc.queryForObject("SELECT count(*) FROM person_party", Integer.class);
-        assertThat(persons).isGreaterThanOrEqualTo(70);
+        // No assertion on person_party row counts. #1968 retired
+        // R__seed_customer_operational_data.sql, which was the only source of the seventy demo
+        // persons this once counted: they are test data, and a production database must not
+        // receive them. The rows now arrive through the bulk-load pipeline
+        // (scripts/fixtures/seed/alpha/), so a freshly migrated schema is legitimately empty and
+        // what this IT verifies is the migration state itself, not seeded content.
 
         // FI-4 (#1135): structured-address replica columns and the org-address replica table.
         Integer addressColumns = jdbc.queryForObject(
