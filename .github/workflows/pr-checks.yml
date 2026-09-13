@@ -161,6 +161,16 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts/tests -p 'test_generate_permissions*.py'
 
+      - name: Permission report exporter unit tests (test_export_permission_registrations.py)
+        # The exporter walks the repository from the root, so a git worktree or nested clone it
+        # descends into gets every module counted twice. That is not hypothetical: the committed
+        # docs/permissions-report.yaml once described 47 manifests and 965 permissions with 470
+        # duplicate names, which was 24 real modules seen twice. These pins are the only thing
+        # keeping the nested-checkout guard in place, and discovery for the generator tests above
+        # does not match this filename. Stdlib plus PyYAML, already installed above.
+        run: |
+          python3 -m unittest discover -s scripts/tests -p 'test_export_permission_registrations.py'
+
       - name: Seed driver unit tests (test_seed_alpha*.py)
         # seed-alpha.py picks the tenant it loads into from the access token's unverified `tid`
         # claim (ADR-0062, plan WS8). A claim that is not a UUID string must come back as "no
