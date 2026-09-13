@@ -133,7 +133,13 @@ class PartyReplayQueryTest extends PostgresSliceTestBase {
 
         assertThat(commercialParties.findForReplay(ordered.get(0).getPartyId(), null, Pageable.unpaged()))
                 .containsExactly(ordered.get(1), ordered.get(2));
-        assertThat(personParties.findForReplay(null, null, Pageable.unpaged())).isNotEmpty();
+
+        // The person side needs a row of its own. This previously asserted only isNotEmpty() and
+        // passed on whatever R__seed_customer_operational_data.sql had put in the schema; that seed
+        // is retired, so the case now creates what it reads and asserts the row it created rather
+        // than "something is there".
+        PersonParty person = person("u4");
+        assertThat(personParties.findForReplay(null, null, Pageable.unpaged())).contains(person);
     }
 
     @Test

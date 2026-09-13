@@ -17,17 +17,12 @@
 # When a seed file is deleted, remove its line — a stale entry fails the check.
 pos-accounting/R__seed_reference_accounting.sql tier1
 pos-catalog/R__seed_reference_catalog.sql tier2
-pos-catalog/R__seed_reference_catalog_2_products.sql tier2
-pos-catalog/R__seed_reference_catalog_3_services.sql tier2
-pos-catalog/R__seed_reference_catalog_4_pricing.sql tier2
 pos-catalog/R__seed_reference_catalog_5_uom.sql tier2
 pos-catalog/R__seed_reference_catalog_6_labor_guide.sql tier2
 pos-catalog/R__seed_reference_catalog_7_labor_time_source_policy.sql tier1
-pos-customer/R__seed_customer_operational_data.sql tier2
 pos-inventory/R__seed_reference_inventory.sql tier1
 pos-invoice/R__seed_reference_invoice.sql tier1
 pos-location/R__seed_location_1_reference.sql tier1
-pos-people-contact/R__seed_people_contact_operational_data.sql tier2
 pos-people-contact/R__seed_reference_people_contact.sql tier1
 pos-people/R__seed_reference_people.sql tier1
 pos-price/R__seed_reference_price.sql tier1
@@ -36,5 +31,3 @@ pos-security-service/R__seed_role_location_scope.sql tier1
 pos-security-service/R__seed_role_permissions.sql tier1
 pos-security-service/R__seed_security_operational_data.sql tier2
 pos-security-service/R__seed_tenant_template.sql tier1
-pos-shop-manager/R__seed_shop_manager_mechanics.sql tier2
-pos-vehicle-inventory/R__seed_vehicle_inventory_operational_data.sql tier2
