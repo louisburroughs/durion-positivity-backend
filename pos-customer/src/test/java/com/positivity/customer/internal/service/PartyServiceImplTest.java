@@ -456,7 +456,7 @@ class PartyServiceImplTest {
     }
 
     @Test
-    void createCommercialAccount_refusesASecondAccountUnderTheSameLegalName() {
+    void importCommercialAccount_refusesASecondAccountUnderTheSameLegalName() {
         CreateCommercialAccountRequest request = new CreateCommercialAccountRequest();
         request.setLegalName("  Carolina Fresh  ");
         when(partyRepository.findFirstByLegalNameIgnoreCase("Carolina Fresh"))
@@ -464,10 +464,47 @@ class PartyServiceImplTest {
 
         // Issue #1978: a repeat of a seed pack used to double every account, and the second copy
         // made the loader's owner resolution ambiguous for every vehicle naming that owner.
-        assertThatThrownBy(() -> service.createCommercialAccount(request))
+        assertThatThrownBy(() -> service.importCommercialAccount(request))
                 .isInstanceOf(com.positivity.customer.internal.exception.CrmDuplicateResourceException.class)
                 .hasMessageContaining("Carolina Fresh");
         verify(partyRepository, never()).save(any(CommercialParty.class));
+    }
+
+    @Test
+    void importCommercialAccount_createsWhenTheLegalNameIsFree() {
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        CreateCommercialAccountRequest request = new CreateCommercialAccountRequest();
+        request.setLegalName("  Carolina Fresh  ");
+        when(partyRepository.findFirstByLegalNameIgnoreCase("Carolina Fresh")).thenReturn(Optional.empty());
+        CommercialParty saved = party(partyId);
+        saved.setCreatedAt(Instant.now(TEST_CLOCK));
+        when(partyRepository.save(any(CommercialParty.class))).thenReturn(saved);
+        when(partyRepository.getNextCustomerNumberSequence()).thenReturn(42L);
+
+        service.importCommercialAccount(request);
+
+        ArgumentCaptor<CommercialParty> captor = ArgumentCaptor.forClass(CommercialParty.class);
+        verify(partyRepository).save(captor.capture());
+        assertThat(captor.getValue().getLegalName()).isEqualTo("Carolina Fresh");
+    }
+
+    @Test
+    void createCommercialAccount_stillAppliesNoDuplicateCheck() {
+        UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        CreateCommercialAccountRequest request = new CreateCommercialAccountRequest();
+        request.setLegalName("Carolina Fresh");
+        CommercialParty saved = party(partyId);
+        saved.setCreatedAt(Instant.now(TEST_CLOCK));
+        when(partyRepository.save(any(CommercialParty.class))).thenReturn(saved);
+        when(partyRepository.getNextCustomerNumberSequence()).thenReturn(43L);
+
+        // The interactive endpoint documents that it performs no duplicate detection and offers
+        // checkPartyDuplicates so the caller decides; inquiry conversion relies on that, since two
+        // enquiries from one organization are ordinary. Only the import path refuses (issue #1978).
+        service.createCommercialAccount(request);
+
+        verify(partyRepository).save(any(CommercialParty.class));
+        verify(partyRepository, never()).findFirstByLegalNameIgnoreCase(any());
     }
 
     @Test

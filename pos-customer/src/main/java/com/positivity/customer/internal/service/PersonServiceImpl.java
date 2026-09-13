@@ -20,6 +20,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -139,7 +140,7 @@ public class PersonServiceImpl implements PersonService {
         person.setPersonId(peoplePersonId);
         person.setCustomerNumber(customerNumber != null ? customerNumber : "CUST-PER-" + UUIDv7Generator.generate());
         person.setPreferredContactMethod(request.getPreferredContactMethod());
-        PersonParty savedPerson = personRepository.save(person);
+        PersonParty savedPerson = savePerson(person, customerNumber);
         customerFactPublisher.partyChanged(savedPerson);
         log.debug(
                 "PersonParty created with partyId={} mapped to personId={}",
@@ -258,6 +259,28 @@ public class PersonServiceImpl implements PersonService {
         }
         if (request.getPreferredContactMethod() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "preferredContactMethod is required");
+        }
+    }
+
+    /**
+     * Saves the new party, flushing so a {@code (tenant_id, customer_number)} conflict surfaces
+     * here rather than at commit.
+     *
+     * <p>The duplicate pre-check above is not atomic with this insert, so a concurrent create
+     * quoting the same number reaches the constraint. Left as a raw
+     * {@code DataIntegrityViolationException} it would escape the bulk ingest's rejection types
+     * and be reported as INTERNAL_ERROR instead of the duplicate the row actually is, and the
+     * interactive caller would get a 500 rather than a 409.
+     */
+    private PersonParty savePerson(PersonParty person, String customerNumber) {
+        try {
+            return personRepository.saveAndFlush(person);
+        } catch (DataIntegrityViolationException e) {
+            if (customerNumber != null) {
+                log.warn("Customer number '{}' was taken concurrently", customerNumber, e);
+                throw new CrmDuplicateResourceException("Customer", customerNumber);
+            }
+            throw e;
         }
     }
 

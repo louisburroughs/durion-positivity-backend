@@ -80,7 +80,7 @@ class PersonServiceImplTest {
         when(personDirectoryService.resolveOrCreatePersonId(any(), any(), any(), any()))
                 .thenReturn(PERSON_ID);
         when(personRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.empty());
-        when(personRepository.save(any())).thenAnswer(invocation -> {
+        when(personRepository.saveAndFlush(any())).thenAnswer(invocation -> {
             PersonParty person = invocation.getArgument(0);
             person.setPartyId(PERSON_PARTY_ID);
             return person;
@@ -131,7 +131,7 @@ class PersonServiceImplTest {
                     USER_ID);
 
             ArgumentCaptor<PersonParty> saved = ArgumentCaptor.forClass(PersonParty.class);
-            verify(personRepository).save(saved.capture());
+            verify(personRepository).saveAndFlush(saved.capture());
             assertThat(saved.getValue().getPersonId()).isEqualTo(PERSON_ID);
             assertThat(saved.getValue().getCustomerNumber()).startsWith("CUST-PER-");
             verify(customerFactPublisher).partyChanged(saved.getValue());
@@ -160,7 +160,7 @@ class PersonServiceImplTest {
             CreatePersonResponse response = service.createPerson(request().build(), USER_ID);
 
             assertThat(response.getPersonId()).isEqualTo(PERSON_ID);
-            verify(personRepository, never()).save(any());
+            verify(personRepository, never()).saveAndFlush(any());
             verify(personDirectoryService, never()).setContactPoints(any(), any(), any(), any());
         }
 
@@ -172,7 +172,7 @@ class PersonServiceImplTest {
             service.createPerson(request().customerNumber(" CUST-PP-001 ").build(), USER_ID);
 
             ArgumentCaptor<PersonParty> saved = ArgumentCaptor.forClass(PersonParty.class);
-            verify(personRepository).save(saved.capture());
+            verify(personRepository).saveAndFlush(saved.capture());
             assertThat(saved.getValue().getCustomerNumber()).isEqualTo("CUST-PP-001");
         }
 
@@ -187,7 +187,7 @@ class PersonServiceImplTest {
                             request().customerNumber("CUST-PP-001").build(), USER_ID))
                     .isInstanceOf(com.positivity.customer.internal.exception.CrmDuplicateResourceException.class)
                     .hasMessageContaining("CUST-PP-001");
-            verify(personRepository, never()).save(any());
+            verify(personRepository, never()).saveAndFlush(any());
             verify(personDirectoryService, never()).resolveOrCreatePersonId(any(), any(), any(), any());
         }
 

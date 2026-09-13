@@ -86,10 +86,13 @@ public class CrmPersonController {
                     Required inputs: firstName, lastName, and preferredContactMethod (EMAIL, PHONE_CALL, \
                     SMS, or NONE); emails and phones are optional lists whose entries carry a value and an \
                     isPrimary flag, phone type defaults to PHONE_MOBILE, and emails are stored lowercase.
+                    customerNumber is optional: supply one to claim it as the person's business key and it \
+                    is stored as given; omit it and a CUST-PER number is generated.
                     Emits a CRM_PERSON_CREATE event, publishes a party-changed customer fact, and writes \
                     the contact points to pos-people.
                     Returns 400 when firstName, lastName, or preferredContactMethod is missing or an email \
-                    value is malformed.
+                    value is malformed, and 409 when the supplied customerNumber already belongs to another \
+                    party.
                     """)
     @ApiResponse(
             responseCode = "201",
@@ -98,6 +101,7 @@ public class CrmPersonController {
     @ApiResponse(responseCode = "400", description = "Invalid request - validation failed")
     @ApiResponse(responseCode = "401", description = "Unauthorized")
     @ApiResponse(responseCode = "403", description = "Forbidden - missing required permission")
+    @ApiResponse(responseCode = "409", description = "The supplied customerNumber already belongs to another party")
     public ResponseEntity<CreatePersonResponse> createCrmPerson(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             description =

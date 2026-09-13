@@ -109,20 +109,8 @@ public class PartyServiceImpl implements PartyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "legalName is required");
         }
 
-        // The legal name is a commercial account's natural key. Two accounts sharing one makes
-        // every name-based lookup ambiguous, and the bulk loader's owner resolution treats
-        // ambiguity as a hard failure — so a repeated import used to leave both the duplicate and
-        // every vehicle that names its owner unloadable (issue #1978). Refuse the second create
-        // instead; the caller that genuinely means to record a namesake can distinguish it by
-        // legal name, which is what the register does too.
-        String legalName = request.getLegalName().trim();
-        if (partyRepository.findFirstByLegalNameIgnoreCase(legalName).isPresent()) {
-            log.warn("CreateCommercialAccount refused: an account already exists for legalName '{}'", legalName);
-            throw new CrmDuplicateResourceException("Commercial account", legalName);
-        }
-
         CommercialParty party = new CommercialParty();
-        party.setLegalName(legalName);
+        party.setLegalName(request.getLegalName());
         party.setDisplayName(request.getDisplayName());
         party.setTaxId(request.getTaxId());
         party.setBillingTermsId(request.getBillingTermsId());
@@ -156,6 +144,22 @@ public class PartyServiceImpl implements PartyService {
                 .createdAt(saved.getCreatedAt())
                 .duplicateCandidates(new ArrayList<>())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public CreateCommercialAccountResponse importCommercialAccount(CreateCommercialAccountRequest request) {
+        if (request == null || !StringUtils.hasText(request.getLegalName())) {
+            log.warn("ImportCommercialAccount failed: legalName is required");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "legalName is required");
+        }
+        String legalName = request.getLegalName().trim();
+        if (partyRepository.findFirstByLegalNameIgnoreCase(legalName).isPresent()) {
+            log.warn("ImportCommercialAccount refused: an account already exists for legalName '{}'", legalName);
+            throw new CrmDuplicateResourceException("Commercial account", legalName);
+        }
+        request.setLegalName(legalName);
+        return createCommercialAccount(request);
     }
 
     @Override
