@@ -13,23 +13,28 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * Boots the full application context against a real Postgres (Testcontainers) so that
- * the entire Flyway migration chain (V1..Vn) and the repeatable seed run, then Hibernate
- * validates the entity mappings (ddl-auto=validate). Context startup succeeding proves the
- * migrations, the seed SQL, and the JPA entities all agree.
+ * Boots the full application context against a real Postgres (Testcontainers) so that the entire
+ * Flyway migration chain runs, then Hibernate validates the entity mappings (ddl-auto=validate).
+ * Context startup succeeding proves the migrations and the JPA entities agree.
  *
- * <p>Added for issue #684: the three rollout breakages (seed comma, two {@code primary}
- * field mismatches) were untested SQL because the default tests use H2 with Flyway
- * disabled. This test exercises the real DDL + seed in CI. Requires Docker.
+ * <p>Added for issue #684: the three rollout breakages (seed comma, two {@code primary} field
+ * mismatches) were untested SQL because the default tests use H2 with Flyway disabled. This test
+ * exercises the real DDL in CI. Requires Docker.
+ *
+ * <p>The module carries no repeatable seed any more. #1968 retired
+ * {@code R__seed_customer_operational_data.sql} because its demo rows are test data that must not
+ * reach a production database, so {@code db/migration} holds only {@code V1__baseline_customer.sql}
+ * and {@code V2__event_outbox_tenant_id.sql}. This IT therefore covers migration and schema state
+ * only; seeded content now arrives through the bulk-load pipeline
+ * ({@code scripts/fixtures/seed/alpha/}) and is not this test's subject.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("pg")
 class FlywayMigrationIT {
 
     /**
-     * Connected as the schema owner rather than as {@code pos_app}: this test reads the catalog and
-     * counts seeded rows, neither of which the application role can do unscoped under row-level
-     * security.
+     * Connected as the schema owner rather than as {@code pos_app}: this test reads the system
+     * catalog, which the application role cannot do unscoped under row-level security.
      */
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {
@@ -40,12 +45,11 @@ class FlywayMigrationIT {
     private DataSource dataSource;
 
     /**
-     * Context loads only if every migration + the repeatable seed applied cleanly and the
-     * schema validated against the entities. We additionally assert the thin-link drops
-     * from issue #684 actually took effect.
+     * Context loads only if every migration applied cleanly and the schema validated against the
+     * entities. We additionally assert the thin-link drops from issue #684 actually took effect.
      */
     @Test
-    void migrationsAndSeedApply_andThinLinkDropsTookEffect() {
+    void migrationsApply_andThinLinkDropsTookEffect() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
 
         // 2c.3: contact_point table dropped.
@@ -63,12 +67,8 @@ class FlywayMigrationIT {
                 Integer.class);
         assertThat(nameColumns).isZero();
 
-        // No assertion on person_party row counts. #1968 retired
-        // R__seed_customer_operational_data.sql, which was the only source of the seventy demo
-        // persons this once counted: they are test data, and a production database must not
-        // receive them. The rows now arrive through the bulk-load pipeline
-        // (scripts/fixtures/seed/alpha/), so a freshly migrated schema is legitimately empty and
-        // what this IT verifies is the migration state itself, not seeded content.
+        // A person_party row count used to sit here, counting the seventy demo persons the retired
+        // seed inserted. See the class javadoc for why there is nothing to count any more.
 
         // FI-4 (#1135): structured-address replica columns and the org-address replica table.
         Integer addressColumns = jdbc.queryForObject(
