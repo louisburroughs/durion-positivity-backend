@@ -80,7 +80,7 @@ class PersonServiceImplTest {
         when(personDirectoryService.resolveOrCreatePersonId(any(), any(), any(), any()))
                 .thenReturn(PERSON_ID);
         when(personRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.empty());
-        when(personRepository.save(any())).thenAnswer(invocation -> {
+        when(personRepository.saveAndFlush(any())).thenAnswer(invocation -> {
             PersonParty person = invocation.getArgument(0);
             person.setPartyId(PERSON_PARTY_ID);
             return person;
@@ -131,14 +131,18 @@ class PersonServiceImplTest {
                     USER_ID);
 
             ArgumentCaptor<PersonParty> saved = ArgumentCaptor.forClass(PersonParty.class);
-            verify(personRepository).save(saved.capture());
+            verify(personRepository).saveAndFlush(saved.capture());
             assertThat(saved.getValue().getPersonId()).isEqualTo(PERSON_ID);
             assertThat(saved.getValue().getCustomerNumber()).startsWith("CUST-PER-");
             verify(customerFactPublisher).partyChanged(saved.getValue());
 
             ArgumentCaptor<List<PersonDirectoryService.ContactPointUpsert>> contactPoints = ArgumentCaptor.captor();
             verify(personDirectoryService)
-                    .setContactPoints(org.mockito.ArgumentMatchers.eq(PERSON_ID), contactPoints.capture());
+                    .setContactPoints(
+                            org.mockito.ArgumentMatchers.eq(PERSON_ID),
+                            contactPoints.capture(),
+                            org.mockito.ArgumentMatchers.eq("Jane"),
+                            org.mockito.ArgumentMatchers.eq("Smith"));
             assertThat(contactPoints.getValue()).hasSize(2);
             // Emails are lower-cased before they leave pos-customer.
             assertThat(contactPoints.getValue().get(0).value()).isEqualTo("jane@example.invalid");
@@ -156,8 +160,35 @@ class PersonServiceImplTest {
             CreatePersonResponse response = service.createPerson(request().build(), USER_ID);
 
             assertThat(response.getPersonId()).isEqualTo(PERSON_ID);
-            verify(personRepository, never()).save(any());
-            verify(personDirectoryService, never()).setContactPoints(any(), any());
+            verify(personRepository, never()).saveAndFlush(any());
+            verify(personDirectoryService, never()).setContactPoints(any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("a supplied customerNumber becomes the party's own, not a generated one")
+        void keepsASuppliedCustomerNumber() {
+            when(personRepository.findByCustomerNumber("CUST-PP-001")).thenReturn(Optional.empty());
+
+            service.createPerson(request().customerNumber(" CUST-PP-001 ").build(), USER_ID);
+
+            ArgumentCaptor<PersonParty> saved = ArgumentCaptor.forClass(PersonParty.class);
+            verify(personRepository).saveAndFlush(saved.capture());
+            assertThat(saved.getValue().getCustomerNumber()).isEqualTo("CUST-PP-001");
+        }
+
+        @Test
+        @DisplayName("a customerNumber already in use is refused instead of making a second party")
+        void refusesADuplicateCustomerNumber() {
+            when(personRepository.findByCustomerNumber("CUST-PP-001")).thenReturn(Optional.of(personParty()));
+
+            // Issue #1978: re-running a seed pack silently doubled every person customer, and the
+            // duplicates then made owner resolution ambiguous for the vehicles naming them.
+            assertThatThrownBy(() -> service.createPerson(
+                            request().customerNumber("CUST-PP-001").build(), USER_ID))
+                    .isInstanceOf(com.positivity.customer.internal.exception.CrmDuplicateResourceException.class)
+                    .hasMessageContaining("CUST-PP-001");
+            verify(personRepository, never()).saveAndFlush(any());
+            verify(personDirectoryService, never()).resolveOrCreatePersonId(any(), any(), any(), any());
         }
 
         @Test
@@ -172,7 +203,7 @@ class PersonServiceImplTest {
                     USER_ID);
 
             ArgumentCaptor<List<PersonDirectoryService.ContactPointUpsert>> contactPoints = ArgumentCaptor.captor();
-            verify(personDirectoryService).setContactPoints(any(), contactPoints.capture());
+            verify(personDirectoryService).setContactPoints(any(), contactPoints.capture(), any(), any());
             assertThat(contactPoints.getValue().get(0).contactType()).isEqualTo(ContactPointType.PHONE_WORK.name());
         }
 

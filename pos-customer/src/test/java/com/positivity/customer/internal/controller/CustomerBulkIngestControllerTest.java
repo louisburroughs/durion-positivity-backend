@@ -179,6 +179,32 @@ class CustomerBulkIngestControllerTest {
     }
 
     @Test
+    void bulkIngest_passesTheRecordsCustomerNumberThroughAsTheBusinessKey() throws Exception {
+        CustomerBulkIngestRecord ingestRecord = new CustomerBulkIngestRecord();
+        ingestRecord.setFirstName("Marcus");
+        ingestRecord.setLastName("Patterson");
+        ingestRecord.setCustomerNumber("CUST-PP-001");
+
+        BulkIngestRequest<CustomerBulkIngestRecord> request = new BulkIngestRequest<>();
+        request.setJobId(JOB_ID);
+        request.setLocationId(LOCATION_ID);
+        request.setRecords(List.of(ingestRecord));
+
+        when(personService.createPerson(any(), any()))
+                .thenReturn(CreatePersonResponse.builder().personId(PERSON_ID).build());
+
+        mockMvc.perform(post("/v1/customer/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        // Issue #1978: dropped here, the number could not deduplicate a repeated import.
+        ArgumentCaptor<CreatePersonRequest> captor = ArgumentCaptor.forClass(CreatePersonRequest.class);
+        verify(personService).createPerson(captor.capture(), any());
+        assertThat(captor.getValue().getCustomerNumber()).isEqualTo("CUST-PP-001");
+    }
+
+    @Test
     void bulkIngest_usesOperatorIdAsUserId_whenPresent() throws Exception {
         CustomerBulkIngestRecord ingestRecord = new CustomerBulkIngestRecord();
         ingestRecord.setFirstName("Bob");

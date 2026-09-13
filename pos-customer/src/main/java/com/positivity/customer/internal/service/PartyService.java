@@ -26,6 +26,27 @@ public interface PartyService {
 
     CreateCommercialAccountResponse createCommercialAccount(CreateCommercialAccountRequest request);
 
+    /**
+     * Bulk-import variant of {@link #createCommercialAccount}: identical, except that an account
+     * already registered under this legal name is refused as a duplicate instead of created.
+     *
+     * <p>Only the import path deduplicates. The interactive create deliberately does not — it
+     * documents that it applies no uniqueness check, offers {@code checkPartyDuplicates} so the
+     * caller decides, and is the path an inquiry conversion takes, where two enquiries from one
+     * organization are ordinary. Importing a pack is the opposite: a re-run must not silently
+     * double every account, because the loader resolves a vehicle's owner by legal name and
+     * fails the row outright on more than one match (issue #1978).
+     *
+     * <p>The check is not atomic with the insert and no database constraint backs it, by design:
+     * a unique index on {@code legal_name} would forbid the genuine namesakes the interactive
+     * contract allows. Two import jobs running the same pack concurrently can therefore still
+     * both insert; sequential re-runs, which is what a seed does, cannot.
+     *
+     * @throws com.positivity.customer.internal.exception.CrmDuplicateResourceException if an
+     *     account already exists under this legal name
+     */
+    CreateCommercialAccountResponse importCommercialAccount(CreateCommercialAccountRequest request);
+
     GetPartyResponse getParty(UUID partyId);
 
     @NonNull
