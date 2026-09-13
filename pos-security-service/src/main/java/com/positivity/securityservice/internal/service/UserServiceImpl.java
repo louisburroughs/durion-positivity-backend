@@ -85,11 +85,12 @@ public class UserServiceImpl implements UserService {
         User user = userRepository
                 .findById(created.getId())
                 .orElseThrow(() -> new IllegalStateException("User " + created.getId() + " vanished after creation"));
+        // Held in its own column, never as the password. The password stays the discarded random
+        // value createUser wrote, so login matches nothing for this account and answers the same
+        // INVALID_CREDENTIALS for every password including the starter — the starter is incapable of
+        // authenticating rather than merely rejected late. See V6__users_starter_password_hash.sql.
         if (starterPasswordHash != null && !starterPasswordHash.isBlank()) {
-            // Stored as the password so the exchange can verify it with the ordinary encoder. That is
-            // safe only because the account is simultaneously marked below: login checks the account
-            // state before it ever compares a password, so this value cannot authenticate anyone.
-            user.setPassword(starterPasswordHash);
+            user.setStarterPasswordHash(starterPasswordHash);
         }
         user.setCredentialsNonExpired(false);
         user.setCredentialsExpireAt(Instant.now(clock));

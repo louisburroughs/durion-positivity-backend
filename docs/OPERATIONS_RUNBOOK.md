@@ -662,6 +662,8 @@ curl -sS -X POST "https://<gateway>/security-service/v1/auth/activate-starter" \
 | Situation | Answer |
 | --- | --- |
 | Unknown username, wrong starter password, an account the loader did not provision, or one already claimed | `401 ACTIVATION_TOKEN_INVALID` — one code on purpose, so an unauthenticated caller learns nothing about which accounts exist or remain unclaimed |
+| A blank field or a malformed `tenantSlug` | `400` from bean validation, before the exchange runs (ADR-0017). The single-401 rule covers exchange outcomes, not malformed requests |
+| Login with the starter password | `401 INVALID_CREDENTIALS`, the same as any wrong password. The starter hash lives in `users.starter_password_hash`, never in `password`, so login has nothing to match |
 | The account was already claimed | The same 401. The exchange clears `awaiting_activation`, so a starter password works once per account and never again |
 | `SECURITY_STARTER_PASSWORD_HASH` unset | No account can be claimed this way; use the activation-token path above |
 

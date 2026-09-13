@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.exception.ActivationTokenInvalidException;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.internal.security.service.JwtService;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,28 +43,51 @@ class StarterPasswordExchangeServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private JwtService jwtService;
+
     private final PasswordEncoder encoder = new BCryptPasswordEncoder();
     private StarterPasswordExchangeService.BoundExchange exchange;
 
     @BeforeEach
     void setUp() {
-        exchange = new StarterPasswordExchangeService.BoundExchange(userRepository, encoder);
+        exchange = new StarterPasswordExchangeService.BoundExchange(userRepository, encoder, jwtService);
     }
 
     private User provisioned() {
         User user = new User();
         user.setId(UUID.fromString("01900000-0000-7000-8000-0000000000e1"));
         user.setUsername("marcus.webb");
-        user.setPassword(encoder.encode(STARTER));
+        user.setPassword(encoder.encode("a-discarded-random-value-nobody-holds"));
+        user.setStarterPasswordHash(encoder.encode(STARTER));
         user.setAwaitingActivation(true);
         user.setCredentialsNonExpired(false);
         return user;
     }
 
+    private void stubLookup(User user) {
+        when(userRepository.findByUsername(user.getUsername())).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(user.getId())).thenReturn(Optional.of(user));
+    }
+
+    @Test
+    @DisplayName("the starter password is never the account's password, so login cannot match it")
+    void theStarterPasswordIsNotTheAccountsPassword() {
+        User user = provisioned();
+
+        assertThat(encoder.matches(STARTER, user.getPassword())).as("""
+                        Spring compares the password before it checks credential expiry, so a starter \
+                        password stored in the password column would answer CREDENTIALS_EXPIRED when \
+                        guessed right and INVALID_CREDENTIALS otherwise — telling an unauthenticated \
+                        caller both that the guess was correct and that the account is unclaimed. Held \
+                        apart, login matches nothing and answers the same for every password.""").isFalse();
+        assertThat(encoder.matches(STARTER, user.getStarterPasswordHash())).isTrue();
+    }
+
     @Test
     void setsTheChosenPasswordAndClearsTheMarker() {
         User user = provisioned();
-        when(userRepository.findByUsername("marcus.webb")).thenReturn(Optional.of(user));
+        stubLookup(user);
 
         exchange.exchange("marcus.webb", STARTER, "Ch0senPassw0rd!");
 
@@ -73,13 +97,17 @@ class StarterPasswordExchangeServiceTest {
         assertThat(user.isAwaitingActivation()).isFalse();
         assertThat(user.isCredentialsNonExpired()).isTrue();
         assertThat(user.getCredentialsExpireAt()).isNull();
+        assertThat(user.getStarterPasswordHash())
+                .as("cleared, so the shared password cannot re-open an account already claimed")
+                .isNull();
+        verify(jwtService).revokeAllTokensForUser("marcus.webb");
         verify(userRepository).save(user);
     }
 
     @Test
     void theStarterPasswordStopsWorkingOnceExchanged() {
         User user = provisioned();
-        when(userRepository.findByUsername("marcus.webb")).thenReturn(Optional.of(user));
+        stubLookup(user);
         exchange.exchange("marcus.webb", STARTER, "Ch0senPassw0rd!");
 
         assertThatThrownBy(() -> exchange.exchange("marcus.webb", STARTER, "Another0ne!"))
@@ -95,7 +123,7 @@ class StarterPasswordExchangeServiceTest {
         User live = provisioned();
         live.setAwaitingActivation(false);
         live.setCredentialsNonExpired(true);
-        when(userRepository.findByUsername("marcus.webb")).thenReturn(Optional.of(live));
+        stubLookup(live);
 
         assertThatThrownBy(() -> exchange.exchange("marcus.webb", STARTER, "Ch0senPassw0rd!"))
                 .as("a live account's password is never overwritten through this path")
@@ -105,7 +133,7 @@ class StarterPasswordExchangeServiceTest {
 
     @Test
     void refusesAWrongStarterPassword() {
-        when(userRepository.findByUsername("marcus.webb")).thenReturn(Optional.of(provisioned()));
+        stubLookup(provisioned());
 
         assertThatThrownBy(() -> exchange.exchange("marcus.webb", "not-the-starter", "Ch0senPassw0rd!"))
                 .isInstanceOf(ActivationTokenInvalidException.class);

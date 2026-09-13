@@ -54,6 +54,20 @@ public class User extends TenantScopedEntity {
     @Column(name = "awaiting_activation", nullable = false)
     private boolean awaitingActivation = false;
 
+    /**
+     * Bcrypt hash of the shared starter password this account may be claimed with, or null.
+     *
+     * <p>Deliberately not the {@code password} column. Spring Security compares the password before
+     * it checks credential expiry, so a starter password stored there would answer
+     * {@code CREDENTIALS_EXPIRED} when guessed correctly and {@code INVALID_CREDENTIALS} otherwise —
+     * telling an unauthenticated caller both that the guess was right and that the account is still
+     * unclaimed. Held here, {@code password} keeps the discarded random value and login matches
+     * nothing, which is what makes the starter password incapable of authenticating rather than
+     * merely unlucky.
+     */
+    @Column(name = "starter_password_hash")
+    private String starterPasswordHash;
+
     @Column(name = "failed_login_attempts", nullable = false)
     private int failedLoginAttempts = 0;
 

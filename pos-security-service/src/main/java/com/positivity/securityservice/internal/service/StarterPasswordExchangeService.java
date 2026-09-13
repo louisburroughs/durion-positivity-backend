@@ -3,6 +3,7 @@ package com.positivity.securityservice.internal.service;
 import com.positivity.securityservice.internal.entity.User;
 import com.positivity.securityservice.internal.exception.ActivationTokenInvalidException;
 import com.positivity.securityservice.internal.repository.UserRepository;
+import com.positivity.securityservice.internal.security.service.JwtService;
 import com.positivity.tenancy.TenantContext;
 import java.time.Clock;
 import java.util.UUID;
@@ -74,26 +75,52 @@ public class StarterPasswordExchangeService {
 
         private final UserRepository userRepository;
         private final PasswordEncoder passwordEncoder;
+        private final JwtService jwtService;
 
         @Transactional
         public void exchange(String username, String starterPassword, String newPassword) {
-            User user = userRepository.findByUsername(username).orElseThrow(ActivationTokenInvalidException::new);
+            UUID userId = userRepository
+                    .findByUsername(username)
+                    .map(User::getId)
+                    .orElseThrow(ActivationTokenInvalidException::new);
 
-            // Only an account the bulk loader provisioned this way may be opened with a shared
-            // password. A live account's password is never overwritten through this path, which is
-            // the same rule the token exchange enforces with USER_NOT_AWAITING_ACTIVATION.
+            // Locked before anything is read for a decision, the same lock the token exchange and
+            // PUT /v1/users/{id} take. Two people claiming the same account concurrently would
+            // otherwise both see it unclaimed, both set a password, and the loser would be told they
+            // had succeeded while holding a password the account does not have.
+            User user = userRepository.findByIdForUpdate(userId).orElseThrow(ActivationTokenInvalidException::new);
+
+            // Only an account the loader provisioned this way may be opened with a shared password.
+            // A live account's password is never overwritten through this path, which is the rule the
+            // token exchange enforces with USER_NOT_AWAITING_ACTIVATION.
             if (!user.isAwaitingActivation()) {
                 throw new ActivationTokenInvalidException();
             }
-            if (!passwordEncoder.matches(starterPassword, user.getPassword())) {
+            String expected = user.getStarterPasswordHash();
+            if (expected == null || expected.isBlank() || !passwordEncoder.matches(starterPassword, expected)) {
                 throw new ActivationTokenInvalidException();
             }
 
             user.setPassword(passwordEncoder.encode(newPassword));
+            user.setStarterPasswordHash(null);
             user.setCredentialsNonExpired(true);
             user.setCredentialsExpireAt(null);
             user.setAwaitingActivation(false);
+
+            // Lockout bookkeeping, for the reason the token exchange records: failed attempts are
+            // counted against this userId while the account is unclaimed, so without this a freshly
+            // claimed account can arrive already locked out by its own rejected logins.
+            user.setAccountNonLocked(true);
+            user.setFailedLoginAttempts(0);
+            user.setLockedAt(null);
+            user.setLockedUntil(null);
             userRepository.save(user);
+
+            // Token revocation, likewise: JwtController can mint a token for a username with no
+            // awaiting-activation check, and such a token is refused only while credentialsNonExpired
+            // is false. The line above sets it true, so anything minted before this commit would
+            // start authenticating and bypass the exchange entirely.
+            jwtService.revokeAllTokensForUser(user.getUsername());
             log.info("Starter password exchanged for a chosen password. userId={}", user.getId());
         }
     }
