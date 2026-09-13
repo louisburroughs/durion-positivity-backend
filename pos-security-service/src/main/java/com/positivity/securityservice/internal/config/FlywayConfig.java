@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.config;
 
 import jakarta.persistence.EntityManagerFactory;
+import java.util.Arrays;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
@@ -31,7 +32,8 @@ public class FlywayConfig {
             @Value("${spring.flyway.url:}") String flywayUrl,
             @Value("${spring.flyway.user:}") String flywayUser,
             @Value("${spring.flyway.password:}") String flywayPassword,
-            @Value("${spring.datasource.url:}") String datasourceUrl) {
+            @Value("${spring.datasource.url:}") String datasourceUrl,
+            @Value("${spring.flyway.ignore-migration-patterns:}") String[] ignoreMigrationPatterns) {
         if (seedAdminPasswordHash == null || seedAdminPasswordHash.isBlank()) {
             throw new IllegalStateException("Missing required configuration: SECURITY_SEED_ADMIN_PASSWORD_HASH");
         }
@@ -44,6 +46,12 @@ public class FlywayConfig {
             configuration = configuration.dataSource(url, flywayUser, flywayPassword);
         } else {
             configuration = configuration.dataSource(dataSource);
+        }
+        String[] patterns = Arrays.stream(ignoreMigrationPatterns)
+                .filter(pattern -> !pattern.isBlank())
+                .toArray(String[]::new);
+        if (patterns.length > 0) {
+            configuration.ignoreMigrationPatterns(patterns);
         }
         return configuration.load();
     }

@@ -1,6 +1,7 @@
 package com.positivity.vehicle.internal.config;
 
 import jakarta.persistence.EntityManagerFactory;
+import java.util.Arrays;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.configuration.FluentConfiguration;
@@ -31,7 +32,8 @@ public class FlywayConfig {
             @Value("${spring.flyway.user:}") String flywayUser,
             @Value("${spring.flyway.password:}") String flywayPassword,
             @Value("${spring.datasource.url:}") String datasourceUrl,
-            @Value("${spring.flyway.locations:classpath:db/migration}") String[] locations) {
+            @Value("${spring.flyway.locations:classpath:db/migration}") String[] locations,
+            @Value("${spring.flyway.ignore-migration-patterns:}") String[] ignoreMigrationPatterns) {
         // Honours spring.flyway.locations, which no profile in this module overrides today.
         FluentConfiguration configuration = Flyway.configure().locations(locations);
         if (flywayUser != null && !flywayUser.isBlank()) {
@@ -39,6 +41,12 @@ public class FlywayConfig {
             configuration = configuration.dataSource(url, flywayUser, flywayPassword);
         } else {
             configuration = configuration.dataSource(dataSource);
+        }
+        String[] patterns = Arrays.stream(ignoreMigrationPatterns)
+                .filter(pattern -> !pattern.isBlank())
+                .toArray(String[]::new);
+        if (patterns.length > 0) {
+            configuration.ignoreMigrationPatterns(patterns);
         }
         return configuration.load();
     }

@@ -1,4 +1,11 @@
 spring:
+  flyway:
+    # R__seed_shop_manager_mechanics.sql was retired in favour of the alpha fixture packs
+    # (docs/DATA_SEED_STRATEGY.md, #1968). Environments that ran them keep the
+    # flyway_schema_history rows, which default validation flags as "applied migration
+    # not resolved locally" and which fails startup. Ignore missing repeatables only -
+    # versioned-migration validation stays fully enforced.
+    ignore-migration-patterns: "repeatable:missing"
   kafka:
     bootstrap-servers:
       - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
