@@ -19,7 +19,7 @@ except Exception:  # pragma: no cover
     yaml = None
 
 
-PRUNE_DIRS = {".git", ".idea", ".vscode", "target", "build", "node_modules", ".mvn"}
+PRUNE_DIRS = {".git", ".idea", ".vscode", "target", "build", "node_modules", ".mvn", ".worktrees"}
 
 
 @dataclass
@@ -69,8 +69,22 @@ def parse_args() -> argparse.Namespace:
 
 
 def list_permission_manifests(root: Path) -> Iterable[Path]:
+    """Every permissions.yaml under root, counting each module exactly once.
+
+    Nested checkouts are pruned as well as the names in PRUNE_DIRS. A git worktree or a
+    nested clone contains a full copy of the module tree, so walking into one counts every
+    manifest a second time: the committed report once described 47 manifests and 965
+    permissions with 470 "duplicate" names, which was 24 real modules seen twice because
+    the generator ran from a checkout that had .worktrees/ populated. A worktree's directory
+    always holds a .git entry (a file for a worktree, a directory for a clone), so that is
+    what identifies one, whatever it happens to be named -- the .worktrees name in
+    PRUNE_DIRS only saves descending into the wrapper directory first.
+    """
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in PRUNE_DIRS]
+        here = Path(dirpath)
+        dirnames[:] = [
+            name for name in dirnames if name not in PRUNE_DIRS and not (here / name / ".git").exists()
+        ]
         for filename in filenames:
             if filename == "permissions.yaml":
                 yield Path(dirpath) / filename
