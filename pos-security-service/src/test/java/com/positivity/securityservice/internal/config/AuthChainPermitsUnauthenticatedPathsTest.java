@@ -42,7 +42,8 @@ class AuthChainPermitsUnauthenticatedPathsTest {
                 "/v1/auth/activate",
                 "/v1/auth/activate-starter",
                 "/v1/auth/refresh",
-                "/v1/auth/validate"
+                "/v1/auth/validate",
+                "/v1/auth/tenants"
             })
     void theChainNamesEveryPublicAuthPath(String path) throws IOException {
         String source = Files.readString(CONFIG, StandardCharsets.UTF_8);

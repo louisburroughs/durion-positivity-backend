@@ -14,6 +14,8 @@ public interface TenantRepository extends JpaRepository<TenantEntity, UUID> {
 
     boolean existsBySlug(@NonNull String slug);
 
+    boolean existsByDisplayNameKey(@NonNull String displayNameKey);
+
     @NonNull
     List<TenantEntity> findByAccountIdOrderByCreatedAtAsc(@NonNull UUID accountId);
 

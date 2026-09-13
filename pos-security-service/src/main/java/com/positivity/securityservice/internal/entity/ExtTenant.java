@@ -40,6 +40,13 @@ public class ExtTenant {
     @Column(name = "display_name", length = 200)
     private String displayName;
 
+    /**
+     * Normalized {@link #displayName} (pos-tenancy-common {@code TenantDisplayName}) the login
+     * organization search matches on; null when the projection carries no display name.
+     */
+    @Column(name = "display_name_key", length = 200)
+    private String displayNameKey;
+
     /** Raw lifecycle status: {@code PENDING}, {@code ACTIVE}, {@code SUSPENDED} or {@code DECOMMISSIONED}. */
     @Column(nullable = false, length = 16)
     private String status;

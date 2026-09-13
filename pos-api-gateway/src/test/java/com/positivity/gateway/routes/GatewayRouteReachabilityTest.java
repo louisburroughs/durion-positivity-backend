@@ -243,4 +243,53 @@ class GatewayRouteReachabilityTest {
         chain.filter(exchange).block(TIMEOUT);
         return downstream.get();
     }
+
+    @Test
+    @DisplayName("the organization directory keeps its own rate-limited route, ahead of security-service")
+    void tenantSearchRouteCarriesTheRateLimiter() {
+        RouteDefinition definition = routeDefinitionById("security-service-tenant-search");
+
+        assertThat(definition.getUri()).hasToString("lb://SECURITY-SERVICE");
+
+        // Exact path, not a prefix: this is the one public route that answers which tenants exist,
+        // and the ceiling must not be widened to the whole service by a stray "**".
+        assertThat(definition.getPredicates()).hasSize(1);
+        PredicateDefinition predicate = definition.getPredicates().get(0);
+        assertThat(predicate.getName()).isEqualTo("Path");
+        assertThat(predicate.getArgs()).containsValue("/security-service/v1/auth/tenants");
+
+        assertThat(definition.getFilters()).hasSize(2);
+        assertThat(definition.getFilters().get(0).getName()).isEqualTo("StripPrefix");
+        assertThat(definition.getFilters().get(0).getArgs()).containsValue("1");
+
+        FilterDefinition limiter = definition.getFilters().get(1);
+        assertThat(limiter.getName())
+                .as("without this the directory is served with no per-client ceiling at all")
+                .isEqualTo("RequestRateLimiter");
+        assertThat(limiter.getArgs()).containsValue("#{@clientIpKeyResolver}");
+        assertThat(limiter.getArgs()).containsValue("#{@tenantSearchRateLimiter}");
+    }
+
+    @Test
+    @DisplayName("routes match in order, so the narrow search route wins over /security-service/**")
+    void tenantSearchRouteIsOrderedAheadOfTheGeneralRoute() {
+        List<RouteDefinition> definitions =
+                routeDefinitionLocator.getRouteDefinitions().collectList().block(Duration.ofSeconds(10));
+        assertThat(definitions).isNotNull();
+
+        List<String> ids = definitions.stream().map(RouteDefinition::getId).toList();
+        assertThat(ids.indexOf("security-service-tenant-search"))
+                .as("declared after the general route, the rate limiter would never be applied")
+                .isLessThan(ids.indexOf("security-service"));
+    }
+
+    @Test
+    @DisplayName("the general security-service route still carries no limiter")
+    void generalSecurityServiceRouteIsUnchanged() {
+        RouteDefinition definition = routeDefinitionById("security-service");
+
+        assertThat(definition.getPredicates().get(0).getArgs()).containsValue("/security-service/**");
+        assertThat(definition.getFilters()).hasSize(1);
+        assertThat(definition.getFilters().get(0).getName()).isEqualTo("StripPrefix");
+    }
 }
