@@ -1243,6 +1243,8 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1auth~1self-register
   /v1/auth/subject:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1auth~1subject
+  /v1/auth/tenants:
+    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1auth~1tenants
   /v1/auth/token-pair:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1auth~1token-pair
   /v1/auth/user-id:
