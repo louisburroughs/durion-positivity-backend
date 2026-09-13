@@ -153,7 +153,7 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
 
         assertThat(response.getContactPointsCreated()).isEqualTo(4);
         // Contacts are written to pos-people (source of truth), not stored locally.
-        verify(personDirectoryService).setContactPoints(eq(personId), argThat(list -> list.size() == 4));
+        verify(personDirectoryService).setContactPoints(eq(personId), argThat(list -> list.size() == 4), any(), any());
     }
 
     /** AC3: Missing lastName returns 400 and persists nothing. */
@@ -315,7 +315,9 @@ class PersonServiceContractBehaviorIT extends BaseContractIntegrationTest {
         verify(personDirectoryService)
                 .setContactPoints(
                         eq(personId),
-                        argThat(list -> list.size() == 1 && list.get(0).value().equals("test.user@example.com")));
+                        argThat(list -> list.size() == 1 && list.get(0).value().equals("test.user@example.com")),
+                        any(),
+                        any());
     }
 
     @Test

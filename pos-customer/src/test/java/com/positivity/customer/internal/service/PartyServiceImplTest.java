@@ -456,6 +456,21 @@ class PartyServiceImplTest {
     }
 
     @Test
+    void createCommercialAccount_refusesASecondAccountUnderTheSameLegalName() {
+        CreateCommercialAccountRequest request = new CreateCommercialAccountRequest();
+        request.setLegalName("  Carolina Fresh  ");
+        when(partyRepository.findFirstByLegalNameIgnoreCase("Carolina Fresh"))
+                .thenReturn(Optional.of(party(UUID.fromString("00000000-0000-0000-0000-000000000009"))));
+
+        // Issue #1978: a repeat of a seed pack used to double every account, and the second copy
+        // made the loader's owner resolution ambiguous for every vehicle naming that owner.
+        assertThatThrownBy(() -> service.createCommercialAccount(request))
+                .isInstanceOf(com.positivity.customer.internal.exception.CrmDuplicateResourceException.class)
+                .hasMessageContaining("Carolina Fresh");
+        verify(partyRepository, never()).save(any(CommercialParty.class));
+    }
+
+    @Test
     void getParty_returnsMappedResponse() {
         UUID partyId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         CommercialParty p = party(partyId);

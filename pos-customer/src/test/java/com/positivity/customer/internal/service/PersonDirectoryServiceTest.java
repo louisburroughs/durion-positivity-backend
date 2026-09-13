@@ -174,27 +174,52 @@ class PersonDirectoryServiceTest {
             when(replicaRepository.findById(ALICE)).thenReturn(java.util.Optional.of(existing));
 
             service.setContactPoints(
-                    ALICE, List.of(new PersonDirectoryService.ContactPointUpsert("EMAIL", "a@example.com", true)));
+                    ALICE,
+                    List.of(new PersonDirectoryService.ContactPointUpsert("EMAIL", "a@example.com", true)),
+                    "Caller",
+                    "Supplied");
 
             ArgumentCaptor<PersonUpsertRequestedV1> captor = ArgumentCaptor.forClass(PersonUpsertRequestedV1.class);
             verify(commandEmitter).requestPersonUpsert(captor.capture());
+            // The authority's own names win over whatever the caller happens to hold.
             assertThat(captor.getValue().firstName()).isEqualTo("Alice");
+            assertThat(captor.getValue().lastName()).isEqualTo("Smith");
             assertThat(captor.getValue().preferredName()).isEqualTo("Ali");
             assertThat(captor.getValue().contactPoints()).hasSize(1);
         }
 
         @Test
-        @DisplayName("a not-yet-replicated person upserts with null names rather than failing")
-        void unreplicatedPersonKeepsNullNames() {
+        @DisplayName("a not-yet-replicated person takes the caller's names instead of being blanked")
+        void unreplicatedPersonTakesTheCallersNames() {
             when(replicaRepository.findById(ALICE)).thenReturn(java.util.Optional.empty());
 
             service.setContactPoints(
-                    ALICE, List.of(new PersonDirectoryService.ContactPointUpsert("EMAIL", "a@example.com", true)));
+                    ALICE,
+                    List.of(new PersonDirectoryService.ContactPointUpsert("EMAIL", "a@example.com", true)),
+                    "Linda",
+                    "Guerrero");
 
             ArgumentCaptor<PersonUpsertRequestedV1> captor = ArgumentCaptor.forClass(PersonUpsertRequestedV1.class);
             verify(commandEmitter).requestPersonUpsert(captor.capture());
-            // The upsert is keyed by personId; the authority keeps its own names until this
-            // person's fact replicates.
+            // Issue #1977: this is the state every freshly created person is in, and sending the
+            // full-attribute upsert with null names here left the customer anonymous everywhere.
+            assertThat(captor.getValue().firstName()).isEqualTo("Linda");
+            assertThat(captor.getValue().lastName()).isEqualTo("Guerrero");
+        }
+
+        @Test
+        @DisplayName("names stay null when neither the replica nor the caller has one")
+        void keepsNullNamesWhenNobodyHasThem() {
+            when(replicaRepository.findById(ALICE)).thenReturn(java.util.Optional.empty());
+
+            service.setContactPoints(
+                    ALICE,
+                    List.of(new PersonDirectoryService.ContactPointUpsert("EMAIL", "a@example.com", true)),
+                    null,
+                    "  ");
+
+            ArgumentCaptor<PersonUpsertRequestedV1> captor = ArgumentCaptor.forClass(PersonUpsertRequestedV1.class);
+            verify(commandEmitter).requestPersonUpsert(captor.capture());
             assertThat(captor.getValue().firstName()).isNull();
             assertThat(captor.getValue().lastName()).isNull();
         }

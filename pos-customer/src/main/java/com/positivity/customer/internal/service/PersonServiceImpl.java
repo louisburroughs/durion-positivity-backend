@@ -6,6 +6,7 @@ import com.positivity.customer.internal.dto.GetPersonResponse;
 import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.ContactPointType;
+import com.positivity.customer.internal.exception.CrmDuplicateResourceException;
 import com.positivity.customer.internal.repository.PartyRelationshipRepository;
 import com.positivity.customer.internal.repository.PersonPartyRepository;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -59,11 +60,18 @@ public class PersonServiceImpl implements PersonService {
      * - AC3: Missing lastName returns 400 and persists nothing.
      * - AC4: Invalid email format returns 400 and persists nothing.
      * </p>
+     * <p>
+     * A request carrying a customerNumber claims it as the party's business key: the number is
+     * kept as given, and a number already in use is refused as a duplicate rather than turned
+     * into a second party for the same customer (issue #1978). Omit it and one is generated.
+     * </p>
      *
      * @param request the creation request
      * @param userId  the ID of the user creating the person (may be null)
      * @return response with created person details
      * @throws ResponseStatusException if validation fails
+     * @throws com.positivity.customer.internal.exception.CrmDuplicateResourceException if the
+     *     request's customerNumber already belongs to another party
      */
     @Override
     @Transactional
@@ -106,6 +114,15 @@ public class PersonServiceImpl implements PersonService {
             }
         }
 
+        // A caller-supplied customer number is the party's business key, so it is checked
+        // before anything is written: a repeat of the same import must be refused, not turned
+        // into a second party for one real customer (issue #1978).
+        String customerNumber = trimToNull(request.getCustomerNumber());
+        if (customerNumber != null
+                && personRepository.findByCustomerNumber(customerNumber).isPresent()) {
+            throw new CrmDuplicateResourceException("Customer", customerNumber);
+        }
+
         String primaryEmail = extractPrimaryEmail(request);
         String primaryPhone = extractPrimaryPhone(request);
         UUID peoplePersonId =
@@ -120,7 +137,7 @@ public class PersonServiceImpl implements PersonService {
         // Create the thin link (no local name/contact copy)
         PersonParty person = new PersonParty();
         person.setPersonId(peoplePersonId);
-        person.setCustomerNumber("CUST-PER-" + UUIDv7Generator.generate());
+        person.setCustomerNumber(customerNumber != null ? customerNumber : "CUST-PER-" + UUIDv7Generator.generate());
         person.setPreferredContactMethod(request.getPreferredContactMethod());
         PersonParty savedPerson = personRepository.save(person);
         customerFactPublisher.partyChanged(savedPerson);
@@ -129,8 +146,10 @@ public class PersonServiceImpl implements PersonService {
                 savedPerson.getPersonPartyId(),
                 savedPerson.getPersonId());
 
-        // Write contact points to pos-people (source of truth, ADR-0015 I2).
-        personDirectoryService.setContactPoints(peoplePersonId, contactPoints);
+        // Write contact points to pos-people (source of truth, ADR-0015 I2). The names go with
+        // them: the command is a full-attribute upsert, and a person created a moment ago is not
+        // in the replica it would otherwise read them from (issue #1977).
+        personDirectoryService.setContactPoints(peoplePersonId, contactPoints, firstName, lastName);
 
         log.info(
                 "Successfully created person personId={} personPartyId={} with {} contact points",
@@ -240,6 +259,14 @@ public class PersonServiceImpl implements PersonService {
         if (request.getPreferredContactMethod() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "preferredContactMethod is required");
         }
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private void validateEmail(String email) {

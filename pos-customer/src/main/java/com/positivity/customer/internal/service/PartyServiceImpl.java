@@ -31,6 +31,7 @@ import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.PartyType;
+import com.positivity.customer.internal.exception.CrmDuplicateResourceException;
 import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ExtVehicleRepository;
@@ -108,8 +109,20 @@ public class PartyServiceImpl implements PartyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "legalName is required");
         }
 
+        // The legal name is a commercial account's natural key. Two accounts sharing one makes
+        // every name-based lookup ambiguous, and the bulk loader's owner resolution treats
+        // ambiguity as a hard failure — so a repeated import used to leave both the duplicate and
+        // every vehicle that names its owner unloadable (issue #1978). Refuse the second create
+        // instead; the caller that genuinely means to record a namesake can distinguish it by
+        // legal name, which is what the register does too.
+        String legalName = request.getLegalName().trim();
+        if (partyRepository.findFirstByLegalNameIgnoreCase(legalName).isPresent()) {
+            log.warn("CreateCommercialAccount refused: an account already exists for legalName '{}'", legalName);
+            throw new CrmDuplicateResourceException("Commercial account", legalName);
+        }
+
         CommercialParty party = new CommercialParty();
-        party.setLegalName(request.getLegalName());
+        party.setLegalName(legalName);
         party.setDisplayName(request.getDisplayName());
         party.setTaxId(request.getTaxId());
         party.setBillingTermsId(request.getBillingTermsId());

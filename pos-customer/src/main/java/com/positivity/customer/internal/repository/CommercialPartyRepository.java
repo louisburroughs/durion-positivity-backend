@@ -4,6 +4,7 @@ import com.positivity.customer.internal.entity.CommercialParty;
 import com.positivity.tenancy.TenantAudited;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -24,6 +25,14 @@ public interface CommercialPartyRepository
     @Query(
             "SELECT p FROM CommercialParty p WHERE LOWER(p.legalName) LIKE LOWER(CONCAT('%', :legalName, '%')) ORDER BY p.legalName")
     List<CommercialParty> findByLegalNameContaining(@Param("legalName") String legalName);
+
+    /**
+     * An existing account under exactly this legal name, ignoring case. The legal name is the key
+     * every name-based lookup resolves an account by — including the bulk loader's owner
+     * resolution, which fails outright on more than one match — so a second account under the
+     * same name is refused at create rather than left to poison those lookups (issue #1978).
+     */
+    Optional<CommercialParty> findFirstByLegalNameIgnoreCase(@NonNull String legalName);
 
     /**
      * Commercial parties currently associated with the given vehicle VIN. Used by the

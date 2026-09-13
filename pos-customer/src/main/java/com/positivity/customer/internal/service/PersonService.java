@@ -20,11 +20,18 @@ public interface PersonService {
      * - AC3: Missing lastName returns 400 and persists nothing.
      * - AC4: Invalid email format returns 400 and persists nothing.
      * </p>
+     * <p>
+     * A request carrying a customerNumber claims it as the party's business key: the number is
+     * kept as given, and a number already in use is refused as a duplicate rather than turned
+     * into a second party for the same customer (issue #1978). Omit it and one is generated.
+     * </p>
      *
      * @param request the creation request
      * @param userId  the ID of the user creating the person (may be null)
      * @return response with created person details
      * @throws ResponseStatusException if validation fails
+     * @throws com.positivity.customer.internal.exception.CrmDuplicateResourceException if the
+     *     request's customerNumber already belongs to another party
      */
     CreatePersonResponse createPerson(CreatePersonRequest request, UUID userId);
 

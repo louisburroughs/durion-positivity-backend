@@ -50,6 +50,16 @@ public class CreatePersonRequest {
     @Schema(description = "Phone numbers for this person", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private List<PhoneInput> phones;
 
+    @Size(max = 50)
+    @Schema(
+            description = "Customer number to assign to this person, if the caller already has one."
+                    + " It is the person's business key: a second create quoting a number already"
+                    + " in use is refused as a duplicate rather than making a second party for the"
+                    + " same customer. Omit it and the service generates one.",
+            example = "CUST-PP-001",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private String customerNumber;
+
     /**
      * Email input for person creation.
      */
