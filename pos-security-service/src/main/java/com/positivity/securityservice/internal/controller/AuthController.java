@@ -219,6 +219,10 @@ public class AuthController {
                     unauthenticated caller learns nothing about which accounts exist or are still unclaimed.""")
     @ApiResponse(responseCode = "204", description = "The password was set; sign in with it")
     @ApiResponse(
+            responseCode = "400",
+            description = "Missing or blank username/starterPassword/newPassword",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "401",
             description = "ACTIVATION_TOKEN_INVALID: unknown account, wrong starter password, or already claimed",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
