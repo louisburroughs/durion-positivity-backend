@@ -2,6 +2,7 @@ package com.positivity.securityservice.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.securityservice.internal.dto.ActivateAccountRequest;
+import com.positivity.securityservice.internal.dto.ActivateWithStarterRequest;
 import com.positivity.securityservice.internal.dto.LoginRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationRequest;
 import com.positivity.securityservice.internal.dto.SelfRegistrationResponse;
@@ -9,6 +10,7 @@ import com.positivity.securityservice.internal.dto.TokenPairResponse;
 import com.positivity.securityservice.internal.service.AdministratorActivationService;
 import com.positivity.securityservice.internal.service.AuthenticationService;
 import com.positivity.securityservice.internal.service.SelfRegistrationService;
+import com.positivity.securityservice.internal.service.StarterPasswordExchangeService;
 import com.positivity.shared.error.ApiError;
 import com.positivity.tenancy.TenantHeaders;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,6 +22,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -46,6 +49,7 @@ public class AuthController {
     private final AuthenticationService authenticationService;
     private final SelfRegistrationService selfRegistrationService;
     private final AdministratorActivationService administratorActivationService;
+    private final StarterPasswordExchangeService starterPasswordExchangeService;
 
     @Operation(operationId = "loginUser", summary = "Authenticate User and Issue Tokens", description = """
                     Authenticates a user with username and password and returns a JWT access token (1-hour) and \
@@ -203,6 +207,68 @@ public class AuthController {
                     @RequestBody
                     ActivateAccountRequest request) {
         administratorActivationService.activate(request.token(), request.newPassword());
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(
+            operationId = "activateAccountWithStarterPassword",
+            summary = "Claim a Bulk-Provisioned Account with Its Starter Password",
+            description = """
+                    Trades the shared starter password an account was loaded with for a password of its own: \
+                    sets the password, clears the starter hash and the credential expiry provisioning left on the \
+                    account, and releases any lockout, all in one transaction under the account's tenant.
+                    Use this tool when an operator has bulk-loaded accounts from users.csv and handed their \
+                    holders the one starter password those accounts share; do not use loginUser, which cannot \
+                    succeed until the exchange has run, do not use activateAccount, which needs a one-time token \
+                    no bulk-provisioned account is given, and do not use updateUser, which needs an authenticated \
+                    caller.
+                    Preconditions: none on the caller — the endpoint is unauthenticated; the account must still be \
+                    awaiting activation, and the starter password must match the hash it was loaded with.
+                    Required inputs: username, starterPassword and newPassword, all non-blank; tenantSlug only \
+                    when the request host does not already name the tenant.
+                    Emits a SECURITY_AUTH_ACTIVATE_STARTER event and revokes every token already minted for the \
+                    account; no token is issued, so a follow-up loginUser call with the new password is required.
+                    Returns 204 on success; 400 on a blank field; 401 with ACTIVATION_TOKEN_INVALID when the \
+                    account is unknown, the starter password is wrong, or the account has already been claimed \
+                    (one code on purpose, so an unauthenticated caller learns nothing about which accounts exist \
+                    or are still unclaimed).
+                    """)
+    @ApiResponse(responseCode = "204", description = "The password was set; sign in with it")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Missing or blank username/starterPassword/newPassword",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "ACTIVATION_TOKEN_INVALID: unknown account, wrong starter password, or already claimed",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @EmitEvent(id = "SECURITY_AUTH_ACTIVATE_STARTER", apiVersion = "1")
+    @PostMapping("/activate-starter")
+    @PreAuthorize("permitAll()")
+    public ResponseEntity<Void> activateWithStarter(
+            @RequestHeader(value = "X-Tenant-Slug", required = false) @Nullable String tenantSlugHeader,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "The account to claim, the starter password it was loaded with, and the password to set.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Starter password exchange", value = """
+                                                                    {"username":"marcus.webb",
+                                                                     "starterPassword":"Ch4ngeM3Now!",
+                                                                     "newPassword":"Sup3rS3cret!",
+                                                                     "tenantSlug":"alpha"}
+                                                                    """)))
+                    @Valid
+                    @RequestBody
+                    ActivateWithStarterRequest request) {
+        starterPasswordExchangeService.exchange(
+                tenantSlugHeader,
+                request.tenantSlug(),
+                request.username(),
+                request.starterPassword(),
+                request.newPassword());
         return ResponseEntity.noContent().build();
     }
 }

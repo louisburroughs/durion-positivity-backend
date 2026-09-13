@@ -35,6 +35,23 @@ public interface UserService {
     @NonNull
     UserDto createUserAwaitingActivation(@NonNull String username, @NonNull Set<String> roleNames);
 
+    /**
+     * Creates a user whose first credential is the configured starter password.
+     *
+     * <p>For accounts provisioned in bulk from a fixture pack, where an operator has to be able to
+     * tell people how to get in without a per-user token being minted for each of them. The starter
+     * password is shared and therefore never a credential in its own right: the account is created
+     * awaiting activation with its credentials already expired, so
+     * {@code POST /v1/auth/login} refuses it, and the only thing the starter password opens is
+     * {@code POST /v1/auth/activate-starter}, which trades it for a real password and clears the
+     * marker. A starter password can never become a session.
+     *
+     * <p>With no starter password configured this behaves exactly like
+     * {@link #createUserAwaitingActivation}: the account is created with a generated password
+     * nobody holds, and only an operator-minted activation token can open it.
+     */
+    UserDto createUserAwaitingStarterExchange(@NonNull String username, @NonNull Set<String> roleNames);
+
     Optional<UserAuthContext> getUserByUsername(String username);
 
     Optional<UserDto> getUserById(UUID id);

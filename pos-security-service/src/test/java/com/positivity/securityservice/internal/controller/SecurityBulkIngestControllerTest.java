@@ -115,7 +115,7 @@ class SecurityBulkIngestControllerTest {
 
     @Test
     void users_provisionWithAGeneratedPassword_neverOneFromTheRequest() throws Exception {
-        when(userService.createUserWithGeneratedPassword(eq("jane.doe"), anySet()))
+        when(userService.createUserAwaitingStarterExchange(eq("jane.doe"), anySet()))
                 .thenReturn(account(USER_ID, "jane.doe"));
 
         mockMvc.perform(post("/v1/users/bulk-ingest")
@@ -134,7 +134,7 @@ class SecurityBulkIngestControllerTest {
     @Test
     void users_aPasswordInTheRequestIsIgnored_notHonoured() throws Exception {
         // Someone will eventually add a password column out of habit; it must not become a login.
-        when(userService.createUserWithGeneratedPassword(eq("jane.doe"), anySet()))
+        when(userService.createUserAwaitingStarterExchange(eq("jane.doe"), anySet()))
                 .thenReturn(account(USER_ID, "jane.doe"));
 
         String withPassword = """
@@ -154,7 +154,7 @@ class SecurityBulkIngestControllerTest {
 
     @Test
     void users_anExistingUsernameIsAlreadyProvisioned_notAFailure() throws Exception {
-        when(userService.createUserWithGeneratedPassword(anyString(), anySet()))
+        when(userService.createUserAwaitingStarterExchange(anyString(), anySet()))
                 .thenThrow(new DuplicateUsernameException("Username already exists"));
 
         mockMvc.perform(post("/v1/users/bulk-ingest")
@@ -170,7 +170,7 @@ class SecurityBulkIngestControllerTest {
     void users_anUnknownRoleFailsItsRow() throws Exception {
         // The type UserServiceImpl actually raises for an unknown role, not a stand-in: a
         // rejection has to be recognisable as one for its message to reach the caller (#1718).
-        when(userService.createUserWithGeneratedPassword(anyString(), anySet()))
+        when(userService.createUserAwaitingStarterExchange(anyString(), anySet()))
                 .thenThrow(new SecurityValidationException("Role not found: NOPE"));
 
         mockMvc.perform(post("/v1/users/bulk-ingest")
@@ -189,7 +189,7 @@ class SecurityBulkIngestControllerTest {
      */
     @Test
     void users_serverFault_reportsGenericFailureAndTheCorrelationId() throws Exception {
-        when(userService.createUserWithGeneratedPassword(anyString(), anySet()))
+        when(userService.createUserAwaitingStarterExchange(anyString(), anySet()))
                 .thenThrow(new IllegalStateException("could not execute statement [insert into sec_user ...]"));
 
         mockMvc.perform(post("/v1/users/bulk-ingest")

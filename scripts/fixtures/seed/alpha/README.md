@@ -293,11 +293,18 @@ product landed uncategorized.
   (there is no manufacturer table; the seed's ids were synthetic and are dropped).
 - `upc` and `description` are blank (the seed never had UPCs; description defaults
   to the name server-side); `price` is blank (pricing is a separate seed).
-- Categories/subcategories (`R__seed_reference_catalog.sql`), the 50 general services
-  (file 3 — still no ingest path for those rows; `facts/replay` exists), pricing
-  (file 4: `item_cost`, `product_msrp`), and `product_uom` (file 5) are **not
-  converted** and their seed files stay. The products file itself stays until the
-  alpha reseed is verified (§5.4).
+- Categories/subcategories (`R__seed_reference_catalog.sql`) and `product_uom`
+  (file 5) are **kept in Flyway and reclassified tier 1**: a taxonomy products and
+  putaway rules resolve against, and units of measure, are reference data a working
+  system needs rather than demo rows.
+- Files 2 (products), 3 (the 50 general services) and 4 (pricing) are **deleted**
+  (#1968). The general services were demo data and are not restored wholesale —
+  that is the point of the conversion, not an oversight. The three operations the
+  Tier 0 packs name (`TIRE-ROTATION`, `WHEEL-BALANCE-SET-4`, `TIRE-INSTALL-SET-4`)
+  were defined only by file 3 and moved into `catalog/tier0-services.csv`, because
+  without them those packs cannot load. Anything else that wants a general service
+  catalogue on a fresh database must add a fixture for it; a fresh database
+  deliberately carries no demo data until the pipeline runs.
 
 ### `catalog/` Tier 0 — from `pos-catalog R__seed_reference_catalog_7/8` (#1575 Tier 0)
 

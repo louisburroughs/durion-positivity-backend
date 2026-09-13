@@ -16,6 +16,7 @@ import com.positivity.securityservice.internal.service.AdministratorActivationSe
 import com.positivity.securityservice.internal.service.AuthenticationService;
 import com.positivity.securityservice.internal.service.CustomUserDetailsService;
 import com.positivity.securityservice.internal.service.SelfRegistrationService;
+import com.positivity.securityservice.internal.service.StarterPasswordExchangeService;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import jakarta.servlet.FilterChain;
 import java.time.Clock;
@@ -87,6 +88,9 @@ class AuthControllerErrorHandlingTest {
 
     @MockitoBean
     private CustomUserDetailsService customUserDetailsService;
+
+    @MockitoBean
+    private StarterPasswordExchangeService starterPasswordExchangeService;
 
     @BeforeEach
     void configureJwtFilterPassthrough() throws Exception {

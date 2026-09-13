@@ -1359,6 +1359,7 @@ services:
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
       POS_SECURITY_API_SECRET: ${POS_SECURITY_API_SECRET}
       SECURITY_SEED_ADMIN_PASSWORD_HASH: ${SECURITY_SEED_ADMIN_PASSWORD_HASH}
+      SECURITY_STARTER_PASSWORD_HASH: ${SECURITY_STARTER_PASSWORD_HASH:-}
       # #1883: revocation is a security control now that ADR-0061 location scope rides in the
       # token, so the stack runs a real Redis and this is on. The health indicator stays off:
       # revocation fails open by decision (#1874), and a Redis outage must not mark the service
