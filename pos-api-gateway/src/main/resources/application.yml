@@ -113,6 +113,21 @@ spring:
                 - Path=/people-contact/**
               filters:
                 - StripPrefix=1
+            # ADR-0062 section 3: the anonymous organization directory, ahead of the general
+            # security-service route because routes match in order and this one is narrower. It is
+            # the only public route that answers questions about which tenants exist, so it is the
+            # only one carrying a per-caller ceiling. The limiter fails open on a Redis outage, the
+            # same stance the revocation check takes (see TenantSearchRateLimitConfig).
+            - id: security-service-tenant-search
+              uri: lb://SECURITY-SERVICE
+              predicates:
+                - Path=/security-service/v1/auth/tenants
+              filters:
+                - StripPrefix=1
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@clientIpKeyResolver}"
+                    rate-limiter: "#{@tenantSearchRateLimiter}"
             - id: security-service
               uri: lb://SECURITY-SERVICE
               predicates:

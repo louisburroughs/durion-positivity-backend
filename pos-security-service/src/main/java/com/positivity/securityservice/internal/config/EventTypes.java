@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the security module.
-     * Total: 43 event types.
+     * Total: 44 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -24,7 +24,10 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead("SECURITY_TENANT_ME_GET", "Read the caller's tenant from ext_tenant")
                         .build(),
 
-                // AuthController - 3 events
+                // AuthController - 5 events (tenant search, login, self-register, activate, activate-starter)
+                EventTypeRegistration.search(
+                                "SECURITY_TENANT_SEARCH", "Organization search for the login form via /v1/auth/tenants")
+                        .build(),
                 EventTypeRegistration.write("SECURITY_AUTH_LOGIN", "User login via /v1/auth/login")
                         .build(),
                 EventTypeRegistration.write("SECURITY_AUTH_SELF_REGISTER", "Register a new self-service user account")

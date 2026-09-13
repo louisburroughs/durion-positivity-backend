@@ -4,6 +4,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,8 +20,15 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Request payload for updating a tenant's display name or cell")
 public class TenantUpdateRequest {
 
-    @Schema(description = "New human-readable name; omitted or null leaves it unchanged", requiredMode = NOT_REQUIRED)
-    @Size(min = 1, max = 200)
+    @Schema(
+            description = "New human-readable name, unique across the registry case- and whitespace-insensitively;"
+                    + " omitted or null leaves it unchanged",
+            requiredMode = NOT_REQUIRED)
+    // @Size(min = 1) counted whitespace, so "   " passed it and normalized to the empty string —
+    // a tenant with no name, unmatchable by a three-character search. @Pattern ignores null, so
+    // the field stays optional and null still means "leave it unchanged".
+    @Pattern(regexp = ".*\\S.*", message = "must not be blank")
+    @Size(max = 200)
     private String displayName;
 
     @Schema(description = "New cell or region; omitted or null leaves it unchanged", requiredMode = NOT_REQUIRED)

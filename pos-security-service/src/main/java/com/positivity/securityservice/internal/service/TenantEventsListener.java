@@ -7,6 +7,7 @@ import com.positivity.securityservice.internal.repository.ExtTenantRepository;
 import com.positivity.securityservice.internal.repository.ProcessedEventRepository;
 import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.replica.TenantDisplayName;
 import com.positivity.tenancy.replica.TenantProjectionEvent;
 import java.time.Clock;
 import java.time.Instant;
@@ -159,6 +160,8 @@ public class TenantEventsListener {
                     : ExtTenant.builder().tenantId(projection.tenantId()).build();
             row.setSlug(projection.slug());
             row.setDisplayName(projection.displayName());
+            row.setDisplayNameKey(
+                    projection.displayName() == null ? null : TenantDisplayName.normalize(projection.displayName()));
             row.setStatus(projection.status());
             row.setAggregateVersion(projection.aggregateVersion());
             row.setUpdatedAt(Instant.now(clock));
