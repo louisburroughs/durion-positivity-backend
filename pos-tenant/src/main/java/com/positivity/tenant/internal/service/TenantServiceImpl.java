@@ -101,6 +101,11 @@ public class TenantServiceImpl implements TenantService {
         boolean changed = false;
         if (request.getDisplayName() != null) {
             String displayName = TenantDisplayNameAllocator.displayForm(request.getDisplayName());
+            if (displayName.isEmpty()) {
+                // Bean validation rejects this at the edge; the guard keeps a whitespace-only name
+                // from ever reaching the column, which would leave a tenant unfindable at login.
+                throw new IllegalArgumentException("Tenant display name must not be blank");
+            }
             if (!displayName.equals(tenant.getDisplayName())) {
                 String key = TenantDisplayNameAllocator.normalize(displayName);
                 if (!key.equals(tenant.getDisplayNameKey()) && tenantRepository.existsByDisplayNameKey(key)) {

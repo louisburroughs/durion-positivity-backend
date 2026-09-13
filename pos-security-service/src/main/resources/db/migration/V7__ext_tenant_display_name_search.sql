@@ -10,8 +10,12 @@
 ALTER TABLE public.ext_tenant
     ADD COLUMN display_name_key character varying(200);
 
+-- Bounded at each step for the same reason as the registry's own migration: NFKC and lower() can
+-- each lengthen a value that already fits varchar(200), and one such legacy row would otherwise
+-- stop this migration from starting.
 UPDATE public.ext_tenant
-   SET display_name_key = lower(btrim(regexp_replace(normalize(display_name, NFKC), '\s+', ' ', 'g')))
+   SET display_name_key =
+           left(lower(left(btrim(regexp_replace(normalize(display_name, NFKC), '\s+', ' ', 'g')), 200)), 200)
  WHERE display_name IS NOT NULL;
 
 -- text_pattern_ops so the anchored LIKE prefix the search uses can be served by the index. Search

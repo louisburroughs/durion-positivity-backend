@@ -143,6 +143,10 @@ class TenantEventsListenerTest {
         verify(extTenants).save(saved.capture());
         assertThat(saved.getValue().getTenantId()).isEqualTo(TENANT);
         assertThat(saved.getValue().getSlug()).isEqualTo("acme");
+        assertThat(saved.getValue().getDisplayName()).isEqualTo("Acme");
+        // The key is what makes a newly projected organization findable at login; without this
+        // assertion the upsert could stop deriving it and every test here would still pass.
+        assertThat(saved.getValue().getDisplayNameKey()).isEqualTo("acme");
         assertThat(saved.getValue().getStatus()).isEqualTo("PENDING");
         assertThat(saved.getValue().getAggregateVersion()).isEqualTo(1L);
         assertThat(saved.getValue().getUpdatedAt()).isEqualTo(NOW);

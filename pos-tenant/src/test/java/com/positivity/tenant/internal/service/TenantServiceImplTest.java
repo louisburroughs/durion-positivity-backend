@@ -271,6 +271,19 @@ class TenantServiceImplTest {
     }
 
     @Test
+    @DisplayName("a whitespace-only rename is refused, never persisted as an empty name")
+    void updateRefusesABlankDisplayName() {
+        TenantEntity tenant = existing(TenantStatus.ACTIVE);
+
+        assertThatThrownBy(() -> service.update(
+                        tenant.getId(),
+                        TenantUpdateRequest.builder().displayName("   ").build()))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(tenants, never()).saveAndFlush(any());
+        verifyNoInteractions(facts);
+    }
+
+    @Test
     void updateRefusesDecommissionedTenant() {
         TenantEntity tenant = existing(TenantStatus.DECOMMISSIONED);
         assertThatThrownBy(() -> service.update(

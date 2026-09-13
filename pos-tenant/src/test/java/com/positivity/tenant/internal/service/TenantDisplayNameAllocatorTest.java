@@ -32,6 +32,15 @@ class TenantDisplayNameAllocatorTest {
         }
 
         @Test
+        @DisplayName("case folding cannot push the key past the column")
+        void caseFoldingStaysInsideTheColumn() {
+            // U+0130 lowercases to two characters, so 200 of them fold to 400. The key column is
+            // varchar(200) like the name, so the fold has to be bounded too.
+            assertThat(TenantDisplayNameAllocator.normalize("\u0130".repeat(200)))
+                    .hasSizeLessThanOrEqualTo(TenantDisplayNameAllocator.MAX_LENGTH);
+        }
+
+        @Test
         @DisplayName("applies NFKC, so compatibility forms are one name")
         void appliesNfkc() {
             // U+FF21.. are the fullwidth Latin letters; NFKC folds them to ASCII.
@@ -58,6 +67,29 @@ class TenantDisplayNameAllocatorTest {
         void truncates() {
             String long_ = "A".repeat(250);
             assertThat(TenantDisplayNameAllocator.displayForm(long_)).hasSize(TenantDisplayNameAllocator.MAX_LENGTH);
+        }
+
+        @Test
+        @DisplayName("NFKC expansion cannot push the display form past the column")
+        void nfkcExpansionStaysInsideTheColumn() {
+            // U+FB03 is the ffi ligature: NFKC turns each one into three characters, so 200 of
+            // them become 600. Unbounded, that overflows varchar(200) and fails the write.
+            assertThat(TenantDisplayNameAllocator.displayForm("\uFB03".repeat(200)))
+                    .hasSize(TenantDisplayNameAllocator.MAX_LENGTH);
+        }
+
+        @Test
+        @DisplayName("never cuts a surrogate pair in half")
+        void keepsSurrogatePairsIntact() {
+            // U+1F3E2 (office building) is two chars; cutting at 200 would land mid-pair.
+            String emoji = "\uD83C\uDFE2".repeat(150);
+
+            String form = TenantDisplayNameAllocator.displayForm(emoji);
+
+            assertThat(form.length()).isLessThanOrEqualTo(TenantDisplayNameAllocator.MAX_LENGTH);
+            assertThat(Character.isHighSurrogate(form.charAt(form.length() - 1)))
+                    .as("a lone high surrogate is not valid text and Postgres rejects it")
+                    .isFalse();
         }
     }
 

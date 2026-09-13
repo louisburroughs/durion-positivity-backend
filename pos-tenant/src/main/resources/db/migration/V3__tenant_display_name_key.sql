@@ -24,9 +24,16 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000000', 
 -- display_name is tidied to the same display form the application stores (TenantDisplayNameAllocator
 -- .displayForm: NFKC, whitespace collapsed, trimmed, the operator's casing kept) so a migrated row
 -- is indistinguishable from one written afterwards; only the case-fold separates it from the key.
+-- left(..., 200) on both, and on the key *after* lowercasing, because either step can lengthen a
+-- value that already fits: NFKC expands compatibility forms (one U+FB03 ligature becomes three
+-- characters) and lower() expands others (U+0130 becomes two). Without the bound a single such
+-- legacy row fails the whole migration with a value-too-long error. This mirrors
+-- TenantDisplayName.displayForm/normalize, which bound the same two steps the same way.
 UPDATE public.tenant
-   SET display_name = btrim(regexp_replace(normalize(display_name, NFKC), '\s+', ' ', 'g')),
-       display_name_key = lower(btrim(regexp_replace(normalize(display_name, NFKC), '\s+', ' ', 'g')));
+   SET display_name = left(btrim(regexp_replace(normalize(display_name, NFKC), '\s+', ' ', 'g')), 200);
+
+UPDATE public.tenant
+   SET display_name_key = left(lower(display_name), 200);
 
 -- De-duplicate anything the new constraint would reject. The oldest row of each colliding group
 -- keeps its name; every later one gets the lowest free ' #<n>' suffix, which is the same shape the

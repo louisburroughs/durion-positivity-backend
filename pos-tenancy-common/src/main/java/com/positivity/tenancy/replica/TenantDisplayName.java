@@ -30,11 +30,17 @@ public final class TenantDisplayName {
 
     /**
      * The normalized key for a display name: NFKC, internal whitespace collapsed to one space,
-     * trimmed, case-folded. {@code "Acme  Tire & Auto "} and {@code "acme tire & auto"} both yield
-     * {@code "acme tire & auto"}.
+     * trimmed, case-folded, and bounded to {@link #MAX_LENGTH}. {@code "Acme  Tire & Auto "} and
+     * {@code "acme tire & auto"} both yield {@code "acme tire & auto"}.
+     *
+     * <p>The bound is not belt-and-braces. Both transformations can <em>lengthen</em> a string that
+     * already fits: NFKC expands compatibility forms (one {@code U+FB03} ligature becomes three
+     * characters, so 200 of them become 600), and case folding expands others ({@code U+0130}
+     * lowercases to two characters, so 200 become 400). Unbounded, either would overflow the
+     * {@code varchar(200)} column and fail the write.
      */
     public static @NonNull String normalize(@NonNull String displayName) {
-        return collapse(displayName).toLowerCase(Locale.ROOT);
+        return truncate(collapse(displayName).toLowerCase(Locale.ROOT));
     }
 
     /**
@@ -42,14 +48,26 @@ public final class TenantDisplayName {
      * {@link #MAX_LENGTH}. The operator's casing is theirs and is left alone.
      */
     public static @NonNull String displayForm(@NonNull String displayName) {
-        String collapsed = collapse(displayName);
-        return collapsed.length() <= MAX_LENGTH
-                ? collapsed
-                : collapsed.substring(0, MAX_LENGTH).strip();
+        return truncate(collapse(displayName));
     }
 
     private static String collapse(String value) {
         String nfkc = Normalizer.normalize(value, Normalizer.Form.NFKC);
         return WHITESPACE.matcher(nfkc).replaceAll(" ").strip();
+    }
+
+    /**
+     * Cuts to {@link #MAX_LENGTH} without splitting a surrogate pair — a blind {@code substring}
+     * would leave a lone high surrogate, which is not valid text and which Postgres rejects.
+     */
+    private static String truncate(String value) {
+        if (value.length() <= MAX_LENGTH) {
+            return value;
+        }
+        int end = MAX_LENGTH;
+        if (Character.isHighSurrogate(value.charAt(end - 1))) {
+            end--;
+        }
+        return value.substring(0, end).strip();
     }
 }

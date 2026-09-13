@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -120,6 +121,22 @@ class TenantSearchServiceTest {
         List<TenantSearchResponse> results = service().search("acme");
 
         assertThat(results).containsExactly(new TenantSearchResponse("acme-tire", "Acme Tire & Auto"));
+    }
+
+    @Test
+    @DisplayName("configuration may tighten the enumeration bound, never widen it")
+    void configurationCannotWidenTheBound() {
+        // These two values are the bound. A deployment override that served one-character queries
+        // or handed back more than ten organizations would quietly undo what the ADR fixed.
+        assertThatThrownBy(() -> new TenantSearchProperties(true, 2, 10))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("minQueryLength");
+        assertThatThrownBy(() -> new TenantSearchProperties(true, 3, 50))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("maxResults");
+
+        // Tightening is allowed.
+        assertThat(new TenantSearchProperties(true, 5, 3)).isNotNull();
     }
 
     @Test
