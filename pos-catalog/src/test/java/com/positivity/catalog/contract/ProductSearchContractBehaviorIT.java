@@ -313,6 +313,51 @@ class ProductSearchContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     // -----------------------------------------------------------------------
+    // CS-007b: subcategory filter applied → only matching subcategory products
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("CS-007b: Subcategory filter applied – a non-matching subcategory returns nothing")
+    void testSearch_subcategoryFilterApplied_excludesNonMatchingProducts() throws Exception {
+        // The filter has to actually filter. Spring ignores a query parameter the handler does not
+        // declare, so an unsupported `subcategory` did not narrow anything — it returned the first
+        // product in the catalog and looked like a successful search. pos-bulk-loader resolves a
+        // putaway rule's catalog class by asking for a product carrying that class and reading the
+        // class id back off it, so every SUBCATEGORY rule resolved to whatever product came first
+        // ("Air Filters", on alpha) and was refused by the loader's own name check. Three rules
+        // failed on every seed run for a fixture that was correct.
+        //
+        // Asserting that a non-existent subcategory returns EMPTY is the assertion that catches
+        // that: an ignored parameter returns both products instead.
+        String namePrefix = "SearchAnvil-" + UUID.fromString("00000000-0000-0000-0000-000000000002");
+
+        createProductAndGetId(
+                namePrefix + " A",
+                "SKU-CS007B-A-" + UUID.fromString("00000000-0000-0000-0000-000000000002"),
+                "MPN-CS007B-A");
+        createProductAndGetId(
+                namePrefix + " B",
+                "SKU-CS007B-B-" + UUID.fromString("00000000-0000-0000-0000-000000000002"),
+                "MPN-CS007B-B");
+
+        MvcResult allResult = mockMvc.perform(
+                        withAuth(MockMvcRequestBuilders.get(SEARCH_PATH).param("q", namePrefix)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode allBody = objectMapper.readTree(allResult.getResponse().getContentAsString());
+        assertThat(allBody.get("data").size())
+                .as("both products are visible without a subcategory filter")
+                .isEqualTo(2);
+
+        mockMvc.perform(withAuth(MockMvcRequestBuilders.get(SEARCH_PATH)
+                        .param("q", namePrefix)
+                        .param("subcategory", "ZZZ-NoSuchSubcategory")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    // -----------------------------------------------------------------------
     // CS-008: limit > 100 → 200 OK, results clamped to max 100
     // RED: scaffold returns empty data (data.length == 0, not 100 as expected)
     // -----------------------------------------------------------------------

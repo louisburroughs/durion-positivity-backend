@@ -53,7 +53,14 @@ public class ProductSearchServiceImpl implements ProductSearchService {
     @NonNull
     @Transactional(readOnly = true)
     public CatalogSearchResultDto searchProducts(
-            String q, String brand, String category, String sku, String cursor, int limit, boolean detailed) {
+            String q,
+            String brand,
+            String category,
+            String subcategory,
+            String sku,
+            String cursor,
+            int limit,
+            boolean detailed) {
 
         int effectiveLimit = Math.clamp(limit, 1, MAX_LIMIT);
         int pageNumber = decodeCursor(cursor);
@@ -63,12 +70,14 @@ public class ProductSearchServiceImpl implements ProductSearchService {
         String normalizedSku = (sku == null || sku.isBlank()) ? null : sku.strip();
         String normalizedBrand = (brand == null || brand.isBlank()) ? null : brand.strip();
         String normalizedCategory = (category == null || category.isBlank()) ? null : category.strip();
+        String normalizedSubcategory = (subcategory == null || subcategory.isBlank()) ? null : subcategory.strip();
 
         log.debug(
-                "Catalog search: q={}, brand={}, category={}, sku={}, page={}, limit={}, detailed={}",
+                "Catalog search: q={}, brand={}, category={}, subcategory={}, sku={}, page={}, limit={}, detailed={}",
                 normalizedQ,
                 normalizedBrand,
                 normalizedCategory,
+                normalizedSubcategory,
                 normalizedSku,
                 pageNumber,
                 effectiveLimit,
@@ -83,7 +92,7 @@ public class ProductSearchServiceImpl implements ProductSearchService {
                         .ascending()
                         .and(typedSort.by(ProductEntity::getId).ascending()));
         Page<ProductEntity> page = productRepository.searchProductsFiltered(
-                normalizedQ, normalizedSku, normalizedBrand, normalizedCategory, pageable);
+                normalizedQ, normalizedSku, normalizedBrand, normalizedCategory, normalizedSubcategory, pageable);
 
         List<ProductEntity> products = page.getContent();
         Map<UUID, ProductMsrpEntity> activeMsrpByProduct = detailed ? loadActiveMsrps(products) : Map.of();

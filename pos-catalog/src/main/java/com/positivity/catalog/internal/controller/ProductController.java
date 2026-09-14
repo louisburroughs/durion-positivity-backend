@@ -384,6 +384,9 @@ public class ProductController {
             @Parameter(description = "Filter by category name (exact, case-insensitive)")
                     @RequestParam(required = false)
                     String category,
+            @Parameter(description = "Filter by subcategory name (exact match, case-insensitive)")
+                    @RequestParam(required = false)
+                    String subcategory,
             @Parameter(description = "Filter by SKU (exact match, case-insensitive)") @RequestParam(required = false)
                     String sku,
             @Parameter(description = "Pagination cursor from previous response") @RequestParam(required = false)
@@ -399,7 +402,8 @@ public class ProductController {
                             schema = @Schema(type = "boolean", defaultValue = "false"))
                     @RequestParam(defaultValue = "false")
                     boolean detailed) {
-        return ResponseEntity.ok(productSearchService.searchProducts(q, brand, category, sku, cursor, limit, detailed));
+        return ResponseEntity.ok(
+                productSearchService.searchProducts(q, brand, category, subcategory, sku, cursor, limit, detailed));
     }
 
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('" + CatalogPermissions.PRODUCT_CREATE + "')")

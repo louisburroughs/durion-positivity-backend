@@ -36,5 +36,12 @@ public interface ProductSearchService {
      */
     @NonNull
     CatalogSearchResultDto searchProducts(
-            String q, String brand, String category, String sku, String cursor, int limit, boolean detailed);
+            String q,
+            String brand,
+            String category,
+            String subcategory,
+            String sku,
+            String cursor,
+            int limit,
+            boolean detailed);
 }
