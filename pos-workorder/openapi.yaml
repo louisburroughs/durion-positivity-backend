@@ -34,6 +34,8 @@ tags:
   name: Approval Configuration API
 - description: Operations for product substitute links and workorder substitute suggestions
   name: Substitute Link API
+- description: Assign, change and release the position a workorder occupies
+  name: Service Position API
 - description: Endpoints for assigning technicians to workorders
   name: Technician Assignment API
 - description: Endpoints for estimate management and approval workflow
@@ -5878,6 +5880,198 @@ paths:
       - Workorder Picked Items
       x-required-permissions:
       - workorder:parts:consume
+  /v1/workorders/{workorderId}/position:
+    delete:
+      description: 'Gives up the position the workorder holds, leaving it deliberately unplaced, freeing the bay or mobile unit for another job, and closing the history row with the reason rather than deleting it.
+
+        Use this tool when a workorder leaves a position without going to another one; do not use assignServicePosition, which moves it to a named position instead.
+
+        Preconditions: the workorder must exist and must not be COMPLETED or CANCELLED, and releasing a workorder that holds no position succeeds and writes nothing, so the call is idempotent; completing or cancelling a workorder releases its position on its own, leaving this endpoint for releasing one while the job is still open.
+
+        Required inputs: workorderId (UUID) as a path parameter; reason is an optional query parameter recorded on the closed history row.
+
+        Emits a WORKORDER_POSITION_RELEASE event and marks the workorder fact changed.
+
+        Returns 403 when the caller''s location scope does not cover the workorder''s shop, 404 when no workorder exists for the id, and 409 WORKORDER_CLOSED when the workorder is COMPLETED or CANCELLED.
+
+        '
+      operationId: releaseServicePosition
+      parameters:
+      - description: ID of the workorder
+        example: 550e8400-e29b-41d4-a716-446655440001
+        in: path
+        name: workorderId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Why the position is being given up
+        example: Vehicle moved to the lot
+        in: query
+        name: reason
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePositionResponse'
+          description: Position released, or the workorder already held none
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller's location scope does not cover the workorder's shop (ApiError.code LOCATION_SCOPE_DENIED)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePositionResponse'
+          description: Workorder not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Workorder is COMPLETED or CANCELLED (ApiError.code WORKORDER_CLOSED)
+      security:
+      - bearerAuth:
+        - workorder:operationalContext:override
+      summary: Release a Workorder's Service Position
+      tags:
+      - Service Position API
+      x-required-permissions:
+      - workorder:operationalContext:override
+    get:
+      description: 'Returns where the workorder is and who is working on it together — the current service position, the current technician, the workorder status, and the full position history newest first.
+
+        Use this tool to read dispatch state for one workorder; do not use assignServicePosition or releaseServicePosition, which change it. getOperationalContext answers the position half only and carries no history.
+
+        Preconditions: the workorder must exist. A workorder with no position returns null resourceType and resourceId, and a workorder with no technician returns a null technicianId; neither is an error.
+
+        Required inputs: workorderId (UUID) as a path parameter.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 404 when no workorder exists for the id.
+
+        '
+      operationId: getServicePosition
+      parameters:
+      - description: ID of the workorder
+        example: 550e8400-e29b-41d4-a716-446655440001
+        in: path
+        name: workorderId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePositionResponse'
+          description: Current position and technician returned
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePositionResponse'
+          description: Workorder not found
+      security:
+      - bearerAuth:
+        - workorder:workorder:view
+      summary: Get a Workorder's Service Position and Technician
+      tags:
+      - Service Position API
+      x-required-permissions:
+      - workorder:workorder:view
+    put:
+      description: 'Places the workorder on a service position — a bay, a mobile unit, or the site''s HOLD (parking) position — recording who placed it, when and why, and releasing whatever position it held before in the same transaction.
+
+        Use this tool to dispatch a workorder to a bay, move it between bays or mobile units, or park it; do not use releaseServicePosition, which leaves the workorder unplaced, and do not use overrideOperationalContext, which is the manager exception path and also rewrites mechanics and location.
+
+        Preconditions: the workorder must exist and must not be COMPLETED or CANCELLED; a BAY or MOBILE_UNIT must be known to this module''s location replicas, belong to the workorder''s own site and hold no other open workorder, while HOLD has no capacity limit and accepts only the workorder''s own locationId; and a caller whose workorder:operationalContext:override grant is location-scoped must have the workorder''s shop within reach (ADR-0061).
+
+        Required inputs: workorderId (UUID) as a path parameter and a body with resourceType (BAY, MOBILE_UNIT or HOLD, required); resourceId is required for BAY and MOBILE_UNIT and optional for HOLD, reason is optional, and re-sending the placement already in force is a no-op that writes no history.
+
+        Emits a WORKORDER_POSITION_ASSIGN event and marks the workorder fact changed.
+
+        Returns 403 when the caller''s location scope does not cover the workorder''s shop, 404 when no workorder exists for the id, 409 RESOURCE_OCCUPIED when the position already holds another open workorder, 409 WORKORDER_CLOSED when the workorder is COMPLETED or CANCELLED, and 422 SERVICE_POSITION_INVALID when the position is unknown or at another site.
+
+        '
+      operationId: assignServicePosition
+      parameters:
+      - description: ID of the workorder
+        example: 550e8400-e29b-41d4-a716-446655440001
+        in: path
+        name: workorderId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Dispatch to a bay:
+                description: Dispatch to a bay
+                value:
+                  reason: Alignment rack required
+                  resourceId: 550e8400-e29b-41d4-a716-446655440301
+                  resourceType: BAY
+              Park the vehicle:
+                description: Park the vehicle
+                value:
+                  reason: Awaiting parts
+                  resourceType: HOLD
+            schema:
+              $ref: '#/components/schemas/AssignServicePositionRequest'
+        description: The position to place the workorder on, and why.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePositionResponse'
+          description: Position assigned
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller's location scope does not cover the workorder's shop (ApiError.code LOCATION_SCOPE_DENIED)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePositionResponse'
+          description: Workorder not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Position already holds another open workorder (ApiError.code RESOURCE_OCCUPIED, with the occupying workorder id as referenceId), or the workorder is closed (ApiError.code WORKORDER_CLOSED)
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unknown position, or one belonging to another site (ApiError.code SERVICE_POSITION_INVALID)
+      security:
+      - bearerAuth:
+        - workorder:operationalContext:override
+      summary: Assign or Change a Workorder's Service Position
+      tags:
+      - Service Position API
+      x-required-permissions:
+      - workorder:operationalContext:override
   /v1/workorders/{workorderId}/reopen:
     post:
       description: 'Reopens a COMPLETED workorder in a controlled way: the finalized billable scope is superseded via a new snapshot, and the workorder is flagged isReopened with the actor, reason, and timestamp recorded — the status itself remains COMPLETED.
@@ -6252,6 +6446,58 @@ paths:
       x-required-permissions:
       - AUTHENTICATED
   /v1/workorders/{workorderId}/technician:
+    delete:
+      description: 'Releases the workorder''s current technician, closing the assignment in history and leaving the workorder with nobody on it.
+
+        Use this tool when a technician comes off a job without a replacement — capacity freed for a workorder that is blocked or parked; do not use reassignTechnician, which requires a replacement, and do not use it to change technicians.
+
+        Preconditions: the workorder must exist and must not be COMPLETED or CANCELLED; releasing a workorder that has no current technician succeeds and writes nothing, so the call is idempotent.
+
+        Required inputs: workorderId (UUID) as a path parameter; reason is an optional query parameter recorded on the closed assignment.
+
+        Emits a WORKORDER_TECHNICIAN_RELEASE event.
+
+        Returns 404 when the workorder does not exist, and 409 WORKORDER_CLOSED when it is COMPLETED or CANCELLED.
+
+        '
+      operationId: releaseTechnician
+      parameters:
+      - description: ID of the workorder
+        example: 550e8400-e29b-41d4-a716-446655440001
+        in: path
+        name: workorderId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Why the technician is coming off the workorder
+        example: Shift ended
+        in: query
+        name: reason
+        required: false
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Technician released, or none was assigned
+        '403':
+          description: Permission denied
+        '404':
+          description: Workorder not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Workorder is COMPLETED or CANCELLED (ApiError.code WORKORDER_CLOSED)
+      security:
+      - bearerAuth:
+        - workorder:workorder:assign-technician
+      summary: Release a Workorder's Current Technician
+      tags:
+      - Technician Assignment API
+      x-required-permissions:
+      - workorder:workorder:assign-technician
     get:
       description: 'Returns the workorder''s current technician assignment together with the full assignment history and the workorder''s status.
 
@@ -6298,17 +6544,17 @@ paths:
       x-required-permissions:
       - workorder:workorder:view
     post:
-      description: 'Assigns a technician to a workorder as the current assignment, retiring any previous assignment into history and transitioning the workorder from APPROVED to ASSIGNED when applicable.
+      description: 'Assigns a technician to a workorder that has none, transitioning the workorder from APPROVED to ASSIGNED when applicable.
 
-        Use this tool for the first assignment on a workorder; do not use reassignTechnician, which requires an existing current assignment and records a reassignment reason.
+        Use this tool for the first assignment on a workorder; do not use it to change technicians — reassignTechnician requires an existing current assignment and records a reassignment reason, and releaseTechnician takes the current one off without a replacement.
 
-        Preconditions: the workorder must exist and be in APPROVED, ASSIGNED, or WORK_IN_PROGRESS status.
+        Preconditions: the workorder must exist, be in APPROVED, ASSIGNED, or WORK_IN_PROGRESS status, and have no current technician.
 
         Required inputs: workorderId (UUID) as a path parameter and technicianId (UUID) in the body; notes are optional, the assignedByUserId body field is ignored in favor of the security context, and the Idempotency-Key header is accepted but not currently used to deduplicate.
 
         Emits a WORKORDER_TECHNICIAN_ASSIGN event; an APPROVED workorder is transitioned to ASSIGNED with a recorded state transition.
 
-        Returns 404 when the workorder does not exist, and 400 with the failure reason when the workorder status does not allow assignment.
+        Returns 404 when the workorder does not exist, 400 with the failure reason when the workorder status does not allow assignment, and 409 TECHNICIAN_ALREADY_ASSIGNED when the workorder already has a current technician — use reassignTechnician to change it.
 
         '
       operationId: assignTechnician
@@ -6367,6 +6613,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/TechnicianAssignmentResponse'
           description: Workorder or technician not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The workorder already has a current technician (ApiError.code TECHNICIAN_ALREADY_ASSIGNED, with the current technician id as referenceId)
       security:
       - bearerAuth:
         - workorder:workorder:assign-technician
@@ -6386,7 +6638,7 @@ paths:
 
         Emits a WORKORDER_TECHNICIAN_REASSIGN event.
 
-        Returns 404 when the workorder does not exist, and 400 with the failure reason when there is no current assignment or the workorder status does not allow reassignment.
+        Returns 404 when the workorder does not exist, 400 with the failure reason when the workorder status does not allow reassignment, and 409 TECHNICIAN_NOT_ASSIGNED when the workorder has no current technician to reassign from — use assignTechnician for the first assignment.
 
         '
       operationId: reassignTechnician
@@ -6433,7 +6685,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TechnicianAssignmentResponse'
-          description: Invalid state transition or no current assignment
+          description: Invalid state transition
         '403':
           content:
             application/json:
@@ -6446,6 +6698,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/TechnicianAssignmentResponse'
           description: Workorder not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The workorder has no current technician (ApiError.code TECHNICIAN_NOT_ASSIGNED)
       security:
       - bearerAuth:
         - workorder:workorder:assign-technician
@@ -6808,6 +7066,29 @@ components:
           type: string
       required:
       - customerId
+      type: object
+    AssignServicePositionRequest:
+      description: Service position to place the workorder on
+      properties:
+        reason:
+          description: Why the workorder is being placed here; recorded on the position history
+          example: Alignment rack required
+          type: string
+        resourceId:
+          description: Bay or mobile-unit id. Optional for HOLD, which parks the workorder at its own site; for HOLD the only accepted value is that site's locationId
+          example: 550e8400-e29b-41d4-a716-446655440301
+          format: uuid
+          type: string
+        resourceType:
+          description: 'Kind of position: BAY and MOBILE_UNIT are pos-location resources and hold one open workorder each; HOLD is the site''s parking lot and holds any number'
+          enum:
+          - BAY
+          - MOBILE_UNIT
+          - HOLD
+          example: BAY
+          type: string
+      required:
+      - resourceType
       type: object
     AssignTechnicianRequest:
       description: Request to assign a technician to a workorder
@@ -8299,6 +8580,7 @@ components:
           enum:
           - BAY
           - MOBILE_UNIT
+          - HOLD
           example: MOBILE_UNIT
           type: string
       required:
@@ -8348,6 +8630,7 @@ components:
           enum:
           - BAY
           - MOBILE_UNIT
+          - HOLD
           example: BAY
           type: string
         scheduledEndAt:
@@ -8725,6 +9008,102 @@ components:
       required:
       - quantity
       - workorderPartId
+      type: object
+    ServicePositionAssignmentRecord:
+      description: One placement of a workorder on a service position, open or already released
+      properties:
+        assignedAt:
+          description: When the workorder was placed here
+          example: '2026-03-10T09:30:00'
+          format: date-time
+          type: string
+        assignedBy:
+          description: Who placed it
+          example: advisor@shop.example
+          type: string
+        current:
+          description: True for the placement in force now
+          example: true
+          type: boolean
+        id:
+          description: History row id
+          example: 42
+          format: int64
+          type: integer
+        locationId:
+          description: Site the placement happened at
+          example: 550e8400-e29b-41d4-a716-446655440300
+          format: uuid
+          type: string
+        reason:
+          description: Why it was placed here or given up
+          example: Moved to parking
+          type: string
+        releasedAt:
+          description: When it left, or null while it is still here
+          example: '2026-03-10T14:05:00'
+          format: date-time
+          type: string
+        releasedBy:
+          description: Who released it, or null while it is still here
+          example: advisor@shop.example
+          type: string
+        resourceId:
+          description: Bay id, mobile-unit id, or — for HOLD — the site parked at
+          example: 550e8400-e29b-41d4-a716-446655440301
+          format: uuid
+          type: string
+        resourceType:
+          description: Kind of position
+          enum:
+          - BAY
+          - MOBILE_UNIT
+          - HOLD
+          example: BAY
+          type: string
+      type: object
+    ServicePositionResponse:
+      description: A workorder's current service position and technician, with position history
+      properties:
+        history:
+          description: Every placement this workorder has had, newest first; the first entry is current when the workorder holds a position
+          items:
+            $ref: '#/components/schemas/ServicePositionAssignmentRecord'
+          type: array
+        locationId:
+          description: Site the workorder belongs to
+          example: 550e8400-e29b-41d4-a716-446655440300
+          format: uuid
+          type: string
+        resourceId:
+          description: Position held now; null when the workorder holds none. Null exactly when resourceType is null
+          example: 550e8400-e29b-41d4-a716-446655440301
+          format: uuid
+          type: string
+        resourceType:
+          description: Kind of position held now; null when the workorder holds none
+          enum:
+          - BAY
+          - MOBILE_UNIT
+          - HOLD
+          example: BAY
+          type: string
+        technicianId:
+          description: Technician holding the workorder now; null when none is assigned
+          example: 550e8400-e29b-41d4-a716-446655440120
+          format: uuid
+          type: string
+        workorderId:
+          description: The workorder
+          example: 550e8400-e29b-41d4-a716-446655440001
+          format: uuid
+          type: string
+        workorderStatus:
+          description: Workorder status, which decides whether the position may still be changed
+          example: ASSIGNED
+          type: string
+      required:
+      - workorderId
       type: object
     SortObject:
       properties:
@@ -10724,6 +11103,7 @@ components:
           enum:
           - BAY
           - MOBILE_UNIT
+          - HOLD
           example: BAY
           type: string
         scheduledDate:

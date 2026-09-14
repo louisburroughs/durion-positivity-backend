@@ -87,6 +87,7 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final WorkorderFactPublisher workorderFactPublisher;
     private final PromotedWorkorderDemandPublisher promotedWorkorderDemandPublisher;
     private final WorkorderStateMachine stateMachine;
+    private final ServicePositionService servicePositionService;
     private final WorkorderLaborEntryRepository workorderLaborEntryRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final AuditEventRepository auditEventRepository;
@@ -965,10 +966,48 @@ public class WorkorderServiceImpl implements WorkorderService {
         // BAY fallback for the untyped events pos-shop-manager still publishes.
         ResourceType resourceType = event.resolveResourceType();
         workorder.setLocationId(payload.getLocationId());
-        workorder.setResourceId(payload.getResourceId());
-        workorder.setResourceType(payload.getResourceId() != null ? resourceType : null);
+        // #1984: the position goes through the position service so the inbound fact is subject to the
+        // same one-open-workorder rule as a dispatcher's own assignment, and leaves the same history
+        // row. A refusal is caught rather than propagated: the caller is a log-and-swallow Kafka
+        // listener, so letting it out would cost the whole update — location and mechanics included —
+        // for a conflict that concerns the resource alone. The rest of the update is applied and the
+        // workorder keeps the position it had, which is the state the database can actually honour.
+        // #1984: the position goes through the position service so the inbound fact is subject to the
+        // same one-open-workorder rule as a dispatcher's own assignment, and leaves the same history
+        // row. The occupancy question is asked rather than caught: recordPositionChange is
+        // transactional and joins this method's transaction, so a refusal thrown from it would mark
+        // that transaction rollback-only — catching it and carrying on would lose the location and
+        // mechanics too and then fail at commit, which is the opposite of applying the rest.
+        UUID incomingResourceId = payload.getResourceId();
+        ResourceType incomingResourceType = incomingResourceId != null ? resourceType : null;
+        Optional<UUID> occupant =
+                servicePositionService.findOccupant(workorder.getId(), incomingResourceType, incomingResourceId);
+        if (occupant.isPresent()) {
+            // The workorder moves to the new site with no position rather than keeping the old bay:
+            // a workorder sitting at site B while still pointing at site A's bay is a state the
+            // dispatch board cannot render honestly, and the old bay is not where this job is going.
+            log.warn(
+                    "Inbound assignment for workorder {} names {} {}, which open workorder {} holds;"
+                            + " applying the location and mechanics and leaving this workorder unplaced",
+                    workorder.getId(),
+                    incomingResourceType,
+                    incomingResourceId,
+                    occupant.get());
+            incomingResourceId = null;
+            incomingResourceType = null;
+        }
+        servicePositionService.recordPositionChange(
+                workorder,
+                incomingResourceType,
+                incomingResourceId,
+                "System:ShopManagementService",
+                occupant.isPresent()
+                        ? "Assignment context updated; requested position was occupied"
+                        : "Assignment context updated");
+        workorder.setResourceId(incomingResourceId);
+        workorder.setResourceType(incomingResourceType);
         workorder.setMechanicIds(serializeMechanicIds(payload.getMechanicIds()));
-        workorderRepository.save(workorder);
+        servicePositionService.savePositionChange(workorder);
         workorderFactPublisher.markChanged(workorder.getId());
 
         String details = buildAuditDetails(
@@ -1031,6 +1070,7 @@ public class WorkorderServiceImpl implements WorkorderService {
     }
 
     @Override
+    @Transactional
     public OperationalContextResponse overrideOperationalContext(
             @NonNull UUID workorderId, @NonNull OperationalContextOverrideRequest override) {
         Workorder workorder = workorderRepository
@@ -1058,10 +1098,28 @@ public class WorkorderServiceImpl implements WorkorderService {
         // the id alone would let a bay → mobile-unit override land half-applied: the workorder would
         // point at a van while still typed BAY, so the dispatch board would file it under bays[] and
         // go on advertising the van as available in the very same response.
+        //
+        // #1984: and they are written through the position service rather than onto the entity, so
+        // that this path — the one way a bay could be set before there were assignment operations —
+        // gets the occupancy check and the history row too. It stays an override in the sense that
+        // matters: the position is not re-validated against the location replicas, so a manager
+        // re-slotting a job is never blocked by a replica row that has not landed. Taking a bay
+        // another open workorder is already in is a 409, not a silent double-booking.
+        ResourceType overrideResourceType =
+                resourceId != null ? ResourceType.orDefault(override.getResourceType()) : null;
+        servicePositionService.recordPositionChange(
+                workorder,
+                overrideResourceType,
+                resourceId,
+                resolveCurrentActorUserId(),
+                "Operational context override");
         workorder.setResourceId(resourceId);
-        workorder.setResourceType(resourceId != null ? ResourceType.orDefault(override.getResourceType()) : null);
+        workorder.setResourceType(overrideResourceType);
         workorder.setMechanicIds(serializeMechanicIds(override.getAssignedMechanics()));
-        Workorder saved = workorderRepository.save(workorder);
+        // One transaction, and the same conflict translation the dedicated assignment operation uses:
+        // the history rows this method just wrote and the workorder they describe must commit or roll
+        // back together, and a lost race against the occupancy index is a 409 here as well as there.
+        Workorder saved = servicePositionService.savePositionChange(workorder);
         workorderFactPublisher.markChanged(saved.getId());
 
         return OperationalContextResponse.builder()

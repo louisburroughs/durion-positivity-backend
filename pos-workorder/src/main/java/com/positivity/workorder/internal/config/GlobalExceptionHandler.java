@@ -19,8 +19,13 @@ import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsist
 import com.positivity.workorder.internal.exception.PromotionValidationException;
 import com.positivity.workorder.internal.exception.PurchaseOrderRequiredException;
 import com.positivity.workorder.internal.exception.ServiceLineNotFoundException;
+import com.positivity.workorder.internal.exception.ServicePositionInvalidException;
+import com.positivity.workorder.internal.exception.ServicePositionOccupiedException;
 import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionException;
 import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
+import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
+import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
+import com.positivity.workorder.internal.exception.TechnicianNotFoundException;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
 import com.positivity.workorder.internal.exception.TravelSegmentNotFoundException;
 import com.positivity.workorder.internal.exception.UomConversionUndefinedException;
@@ -28,6 +33,7 @@ import com.positivity.workorder.internal.exception.WorkSessionLockedException;
 import com.positivity.workorder.internal.exception.WorkSessionNotFoundException;
 import com.positivity.workorder.internal.exception.WorkSessionOverlapException;
 import com.positivity.workorder.internal.exception.WorkSessionStateException;
+import com.positivity.workorder.internal.exception.WorkorderClosedException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
@@ -314,6 +320,120 @@ public class GlobalExceptionHandler {
      * the same {@code CONFLICT} code as {@link #handleIllegalState} so every stateful-collision
      * response in this module carries one consistent code.
      */
+    /**
+     * An exclusive service position already holds an open workorder (#1984).
+     *
+     * <p>409 and not 422: the request is well-formed and the position is one the caller may use —
+     * it is the position's current occupancy that refuses, and it will stop refusing when the
+     * occupying workorder completes, is cancelled, or moves. The occupying workorder rides as
+     * {@code referenceId} so a dispatch board can link straight to the job in the bay instead of
+     * parsing the message; it is absent when a racing assign lost to the unique index, where the
+     * winner is not knowable from inside the losing transaction.
+     */
+    @ExceptionHandler(ServicePositionOccupiedException.class)
+    public ResponseEntity<ApiError> handleServicePositionOccupied(
+            ServicePositionOccupiedException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        ApiError body = ApiError.guided(
+                ServicePositionOccupiedException.ERROR_CODE,
+                ex.getMessage(),
+                HttpStatus.CONFLICT.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                ex.getOccupyingWorkorderId() == null
+                        ? null
+                        : ex.getOccupyingWorkorderId().toString(),
+                null,
+                null);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        return new ResponseEntity<>(body, headers, HttpStatus.CONFLICT);
+    }
+
+    /**
+     * A position that is unknown, or that belongs to another site than the workorder (#1983).
+     *
+     * <p>422, not 400 and not 404: the payload parses and every field is within its declared type,
+     * and the position is not what the URL addresses. What fails is a cross-entity rule, which
+     * ADR-0017 §2 places at 422.
+     */
+    @ExceptionHandler(ServicePositionInvalidException.class)
+    public ResponseEntity<ApiError> handleServicePositionInvalid(
+            ServicePositionInvalidException ex, HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY, ServicePositionInvalidException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    /**
+     * Position or technician changes asked of a COMPLETED or CANCELLED workorder (#1983).
+     *
+     * <p>The stable code the story asks for, so a client can distinguish "this job is over" from
+     * every other 409 the assignment endpoints can raise.
+     */
+    @ExceptionHandler(WorkorderClosedException.class)
+    public ResponseEntity<ApiError> handleWorkorderClosed(WorkorderClosedException ex, HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.CONFLICT, WorkorderClosedException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    /**
+     * Assign was called on a workorder that already has a current technician (#1985).
+     *
+     * <p>Assign used to overwrite silently, so an accidental double assign looked exactly like a
+     * deliberate hand-over. The current technician rides as {@code referenceId} and the
+     * {@code nextAction} names the operation that does change technicians.
+     */
+    @ExceptionHandler(TechnicianAlreadyAssignedException.class)
+    public ResponseEntity<ApiError> handleTechnicianAlreadyAssigned(
+            TechnicianAlreadyAssignedException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        ApiError body = ApiError.guided(
+                TechnicianAlreadyAssignedException.ERROR_CODE,
+                ex.getMessage(),
+                HttpStatus.CONFLICT.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                ex.getCurrentTechnicianId() == null
+                        ? null
+                        : ex.getCurrentTechnicianId().toString(),
+                TechnicianAlreadyAssignedException.NEXT_ACTION,
+                null);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        return new ResponseEntity<>(body, headers, HttpStatus.CONFLICT);
+    }
+
+    /**
+     * A technician id that names nobody in the {@code ext_person} replica (#1983).
+     *
+     * <p>422 for the same reason {@link ServicePositionInvalidException} is: a cross-entity rule
+     * fails, and the technician is not what the URL addresses.
+     */
+    @ExceptionHandler(TechnicianNotFoundException.class)
+    public ResponseEntity<ApiError> handleTechnicianNotFound(
+            TechnicianNotFoundException ex, HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY, TechnicianNotFoundException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    /** Reassign was called on a workorder that has no current technician to reassign from (#1985). */
+    @ExceptionHandler(TechnicianNotAssignedException.class)
+    public ResponseEntity<ApiError> handleTechnicianNotAssigned(
+            TechnicianNotAssignedException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        ApiError body = ApiError.guided(
+                TechnicianNotAssignedException.ERROR_CODE,
+                ex.getMessage(),
+                HttpStatus.CONFLICT.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                null,
+                TechnicianNotAssignedException.NEXT_ACTION,
+                null);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        return new ResponseEntity<>(body, headers, HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(WorkorderResourceConflictException.class)
     public ResponseEntity<ApiError> handleWorkorderResourceConflict(
             WorkorderResourceConflictException ex, HttpServletRequest request) {

@@ -87,6 +87,18 @@ public class TechnicianAssignment extends TenantScopedEntity {
     @Column(columnDefinition = "TEXT")
     private String reassignmentReason;
 
+    /**
+     * Who took the technician off the workorder, for a release that names no replacement (#1983).
+     *
+     * <p>{@code assignedBy} answers "who put them on"; without this there was no field answering
+     * "who took them off", so a release recorded when and why but not by whom — and the story
+     * requires all three. A reassignment leaves this null: the incoming row's {@code assignedBy} is
+     * the actor there, and duplicating it would invite the two to disagree.
+     */
+    @Nullable
+    @Column(name = "released_by", columnDefinition = "TEXT")
+    private String releasedBy;
+
     @Nullable
     @Column(columnDefinition = "TEXT")
     private String notes;
@@ -123,8 +135,22 @@ public class TechnicianAssignment extends TenantScopedEntity {
      * @param reason           optional reason for unassignment
      */
     public void markAsNotCurrent(@NonNull LocalDateTime unassignmentTime, @Nullable String reason) {
+        markAsNotCurrent(unassignmentTime, reason, null);
+    }
+
+    /**
+     * Close this assignment, recording who ended it.
+     *
+     * @param unassignmentTime the time the technician came off the workorder
+     * @param reason           why, when the caller supplied one; a blank reason leaves any existing one
+     * @param releasedBy       the actor for a release that names no replacement; null on a reassignment,
+     *                         where the incoming row's {@code assignedBy} is the actor
+     */
+    public void markAsNotCurrent(
+            @NonNull LocalDateTime unassignmentTime, @Nullable String reason, @Nullable String releasedBy) {
         this.current = false;
         this.unassignedAt = unassignmentTime;
+        this.releasedBy = releasedBy;
         if (reason != null && !reason.isBlank()) {
             this.reassignmentReason = reason;
         }

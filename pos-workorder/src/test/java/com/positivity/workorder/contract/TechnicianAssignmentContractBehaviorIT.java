@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.*;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
+import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
@@ -13,6 +14,7 @@ import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
@@ -60,6 +62,9 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
     @Autowired
     private TechnicianAssignmentRepository assignmentRepository;
+
+    @Autowired
+    private ExtPersonReplicaRepository extPersonReplicaRepository;
 
     private UUID testCustomerId;
     private UUID testLocationId;
@@ -267,7 +272,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
     }
 
     @Test
-    @DisplayName("TA-005: Reject reassignment if no current assignment exists")
+    @DisplayName("TA-005: Reject reassignment if no current assignment exists (#1985: 409, not 400)")
     void testReassignTechnician_NoExistingAssignment() {
         // Given: A workorder with NO existing assignment
         UUID workorderId = seedApprovedWorkorder();
@@ -294,12 +299,110 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 .then()
                 .log()
                 .ifValidationFails()
-                .statusCode(400); // Bad request - no current assignment to reassign from
+                // #1985: reassign is not quietly promoted to an assign when there is nobody to
+                // reassign from. 409 with a stable code, so a caller whose view of the workorder was
+                // stale learns that rather than getting a 200 that tells it nothing.
+                .statusCode(409)
+                .body("code", equalTo("TECHNICIAN_NOT_ASSIGNED"));
 
         // Then: Verify no assignment was created
         List<TechnicianAssignment> assignments =
                 assignmentRepository.findByWorkorder_IdOrderByAssignedAtDesc(workorderId);
         assertThat(assignments).isEmpty();
+    }
+
+    @Test
+    @DisplayName("TA-006: #1985 assigning a workorder that already has a technician is refused")
+    void testAssignTechnician_AlreadyAssigned() {
+        // Given: a workorder that already has a current technician
+        UUID workorderId = seedWorkorderWithAssignedTechnician();
+        UUID incumbent = testTechnicianId1;
+        UUID replacement = UUID.fromString("00000000-0000-0000-0000-000000000002");
+
+        // When: assign is called again rather than reassign
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("technicianId", replacement.toString(), "notes", "second assign"))
+                .when()
+                .post("/v1/workorders/{workorderId}/technician", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                // Assign used to overwrite silently, which made an accidental double assign
+                // indistinguishable from a deliberate hand-over.
+                .statusCode(409)
+                .body("code", equalTo("TECHNICIAN_ALREADY_ASSIGNED"))
+                .body("referenceId", equalTo(incumbent.toString()));
+
+        // Then: the incumbent still holds the workorder and no new row was written
+        TechnicianAssignment current = assignmentRepository
+                .findByWorkorder_IdAndCurrentTrue(workorderId)
+                .orElseThrow();
+        assertThat(current.getTechnicianId()).isEqualTo(incumbent);
+        assertThat(assignmentRepository.findByWorkorder_IdOrderByAssignedAtDesc(workorderId))
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("TA-007: #1983 assign, reassign, release — the full technician lifecycle")
+    void testAssignReassignRelease() {
+        UUID workorderId = seedApprovedWorkorder();
+        UUID first = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID second = UUID.fromString("00000000-0000-0000-0000-000000000002");
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("technicianId", first.toString()))
+                .when()
+                .post("/v1/workorders/{workorderId}/technician", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(200);
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("newTechnicianId", second.toString(), "reason", "called out sick"))
+                .when()
+                .put("/v1/workorders/{workorderId}/technician", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(200);
+
+        givenWithGatewayAuth()
+                .when()
+                .delete("/v1/workorders/{workorderId}/technician?reason=Shift%20ended", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                // Release is the operation #1983 found missing: freeing a technician with no
+                // replacement to name.
+                .statusCode(204);
+
+        assertThat(assignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId))
+                .isEmpty();
+        // Nothing is deleted: both technicians remain in the history.
+        assertThat(assignmentRepository.findByWorkorder_IdOrderByAssignedAtDesc(workorderId))
+                .hasSize(2)
+                .allSatisfy(assignment -> assertThat(assignment.getCurrent()).isFalse());
+    }
+
+    @Test
+    @DisplayName("TA-008: #1983 releasing a workorder with no technician is idempotent")
+    void testReleaseTechnician_WhenNoneAssigned() {
+        UUID workorderId = seedApprovedWorkorder();
+
+        givenWithGatewayAuth()
+                .when()
+                .delete("/v1/workorders/{workorderId}/technician", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(204);
+
+        assertThat(assignmentRepository.findByWorkorder_IdOrderByAssignedAtDesc(workorderId))
+                .isEmpty();
     }
 
     @Test
@@ -323,6 +426,23 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
     /**
      * Seed an APPROVED workorder ready for technician assignment.
      */
+    /**
+     * Make the technicians these tests name known to the module (#1983).
+     *
+     * <p>Assignment validates the technician against the {@code ext_person} replica pos-people feeds,
+     * the same way a bay is validated against {@code ext_bay}, so a contract test has to seed the
+     * replica rather than assume a bare UUID resolves.
+     */
+    private void seedKnownTechnicians(UUID... technicianIds) {
+        for (UUID technicianId : technicianIds) {
+            extPersonReplicaRepository.save(ExtPersonReplica.builder()
+                    .personId(technicianId)
+                    .aggregateVersion(1L)
+                    .updatedAt(java.time.Instant.EPOCH)
+                    .build());
+        }
+    }
+
     private UUID seedApprovedWorkorder() {
         testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -351,6 +471,12 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 .createdById("test-user")
                 .build();
         estimateItemRepository.save(item);
+
+        seedKnownTechnicians(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000002"),
+                UUID.fromString("00000000-0000-0000-0000-000000000051"),
+                UUID.fromString("00000000-0000-0000-0000-000000000050"));
 
         // Create workorder in APPROVED status
         Workorder workorder = Workorder.builder()

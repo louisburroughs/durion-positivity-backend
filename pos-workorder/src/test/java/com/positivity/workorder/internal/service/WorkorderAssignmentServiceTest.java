@@ -90,6 +90,29 @@ class WorkorderAssignmentServiceTest {
     @org.mockito.Mock
     private com.positivity.workorder.internal.service.WorkorderFactPublisher workorderFactPublisher;
 
+    // #1984: the inbound assignment path records the position change (occupancy check plus history
+    // row) through the position service before writing the fields itself, so the collaborator has to
+    // be present. A bare mock is right: these tests are about how the event is applied, and the
+    // position service's own behaviour is covered by ServicePositionServiceImplTest.
+    @org.mockito.Mock
+    private com.positivity.workorder.internal.service.ServicePositionService servicePositionService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void stubPositionSave() {
+        // #1984: the inbound assignment persists through the position service, which owns the flush
+        // that turns a lost race against the occupancy index into a 409 rather than a 500. The
+        // occupancy question is asked, not caught, so findOccupant answers "free" by default here.
+        org.mockito.Mockito.lenient()
+                .when(servicePositionService.savePositionChange(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        org.mockito.Mockito.lenient()
+                .when(servicePositionService.findOccupant(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Optional.empty());
+    }
+
     @InjectMocks
     private WorkorderServiceImpl workorderService;
 
@@ -126,7 +149,7 @@ class WorkorderAssignmentServiceTest {
 
         assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
         assertThat(workorder.getResourceType()).isEqualTo(ResourceType.MOBILE_UNIT);
-        verify(workorderRepository).save(workorder);
+        verify(servicePositionService).savePositionChange(workorder);
     }
 
     @Test
@@ -198,7 +221,7 @@ class WorkorderAssignmentServiceTest {
                 .isNotNull()
                 .contains(MECHANIC_ID_1.toString())
                 .contains(MECHANIC_ID_2.toString());
-        verify(workorderRepository).save(workorder);
+        verify(servicePositionService).savePositionChange(workorder);
     }
 
     // Issue CAP-140: AC1 — APPROVED workorder receives full assignment context
@@ -217,7 +240,7 @@ class WorkorderAssignmentServiceTest {
 
         assertThat(workorder.getLocationId()).isEqualTo(LOCATION_ID);
         assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
-        verify(workorderRepository).save(workorder);
+        verify(servicePositionService).savePositionChange(workorder);
     }
 
     // Issue CAP-140: AC1 — ASSIGNED workorder receives full assignment context
@@ -236,7 +259,7 @@ class WorkorderAssignmentServiceTest {
 
         assertThat(workorder.getLocationId()).isEqualTo(LOCATION_ID);
         assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
-        verify(workorderRepository).save(workorder);
+        verify(servicePositionService).savePositionChange(workorder);
     }
 
     // Issue CAP-140 / #1656: locked statuses are skipped; running work is reassignable
@@ -263,7 +286,7 @@ class WorkorderAssignmentServiceTest {
 
         assertThat(workorder.getLocationId()).isEqualTo(LOCATION_ID);
         assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
-        verify(workorderRepository).save(workorder);
+        verify(servicePositionService).savePositionChange(workorder);
     }
 
     @Test
@@ -283,7 +306,7 @@ class WorkorderAssignmentServiceTest {
 
         assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID).isNotEqualTo(oldBayId);
         assertThat(workorder.getResourceType()).isEqualTo(ResourceType.MOBILE_UNIT);
-        verify(workorderRepository).save(workorder);
+        verify(servicePositionService).savePositionChange(workorder);
     }
 
     /**
@@ -298,7 +321,7 @@ class WorkorderAssignmentServiceTest {
         workorderService.handleAssignmentUpdated(validEvent());
 
         assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
-        verify(workorderRepository).save(workorder);
+        verify(servicePositionService).savePositionChange(workorder);
     }
 
     /**
@@ -350,7 +373,7 @@ class WorkorderAssignmentServiceTest {
         workorderService.handleAssignmentUpdated(validEvent());
 
         assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
-        verify(workorderRepository).save(any(Workorder.class));
+        verify(servicePositionService).savePositionChange(any(Workorder.class));
         verify(auditEventRepository).save(any());
     }
 
@@ -366,7 +389,7 @@ class WorkorderAssignmentServiceTest {
         workorderService.handleAssignmentUpdated(validEvent());
 
         assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
-        verify(workorderRepository).save(any(Workorder.class));
+        verify(servicePositionService).savePositionChange(any(Workorder.class));
         verify(auditEventRepository).save(any());
     }
 
@@ -386,7 +409,7 @@ class WorkorderAssignmentServiceTest {
         workorderService.handleAssignmentUpdated(validEvent());
 
         assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
-        verify(workorderRepository).save(workorder);
+        verify(servicePositionService).savePositionChange(workorder);
     }
 
     // Issue CAP-140: AC3 — full replace semantics (prior value is discarded)

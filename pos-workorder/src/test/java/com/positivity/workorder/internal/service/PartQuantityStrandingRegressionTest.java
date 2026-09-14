@@ -169,6 +169,7 @@ class PartQuantityStrandingRegressionTest {
                 workorderFactPublisher,
                 promotedWorkorderDemandPublisher,
                 workorderStateMachine,
+                org.mockito.Mockito.mock(com.positivity.workorder.internal.service.ServicePositionService.class),
                 workorderLaborEntryRepository,
                 applicationEventPublisher,
                 auditEventRepository,

@@ -282,6 +282,21 @@ erDiagram
 		TIMESTAMP createdAt
 		TIMESTAMP updatedAt
 	}
+	service_position_assignment {
+		BIGINT id
+		UUID workorder_id
+		VARCHAR resourceType
+		UUID resourceId
+		UUID locationId
+		TIMESTAMP assignedAt
+		TEXT assignedBy
+		TIMESTAMP releasedAt
+		TEXT releasedBy
+		TEXT reason
+		BOOLEAN current
+		TIMESTAMP createdAt
+		TIMESTAMP updatedAt
+	}
 	substitute_link {
 		UUID id
 		UUID productId

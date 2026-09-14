@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.repository;
 
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -140,6 +141,46 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
     @NonNull
     List<Workorder> findOpenResourceHoldersAtLocation(
             @Param("locationId") @NonNull UUID locationId, @Param("onOrBefore") @NonNull LocalDate onOrBefore);
+
+    /**
+     * The open workorders currently occupying one exclusive service position (#1984).
+     *
+     * <p>This is the assignment-time gate {@code findOpenResourceHoldersAtLocation} is not: that one
+     * answers a whole site's dispatch board in one query and is bounded by the board's date, which
+     * is exactly wrong here — a job scheduled for tomorrow is not yet in the bay for the board, but
+     * it <em>does</em> already hold the bay, and letting a second workorder take it would create the
+     * double-booking the board would then report. So there is no date bound: open is open.
+     *
+     * <p>"Open" is {@link Workorder#isLocked()} in JPQL, written as explicit {@code <> … OR IS NULL}
+     * pairs for the same reason the sibling query is — {@code status} is nullable and SQL's
+     * three-valued logic would silently read a null-status row as locked, freeing a position the
+     * entity still considers held. The predicate here must agree with the partial unique index
+     * {@code workorder_open_position_uniq} exactly: this query produces the 409 with the occupying
+     * workorder named, the index produces the same 409 for two assigns that race past the check.
+     *
+     * <p>The caller excludes the workorder being assigned, so re-assigning a workorder to the
+     * position it already holds is a no-op rather than a self-conflict.
+     *
+     * <p>{@link com.positivity.workorder.internal.enums.ResourceType#HOLD} positions are never
+     * passed here — a lot has no capacity limit — which is the caller's job, not this query's.
+     *
+     * @param resourceType the kind of position
+     * @param resourceId   the position
+     * @param excludeWorkorderId the workorder being assigned, which cannot conflict with itself
+     * @return open workorders on that position; empty when it is free
+     */
+    @Query("SELECT w FROM Workorder w WHERE w.resourceId = :resourceId AND w.resourceType = :resourceType "
+            + "AND w.id <> :excludeWorkorderId "
+            + "AND (w.status IS NULL "
+            + "OR w.status <> com.positivity.workorder.internal.enums.WorkorderStatus.CANCELLED) "
+            + "AND (w.status IS NULL "
+            + "OR w.status <> com.positivity.workorder.internal.enums.WorkorderStatus.COMPLETED "
+            + "OR w.isReopened = TRUE)")
+    @NonNull
+    List<Workorder> findOpenOccupantsOfPosition(
+            @Param("resourceType") @NonNull ResourceType resourceType,
+            @Param("resourceId") @NonNull UUID resourceId,
+            @Param("excludeWorkorderId") @NonNull UUID excludeWorkorderId);
 
     /**
      * Free-text workorder search matching the workorder number (contains), a resolved

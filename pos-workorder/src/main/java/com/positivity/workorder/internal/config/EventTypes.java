@@ -134,6 +134,26 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    /** Release the current technician from a workorder without naming a replacement (#1983) */
+    public static final EventTypeRegistration WORKORDER_TECHNICIAN_RELEASE = EventTypeRegistration.write(
+                    "WORKORDER_TECHNICIAN_RELEASE", "Release a workorder's current technician, leaving it unassigned")
+            .apiVersion("1")
+            .build();
+
+    // ==================== SERVICE POSITION EVENTS (#1983, #1984) ====================
+
+    /** Place a workorder on a bay, mobile unit or hold position, or move it between them */
+    public static final EventTypeRegistration WORKORDER_POSITION_ASSIGN = EventTypeRegistration.write(
+                    "WORKORDER_POSITION_ASSIGN", "Assign or change the service position a workorder occupies")
+            .apiVersion("1")
+            .build();
+
+    /** Give up the service position a workorder holds, leaving it unplaced */
+    public static final EventTypeRegistration WORKORDER_POSITION_RELEASE = EventTypeRegistration.write(
+                    "WORKORDER_POSITION_RELEASE", "Release the service position a workorder occupies")
+            .apiVersion("1")
+            .build();
+
     // ==================== LABOR TRACKING EVENTS (CAP:005 Story #159)
     // ====================
 
@@ -596,6 +616,10 @@ public final class EventTypes {
             // Technician assignment events (CAP:005 Story #161)
             WORKORDER_TECHNICIAN_ASSIGN,
             WORKORDER_TECHNICIAN_REASSIGN,
+            WORKORDER_TECHNICIAN_RELEASE,
+            // Service position assignment (#1983, #1984)
+            WORKORDER_POSITION_ASSIGN,
+            WORKORDER_POSITION_RELEASE,
             // Labor tracking events (CAP:005 Story #159)
             WORKORDER_LABOR_START,
             WORKORDER_LABOR_STOP,
