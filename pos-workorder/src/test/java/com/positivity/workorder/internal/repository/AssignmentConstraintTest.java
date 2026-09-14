@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.tenancy.TenantContext;
 import com.positivity.workorder.PostgresSliceTestBase;
 import com.positivity.workorder.WorkorderPostgresContainer;
 import java.io.IOException;
@@ -221,6 +222,13 @@ class AssignmentConstraintTest extends PostgresSliceTestBase {
                 // cannot decide this. It unblocks when the winner commits, and only then is refused.
                 CountDownLatch started = new CountDownLatch(1);
                 Future<SQLException> loser = executor.submit(() -> {
+                    // The tenant binding is a ThreadLocal, and TenantAwareDataSource stamps it onto
+                    // the connection at checkout — so a worker thread that does not bind it gets a
+                    // connection with no app.current_tenant, and row-level security then makes this
+                    // UPDATE match zero rows and succeed, instead of the index refusing it. Binding
+                    // here is what makes the second request a real competitor for the bay rather
+                    // than a no-op that quietly proves nothing.
+                    TenantContext.bind(TENANT);
                     try (Connection connection = connection()) {
                         connection.setAutoCommit(false);
                         started.countDown();
@@ -229,6 +237,8 @@ class AssignmentConstraintTest extends PostgresSliceTestBase {
                         return null;
                     } catch (SQLException e) {
                         return e;
+                    } finally {
+                        TenantContext.clear();
                     }
                 });
 
@@ -389,12 +399,19 @@ class AssignmentConstraintTest extends PostgresSliceTestBase {
 
                 CountDownLatch started = new CountDownLatch(1);
                 Future<SQLException> loser = executor.submit(() -> {
+                    // Bind the tenant on this thread too — see the note in the position race. Without
+                    // it the insert is refused by row-level security (SQLSTATE 42501) rather than by
+                    // technician_assignment_one_current_uniq, which would pass a "there was an
+                    // exception" assertion while proving nothing about the index.
+                    TenantContext.bind(TENANT);
                     try {
                         started.countDown();
                         assignTechnician(workorderId, OTHER_TECHNICIAN, true, NOW);
                         return null;
                     } catch (SQLException e) {
                         return e;
+                    } finally {
+                        TenantContext.clear();
                     }
                 });
 

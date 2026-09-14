@@ -59,16 +59,15 @@ public class ServicePositionController {
                     park it; do not use releaseServicePosition, which leaves the workorder unplaced, and do not \
                     use overrideOperationalContext, which is the manager exception path and also rewrites \
                     mechanics and location.
-                    Preconditions: the workorder must exist and must not be COMPLETED or CANCELLED. A BAY or \
-                    MOBILE_UNIT must be known to this module's location replicas and belong to the workorder's \
-                    own site, and must hold no other open workorder. HOLD has no capacity limit and its \
-                    resourceId, if given, must be the workorder's own locationId. A caller whose \
-                    workorder:operationalContext:override grant is location-scoped must have the workorder's \
-                    shop within reach (ADR-0061).
+                    Preconditions: the workorder must exist and must not be COMPLETED or CANCELLED; a BAY or \
+                    MOBILE_UNIT must be known to this module's location replicas, belong to the workorder's own \
+                    site and hold no other open workorder, while HOLD has no capacity limit and accepts only \
+                    the workorder's own locationId; and a caller whose workorder:operationalContext:override \
+                    grant is location-scoped must have the workorder's shop within reach (ADR-0061).
                     Required inputs: workorderId (UUID) as a path parameter and a body with resourceType \
                     (BAY, MOBILE_UNIT or HOLD, required); resourceId is required for BAY and MOBILE_UNIT and \
-                    optional for HOLD, and reason is optional. Re-sending the placement already in force is a \
-                    no-op and writes no history.
+                    optional for HOLD, reason is optional, and re-sending the placement already in force is a \
+                    no-op that writes no history.
                     Emits a WORKORDER_POSITION_ASSIGN event and marks the workorder fact changed.
                     Returns 403 when the caller's location scope does not cover the workorder's shop, 404 when \
                     no workorder exists for the id, 409 RESOURCE_OCCUPIED when the position already holds \
@@ -132,15 +131,15 @@ public class ServicePositionController {
             operationId = "releaseServicePosition",
             summary = "Release a Workorder's Service Position",
             description = """
-                    Gives up the position the workorder holds, leaving it deliberately unplaced and freeing \
-                    the bay or mobile unit for another job. The history row is closed with the reason rather \
-                    than deleted.
+                    Gives up the position the workorder holds, leaving it deliberately unplaced, freeing the \
+                    bay or mobile unit for another job, and closing the history row with the reason rather \
+                    than deleting it.
                     Use this tool when a workorder leaves a position without going to another one; do not use \
                     assignServicePosition, which moves it to a named position instead.
-                    Preconditions: the workorder must exist and must not be COMPLETED or CANCELLED. Releasing a \
-                    workorder that holds no position succeeds and writes nothing, so the call is idempotent. \
-                    Completing or cancelling a workorder releases its position on its own; this endpoint is for \
-                    releasing one while the job is still open.
+                    Preconditions: the workorder must exist and must not be COMPLETED or CANCELLED, and \
+                    releasing a workorder that holds no position succeeds and writes nothing, so the call is \
+                    idempotent; completing or cancelling a workorder releases its position on its own, leaving \
+                    this endpoint for releasing one while the job is still open.
                     Required inputs: workorderId (UUID) as a path parameter; reason is an optional query \
                     parameter recorded on the closed history row.
                     Emits a WORKORDER_POSITION_RELEASE event and marks the workorder fact changed.
