@@ -42,9 +42,10 @@ public class MechanicSkillController {
                         Required inputs: personId as a path parameter and skills, a non-empty array where each entry \
                         has skillCode and proficiencyLevel between 1 and 5; the array replaces all current skills.
                         Emits a SHOP_MECHANIC_SKILLS_REPLACE event and records a mechanic audit-log entry; the \
-                        edit rides the HR-feed path as a synthetic skills event stamped with the current \
-                        timestamp, advancing the sync version so ordering against in-flight feed events is \
-                        last-write-wins.
+                        edit rides the HR-feed path as a synthetic skills event, so dedupe and audit apply as \
+                        usual, but it does not advance the mechanic's feed-ordering version: skills are \
+                        shop-manager-owned enrichment the feed never carries, so an operator edit is ordered \
+                        against other operator edits and leaves the feed's own sequence untouched.
                         Returns 204 on success, 400 when the body is invalid or personId is not a UUID, and 503 \
                         MECHANIC_REPLICATION_PENDING with a Retry-After when no mechanic exists for the person: \
                         the service waits briefly for the staffing assignment that creates one, and where it \

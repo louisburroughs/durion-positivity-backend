@@ -90,7 +90,8 @@ public class MechanicSkillBulkIngestController extends AbstractBulkIngestControl
                     skillCode and a proficiencyLevel from 1 to 5. A mechanic appears once per skill; the rows are \
                     grouped here.
                     Emits a SHOP_MECHANIC_SKILLS_BULK_INGEST event, and routes each mechanic's set through the \
-                    same HR-feed path the Kafka projection uses, so dedupe, stale-guard and audit apply as usual; \
+                    same HR-feed path the Kafka projection uses, so dedupe and audit apply as usual while the \
+                    mechanic's feed-ordering version is left untouched; \
                     re-running the same file is safe, since each mechanic's set is replaced rather than added to.
                     Returns 200 with a per-record result, where every row of one mechanic shares that mechanic's \
                     outcome since they were applied together: MECHANIC_SKILL_INGEST_FAILED with the reason for rows \
