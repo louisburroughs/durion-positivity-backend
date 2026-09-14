@@ -1739,6 +1739,8 @@ paths:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1{workorderId}~1picked-items
   /v1/workorders/{workorderId}/picked-items:consume:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1{workorderId}~1picked-items:consume
+  /v1/workorders/{workorderId}/position:
+    $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1{workorderId}~1position
   /v1/workorders/{workorderId}/reopen:
     $ref: ../../pos-workorder/openapi.yaml#/paths/~1v1~1workorders~1{workorderId}~1reopen
   /v1/workorders/{workorderId}/services/{serviceId}/labor/start:
