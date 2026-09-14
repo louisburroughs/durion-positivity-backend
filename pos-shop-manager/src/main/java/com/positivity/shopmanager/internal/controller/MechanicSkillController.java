@@ -41,11 +41,17 @@ public class MechanicSkillController {
                         edit rides the HR-feed path as a synthetic skills event stamped with the current \
                         timestamp, advancing the sync version so ordering against in-flight feed events is \
                         last-write-wins.
-                        Returns 204 on success, 404 when no mechanic exists for the person, and 400 when the body is \
-                        invalid.
+                        Returns 204 on success, 400 when the body is invalid, 404 when the person is known here \
+                        and holds no active TECHNICIAN assignment, and 503 MECHANIC_REPLICATION_PENDING with a \
+                        Retry-After when the mechanic is not visible here yet: the service waits briefly for the \
+                        staffing assignment that creates it, and answers 503 rather than 404 where it cannot tell \
+                        an unknown person from an unreplicated one. Retry a 503; a 404 will not change.
                         """)
     @ApiResponse(responseCode = "204", description = "Skill set replaced.")
-    @ApiResponse(responseCode = "404", description = "No mechanic for that person.")
+    @ApiResponse(responseCode = "404", description = "The person is known here and is not a mechanic.")
+    @ApiResponse(
+            responseCode = "503",
+            description = "The mechanic has not replicated here yet; retry (MECHANIC_REPLICATION_PENDING).")
     @EmitEvent(id = "SHOP_MECHANIC_SKILLS_REPLACE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

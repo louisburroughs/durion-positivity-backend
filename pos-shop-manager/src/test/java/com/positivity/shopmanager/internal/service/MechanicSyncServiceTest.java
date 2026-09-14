@@ -8,11 +8,14 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.shopmanager.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.shopmanager.internal.entity.HrIntegrationLog;
 import com.positivity.shopmanager.internal.entity.Mechanic;
 import com.positivity.shopmanager.internal.entity.MechanicSkill;
 import com.positivity.shopmanager.internal.enums.MechanicStatus;
+import com.positivity.shopmanager.internal.exception.MechanicReplicationPendingException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
+import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.shopmanager.internal.repository.HrIntegrationLogRepository;
 import com.positivity.shopmanager.internal.repository.MechanicAuditLogRepository;
 import com.positivity.shopmanager.internal.repository.MechanicRepository;
@@ -20,6 +23,7 @@ import com.positivity.shopmanager.internal.repository.MechanicSkillRepository;
 import com.positivity.shopmanager.internal.service.dto.HrMechanicEvent;
 import com.positivity.shopmanager.internal.service.enums.HrEventType;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -70,16 +74,32 @@ class MechanicSyncServiceTest {
     @Mock
     private MechanicAuditLogRepository mechanicAuditLogRepository;
 
+    @Mock
+    private ExtStaffingAssignmentReplicaRepository assignmentReplicaRepository;
+
     private MechanicSyncService mechanicSyncService;
 
     @BeforeEach
     void setUp() {
-        mechanicSyncService = new MechanicSyncServiceImpl(
+        mechanicSyncService = newService(Duration.ZERO);
+    }
+
+    /**
+     * The unit under test with a given replication wait. {@code setSelf} takes the instance itself
+     * rather than a proxy: in a unit test there is no transaction to re-enter, and the call it
+     * makes is the same one.
+     */
+    private MechanicSyncService newService(Duration replicationWait) {
+        MechanicSyncServiceImpl service = new MechanicSyncServiceImpl(
                 mechanicRepository,
                 mechanicSkillRepository,
                 hrIntegrationLogRepository,
                 mechanicAuditLogRepository,
-                FIXED_CLOCK);
+                assignmentReplicaRepository,
+                FIXED_CLOCK,
+                replicationWait);
+        service.setSelf(service);
+        return service;
     }
 
     // -------------------------------------------------------------------------
@@ -686,20 +706,69 @@ class MechanicSyncServiceTest {
         verify(mechanicAuditLogRepository).save(any());
     }
 
-    /** replaceSkills must 404 where the feed path deliberately no-ops. */
+    /**
+     * A person this service holds no staffing assignment for is one it cannot judge: the
+     * assignment that would create the mechanic may simply not have been consumed yet (#1987), so
+     * the refusal says "not yet", not "no such mechanic".
+     */
     @Test
-    void replaceSkills_unknownMechanic_throwsNotFound() {
-        when(mechanicRepository.findByPersonId("missing")).thenReturn(Optional.empty());
+    void replaceSkills_personWithNoAssignmentHistory_isReportedAsReplicationPending() {
+        UUID personId = UUID.fromString("01960011-0000-7000-8000-00000000000a");
+        when(mechanicRepository.findByPersonId(personId.toString())).thenReturn(Optional.empty());
+        when(assignmentReplicaRepository.findByPersonId(personId)).thenReturn(List.of());
 
-        assertThatThrownBy(() -> mechanicSyncService.replaceSkills(
-                        "missing",
-                        List.of(HrMechanicEvent.Payload.Skill.builder()
-                                .skillCode("T4-BRAKES")
-                                .proficiencyLevel(4)
-                                .build())))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
-                .hasMessageContaining("Mechanic not found");
+        assertThatThrownBy(() -> mechanicSyncService.replaceSkills(personId.toString(), skills()))
+                .isInstanceOf(MechanicReplicationPendingException.class)
+                .hasMessageContaining("not visible here yet");
         verify(mechanicSkillRepository, never()).deleteAllByMechanicId(any());
+    }
+
+    /**
+     * A person whose assignments this service does hold, none of them an ACTIVE TECHNICIAN one, is
+     * a real 404: waiting longer cannot make them a mechanic.
+     */
+    @Test
+    void replaceSkills_personWhoIsNotATechnician_throwsNotFound() {
+        UUID personId = UUID.fromString("01960011-0000-7000-8000-00000000000b");
+        when(mechanicRepository.findByPersonId(personId.toString())).thenReturn(Optional.empty());
+        when(assignmentReplicaRepository.findByPersonId(personId))
+                .thenReturn(List.of(ExtStaffingAssignmentReplica.builder()
+                        .assignmentId(UUID.fromString("01960011-0000-7000-8000-00000000000c"))
+                        .personId(personId)
+                        .role("SERVICE_ADVISOR")
+                        .status("ACTIVE")
+                        .build()));
+
+        assertThatThrownBy(() -> mechanicSyncService.replaceSkills(personId.toString(), skills()))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("is not a mechanic");
+        verify(mechanicSkillRepository, never()).deleteAllByMechanicId(any());
+    }
+
+    /**
+     * The point of the wait: a mechanic row that lands while the caller is waiting is used, rather
+     * than the caller being refused for a race it could not see (#1987).
+     */
+    @Test
+    void replaceSkills_mechanicArrivingDuringTheWait_isApplied() {
+        String personId = "01960011-0000-7000-8000-00000000000d";
+        Mechanic existing = buildMechanic(personId, MechanicStatus.ACTIVE, 3);
+        when(mechanicRepository.findByPersonId(personId))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(existing));
+        when(hrIntegrationLogRepository.existsByEventId(any())).thenReturn(false);
+        when(mechanicRepository.save(any(Mechanic.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        newService(Duration.ofSeconds(5)).replaceSkills(personId, skills());
+
+        verify(mechanicSkillRepository).deleteAllByMechanicId(existing.getMechanicId());
+    }
+
+    private List<HrMechanicEvent.Payload.Skill> skills() {
+        return List.of(HrMechanicEvent.Payload.Skill.builder()
+                .skillCode("T4-BRAKES")
+                .proficiencyLevel(4)
+                .build());
     }
 
     // -------------------------------------------------------------------------

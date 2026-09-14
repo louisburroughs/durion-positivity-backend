@@ -11,5 +11,12 @@ public interface ExtStaffingAssignmentReplicaRepository extends JpaRepository<Ex
     @NonNull
     List<ExtStaffingAssignmentReplica> findByPersonIdAndStatus(@NonNull UUID personId, @NonNull String status);
 
+    /**
+     * Every assignment this service holds for a person, whatever its role or status — the evidence
+     * that lets a missing mechanic row be called a real 404 rather than replication lag (#1987).
+     */
+    @NonNull
+    List<ExtStaffingAssignmentReplica> findByPersonId(@NonNull UUID personId);
+
     boolean existsByLocationIdAndStatus(@NonNull UUID locationId, @NonNull String status);
 }

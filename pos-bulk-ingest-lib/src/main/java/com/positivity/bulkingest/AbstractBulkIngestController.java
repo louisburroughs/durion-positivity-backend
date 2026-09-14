@@ -46,7 +46,11 @@ public abstract class AbstractBulkIngestController<T> {
      *
      * <p>A row whose exception is named by {@link #rowRejectionTypes()} is reported with
      * {@link #rowRejectionCode()} and the exception's own message, because the owning service
-     * refused the submitted record and the message is how the caller fixes it. Anything else is a
+     * refused the submitted record and the message is how the caller fixes it. A row whose
+     * exception declares {@code 503} is reported with
+     * {@link BulkIngestFailures#RETRYABLE_ERROR_CODE} and its message: the service did not refuse
+     * the row, it could not judge it yet (#1987), and a caller that cannot tell those apart has to
+     * treat a transient failure as permanent. Anything else is a
      * server-side fault: it is logged here at ERROR against a correlation id, and the caller gets
      * {@link BulkIngestFailures#INTERNAL_ERROR_CODE} and that id — never the exception's text,
      * which can name internal classes, columns and query fragments.
@@ -58,6 +62,11 @@ public abstract class AbstractBulkIngestController<T> {
         if (BulkIngestFailures.isRowRejection(exception, rowRejectionTypes())) {
             log.warn("Rejected record at row {}: {}", rowIndex, exception.getMessage());
             return BulkIngestFailures.rejected(rowIndex, rowRejectionCode(), exception, rowRejectionFallbackMessage());
+        }
+
+        if (BulkIngestFailures.isRetryable(exception)) {
+            log.warn("Deferred record at row {}: {}", rowIndex, exception.getMessage());
+            return BulkIngestFailures.retryable(rowIndex, exception, rowRetryableFallbackMessage());
         }
 
         String correlationId = BulkIngestFailures.correlationId();
@@ -111,5 +120,10 @@ public abstract class AbstractBulkIngestController<T> {
     /** Reported for a rejected row whose exception carries no message of its own. */
     protected String rowRejectionFallbackMessage() {
         return "Record rejected";
+    }
+
+    /** Reported for a deferred row whose exception carries no message of its own. */
+    protected String rowRetryableFallbackMessage() {
+        return "Record could not be ingested yet; retry";
     }
 }

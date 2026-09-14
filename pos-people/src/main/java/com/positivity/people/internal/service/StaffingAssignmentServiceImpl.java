@@ -10,7 +10,6 @@ import com.positivity.people.internal.enums.AssignmentStatus;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
-import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.SecurityContextHelper;
@@ -48,8 +47,6 @@ import org.springframework.web.server.ResponseStatusException;
 public class StaffingAssignmentServiceImpl implements StaffingAssignmentService {
 
     private final EmployeeLocationAssignmentRepository repository;
-
-    private final ExtPersonReplicaRepository extPersonReplicaRepository;
 
     private final PeopleEventPublisher peopleEventPublisher;
 
@@ -273,16 +270,24 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
                         HttpStatus.NOT_FOUND, "Employee not found for person: " + personId));
     }
 
+    /**
+     * Person existence is established from this module's own {@link Employee} row, never from the
+     * {@code ext_people_contact_person} replica (#1987).
+     *
+     * <p>pos-people mints the person id itself and writes the employee row against it before
+     * asking pos-people-contact to create the person ({@code EmployeeServiceImpl#createEmployee}),
+     * so an employee row <em>is</em> this module's proof that the person exists — it is the record
+     * that caused the person to exist. The replica is a copy of the identity attributes that comes
+     * back over {@code people-contact.events.v1} a moment later; gating on it made a lag on that
+     * round trip indistinguishable from a person who was never created, and answered
+     * "Person not found" for a person this very service had just created.
+     */
     private void validatePersonAndLocation(@NonNull UUID personId, @NonNull UUID locationId) {
-        extPersonReplicaRepository
-                .findById(personId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found: " + personId));
-
-        EmployeeStatus status = employeeRepository
+        Employee employee = employeeRepository
                 .findByPersonId(personId)
-                .map(com.positivity.people.internal.entity.Employee::getStatus)
-                .orElse(null);
-        if (status != EmployeeStatus.ACTIVE) {
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Employee not found for person: " + personId));
+        if (employee.getStatus() != EmployeeStatus.ACTIVE) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Person is not active: " + personId);
         }
 

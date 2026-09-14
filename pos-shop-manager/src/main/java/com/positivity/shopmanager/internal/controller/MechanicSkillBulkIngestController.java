@@ -82,8 +82,9 @@ public class MechanicSkillBulkIngestController extends AbstractBulkIngestControl
                     Use this tool when seeding a workshop's capabilities; use replaceMechanicSkills instead for a \
                     single mechanic.
                     Preconditions: each person must already exist as a mechanic. Mechanics are projected from \
-                    ACTIVE TECHNICIAN staffing assignments over Kafka, so run this after those assignments and \
-                    allow the projection to catch up.
+                    ACTIVE TECHNICIAN staffing assignments over Kafka, so run this after those assignments; the \
+                    service waits briefly for the projection itself, and a row it is still waiting on is reported \
+                    as retryable rather than failed.
                     Required inputs: jobId (UUID), locationId (UUID) and records, each with a personId, a \
                     skillCode and a proficiencyLevel from 1 to 5. A mechanic appears once per skill; the rows are \
                     grouped here.
@@ -92,8 +93,9 @@ public class MechanicSkillBulkIngestController extends AbstractBulkIngestControl
                     re-running the same file is safe, since each mechanic's set is replaced rather than added to.
                     Returns 200 with a per-record result, where every row of one mechanic shares that mechanic's \
                     outcome since they were applied together: MECHANIC_SKILL_INGEST_FAILED with the reason for rows \
-                    the service refused, or INTERNAL_ERROR with a correlationId to quote for rows lost to a \
-                    server-side fault.
+                    the service refused, REPLICATION_PENDING for rows naming a mechanic that has not replicated \
+                    here yet and which are worth resubmitting, or INTERNAL_ERROR with a correlationId to quote for \
+                    rows lost to a server-side fault.
                     """)
     @ApiResponse(
             responseCode = "200",

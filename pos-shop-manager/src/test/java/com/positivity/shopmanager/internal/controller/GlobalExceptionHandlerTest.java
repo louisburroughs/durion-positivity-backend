@@ -10,6 +10,7 @@ import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundExceptio
 import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
+import com.positivity.shopmanager.internal.exception.MechanicReplicationPendingException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.exception.SourceNotEligibleException;
@@ -53,6 +54,7 @@ class GlobalExceptionHandlerTest {
     private static final UUID APPOINTMENT_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3fcc03");
     private static final UUID LOCATION_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3fcc04");
     private static final UUID CORRELATION_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3fcc05");
+    private static final String PERSON_ID = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3fcc06";
 
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler(Clock.fixed(NOW, ZoneOffset.UTC));
 
@@ -324,7 +326,11 @@ class GlobalExceptionHandlerTest {
                         return sut.handleTypeMismatch(typeMismatch, request);
                     }),
                     Named.of("handleShopManagerValidation", (HandlerInvocation) request ->
-                            sut.handleShopManagerValidation(new ShopManagerValidationException("bad id"), request)));
+                            sut.handleShopManagerValidation(new ShopManagerValidationException("bad id"), request)),
+                    Named.of("handleMechanicReplicationPending", (HandlerInvocation)
+                            request -> sut.handleMechanicReplicationPending(
+                                    new MechanicReplicationPendingException(PERSON_ID, "not visible here yet"),
+                                    request)));
         }
 
         @ParameterizedTest

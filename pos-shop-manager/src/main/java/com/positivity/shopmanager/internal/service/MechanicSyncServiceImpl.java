@@ -1,37 +1,83 @@
 package com.positivity.shopmanager.internal.service;
 
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shopmanager.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.shopmanager.internal.entity.HrIntegrationLog;
 import com.positivity.shopmanager.internal.entity.Mechanic;
 import com.positivity.shopmanager.internal.entity.MechanicAuditLog;
 import com.positivity.shopmanager.internal.entity.MechanicSkill;
 import com.positivity.shopmanager.internal.enums.MechanicStatus;
+import com.positivity.shopmanager.internal.exception.MechanicReplicationPendingException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
+import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.shopmanager.internal.repository.HrIntegrationLogRepository;
 import com.positivity.shopmanager.internal.repository.MechanicAuditLogRepository;
 import com.positivity.shopmanager.internal.repository.MechanicRepository;
 import com.positivity.shopmanager.internal.repository.MechanicSkillRepository;
 import com.positivity.shopmanager.internal.service.dto.HrMechanicEvent;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
+import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
-@RequiredArgsConstructor
 public class MechanicSyncServiceImpl implements MechanicSyncService {
 
     private static final String SYSTEM = "system";
+
+    private static final String TECHNICIAN_ROLE = "TECHNICIAN";
+    private static final String ASSIGNMENT_STATUS_ACTIVE = "ACTIVE";
+
+    /** How often the replication wait re-checks for the mechanic row. */
+    private static final Duration REPLICATION_POLL_INTERVAL = Duration.ofMillis(250);
 
     private final MechanicRepository mechanicRepository;
     private final MechanicSkillRepository mechanicSkillRepository;
     private final HrIntegrationLogRepository hrIntegrationLogRepository;
     private final MechanicAuditLogRepository mechanicAuditLogRepository;
+    private final ExtStaffingAssignmentReplicaRepository assignmentReplicaRepository;
     private final Clock clock;
+    private final Duration replicationWait;
+
+    /**
+     * Self-reference (lazy to break the construction cycle) so {@link #replaceSkills} can wait for
+     * the mechanic projection outside any transaction and then enter
+     * {@link #processHrEvent}'s through the Spring proxy — a self-invocation would run the whole
+     * apply with no transaction at all.
+     */
+    private MechanicSyncService self;
+
+    public MechanicSyncServiceImpl(
+            @NonNull MechanicRepository mechanicRepository,
+            @NonNull MechanicSkillRepository mechanicSkillRepository,
+            @NonNull HrIntegrationLogRepository hrIntegrationLogRepository,
+            @NonNull MechanicAuditLogRepository mechanicAuditLogRepository,
+            @NonNull ExtStaffingAssignmentReplicaRepository assignmentReplicaRepository,
+            @NonNull Clock clock,
+            @Value("${pos.shop-manager.mechanic-replication-wait:PT5S}") @NonNull Duration replicationWait) {
+        this.mechanicRepository = mechanicRepository;
+        this.mechanicSkillRepository = mechanicSkillRepository;
+        this.hrIntegrationLogRepository = hrIntegrationLogRepository;
+        this.mechanicAuditLogRepository = mechanicAuditLogRepository;
+        this.assignmentReplicaRepository = assignmentReplicaRepository;
+        this.clock = clock;
+        this.replicationWait = replicationWait;
+    }
+
+    @Autowired
+    public void setSelf(@Lazy MechanicSyncService self) {
+        this.self = self;
+    }
 
     @Override
     @Transactional
@@ -199,16 +245,16 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
      * mechanic rows: a synthetic MECHANIC_SKILLS_UPDATED event stamped with a now-millis
      * version, so dedupe, the stale guard, and both logs apply uniformly and ordering
      * against in-flight feed events is last-write-wins by timestamp. The existence
-     * pre-check gives the API a 404 where the feed path deliberately no-ops.
+     * pre-check gives the API a refusal where the feed path deliberately no-ops.
+     *
+     * <p>Deliberately not {@code @Transactional}: {@link #awaitMechanic} waits for a row another
+     * thread commits, so it must not run inside a transaction of its own, and the apply is entered
+     * through the proxy afterwards so it still gets one.
      */
     @Override
-    @Transactional
     public void replaceSkills(@NonNull String personId, @NonNull List<HrMechanicEvent.Payload.Skill> skills) {
-        if (mechanicRepository.findByPersonId(personId).isEmpty()) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.NOT_FOUND, "Mechanic not found for person " + personId);
-        }
-        processHrEvent(HrMechanicEvent.builder()
+        awaitMechanic(personId);
+        self.processHrEvent(HrMechanicEvent.builder()
                 .eventId(com.positivity.shared.id.UUIDv7Generator.generate())
                 .eventType(com.positivity.shopmanager.internal.service.enums.HrEventType.MECHANIC_SKILLS_UPDATED)
                 .personId(personId)
@@ -216,6 +262,79 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
                 .occurredAt(Instant.now(clock))
                 .payload(HrMechanicEvent.Payload.builder().skills(skills).build())
                 .build());
+    }
+
+    /**
+     * Blocks until the person's mechanic row is visible, up to {@code pos.shop-manager
+     * .mechanic-replication-wait}, and refuses in a way the caller can act on when it never
+     * appears (#1987).
+     *
+     * <p>Mechanic rows are projected here from ACTIVE TECHNICIAN staffing assignments arriving on
+     * {@code people.events.v1}, so a mechanic created moments ago in pos-people is genuinely real
+     * and genuinely not here yet. The wait closes that window for the common case — a caller that
+     * assigns a technician and immediately sets their skills, the seed and the UI alike — and what
+     * it cannot close, it reports honestly: {@link MechanicReplicationPendingException} (503,
+     * retry) when this service has no assignment history for the person and so cannot tell an
+     * unknown id from an unseen one, and a plain 404 when it does hold that history and none of it
+     * makes the person a technician, which no amount of retrying will change.
+     *
+     * <p>Timed against {@link System#nanoTime()} rather than the injected clock: the deadline is
+     * real elapsed time, and a test running on a fixed clock would otherwise never reach it.
+     */
+    private void awaitMechanic(@NonNull String personId) {
+        long deadline = System.nanoTime() + replicationWait.toNanos();
+        while (true) {
+            if (mechanicRepository.findByPersonId(personId).isPresent()) {
+                return;
+            }
+            if (System.nanoTime() - deadline >= 0) {
+                throw mechanicMissing(personId);
+            }
+            try {
+                Thread.sleep(REPLICATION_POLL_INTERVAL);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw mechanicMissing(personId);
+            }
+        }
+    }
+
+    /**
+     * Whether a mechanic row that never arrived is a real 404 or replication this service is still
+     * waiting on. Only the staffing assignments it already holds can tell the two apart: a person
+     * it has assignment history for, none of it an ACTIVE TECHNICIAN assignment, is someone it
+     * knows and who is not a mechanic. Anything else — no history, or an id that is not a UUID at
+     * all and so cannot be looked up — leaves the question open, and an open question is reported
+     * as retryable rather than as an answer.
+     */
+    private RuntimeException mechanicMissing(@NonNull String personId) {
+        List<ExtStaffingAssignmentReplica> assignments = parseUuid(personId)
+                .map(assignmentReplicaRepository::findByPersonId)
+                .orElseGet(List::of);
+        boolean knownNonTechnician = !assignments.isEmpty()
+                && assignments.stream()
+                        .noneMatch(assignment -> TECHNICIAN_ROLE.equals(assignment.getRole())
+                                && ASSIGNMENT_STATUS_ACTIVE.equals(assignment.getStatus()));
+        if (knownNonTechnician) {
+            return new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.NOT_FOUND,
+                    "Person " + personId + " is not a mechanic: no active TECHNICIAN assignment");
+        }
+        log.warn(
+                "Mechanic for person {} still not replicated after {}; answering retryable", personId, replicationWait);
+        return new MechanicReplicationPendingException(
+                personId,
+                "Mechanic for person " + personId
+                        + " is not visible here yet; the staffing assignment that creates it has not been"
+                        + " replicated. Retry shortly.");
+    }
+
+    private static Optional<UUID> parseUuid(String value) {
+        try {
+            return Optional.of(UUID.fromString(value));
+        } catch (IllegalArgumentException notAUuid) {
+            return Optional.empty();
+        }
     }
 
     private void persistAuditLog(HrMechanicEvent event, String beforeState, String afterState) {

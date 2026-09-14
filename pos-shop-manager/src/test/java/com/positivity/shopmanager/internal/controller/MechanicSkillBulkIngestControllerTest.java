@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.shopmanager.internal.exception.MechanicReplicationPendingException;
 import com.positivity.shopmanager.internal.service.MechanicSyncService;
 import com.positivity.shopmanager.internal.service.dto.HrMechanicEvent;
 import java.util.List;
@@ -77,10 +78,12 @@ class MechanicSkillBulkIngestControllerTest {
     void bulkIngest_everyRowOfAFailedMechanicFails() throws Exception {
         // The rows were applied together, so they share the outcome; reporting one as successful
         // would say a skill landed when the whole set was refused.
-        // The type replaceSkills actually raises when the mechanic projection has not arrived,
+        // The type replaceSkills actually raises for a person it knows and who is not a mechanic,
         // not a stand-in: a rejection has to be recognisable as one for its message to reach the
         // caller (issue #1718).
-        doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Mechanic not found for person " + ALICE))
+        doThrow(new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Person " + ALICE + " is not a mechanic: no active TECHNICIAN assignment"))
                 .when(mechanicSyncService)
                 .replaceSkills(eq(ALICE), any());
 
@@ -92,8 +95,35 @@ class MechanicSkillBulkIngestControllerTest {
                 .andExpect(jsonPath("$.results[1].success").value(true))
                 .andExpect(jsonPath("$.results[2].errorCode").value("MECHANIC_SKILL_INGEST_FAILED"))
                 // Classified once for the mechanic, reported against each of that mechanic's rows.
-                .andExpect(jsonPath("$.results[0].errorMessage").value("Mechanic not found for person " + ALICE))
-                .andExpect(jsonPath("$.results[2].errorMessage").value("Mechanic not found for person " + ALICE));
+                .andExpect(jsonPath("$.results[0].errorMessage")
+                        .value("Person " + ALICE + " is not a mechanic: no active TECHNICIAN assignment"))
+                .andExpect(jsonPath("$.results[2].errorMessage")
+                        .value("Person " + ALICE + " is not a mechanic: no active TECHNICIAN assignment"));
+    }
+
+    /**
+     * A row the service could not judge yet — the mechanic's staffing assignment has not
+     * replicated here (#1987) — is neither a refusal nor a server fault. It carries
+     * REPLICATION_PENDING and the service's own message, so a caller can tell a row worth
+     * resubmitting from one that never will be, which a bare INTERNAL_ERROR would have hidden.
+     */
+    @Test
+    @WithMockUser(authorities = "shop:schedule:edit")
+    void bulkIngest_mechanicNotReplicatedYet_reportsTheRowAsRetryable() throws Exception {
+        doThrow(new MechanicReplicationPendingException(
+                        ALICE, "Mechanic for person " + ALICE + " is not visible here yet; ..."))
+                .when(mechanicSyncService)
+                .replaceSkills(eq(ALICE), any());
+
+        mockMvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON).content(TWO_MECHANICS))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.successCount").value(1))
+                .andExpect(jsonPath("$.failureCount").value(2))
+                .andExpect(jsonPath("$.results[0].errorCode").value("REPLICATION_PENDING"))
+                .andExpect(jsonPath("$.results[2].errorCode").value("REPLICATION_PENDING"))
+                .andExpect(jsonPath("$.results[0].errorMessage").value(containsString("not visible here yet")))
+                // Not a server fault, so no correlation id is minted for it to quote.
+                .andExpect(jsonPath("$.results[0].correlationId").doesNotExist());
     }
 
     /**
