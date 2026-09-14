@@ -5,6 +5,7 @@ import com.positivity.location.internal.dto.ServiceAreaRequest;
 import com.positivity.location.internal.dto.ServiceAreaResponse;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.NonNull;
 
 public interface ServiceAreaService {
 
@@ -14,7 +15,8 @@ public interface ServiceAreaService {
 
     ServiceAreaResponse patch(String id, Map<String, Object> patch);
 
-    ServiceAreaResponse replacePostalCodes(String id, ServiceAreaPostalCodesRequest request);
+    @NonNull
+    ServiceAreaResponse replacePostalCodes(@NonNull String id, @NonNull ServiceAreaPostalCodesRequest request);
 
     List<ServiceAreaResponse> list();
 }

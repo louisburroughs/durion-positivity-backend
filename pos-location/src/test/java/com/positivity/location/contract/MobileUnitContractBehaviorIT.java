@@ -1,6 +1,8 @@
 package com.positivity.location.contract;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -240,6 +242,116 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{ \"postalCodes\": [] }")))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("#1991 - an entry missing its countryCode is a 400, not a 500")
+    void shouldReturnBadRequestWhenAReplacementEntryHasNoCountryCode() throws Exception {
+        String id = createServiceArea("Country Code Guard Zone", "98120");
+
+        mockMvc.perform(withGatewayAuth(put("/v1/service-areas/{id}/postal-codes", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"postalCodes\": [ { \"postalCode\": \"98121\" } ] }")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("#1991 - a null entry in the replacement set is a 400, not a 500")
+    void shouldReturnBadRequestWhenAReplacementEntryIsNull() throws Exception {
+        String id = createServiceArea("Null Entry Guard Zone", "98130");
+
+        // A cascaded @Valid skips null elements, so this reaches the service validator; before
+        // #1991 it dereferenced the null and the envelope rendered the NPE as a 500.
+        mockMvc.perform(withGatewayAuth(put("/v1/service-areas/{id}/postal-codes", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"postalCodes\": [ null ] }")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("#1991 - createServiceArea also rejects a missing countryCode with 400")
+    void shouldReturnBadRequestWhenCreateEntryHasNoCountryCode() throws Exception {
+        mockMvc.perform(withGatewayAuth(post("/v1/service-areas")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Create Guard Zone",
+                                  "postalCodes": [ { "postalCode": "98140" } ]
+                                }
+                                """)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("#1991 - replacing postal codes changes which units findEligibleMobileUnits returns")
+    void shouldChangeEligibilityWhenPostalCodesAreReplaced() throws Exception {
+        // The acceptance criterion of #1991 is not "the DTO comes back changed" but "coverage
+        // resolution follows", so this drives the real query either side of the replacement.
+        // The unit is created INACTIVE and then flipped: an ACTIVE unit must arrive with
+        // capabilities, and the reference capabilities are seeded by Flyway, which the H2 test
+        // profile disables. Eligibility reads status, coverage rules and postal codes only.
+        String areaId = createServiceArea("Eligibility Shift Zone", "98160");
+
+        String unit = mockMvc.perform(withGatewayAuth(post("/v1/mobile-units")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "MU-ELIGIBILITY-1991",
+                                  "status": "INACTIVE",
+                                  "coverageRules": [
+                                    { "serviceAreaId": "%s", "ruleType": "SERVICE_AREA", "priority": 1 }
+                                  ]
+                                }
+                                """.formatted(areaId))))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String unitId = new ObjectMapper().readTree(unit).get("id").asText();
+        String unitName = new ObjectMapper().readTree(unit).get("name").asText();
+
+        mockMvc.perform(withGatewayAuth(patch("/v1/mobile-units/{id}", unitId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"status\": \"ACTIVE\" }")))
+                .andExpect(status().isOk());
+
+        assertEligible("98160", unitName, true);
+        assertEligible("98161", unitName, false);
+
+        // Move the area's coverage from 98160 to 98161.
+        mockMvc.perform(withGatewayAuth(put("/v1/service-areas/{id}/postal-codes", areaId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"postalCodes\": [ { \"postalCode\": \"98161\", \"countryCode\": \"US\" } ] }")))
+                .andExpect(status().isOk());
+
+        // Same unit, same coverage rule: only the area's postal codes moved.
+        assertEligible("98160", unitName, false);
+        assertEligible("98161", unitName, true);
+    }
+
+    private void assertEligible(String postalCode, String unitName, boolean expected) throws Exception {
+        mockMvc.perform(withGatewayAuth(get("/v1/mobile-units:eligible")
+                        .param("postalCode", postalCode)
+                        .param("countryCode", "US")
+                        .param("at", "2026-09-14T12:00:00Z")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].name", expected ? hasItem(unitName) : not(hasItem(unitName))));
+    }
+
+    private String createServiceArea(String name, String postalCode) throws Exception {
+        String body = mockMvc.perform(withGatewayAuth(post("/v1/service-areas")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "%s",
+                                  "postalCodes": [ { "postalCode": "%s", "countryCode": "US" } ]
+                                }
+                                """.formatted(name, postalCode))))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return new ObjectMapper().readTree(body).get("id").asText();
     }
 
     @Test

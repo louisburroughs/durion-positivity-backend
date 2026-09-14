@@ -144,8 +144,8 @@ class ServiceAreaServiceTest {
         Map<String, Object> request = Map.of("name", "Invalid Area", "active", true, "postalCodes", List.of());
 
         assertThatThrownBy(() -> service.create(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("service area must include at least one postal code");
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("service area must include at least one postal code");
     }
 
     @Test
@@ -155,8 +155,8 @@ class ServiceAreaServiceTest {
                 "name", "Invalid Country", "active", true, "postalCodes", List.of(Map.of("postalCode", "10001")));
 
         assertThatThrownBy(() -> service.create(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("postal code entries require countryCode");
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("postal code entries require countryCode");
     }
 
     @Test
@@ -329,7 +329,7 @@ class ServiceAreaServiceTest {
                         ServiceAreaPostalCodesRequest.builder()
                                 .postalCodes(List.of())
                                 .build()))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("at least one postal code");
 
         verify(serviceAreaRepository, never()).save(any(ServiceAreaEntity.class));
@@ -347,7 +347,7 @@ class ServiceAreaServiceTest {
                 .build();
 
         assertThatThrownBy(() -> service.replacePostalCodes(id.toString(), request))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("countryCode");
 
         verify(serviceAreaRepository, never()).save(any(ServiceAreaEntity.class));

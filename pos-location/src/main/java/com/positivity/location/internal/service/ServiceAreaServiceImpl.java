@@ -13,8 +13,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -139,13 +141,14 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
      */
     @Override
     @Transactional
-    public ServiceAreaResponse replacePostalCodes(String id, ServiceAreaPostalCodesRequest request) {
+    public @NonNull ServiceAreaResponse replacePostalCodes(
+            @NonNull String id, @NonNull ServiceAreaPostalCodesRequest request) {
         UUID areaId = parseUuidStrict(id);
         ServiceAreaEntity entity = serviceAreaRepository
                 .findById(areaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Service area not found"));
 
-        List<ServiceAreaRequest.PostalCodeEntry> replacement = request == null ? null : request.getPostalCodes();
+        List<ServiceAreaRequest.PostalCodeEntry> replacement = request.getPostalCodes();
         validatePostalCodes(replacement);
 
         // Mutated in place rather than assigned: postalCodes is an @ElementCollection, and Hibernate
@@ -190,13 +193,16 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
 
     private void validatePostalCodes(List<ServiceAreaRequest.PostalCodeEntry> postalCodes) {
         if (postalCodes == null || postalCodes.isEmpty()) {
-            throw new IllegalArgumentException("service area must include at least one postal code");
+            throw badRequest("service area must include at least one postal code");
+        }
+        if (postalCodes.stream().anyMatch(Objects::isNull)) {
+            throw badRequest("postal code entries must not be null");
         }
         boolean missingCountryCode = postalCodes.stream()
                 .anyMatch(entry ->
                         entry.getCountryCode() == null || entry.getCountryCode().isBlank());
         if (missingCountryCode) {
-            throw new IllegalArgumentException("postal code entries require countryCode");
+            throw badRequest("postal code entries require countryCode");
         }
     }
 
@@ -233,6 +239,18 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * A rejection the error envelope renders as 400.
+     *
+     * <p>These checks used to throw a bare IllegalArgumentException, which GlobalApiExceptionHandler
+     * has no handler for: it fell through to the catch-all and became a 500, for input both
+     * createServiceArea and replaceServiceAreaPostalCodes document as a 400. ResponseStatusException
+     * is what parseUuidStrict below already uses for the same purpose.
+     */
+    private ResponseStatusException badRequest(String message) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
 
     private UUID parseUuidStrict(String id) {

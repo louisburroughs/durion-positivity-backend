@@ -2385,6 +2385,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ServiceAreaResponse'
           description: Service area created
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceAreaResponse'
+          description: Empty postal code set, or an entry missing its countryCode
         '409':
           content:
             application/json:
@@ -4012,6 +4018,7 @@ components:
         countryCode:
           description: ISO 3166-1 alpha-2 country code
           example: US
+          minLength: 1
           type: string
         postalCode:
           description: Postal or ZIP code
@@ -4019,6 +4026,7 @@ components:
           minLength: 1
           type: string
       required:
+      - countryCode
       - postalCode
       type: object
     ProblemDetail:

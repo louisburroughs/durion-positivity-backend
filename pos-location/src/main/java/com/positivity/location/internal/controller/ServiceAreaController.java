@@ -68,6 +68,7 @@ public class ServiceAreaController {
                     Returns 201 with the created area and 409 when the name is already taken.
                     """)
     @ApiResponse(responseCode = "201", description = "Service area created")
+    @ApiResponse(responseCode = "400", description = "Empty postal code set, or an entry missing its countryCode")
     @ApiResponse(responseCode = "409", description = "Service area name already taken")
     @EmitEvent(id = "LOCATION_SERVICE_AREA_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.SERVICE_AREA_MANAGE + "')")
@@ -85,6 +86,7 @@ public class ServiceAreaController {
                                             mediaType = "application/json",
                                             examples =
                                                     @ExampleObject(name = "Metro area", value = SERVICE_AREA_EXAMPLE)))
+                    @Valid
                     @RequestBody
                     ServiceAreaRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(serviceAreaService.create(request));
