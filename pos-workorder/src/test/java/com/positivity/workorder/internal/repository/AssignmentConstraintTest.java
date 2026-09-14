@@ -24,8 +24,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -446,22 +444,31 @@ class AssignmentConstraintTest extends PostgresSliceTestBase {
     class MigrationCleanup {
 
         /**
-         * The two cleanup statements, read out of the shipped migration rather than restated here.
+         * The reconciliation block, read out of the shipped migration rather than restated here.
          *
-         * <p>A test that retyped the SQL would prove only that the copy works. These tests run the
-         * exact text Flyway runs, so a change to the migration that breaks the cleanup breaks them.
+         * <p>A test that retyped the SQL would prove only that the copy works. This runs the exact
+         * text Flyway runs, so a change to the migration that breaks the reconciliation breaks these
+         * tests.
+         *
+         * <p>Whole block, in file order, rather than statements picked out individually. The order
+         * <em>is</em> the behaviour under test — type the untyped placements, release the closed
+         * ones, seed history, then park duplicates — and an earlier version that selected statements
+         * by shape got it wrong twice: first by assuming there were exactly two, then by matching a
+         * table name that every statement's CTE happens to read from. Taking the block entire
+         * removes the guessing.
+         *
+         * @param fromMarker the section comment the block starts at
+         * @param toMarker   the line the block ends before, normally the index this data must satisfy
          */
-        private String cleanupStatement(int index) throws IOException {
+        private String reconciliationBlock(String fromMarker, String toMarker) throws IOException {
             String migration = readMigration();
-            Matcher matcher = Pattern.compile("(?s)WITH ranked AS \\(.*?;").matcher(migration);
-            List<String> statements = new ArrayList<>();
-            while (matcher.find()) {
-                statements.add(matcher.group());
-            }
-            assertThat(statements)
-                    .as("V3 should carry exactly two `WITH ranked AS (...)` cleanup statements")
-                    .hasSize(2);
-            return statements.get(index);
+            int from = migration.indexOf(fromMarker);
+            int to = migration.indexOf(toMarker, from);
+            assertThat(from).as("start marker %s in V3", fromMarker).isNotNegative();
+            assertThat(to)
+                    .as("end marker %s after %s in V3", toMarker, fromMarker)
+                    .isGreaterThan(from);
+            return migration.substring(from, to);
         }
 
         private String readMigration() throws IOException {
@@ -496,7 +503,9 @@ class AssignmentConstraintTest extends PostgresSliceTestBase {
         void duplicatePositionsAreParked() throws Exception {
             UUID keeper = givenOpenWorkorder("WORK_IN_PROGRESS");
             UUID loser = givenOpenWorkorder("APPROVED");
-            String cleanup = cleanupStatement(0);
+            String reconciliation = reconciliationBlock(
+                    "-- 3. Normalise the placements that predate the constraints.",
+                    "CREATE UNIQUE INDEX workorder_open_position_uniq");
 
             withIndexDropped("workorder_open_position_uniq", """
                     CREATE UNIQUE INDEX workorder_open_position_uniq
@@ -507,24 +516,53 @@ class AssignmentConstraintTest extends PostgresSliceTestBase {
                           AND (status IS NULL OR status <> 'COMPLETED' OR is_reopened IS TRUE)
                     """, owner -> {
                 try (Statement statement = owner.createStatement()) {
+                    // Two open workorders on one bay, which nothing prevented before this migration.
+                    // The later-created one is the loser; note it is left untyped, so this also
+                    // covers the legacy placement the reconciliation has to type before it can see it.
                     statement.execute("UPDATE workorder SET resource_type = 'BAY', resource_id = '" + BAY
                             + "', created_at = '2026-03-01T00:00:00Z' WHERE id = '" + keeper + "'");
-                    statement.execute("UPDATE workorder SET resource_type = 'BAY', resource_id = '" + BAY
+                    statement.execute("UPDATE workorder SET resource_type = NULL, resource_id = '" + BAY
                             + "', created_at = '2026-03-02T00:00:00Z' WHERE id = '" + loser + "'");
-                    statement.execute(cleanup);
+                    statement.execute(reconciliation);
                 }
             });
 
             assertThat(positionOf(keeper)).isEqualTo(new Position("BAY", BAY));
             // Moved to the site's lot, not deleted and not silently unplaced: the vehicle is somewhere.
             assertThat(positionOf(loser)).isEqualTo(new Position("HOLD", SITE));
+
+            // The bay claim survives the move. Overwriting the placement before recording it would
+            // lose the only evidence of where this job actually was.
+            assertThat(placementsOf(loser))
+                    .hasSize(2)
+                    .anySatisfy(placement -> {
+                        assertThat(placement.resourceType()).isEqualTo("BAY");
+                        assertThat(placement.resourceId()).isEqualTo(BAY);
+                        assertThat(placement.current()).isFalse();
+                        assertThat(placement.releasedBy()).isEqualTo("system:migration");
+                    })
+                    .anySatisfy(placement -> {
+                        assertThat(placement.resourceType()).isEqualTo("HOLD");
+                        assertThat(placement.resourceId()).isEqualTo(SITE);
+                        assertThat(placement.current()).isTrue();
+                    });
+
+            // The keeper is untouched: one row, still current, still the bay.
+            assertThat(placementsOf(keeper)).singleElement().satisfies(placement -> {
+                assertThat(placement.resourceType()).isEqualTo("BAY");
+                assertThat(placement.current()).isTrue();
+            });
         }
 
         @Test
         @DisplayName("#1985: a workorder with several current technicians keeps the latest assigned")
         void duplicateCurrentTechniciansAreClosed() throws Exception {
             UUID workorderId = givenOpenWorkorder("WORK_IN_PROGRESS");
-            String cleanup = cleanupStatement(1);
+            // From the cleanup itself, not the section header: the header is followed by the
+            // released_by ALTER, which Flyway runs once and a replay here would fail on.
+            String reconciliation = reconciliationBlock(
+                    "-- assignTechnician closed the previous row",
+                    "CREATE UNIQUE INDEX technician_assignment_one_current_uniq");
 
             withIndexDropped("technician_assignment_one_current_uniq", """
                     CREATE UNIQUE INDEX technician_assignment_one_current_uniq
@@ -542,7 +580,7 @@ class AssignmentConstraintTest extends PostgresSliceTestBase {
                                 + TENANT + "', '" + workorderId + "', '" + row[0] + "', '" + row[1]
                                 + "', 'dispatch', TRUE, now(), now())");
                     }
-                    statement.execute(cleanup);
+                    statement.execute(reconciliation);
                 }
             });
 
@@ -573,6 +611,27 @@ class AssignmentConstraintTest extends PostgresSliceTestBase {
             }
         }
 
+        /** Every service-position history row for a workorder, oldest first. */
+        private List<Placement> placementsOf(UUID workorderId) throws SQLException {
+            try (Connection connection = connection();
+                    PreparedStatement statement = connection.prepareStatement("""
+                            SELECT resource_type, resource_id, current, released_by
+                            FROM service_position_assignment
+                            WHERE workorder_id = ?
+                            ORDER BY id
+                            """)) {
+                statement.setObject(1, workorderId);
+                try (ResultSet rs = statement.executeQuery()) {
+                    List<Placement> placements = new ArrayList<>();
+                    while (rs.next()) {
+                        placements.add(new Placement(
+                                rs.getString(1), rs.getObject(2, UUID.class), rs.getBoolean(3), rs.getString(4)));
+                    }
+                    return placements;
+                }
+            }
+        }
+
         private Position positionOf(UUID workorderId) throws SQLException {
             try (Connection connection = connection();
                     PreparedStatement statement = connection.prepareStatement(
@@ -587,6 +646,8 @@ class AssignmentConstraintTest extends PostgresSliceTestBase {
     }
 
     private record Position(String resourceType, UUID resourceId) {}
+
+    private record Placement(String resourceType, UUID resourceId, boolean current, String releasedBy) {}
 
     @FunctionalInterface
     private interface SqlWork {
