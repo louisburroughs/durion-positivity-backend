@@ -6451,13 +6451,13 @@ paths:
 
         Use this tool when a technician comes off a job without a replacement — capacity freed for a workorder that is blocked or parked; do not use reassignTechnician, which requires a replacement, and do not use it to change technicians.
 
-        Preconditions: the workorder must exist. Releasing a workorder that has no current technician succeeds and writes nothing, so the call is idempotent.
+        Preconditions: the workorder must exist and must not be COMPLETED or CANCELLED; releasing a workorder that has no current technician succeeds and writes nothing, so the call is idempotent.
 
         Required inputs: workorderId (UUID) as a path parameter; reason is an optional query parameter recorded on the closed assignment.
 
         Emits a WORKORDER_TECHNICIAN_RELEASE event.
 
-        Returns 404 when the workorder does not exist.
+        Returns 404 when the workorder does not exist, and 409 WORKORDER_CLOSED when it is COMPLETED or CANCELLED.
 
         '
       operationId: releaseTechnician
@@ -6484,6 +6484,12 @@ paths:
           description: Permission denied
         '404':
           description: Workorder not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Workorder is COMPLETED or CANCELLED (ApiError.code WORKORDER_CLOSED)
       security:
       - bearerAuth:
         - workorder:workorder:assign-technician
