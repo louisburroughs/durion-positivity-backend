@@ -354,7 +354,7 @@ public class ProductController {
     @GetMapping("/search")
     @Operation(operationId = "searchCatalogProducts", summary = "Search Catalog Products", description = """
             Searches products with an optional free-text query over name and description plus exact \
-            case-insensitive filters for brand, category and SKU, paged by an opaque cursor.
+            case-insensitive filters for brand, category, subcategory and SKU, paged by an opaque cursor.
             Use this tool to find products by partial text or filters; use getProductById instead when the id \
             is known, and listProductsByName only for exact whole-name matches.
             Preconditions: none; a malformed or missing cursor silently restarts at the first page rather \

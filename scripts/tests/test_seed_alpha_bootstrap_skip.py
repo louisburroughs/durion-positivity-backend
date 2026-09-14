@@ -62,6 +62,34 @@ class WithoutRowCodedTest(unittest.TestCase):
         other = b"name,city\nCharlotte Main,Charlotte\n"
         self.assertEqual(seed_alpha._without_row_coded(other, "CLT-MAIN-001"), other)
 
+    def test_aQuotedCommaInAnEarlierFieldDoesNotShiftTheCodeColumn(self):
+        # split(",") reads "Service Center" as the whole name and "West" as the code, so the
+        # bootstrapped row matches nothing and is sent again — the exact failure this filter exists
+        # to prevent, on a site name that is perfectly legal CSV.
+        quoted = (
+            b'name,code,city,active\n'
+            b'"Service Center, West",CLT-MAIN-001,Charlotte,true\n'
+            b'Charlotte North,CLT-NORTH-001,Charlotte,true\n'
+        )
+        out = seed_alpha._without_row_coded(quoted, "CLT-MAIN-001")
+        text = out.decode("utf-8")
+        self.assertNotIn("CLT-MAIN-001", text)
+        self.assertIn("CLT-NORTH-001", text)
+
+    def test_aQuotedCommaSurvivesInARowThatIsKept(self):
+        # The kept row must still parse as one field, not two.
+        quoted = (
+            b'name,code,city,active\n'
+            b'"Service Center, West",CLT-NORTH-001,Charlotte,true\n'
+        )
+        out = seed_alpha._without_row_coded(quoted, "CLT-MAIN-001")
+        import csv as _csv
+        import io as _io
+
+        rows = list(_csv.reader(_io.StringIO(out.decode("utf-8"))))
+        self.assertEqual(rows[1][0], "Service Center, West")
+        self.assertEqual(rows[1][1], "CLT-NORTH-001")
+
     def test_aPartialRowDoesNotCrashTheFilter(self):
         ragged = b"name,code,city,active\nOnly Name\nCharlotte Main,CLT-MAIN-001,Charlotte,true\n"
         out = self._rows(seed_alpha._without_row_coded(ragged, "CLT-MAIN-001"))

@@ -386,24 +386,33 @@ def _without_row_coded(file_bytes, code):
     an "expected duplicate" the operator was told to ignore, sitting in the same column as failures
     that are not expected at all. Dropping the row the driver already loaded means a clean run
     reports a clean load.
+
+    Parsed with the csv module rather than split(","): a site legitimately named
+    "Service Center, West" carries a quoted comma, and splitting on commas would shift every field
+    after it -- reading the wrong column as the code, matching nothing, and sending the bootstrapped
+    row anyway. Kept rows are re-emitted by csv.writer, so quoting is normalised rather than
+    preserved byte for byte; the upload is parsed as CSV, not compared.
     """
-    lines = file_bytes.decode("utf-8").splitlines()
-    if not lines:
+    rows = list(csv.reader(io.StringIO(file_bytes.decode("utf-8"))))
+    if not rows:
         return file_bytes
-    header = lines[0].split(",")
+    header = rows[0]
     try:
         code_column = header.index("code")
     except ValueError:
         return file_bytes
-    kept = [lines[0]]
-    for line in lines[1:]:
-        if not line.strip():
+
+    kept = [header]
+    for row in rows[1:]:
+        if not any(field.strip() for field in row):
             continue
-        values = line.split(",")
-        if len(values) > code_column and values[code_column].strip() == code:
+        if len(row) > code_column and row[code_column].strip() == code:
             continue
-        kept.append(line)
-    return ("\n".join(kept) + "\n").encode("utf-8")
+        kept.append(row)
+
+    buffer = io.StringIO(newline="")
+    csv.writer(buffer, lineterminator="\n").writerows(kept)
+    return buffer.getvalue().encode("utf-8")
 
 
 def run_pack_file(gateway, relative_path, domain_type, location_id, poll_timeout_seconds, skip_code=None):
