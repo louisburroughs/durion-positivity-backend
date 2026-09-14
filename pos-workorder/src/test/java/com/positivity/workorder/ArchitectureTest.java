@@ -145,6 +145,18 @@ public class ArchitectureTest {
             .allowEmptyShould(true)
             .because("all HTTP endpoints must declare authorization guards");
 
+    /**
+     * The two assignment-history entities are exempt because their primary key is deliberately not a
+     * UUID at all.
+     *
+     * <p>{@code TechnicianAssignment} and {@code ServicePositionAssignment} are append-only history
+     * rows keyed by a database identity {@code BIGINT}: nothing outside the module ever addresses one
+     * by id, and an identity column is what gives the history its insertion order for free. Their
+     * UUID <em>references</em> — workorder, technician, resource — are all v7 ids minted by the
+     * aggregates that own them, which is what ADR-0013 is actually about; each entity names
+     * {@code UUIDv7Generator} explicitly to record that. Requiring {@code @UUIDv7Id} here would mean
+     * giving a history row a surrogate UUID key that no caller would ever use.
+     */
     @ArchTest
     static final ArchRule entities_should_use_uuidv7_id_annotation = classes()
             .that()
@@ -153,6 +165,8 @@ public class ArchitectureTest {
             .areAnnotatedWith("jakarta.persistence.Entity")
             .and()
             .doNotHaveSimpleName("TechnicianAssignment")
+            .and()
+            .doNotHaveSimpleName("ServicePositionAssignment")
             .should()
             .dependOnClassesThat()
             .haveFullyQualifiedName("com.positivity.shared.id.UUIDv7Id")
