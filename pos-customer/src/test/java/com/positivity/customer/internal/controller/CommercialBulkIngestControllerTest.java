@@ -95,7 +95,7 @@ class CommercialBulkIngestControllerTest {
         CommercialBulkIngestRecord ingestRecord = new CommercialBulkIngestRecord();
         ingestRecord.setLegalName("Piedmont Freight Carriers LLC");
 
-        when(partyService.createCommercialAccount(any())).thenReturn(accountResponse());
+        when(partyService.importCommercialAccount(any())).thenReturn(accountResponse());
 
         mockMvc.perform(post("/v1/customer/commercial/bulk-ingest")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -108,7 +108,7 @@ class CommercialBulkIngestControllerTest {
 
         ArgumentCaptor<CreateCommercialAccountRequest> captor =
                 ArgumentCaptor.forClass(CreateCommercialAccountRequest.class);
-        verify(partyService).createCommercialAccount(captor.capture());
+        verify(partyService).importCommercialAccount(captor.capture());
         assertThat(captor.getValue().getLegalName()).isEqualTo("Piedmont Freight Carriers LLC");
         assertThat(captor.getValue().getDisplayName()).isEqualTo("Piedmont Freight Carriers LLC");
         verifyNoInteractions(personService, partyRelationshipService);
@@ -126,7 +126,7 @@ class CommercialBulkIngestControllerTest {
         ingestRecord.setContactLastName("Whitfield");
         ingestRecord.setContactEmail("dale@piedmont.example.com");
 
-        when(partyService.createCommercialAccount(any())).thenReturn(accountResponse());
+        when(partyService.importCommercialAccount(any())).thenReturn(accountResponse());
         when(personService.createPerson(any(), any()))
                 .thenReturn(CreatePersonResponse.builder().personId(PERSON_ID).build());
 
@@ -163,7 +163,7 @@ class CommercialBulkIngestControllerTest {
         CommercialBulkIngestRecord succeeding = new CommercialBulkIngestRecord();
         succeeding.setLegalName("Piedmont Freight Carriers LLC");
 
-        when(partyService.createCommercialAccount(any()))
+        when(partyService.importCommercialAccount(any()))
                 .thenThrow(new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "bad"))
                 .thenReturn(accountResponse());
 
@@ -189,7 +189,7 @@ class CommercialBulkIngestControllerTest {
         ingestRecord.setContactFirstName("Dale");
         ingestRecord.setContactLastName("Whitfield");
 
-        when(partyService.createCommercialAccount(any())).thenReturn(accountResponse());
+        when(partyService.importCommercialAccount(any())).thenReturn(accountResponse());
         when(personService.createPerson(any(), any()))
                 .thenThrow(new IllegalStateException("could not execute statement [insert into crm_person ...]"));
 

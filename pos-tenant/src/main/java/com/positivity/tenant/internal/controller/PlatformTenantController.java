@@ -44,7 +44,7 @@ public class PlatformTenantController {
     private final TenantService tenantService;
 
     private static final String TENANT_CREATE_EXAMPLE = """
-            {"slug":"acme-tire","displayName":"Acme Tire & Auto",
+            {"slug":"acme-tire","displayName":"Acme Tire & Auto — Tucson",
              "accountId":"01990000-0000-7000-8000-00000000a001","cell":"us-east-1",
              "initialAdminEmail":"owner@acme.example"}
             """;
@@ -59,14 +59,17 @@ public class PlatformTenantController {
             named by initialAdminEmail, then answers tenant.provisioned, which moves the tenant to ACTIVE.
             Use this tool once per customer tenancy, after createAccount when the owning account does not exist; do not use \
             it to change an existing tenant, use updateTenant or the lifecycle operations instead.
-            Preconditions: the account exists and the slug is not taken.
-            Required inputs: slug, displayName, accountId and initialAdminEmail; cell is optional.
+            Preconditions: the account exists, and neither the slug nor the display name is taken.
+            Required inputs: slug, accountId and initialAdminEmail; cell and displayName are optional. Omitting \
+            displayName seeds it from the account's legal name, suffixed " #2", " #3" and so on only where that \
+            would collide — a fallback, so prefer naming the tenant explicitly.
             Emits a TENANT_CREATE event.
-            Returns 201 with the tenant, 404 when the account is unknown and 409 when the slug is taken.
+            Returns 201 with the tenant, 404 when the account is unknown and 409 when the slug or the display name \
+            is taken.
             """)
     @ApiResponse(responseCode = "201", description = "Tenant registered")
     @ApiResponse(responseCode = "404", description = "Account not found")
-    @ApiResponse(responseCode = "409", description = "Slug already taken")
+    @ApiResponse(responseCode = "409", description = "Slug or display name already taken")
     @EmitEvent(id = "TENANT_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.TENANT_CREATE + "')")
     @SecurityRequirement(
@@ -75,8 +78,8 @@ public class PlatformTenantController {
     @PostMapping
     public ResponseEntity<TenantResponse> create(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description =
-                                    "Tenant to register: slug, display name, owning account and the initial administrator.",
+                            description = "Tenant to register: slug, owning account, the initial administrator and,"
+                                    + " preferably, the display name users will sign in by.",
                             required = true,
                             content =
                                     @Content(
@@ -137,15 +140,17 @@ public class PlatformTenantController {
             never changed here.
             Use this tool for descriptive edits; do not use it to change status, use suspendTenant, reactivateTenant or \
             decommissionTenant instead.
-            Preconditions: the tenant exists and is not DECOMMISSIONED.
+            Preconditions: the tenant exists, is not DECOMMISSIONED, and the new display name is not already held \
+            by another tenant.
             Required inputs: id (UUID) as a path parameter and a body with displayName and/or cell; a null field \
             leaves the value unchanged.
             Emits a TENANT_UPDATE event.
-            Returns 200 with the tenant, 404 when it does not exist and 409 when it is decommissioned.
+            Returns 200 with the tenant, 404 when it does not exist and 409 when it is decommissioned or the \
+            display name is taken.
             """)
     @ApiResponse(responseCode = "200", description = "Tenant updated")
     @ApiResponse(responseCode = "404", description = "Tenant not found")
-    @ApiResponse(responseCode = "409", description = "Tenant is decommissioned")
+    @ApiResponse(responseCode = "409", description = "Tenant is decommissioned, or the display name is taken")
     @EmitEvent(id = "TENANT_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.TENANT_UPDATE + "')")
     @SecurityRequirement(

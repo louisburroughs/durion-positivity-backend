@@ -31,6 +31,7 @@ import com.positivity.customer.internal.entity.PartyRelationship;
 import com.positivity.customer.internal.entity.PersonParty;
 import com.positivity.customer.internal.enums.AccountStatus;
 import com.positivity.customer.internal.enums.PartyType;
+import com.positivity.customer.internal.exception.CrmDuplicateResourceException;
 import com.positivity.customer.internal.exception.CrmValidationException;
 import com.positivity.customer.internal.repository.CommercialPartyRepository;
 import com.positivity.customer.internal.repository.ExtVehicleRepository;
@@ -143,6 +144,22 @@ public class PartyServiceImpl implements PartyService {
                 .createdAt(saved.getCreatedAt())
                 .duplicateCandidates(new ArrayList<>())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public CreateCommercialAccountResponse importCommercialAccount(CreateCommercialAccountRequest request) {
+        if (request == null || !StringUtils.hasText(request.getLegalName())) {
+            log.warn("ImportCommercialAccount failed: legalName is required");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "legalName is required");
+        }
+        String legalName = request.getLegalName().trim();
+        if (partyRepository.findFirstByLegalNameIgnoreCase(legalName).isPresent()) {
+            log.warn("ImportCommercialAccount refused: an account already exists for legalName '{}'", legalName);
+            throw new CrmDuplicateResourceException("Commercial account", legalName);
+        }
+        request.setLegalName(legalName);
+        return createCommercialAccount(request);
     }
 
     @Override

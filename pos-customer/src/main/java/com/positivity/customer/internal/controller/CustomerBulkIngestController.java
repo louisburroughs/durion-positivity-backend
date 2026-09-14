@@ -65,6 +65,10 @@ public class CustomerBulkIngestController extends AbstractBulkIngestController<C
                     phoneNumber, primaryAddress, and customerNumber; preferredContactMethod is derived as \
                     EMAIL when an email is present and PHONE_CALL otherwise, and operatorId falls back to \
                     the security context when absent or not a UUID.
+                    A supplied customerNumber is kept as the customer's business key and makes the row \
+                    repeatable: re-importing a batch reports every row whose customerNumber already \
+                    exists as a CUSTOMER_INGEST_FAILED duplicate instead of creating a second customer \
+                    for it. Rows without one are still deduplicated only by identity matching.
                     Emits a CUSTOMER_BULK_INGEST event, and each successful row publishes a party-changed \
                     customer fact and writes contact points to pos-people.
                     Returns 200 with per-row results including failures, and 400 when jobId, locationId, or \
@@ -125,6 +129,7 @@ public class CustomerBulkIngestController extends AbstractBulkIngestController<C
                 createPersonRequest.setFirstName(ingestRecord.getFirstName());
                 createPersonRequest.setLastName(ingestRecord.getLastName());
                 createPersonRequest.setPreferredContactMethod(resolvePreferredContactMethod(ingestRecord));
+                createPersonRequest.setCustomerNumber(ingestRecord.getCustomerNumber());
                 if (StringUtils.hasText(ingestRecord.getEmail())) {
                     createPersonRequest.setEmails(List.of(CreatePersonRequest.EmailInput.builder()
                             .value(ingestRecord.getEmail())

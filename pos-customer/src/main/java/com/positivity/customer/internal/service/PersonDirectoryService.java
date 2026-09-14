@@ -71,25 +71,46 @@ public class PersonDirectoryService {
     }
 
     /**
-     * Replace a person's typed contact points via the full-typed upsert command. Names travel
-     * from the replica so the full-attribute upsert cannot blank them; a not-yet-replicated
-     * person keeps null names until its own fact lands (the upsert is keyed by personId either
-     * way).
+     * Replace a person's typed contact points via the full-typed upsert command.
+     *
+     * <p>The command is a full-attribute upsert, so it must carry the names or it blanks them.
+     * The replica is the first source — it holds whatever the authority last confirmed — but it
+     * is eventually consistent, and for a person created moments ago by
+     * {@link #resolveOrCreatePersonId} it holds nothing at all yet. That window is not rare: it
+     * is every single create, which is how person customers came to exist with no name anywhere
+     * (issue #1977). So the caller's own names are the fallback, and only a person the replica
+     * has never heard of takes them.
+     *
+     * @param firstName the caller's first name for this person, used only when the replica has
+     *     no name of its own; may be null when the caller has none either
+     * @param lastName the caller's last name, under the same rule
      */
-    public void setContactPoints(@NonNull UUID personId, @NonNull List<ContactPointUpsert> contactPoints) {
+    public void setContactPoints(
+            @NonNull UUID personId,
+            @NonNull List<ContactPointUpsert> contactPoints,
+            @Nullable String firstName,
+            @Nullable String lastName) {
         ExtPersonReplica existing = replicaRepository.findById(personId).orElse(null);
         List<PersonUpdatedV1.ContactPointV1> typed = contactPoints.stream()
                 .map(cp -> new PersonUpdatedV1.ContactPointV1(cp.contactType(), cp.value(), cp.primary()))
                 .toList();
         commandEmitter.requestPersonUpsert(new PersonUpsertRequestedV1(
                 personId,
-                existing != null ? existing.getFirstName() : null,
-                existing != null ? existing.getLastName() : null,
+                firstNonBlank(existing != null ? existing.getFirstName() : null, firstName),
+                firstNonBlank(existing != null ? existing.getLastName() : null, lastName),
                 existing != null ? existing.getPreferredName() : null,
                 null,
                 null,
                 List.of(),
                 typed));
+    }
+
+    @Nullable
+    private static String firstNonBlank(@Nullable String preferred, @Nullable String fallback) {
+        if (preferred != null && !preferred.isBlank()) {
+            return preferred;
+        }
+        return fallback != null && !fallback.isBlank() ? fallback : null;
     }
 
     /** Batch identity lookup from the replica; unknown ids are absent from the map. */

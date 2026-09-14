@@ -53,6 +53,16 @@ public class TenantEntity extends TenantScopedEntity {
     @Column(name = "display_name", nullable = false, length = 200)
     private String displayName;
 
+    /**
+     * Normalized form of {@link #displayName} (NFKC, trimmed, internal whitespace collapsed,
+     * case-folded) under a unique constraint, so two tenants cannot hold names that differ only in
+     * case or spacing. Written by the application on every write — see
+     * {@code TenantDisplayNameAllocator} and {@code V3__tenant_display_name_key.sql} for why this is
+     * not a database-generated column.
+     */
+    @Column(name = "display_name_key", nullable = false, length = 200)
+    private String displayNameKey;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     @Builder.Default

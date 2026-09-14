@@ -484,13 +484,13 @@ paths:
 
         Use this tool once per customer tenancy, after createAccount when the owning account does not exist; do not use it to change an existing tenant, use updateTenant or the lifecycle operations instead.
 
-        Preconditions: the account exists and the slug is not taken.
+        Preconditions: the account exists, and neither the slug nor the display name is taken.
 
-        Required inputs: slug, displayName, accountId and initialAdminEmail; cell is optional.
+        Required inputs: slug, accountId and initialAdminEmail; cell and displayName are optional. Omitting displayName seeds it from the account''s legal name, suffixed " #2", " #3" and so on only where that would collide — a fallback, so prefer naming the tenant explicitly.
 
         Emits a TENANT_CREATE event.
 
-        Returns 201 with the tenant, 404 when the account is unknown and 409 when the slug is taken.
+        Returns 201 with the tenant, 404 when the account is unknown and 409 when the slug or the display name is taken.
 
         '
       operationId: createTenant
@@ -503,12 +503,12 @@ paths:
                 value:
                   accountId: 01990000-0000-7000-8000-00000000a001
                   cell: us-east-1
-                  displayName: Acme Tire & Auto
+                  displayName: Acme Tire & Auto — Tucson
                   initialAdminEmail: owner@acme.example
                   slug: acme-tire
             schema:
               $ref: '#/components/schemas/TenantCreateRequest'
-        description: 'Tenant to register: slug, display name, owning account and the initial administrator.'
+        description: 'Tenant to register: slug, owning account, the initial administrator and, preferably, the display name users will sign in by.'
         required: true
       responses:
         '201':
@@ -528,7 +528,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TenantResponse'
-          description: Slug already taken
+          description: Slug or display name already taken
       security:
       - bearerAuth:
         - platform:tenant:create
@@ -586,13 +586,13 @@ paths:
 
         Use this tool for descriptive edits; do not use it to change status, use suspendTenant, reactivateTenant or decommissionTenant instead.
 
-        Preconditions: the tenant exists and is not DECOMMISSIONED.
+        Preconditions: the tenant exists, is not DECOMMISSIONED, and the new display name is not already held by another tenant.
 
         Required inputs: id (UUID) as a path parameter and a body with displayName and/or cell; a null field leaves the value unchanged.
 
         Emits a TENANT_UPDATE event.
 
-        Returns 200 with the tenant, 404 when it does not exist and 409 when it is decommissioned.
+        Returns 200 with the tenant, 404 when it does not exist and 409 when it is decommissioned or the display name is taken.
 
         '
       operationId: updateTenant
@@ -634,7 +634,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TenantResponse'
-          description: Tenant is decommissioned
+          description: Tenant is decommissioned, or the display name is taken
       security:
       - bearerAuth:
         - platform:tenant:update
@@ -1141,8 +1141,8 @@ components:
           minLength: 0
           type: string
         displayName:
-          description: Human-readable name
-          example: Acme Tire & Auto
+          description: 'Human-readable name users pick this organization by when signing in; unique across the registry, case- and whitespace-insensitively. Omit it and the owning account''s legal name is used, suffixed " #2", " #3" and so on only where that would collide — a fallback, not the intended outcome, so supply a name that distinguishes this tenant from the account''s others.'
+          example: Acme Tire & Auto — Tucson
           maxLength: 200
           minLength: 0
           type: string
@@ -1161,7 +1161,6 @@ components:
           type: string
       required:
       - accountId
-      - displayName
       - initialAdminEmail
       - slug
       type: object
@@ -1237,9 +1236,10 @@ components:
           minLength: 0
           type: string
         displayName:
-          description: New human-readable name; omitted or null leaves it unchanged
+          description: New human-readable name, unique across the registry case- and whitespace-insensitively; omitted or null leaves it unchanged
           maxLength: 200
-          minLength: 1
+          minLength: 0
+          pattern: .*\S.*
           type: string
       type: object
   securitySchemes:

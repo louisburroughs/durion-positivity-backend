@@ -33,8 +33,11 @@ public class TenantCreateRequest {
     @Pattern(regexp = "^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])$")
     private String slug;
 
-    @Schema(description = "Human-readable name", example = "Acme Tire & Auto", requiredMode = REQUIRED)
-    @NotBlank
+    @Schema(description = """
+                    Human-readable name users pick this organization by when signing in; unique across the \
+                    registry, case- and whitespace-insensitively. Omit it and the owning account's legal name is \
+                    used, suffixed " #2", " #3" and so on only where that would collide — a fallback, not the \
+                    intended outcome, so supply a name that distinguishes this tenant from the account's others.""", example = "Acme Tire & Auto — Tucson", requiredMode = NOT_REQUIRED)
     @Size(max = 200)
     private String displayName;
 

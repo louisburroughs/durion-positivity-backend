@@ -21,6 +21,13 @@ public interface PersonPartyRepository extends JpaRepository<PersonParty, UUID>,
     Optional<PersonParty> findByPersonId(@NonNull UUID personId);
 
     /**
+     * Lookup by the party's business key. {@code customer_number} is unique per tenant, so a
+     * caller that supplies one can be told the customer already exists instead of minting a
+     * second party for it (issue #1978).
+     */
+    Optional<PersonParty> findByCustomerNumber(@NonNull String customerNumber);
+
+    /**
      * Find individual-customer persons: person parties that are NOT acting as a
      * commercial-account contact (i.e. not referenced by any party relationship).
      * These are the standalone individual customers shown in the customer directory.

@@ -1190,6 +1190,53 @@ paths:
       - JWT API
       x-required-permissions:
       - AUTHENTICATED
+  /v1/auth/tenants:
+    get:
+      description: 'Returns the organizations whose name starts with the query, or one of whose words does, so a user can pick theirs at sign-in instead of typing a tenant slug.
+
+        Use this tool to populate the login form''s organization field; do not use it to enumerate tenants, which the result cap, the minimum query length and the prefix-only matching all exist to limit, and do not use it to check whether an organization exists before logging in — loginUser answers the same 401 either way.
+
+        Preconditions: none; the endpoint is anonymous.
+
+        Required inputs: q, the text the user has typed so far. A q shorter than the configured minimum (3 characters by default) is not searched and answers an empty list, which is the normal state while someone is still typing.
+
+        Emits a SECURITY_TENANT_SEARCH event.
+
+        Returns 200 with at most 10 ACTIVE organizations, each carrying only its display name and the slug to submit, and 404 when the directory is switched off, in which case the form asks for the slug instead.
+
+        '
+      operationId: searchTenants
+      parameters:
+      - description: Text the user has typed so far
+        in: query
+        name: q
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/TenantSearchResponse'
+                type: array
+          description: Matching organizations, possibly none
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Bad Request
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Organization search is disabled in this deployment
+      summary: Search Organizations for the Login Form
+      tags:
+      - Auth API
   /v1/auth/token-pair:
     post:
       description: 'Privileged internal endpoint that issues a JWT access token (1-hour) and refresh token (7-day) for an existing user''s username on behalf of a trusted internal caller, embedding uid, roles, perm_bits, and perm_ver claims.
@@ -6543,6 +6590,18 @@ components:
       - id
       - slug
       - status
+      type: object
+    TenantSearchResponse:
+      description: An organization a user may sign in to
+      properties:
+        displayName:
+          description: Human-readable organization name
+          example: Acme Tire & Auto — Tucson
+          type: string
+        slug:
+          description: Tenant slug to submit with the login
+          example: acme-tire
+          type: string
       type: object
     TokenPairRequest:
       description: Request to generate an access token and refresh token pair
