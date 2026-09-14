@@ -90,6 +90,13 @@ class WorkorderAssignmentServiceTest {
     @org.mockito.Mock
     private com.positivity.workorder.internal.service.WorkorderFactPublisher workorderFactPublisher;
 
+    // #1984: the inbound assignment path records the position change (occupancy check plus history
+    // row) through the position service before writing the fields itself, so the collaborator has to
+    // be present. A bare mock is right: these tests are about how the event is applied, and the
+    // position service's own behaviour is covered by ServicePositionServiceImplTest.
+    @org.mockito.Mock
+    private com.positivity.workorder.internal.service.ServicePositionService servicePositionService;
+
     @InjectMocks
     private WorkorderServiceImpl workorderService;
 

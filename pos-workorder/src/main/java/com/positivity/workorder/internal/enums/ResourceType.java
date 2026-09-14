@@ -21,7 +21,24 @@ public enum ResourceType {
     BAY,
 
     /** A mobile service unit owned by pos-location ({@code GET /v1/mobile-units}). */
-    MOBILE_UNIT;
+    MOBILE_UNIT,
+
+    /**
+     * A site-scoped <em>hold</em> position — the parking lot a vehicle waits in rather than a
+     * position work is performed at (#1984).
+     *
+     * <p>Unlike {@link #BAY} and {@link #MOBILE_UNIT} this is not an aggregate pos-location owns,
+     * so it has no replica to validate against and no identity of its own: a parked workorder
+     * carries {@code resourceType = HOLD} with {@code resourceId} set to its own
+     * {@code locationId}, which is the site whose lot it is sitting in. That is what makes a hold
+     * position site-scoped without a new table — "parked at site S" is exactly the pair
+     * {@code (HOLD, S)}.
+     *
+     * <p>A hold position has no capacity limit: it is the one resource type
+     * {@link #isExclusive()} answers {@code false} for, and therefore the one type excluded from
+     * the partial unique index that gives every other position at most one open workorder.
+     */
+    HOLD;
 
     private static final Logger log = LoggerFactory.getLogger(ResourceType.class);
 
@@ -88,5 +105,24 @@ public enum ResourceType {
      */
     public static ResourceType orDefault(ResourceType resourceType) {
         return resourceType != null ? resourceType : BAY;
+    }
+
+    /**
+     * Whether a position of this kind may hold at most one open workorder at a time (#1984).
+     *
+     * <p>A bay is a physical slot and a mobile unit is a vehicle, so each does one job at a time and
+     * a second open workorder pointing at it is a double-booking — refused with 409
+     * {@code RESOURCE_OCCUPIED} and, underneath that check, by a partial unique index so two
+     * concurrent assigns cannot both win. {@link #HOLD} is a lot rather than a slot and takes as
+     * many parked workorders as fit, so it is excluded from both.
+     *
+     * <p>This predicate is the single place that distinction is made in Java; its SQL twin is the
+     * {@code resource_type <> 'HOLD'} clause of {@code workorder_open_position_uniq}. Change one and
+     * the other must follow.
+     *
+     * @return {@code true} for a position that admits one open workorder, {@code false} for a hold
+     */
+    public boolean isExclusive() {
+        return this != HOLD;
     }
 }

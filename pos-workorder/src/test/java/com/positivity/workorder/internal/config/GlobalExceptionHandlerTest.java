@@ -23,13 +23,18 @@ import com.positivity.workorder.internal.exception.PromotionValidationException;
 import com.positivity.workorder.internal.exception.PromotionValidationException.PromotionErrorCode;
 import com.positivity.workorder.internal.exception.PurchaseOrderRequiredException;
 import com.positivity.workorder.internal.exception.ServiceLineNotFoundException;
+import com.positivity.workorder.internal.exception.ServicePositionInvalidException;
+import com.positivity.workorder.internal.exception.ServicePositionOccupiedException;
 import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionException;
 import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
+import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
+import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
 import com.positivity.workorder.internal.exception.TravelSegmentNotFoundException;
 import com.positivity.workorder.internal.exception.UomConversionUndefinedException;
 import com.positivity.workorder.internal.exception.WorkSessionNotFoundException;
 import com.positivity.workorder.internal.exception.WorkSessionOverlapException;
+import com.positivity.workorder.internal.exception.WorkorderClosedException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
@@ -195,6 +200,20 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleWorkorderResourceConflict", (HandlerInvocation)
                             request -> handler.handleWorkorderResourceConflict(
                                     new WorkorderResourceConflictException("conflict"), request)),
+                    Named.of("handleServicePositionOccupied", (HandlerInvocation)
+                            request -> handler.handleServicePositionOccupied(
+                                    new ServicePositionOccupiedException("bay taken", OTHER_ID), request)),
+                    Named.of("handleServicePositionInvalid", (HandlerInvocation)
+                            request -> handler.handleServicePositionInvalid(
+                                    new ServicePositionInvalidException("unknown bay"), request)),
+                    Named.of("handleWorkorderClosed", (HandlerInvocation) request ->
+                            handler.handleWorkorderClosed(new WorkorderClosedException(SOME_ID, "COMPLETED"), request)),
+                    Named.of("handleTechnicianAlreadyAssigned", (HandlerInvocation)
+                            request -> handler.handleTechnicianAlreadyAssigned(
+                                    new TechnicianAlreadyAssignedException("already assigned", OTHER_ID), request)),
+                    Named.of("handleTechnicianNotAssigned", (HandlerInvocation)
+                            request -> handler.handleTechnicianNotAssigned(
+                                    new TechnicianNotAssignedException("none assigned"), request)),
                     Named.of("handlePurchaseOrderRequired", (HandlerInvocation)
                             request -> handler.handlePurchaseOrderRequired(
                                     new PurchaseOrderRequiredException("PO required"), request)),

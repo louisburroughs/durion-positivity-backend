@@ -33,6 +33,7 @@ import com.positivity.workorder.internal.exception.CustomerRequirementsNotMetExc
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PartLineNotFoundException;
 import com.positivity.workorder.internal.exception.ServiceLineNotFoundException;
+import com.positivity.workorder.internal.exception.ServicePositionOccupiedException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
@@ -87,6 +88,7 @@ public class WorkorderServiceImpl implements WorkorderService {
     private final WorkorderFactPublisher workorderFactPublisher;
     private final PromotedWorkorderDemandPublisher promotedWorkorderDemandPublisher;
     private final WorkorderStateMachine stateMachine;
+    private final ServicePositionService servicePositionService;
     private final WorkorderLaborEntryRepository workorderLaborEntryRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final AuditEventRepository auditEventRepository;
@@ -965,8 +967,30 @@ public class WorkorderServiceImpl implements WorkorderService {
         // BAY fallback for the untyped events pos-shop-manager still publishes.
         ResourceType resourceType = event.resolveResourceType();
         workorder.setLocationId(payload.getLocationId());
-        workorder.setResourceId(payload.getResourceId());
-        workorder.setResourceType(payload.getResourceId() != null ? resourceType : null);
+        // #1984: the position goes through the position service so the inbound fact is subject to the
+        // same one-open-workorder rule as a dispatcher's own assignment, and leaves the same history
+        // row. A refusal is caught rather than propagated: the caller is a log-and-swallow Kafka
+        // listener, so letting it out would cost the whole update — location and mechanics included —
+        // for a conflict that concerns the resource alone. The rest of the update is applied and the
+        // workorder keeps the position it had, which is the state the database can actually honour.
+        try {
+            servicePositionService.recordPositionChange(
+                    workorder,
+                    payload.getResourceId() != null ? resourceType : null,
+                    payload.getResourceId(),
+                    "System:ShopManagementService",
+                    "Assignment context updated");
+            workorder.setResourceId(payload.getResourceId());
+            workorder.setResourceType(payload.getResourceId() != null ? resourceType : null);
+        } catch (ServicePositionOccupiedException ex) {
+            log.warn(
+                    "Inbound assignment for workorder {} names {} {}, which another open workorder holds;"
+                            + " keeping its current position and applying the rest of the update",
+                    workorder.getId(),
+                    resourceType,
+                    payload.getResourceId(),
+                    ex);
+        }
         workorder.setMechanicIds(serializeMechanicIds(payload.getMechanicIds()));
         workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(workorder.getId());
@@ -1058,8 +1082,23 @@ public class WorkorderServiceImpl implements WorkorderService {
         // the id alone would let a bay → mobile-unit override land half-applied: the workorder would
         // point at a van while still typed BAY, so the dispatch board would file it under bays[] and
         // go on advertising the van as available in the very same response.
+        //
+        // #1984: and they are written through the position service rather than onto the entity, so
+        // that this path — the one way a bay could be set before there were assignment operations —
+        // gets the occupancy check and the history row too. It stays an override in the sense that
+        // matters: the position is not re-validated against the location replicas, so a manager
+        // re-slotting a job is never blocked by a replica row that has not landed. Taking a bay
+        // another open workorder is already in is a 409, not a silent double-booking.
+        ResourceType overrideResourceType =
+                resourceId != null ? ResourceType.orDefault(override.getResourceType()) : null;
+        servicePositionService.recordPositionChange(
+                workorder,
+                overrideResourceType,
+                resourceId,
+                resolveCurrentActorUserId(),
+                "Operational context override");
         workorder.setResourceId(resourceId);
-        workorder.setResourceType(resourceId != null ? ResourceType.orDefault(override.getResourceType()) : null);
+        workorder.setResourceType(overrideResourceType);
         workorder.setMechanicIds(serializeMechanicIds(override.getAssignedMechanics()));
         Workorder saved = workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(saved.getId());

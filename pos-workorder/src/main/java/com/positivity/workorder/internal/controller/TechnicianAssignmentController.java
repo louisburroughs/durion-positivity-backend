@@ -2,6 +2,7 @@ package com.positivity.workorder.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import com.positivity.workorder.internal.dto.AssignTechnicianRequest;
 import com.positivity.workorder.internal.dto.ReassignTechnicianRequest;
 import com.positivity.workorder.internal.dto.TechnicianAssignmentMapper;
@@ -54,20 +55,21 @@ public class TechnicianAssignmentController {
             operationId = "assignTechnician",
             summary = "Assign Technician to Workorder",
             description = """
-                    Assigns a technician to a workorder as the current assignment, retiring any previous \
-                    assignment into history and transitioning the workorder from APPROVED to ASSIGNED when \
-                    applicable.
-                    Use this tool for the first assignment on a workorder; do not use reassignTechnician, which \
-                    requires an existing current assignment and records a reassignment reason.
-                    Preconditions: the workorder must exist and be in APPROVED, ASSIGNED, or WORK_IN_PROGRESS \
-                    status.
+                    Assigns a technician to a workorder that has none, transitioning the workorder from \
+                    APPROVED to ASSIGNED when applicable.
+                    Use this tool for the first assignment on a workorder; do not use it to change technicians \
+                    — reassignTechnician requires an existing current assignment and records a reassignment \
+                    reason, and releaseTechnician takes the current one off without a replacement.
+                    Preconditions: the workorder must exist, be in APPROVED, ASSIGNED, or WORK_IN_PROGRESS \
+                    status, and have no current technician.
                     Required inputs: workorderId (UUID) as a path parameter and technicianId (UUID) in the body; \
                     notes are optional, the assignedByUserId body field is ignored in favor of the security \
                     context, and the Idempotency-Key header is accepted but not currently used to deduplicate.
                     Emits a WORKORDER_TECHNICIAN_ASSIGN event; an APPROVED workorder is transitioned to ASSIGNED \
                     with a recorded state transition.
-                    Returns 404 when the workorder does not exist, and 400 with the failure reason when the \
-                    workorder status does not allow assignment.
+                    Returns 404 when the workorder does not exist, 400 with the failure reason when the \
+                    workorder status does not allow assignment, and 409 TECHNICIAN_ALREADY_ASSIGNED when the \
+                    workorder already has a current technician — use reassignTechnician to change it.
                     """,
             responses = {
                 @ApiResponse(
@@ -76,7 +78,12 @@ public class TechnicianAssignmentController {
                         content = @Content(schema = @Schema(implementation = TechnicianAssignmentResponse.class))),
                 @ApiResponse(responseCode = "400", description = "Invalid state transition"),
                 @ApiResponse(responseCode = "403", description = "Permission denied"),
-                @ApiResponse(responseCode = "404", description = "Workorder or technician not found")
+                @ApiResponse(responseCode = "404", description = "Workorder or technician not found"),
+                @ApiResponse(
+                        responseCode = "409",
+                        description = "The workorder already has a current technician (ApiError.code "
+                                + "TECHNICIAN_ALREADY_ASSIGNED, with the current technician id as referenceId)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Technician to place on the workorder, with optional assignment notes.",
@@ -168,17 +175,23 @@ public class TechnicianAssignmentController {
                     body; reason and notes are optional, the reassignedByUserId body field is ignored in favor \
                     of the security context, and the Idempotency-Key header is accepted but not currently used.
                     Emits a WORKORDER_TECHNICIAN_REASSIGN event.
-                    Returns 404 when the workorder does not exist, and 400 with the failure reason when there is \
-                    no current assignment or the workorder status does not allow reassignment.
+                    Returns 404 when the workorder does not exist, 400 with the failure reason when the workorder \
+                    status does not allow reassignment, and 409 TECHNICIAN_NOT_ASSIGNED when the workorder has no \
+                    current technician to reassign from — use assignTechnician for the first assignment.
                     """,
             responses = {
                 @ApiResponse(
                         responseCode = "200",
                         description = "Technician reassigned successfully",
                         content = @Content(schema = @Schema(implementation = TechnicianAssignmentResponse.class))),
-                @ApiResponse(responseCode = "400", description = "Invalid state transition or no current assignment"),
+                @ApiResponse(responseCode = "400", description = "Invalid state transition"),
                 @ApiResponse(responseCode = "403", description = "Permission denied"),
-                @ApiResponse(responseCode = "404", description = "Workorder not found")
+                @ApiResponse(responseCode = "404", description = "Workorder not found"),
+                @ApiResponse(
+                        responseCode = "409",
+                        description =
+                                "The workorder has no current technician (ApiError.code " + "TECHNICIAN_NOT_ASSIGNED)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Replacement technician plus the reason the workorder is changing hands.",
@@ -301,6 +314,58 @@ public class TechnicianAssignmentController {
             log.warn("Get assignment failed - not found: {}", e.getMessage());
             return ResponseEntity.notFound().build();
         }
+    }
+
+    /**
+     * Release the current technician, leaving the workorder unassigned.
+     *
+     * <p>
+     * The counterpart of assign that #1983 found missing: freeing a technician
+     * without naming a replacement.
+     */
+    @Operation(
+            operationId = "releaseTechnician",
+            summary = "Release a Workorder's Current Technician",
+            description = """
+                    Releases the workorder's current technician, closing the assignment in history and leaving \
+                    the workorder with nobody on it.
+                    Use this tool when a technician comes off a job without a replacement — capacity freed for a \
+                    workorder that is blocked or parked; do not use reassignTechnician, which requires a \
+                    replacement, and do not use it to change technicians.
+                    Preconditions: the workorder must exist. Releasing a workorder that has no current \
+                    technician succeeds and writes nothing, so the call is idempotent.
+                    Required inputs: workorderId (UUID) as a path parameter; reason is an optional query \
+                    parameter recorded on the closed assignment.
+                    Emits a WORKORDER_TECHNICIAN_RELEASE event.
+                    Returns 404 when the workorder does not exist.
+                    """,
+            responses = {
+                @ApiResponse(responseCode = "204", description = "Technician released, or none was assigned"),
+                @ApiResponse(responseCode = "403", description = "Permission denied"),
+                @ApiResponse(responseCode = "404", description = "Workorder not found")
+            })
+    @DeleteMapping("/{workorderId}/technician")
+    @EmitEvent(id = "WORKORDER_TECHNICIAN_RELEASE", apiVersion = "1")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"workorder:workorder:assign-technician"})
+    @PreAuthorize("hasAuthority('" + WorkorderPermissions.WORKORDER_ASSIGN_TECHNICIAN + "')")
+    public ResponseEntity<Void> releaseTechnician(
+            @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001")
+                    @PathVariable
+                    UUID workorderId,
+            @Parameter(description = "Why the technician is coming off the workorder", example = "Shift ended")
+                    @RequestParam(value = "reason", required = false)
+                    String reason) {
+
+        String releasedBy = resolveAssignedByUsername();
+        // Existence is checked before the release so a release against an unknown workorder is a 404
+        // rather than a silent 204 — releaseAssignment itself answers "nothing to release" and
+        // "no such workorder" identically, which is right for its internal callers and wrong here.
+        assignmentService.getWorkorderStatus(workorderId);
+        assignmentService.releaseAssignment(workorderId, releasedBy, reason);
+        log.info("Released the technician on workorder {} by user {}", workorderId, releasedBy);
+        return ResponseEntity.noContent().build();
     }
 
     /**

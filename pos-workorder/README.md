@@ -7,7 +7,8 @@ Core workorder service for the Durion Positivity ETSMS platform. Manages the ful
 - Create and manage workorders with state machine transitions (estimate, WIP, complete, cancelled)
 - Build estimates from appointments with line item services and parts
 - Track WIP status and dashboard summaries per shop
-- Assign and reassign technicians to workorder service lines
+- Assign, change and release the service position a workorder occupies — a bay, a mobile unit, or the site's hold (parking) position
+- Assign, reassign and release the workorder's technician; a workorder has at most one current technician
 - Record labor time entries and work sessions for payroll and billing
 - Manage part usage, part substitutions, and part pick coordination
 - Apply and validate promotional offers on workorder lines
@@ -23,7 +24,8 @@ Core workorder service for the Durion Positivity ETSMS platform. Manages the ful
 - `WorkorderLaborService` — labor line management on workorder service lines
 - `WorkorderPartUsageService` — part consumption recording and adjustments
 - `WorkorderInvoiceService` — invokes `pos-invoice` to generate an invoice at close
-- `TechnicianAssignmentService` — assign and reassign technicians
+- `TechnicianAssignmentService` — assign, reassign and release the workorder's technician
+- `ServicePositionService` — assign, change and release the service position a workorder occupies
 - `DashboardService` — aggregated shop dashboard data (bays and mobile units, see below)
 - `TaxClient` — outbound client for `pos-tax`; forwards `X-User: pos-workorder` and `X-Authorities: tax:calculate` on the tax-calculate call so the request satisfies `tax:calculate` enforcement (matching `pos-invoice`'s `TaxServiceClient`)
 
@@ -46,6 +48,53 @@ Core workorder service for the Durion Positivity ETSMS platform. Manages the ful
 - `GET /v1/workexec/adjustments` — time entry adjustments
 - `POST /v1/workorders/{workorderId}/notes` — record a note about the customer
 - `GET /v1/workorders/{workorderId}/notes` — the workorder's customer notes
+- `PUT /v1/workorders/{workorderId}/position` — assign or change the workorder's service position
+- `DELETE /v1/workorders/{workorderId}/position` — release it, leaving the workorder unplaced
+- `GET /v1/workorders/{workorderId}/position` — the current position and technician, with position history
+- `POST /v1/workorders/{workorderId}/technician` — assign the first technician
+- `PUT /v1/workorders/{workorderId}/technician` — reassign to a different technician, with a reason
+- `DELETE /v1/workorders/{workorderId}/technician` — release the current technician
+
+## Service position and technician assignment (#1983, #1984, #1985)
+
+Where a workorder happens and who works on it are two **independent** assignments of the same
+workorder. Each can be assigned, changed and released across the open lifecycle, each keeps its own
+append-only history (who, when, why), and changing one never changes the other. `GET .../position`
+answers both together.
+
+**One open workorder per position.** A `BAY` or a `MOBILE_UNIT` holds at most one open workorder;
+a second one is refused with `409 RESOURCE_OCCUPIED`, whose `referenceId` names the occupying
+workorder. `HOLD` — the site's parking lot — has no capacity limit, and an unset position is always
+allowed. A parked workorder carries `resourceType = HOLD` with `resourceId` set to its own
+`locationId`; that pair is what makes a hold site-scoped without a resource aggregate of its own, so
+pos-location owns nothing new.
+
+The rule is enforced **twice, on purpose**. `ServicePositionServiceImpl` checks occupancy so the
+caller gets a 409 naming the occupant; the partial unique index `workorder_open_position_uniq`
+(V3) decides two assigns that race that check, which no application-level check can — both read the
+bay as free before either commits. The index's "open" predicate mirrors `Workorder.isLocked()`
+exactly, reopened workorders included; the two must be changed together.
+
+**One current technician per workorder.** `POST .../technician` now means *this workorder has no
+technician yet* and answers `409 TECHNICIAN_ALREADY_ASSIGNED` (with the incumbent as `referenceId`)
+when one is already assigned — it used to overwrite silently, which made an accidental double assign
+indistinguishable from a deliberate hand-over. `PUT` (reassign) requires a current technician and
+answers `409 TECHNICIAN_NOT_ASSIGNED` without one, rather than being quietly promoted to an assign.
+`DELETE` releases without naming a replacement. The partial unique index
+`technician_assignment_one_current_uniq` backs the rule the same way.
+
+**Closing frees the position.** A transition to `COMPLETED` or `CANCELLED` releases the position
+from inside `WorkorderStateMachine.transitionWorkorder` — the single funnel every status change goes
+through — closing the history row and clearing `resourceId`. Clearing matters: the index reads
+`is_reopened`, so a closed workorder that kept its bay would re-enter the index on reopen and
+collide with whoever took the bay meanwhile.
+
+**Permissions.** Position assign and release reuse `workorder:operationalContext:override` and the
+read reuses `workorder:workorder:view`; no new permission is minted for what is the same authority —
+deciding where a job happens. `POST /v1/workorders/{id}/operationalContext/override` remains the
+manager exception path and now routes its position change through the same service, so it gets
+occupancy enforcement and a history row, while keeping override semantics: the position is not
+re-validated against the location replicas.
 
 ## Estimate/workorder snapshot facts (order parity E1)
 
@@ -252,6 +301,7 @@ module's `LocationAncestorResolver`; there is no per-request call to pos-locatio
 | `getEstimate`, `getEstimateSummary`, `generateEstimatePdf` | `workorder:estimate:view` | controller, off the loaded estimate's location, after the 404 |
 | `createEstimateFromAppointment` | `workorder:estimate:create` | controller, on the body's `locationId` |
 | `overrideOperationalContext` | `workorder:operationalContext:override` | `WorkorderServiceImpl`, after the 404 and before any write: first the workorder's current `shopId` (null fails closed), then the body's `locationId` |
+| `assignServicePosition`, `releaseServicePosition` | `workorder:operationalContext:override` | `ServicePositionServiceImpl`, after the 404 and before any write, on the workorder's `shopId` (null fails closed). The target position is at the workorder's own site by construction, so there is no second location to check |
 | `startWorkexecWorkSession` | `timekeeping:work_session:create` | controller, on the body's `locationId` |
 
 **Narrow** — the location is an optional filter; a supplied one is gated, and without one a scoped

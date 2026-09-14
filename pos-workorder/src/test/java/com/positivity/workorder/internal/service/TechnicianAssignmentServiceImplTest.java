@@ -11,6 +11,8 @@ import com.positivity.workorder.internal.dto.TechnicianAssignmentRecord;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
+import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -26,16 +28,20 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * Technician assignment: assignment is only allowed from APPROVED / ASSIGNED / WORK_IN_PROGRESS,
  * the first assignment from APPROVED drives the workorder to ASSIGNED, and every superseded
  * assignment is retained as history with {@code current} cleared.
+ *
+ * <p>Since #1985 a workorder has <em>exactly one</em> current technician: assign requires the
+ * workorder to be free and refuses otherwise, reassign requires it to be held, and a lost race
+ * against the partial unique index answers with the same refusal as the pre-check.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -65,15 +71,22 @@ class TechnicianAssignmentServiceImplTest {
         service = new TechnicianAssignmentServiceImpl(
                 Clock.fixed(NOW, ZoneOffset.UTC), assignmentRepository, workorderRepository, stateMachine);
 
-        when(assignmentRepository.save(any())).thenAnswer(invocation -> {
-            TechnicianAssignment assignment = invocation.getArgument(0);
-            if (assignment.getId() == null) {
-                assignment.setId(ASSIGNMENT_ID);
-            }
-            return assignment;
-        });
+        when(assignmentRepository.save(any())).thenAnswer(TechnicianAssignmentServiceImplTest::stampId);
+        // Assign and reassign write the new current row through saveAndFlush so a lost race against
+        // technician_assignment_one_current_uniq surfaces as a 409 rather than a 500 at commit
+        // (#1985); reassign also flushes the closed row first, because Hibernate runs inserts before
+        // updates and would otherwise present two current rows to the index at once.
+        when(assignmentRepository.saveAndFlush(any())).thenAnswer(TechnicianAssignmentServiceImplTest::stampId);
         when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
                 .thenReturn(Optional.empty());
+    }
+
+    private static TechnicianAssignment stampId(org.mockito.invocation.InvocationOnMock invocation) {
+        TechnicianAssignment assignment = invocation.getArgument(0);
+        if (assignment.getId() == null) {
+            assignment.setId(ASSIGNMENT_ID);
+        }
+        return assignment;
     }
 
     private void givenWorkorder(WorkorderStatus status) {
@@ -146,23 +159,41 @@ class TechnicianAssignmentServiceImplTest {
         }
 
         @Test
-        @DisplayName("supersedes the existing assignment instead of deleting it")
-        void supersedesExistingAssignment() {
+        @DisplayName("#1985: refuses a workorder that already has a technician, naming who holds it")
+        void refusesWhenAlreadyAssigned() {
             givenWorkorder(WorkorderStatus.ASSIGNED);
             TechnicianAssignment existing = currentAssignment(OTHER_TECHNICIAN_ID);
             when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
                     .thenReturn(Optional.of(existing));
 
-            service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null);
+            // This used to succeed, silently closing the incumbent's row with a canned reason, which
+            // made an accidental double assign indistinguishable from a deliberate hand-over.
+            assertThatThrownBy(() -> service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null))
+                    .isInstanceOf(TechnicianAlreadyAssignedException.class)
+                    .hasMessageContaining(OTHER_TECHNICIAN_ID.toString());
 
-            assertThat(existing.getCurrent()).isFalse();
-            assertThat(existing.getUnassignedAt()).isEqualTo(NOW_LOCAL);
-            assertThat(existing.getReassignmentReason()).isEqualTo("Reassigned to different technician");
+            assertThat(existing.getCurrent()).isTrue();
+            assertThat(existing.getUnassignedAt()).isNull();
+            verify(assignmentRepository, never()).save(any());
+            verify(assignmentRepository, never()).saveAndFlush(any());
+        }
 
-            ArgumentCaptor<TechnicianAssignment> captor = ArgumentCaptor.forClass(TechnicianAssignment.class);
-            verify(assignmentRepository, org.mockito.Mockito.times(2)).save(captor.capture());
-            assertThat(captor.getAllValues().get(0)).isSameAs(existing);
-            assertThat(captor.getAllValues().get(1).getTechnicianId()).isEqualTo(TECHNICIAN_ID);
+        @Test
+        @DisplayName("#1985: a lost race against the unique index is the same refusal, not a 500")
+        void concurrentAssignBecomesConflict() {
+            givenWorkorder(WorkorderStatus.ASSIGNED);
+            // doThrow, not when(...): when() would call the already-stubbed saveAndFlush with a null
+            // argument while setting the stub up, and the setUp answer would dereference it.
+            org.mockito.Mockito.doThrow(
+                            new DataIntegrityViolationException("duplicate key value violates unique constraint "
+                                    + "\"technician_assignment_one_current_uniq\""))
+                    .when(assignmentRepository)
+                    .saveAndFlush(any());
+
+            // Both requests read "no current technician" — neither sees the other's uncommitted row —
+            // so the index is what decides, and the loser must hear the same thing the pre-check says.
+            assertThatThrownBy(() -> service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null))
+                    .isInstanceOf(TechnicianAlreadyAssignedException.class);
         }
 
         @Test
@@ -204,6 +235,9 @@ class TechnicianAssignmentServiceImplTest {
             assertThat(existing.getCurrent()).isFalse();
             assertThat(existing.getUnassignedAt()).isEqualTo(NOW_LOCAL);
             assertThat(existing.getReassignmentReason()).isEqualTo("called out sick");
+            // The closed row is flushed, not merely saved: Hibernate would otherwise insert the new
+            // current row before updating the old one and the index would refuse the reassignment.
+            verify(assignmentRepository).saveAndFlush(existing);
 
             assertThat(created.technicianId()).isEqualTo(TECHNICIAN_ID);
             assertThat(created.assignedBy()).isEqualTo("supervisor");
@@ -245,7 +279,7 @@ class TechnicianAssignmentServiceImplTest {
 
             assertThatThrownBy(
                             () -> service.reassignTechnician(WORKORDER_ID, TECHNICIAN_ID, "supervisor", "reason", null))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(TechnicianNotAssignedException.class)
                     .hasMessageContaining("no current technician assignment");
         }
 

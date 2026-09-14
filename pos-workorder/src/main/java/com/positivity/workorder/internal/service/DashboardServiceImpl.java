@@ -520,7 +520,13 @@ public class DashboardServiceImpl implements DashboardService {
      */
     private void detectResourceDoubleBooking(List<Workorder> resourceHolders, List<ConflictEntry> conflicts) {
         Map<ResourceKey, Long> claimCounts = resourceHolders.stream()
-                .filter(wo -> wo.getResourceId() != null && !wo.isLocked())
+                // A hold position is a lot, not a slot: every parked workorder at a site shares the
+                // one (HOLD, siteId) key, so counting them as claims on the same resource would
+                // report the parking lot as double-booked the moment a second car is parked in it
+                // (#1984). Only exclusive positions can be double-booked.
+                .filter(wo -> wo.getResourceId() != null
+                        && !wo.isLocked()
+                        && effectiveResourceType(wo).isExclusive())
                 .collect(Collectors.groupingBy(
                         wo -> new ResourceKey(wo.getResourceId(), effectiveResourceType(wo)),
                         LinkedHashMap::new,

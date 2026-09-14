@@ -111,6 +111,13 @@ class OperationalContextLocationScopeTest {
     @Mock
     private WorkorderFactPublisher workorderFactPublisher;
 
+    // #1984: the override path records the position change (occupancy check plus history row)
+    // through the position service before writing the fields itself, so the collaborator has to be
+    // present. A bare mock is right here: these tests are about the override's own behaviour, and
+    // the position service's is covered by ServicePositionServiceImplTest.
+    @Mock
+    private com.positivity.workorder.internal.service.ServicePositionService servicePositionService;
+
     @InjectMocks
     private WorkorderServiceImpl workorderService;
 

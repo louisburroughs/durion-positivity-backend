@@ -113,6 +113,12 @@ class WorkorderCompletionTest {
     @Mock
     private com.positivity.workorder.internal.service.ServiceCompletionFactPublisher serviceCompletionFactPublisher;
 
+    // #1984: transitioning to COMPLETED or CANCELLED releases the workorder's service position, so
+    // the state machine now collaborates with the position service. Declared before @InjectMocks so
+    // Mockito wires it in.
+    @Mock
+    private com.positivity.workorder.internal.service.ServicePositionService servicePositionService;
+
     @InjectMocks
     private WorkorderStateMachine stateMachine;
 
@@ -172,6 +178,7 @@ class WorkorderCompletionTest {
                 org.mockito.Mockito.mock(
                         com.positivity.workorder.internal.service.PromotedWorkorderDemandPublisher.class),
                 stateMachine,
+                servicePositionService,
                 workorderLaborEntryRepository,
                 applicationEventPublisher,
                 auditEventRepository,

@@ -4,6 +4,8 @@ import com.positivity.workorder.internal.dto.TechnicianAssignmentRecord;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
+import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -16,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,8 +31,13 @@ import org.springframework.transaction.annotation.Transactional;
  * <li>Assignment is allowed only from APPROVED, ASSIGNED, or WORK_IN_PROGRESS
  * status</li>
  * <li>Initial assignment transitions workorder to ASSIGNED status</li>
+ * <li>A workorder has at most one current technician. Assign requires none, reassign
+ * requires one, release gives the current one up; the partial unique index
+ * {@code technician_assignment_one_current_uniq} guarantees the rule under
+ * concurrency rather than leaving it to these checks (#1985)</li>
  * <li>Reassignment marks previous assignment as not current</li>
- * <li>Assignment history is append-only and ordered newest-first</li>
+ * <li>Assignment history is append-only and ordered newest-first; closed rows are
+ * never deleted</li>
  * </ul>
  */
 @Service
@@ -42,14 +50,13 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
     private final WorkorderRepository workorderRepository;
     private final WorkorderStateMachine stateMachine;
 
-    private static final String REASSIGNMENT_REASON = "Reassigned to different technician";
-
     /**
      * Assign a technician to a workorder.
      *
      * <p>
      * If the workorder is in APPROVED status, it will be transitioned to ASSIGNED.
-     * If already assigned, this effectively performs a reassignment.
+     * The workorder must have no current technician: changing hands is
+     * {@link #reassignTechnician}, which records a reason.
      *
      * @param workorderId  the workorder ID
      * @param technicianId the technician ID to assign
@@ -57,6 +64,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
      * @param notes        optional notes for the assignment
      * @return the created assignment record
      * @throws WorkorderNotFoundException if workorder not found
+     * @throws TechnicianAlreadyAssignedException if a current technician already holds the workorder
      * @throws IllegalStateException  if workorder status doesn't allow assignment
      */
     @Transactional
@@ -71,15 +79,19 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         // Validate status
         validateAssignmentAllowed(workorder);
 
-        // Mark any existing assignment as not current
+        // Assign means "this workorder has no technician yet" (#1985). It used to silently retire
+        // whoever held the job and install the new one, which made an accidental double assign
+        // indistinguishable from a deliberate hand-over — the first technician's row was closed with
+        // a canned reason and nobody was told. Changing hands is reassignTechnician, which takes a
+        // reason; here a held workorder is a 409 naming its current technician.
         Optional<TechnicianAssignment> existingAssignment =
                 assignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId);
 
         if (existingAssignment.isPresent()) {
-            log.debug("Found existing assignment for workorder {}, marking as not current", workorderId);
-            TechnicianAssignment existing = existingAssignment.get();
-            existing.markAsNotCurrent(LocalDateTime.now(clock), REASSIGNMENT_REASON);
-            assignmentRepository.save(existing);
+            UUID currentTechnicianId = existingAssignment.get().getTechnicianId();
+            throw new TechnicianAlreadyAssignedException(
+                    "Workorder " + workorderId + " is already assigned to technician " + currentTechnicianId,
+                    currentTechnicianId);
         }
 
         // Create new assignment
@@ -93,7 +105,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                 .current(true)
                 .build();
 
-        TechnicianAssignment saved = assignmentRepository.save(assignment);
+        TechnicianAssignment saved = saveHonouringSingleCurrentIndex(assignment, workorderId);
         log.info("Assigned technician {} to workorder {} by user {}", technicianId, workorderId, assignedBy);
 
         // Transition workorder to ASSIGNED status if currently APPROVED
@@ -119,8 +131,8 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
      * @param reason          the reason for reassignment
      * @param notes           optional additional notes
      * @return the new assignment record
-     * @throws WorkorderNotFoundException if workorder not found; IllegalStateException if no current
-     *                                assignment exists
+     * @throws WorkorderNotFoundException if workorder not found
+     * @throws TechnicianNotAssignedException if the workorder has no current technician to reassign from
      * @throws IllegalStateException  if workorder status doesn't allow reassignment
      */
     @Transactional
@@ -140,10 +152,13 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         validateAssignmentAllowed(workorder);
 
         // Ensure there's a current assignment to reassign from
+        // Reassign is deliberately not promoted to an assign when there is nobody to reassign from
+        // (#1985): a caller that believed the workorder was held and gets a 200 has learned nothing
+        // about its view being stale, which is the same ambiguity assign's new 409 removes.
         TechnicianAssignment currentAssignment = assignmentRepository
                 .findByWorkorder_IdAndCurrentTrue(workorderId)
-                .orElseThrow(() -> new IllegalStateException(
-                        "Cannot reassign: no current technician assignment for workorder " + workorderId));
+                .orElseThrow(() -> new TechnicianNotAssignedException(
+                        "Cannot reassign: workorder " + workorderId + " has no current technician assignment"));
 
         UUID previousTechnicianId = currentAssignment.getTechnicianId();
         log.debug(
@@ -152,9 +167,13 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                 previousTechnicianId,
                 newTechnicianId);
 
-        // Mark current assignment as not current
+        // Close the outgoing row and flush it before the incoming one is written. The flush is
+        // load-bearing, not defensive: Hibernate's action queue runs every INSERT before any UPDATE,
+        // so a plain save() here would have the new current row inserted while the old one still
+        // says current = true, and the partial unique index
+        // technician_assignment_one_current_uniq would refuse the reassignment outright (#1985).
         currentAssignment.markAsNotCurrent(LocalDateTime.now(clock), reason);
-        assignmentRepository.save(currentAssignment);
+        assignmentRepository.saveAndFlush(currentAssignment);
 
         // Create new assignment
         LocalDateTime now = LocalDateTime.now(clock);
@@ -168,7 +187,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                 .current(true)
                 .build();
 
-        TechnicianAssignment saved = assignmentRepository.save(newAssignment);
+        TechnicianAssignment saved = saveHonouringSingleCurrentIndex(newAssignment, workorderId);
         log.info(
                 "Reassigned workorder {} from technician {} to {} by user {}",
                 workorderId,
@@ -255,6 +274,29 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                 .findById(workorderId)
                 .map(Workorder::getStatus)
                 .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
+    }
+
+    /**
+     * Flush the new assignment now so a lost race surfaces as the same 409 the pre-check raises.
+     *
+     * <p>Two dispatchers assigning the same free workorder both read no current assignment — neither
+     * sees the other's uncommitted row — and the partial unique index
+     * {@code technician_assignment_one_current_uniq} is what decides between them (#1985). Without
+     * the explicit flush the loser's violation would surface at commit, outside this method and
+     * outside the {@code @ExceptionHandler} that knows what it means, so an ordinary expected
+     * refusal would reach the client as a 500. The current technician is left null: the winner is
+     * whichever transaction committed first, and this one cannot see it from its own snapshot.
+     */
+    @NonNull
+    private TechnicianAssignment saveHonouringSingleCurrentIndex(
+            @NonNull TechnicianAssignment assignment, @NonNull UUID workorderId) {
+        try {
+            return assignmentRepository.saveAndFlush(assignment);
+        } catch (DataIntegrityViolationException ex) {
+            log.info("Concurrent technician assignment lost the race on workorder {}", workorderId, ex);
+            throw new TechnicianAlreadyAssignedException(
+                    "Workorder " + workorderId + " was assigned to a technician by another request", null);
+        }
     }
 
     /**

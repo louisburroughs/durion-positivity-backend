@@ -50,6 +50,7 @@ public class WorkorderStateMachine {
     private final AuditEventRepository auditEventRepository;
     private final ObjectMapper objectMapper;
     private final ChangeRequestService changeRequestService;
+    private final ServicePositionService servicePositionService;
 
     private static final Set<WorkorderStatus> COMPLETION_ELIGIBLE_STATUSES = Set.of(
             WorkorderStatus.WORK_IN_PROGRESS,
@@ -102,6 +103,16 @@ public class WorkorderStateMachine {
         workorder.setStatus(toStatus);
         workorderRepository.save(workorder);
         workorderFactPublisher.markChanged(workorderId);
+
+        // A closed workorder gives up its bay or mobile unit (#1984). This is the single funnel every
+        // status change goes through — direct calls, completion, cancellation and the order-settlement
+        // replay alike — so hooking it here is what makes "completing a workorder frees its position"
+        // true regardless of which path closed it. Releasing is not cosmetic: the occupancy index reads
+        // is_reopened, so a completed workorder that kept its resource_id would re-enter the index on
+        // reopen and collide with whoever took the bay in the meantime.
+        if (toStatus == WorkorderStatus.COMPLETED || toStatus == WorkorderStatus.CANCELLED) {
+            servicePositionService.releaseOnClose(workorderId, actorId, "Workorder " + toStatus);
+        }
 
         recordTransition(workorderId, fromStatus, toStatus, actorId, reason);
 
