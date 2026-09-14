@@ -12,6 +12,7 @@ import com.positivity.shopmanager.internal.entity.HrIntegrationLog;
 import com.positivity.shopmanager.internal.entity.Mechanic;
 import com.positivity.shopmanager.internal.entity.MechanicSkill;
 import com.positivity.shopmanager.internal.enums.MechanicStatus;
+import com.positivity.shopmanager.internal.exception.MechanicReplicationPendingException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.HrIntegrationLogRepository;
 import com.positivity.shopmanager.internal.repository.MechanicAuditLogRepository;
@@ -20,18 +21,23 @@ import com.positivity.shopmanager.internal.repository.MechanicSkillRepository;
 import com.positivity.shopmanager.internal.service.dto.HrMechanicEvent;
 import com.positivity.shopmanager.internal.service.enums.HrEventType;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service-layer unit tests for {@link MechanicSyncService} — HR mechanic roster
@@ -74,12 +80,24 @@ class MechanicSyncServiceTest {
 
     @BeforeEach
     void setUp() {
-        mechanicSyncService = new MechanicSyncServiceImpl(
+        mechanicSyncService = newService(Duration.ZERO);
+    }
+
+    /**
+     * The unit under test with a given replication wait. {@code setSelf} takes the instance itself
+     * rather than a proxy: in a unit test there is no transaction to re-enter, and the call it
+     * makes is the same one.
+     */
+    private MechanicSyncService newService(Duration replicationWait) {
+        MechanicSyncServiceImpl service = new MechanicSyncServiceImpl(
                 mechanicRepository,
                 mechanicSkillRepository,
                 hrIntegrationLogRepository,
                 mechanicAuditLogRepository,
-                FIXED_CLOCK);
+                FIXED_CLOCK,
+                replicationWait);
+        service.setSelf(service);
+        return service;
     }
 
     // -------------------------------------------------------------------------
@@ -658,8 +676,9 @@ class MechanicSyncServiceTest {
 
     /**
      * replaceSkills routes through processHrEvent as a MECHANIC_SKILLS_UPDATED
-     * event (single write path), replacing the skill set and bumping
-     * version/lastSyncedAt to the synthetic event's now-millis stamp.
+     * event (single write path), replacing the skill set and refreshing lastSyncedAt. The
+     * feed-ordering version is deliberately left alone — see
+     * {@link #replaceSkills_doesNotPoisonTheFeedOrderingVersion()}.
      */
     @Test
     void replaceSkills_existingMechanic_replacesViaFeedPath() {
@@ -681,25 +700,203 @@ class MechanicSyncServiceTest {
         ArgumentCaptor<Iterable<MechanicSkill>> skillCaptor = ArgumentCaptor.forClass(Iterable.class);
         verify(mechanicSkillRepository).saveAll(skillCaptor.capture());
         assertThat(skillCaptor.getValue()).hasSize(1);
-        assertThat(existing.getVersion()).isEqualTo(Instant.now(FIXED_CLOCK).toEpochMilli());
+        // The mechanic's feed-ordering version is untouched: the synthetic event's epoch-millis
+        // stamp belongs to no position in the feed's per-aggregate sequence (#1987).
+        assertThat(existing.getVersion()).isEqualTo(3);
         verify(hrIntegrationLogRepository).save(any());
         verify(mechanicAuditLogRepository).save(any());
     }
 
-    /** replaceSkills must 404 where the feed path deliberately no-ops. */
+    /**
+     * A missing mechanic row is always reported as pending, never as a 404: this service holds no
+     * signal that its replica is current, so it cannot tell an unreplicated mechanic from a person
+     * who has no technician assignment at all (#1987).
+     */
     @Test
-    void replaceSkills_unknownMechanic_throwsNotFound() {
-        when(mechanicRepository.findByPersonId("missing")).thenReturn(Optional.empty());
+    void replaceSkills_noMechanicRow_isReportedAsReplicationPending() {
+        UUID personId = UUID.fromString("01960011-0000-7000-8000-00000000000a");
+        when(mechanicRepository.findByPersonId(personId.toString())).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> mechanicSyncService.replaceSkills(
-                        "missing",
-                        List.of(HrMechanicEvent.Payload.Skill.builder()
-                                .skillCode("T4-BRAKES")
-                                .proficiencyLevel(4)
-                                .build())))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
-                .hasMessageContaining("Mechanic not found");
+        assertThatThrownBy(() -> mechanicSyncService.replaceSkills(personId.toString(), skills()))
+                .isInstanceOf(MechanicReplicationPendingException.class)
+                .hasMessageContaining("cannot tell the two apart");
         verify(mechanicSkillRepository, never()).deleteAllByMechanicId(any());
+    }
+
+    /**
+     * The regression for the branch this replaced. An earlier revision inferred "not a technician"
+     * from the staffing-assignment replica holding no ACTIVE TECHNICIAN row, so a person with
+     * older non-technician assignments and a brand-new technician one still in flight was told,
+     * non-retryably, that they were not a mechanic — #1987's own ambiguity, one branch over.
+     * Assignment history must have no bearing on the answer.
+     */
+    @Test
+    void replaceSkills_personWithOlderNonTechnicianHistory_isStillReportedAsPending() {
+        UUID personId = UUID.fromString("01960011-0000-7000-8000-00000000000b");
+        when(mechanicRepository.findByPersonId(personId.toString())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> mechanicSyncService.replaceSkills(personId.toString(), skills()))
+                .isInstanceOf(MechanicReplicationPendingException.class);
+    }
+
+    /**
+     * The one negative this service can prove: every person id on the platform is a UUID
+     * (ADR-0027), so an id that is not one names nobody and no amount of replication will change
+     * that. Refused as a client error, and refused without spending the wait.
+     */
+    @Test
+    void replaceSkills_personIdThatIsNotAUuid_isRefusedNotDeferred() {
+        MechanicSyncService service = newService(Duration.ofMinutes(5));
+
+        long startedAt = System.nanoTime();
+        assertThatThrownBy(() -> service.replaceSkills("not-a-uuid", skills()))
+                .isInstanceOf(ShopManagerValidationException.class)
+                .hasMessageContaining("not a UUID");
+        assertThat(Duration.ofNanos(System.nanoTime() - startedAt)).isLessThan(Duration.ofSeconds(1));
+        verify(mechanicRepository, never()).findByPersonId(any());
+    }
+
+    /** The wait is bounded: a configured window that expires refuses rather than blocking on. */
+    @Test
+    void replaceSkills_waitThatExpires_refusesWithinTheConfiguredWindow() {
+        String personId = "01960011-0000-7000-8000-00000000000e";
+        when(mechanicRepository.findByPersonId(personId)).thenReturn(Optional.empty());
+        MechanicSyncService service = newService(Duration.ofMillis(600));
+
+        long startedAt = System.nanoTime();
+        assertThatThrownBy(() -> service.replaceSkills(personId, skills()))
+                .isInstanceOf(MechanicReplicationPendingException.class);
+        Duration elapsed = Duration.ofNanos(System.nanoTime() - startedAt);
+
+        assertThat(elapsed).isGreaterThanOrEqualTo(Duration.ofMillis(500));
+        assertThat(elapsed).isLessThan(Duration.ofSeconds(10));
+    }
+
+    /**
+     * An interrupt during the wait refuses immediately and leaves the flag set, so a container
+     * shutting the thread down is not swallowed by this loop.
+     */
+    @Test
+    void replaceSkills_interruptedDuringTheWait_refusesAndKeepsTheInterruptFlag() throws Exception {
+        String personId = "01960011-0000-7000-8000-00000000000f";
+        when(mechanicRepository.findByPersonId(personId)).thenReturn(Optional.empty());
+        MechanicSyncService service = newService(Duration.ofMinutes(5));
+
+        AtomicReference<Throwable> thrown = new AtomicReference<>();
+        AtomicBoolean interruptFlagKept = new AtomicBoolean();
+        Thread caller = new Thread(() -> {
+            try {
+                service.replaceSkills(personId, skills());
+            } catch (Throwable t) {
+                thrown.set(t);
+                interruptFlagKept.set(Thread.currentThread().isInterrupted());
+            }
+        });
+        caller.start();
+        Thread.sleep(300);
+        caller.interrupt();
+        caller.join(Duration.ofSeconds(10).toMillis());
+
+        assertThat(thrown.get()).isInstanceOf(MechanicReplicationPendingException.class);
+        assertThat(interruptFlagKept).isTrue();
+    }
+
+    /**
+     * The wait must not run inside a transaction — it waits on a row another thread commits, and
+     * an ambient transaction would both hide that commit and hold a pooled connection asleep for
+     * the window. Enforced by the annotation rather than left to a comment.
+     */
+    @Test
+    void replaceSkills_suspendsAnyAmbientTransaction() throws Exception {
+        Transactional annotation = MechanicSyncServiceImpl.class
+                .getMethod("replaceSkills", String.class, List.class, boolean.class)
+                .getAnnotation(Transactional.class);
+
+        assertThat(annotation).isNotNull();
+        assertThat(annotation.propagation()).isEqualTo(Propagation.NOT_SUPPORTED);
+    }
+
+    /**
+     * An operator skills edit must not advance the mechanic's feed-ordering version: it is stamped
+     * with epoch-millis while feed events carry small aggregateVersions, so writing it through
+     * would discard every later people.events.v1 event for that mechanic as stale (#1987).
+     */
+    @Test
+    void replaceSkills_doesNotPoisonTheFeedOrderingVersion() {
+        String personId = "01960011-0000-7000-8000-000000000010";
+        Mechanic existing = buildMechanic(personId, MechanicStatus.ACTIVE, 3);
+        when(mechanicRepository.findByPersonId(personId)).thenReturn(Optional.of(existing));
+        when(hrIntegrationLogRepository.existsByEventId(any())).thenReturn(false);
+        when(mechanicRepository.save(any(Mechanic.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        mechanicSyncService.replaceSkills(personId, skills());
+
+        assertThat(existing.getVersion()).isEqualTo(3);
+    }
+
+    /**
+     * And the edit itself is never discarded by the stale guard, which compares against that same
+     * feed sequence: an operator edit sits outside it entirely.
+     */
+    @Test
+    void replaceSkills_isNotDiscardedByTheFeedStaleGuard() {
+        String personId = "01960011-0000-7000-8000-000000000011";
+        Mechanic existing = buildMechanic(personId, MechanicStatus.ACTIVE, Integer.MAX_VALUE);
+        when(mechanicRepository.findByPersonId(personId)).thenReturn(Optional.of(existing));
+        when(hrIntegrationLogRepository.existsByEventId(any())).thenReturn(false);
+        when(mechanicRepository.save(any(Mechanic.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        mechanicSyncService.replaceSkills(personId, skills());
+
+        verify(mechanicSkillRepository).deleteAllByMechanicId(existing.getMechanicId());
+    }
+
+    /** A feed event after an operator edit still applies — the version line was left intact. */
+    @Test
+    void feedEventAfterAnOperatorSkillsEdit_isStillApplied() {
+        String personId = "01960011-0000-7000-8000-000000000012";
+        Mechanic existing = buildMechanic(personId, MechanicStatus.ACTIVE, 3);
+        when(mechanicRepository.findByPersonId(personId)).thenReturn(Optional.of(existing));
+        when(hrIntegrationLogRepository.existsByEventId(any())).thenReturn(false);
+        when(mechanicRepository.save(any(Mechanic.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        mechanicSyncService.replaceSkills(personId, skills());
+        mechanicSyncService.processHrEvent(HrMechanicEvent.builder()
+                .eventId(UUID.fromString("01960011-0000-7000-8000-000000000013"))
+                .eventType(HrEventType.MECHANIC_DEACTIVATED)
+                .personId(personId)
+                .version(4L)
+                .occurredAt(Instant.now(FIXED_CLOCK))
+                .build());
+
+        assertThat(existing.getStatus()).isEqualTo(MechanicStatus.INACTIVE);
+        assertThat(existing.getVersion()).isEqualTo(4L);
+    }
+
+    /**
+     * The point of the wait: a mechanic row that lands while the caller is waiting is used, rather
+     * than the caller being refused for a race it could not see (#1987).
+     */
+    @Test
+    void replaceSkills_mechanicArrivingDuringTheWait_isApplied() {
+        String personId = "01960011-0000-7000-8000-00000000000d";
+        Mechanic existing = buildMechanic(personId, MechanicStatus.ACTIVE, 3);
+        when(mechanicRepository.findByPersonId(personId))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(existing));
+        when(hrIntegrationLogRepository.existsByEventId(any())).thenReturn(false);
+        when(mechanicRepository.save(any(Mechanic.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        newService(Duration.ofSeconds(5)).replaceSkills(personId, skills());
+
+        verify(mechanicSkillRepository).deleteAllByMechanicId(existing.getMechanicId());
+    }
+
+    private List<HrMechanicEvent.Payload.Skill> skills() {
+        return List.of(HrMechanicEvent.Payload.Skill.builder()
+                .skillCode("T4-BRAKES")
+                .proficiencyLevel(4)
+                .build());
     }
 
     // -------------------------------------------------------------------------

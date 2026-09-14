@@ -45,6 +45,14 @@ class BulkIngestFailuresTest {
         }
     }
 
+    /** The shape a module's "not yet, ask again" type takes (#1987). */
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    private static class AnnotatedUnavailableException extends RuntimeException {
+        AnnotatedUnavailableException(String message) {
+            super(message);
+        }
+    }
+
     /** The positional form, where the status is {@code value} rather than {@code code}. */
     @ResponseStatus(HttpStatus.NOT_FOUND)
     private static class AnnotatedWithValueAliasException extends RuntimeException {
@@ -281,6 +289,64 @@ class BulkIngestFailuresTest {
         void generatesAUuidV7OffARequestThread() {
             assertThat(UUID.fromString(BulkIngestFailures.correlationId()).version())
                     .isEqualTo(7);
+        }
+    }
+
+    @Nested
+    @DisplayName("isRetryable")
+    class IsRetryable {
+
+        @Test
+        void treatsASelfDeclaredServiceUnavailableAsRetryable() {
+            assertThat(BulkIngestFailures.isRetryable(
+                            new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "replica has not caught up")))
+                    .isTrue();
+        }
+
+        @Test
+        void treatsAnAnnotatedServiceUnavailableTypeAsRetryable() {
+            assertThat(BulkIngestFailures.isRetryable(new AnnotatedUnavailableException("not yet")))
+                    .isTrue();
+        }
+
+        /** A refusal is an answer, not a wait: it must not be reported as worth resubmitting. */
+        @Test
+        void doesNotTreatARejectionAsRetryable() {
+            assertThat(BulkIngestFailures.isRetryable(new ResponseStatusException(HttpStatus.NOT_FOUND, "no such row")))
+                    .isFalse();
+        }
+
+        /**
+         * Only self-declared statuses count. An unclassified fault stays generic, exactly as under
+         * {@link BulkIngestFailures#isRowRejection}, so a transport failure that merely happens to
+         * be a 503 cannot smuggle its message into the row result.
+         */
+        @Test
+        void doesNotTreatAnUnclassifiedExceptionAsRetryable() {
+            assertThat(BulkIngestFailures.isRetryable(new IllegalStateException("connection reset")))
+                    .isFalse();
+        }
+
+        @Test
+        void reportsTheServicesOwnMessageUnderTheSharedRetryableCode() {
+            BulkIngestResult result = BulkIngestFailures.retryable(
+                    2,
+                    new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "mechanic has not replicated yet"),
+                    "fallback");
+
+            assertThat(result.getRowIndex()).isEqualTo(2);
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.getErrorCode()).isEqualTo(BulkIngestFailures.RETRYABLE_ERROR_CODE);
+            assertThat(result.getErrorMessage()).isEqualTo("mechanic has not replicated yet");
+            assertThat(result.getCorrelationId()).isNull();
+        }
+
+        @Test
+        void fallsBackWhenTheExceptionCarriesNoReason() {
+            BulkIngestResult result = BulkIngestFailures.retryable(
+                    0, new AnnotatedUnavailableException(""), "Record could not be ingested yet; retry");
+
+            assertThat(result.getErrorMessage()).isEqualTo("Record could not be ingested yet; retry");
         }
     }
 }

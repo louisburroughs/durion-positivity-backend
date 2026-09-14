@@ -133,20 +133,44 @@ class MechanicSyncServiceSkillReplacementTest {
                 .isEqualTo(SEEDED_VERSION + 1);
     }
 
-    /** Operator path: {@code replaceSkills} rides the same replace-set sequence via a synthetic event. */
+    /**
+     * Operator path: the synthetic event {@code replaceSkills} builds rides the same replace-set
+     * sequence, and leaves the feed-ordering version alone (#1987).
+     *
+     * <p>Driven through {@link MechanicSyncService#processHrEvent} rather than
+     * {@code replaceSkills} because that method now runs
+     * {@code @Transactional(propagation = NOT_SUPPORTED)}: its wait is for a row another thread
+     * commits, so it suspends any ambient transaction and therefore cannot see the mechanic this
+     * {@code @Transactional} test seeded but has not committed. That is correct production
+     * behaviour, not something to work around here — the wait and its refusals are covered by
+     * {@link MechanicSyncServiceTest}, and what this suite exists to pin is the flush ordering of
+     * the replace-set sequence (#1679), which is identical either way.
+     */
     @Test
-    void operatorReplaceSkillsOnExistingMechanicReplacesTheWholeSet() {
+    void operatorSkillsEditReplacesTheWholeSetWithoutAdvancingTheFeedVersion() {
         UUID existingMechanicId = mechanicId(EXISTING_PERSON_ID);
         assertThat(rowCount("mechanic_skill", existingMechanicId)).isEqualTo(2);
 
-        mechanicSyncService.replaceSkills(EXISTING_PERSON_ID.toString(), List.of(skill("ELECTRICAL", 5)));
+        mechanicSyncService.processHrEvent(HrMechanicEvent.builder()
+                .eventId(SKILLS_EVENT_ID)
+                .eventType(HrEventType.MECHANIC_SKILLS_UPDATED)
+                .personId(EXISTING_PERSON_ID.toString())
+                .version(Instant.now().toEpochMilli())
+                .occurredAt(OCCURRED_AT)
+                .operatorEdit(true)
+                .payload(HrMechanicEvent.Payload.builder()
+                        .skills(List.of(skill("ELECTRICAL", 5)))
+                        .build())
+                .build());
 
         assertReplacedWithSingleSkill(existingMechanicId, "ELECTRICAL", 5);
+        // The epoch-millis stamp must not reach the version column: feed events carry small
+        // aggregateVersions, and a ~1.7e12 value there would discard every later one as stale.
         assertThat(mechanicRepository
                         .findByPersonId(EXISTING_PERSON_ID.toString())
                         .orElseThrow()
                         .getVersion())
-                .isGreaterThan(SEEDED_VERSION);
+                .isEqualTo(SEEDED_VERSION);
     }
 
     /** Feed path: an explicit empty skill list clears the set, unlike a null list which preserves it. */

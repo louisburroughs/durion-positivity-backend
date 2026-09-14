@@ -10,12 +10,14 @@ import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundExceptio
 import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
+import com.positivity.shopmanager.internal.exception.MechanicReplicationPendingException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.exception.SourceNotEligibleException;
 import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
 import java.lang.reflect.Method;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Arrays;
@@ -53,8 +55,11 @@ class GlobalExceptionHandlerTest {
     private static final UUID APPOINTMENT_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3fcc03");
     private static final UUID LOCATION_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3fcc04");
     private static final UUID CORRELATION_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3fcc05");
+    private static final String PERSON_ID = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3fcc06";
+    private static final Duration REPLICATION_WAIT = Duration.ofSeconds(5);
 
-    private final GlobalExceptionHandler handler = new GlobalExceptionHandler(Clock.fixed(NOW, ZoneOffset.UTC));
+    private final GlobalExceptionHandler handler =
+            new GlobalExceptionHandler(Clock.fixed(NOW, ZoneOffset.UTC), REPLICATION_WAIT);
 
     private static MockHttpServletRequest request() {
         return new MockHttpServletRequest("GET", "/v1/shop-manager/appointments");
@@ -278,7 +283,7 @@ class GlobalExceptionHandlerTest {
          * PER_CLASS} test instance lifecycle.
          */
         private static Stream<Named<HandlerInvocation>> handlerInvocations() throws NoSuchMethodException {
-            GlobalExceptionHandler sut = new GlobalExceptionHandler(Clock.fixed(NOW, ZoneOffset.UTC));
+            GlobalExceptionHandler sut = new GlobalExceptionHandler(Clock.fixed(NOW, ZoneOffset.UTC), REPLICATION_WAIT);
             BindingResult bindingResult = new BeanPropertyBindingResult(new Object(), "request");
             bindingResult.addError(new org.springframework.validation.FieldError(
                     "request", "locationId", null, false, null, null, "locationId is required"));
@@ -324,7 +329,11 @@ class GlobalExceptionHandlerTest {
                         return sut.handleTypeMismatch(typeMismatch, request);
                     }),
                     Named.of("handleShopManagerValidation", (HandlerInvocation) request ->
-                            sut.handleShopManagerValidation(new ShopManagerValidationException("bad id"), request)));
+                            sut.handleShopManagerValidation(new ShopManagerValidationException("bad id"), request)),
+                    Named.of("handleMechanicReplicationPending", (HandlerInvocation)
+                            request -> sut.handleMechanicReplicationPending(
+                                    new MechanicReplicationPendingException(PERSON_ID, "not visible here yet"),
+                                    request)));
         }
 
         @ParameterizedTest

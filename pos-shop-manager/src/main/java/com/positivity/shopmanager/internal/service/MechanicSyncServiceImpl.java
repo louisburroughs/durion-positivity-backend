@@ -1,37 +1,78 @@
 package com.positivity.shopmanager.internal.service;
 
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shopmanager.internal.entity.HrIntegrationLog;
 import com.positivity.shopmanager.internal.entity.Mechanic;
 import com.positivity.shopmanager.internal.entity.MechanicAuditLog;
 import com.positivity.shopmanager.internal.entity.MechanicSkill;
 import com.positivity.shopmanager.internal.enums.MechanicStatus;
+import com.positivity.shopmanager.internal.exception.MechanicReplicationPendingException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.HrIntegrationLogRepository;
 import com.positivity.shopmanager.internal.repository.MechanicAuditLogRepository;
 import com.positivity.shopmanager.internal.repository.MechanicRepository;
 import com.positivity.shopmanager.internal.repository.MechanicSkillRepository;
 import com.positivity.shopmanager.internal.service.dto.HrMechanicEvent;
+import com.positivity.shopmanager.internal.service.enums.HrEventType;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
+import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
-@RequiredArgsConstructor
 public class MechanicSyncServiceImpl implements MechanicSyncService {
 
     private static final String SYSTEM = "system";
+
+    /** How often the replication wait re-checks for the mechanic row. */
+    private static final Duration REPLICATION_POLL_INTERVAL = Duration.ofMillis(250);
 
     private final MechanicRepository mechanicRepository;
     private final MechanicSkillRepository mechanicSkillRepository;
     private final HrIntegrationLogRepository hrIntegrationLogRepository;
     private final MechanicAuditLogRepository mechanicAuditLogRepository;
     private final Clock clock;
+    private final Duration replicationWait;
+
+    /**
+     * Self-reference (lazy to break the construction cycle) so {@link #replaceSkills} can wait for
+     * the mechanic projection outside any transaction and then enter
+     * {@link #processHrEvent}'s through the Spring proxy — a self-invocation would run the whole
+     * apply with no transaction at all.
+     */
+    private MechanicSyncService self;
+
+    public MechanicSyncServiceImpl(
+            @NonNull MechanicRepository mechanicRepository,
+            @NonNull MechanicSkillRepository mechanicSkillRepository,
+            @NonNull HrIntegrationLogRepository hrIntegrationLogRepository,
+            @NonNull MechanicAuditLogRepository mechanicAuditLogRepository,
+            @NonNull Clock clock,
+            @Value("${pos.shop-manager.mechanic-replication-wait:PT5S}") @NonNull Duration replicationWait) {
+        this.mechanicRepository = mechanicRepository;
+        this.mechanicSkillRepository = mechanicSkillRepository;
+        this.hrIntegrationLogRepository = hrIntegrationLogRepository;
+        this.mechanicAuditLogRepository = mechanicAuditLogRepository;
+        this.clock = clock;
+        this.replicationWait = replicationWait;
+    }
+
+    @Autowired
+    public void setSelf(@Lazy MechanicSyncService self) {
+        this.self = self;
+    }
 
     @Override
     @Transactional
@@ -53,9 +94,13 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
         }
 
         // AC4: monotonic ordering — skip stale or equal versions but persist audit
-        // trail
+        // trail. Operator edits are exempt: they carry an epoch-millis stamp rather than a
+        // position in the feed's per-aggregate sequence, so comparing the two is meaningless in
+        // both directions (#1987).
         Optional<Mechanic> existing = mechanicRepository.findByPersonId(event.getPersonId());
-        if (existing.isPresent() && event.getVersion() <= existing.get().getVersion()) {
+        if (!event.isOperatorEdit()
+                && existing.isPresent()
+                && event.getVersion() <= existing.get().getVersion()) {
             persistIntegrationLog(event, "DISCARDED_STALE");
             return;
         }
@@ -173,7 +218,16 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
             return;
         }
         String beforeState = existing.toString();
-        existing.setVersion(event.getVersion());
+        // An operator edit must not advance the feed-ordering version. It is stamped with
+        // epoch-millis (~1.7e12) while feed events carry the producer's aggregateVersion (1, 2,
+        // 3…), so writing it through would leave every later people.events.v1 event for this
+        // mechanic — a name refresh, the deactivation when their assignment ends — below the
+        // stored version and silently discarded as DISCARDED_STALE (#1987). Skills are
+        // shop-manager-owned enrichment the feed never carries, so the two orderings are
+        // independent and only the feed's belongs in this column.
+        if (!event.isOperatorEdit()) {
+            existing.setVersion(event.getVersion());
+        }
         existing.setLastSyncedAt(Instant.now(clock));
         Mechanic saved = mechanicRepository.save(existing);
 
@@ -194,28 +248,106 @@ public class MechanicSyncServiceImpl implements MechanicSyncService {
                 "reconcileFromHr() requires an HR client integration — not yet implemented");
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public void replaceSkills(@NonNull String personId, @NonNull List<HrMechanicEvent.Payload.Skill> skills) {
+        replaceSkills(personId, skills, true);
+    }
+
     /**
-     * Operator skills edits ride the same HR-feed path as everything else that touches
-     * mechanic rows: a synthetic MECHANIC_SKILLS_UPDATED event stamped with a now-millis
-     * version, so dedupe, the stale guard, and both logs apply uniformly and ordering
-     * against in-flight feed events is last-write-wins by timestamp. The existence
-     * pre-check gives the API a 404 where the feed path deliberately no-ops.
+     * {@inheritDoc}
+     *
+     * <p>Deliberately {@code NOT_SUPPORTED} rather than merely un-annotated: {@link #awaitMechanic}
+     * waits for a row another thread commits, so it must not run inside a transaction — not its
+     * own, and not one an enclosing caller opened, which would hold a pooled connection asleep for
+     * the whole window. Suspending makes the invariant enforced instead of documented. The apply is
+     * then entered through the proxy, which starts the transaction it does need.
      */
     @Override
-    @Transactional
-    public void replaceSkills(@NonNull String personId, @NonNull List<HrMechanicEvent.Payload.Skill> skills) {
-        if (mechanicRepository.findByPersonId(personId).isEmpty()) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.NOT_FOUND, "Mechanic not found for person " + personId);
-        }
-        processHrEvent(HrMechanicEvent.builder()
-                .eventId(com.positivity.shared.id.UUIDv7Generator.generate())
-                .eventType(com.positivity.shopmanager.internal.service.enums.HrEventType.MECHANIC_SKILLS_UPDATED)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void replaceSkills(
+            @NonNull String personId, @NonNull List<HrMechanicEvent.Payload.Skill> skills, boolean awaitReplication) {
+        requireResolvablePersonId(personId);
+        awaitMechanic(personId, awaitReplication);
+        self.processHrEvent(HrMechanicEvent.builder()
+                .eventId(UUIDv7Generator.generate())
+                .eventType(HrEventType.MECHANIC_SKILLS_UPDATED)
                 .personId(personId)
                 .version(Instant.now(clock).toEpochMilli())
                 .occurredAt(Instant.now(clock))
+                .operatorEdit(true)
                 .payload(HrMechanicEvent.Payload.builder().skills(skills).build())
                 .build());
+    }
+
+    /**
+     * The one negative about a person this service can actually prove (#1987).
+     *
+     * <p>Every person id on this platform is a UUID (ADR-0027), so an id that is not one names
+     * nobody and never will — no amount of replication produces a mechanic for it. Checked before
+     * the wait, so a typo in a CSV costs nothing and is reported as the client error it is rather
+     * than spending the window and then being told to try again forever.
+     */
+    private void requireResolvablePersonId(@NonNull String personId) {
+        try {
+            UUID.fromString(personId);
+        } catch (IllegalArgumentException notAUuid) {
+            throw new ShopManagerValidationException("personId is not a UUID: " + personId);
+        }
+    }
+
+    /**
+     * Blocks until the person's mechanic row is visible, up to {@code pos.shop-manager
+     * .mechanic-replication-wait}, and refuses in a way the caller can act on when it never
+     * appears (#1987).
+     *
+     * <p>Mechanic rows are projected here from ACTIVE TECHNICIAN staffing assignments arriving on
+     * {@code people.events.v1}, so a mechanic created moments ago in pos-people is genuinely real
+     * and genuinely not here yet. The wait closes that window for a caller that assigns a
+     * technician and immediately sets their skills.
+     *
+     * <p>What it cannot close it does not pretend to answer. This service holds no signal that its
+     * replica is current — Kafka orders per aggregate, not globally, and the producer's outbox may
+     * not have published at all — so a missing mechanic row is always reported as
+     * {@link MechanicReplicationPendingException}, never as a 404. An earlier revision inferred
+     * "this person is not a technician" from the staffing-assignment replica holding no ACTIVE
+     * TECHNICIAN row for them; that replica is an event-fed history with no completeness
+     * guarantee, so a person with older non-technician assignments and a brand-new technician one
+     * still in flight was told, non-retryably, that they were not a mechanic — this issue's own
+     * ambiguity, one branch over.
+     *
+     * <p>Timed against {@link System#nanoTime()} rather than the injected clock: the deadline is
+     * real elapsed time, and a test running on a fixed clock would otherwise never reach it.
+     */
+    private void awaitMechanic(@NonNull String personId, boolean awaitReplication) {
+        long deadline = System.nanoTime() + (awaitReplication ? replicationWait.toNanos() : 0L);
+        while (true) {
+            if (mechanicRepository.findByPersonId(personId).isPresent()) {
+                return;
+            }
+            if (System.nanoTime() - deadline >= 0) {
+                throw mechanicPending(personId, awaitReplication);
+            }
+            try {
+                Thread.sleep(REPLICATION_POLL_INTERVAL);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw mechanicPending(personId, awaitReplication);
+            }
+        }
+    }
+
+    private MechanicReplicationPendingException mechanicPending(@NonNull String personId, boolean waited) {
+        log.warn(
+                "No mechanic for person {} (waited={}); answering retryable",
+                personId,
+                waited ? replicationWait : Duration.ZERO);
+        return new MechanicReplicationPendingException(
+                personId,
+                "No mechanic for person " + personId
+                        + " here yet. Either the staffing assignment that creates one has not"
+                        + " replicated, or the person holds no active TECHNICIAN assignment; this"
+                        + " service cannot tell the two apart. Retry shortly.");
     }
 
     private void persistAuditLog(HrMechanicEvent event, String beforeState, String afterState) {

@@ -6,6 +6,7 @@ import java.util.Collection;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -23,13 +24,18 @@ import org.springframework.web.server.ResponseStatusException;
  * Hibernate errors, {@code UUID.fromString} failures on stored data and any other internal fault
  * back to the caller verbatim, internal class names and query text included.
  *
- * <p>Two quite different things can fail a row, and they must not be reported the same way:
+ * <p>Three quite different things can fail a row, and they must not be reported the same way:
  *
  * <ul>
  *   <li><b>The row was rejected.</b> The exception is one the owning module's advice maps to a
  *       4xx, so its message describes the submitted record and is exactly what the caller needs
  *       in order to correct the row and resubmit. Reported with the module's own reason code and
  *       the message as written.
+ *   <li><b>The row is not refused, only early.</b> The exception declares {@code 503}, which a
+ *       module raises when a dependency it reads asynchronously has not caught up and it
+ *       therefore cannot say whether the row is wrong (#1987). Reported with
+ *       {@link #RETRYABLE_ERROR_CODE} and the module's own message, so a caller can tell a row
+ *       worth resubmitting from one that will never pass.
  *   <li><b>The server failed.</b> Anything else. Its message may name internal classes, columns
  *       or query text, so the caller gets {@link #INTERNAL_ERROR_CODE} and a correlation id and
  *       nothing else; the exception itself belongs in an ERROR log against that id.
@@ -62,6 +68,17 @@ public final class BulkIngestFailures {
      * domain.
      */
     public static final String INTERNAL_ERROR_CODE = "INTERNAL_ERROR";
+
+    /**
+     * Reason code for a row that was neither accepted nor refused: the owning service could not
+     * decide yet, because state it receives asynchronously had not arrived (#1987).
+     *
+     * <p>Shared across domains for the same reason {@link #INTERNAL_ERROR_CODE} is: what a caller
+     * acts on is whether the row is theirs to fix, ours to fix, or simply worth sending again, and
+     * that third answer does not vary by domain either. The message beside it is the module's own
+     * and names what it was waiting for.
+     */
+    public static final String RETRYABLE_ERROR_CODE = "REPLICATION_PENDING";
 
     /** Fixed text: everything a caller may act on is the code and the correlation id beside it. */
     private static final String INTERNAL_ERROR_MESSAGE = "Record could not be ingested because of a server-side error";
@@ -103,6 +120,36 @@ public final class BulkIngestFailures {
         }
         HttpStatusCode declared = declaredStatus(failure);
         return declared != null && declared.is4xxClientError();
+    }
+
+    /**
+     * Whether {@code failure} says "not yet" rather than "no": a self-declared {@code 503}, either
+     * as a {@link ResponseStatusException} or through a {@link ResponseStatus} annotation on its
+     * class.
+     *
+     * <p>Only self-declared statuses count, exactly as in {@link #isRowRejection}: a {@code 503}
+     * the module chose to raise is one it wrote a message for, while a transport failure that
+     * merely happens to carry one is an unclassified fault and stays generic.
+     */
+    public static boolean isRetryable(@NonNull Throwable failure) {
+        HttpStatusCode declared = declaredStatus(failure);
+        return declared != null && declared.isSameCodeAs(HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    /**
+     * A row the owning service could not decide on yet. Like {@link #rejected}, the message is
+     * passed through: it is the module's own account of what it was waiting for, and it is what
+     * tells the caller whether resubmitting is worth anything.
+     */
+    public static BulkIngestResult retryable(
+            int rowIndex, @NonNull Throwable failure, @NonNull String fallbackMessage) {
+        String message = rejectionMessage(failure);
+        return BulkIngestResult.builder()
+                .rowIndex(rowIndex)
+                .success(false)
+                .errorCode(RETRYABLE_ERROR_CODE)
+                .errorMessage(message == null || message.isBlank() ? fallbackMessage : message)
+                .build();
     }
 
     /**

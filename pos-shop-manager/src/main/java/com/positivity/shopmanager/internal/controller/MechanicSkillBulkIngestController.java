@@ -6,6 +6,7 @@ import com.positivity.bulkingest.BulkIngestResponse;
 import com.positivity.bulkingest.BulkIngestResult;
 import com.positivity.events.EmitEvent;
 import com.positivity.shopmanager.internal.dto.MechanicSkillBulkIngestRecord;
+import com.positivity.shopmanager.internal.exception.MechanicReplicationPendingException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.internal.service.MechanicSyncService;
@@ -82,18 +83,21 @@ public class MechanicSkillBulkIngestController extends AbstractBulkIngestControl
                     Use this tool when seeding a workshop's capabilities; use replaceMechanicSkills instead for a \
                     single mechanic.
                     Preconditions: each person must already exist as a mechanic. Mechanics are projected from \
-                    ACTIVE TECHNICIAN staffing assignments over Kafka, so run this after those assignments and \
-                    allow the projection to catch up.
+                    ACTIVE TECHNICIAN staffing assignments over Kafka, so run this after those assignments; the \
+                    service waits briefly for the projection itself, and a row it is still waiting on is reported \
+                    as retryable rather than failed.
                     Required inputs: jobId (UUID), locationId (UUID) and records, each with a personId, a \
                     skillCode and a proficiencyLevel from 1 to 5. A mechanic appears once per skill; the rows are \
                     grouped here.
                     Emits a SHOP_MECHANIC_SKILLS_BULK_INGEST event, and routes each mechanic's set through the \
-                    same HR-feed path the Kafka projection uses, so dedupe, stale-guard and audit apply as usual; \
+                    same HR-feed path the Kafka projection uses, so dedupe and audit apply as usual while the \
+                    mechanic's feed-ordering version is left untouched; \
                     re-running the same file is safe, since each mechanic's set is replaced rather than added to.
                     Returns 200 with a per-record result, where every row of one mechanic shares that mechanic's \
                     outcome since they were applied together: MECHANIC_SKILL_INGEST_FAILED with the reason for rows \
-                    the service refused, or INTERNAL_ERROR with a correlationId to quote for rows lost to a \
-                    server-side fault.
+                    the service refused, REPLICATION_PENDING for rows naming a mechanic that has not replicated \
+                    here yet and which are worth resubmitting, or INTERNAL_ERROR with a correlationId to quote for \
+                    rows lost to a server-side fault.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -142,11 +146,21 @@ public class MechanicSkillBulkIngestController extends AbstractBulkIngestControl
         int successCount = 0;
         int failureCount = 0;
 
+        // The replication wait is spent at most once for the whole batch. It waits out consumer lag
+        // on people.events.v1, which is a property of this service rather than of any one person:
+        // once a request has waited the window out and the projection still has not produced a
+        // mechanic, waiting again for the next person buys nothing. Per-person waits would also
+        // multiply by the row count — a chunk of 100 unresolvable rows at five seconds each is
+        // well past the loader's read timeout, which would abandon the response after the service
+        // had already applied rows, the exact "reports the opposite of what happened" failure
+        // #1981 fixed.
+        boolean awaitReplication = true;
+
         for (Map.Entry<String, List<Integer>> entry : rowsByPerson.entrySet()) {
             String personId = entry.getKey();
             List<Integer> rowIndexes = entry.getValue();
             try {
-                mechanicSyncService.replaceSkills(personId, skillsByPerson.get(personId));
+                mechanicSyncService.replaceSkills(personId, skillsByPerson.get(personId), awaitReplication);
                 for (int rowIndex : rowIndexes) {
                     results[rowIndex] = BulkIngestResult.builder()
                             .rowIndex(rowIndex)
@@ -156,6 +170,10 @@ public class MechanicSkillBulkIngestController extends AbstractBulkIngestControl
                 }
                 successCount += rowIndexes.size();
             } catch (Exception exception) {
+                if (exception instanceof MechanicReplicationPendingException) {
+                    // The window has been spent; every later miss in this request is immediate.
+                    awaitReplication = false;
+                }
                 // One call covers every row for this mechanic, so the failure is classified and
                 // logged once and the outcome it produced is reported against each of those rows.
                 // The rows are named here as well, because rowFailure's own entry can only carry

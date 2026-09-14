@@ -13,12 +13,10 @@ import com.positivity.people.internal.dto.StaffingAssignmentResponse;
 import com.positivity.people.internal.dto.UpdateStaffingAssignmentRequest;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
-import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.enums.AssignmentStatus;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
-import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -26,6 +24,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -62,9 +61,6 @@ class StaffingAssignmentLifecycleTest {
     private EmployeeLocationAssignmentRepository repository;
 
     @Mock
-    private ExtPersonReplicaRepository extPersonReplicaRepository;
-
-    @Mock
     private PeopleEventPublisher peopleEventPublisher;
 
     @Mock
@@ -79,18 +75,11 @@ class StaffingAssignmentLifecycleTest {
     void setUp() {
         service = new StaffingAssignmentServiceImpl(
                 repository,
-                extPersonReplicaRepository,
                 peopleEventPublisher,
                 employeeRepository,
                 locationReferenceService,
                 Clock.fixed(NOW, ZoneOffset.UTC));
 
-        when(extPersonReplicaRepository.findById(PERSON_ID))
-                .thenReturn(Optional.of(ExtPersonReplica.builder()
-                        .personId(PERSON_ID)
-                        .aggregateVersion(0)
-                        .updatedAt(NOW)
-                        .build()));
         when(employeeRepository.findByPersonId(PERSON_ID))
                 .thenReturn(Optional.of(Employee.builder()
                         .personId(PERSON_ID)
@@ -193,16 +182,6 @@ class StaffingAssignmentLifecycleTest {
         }
 
         @Test
-        void refusesAnAssignmentForAPersonTheReplicaDoesNotKnow() {
-            when(extPersonReplicaRepository.findById(PERSON_ID)).thenReturn(Optional.empty());
-            CreateStaffingAssignmentRequest request = createRequest();
-
-            assertThatThrownBy(() -> service.create(request, ACTOR))
-                    .isInstanceOf(ResponseStatusException.class)
-                    .hasMessageContaining("Person not found");
-        }
-
-        @Test
         void refusesAnAssignmentForANonActiveEmployee() {
             when(employeeRepository.findByPersonId(PERSON_ID))
                     .thenReturn(Optional.of(Employee.builder()
@@ -216,6 +195,13 @@ class StaffingAssignmentLifecycleTest {
                     .hasMessageContaining("not active");
         }
 
+        /**
+         * The employee row this module owns is what proves the person exists — not the
+         * {@code ext_people_contact_person} replica the identity round trip fills in a moment
+         * later (#1987) — so a person with no employee row is the only unknown person there is,
+         * and it answers 404 rather than the 400 "not active" it shared with a disabled employee
+         * before. The two are different remediations: one row is missing, the other is refused.
+         */
         @Test
         void refusesAnAssignmentForAPersonWithNoEmploymentRow() {
             when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.empty());
@@ -223,7 +209,11 @@ class StaffingAssignmentLifecycleTest {
 
             assertThatThrownBy(() -> service.create(request, ACTOR))
                     .isInstanceOf(ResponseStatusException.class)
-                    .hasMessageContaining("not active");
+                    .asInstanceOf(InstanceOfAssertFactories.type(ResponseStatusException.class))
+                    .satisfies(e -> {
+                        assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+                        assertThat(e.getReason()).contains("Employee not found for person");
+                    });
         }
 
         @Test
@@ -308,7 +298,7 @@ class StaffingAssignmentLifecycleTest {
             assertThat(service.update(ASSIGNMENT_ID, updateRequest(TODAY, null, false), ACTOR))
                     .isEmpty();
             // The person/location checks are skipped entirely for a missing assignment.
-            verify(extPersonReplicaRepository, never()).findById(any());
+            verify(locationReferenceService, never()).isLocationActive(any());
         }
 
         @Test

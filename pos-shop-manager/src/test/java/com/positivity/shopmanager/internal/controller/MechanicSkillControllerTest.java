@@ -1,13 +1,17 @@
 package com.positivity.shopmanager.internal.controller;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.shopmanager.internal.exception.MechanicReplicationPendingException;
 import com.positivity.shopmanager.internal.service.MechanicSyncService;
 import com.positivity.shopmanager.internal.service.dto.HrMechanicEvent;
 import java.util.List;
@@ -20,7 +24,6 @@ import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.server.ResponseStatusException;
 
 @WebMvcTest(MechanicSkillController.class)
 @SuppressWarnings({"java:S100", "java:S1192"})
@@ -54,15 +57,27 @@ class MechanicSkillControllerTest {
                 .isEqualTo(4);
     }
 
+    /**
+     * The mechanic may well exist and simply not have reached this service yet (#1987), so the
+     * caller is told to retry rather than told there is no such mechanic — and told it in a way a
+     * client can act on without reading the message: the status, the code, and Retry-After.
+     */
     @Test
     @WithMockUser(authorities = "shop:schedule:edit")
-    void replaceSkills_unknownMechanic_returns404() throws Exception {
-        doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Mechanic not found for person " + PERSON_ID))
+    void replaceSkills_mechanicNotReplicatedYet_returns503WithRetryAfter() throws Exception {
+        doThrow(new MechanicReplicationPendingException(
+                        PERSON_ID, "Mechanic for person " + PERSON_ID + " is not visible here yet; ..."))
                 .when(mechanicSyncService)
                 .replaceSkills(any(), anyList());
 
         mockMvc.perform(put(PATH).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isServiceUnavailable())
+                // Derived from the configured wait, not fixed: each retry costs the server another
+                // full window, so a shorter hint would have clients re-arriving mid-wait.
+                .andExpect(header().string("Retry-After", "5"))
+                .andExpect(jsonPath("$.code").value("MECHANIC_REPLICATION_PENDING"))
+                .andExpect(jsonPath("$.status").value(503))
+                .andExpect(jsonPath("$.nextAction").value(containsString("Retry")));
     }
 
     @Test

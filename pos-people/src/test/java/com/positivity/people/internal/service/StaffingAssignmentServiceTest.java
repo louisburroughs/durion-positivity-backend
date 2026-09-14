@@ -8,12 +8,10 @@ import com.positivity.people.internal.dto.CreateStaffingAssignmentRequest;
 import com.positivity.people.internal.dto.StaffingAssignmentResponse;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
-import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.enums.AssignmentStatus;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
-import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -45,9 +43,6 @@ class StaffingAssignmentServiceTest {
     private EmployeeLocationAssignmentRepository repository;
 
     @Mock
-    private ExtPersonReplicaRepository extPersonReplicaRepository;
-
-    @Mock
     private com.positivity.people.internal.config.PeopleEventPublisher peopleEventPublisher;
 
     @Mock
@@ -63,12 +58,7 @@ class StaffingAssignmentServiceTest {
     @BeforeEach
     void setUp() {
         service = new StaffingAssignmentServiceImpl(
-                repository,
-                extPersonReplicaRepository,
-                peopleEventPublisher,
-                employeeRepository,
-                locationReferenceService,
-                FIXED_CLOCK);
+                repository, peopleEventPublisher, employeeRepository, locationReferenceService, FIXED_CLOCK);
         // The mutations gate on the caller's location scope; a pre-rollout token is unscoped.
         LocationScopeFixtures.preRolloutCaller(ACTOR);
 
@@ -76,12 +66,6 @@ class StaffingAssignmentServiceTest {
                 .personId(PERSON_ID)
                 .status(EmployeeStatus.ACTIVE)
                 .build();
-        when(extPersonReplicaRepository.findById(PERSON_ID))
-                .thenReturn(Optional.of(ExtPersonReplica.builder()
-                        .personId(PERSON_ID)
-                        .aggregateVersion(0)
-                        .updatedAt(java.time.Instant.now())
-                        .build()));
         when(employeeRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(employee));
         when(locationReferenceService.isLocationActive(LOCATION_ID)).thenReturn(true);
         when(repository.existsOverlapping(any(), any(), any(), any(), any())).thenReturn(false);

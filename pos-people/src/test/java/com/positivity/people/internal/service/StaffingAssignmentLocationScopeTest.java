@@ -13,12 +13,10 @@ import com.positivity.people.internal.dto.CreateStaffingAssignmentRequest;
 import com.positivity.people.internal.dto.UpdateStaffingAssignmentRequest;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
-import com.positivity.people.internal.entity.ExtPersonReplica;
 import com.positivity.people.internal.enums.AssignmentStatus;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
-import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.security.common.LocationAncestorResolver;
 import com.positivity.security.common.LocationScope;
@@ -74,9 +72,6 @@ class StaffingAssignmentLocationScopeTest {
     private EmployeeLocationAssignmentRepository repository;
 
     @Mock
-    private ExtPersonReplicaRepository extPersonReplicaRepository;
-
-    @Mock
     private PeopleEventPublisher peopleEventPublisher;
 
     @Mock
@@ -91,17 +86,10 @@ class StaffingAssignmentLocationScopeTest {
     void setUp() {
         service = new StaffingAssignmentServiceImpl(
                 repository,
-                extPersonReplicaRepository,
                 peopleEventPublisher,
                 employeeRepository,
                 locationReferenceService,
                 Clock.fixed(NOW, ZoneOffset.UTC));
-        when(extPersonReplicaRepository.findById(PERSON_ID))
-                .thenReturn(Optional.of(ExtPersonReplica.builder()
-                        .personId(PERSON_ID)
-                        .aggregateVersion(0)
-                        .updatedAt(NOW)
-                        .build()));
         when(employeeRepository.findByPersonId(PERSON_ID))
                 .thenReturn(Optional.of(Employee.builder()
                         .personId(PERSON_ID)

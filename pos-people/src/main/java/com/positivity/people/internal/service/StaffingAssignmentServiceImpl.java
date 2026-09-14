@@ -10,7 +10,6 @@ import com.positivity.people.internal.enums.AssignmentStatus;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import com.positivity.people.internal.repository.EmployeeLocationAssignmentRepository;
 import com.positivity.people.internal.repository.EmployeeRepository;
-import com.positivity.people.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.people.internal.security.PeoplePermissions;
 import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.SecurityContextHelper;
@@ -49,8 +48,6 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
 
     private final EmployeeLocationAssignmentRepository repository;
 
-    private final ExtPersonReplicaRepository extPersonReplicaRepository;
-
     private final PeopleEventPublisher peopleEventPublisher;
 
     private final EmployeeRepository employeeRepository;
@@ -63,7 +60,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
     @Transactional
     public @NonNull StaffingAssignmentResponse create(
             @NonNull CreateStaffingAssignmentRequest request, @NonNull String actor) {
-        validatePersonAndLocation(request.getPersonId(), request.getLocationId());
+        Employee employee = validatePersonAndLocation(request.getPersonId(), request.getLocationId());
         requireLocationInReach(request.getLocationId());
 
         if (repository.existsOverlapping(
@@ -113,7 +110,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
         }
 
         EmployeeLocationAssignment assignment = EmployeeLocationAssignment.builder()
-                .employee(resolveEmployee(request.getPersonId()))
+                .employee(employee)
                 .locationId(request.getLocationId())
                 .role(request.getRole())
                 .isPrimary(primary)
@@ -164,7 +161,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
         // Both ends of the move are gated: the assignment being taken away from its current
         // location, and the location it is being given to.
         requireLocationInReach(existingAssignment.get().getLocationId());
-        validatePersonAndLocation(request.getPersonId(), request.getLocationId());
+        Employee employee = validatePersonAndLocation(request.getPersonId(), request.getLocationId());
         requireLocationInReach(request.getLocationId());
 
         if (repository.existsOverlappingExcludingId(
@@ -206,7 +203,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
                     });
         }
 
-        assignment.setEmployee(resolveEmployee(request.getPersonId()));
+        assignment.setEmployee(employee);
         assignment.setLocationId(request.getLocationId());
         assignment.setRole(request.getRole());
         assignment.setPrimary(request.isPrimary());
@@ -273,21 +270,27 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
                         HttpStatus.NOT_FOUND, "Employee not found for person: " + personId));
     }
 
-    private void validatePersonAndLocation(@NonNull UUID personId, @NonNull UUID locationId) {
-        extPersonReplicaRepository
-                .findById(personId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Person not found: " + personId));
-
-        EmployeeStatus status = employeeRepository
-                .findByPersonId(personId)
-                .map(com.positivity.people.internal.entity.Employee::getStatus)
-                .orElse(null);
-        if (status != EmployeeStatus.ACTIVE) {
+    /**
+     * Person existence is established from this module's own {@link Employee} row, never from the
+     * {@code ext_people_contact_person} replica (#1987).
+     *
+     * <p>pos-people mints the person id itself and writes the employee row against it before
+     * asking pos-people-contact to create the person ({@code EmployeeServiceImpl#createEmployee}),
+     * so an employee row <em>is</em> this module's proof that the person exists — it is the record
+     * that caused the person to exist. The replica is a copy of the identity attributes that comes
+     * back over {@code people-contact.events.v1} a moment later; gating on it made a lag on that
+     * round trip indistinguishable from a person who was never created, and answered
+     * "Person not found" for a person this very service had just created.
+     */
+    private Employee validatePersonAndLocation(@NonNull UUID personId, @NonNull UUID locationId) {
+        Employee employee = resolveEmployee(personId);
+        if (employee.getStatus() != EmployeeStatus.ACTIVE) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Person is not active: " + personId);
         }
 
         if (!locationReferenceService.isLocationActive(locationId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found or inactive: " + locationId);
         }
+        return employee;
     }
 }
