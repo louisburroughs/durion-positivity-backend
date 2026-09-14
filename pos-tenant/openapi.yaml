@@ -1238,7 +1238,8 @@ components:
         displayName:
           description: New human-readable name, unique across the registry case- and whitespace-insensitively; omitted or null leaves it unchanged
           maxLength: 200
-          minLength: 1
+          minLength: 0
+          pattern: .*\S.*
           type: string
       type: object
   securitySchemes:
