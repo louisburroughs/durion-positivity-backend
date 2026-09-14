@@ -24,6 +24,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -208,7 +209,11 @@ class StaffingAssignmentLifecycleTest {
 
             assertThatThrownBy(() -> service.create(request, ACTOR))
                     .isInstanceOf(ResponseStatusException.class)
-                    .hasMessageContaining("Employee not found for person");
+                    .asInstanceOf(InstanceOfAssertFactories.type(ResponseStatusException.class))
+                    .satisfies(e -> {
+                        assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+                        assertThat(e.getReason()).contains("Employee not found for person");
+                    });
         }
 
         @Test

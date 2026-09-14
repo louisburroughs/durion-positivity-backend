@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
@@ -13,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.shopmanager.internal.exception.MechanicReplicationPendingException;
+import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.service.MechanicSyncService;
 import com.positivity.shopmanager.internal.service.dto.HrMechanicEvent;
 import java.util.List;
@@ -20,12 +22,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * The mechanic-skill ingest, whose whole job is the folding: the underlying operation replaces a
@@ -68,9 +68,9 @@ class MechanicSkillBulkIngestControllerTest {
         // other's skill.
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<HrMechanicEvent.Payload.Skill>> captor = ArgumentCaptor.forClass(List.class);
-        verify(mechanicSyncService).replaceSkills(eq(ALICE), captor.capture());
+        verify(mechanicSyncService).replaceSkills(eq(ALICE), captor.capture(), anyBoolean());
         assertThat(captor.getValue()).hasSize(2);
-        verify(mechanicSyncService, times(1)).replaceSkills(eq(BOB), any());
+        verify(mechanicSyncService, times(1)).replaceSkills(eq(BOB), any(), anyBoolean());
     }
 
     @Test
@@ -78,14 +78,12 @@ class MechanicSkillBulkIngestControllerTest {
     void bulkIngest_everyRowOfAFailedMechanicFails() throws Exception {
         // The rows were applied together, so they share the outcome; reporting one as successful
         // would say a skill landed when the whole set was refused.
-        // The type replaceSkills actually raises for a person it knows and who is not a mechanic,
-        // not a stand-in: a rejection has to be recognisable as one for its message to reach the
-        // caller (issue #1718).
-        doThrow(new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Person " + ALICE + " is not a mechanic: no active TECHNICIAN assignment"))
+        // The type replaceSkills actually raises for an id that can never name a person, not a
+        // stand-in: a rejection has to be recognisable as one for its message to reach the caller
+        // (issue #1718).
+        doThrow(new ShopManagerValidationException("personId is not a UUID: " + ALICE))
                 .when(mechanicSyncService)
-                .replaceSkills(eq(ALICE), any());
+                .replaceSkills(eq(ALICE), any(), anyBoolean());
 
         mockMvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON).content(TWO_MECHANICS))
                 .andExpect(status().isOk())
@@ -95,10 +93,8 @@ class MechanicSkillBulkIngestControllerTest {
                 .andExpect(jsonPath("$.results[1].success").value(true))
                 .andExpect(jsonPath("$.results[2].errorCode").value("MECHANIC_SKILL_INGEST_FAILED"))
                 // Classified once for the mechanic, reported against each of that mechanic's rows.
-                .andExpect(jsonPath("$.results[0].errorMessage")
-                        .value("Person " + ALICE + " is not a mechanic: no active TECHNICIAN assignment"))
-                .andExpect(jsonPath("$.results[2].errorMessage")
-                        .value("Person " + ALICE + " is not a mechanic: no active TECHNICIAN assignment"));
+                .andExpect(jsonPath("$.results[0].errorMessage").value("personId is not a UUID: " + ALICE))
+                .andExpect(jsonPath("$.results[2].errorMessage").value("personId is not a UUID: " + ALICE));
     }
 
     /**
@@ -113,7 +109,7 @@ class MechanicSkillBulkIngestControllerTest {
         doThrow(new MechanicReplicationPendingException(
                         ALICE, "Mechanic for person " + ALICE + " is not visible here yet; ..."))
                 .when(mechanicSyncService)
-                .replaceSkills(eq(ALICE), any());
+                .replaceSkills(eq(ALICE), any(), anyBoolean());
 
         mockMvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON).content(TWO_MECHANICS))
                 .andExpect(status().isOk())
@@ -127,6 +123,32 @@ class MechanicSkillBulkIngestControllerTest {
     }
 
     /**
+     * The replication wait is spent at most once for a whole batch (#1987). Per-person waits would
+     * multiply by the row count — a chunk of unresolvable rows at five seconds each runs past the
+     * loader's read timeout, which abandons the response after the service has already applied
+     * rows: the "reports the opposite of what happened" failure #1981 fixed.
+     */
+    @Test
+    @WithMockUser(authorities = "shop:schedule:edit")
+    void bulkIngest_spendsTheReplicationWaitAtMostOncePerRequest() throws Exception {
+        doThrow(new MechanicReplicationPendingException(ALICE, "no mechanic for " + ALICE + " here yet"))
+                .when(mechanicSyncService)
+                .replaceSkills(eq(ALICE), any(), anyBoolean());
+        doThrow(new MechanicReplicationPendingException(BOB, "no mechanic for " + BOB + " here yet"))
+                .when(mechanicSyncService)
+                .replaceSkills(eq(BOB), any(), anyBoolean());
+
+        mockMvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON).content(TWO_MECHANICS))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureCount").value(3));
+
+        // Alice is first in file order and gets the window; Bob, after a miss has already proved
+        // the projection is behind, is asked not to wait at all.
+        verify(mechanicSyncService).replaceSkills(eq(ALICE), any(), eq(true));
+        verify(mechanicSyncService).replaceSkills(eq(BOB), any(), eq(false));
+    }
+
+    /**
      * Issue #1718: a row lost to a server-side fault must not carry the exception's text into the
      * 200 body that reports it. The caller gets a generic code and their own correlation id.
      */
@@ -135,7 +157,7 @@ class MechanicSkillBulkIngestControllerTest {
     void bulkIngest_serverFault_reportsGenericFailureAndTheCorrelationId() throws Exception {
         doThrow(new IllegalStateException("could not execute statement [insert into shop_mechanic_skill ...]"))
                 .when(mechanicSyncService)
-                .replaceSkills(eq(ALICE), any());
+                .replaceSkills(eq(ALICE), any(), anyBoolean());
 
         mockMvc.perform(post(PATH)
                         .header("X-Correlation-Id", "corr-from-caller")

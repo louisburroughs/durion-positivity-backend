@@ -54,6 +54,7 @@ service area names its fixtures carry.
 
 import argparse
 import base64
+import collections
 import csv
 import datetime
 import io
@@ -111,6 +112,22 @@ PACK_FILES = [
 CATALOG_PRODUCTS_PACK = "catalog/products.csv"
 
 POLL_INTERVAL_SECONDS = 5
+
+# Row-level error code a service returns when it cannot yet judge a row because state it receives
+# asynchronously has not arrived (pos-bulk-ingest-lib's BulkIngestFailures.RETRYABLE_ERROR_CODE).
+#
+# This is what replaced the blind `--settle-seconds` sleep of #1981. The driver no longer guesses
+# that a pack might be racing replication; the owning service says so, per row, and the driver
+# re-runs only a pack whose every failure carries this code. A pack that failed for any other
+# reason is a real failure and is reported as one on the first attempt.
+#
+# Re-running is safe for the packs this can fire for, and the property has to be established before
+# adding any pack that might see this code: STAFFING_ASSIGNMENT refuses a row overlapping one
+# already stored, so a landed row cannot be written twice, and MECHANIC_SKILL replaces a mechanic's
+# whole skill set, so a replay converges rather than accumulating. Absent both, a retry duplicates.
+REPLICATION_PENDING_CODE = "REPLICATION_PENDING"
+MAX_REPLICATION_ATTEMPTS = 4
+REPLICATION_BACKOFF_SECONDS = 5
 
 # The tenant every job loads into (ADR-0062, plan WS8), from --tenant-id, else the token's own
 # tenant (its tid claim). None omits tenantId from the create request, which the loader accepts only
@@ -593,6 +610,41 @@ def _without_row_coded(file_bytes, code):
     return buffer.getvalue().encode("utf-8")
 
 
+PackOutcome = collections.namedtuple("PackOutcome", "ok job_id")
+
+
+def failures_are_all_replication_pending(gateway, job_id):
+    """Whether every row this job refused was refused for replication lag, and there is one.
+
+    The owning service classifies each row: REPLICATION_PENDING means it could not judge the row
+    yet because state it consumes asynchronously had not arrived, which is the one failure worth
+    sending again unchanged. Anything else -- a bad value, a duplicate, a server fault -- is an
+    answer, and re-running would just produce it a second time.
+
+    A job whose audit cannot be read is treated as not retryable: the driver must not loop on a
+    pack it cannot classify.
+    """
+    try:
+        _, records = gateway.get(f"/bulk-loader/bulk-jobs/{job_id}/audit")
+    except Exception as exc:  # noqa: BLE001 - any read failure means "do not retry"
+        print(f"  could not read audit for job {job_id} ({exc}); not retrying")
+        return False
+
+    failed_codes = []
+    for record in records or []:
+        if record.get("reviewStatus") == "APPROVED":
+            continue
+        raw_reason = record.get("reasonCodes")
+        if not raw_reason:
+            return False
+        try:
+            failed_codes.append(json.loads(raw_reason).get("errorCode"))
+        except (TypeError, ValueError):
+            return False
+
+    return bool(failed_codes) and all(code == REPLICATION_PENDING_CODE for code in failed_codes)
+
+
 def run_pack_file(gateway, relative_path, domain_type, location_id, poll_timeout_seconds, skip_code=None):
     csv_path = os.path.join(FIXTURE_ROOT, relative_path)
     file_name = os.path.basename(csv_path)
@@ -619,7 +671,7 @@ def run_pack_file(gateway, relative_path, domain_type, location_id, poll_timeout
             break
         if time.monotonic() > deadline:
             print(f"  TIMEOUT: job {job_id} still {status['status']} after {poll_timeout_seconds}s")
-            return False
+            return PackOutcome(False, job_id)
         time.sleep(POLL_INTERVAL_SECONDS)
 
     ok = status["status"] == "COMPLETED" and not status.get("failureCount")
@@ -631,7 +683,7 @@ def run_pack_file(gateway, relative_path, domain_type, location_id, poll_timeout
         # Every rejected row now has an audit record naming what the owning service said about it,
         # so point at the listing that carries the reason rather than the job summary.
         print(f"  review failures: GET {gateway.base_url}/bulk-loader/bulk-jobs/{job_id}/audit")
-    return ok
+    return PackOutcome(ok, job_id)
 
 
 def main():
@@ -728,9 +780,21 @@ def main():
             # The driver created this site itself to scope the jobs; sending it again would be a
             # self-inflicted duplicate.
             skip_code = bootstrapped_code if domain == "LOCATION" else None
-            all_ok = (
-                run_pack_file(gateway, path, domain, location_id, args.poll_timeout, skip_code) and all_ok
-            )
+            outcome = run_pack_file(gateway, path, domain, location_id, args.poll_timeout, skip_code)
+            attempt = 1
+            while (
+                not outcome.ok
+                and attempt < MAX_REPLICATION_ATTEMPTS
+                and failures_are_all_replication_pending(gateway, outcome.job_id)
+            ):
+                print(
+                    f"  every failed row of {domain} reports {REPLICATION_PENDING_CODE}; the owning service "
+                    f"has not caught up. Re-running (attempt {attempt + 1} of {MAX_REPLICATION_ATTEMPTS})"
+                )
+                time.sleep(REPLICATION_BACKOFF_SECONDS)
+                outcome = run_pack_file(gateway, path, domain, location_id, args.poll_timeout, skip_code)
+                attempt += 1
+            all_ok = outcome.ok and all_ok
 
     print("done" if all_ok else "done with failures — inspect the review queue / job counters above")
     return 0 if all_ok else 1

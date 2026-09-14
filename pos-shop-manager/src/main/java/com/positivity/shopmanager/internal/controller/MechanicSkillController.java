@@ -1,11 +1,14 @@
 package com.positivity.shopmanager.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.shared.error.ApiError;
 import com.positivity.shopmanager.internal.dto.ReplaceMechanicSkillsRequest;
 import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.internal.service.MechanicSyncService;
 import com.positivity.shopmanager.internal.service.dto.HrMechanicEvent;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -34,24 +37,34 @@ public class MechanicSkillController {
                         HR feed never carries; do not use this tool to edit the mechanic record itself, which is \
                         projected from people.events.v1.
                         Preconditions: the caller must hold shop:schedule:edit and a mechanic must exist for the \
-                        personId (technicians are projected from ACTIVE TECHNICIAN staffing assignments).
+                        personId (technicians are projected from ACTIVE TECHNICIAN staffing assignments over \
+                        Kafka; this endpoint waits briefly for that projection rather than refusing immediately).
                         Required inputs: personId as a path parameter and skills, a non-empty array where each entry \
                         has skillCode and proficiencyLevel between 1 and 5; the array replaces all current skills.
                         Emits a SHOP_MECHANIC_SKILLS_REPLACE event and records a mechanic audit-log entry; the \
                         edit rides the HR-feed path as a synthetic skills event stamped with the current \
                         timestamp, advancing the sync version so ordering against in-flight feed events is \
                         last-write-wins.
-                        Returns 204 on success, 400 when the body is invalid, 404 when the person is known here \
-                        and holds no active TECHNICIAN assignment, and 503 MECHANIC_REPLICATION_PENDING with a \
-                        Retry-After when the mechanic is not visible here yet: the service waits briefly for the \
-                        staffing assignment that creates it, and answers 503 rather than 404 where it cannot tell \
-                        an unknown person from an unreplicated one. Retry a 503; a 404 will not change.
+                        Returns 204 on success, 400 when the body is invalid or personId is not a UUID, and 503 \
+                        MECHANIC_REPLICATION_PENDING with a Retry-After when no mechanic exists for the person: \
+                        the service waits briefly for the staffing assignment that creates one, and where it \
+                        still finds none it answers 503 rather than 404 because it cannot tell an unreplicated \
+                        mechanic from a person who has no active TECHNICIAN assignment at all. Retry a 503; if it \
+                        persists, check that the person holds an active TECHNICIAN assignment.
                         """)
     @ApiResponse(responseCode = "204", description = "Skill set replaced.")
-    @ApiResponse(responseCode = "404", description = "The person is known here and is not a mechanic.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request body, or personId is not a UUID.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Forbidden.",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "503",
-            description = "The mechanic has not replicated here yet; retry (MECHANIC_REPLICATION_PENDING).")
+            description = "No mechanic for that person here yet; retry (MECHANIC_REPLICATION_PENDING).",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "SHOP_MECHANIC_SKILLS_REPLACE", apiVersion = "1")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
             name = "bearerAuth",

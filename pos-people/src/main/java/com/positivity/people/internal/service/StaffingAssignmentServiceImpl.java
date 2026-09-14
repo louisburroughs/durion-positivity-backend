@@ -60,7 +60,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
     @Transactional
     public @NonNull StaffingAssignmentResponse create(
             @NonNull CreateStaffingAssignmentRequest request, @NonNull String actor) {
-        validatePersonAndLocation(request.getPersonId(), request.getLocationId());
+        Employee employee = validatePersonAndLocation(request.getPersonId(), request.getLocationId());
         requireLocationInReach(request.getLocationId());
 
         if (repository.existsOverlapping(
@@ -110,7 +110,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
         }
 
         EmployeeLocationAssignment assignment = EmployeeLocationAssignment.builder()
-                .employee(resolveEmployee(request.getPersonId()))
+                .employee(employee)
                 .locationId(request.getLocationId())
                 .role(request.getRole())
                 .isPrimary(primary)
@@ -161,7 +161,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
         // Both ends of the move are gated: the assignment being taken away from its current
         // location, and the location it is being given to.
         requireLocationInReach(existingAssignment.get().getLocationId());
-        validatePersonAndLocation(request.getPersonId(), request.getLocationId());
+        Employee employee = validatePersonAndLocation(request.getPersonId(), request.getLocationId());
         requireLocationInReach(request.getLocationId());
 
         if (repository.existsOverlappingExcludingId(
@@ -203,7 +203,7 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
                     });
         }
 
-        assignment.setEmployee(resolveEmployee(request.getPersonId()));
+        assignment.setEmployee(employee);
         assignment.setLocationId(request.getLocationId());
         assignment.setRole(request.getRole());
         assignment.setPrimary(request.isPrimary());
@@ -282,11 +282,8 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
      * round trip indistinguishable from a person who was never created, and answered
      * "Person not found" for a person this very service had just created.
      */
-    private void validatePersonAndLocation(@NonNull UUID personId, @NonNull UUID locationId) {
-        Employee employee = employeeRepository
-                .findByPersonId(personId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Employee not found for person: " + personId));
+    private Employee validatePersonAndLocation(@NonNull UUID personId, @NonNull UUID locationId) {
+        Employee employee = resolveEmployee(personId);
         if (employee.getStatus() != EmployeeStatus.ACTIVE) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Person is not active: " + personId);
         }
@@ -294,5 +291,6 @@ public class StaffingAssignmentServiceImpl implements StaffingAssignmentService 
         if (!locationReferenceService.isLocationActive(locationId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found or inactive: " + locationId);
         }
+        return employee;
     }
 }

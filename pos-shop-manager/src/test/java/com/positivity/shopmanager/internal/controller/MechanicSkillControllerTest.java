@@ -24,7 +24,6 @@ import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.server.ResponseStatusException;
 
 @WebMvcTest(MechanicSkillController.class)
 @SuppressWarnings({"java:S100", "java:S1192"})
@@ -58,19 +57,6 @@ class MechanicSkillControllerTest {
                 .isEqualTo(4);
     }
 
-    @Test
-    @WithMockUser(authorities = "shop:schedule:edit")
-    void replaceSkills_personWhoIsNotAMechanic_returns404() throws Exception {
-        doThrow(new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Person " + PERSON_ID + " is not a mechanic: no active TECHNICIAN assignment"))
-                .when(mechanicSyncService)
-                .replaceSkills(any(), anyList());
-
-        mockMvc.perform(put(PATH).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
-                .andExpect(status().isNotFound());
-    }
-
     /**
      * The mechanic may well exist and simply not have reached this service yet (#1987), so the
      * caller is told to retry rather than told there is no such mechanic — and told it in a way a
@@ -86,7 +72,9 @@ class MechanicSkillControllerTest {
 
         mockMvc.perform(put(PATH).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
                 .andExpect(status().isServiceUnavailable())
-                .andExpect(header().string("Retry-After", "1"))
+                // Derived from the configured wait, not fixed: each retry costs the server another
+                // full window, so a shorter hint would have clients re-arriving mid-wait.
+                .andExpect(header().string("Retry-After", "5"))
                 .andExpect(jsonPath("$.code").value("MECHANIC_REPLICATION_PENDING"))
                 .andExpect(jsonPath("$.status").value(503))
                 .andExpect(jsonPath("$.nextAction").value(containsString("Retry")));

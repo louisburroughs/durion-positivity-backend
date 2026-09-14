@@ -16,12 +16,14 @@ import com.positivity.shopmanager.internal.exception.SourceNotEligibleException;
 import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -33,7 +35,6 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @ControllerAdvice
-@RequiredArgsConstructor
 public class GlobalExceptionHandler {
 
     private static final String CODE_CRM_UNAVAILABLE = "CRM_UNAVAILABLE";
@@ -42,14 +43,24 @@ public class GlobalExceptionHandler {
     private static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
     private static final String RETRY_AFTER_HEADER = "Retry-After";
 
-    /**
-     * Seconds a caller is asked to wait before retrying a replication-pending write. One: the gap
-     * being waited out is a Kafka round trip the service has already spent its own wait on, so the
-     * answer is "again shortly", not "come back later".
-     */
-    private static final String RETRY_AFTER_SECONDS = "1";
-
     private final Clock clock;
+
+    /**
+     * Seconds a caller is asked to wait before retrying a replication-pending write: the same
+     * window the service itself waits out, rounded up, never less than one second.
+     *
+     * <p>Derived rather than fixed, because each retry costs the server another full wait on a
+     * servlet thread. A client honouring a `Retry-After` shorter than that window would keep a
+     * thread near-permanently occupied on an id that never resolves.
+     */
+    private final String retryAfterSeconds;
+
+    public GlobalExceptionHandler(
+            @NonNull Clock clock,
+            @Value("${pos.shop-manager.mechanic-replication-wait:PT5S}") @NonNull Duration replicationWait) {
+        this.clock = clock;
+        this.retryAfterSeconds = Long.toString(Math.max(1L, (long) Math.ceil(replicationWait.toMillis() / 1000d)));
+    }
 
     @ExceptionHandler(CrmCustomerNotFoundException.class)
     public ResponseEntity<ApiError> handleCustomerNotFound(
@@ -175,7 +186,7 @@ public class GlobalExceptionHandler {
                         + "and that this service is consuming people.events.v1.");
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .header(CORRELATION_ID_HEADER, correlationId.toString())
-                .header(RETRY_AFTER_HEADER, RETRY_AFTER_SECONDS)
+                .header(RETRY_AFTER_HEADER, retryAfterSeconds)
                 .body(body);
     }
 

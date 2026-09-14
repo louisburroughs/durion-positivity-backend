@@ -64,6 +64,9 @@ public abstract class AbstractBulkIngestController<T> {
             return BulkIngestFailures.rejected(rowIndex, rowRejectionCode(), exception, rowRejectionFallbackMessage());
         }
 
+        // Checked after isRowRejection, deliberately: a 4xx is the module saying "this row is
+        // wrong", which is an answer, and an answer outranks "ask again" for a type that somehow
+        // declared both.
         if (BulkIngestFailures.isRetryable(exception)) {
             log.warn("Deferred record at row {}: {}", rowIndex, exception.getMessage());
             return BulkIngestFailures.retryable(rowIndex, exception, rowRetryableFallbackMessage());
