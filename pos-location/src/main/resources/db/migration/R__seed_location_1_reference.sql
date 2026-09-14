@@ -85,6 +85,222 @@ INSERT INTO service_areas (id, name, description, active, created_at, updated_at
 VALUES ('fe5bd0c2-6c4b-9929-0f3f-00099be619d5'::uuid, 'far southern fringe beyond York/Lancaster', 'upper-piedmont-sc service area', TRUE, NOW(), NOW())
 ON CONFLICT (tenant_id, name) DO NOTHING;
 
+-- Service area postal codes. The mobile-unit eligibility query resolves an address
+-- through these rows and nothing else -- MobileUnitCoverageRuleRepository inner-joins
+-- serviceArea.postalCodes, so an area without them covers no address however many
+-- coverage rules point at it. NC/SC codes matching each area's name, and disjoint
+-- across these 25 areas -- though nothing in the schema enforces that, so an area
+-- added later may overlap and a postal code may then resolve to more than one.
+--
+-- Resolved by name rather than by the literal ids above, and deliberately: the area
+-- inserts are ON CONFLICT (tenant_id, name) DO NOTHING, so an area that already exists
+-- under a different id -- created through POST /v1/service-areas before this migration
+-- first ran -- keeps that id and never gets the hardcoded one. Naming a literal id here
+-- would then violate the (tenant_id, service_area_id) foreign key, abort this repeatable
+-- migration, and leave pos-location unable to start. SELECT makes that case a no-op.
+-- The tenant_id predicate matters because Flyway runs as the owner, which bypasses RLS:
+-- without it a same-named area in another tenant would match.
+-- Mecklenburg County
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28202'), ('28203'), ('28204'), ('28205'), ('28206'), ('28208'), ('28209'), ('28211')) AS v(code)
+WHERE sa.name = 'Mecklenburg County'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- South Mecklenburg / Ballantyne / Pineville
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28134'), ('28210'), ('28226'), ('28270'), ('28277')) AS v(code)
+WHERE sa.name = 'South Mecklenburg / Ballantyne / Pineville'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Huntersville / Cornelius / Davidson corridor
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28031'), ('28036'), ('28078')) AS v(code)
+WHERE sa.name = 'Huntersville / Cornelius / Davidson corridor'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Mooresville / south Iredell
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28115'), ('28117'), ('28166')) AS v(code)
+WHERE sa.name = 'Mooresville / south Iredell'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Statesville / north Iredell
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28625'), ('28677')) AS v(code)
+WHERE sa.name = 'Statesville / north Iredell'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Lincoln County
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28037'), ('28080'), ('28092'), ('28168')) AS v(code)
+WHERE sa.name = 'Lincoln County'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Catawba County – extended market
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28601'), ('28602'), ('28610'), ('28613'), ('28658')) AS v(code)
+WHERE sa.name = 'Catawba County – extended market'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Concord / Kannapolis
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28025'), ('28027'), ('28081'), ('28083')) AS v(code)
+WHERE sa.name = 'Concord / Kannapolis'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Salisbury / Rowan County
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28023'), ('28144'), ('28146'), ('28147')) AS v(code)
+WHERE sa.name = 'Salisbury / Rowan County'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Albemarle / Stanly County
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28001'), ('28009'), ('28128'), ('28137')) AS v(code)
+WHERE sa.name = 'Albemarle / Stanly County'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Belmont / Mount Holly
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28012'), ('28120')) AS v(code)
+WHERE sa.name = 'Belmont / Mount Holly'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Gastonia / Bessemer City
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28016'), ('28052'), ('28054'), ('28056')) AS v(code)
+WHERE sa.name = 'Gastonia / Bessemer City'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Shelby / Cleveland County
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28086'), ('28090'), ('28150'), ('28152')) AS v(code)
+WHERE sa.name = 'Shelby / Cleveland County'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Matthews / Indian Trail
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28079'), ('28104'), ('28105')) AS v(code)
+WHERE sa.name = 'Matthews / Indian Trail'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Monroe / Wingate
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28110'), ('28112'), ('28174')) AS v(code)
+WHERE sa.name = 'Monroe / Wingate'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Anson County – rural extension
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28007'), ('28091'), ('28133'), ('28170')) AS v(code)
+WHERE sa.name = 'Anson County – rural extension'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Fort Mill / Tega Cay
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('29708'), ('29715')) AS v(code)
+WHERE sa.name = 'Fort Mill / Tega Cay'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Rock Hill
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('29730'), ('29732')) AS v(code)
+WHERE sa.name = 'Rock Hill'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- York / Clover
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('29710'), ('29745')) AS v(code)
+WHERE sa.name = 'York / Clover'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Lancaster / Indian Land
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('29707'), ('29720'), ('29058')) AS v(code)
+WHERE sa.name = 'Lancaster / Indian Land'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Chester County
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('29055'), ('29706'), ('29714')) AS v(code)
+WHERE sa.name = 'Chester County'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Chesterfield County – extended
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('29709'), ('29718'), ('29728'), ('29741')) AS v(code)
+WHERE sa.name = 'Chesterfield County – extended'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Alexander County
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28636'), ('28678'), ('28681')) AS v(code)
+WHERE sa.name = 'Alexander County'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- Unifour spillover
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('28630'), ('28638'), ('28645'), ('28655')) AS v(code)
+WHERE sa.name = 'Unifour spillover'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+-- far southern fringe beyond York/Lancaster
+INSERT INTO service_area_postal_codes (service_area_id, country_code, postal_code)
+SELECT sa.id, 'US', v.code
+FROM service_areas sa
+CROSS JOIN (VALUES ('29009'), ('29010'), ('29020'), ('29045')) AS v(code)
+WHERE sa.name = 'far southern fringe beyond York/Lancaster'
+  AND sa.tenant_id = public.app_current_tenant()
+ON CONFLICT (tenant_id, country_code, service_area_id, postal_code) DO NOTHING;
+
 -- Capabilities
 INSERT INTO service_location_capabilities (id, code, name, active, created_at, updated_at)
 VALUES ('7df8046a-3862-e521-e888-e509c7c5483d'::uuid, 'ALIGNMENT', 'Wheel Alignment', TRUE, NOW(), NOW())

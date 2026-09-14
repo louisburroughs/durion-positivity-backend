@@ -79,7 +79,7 @@ All `*_operational_*` seed data (and catalog items — see §2) moves out of Fly
   application layer — `CatalogBulkIngestController` is `@EmitEvent`-annotated and publishes a
   product fact per row. Loader domains exist for catalog products, base prices,
   customers/persons, people, vehicles, vehicle fitment, opening stock, storage locations, bays,
-  mobile units, staffing assignments, putaway rules, cycle count plans, users, user-person links
+  staffing assignments, putaway rules, cycle count plans, users, user-person links
   and mechanic skills (#1558), and — added with Tier 0 (#1575) — service operations, vehicle-keyed
   labor standards, service packages, package membership, hourly labor rates and labor-matrix
   adjustment steps.
@@ -91,8 +91,12 @@ All `*_operational_*` seed data (and catalog items — see §2) moves out of Fly
   owning service said about it, which is what makes the review queue and its correction endpoint
   reachable. A job that rejected rows reports `PARTIAL`, not `COMPLETED`.
 - **Fallback channel: plain gateway API calls** (scripted, `X-API-Version: 1`, a dedicated
-  `seed-operator` service account) for domains with no bulk-ingest endpoint yet. One pack still
-  uses it: `location/site-defaults.csv`, which calls a single idempotent upsert per site.
+  `seed-operator` service account) for domains whose bulk-ingest endpoint cannot express the
+  rows the fixture needs. Two packs use it: `location/site-defaults.csv`, which calls a single
+  idempotent upsert per site, and `location/mobile-units.csv`, which moved off the loader in #1986
+  — an ACTIVE mobile unit needs a travel buffer policy, capabilities and coverage rules, and
+  `MobileUnitLoaderRecord` carries none of the three, so every active row failed. `DomainType.
+  MOBILE_UNIT` and its loader strategy remain wired for callers outside the seed pipeline.
 
 The pipeline is:
 
@@ -145,7 +149,7 @@ replicas.
 | pos-price `R__seed_reference_price_labor_rates.sql` | 2 | **Deleted, converted in the same PR** (#1575 Tier 0) — `scripts/fixtures/seed/alpha/price/labor-rates.csv` and `labor-rate-adjustments.csv` through two new bulk-ingest endpoints. The seed's shop ids were placeholders that matched no site, so the shop-scoped rates could never have answered for a real location; the files name sites by location code and the loader resolves them |
 | pos-inventory `R__seed_reference_inventory.sql` | 1 | **Trimmed to genuine tier 1** (#1554) — the replenishment policy, the terminal ANY putaway rule, and the initial-stock `inventory_ledger_entry` rows all referenced the retired location seed's fixed storage-location UUIDs and were removed; the ANY rule lives in `scripts/fixtures/seed/alpha/inventory/putaway-rules.csv`, initial stock in `inventory/on-hand.csv` (bulk-ingest + adjustment approval). Only the approval-threshold config remains |
 | pos-location `R__seed_location_1_reference.sql` | 1 | Keep |
-| pos-location `R__seed_location_2_operational_data.sql` | 2 | **Deleted** (#1554) — the fixture packs are the only source: locations (LOCATION loader job), storage locations (uniform realistic garage mix, 38 per site incl. an INACTIVE retired bin and capacity descriptors applied via follow-up PATCH), bays (21), and mobile units (9). Intentionally dropped: MU capabilities/coverage rules, travel-buffer refs, parent edges, staging/quarantine back-references (no API writes the back-references) |
+| pos-location `R__seed_location_2_operational_data.sql` | 2 | **Deleted** (#1554) — the fixture packs are the only source: locations (LOCATION loader job), storage locations (uniform realistic garage mix, 38 per site incl. an INACTIVE retired bin and capacity descriptors applied via follow-up PATCH), bays (21), and mobile units (9). Mobile-unit capabilities, coverage rules and travel-buffer refs are carried by the fixtures as of #1986. Intentionally dropped: parent edges, staging/quarantine back-references (no API writes the back-references) |
 | pos-people `R__seed_reference_people.sql` | 1 | Keep |
 | pos-people `R__seed_people_operational_data.sql` | 2 | **Deleted** (#1554) — employees-only since #875 and fully converted to `scripts/fixtures/seed/alpha/people/` (bulk employees + API-pack staffing assignments); its staffing rows and replica bootstraps were keyed to the deleted location seed's fixed UUIDs, and replicas hydrate from events |
 | pos-people `R__seed_timekeeping_approval_data.sql` | 2 | **Dropped (deleted, not converted)** — fixed person UUIDs and hardcoded dates don't survive the pipeline model, and the seed masked a real gap: nothing creates `time_period` rows (repository is read-only in production code), so the approval flow is inoperable without it. Filed as [#1527](https://github.com/louisburroughs/durion-positivity-backend/issues/1527); demo coverage revisits once period management exists |

@@ -46,7 +46,10 @@ pack inventory:adjustment:create and inventory:adjustment:approve, and for the
 cycle-count-plans pack
 inventory:cycle_count:view and inventory:cycle_count:initiate, for the Tier 0 catalog packs
 catalog:service:ingest, catalog:labor_standard:import and catalog:service_package:manage, and
-for the labor-rate packs pricing:labor_rate:manage).
+for the labor-rate packs pricing:labor_rate:manage). The mobile-units pack additionally needs
+location:mobile-unit:manage and location:mobile-unit:read to create and list the units, plus
+location:travel-buffer-policy:read and location:service-area:read to resolve the policy and
+service area names its fixtures carry.
 """
 
 import argparse
@@ -80,7 +83,7 @@ PACK_FILES = [
     ("location/storage-locations.csv", "STORAGE_LOCATION"),
     ("location/site-defaults.csv", "@site-defaults"),
     ("location/bays.csv", "BAY"),
-    ("location/mobile-units.csv", "MOBILE_UNIT"),
+    ("location/mobile-units.csv", "@mobile-units"),
     ("people/employees.csv", "PERSON"),
     ("people/staffing-assignments.csv", "STAFFING_ASSIGNMENT"),
     ("security/user-person-links.csv", "USER_PERSON_LINK"),
@@ -319,8 +322,229 @@ def run_site_defaults(gateway, relative_path, _location_id):
     return failures == 0
 
 
+MOBILE_UNIT_COVERAGE_RULES_PACK = "location/mobile-unit-coverage-rules.csv"
+
+
+def named_ids(gateway, path, label):
+    """name -> id for a reference collection the gateway returns as a bare list.
+
+    Both /location/travel-buffer-policies and /location/service-areas are
+    unpaginated `List<T>` endpoints, so one call is the whole roster. Fetched
+    once per run and handed to every row rather than re-resolved per unit: nine
+    units naming three policies between them is nine identical round trips
+    otherwise."""
+    status_code, roster = gateway.get(path, allow_error=True)
+    if status_code != 200:
+        # Named explicitly: without it every unit would look like a bad fixture name when the
+        # cause is the token's permissions or the location service being down.
+        print(f"  WARN: cannot list {label} (HTTP {status_code}) — check the token's read permission")
+        return {}
+    return {entry["name"]: entry["id"] for entry in roster or []}
+
+
+def total_pages(body):
+    """How many pages a Spring `Page` response says it has, under either serialisation.
+
+    Spring Boot 4 serialises a raw `Page` flat by default but nests the metadata under `page` when
+    `spring.data.web.pageable.serialization-mode=VIA_DTO`, which is the non-deprecated setting. A
+    reader that only knows the flat shape silently stops after page 0; harmless at nine units, and
+    a re-run that re-POSTs everything past the first hundred once there are more."""
+    body = body or {}
+    nested = body.get("page") if isinstance(body.get("page"), dict) else {}
+    return body.get("totalPages") or nested.get("totalPages") or 1
+
+
+def existing_mobile_units(gateway):
+    """name -> the unit as the service currently holds it.
+
+    The service rejects a duplicate (baseLocationId, name) with 409 rather than upserting, so a
+    re-run has to skip what is already there. But skipping on the name alone is not enough: an alpha
+    seeded before #1986 carries all nine names as INACTIVE units with no policy, capabilities or
+    coverage, and treating those as done would report a clean run while leaving eligibility empty
+    forever. The whole unit is kept so mobile_unit_shortfall can tell the two apart."""
+    units, page = {}, 0
+    while True:
+        status_code, body = gateway.get(f"/location/mobile-units?page={page}&size=100", allow_error=True)
+        if status_code != 200:
+            print(f"  WARN: cannot list existing mobile units (HTTP {status_code}); "
+                  "assuming none and letting duplicates fail per row")
+            return {}
+        for unit in (body or {}).get("content") or []:
+            units[unit["name"]] = unit
+        page += 1
+        if page >= total_pages(body):
+            return units
+
+
+def mobile_unit_shortfall(gateway, unit, row, rules):
+    """Why an already-present unit falls short of what the fixture describes, or None when it does not.
+
+    Only what the fixture asks for is checked: a row the fixture parks INACTIVE is complete as soon
+    as it exists. For an ACTIVE row this is the same trio
+    MobileUnitServiceImpl.validateCreateMobileUnitRequest demands at create, plus the coverage rules
+    the list response does not carry -- fetched per unit, which only happens on a re-run.
+
+    There is deliberately no repair path here. A missing policy could be PATCHed and missing coverage
+    PUT, but capabilityIds is not a PATCH key (MobileUnitServiceImpl:58-60), so an incomplete unit
+    cannot be completed through the API at all; PATCHing it ACTIVE anyway would use PATCH's lack of
+    validation to build the exact state the create path refuses. Saying so and requiring a reset is
+    the honest option."""
+    if row["status"].strip().upper() != "ACTIVE":
+        return None
+
+    missing = []
+    if (unit.get("status") or "").strip().upper() != "ACTIVE":
+        missing.append("is not ACTIVE")
+    if not unit.get("travelBufferPolicyId"):
+        missing.append("has no travel buffer policy")
+    if not unit.get("capabilityIds"):
+        missing.append("has no capabilities")
+    if rules and not missing:
+        # Only worth a call once the cheap checks pass: a unit failing those needs a reset regardless.
+        status_code, current = gateway.get(
+            f"/location/mobile-units/{unit['id']}/coverage-rules", allow_error=True)
+        if status_code != 200:
+            missing.append(f"coverage rules could not be read (HTTP {status_code})")
+        elif not current:
+            missing.append("has no coverage rules")
+    return " and ".join(missing) if missing else None
+
+
+def coverage_rules_by_unit(service_area_ids):
+    """unit name -> coverage rule payloads, in fixture row order.
+
+    Row order is load-bearing for DISTANCE_TIER: MobileUnitServiceImpl.validateDistanceTiers walks
+    the list as given and requires strictly ascending maxDistance ending in a single null catch-all
+    (and it applies to every rule on the unit once any one of them is DISTANCE_TIER). Sorting or
+    regrouping these rows would reject the very fixture that was written to satisfy it."""
+    rules = {}
+    unresolved = set()
+    for row in read_fixture_rows(MOBILE_UNIT_COVERAGE_RULES_PACK):
+        unit_name = row["unitName"]
+        rules.setdefault(unit_name, [])
+        area_name = row["serviceAreaName"]
+        area_id = service_area_ids.get(area_name)
+        if area_id is None:
+            print(f"  WARN: coverage rule for {unit_name}: unknown service area {area_name!r}")
+            unresolved.add(unit_name)
+            continue
+        rule = {"serviceAreaId": area_id, "ruleType": row["ruleType"]}
+        if row.get("priority"):
+            try:
+                rule["priority"] = int(row["priority"])
+            except ValueError:
+                # Everything else here degrades to a WARN and a failed row; an unguarded int()
+                # raised out of main() instead, aborting every pack still queued behind this one.
+                print(f"  WARN: coverage rule for {unit_name}: priority {row['priority']!r} is not a number")
+                unresolved.add(unit_name)
+                continue
+        # Left out entirely when the column is blank rather than sent as "": maxDistance is a
+        # BigDecimal and the two dates are LocalDate on CoverageRuleRequest, so an empty string is
+        # a 400 -- and a blank maxDistance is the null catch-all tier, which "" would not read as.
+        if row.get("maxDistance"):
+            rule["maxDistance"] = row["maxDistance"]
+        for date_field in ("validFrom", "validTo"):
+            if row.get(date_field):
+                rule[date_field] = row[date_field]
+        rules[unit_name].append(rule)
+    # One unresolved area drops the whole unit rather than the single rule: the rules that did
+    # resolve would otherwise give it narrower coverage than the fixture describes, and nothing
+    # downstream would say so. Insertion order is the fixture's row order, which is load-bearing.
+    return {name: (None if name in unresolved else built) for name, built in rules.items()}
+
+
+def run_mobile_units(gateway, relative_path, _location_id):
+    """API pack: create each mobile unit complete with its policy, capabilities and coverage (#1986).
+
+    pos-location refuses an ACTIVE unit that arrives without all three
+    (MobileUnitServiceImpl.validateCreateMobileUnitRequest), and the bulk loader's MOBILE_UNIT
+    strategy carries only name/baseLocationCode/status/notes — so eight of the nine rows failed on
+    every run until #1982 parked them all INACTIVE. POST /v1/mobile-units takes the whole unit in
+    one call, coverage rules included, so the driver assembles it here rather than the loader
+    growing three fields and a second fixture.
+
+    Names, not ids, key both fixtures: the travel buffer policy and the service areas are tier-1
+    reference data seeded by R__seed_location_1_reference.sql, and every other fixture in this tree
+    names its references the same way."""
+    location_ids = location_id_map(gateway)
+    policy_ids = named_ids(gateway, "/location/travel-buffer-policies", "travel buffer policies")
+    service_area_ids = named_ids(gateway, "/location/service-areas", "service areas")
+    rules_by_unit = coverage_rules_by_unit(service_area_ids)
+    existing = existing_mobile_units(gateway)
+
+    unit_rows = read_fixture_rows(relative_path)
+    # A coverage row whose unitName matches no unit -- a typo -- would otherwise be dropped in
+    # silence, and the unit it was meant for posted with no coverage at all: rejected as an opaque
+    # HTTP 400 if it is ACTIVE, and silently under-covered if it is not.
+    orphans = sorted(set(rules_by_unit) - {row["name"] for row in unit_rows})
+    if orphans:
+        print(f"  WARN: coverage rules name unit(s) absent from {os.path.basename(relative_path)}: "
+              f"{', '.join(orphans)}")
+
+    created, skipped, failures = 0, 0, 0
+    for row in unit_rows:
+        name = row["name"]
+        base_location_id = location_ids.get(row["baseLocationCode"])
+        if base_location_id is None:
+            print(f"  WARN: mobile unit {name}: base location {row['baseLocationCode']} not found")
+            failures += 1
+            continue
+
+        policy_name = (row.get("travelBufferPolicyName") or "").strip()
+        policy_id = policy_ids.get(policy_name) if policy_name else None
+        if policy_name and policy_id is None:
+            print(f"  WARN: mobile unit {name}: unknown travel buffer policy {policy_name!r}")
+            failures += 1
+            continue
+
+        # Absent from the coverage fixture is not the same as unresolvable in it: a parked unit
+        # legitimately has no rules (MU-CLT-MAIN-03), and only ACTIVE requires them. The default
+        # separates the two -- None is the poison coverage_rules_by_unit sets for a unit whose
+        # rules name a service area that does not exist.
+        rules = rules_by_unit.get(name, [])
+        if rules is None:
+            print(f"  WARN: mobile unit {name}: skipped, a coverage rule names an unknown service area")
+            failures += 1
+            continue
+
+        current = existing.get(name)
+        if current is not None:
+            shortfall = mobile_unit_shortfall(gateway, current, row, rules)
+            if shortfall is None:
+                skipped += 1
+                continue
+            # Counted as a failure rather than a skip: this is the state an alpha seeded before
+            # #1986 is in, and reporting it as "skipped" is how eligibility stays quietly empty.
+            print(f"  WARN: mobile unit {name} already exists but {shortfall}. It predates #1986 and "
+                  "cannot be completed through the API -- capabilityIds is not a PATCH key. Reset the "
+                  "database and reseed, or delete this unit, to get an ACTIVE unit with coverage.")
+            failures += 1
+            continue
+
+        body = {
+            "name": name,
+            "baseLocationId": base_location_id,
+            "status": row["status"],
+            "capabilityIds": [code for code in (row.get("capabilityCodes") or "").split(";") if code],
+            "coverageRules": rules,
+        }
+        if policy_id:
+            body["travelBufferPolicyId"] = policy_id
+
+        status_code, _ = gateway.post_json("/location/mobile-units", body, allow_error=True)
+        if 200 <= status_code < 300:
+            created += 1
+        else:
+            print(f"  WARN: mobile unit {name}: HTTP {status_code}")
+            failures += 1
+
+    print(f"  mobile units: created={created} skipped={skipped} failures={failures}")
+    return failures == 0
+
+
 API_PACKS = {
     "@site-defaults": run_site_defaults,
+    "@mobile-units": run_mobile_units,
 }
 
 

@@ -68,9 +68,11 @@ the location roster, and `--bootstrap-location` creates it from `locations.csv` 
 the gateway API when the roster is empty (that row then reports one expected
 duplicate failure in the LOCATION job).
 
-Sixteen of the seventeen packs load this way. The exception is
-`location/site-defaults.csv`, which calls one idempotent upsert per site
-(`PUT /v1/locations/{id}/defaults`) and is marked `@site-defaults` in the driver.
+All but two of the packs load this way. The exceptions are marked with an `@` name in the
+driver and call the gateway directly: `location/site-defaults.csv` (`@site-defaults`), one
+idempotent upsert per site (`PUT /v1/locations/{id}/defaults`), and `location/mobile-units.csv`
+(`@mobile-units`), one `POST /v1/mobile-units` per unit carrying its policy, capabilities and
+coverage rules — see the mobile-unit note under `location/` below for why the loader cannot.
 
 Nothing in any pack is an environment-specific id. Files name what they reference — a
 location code, a storage location's name, an employee number, a SKU, a catalog class — and
@@ -421,21 +423,59 @@ about where part numbers come from first.
 | `storage-locations.csv` | 190 (38 per site: 3 floors, 2 cages, 7 shelves, 1 truck, 24 bins under the parts shelves, 1 retired bin) | gateway API pack (`POST .../storage-locations` per row, parents resolved in order; `status`/capacity applied by follow-up `PATCH`) |
 | `site-defaults.csv` | 5 rows, one per site | gateway API pack (`PUT /v1/locations/{id}/defaults` per row) |
 | `bays.csv` | 21 service bays (6 types, from the seed) | gateway API pack (`POST .../bays` per row; 409 = exists) |
-| `mobile-units.csv` | 9 mobile units, all `INACTIVE` (see below) | gateway API pack (`POST /location/mobile-units`; existing names skipped via the list) |
+| `mobile-units.csv` | 9 mobile units, 8 `ACTIVE` and 1 parked (see below) | gateway API pack (`POST /location/mobile-units`, one call carrying the unit's policy, capabilities and coverage rules; existing names skipped via the list) |
+| `mobile-unit-coverage-rules.csv` | 21 rules across the 8 `ACTIVE` units | read by the `mobile-units.csv` pack, not loaded on its own |
 
 Columns (`locations.csv`): `name,code,addressLine1,addressLine2,city,stateOrProvince,postalCode,countryCode,phoneNumber,active,locationTypeName,timezone`.
 
-**Mobile units load `INACTIVE`, deliberately.** pos-location refuses an `ACTIVE` mobile unit that
-has no `travelBufferPolicyId`, `capabilityIds` and `coverageRules` — `MobileUnitServiceImpl`
-rejects it with "ACTIVE mobile unit requires travelBufferPolicyId, capabilityIds, and
-coverageRules" — and the bulk-load pipeline has no way to supply any of the three: there is no
-loader field for them and no fixture that creates travel-buffer policies, capabilities or coverage
-rules. Eight of the nine rows previously declared `ACTIVE` and failed on every run for that reason,
-leaving one loaded unit and eight failures that looked like a defect.
+Columns (`mobile-units.csv`): `name,baseLocationCode,status,travelBufferPolicyName,capabilityCodes` — `capabilityCodes` is `;`-separated.
 
-`INACTIVE` is also what these units factually are: a unit with no coverage rules covers nothing.
-Making them `ACTIVE` needs the coverage data first, which means new fixtures and loader support for
-those three fields — worth doing when mobile dispatch is exercised on alpha, not before.
+Columns (`mobile-unit-coverage-rules.csv`): `unitName,serviceAreaName,ruleType,priority,maxDistance,validFrom,validTo` — `maxDistance` blank is the catch-all tier, and `validFrom`/`validTo` blank means always in effect.
+
+**Mobile units are an API pack, not a loader domain (#1986).** pos-location refuses an `ACTIVE`
+mobile unit that has no `travelBufferPolicyId`, `capabilityIds` and `coverageRules` —
+`MobileUnitServiceImpl.validateCreateMobileUnitRequest` rejects it with "ACTIVE mobile unit requires
+travelBufferPolicyId, capabilityIds, and coverageRules" — and the loader's `MOBILE_UNIT` strategy
+carries only `name`, `baseLocationCode`, `status` and `notes`, so it cannot express an active unit
+at all. `POST /v1/mobile-units` takes the whole unit in one call, coverage rules included, so the
+driver assembles it rather than the loader growing three fields.
+
+Both fixtures key off names, like every other pack here. `travelBufferPolicyName` and
+`serviceAreaName` are resolved through `GET /location/travel-buffer-policies` and
+`GET /location/service-areas` once per run; `capabilityCodes` is a `;`-separated list of codes sent
+as-is, since the service resolves a capability by code as readily as by id.
+
+**Row order in `mobile-unit-coverage-rules.csv` is load-bearing.**
+`MobileUnitServiceImpl.validateDistanceTiers` walks a unit's rules in the order sent and requires
+strictly ascending `maxDistance` ending in a single blank catch-all — and it applies to *every* rule
+on the unit as soon as any one of them is `DISTANCE_TIER`. The four `DISTANCE_TIER` units here are
+written to satisfy that; regrouping or re-sorting the rows breaks them, and only against a live
+pos-location. The other four active units use `SERVICE_AREA` rules, which the tier check leaves
+alone. `scripts/tests/test_seed_alpha_mobile_units.py` pins both shapes.
+
+**`MU-CLT-MAIN-03` stays `INACTIVE`**, as it was in the original fixture. A parked unit is a
+legitimate state to have in demo data and it keeps the `INACTIVE` path exercised; it carries a
+policy and capabilities but no coverage rules, so activating it is a one-call change when something
+needs a ninth active unit.
+
+Coverage resolves through postal codes and nothing else:
+`MobileUnitCoverageRuleRepository.findEligibleCoverageRules` inner-joins `serviceArea.postalCodes`,
+so an area with none covers no address however many rules point at it. That is why
+`GET /v1/mobile-units:eligible` returned nothing before #1986 — the 25 reference service areas had
+no postal codes, and `PATCH /v1/service-areas/{id}` accepts only `description` and `active`, so they
+could not be added through the API. `R__seed_location_1_reference.sql` now seeds 91 NC/SC codes
+across the 25 areas, disjoint, so an address resolves to one area and rule priority alone orders the
+result. The quickest check after a seed is
+
+```
+GET /location/mobile-units:eligible?postalCode=28202&countryCode=US&at=2026-09-14T12:00:00Z
+```
+
+`at` is mandatory — `MobileUnitEligibilityController` declares all three as bare `@RequestParam`s,
+so omitting it is a 400 rather than an empty result. It is reduced to a UTC calendar date and
+matched against each rule's `validFrom`/`validTo`; the fixture leaves both blank, so any instant
+works.
+
 Location types resolve by name (created on the fly if missing, though the reference
 seed provides them); timezones are validated by the service (invalid → per-row
 failure). Note the run-order chicken-and-egg: bulk-load jobs require a `locationId`,
@@ -522,10 +562,10 @@ leaving the defaults null.
 - **`allowNewProduct` is not a fixture column**, so every row lands on the
   service default `MIXED`. Nothing in the alpha topology needs
   `SAME_PRODUCT_ONLY` or `EMPTY_ONLY` yet; add the column when something does.
-- Mobile-unit **capabilities and coverage rules** are intentionally dropped (bays
-  and mobile units suffice for alpha), as are the mobile units'
-  `travel_buffer_policy_id` references and the 4 `location_parent` hierarchy
-  edges (`POST /v1/locations/{id}/parents` exists if wanted later).
+- Mobile-unit **capabilities, coverage rules and `travel_buffer_policy_id`** are carried by
+  `mobile-units.csv` and `mobile-unit-coverage-rules.csv` as of #1986; they were dropped
+  until mobile dispatch needed them. The 4 `location_parent` hierarchy edges are still
+  dropped (`POST /v1/locations/{id}/parents` exists if wanted later).
 - The Flyway seed (`R__seed_location_2_operational_data.sql`) was deleted in
   #1554 — this pack is the only source of the location topology. The INACTIVE
   "Retired Bin" rows and the capacity descriptors it used to carry moved into
