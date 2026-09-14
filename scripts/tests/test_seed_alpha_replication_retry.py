@@ -7,10 +7,12 @@ three packs ran within eight seconds of each other and both dependents reported 
 39 and 23; the same packs passed on a slower run, which is what identifies this as a race rather
 than a data fault.
 
-The retry is safe for exactly these two because both refuse duplicates: a row that did land is
-rejected on the second attempt rather than written twice. That property is what the membership test
-below guards -- customer/*.csv was not idempotent until #1978, and retrying it would have doubled
-every customer.
+The retry is safe for both, for different reasons. STAFFING_ASSIGNMENT refuses an assignment that
+overlaps one already stored, so a landed row cannot be written twice. MECHANIC_SKILL rejects
+nothing: its controller calls replaceSkills(personId, ...), which replaces that mechanic's whole
+skill set, so a replay converges rather than accumulating. Either property makes a retry safe;
+absent both, a retry duplicates -- customer/*.csv had neither until #1978, and retrying it would
+have doubled every party.
 
 Stdlib only: no build, no network, no gateway.
 """
@@ -40,8 +42,8 @@ class ReplicationSensitivePacksTest(unittest.TestCase):
         )
 
     def test_customerPacksAreNotRetried(self):
-        # They were not idempotent until #1978; a retry would duplicate every party, which is the
-        # failure that broke owner resolution for all 260 commercial-owned vehicles.
+        # They had neither replay property until #1978; a retry would duplicate every party, which
+        # is the failure that broke owner resolution for all 260 commercial-owned vehicles.
         self.assertNotIn("CUSTOMER", seed_alpha.REPLICATION_SENSITIVE_PACKS)
         self.assertNotIn("COMMERCIAL_CUSTOMER", seed_alpha.REPLICATION_SENSITIVE_PACKS)
 
@@ -59,6 +61,36 @@ class ReplicationSensitivePacksTest(unittest.TestCase):
             self.assertGreater(
                 order.index(domain), person, f"{domain} must load after PERSON"
             )
+
+
+class LoadedAcrossAttemptsTest(unittest.TestCase):
+    """The union of a pack and its retry decides the run's exit status, not each attempt alone."""
+
+    def _result(self, ok, success, rows):
+        return seed_alpha.PackResult(ok=ok, success_count=success, data_rows=rows)
+
+    def test_partialFirstAttemptPlusPartialRetryCountsAsLoaded(self):
+        # The real case: STAFFING_ASSIGNMENT loaded 13 of 39, then 26 on the retry. Reporting that
+        # as a failed run would exit 1 for a file that is now completely loaded.
+        first = self._result(False, 13, 39)
+        retry = self._result(False, 26, 39)
+        self.assertTrue(seed_alpha.loaded_across_attempts(first, retry))
+
+    def test_aCleanRetryIsLoadedWhateverTheFirstAttemptDid(self):
+        # MECHANIC_SKILL replays the whole file, so a successful retry reports every row itself.
+        first = self._result(False, 0, 23)
+        retry = self._result(True, 23, 23)
+        self.assertTrue(seed_alpha.loaded_across_attempts(first, retry))
+
+    def test_rowsStillMissingAfterBothAttemptsIsAFailure(self):
+        first = self._result(False, 13, 39)
+        retry = self._result(False, 20, 39)
+        self.assertFalse(seed_alpha.loaded_across_attempts(first, retry))
+
+    def test_twoEmptyAttemptsIsAFailure(self):
+        first = self._result(False, 0, 39)
+        retry = self._result(False, 0, 39)
+        self.assertFalse(seed_alpha.loaded_across_attempts(first, retry))
 
 
 if __name__ == "__main__":

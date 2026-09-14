@@ -50,6 +50,7 @@ for the labor-rate packs pricing:labor_rate:manage).
 """
 
 import argparse
+import collections
 import base64
 import csv
 import datetime
@@ -111,10 +112,19 @@ PACK_FILES = [
 # person") when the owning service's replica has not caught up. On alpha the three packs ran within
 # eight seconds of each other and every row failed; the same packs succeeded on a slower run.
 #
-# Retrying is safe for exactly these two because both refuse duplicates: a row that did land is
-# rejected on the second attempt rather than written twice, so the retry can only add rows that
-# lost the race. Do not add a pack here without checking that property -- customer/*.csv was not
-# idempotent until #1978, and a retry would have doubled every customer.
+# Retrying is safe for both, but for different reasons, and the difference is what a future addition
+# has to be checked against:
+#
+#   STAFFING_ASSIGNMENT refuses an assignment that overlaps an existing one for the same person, so
+#   a row that did land is rejected on the second attempt rather than written twice.
+#
+#   MECHANIC_SKILL does not reject anything: its controller calls replaceSkills(personId, ...),
+#   which replaces that mechanic's whole skill set. Replaying the file converges on the same state
+#   rather than accumulating rows.
+#
+# Either property makes a retry safe; absent both, a retry duplicates. Do not add a pack here
+# without establishing which one it has -- customer/*.csv had neither until #1978, and a retry
+# would have doubled every party.
 REPLICATION_SENSITIVE_PACKS = {"STAFFING_ASSIGNMENT", "MECHANIC_SKILL"}
 
 
@@ -346,6 +356,27 @@ def bootstrap_location(gateway, location_code):
     return created["id"]
 
 
+PackResult = collections.namedtuple("PackResult", "ok success_count data_rows")
+
+
+def loaded_across_attempts(first, retry):
+    """Whether a pack and its retry between them loaded every row.
+
+    A pack that lost the race against replication fails its first attempt and succeeds on the
+    second, but `run_pack_file` reports each attempt on its own: 13 successes then 26 successes are
+    two failures, and the run would exit 1 for a file that is now completely loaded. What matters is
+    the union.
+
+    Counting successes across attempts is sound for the two packs this runs for, because neither can
+    report the same row as a success twice. STAFFING_ASSIGNMENT refuses a row that overlaps one
+    already stored, so a landed row cannot succeed again. MECHANIC_SKILL replaces a mechanic's whole
+    skill set, so a replay reports every row once and converges on the same state.
+    """
+    if retry.ok:
+        return True
+    return first.success_count + retry.success_count >= first.data_rows
+
+
 def run_pack_file(gateway, relative_path, domain_type, location_id, poll_timeout_seconds):
     csv_path = os.path.join(FIXTURE_ROOT, relative_path)
     file_name = os.path.basename(csv_path)
@@ -370,7 +401,7 @@ def run_pack_file(gateway, relative_path, domain_type, location_id, poll_timeout
             break
         if time.monotonic() > deadline:
             print(f"  TIMEOUT: job {job_id} still {status['status']} after {poll_timeout_seconds}s")
-            return False
+            return PackResult(False, 0, data_rows)
         time.sleep(POLL_INTERVAL_SECONDS)
 
     ok = status["status"] == "COMPLETED" and not status.get("failureCount")
@@ -382,7 +413,7 @@ def run_pack_file(gateway, relative_path, domain_type, location_id, poll_timeout
         # Every rejected row now has an audit record naming what the owning service said about it,
         # so point at the listing that carries the reason rather than the job summary.
         print(f"  review failures: GET {gateway.base_url}/bulk-loader/bulk-jobs/{job_id}/audit")
-    return ok
+    return PackResult(ok, status.get("successCount") or 0, data_rows)
 
 
 def main():
@@ -477,12 +508,17 @@ def main():
         if domain in API_PACKS:
             all_ok = API_PACKS[domain](gateway, path, location_id) and all_ok
         else:
-            ok = run_pack_file(gateway, path, domain, location_id, args.poll_timeout)
+            result = run_pack_file(gateway, path, domain, location_id, args.poll_timeout)
+            ok = result.ok
             if not ok and args.settle_seconds > 0 and domain in REPLICATION_SENSITIVE_PACKS:
                 print(f"  {domain} depends on rows another service replicates; waiting "
                       f"{args.settle_seconds}s and retrying once")
                 time.sleep(args.settle_seconds)
-                ok = run_pack_file(gateway, path, domain, location_id, args.poll_timeout)
+                retry = run_pack_file(gateway, path, domain, location_id, args.poll_timeout)
+                ok = loaded_across_attempts(result, retry)
+                if ok and not retry.ok:
+                    print(f"  {domain}: {result.success_count} + {retry.success_count} of "
+                          f"{result.data_rows} rows loaded across both attempts — treating as loaded")
             all_ok = ok and all_ok
 
     print("done" if all_ok else "done with failures — inspect the review queue / job counters above")
