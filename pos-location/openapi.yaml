@@ -2403,7 +2403,7 @@ paths:
     patch:
       description: 'Applies a partial update to a service area, accepting only the keys description and active.
 
-        Use this tool to retire an area with active=false or amend its description; do not use it to rename an area or change its postal codes, which are immutable after createServiceArea.
+        Use this tool to retire an area with active=false or amend its description; use replaceServiceAreaPostalCodes to change which postal codes it covers, which this tool cannot do. An area cannot be renamed.
 
         Preconditions: the service area must exist.
 
@@ -2457,6 +2457,75 @@ paths:
       - bearerAuth:
         - location:service-area:manage
       summary: Patch Fields of a Service Area
+      tags:
+      - Service Area API
+      x-required-permissions:
+      - location:service-area:manage
+  /v1/service-areas/{id}/postal-codes:
+    put:
+      description: 'Replaces the whole postal code set of a service area, so the area afterwards covers exactly the codes supplied and nothing else.
+
+        Use this tool whenever coverage changes — a market expands, a rural route is dropped, or an area was created with the wrong codes; patchServiceArea cannot touch postal codes and there is no way to delete an area and start again.
+
+        Preconditions: the service area must exist; at least one postal code entry must be supplied and every entry must carry a countryCode. Sending an empty set is refused rather than treated as "covers nothing" — retire an area with patchServiceArea active=false instead.
+
+        Required inputs: id (UUID) as a path parameter and a body of the form {"postalCodes": [...]}, each entry carrying postalCode and countryCode.
+
+        Emits a LOCATION_SERVICE_AREA_POSTAL_CODES_REPLACE event.
+
+        Returns 200 with the area as it stands afterwards, 400 when the id is not a valid UUID or the set is empty or missing a countryCode, and 404 when no service area exists for the id.
+
+        Coverage resolution reads these rows directly: findEligibleMobileUnits matches an address through them, so removing a code stops every mobile unit covering that address.
+
+        '
+      operationId: replaceServiceAreaPostalCodes
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Expanded metro coverage:
+                description: Expanded metro coverage
+                value:
+                  postalCodes:
+                  - countryCode: US
+                    postalCode: '62704'
+                  - countryCode: US
+                    postalCode: '62711'
+                  - countryCode: US
+                    postalCode: '62702'
+            schema:
+              $ref: '#/components/schemas/ServiceAreaPostalCodesRequest'
+        description: The complete postal code set the area should cover afterwards; any code absent here stops being covered.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceAreaResponse'
+          description: Postal codes replaced
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceAreaResponse'
+          description: Invalid service area id, or an empty or incomplete set
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceAreaResponse'
+          description: Service area not found
+      security:
+      - bearerAuth:
+        - location:service-area:manage
+      summary: Replace the Postal Codes a Service Area Covers
       tags:
       - Service Area API
       x-required-permissions:
@@ -3969,6 +4038,18 @@ components:
         type:
           format: uri
           type: string
+      type: object
+    ServiceAreaPostalCodesRequest:
+      description: Complete replacement postal code set for a service area
+      properties:
+        postalCodes:
+          description: 'The postal codes the service area should cover after this call. The set is replaced wholesale: any code absent here stops being covered.'
+          items:
+            $ref: '#/components/schemas/PostalCodeEntry'
+          minItems: 1
+          type: array
+      required:
+      - postalCodes
       type: object
     ServiceAreaRequest:
       description: Request payload for creating or updating a service area

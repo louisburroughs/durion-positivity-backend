@@ -74,6 +74,10 @@ public final class LocationEventTypes {
                     "LOCATION_SERVICE_AREA_PATCH", "Patch an existing service area")
             .build();
 
+    public static final EventTypeRegistration LOCATION_SERVICE_AREA_POSTAL_CODES_REPLACE = EventTypeRegistration.write(
+                    "LOCATION_SERVICE_AREA_POSTAL_CODES_REPLACE", "Replace the postal codes a service area covers")
+            .build();
+
     public static final EventTypeRegistration LOCATION_TRAVEL_BUFFER_POLICY_CREATE = EventTypeRegistration.write(
                     "LOCATION_TRAVEL_BUFFER_POLICY_CREATE", "Create a new travel buffer policy")
             .build();
@@ -170,6 +174,7 @@ public final class LocationEventTypes {
                 LOCATION_MOBILE_UNIT_MANAGE,
                 LOCATION_SERVICE_AREA_CREATE,
                 LOCATION_SERVICE_AREA_PATCH,
+                LOCATION_SERVICE_AREA_POSTAL_CODES_REPLACE,
                 LOCATION_TRAVEL_BUFFER_POLICY_CREATE,
                 LOCATION_TRAVEL_BUFFER_POLICY_PATCH,
                 LOCATION_COVERAGE_RULES_REPLACE,

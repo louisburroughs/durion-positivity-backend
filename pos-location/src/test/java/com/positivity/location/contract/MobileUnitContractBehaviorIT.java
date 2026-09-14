@@ -1,11 +1,14 @@
 package com.positivity.location.contract;
 
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.location.BaseContractIntegrationTest;
 import com.positivity.location.config.TestSecurityConfig;
 import org.junit.jupiter.api.DisplayName;
@@ -167,6 +170,75 @@ class MobileUnitContractBehaviorIT extends BaseContractIntegrationTest {
         mockMvc.perform(withGatewayAuth(patch("/v1/service-areas/{id}", "bad-id")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("#1991 - PUT /v1/service-areas/{id}/postal-codes replaces the set end to end")
+    void shouldReplaceServiceAreaPostalCodes() throws Exception {
+        String created = mockMvc.perform(withGatewayAuth(post("/v1/service-areas")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Coverage Amendment Zone",
+                                  "postalCodes": [
+                                    { "postalCode": "98101", "countryCode": "US" },
+                                    { "postalCode": "98102", "countryCode": "US" }
+                                  ]
+                                }
+                                """)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String id = new ObjectMapper().readTree(created).get("id").asText();
+
+        // 98101 is dropped and 98103 added: the set sent is the set that remains.
+        mockMvc.perform(withGatewayAuth(put("/v1/service-areas/{id}/postal-codes", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "postalCodes": [
+                                    { "postalCode": "98102", "countryCode": "US" },
+                                    { "postalCode": "98103", "countryCode": "US" }
+                                  ]
+                                }
+                                """)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.postalCodes.length()").value(2))
+                .andExpect(jsonPath("$.postalCodes[*].postalCode", containsInAnyOrder("98102", "98103")));
+    }
+
+    @Test
+    @DisplayName("#1991 - PUT /v1/service-areas/{id}/postal-codes returns 404 when the area is missing")
+    void shouldReturnNotFoundWhenReplacingPostalCodesOnMissingArea() throws Exception {
+        mockMvc.perform(withGatewayAuth(
+                        put("/v1/service-areas/{id}/postal-codes", "018f1f5a-a666-7333-8222-666666666666")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        { "postalCodes": [ { "postalCode": "98101", "countryCode": "US" } ] }
+                                        """)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("#1991 - PUT /v1/service-areas/{id}/postal-codes returns 400 for an invalid id")
+    void shouldReturnBadRequestForInvalidIdWhenReplacingPostalCodes() throws Exception {
+        mockMvc.perform(withGatewayAuth(put("/v1/service-areas/{id}/postal-codes", "bad-id")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "postalCodes": [ { "postalCode": "98101", "countryCode": "US" } ] }
+                                """)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("#1991 - PUT /v1/service-areas/{id}/postal-codes refuses an empty set")
+    void shouldReturnBadRequestWhenReplacementSetIsEmpty() throws Exception {
+        mockMvc.perform(withGatewayAuth(
+                        put("/v1/service-areas/{id}/postal-codes", "018f1f5a-a777-7333-8222-777777777777")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{ \"postalCodes\": [] }")))
                 .andExpect(status().isBadRequest());
     }
 

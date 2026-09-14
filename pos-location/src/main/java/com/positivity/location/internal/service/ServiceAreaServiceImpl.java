@@ -1,5 +1,6 @@
 package com.positivity.location.internal.service;
 
+import com.positivity.location.internal.dto.ServiceAreaPostalCodesRequest;
 import com.positivity.location.internal.dto.ServiceAreaRequest;
 import com.positivity.location.internal.dto.ServiceAreaResponse;
 import com.positivity.location.internal.entity.ServiceAreaEntity;
@@ -116,6 +117,55 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
             return List.of();
         }
         return serviceAreaRepository.findAll().stream().map(this::toResponse).toList();
+    }
+
+    /**
+     * Replaces a service area's whole postal code set.
+     *
+     * <p>Postal codes were write-once until #1991: only createServiceArea accepted them, patch reads
+     * just description and active, and there is no delete. A coverage area was therefore permanent
+     * and unamendable, which no real shop is — coverage grows, shrinks, and gets typed wrong the
+     * first time. Replacement rather than merge because that is what the geography is: the set sent
+     * here is what the area covers afterwards.
+     *
+     * <p>Emptying the set is refused for the same reason createServiceArea refuses it. An area
+     * covering nothing matches no address, and because findEligibleCoverageRules inner-joins these
+     * rows, every coverage rule pointing at it would silently stop resolving. Retiring an area is
+     * what {@code active=false} is for.
+     *
+     * @param id      service area identifier
+     * @param request the complete replacement set
+     * @return the area as it stands after the replacement
+     */
+    @Override
+    @Transactional
+    public ServiceAreaResponse replacePostalCodes(String id, ServiceAreaPostalCodesRequest request) {
+        UUID areaId = parseUuidStrict(id);
+        ServiceAreaEntity entity = serviceAreaRepository
+                .findById(areaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Service area not found"));
+
+        List<ServiceAreaRequest.PostalCodeEntry> replacement = request == null ? null : request.getPostalCodes();
+        validatePostalCodes(replacement);
+
+        // Mutated in place rather than assigned: postalCodes is an @ElementCollection, and Hibernate
+        // tracks the collection instance it loaded. Swapping the reference makes it drop every row
+        // and reinsert; clearing and refilling lets it write only the difference.
+        Set<ServiceAreaPostalCodeValue> current = entity.getPostalCodes();
+        if (current == null) {
+            entity.setPostalCodes(toPostalValues(replacement));
+        } else {
+            current.clear();
+            current.addAll(toPostalValues(replacement));
+        }
+
+        ServiceAreaEntity saved;
+        try {
+            saved = serviceAreaRepository.save(entity);
+        } catch (DataIntegrityViolationException exception) {
+            throw toServiceAreaConflictException(exception);
+        }
+        return toResponse(saved);
     }
 
     private ServiceAreaRequest toRequest(Map<String, Object> map) {
