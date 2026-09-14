@@ -421,9 +421,21 @@ about where part numbers come from first.
 | `storage-locations.csv` | 190 (38 per site: 3 floors, 2 cages, 7 shelves, 1 truck, 24 bins under the parts shelves, 1 retired bin) | gateway API pack (`POST .../storage-locations` per row, parents resolved in order; `status`/capacity applied by follow-up `PATCH`) |
 | `site-defaults.csv` | 5 rows, one per site | gateway API pack (`PUT /v1/locations/{id}/defaults` per row) |
 | `bays.csv` | 21 service bays (6 types, from the seed) | gateway API pack (`POST .../bays` per row; 409 = exists) |
-| `mobile-units.csv` | 9 mobile units | gateway API pack (`POST /location/mobile-units`; existing names skipped via the list) |
+| `mobile-units.csv` | 9 mobile units, all `INACTIVE` (see below) | gateway API pack (`POST /location/mobile-units`; existing names skipped via the list) |
 
 Columns (`locations.csv`): `name,code,addressLine1,addressLine2,city,stateOrProvince,postalCode,countryCode,phoneNumber,active,locationTypeName,timezone`.
+
+**Mobile units load `INACTIVE`, deliberately.** pos-location refuses an `ACTIVE` mobile unit that
+has no `travelBufferPolicyId`, `capabilityIds` and `coverageRules` — `MobileUnitServiceImpl`
+rejects it with "ACTIVE mobile unit requires travelBufferPolicyId, capabilityIds, and
+coverageRules" — and the bulk-load pipeline has no way to supply any of the three: there is no
+loader field for them and no fixture that creates travel-buffer policies, capabilities or coverage
+rules. Eight of the nine rows previously declared `ACTIVE` and failed on every run for that reason,
+leaving one loaded unit and eight failures that looked like a defect.
+
+`INACTIVE` is also what these units factually are: a unit with no coverage rules covers nothing.
+Making them `ACTIVE` needs the coverage data first, which means new fixtures and loader support for
+those three fields — worth doing when mobile dispatch is exercised on alpha, not before.
 Location types resolve by name (created on the fly if missing, though the reference
 seed provides them); timezones are validated by the service (invalid → per-row
 failure). Note the run-order chicken-and-egg: bulk-load jobs require a `locationId`,

@@ -7,6 +7,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.catalog.BaseContractIntegrationTest;
+import com.positivity.catalog.internal.entity.Category;
+import com.positivity.catalog.internal.entity.Subcategory;
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -31,6 +34,12 @@ import tools.jackson.databind.JsonNode;
  */
 @DisplayName("Product Search Contract Behavioral Tests")
 class ProductSearchContractBehaviorIT extends BaseContractIntegrationTest {
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.positivity.catalog.internal.repository.SubcategoryRepository subcategoryRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.positivity.catalog.internal.repository.CategoryRepository categoryRepository;
 
     private static final String SEARCH_PATH = "/v1/products/search";
 
@@ -313,6 +322,85 @@ class ProductSearchContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     // -----------------------------------------------------------------------
+    // CS-007b: subcategory filter applied → only matching subcategory products
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("CS-007b: Subcategory filter applied – matches its own products and excludes the rest")
+    void testSearch_subcategoryFilterApplied_excludesNonMatchingProducts() throws Exception {
+        // The filter has to actually filter. Spring ignores a query parameter the handler does not
+        // declare, so an unsupported `subcategory` did not narrow anything — it returned the first
+        // product in the catalog and looked like a successful search. pos-bulk-loader resolves a
+        // putaway rule's catalog class by asking for a product carrying that class and reading the
+        // class id back off it, so every SUBCATEGORY rule resolved to whatever product came first
+        // ("Air Filters", on alpha) and was refused by the loader's own name check. Three rules
+        // failed on every seed run for a fixture that was correct.
+        //
+        // Both directions are asserted. A non-existent subcategory must return nothing, which is
+        // what an ignored parameter fails — it returns every match for `q` instead. And the named
+        // subcategory must return its own product and only that one, which is what an
+        // over-restrictive filter fails: returning empty for every non-null subcategory would
+        // satisfy the first assertion on its own.
+        //
+        // The `test` profile runs on H2 with Flyway disabled, so the catalog taxonomy seed is
+        // absent and the subcategory is created here.
+        Subcategory subcategory = createSubcategory("CS007B-Batteries");
+
+        String namePrefix = "SearchAnvil-" + UUID.fromString("00000000-0000-0000-0000-000000000002");
+        String skuA = "SKU-CS007B-A-" + UUID.fromString("00000000-0000-0000-0000-000000000002");
+
+        createProductAndGetId(namePrefix + " A", skuA, "MPN-CS007B-A", subcategory.getId());
+        createProductAndGetId(
+                namePrefix + " B",
+                "SKU-CS007B-B-" + UUID.fromString("00000000-0000-0000-0000-000000000002"),
+                "MPN-CS007B-B");
+
+        MvcResult allResult = mockMvc.perform(
+                        withAuth(MockMvcRequestBuilders.get(SEARCH_PATH).param("q", namePrefix)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode allBody = objectMapper.readTree(allResult.getResponse().getContentAsString());
+        assertThat(allBody.get("data").size())
+                .as("both products are visible without a subcategory filter")
+                .isEqualTo(2);
+
+        mockMvc.perform(withAuth(MockMvcRequestBuilders.get(SEARCH_PATH)
+                        .param("q", namePrefix)
+                        .param("subcategory", "ZZZ-NoSuchSubcategory")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isEmpty());
+
+        MvcResult matched = mockMvc.perform(withAuth(MockMvcRequestBuilders.get(SEARCH_PATH)
+                        .param("q", namePrefix)
+                        .param("subcategory", subcategory.getName())))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode matchedBody = objectMapper.readTree(matched.getResponse().getContentAsString());
+        assertThat(matchedBody.get("data").size())
+                .as("only the product carrying '%s' comes back", subcategory.getName())
+                .isEqualTo(1);
+        assertThat(matchedBody.get("data").get(0).get("sku").asText()).isEqualTo(skuA);
+    }
+
+    private Subcategory createSubcategory(String name) {
+        Instant now = Instant.now();
+        Category category = new Category();
+        category.setName(name + "-parent");
+        category.setCreatedAt(now);
+        category.setUpdatedAt(now);
+        category = categoryRepository.save(category);
+
+        Subcategory subcategory = new Subcategory();
+        subcategory.setName(name);
+        subcategory.setCategory(category);
+        subcategory.setCreatedAt(now);
+        subcategory.setUpdatedAt(now);
+        return subcategoryRepository.save(subcategory);
+    }
+
+    // -----------------------------------------------------------------------
     // CS-008: limit > 100 → 200 OK, results clamped to max 100
     // RED: scaffold returns empty data (data.length == 0, not 100 as expected)
     // -----------------------------------------------------------------------
@@ -415,7 +503,11 @@ class ProductSearchContractBehaviorIT extends BaseContractIntegrationTest {
      * @return the UUID assigned to the newly created product
      */
     private UUID createProductAndGetId(String name, String sku, String mpn) throws Exception {
-        Map<String, Object> payload = Map.of(
+        return createProductAndGetId(name, sku, mpn, null);
+    }
+
+    private UUID createProductAndGetId(String name, String sku, String mpn, UUID subcategoryId) throws Exception {
+        Map<String, Object> payload = new java.util.HashMap<>(Map.of(
                 "name",
                 name,
                 "description",
@@ -431,7 +523,10 @@ class ProductSearchContractBehaviorIT extends BaseContractIntegrationTest {
                 "upc",
                 upcFor(sku),
                 "attributes",
-                "{}");
+                "{}"));
+        if (subcategoryId != null) {
+            payload.put("subcategoryId", subcategoryId.toString());
+        }
 
         MvcResult result = mockMvc.perform(withAuth(post("/v1/products")
                         .contentType(MediaType.APPLICATION_JSON)

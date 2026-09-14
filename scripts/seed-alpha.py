@@ -16,7 +16,7 @@ Bootstrap: bulk-load jobs themselves require a locationId. The driver
 resolves --location-code against the location roster; with
 --bootstrap-location it creates that location from the first row of
 locations.csv via the gateway location API when the roster is empty (that row
-then reports one expected duplicate failure in the LOCATION job).
+and the LOCATION pack then skips that row rather than re-sending it).
 
 Usage:
   scripts/seed-alpha.py --gateway https://alpha.example.com \
@@ -377,11 +377,51 @@ def loaded_across_attempts(first, retry):
     return first.success_count + retry.success_count >= first.data_rows
 
 
-def run_pack_file(gateway, relative_path, domain_type, location_id, poll_timeout_seconds):
+def _without_row_coded(file_bytes, code):
+    """The CSV minus the row whose `code` column equals `code`.
+
+    --bootstrap-location creates one site up front, because a bulk job has to be scoped to a
+    location that exists and a freshly reset database has none. The LOCATION pack then carried that
+    same site again and the job reported one failure for a row the driver had itself just created:
+    an "expected duplicate" the operator was told to ignore, sitting in the same column as failures
+    that are not expected at all. Dropping the row the driver already loaded means a clean run
+    reports a clean load.
+
+    Parsed with the csv module rather than split(","): a site legitimately named
+    "Service Center, West" carries a quoted comma, and splitting on commas would shift every field
+    after it -- reading the wrong column as the code, matching nothing, and sending the bootstrapped
+    row anyway. Kept rows are re-emitted by csv.writer, so quoting is normalised rather than
+    preserved byte for byte; the upload is parsed as CSV, not compared.
+    """
+    rows = list(csv.reader(io.StringIO(file_bytes.decode("utf-8"))))
+    if not rows:
+        return file_bytes
+    header = rows[0]
+    try:
+        code_column = header.index("code")
+    except ValueError:
+        return file_bytes
+
+    kept = [header]
+    for row in rows[1:]:
+        if not any(field.strip() for field in row):
+            continue
+        if len(row) > code_column and row[code_column].strip() == code:
+            continue
+        kept.append(row)
+
+    buffer = io.StringIO(newline="")
+    csv.writer(buffer, lineterminator="\n").writerows(kept)
+    return buffer.getvalue().encode("utf-8")
+
+
+def run_pack_file(gateway, relative_path, domain_type, location_id, poll_timeout_seconds, skip_code=None):
     csv_path = os.path.join(FIXTURE_ROOT, relative_path)
     file_name = os.path.basename(csv_path)
     with open(csv_path, "rb") as fh:
         file_bytes = fh.read()
+    if skip_code:
+        file_bytes = _without_row_coded(file_bytes, skip_code)
     data_rows = max(0, len(file_bytes.decode("utf-8").strip().splitlines()) - 1)
 
     body = {"fileName": file_name, "domainType": domain_type, "locationId": location_id}
@@ -493,6 +533,7 @@ def main():
 
     gateway = Gateway(args.gateway, args.token)
 
+    bootstrapped_code = None
     location_id = args.location_id or resolve_location_id(gateway, args.location_code)
     if location_id is None:
         if not args.bootstrap_location:
@@ -500,7 +541,8 @@ def main():
                 f"ERROR: location {args.location_code} not found and --bootstrap-location not given; "
                 "bulk-load jobs need an existing location")
         location_id = bootstrap_location(gateway, args.location_code)
-        print("  note: the bootstrapped row will report one expected duplicate failure in the LOCATION job")
+        bootstrapped_code = args.location_code
+        print(f"  note: {bootstrapped_code} is already loaded; the LOCATION pack will skip that row")
 
     all_ok = True
     for path, domain in selected:
@@ -508,7 +550,10 @@ def main():
         if domain in API_PACKS:
             all_ok = API_PACKS[domain](gateway, path, location_id) and all_ok
         else:
-            result = run_pack_file(gateway, path, domain, location_id, args.poll_timeout)
+            # The driver created this site itself to scope the jobs; sending it again would be a
+            # self-inflicted duplicate.
+            skip_code = bootstrapped_code if domain == "LOCATION" else None
+            result = run_pack_file(gateway, path, domain, location_id, args.poll_timeout, skip_code)
             ok = result.ok
             if not ok and args.settle_seconds > 0 and domain in REPLICATION_SENSITIVE_PACKS:
                 print(f"  {domain} depends on rows another service replicates; waiting "

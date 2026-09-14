@@ -103,23 +103,26 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID>, J
     /**
      * Filtered search for the catalog search endpoint (CAP-247 Story #17).
      * Supports free-text query against name and description, exact SKU match
-     * (SKU used as an exact AND filter), brand filter, and category filter.
+     * (SKU used as an exact AND filter), brand filter, and category/subcategory filters.
      * No additional SKU ranking is applied at the service layer.
      */
     @Query("""
       SELECT p FROM ProductEntity p
       LEFT JOIN p.category c
+      LEFT JOIN p.subcategory s
       WHERE (:q IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))
                        OR LOWER(COALESCE(p.description, p.longDescription, '')) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')))
         AND (:sku IS NULL OR LOWER(p.sku) = LOWER(CAST(:sku AS string)))
         AND (:brand IS NULL OR LOWER(p.manufacturerBrand) = LOWER(CAST(:brand AS string)))
         AND (:category IS NULL OR LOWER(c.name) = LOWER(CAST(:category AS string)))
+        AND (:subcategory IS NULL OR LOWER(s.name) = LOWER(CAST(:subcategory AS string)))
       """)
     Page<ProductEntity> searchProductsFiltered(
             @Param("q") String q,
             @Param("sku") String sku,
             @Param("brand") String brand,
             @Param("category") String category,
+            @Param("subcategory") String subcategory,
             Pageable pageable);
 
     /**
