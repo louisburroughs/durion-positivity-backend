@@ -46,6 +46,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -109,6 +110,14 @@ class FileUploadProcessEndToEndTest {
         requestBodySpec = mock(RestClient.RequestBodySpec.class, Answers.RETURNS_SELF);
         responseSpec = mock(RestClient.ResponseSpec.class);
 
+        // The ingest writer clones the builder and gives the clone its own request factory: a chunk
+        // POST needs a longer read timeout than the single-key lookups this builder also serves.
+        when(restClientBuilder.clone()).thenReturn(restClientBuilder);
+        when(restClientBuilder.requestFactory(nullable(ClientHttpRequestFactory.class)))
+                .thenReturn(restClientBuilder);
+        when(loadBalancedRestClientBuilder.clone()).thenReturn(loadBalancedRestClientBuilder);
+        when(loadBalancedRestClientBuilder.requestFactory(nullable(ClientHttpRequestFactory.class)))
+                .thenReturn(loadBalancedRestClientBuilder);
         when(restClientBuilder.baseUrl(nullable(String.class))).thenReturn(restClientBuilder);
         when(restClientBuilder.build()).thenReturn(mockRestClient);
         when(loadBalancedRestClientBuilder.baseUrl(nullable(String.class))).thenReturn(loadBalancedRestClientBuilder);

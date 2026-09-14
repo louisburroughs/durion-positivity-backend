@@ -59,7 +59,17 @@ public class BulkLoadJobFactory {
     private String storageRoot;
 
     /** Chunk size shared by every domain; the ingest endpoints are batch-shaped, not row-shaped. */
-    private static final int CHUNK_SIZE = 500;
+    /**
+     * Rows per chunk, and so rows per POST to the owning service.
+     *
+     * <p>Was 500, which put the largest packs (501 products, 494 stock counts, 329 vehicles) in a
+     * single request and past the writer's read timeout. A chunk is also the unit of rollback: when
+     * one times out, Spring Batch re-sends every row in it individually, so an oversized chunk
+     * turns one slow request into hundreds of duplicate-key rejections and a success count of zero
+     * for rows that did land. 100 keeps each POST inside the timeout with room to spare and bounds
+     * what a single failure has to re-scan.
+     */
+    private static final int CHUNK_SIZE = 100;
 
     @NonNull
     public Job job(@NonNull String name, @NonNull Step step) {
