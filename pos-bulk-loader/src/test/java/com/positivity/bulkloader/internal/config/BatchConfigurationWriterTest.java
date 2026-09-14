@@ -60,6 +60,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.batch.infrastructure.item.Chunk;
 import org.springframework.batch.infrastructure.item.ItemWriter;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -164,6 +165,12 @@ class BatchConfigurationWriterTest {
     @BeforeEach
     void setUp() {
         RequestContextHolder.resetRequestAttributes();
+        // The ingest writer clones the builder and sets its own request factory (longer read
+        // timeout for a chunk POST than for a single-key lookup).
+        lenient().when(restClientBuilder.clone()).thenReturn(restClientBuilder);
+        lenient()
+                .when(restClientBuilder.requestFactory(nullable(ClientHttpRequestFactory.class)))
+                .thenReturn(restClientBuilder);
         lenient().when(restClientBuilder.baseUrl(nullable(String.class))).thenReturn(restClientBuilder);
         lenient().when(restClientBuilder.build()).thenReturn(mockRestClient);
         lenient().when(mockRestClient.post()).thenReturn(requestBodyUriSpec);

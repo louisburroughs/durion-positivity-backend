@@ -5,6 +5,7 @@ import com.positivity.bulkingest.BulkIngestResponse;
 import com.positivity.bulkloader.internal.domain.NumberedRecord;
 import com.positivity.bulkloader.internal.enums.DomainType;
 import com.positivity.bulkloader.internal.service.BulkIngestResultRecorder;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -14,7 +15,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.batch.infrastructure.item.ItemWriter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -40,6 +43,25 @@ public class BulkIngestWriterFactory {
 
     private final AuthorizationHeaderRelay headerRelay;
     private final BulkIngestResultRecorder bulkIngestResultRecorder;
+
+    /**
+     * Read timeout for a chunk POST, which is a different kind of call from the single-key lookups
+     * the same load-balanced builder serves.
+     *
+     * <p>Those lookups keep the shared 5s: a hung sibling must not hold a worker thread. A chunk
+     * POST asks the owning service to validate and persist up to {@code CHUNK_SIZE} rows and emit
+     * an event for each, and 5s is not enough for that. On alpha the 329-row vehicle chunk timed
+     * out at exactly this limit -- but the service had already committed all 329, so Spring Batch
+     * rolled back, re-sent every row individually, collected 329 "already exists" rejections, and
+     * reported success=0 for a load that had in fact landed completely. The same happened to the
+     * 501-row product chunk. A timeout here does not fail safe: it fails invisibly, and reports the
+     * opposite of what occurred.
+     */
+    @Value("${pos.restclient.ingest.read.timeout:120000}")
+    private int ingestReadTimeoutMs;
+
+    @Value("${pos.restclient.connect.timeout:2000}")
+    private int connectTimeoutMs;
 
     /**
      * Where a domain's rows go and what it takes to be allowed to put them there.
@@ -81,8 +103,17 @@ public class BulkIngestWriterFactory {
             @NonNull JobParams params,
             @NonNull Function<List<I>, List<P>> payloadMapper) {
 
-        RestClient client =
-                restClientBuilder.baseUrl("http://" + target.serviceId()).build();
+        // Cloned: the builder is shared with every other writer and with resolution, so configuring
+        // the original would give one service's base URI and timeout to the next client built from
+        // it.
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
+        requestFactory.setReadTimeout(Duration.ofMillis(ingestReadTimeoutMs));
+        RestClient client = restClientBuilder
+                .clone()
+                .requestFactory(requestFactory)
+                .baseUrl("http://" + target.serviceId())
+                .build();
 
         return chunk -> {
             JobContext context = resolveJobContext(target.writerName(), params, chunk.size());

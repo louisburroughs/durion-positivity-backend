@@ -103,6 +103,21 @@ PACK_FILES = [
     ("inventory/cycle-count-plans.csv", "CYCLE_COUNT_PLAN"),
 ]
 
+# Packs whose rows another service must already be able to see, and which therefore lose a race
+# against replication when the seed runs fast.
+#
+# STAFFING_ASSIGNMENT and MECHANIC_SKILL both resolve a person that people/employees.csv created
+# moments earlier, and both are refused with 404 ("Person not found", "Mechanic not found for
+# person") when the owning service's replica has not caught up. On alpha the three packs ran within
+# eight seconds of each other and every row failed; the same packs succeeded on a slower run.
+#
+# Retrying is safe for exactly these two because both refuse duplicates: a row that did land is
+# rejected on the second attempt rather than written twice, so the retry can only add rows that
+# lost the race. Do not add a pack here without checking that property -- customer/*.csv was not
+# idempotent until #1978, and a retry would have doubled every customer.
+REPLICATION_SENSITIVE_PACKS = {"STAFFING_ASSIGNMENT", "MECHANIC_SKILL"}
+
+
 # The catalog pack, reused by the putaway-rules pack to resolve category and
 # subcategory names (see catalog_exemplar_skus).
 CATALOG_PRODUCTS_PACK = "catalog/products.csv"
@@ -388,6 +403,9 @@ def main():
                              "endpoints are scoped to the token's tenant, so a job created elsewhere could not be "
                              "continued. A PLATFORM_ADMIN token with the platform tenant "
                              "01900000-0000-7000-8000-000000000000 makes security/roles.csv the role template.")
+    parser.add_argument("--settle-seconds", type=int, default=20,
+                        help="Seconds to wait before retrying a replication-sensitive pack that failed "
+                             "(STAFFING_ASSIGNMENT, MECHANIC_SKILL); 0 disables the retry")
     parser.add_argument("--poll-timeout", type=int, default=600,
                         help="Seconds to wait for each job to finish (default: 600)")
     parser.add_argument("--dry-run", action="store_true", help="List planned actions without calling the gateway")
@@ -459,7 +477,13 @@ def main():
         if domain in API_PACKS:
             all_ok = API_PACKS[domain](gateway, path, location_id) and all_ok
         else:
-            all_ok = run_pack_file(gateway, path, domain, location_id, args.poll_timeout) and all_ok
+            ok = run_pack_file(gateway, path, domain, location_id, args.poll_timeout)
+            if not ok and args.settle_seconds > 0 and domain in REPLICATION_SENSITIVE_PACKS:
+                print(f"  {domain} depends on rows another service replicates; waiting "
+                      f"{args.settle_seconds}s and retrying once")
+                time.sleep(args.settle_seconds)
+                ok = run_pack_file(gateway, path, domain, location_id, args.poll_timeout)
+            all_ok = ok and all_ok
 
     print("done" if all_ok else "done with failures — inspect the review queue / job counters above")
     return 0 if all_ok else 1
