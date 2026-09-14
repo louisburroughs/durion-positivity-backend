@@ -68,9 +68,11 @@ the location roster, and `--bootstrap-location` creates it from `locations.csv` 
 the gateway API when the roster is empty (that row then reports one expected
 duplicate failure in the LOCATION job).
 
-Sixteen of the seventeen packs load this way. The exception is
-`location/site-defaults.csv`, which calls one idempotent upsert per site
-(`PUT /v1/locations/{id}/defaults`) and is marked `@site-defaults` in the driver.
+All but two of the packs load this way. The exceptions are marked with an `@` name in the
+driver and call the gateway directly: `location/site-defaults.csv` (`@site-defaults`), one
+idempotent upsert per site (`PUT /v1/locations/{id}/defaults`), and `location/mobile-units.csv`
+(`@mobile-units`), one `POST /v1/mobile-units` per unit carrying its policy, capabilities and
+coverage rules — see the mobile-unit note under `location/` below for why the loader cannot.
 
 Nothing in any pack is an environment-specific id. Files name what they reference — a
 location code, a storage location's name, an employee number, a SKU, a catalog class — and
@@ -463,8 +465,16 @@ so an area with none covers no address however many rules point at it. That is w
 no postal codes, and `PATCH /v1/service-areas/{id}` accepts only `description` and `active`, so they
 could not be added through the API. `R__seed_location_1_reference.sql` now seeds 91 NC/SC codes
 across the 25 areas, disjoint, so an address resolves to one area and rule priority alone orders the
-result. `GET /location/mobile-units:eligible?postalCode=28202&countryCode=US` is the quickest check
-after a seed.
+result. The quickest check after a seed is
+
+```
+GET /location/mobile-units:eligible?postalCode=28202&countryCode=US&at=2026-09-14T12:00:00Z
+```
+
+`at` is mandatory — `MobileUnitEligibilityController` declares all three as bare `@RequestParam`s,
+so omitting it is a 400 rather than an empty result. It is reduced to a UTC calendar date and
+matched against each rule's `validFrom`/`validTo`; the fixture leaves both blank, so any instant
+works.
 
 Location types resolve by name (created on the fly if missing, though the reference
 seed provides them); timezones are validated by the service (invalid → per-row

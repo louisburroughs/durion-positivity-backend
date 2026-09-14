@@ -51,6 +51,16 @@ def _load_driver():
 seed_alpha = _load_driver()
 
 
+def _postal_code_block():
+    """The service_area_postal_codes section of the reference migration."""
+    sql = _REFERENCE_SQL.read_text()
+    return sql[sql.index("-- Service area postal codes."):sql.index("-- Capabilities")]
+
+
+def _areas_with_postal_codes():
+    return set(re.findall(r"WHERE sa\.name = '([^']+)'", _postal_code_block()))
+
+
 def _rows(name):
     with open(_FIXTURES / name, newline="") as fh:
         return list(csv.DictReader(fh))
@@ -97,15 +107,68 @@ class FixtureReferenceNamesTest(unittest.TestCase):
         """The eligibility query inner-joins serviceArea.postalCodes, so an area without them
         covers no address however many coverage rules point at it -- which is what kept
         GET /v1/mobile-units:eligible empty before #1986."""
-        sql = _REFERENCE_SQL.read_text()
-        areas_by_name = {}
-        for match in re.finditer(
-                r"INSERT INTO service_areas \([^)]*\)\s*\nVALUES \('([0-9a-f-]+)'::uuid, '([^']*)'", sql):
-            areas_by_name[match.group(2)] = match.group(1)
-        with_codes = set(re.findall(r"\('([0-9a-f-]+)'::uuid, '[A-Z]{2}', '[^']+'\)", sql))
         for row in _rows("mobile-unit-coverage-rules.csv"):
             with self.subTest(area=row["serviceAreaName"]):
-                self.assertIn(areas_by_name[row["serviceAreaName"]], with_codes)
+                self.assertIn(row["serviceAreaName"], _areas_with_postal_codes())
+
+    def test_postalCodeInsertsResolveTheAreaByNameAndStayTenantScoped(self):
+        """Naming a literal area id would abort the migration -- and block pos-location's start --
+        on any database where that area already exists under a different id, because the area
+        inserts above are ON CONFLICT (tenant_id, name) DO NOTHING. The tenant predicate matters
+        because Flyway runs as the owner, which bypasses row-level security."""
+        block = _postal_code_block()
+        self.assertNotIn("::uuid", block, "postal code rows must not name a literal service area id")
+        self.assertEqual(block.count("SELECT sa.id, 'US', v.code"), 25)
+        self.assertEqual(block.count("AND sa.tenant_id = public.app_current_tenant()"), 25)
+
+    def test_postalCodesAreDisjointAcrossTheSeededAreas(self):
+        """Overlap would make one address resolve to two areas, so the eligible list would carry
+        units from both and the priority ordering would no longer describe one coverage map."""
+        codes = re.findall(r"\('(\d{5})'\)", _postal_code_block())
+        duplicated = sorted({code for code in codes if codes.count(code) > 1})
+        self.assertEqual(duplicated, [], "a postal code is claimed by more than one service area")
+
+
+class CoverageFixtureIntegrityTest(unittest.TestCase):
+    def test_everyCoverageRowNamesAUnitThatExists(self):
+        """A typo'd unitName silently leaves the real unit with no coverage: rejected as an opaque
+        HTTP 400 if the unit is ACTIVE, and quietly under-covered if it is not."""
+        units = {row["name"] for row in _rows("mobile-units.csv")}
+        for row in _rows("mobile-unit-coverage-rules.csv"):
+            with self.subTest(unit=row["unitName"]):
+                self.assertIn(row["unitName"], units)
+
+    def test_noTwoUnitsShareAPriorityOnTheSameServiceArea(self):
+        """findEligibleCoverageRules orders by priority alone, so units tied on one area come back
+        in whatever order Postgres returns and the demo result is not reproducible."""
+        seen = {}
+        for row in _rows("mobile-unit-coverage-rules.csv"):
+            key = (row["serviceAreaName"], row["priority"])
+            with self.subTest(area=row["serviceAreaName"], priority=row["priority"]):
+                self.assertNotIn(key, seen, f"tied with {seen.get(key)}")
+            seen[key] = row["unitName"]
+
+
+class LoaderPackClassificationTest(unittest.TestCase):
+    """Pins the cross-language half of the move to an API pack.
+
+    pos-bulk-loader's AlphaFixtureHeadersMapTest reads the real fixture off disk and asserts every
+    column maps to a field of the domain's loader record. Leaving mobile-units.csv listed there
+    failed on the two new columns -- and because CI only builds changed modules, that break would
+    have landed on main and surfaced in an unrelated PR."""
+
+    _JAVA_TEST = (_SCRIPTS.parent / "pos-bulk-loader/src/test/java/com/positivity/bulkloader"
+                  / "internal/domain/AlphaFixtureHeadersMapTest.java")
+
+    def test_mobileUnitsIsNotListedAsALoaderBackedPack(self):
+        java = self._JAVA_TEST.read_text()
+        listed = re.findall(r'Arguments\.of\("([^"]+)"', java)
+        self.assertNotIn("location/mobile-units.csv", listed)
+        self.assertNotIn("location/mobile-unit-coverage-rules.csv", listed)
+
+    def test_theOtherApiPackIsAbsentTooSoTheConventionIsClear(self):
+        java = self._JAVA_TEST.read_text()
+        self.assertNotIn("location/site-defaults.csv", re.findall(r'Arguments\.of\("([^"]+)"', java))
 
 
 class ActiveUnitCompletenessTest(unittest.TestCase):
@@ -185,12 +248,15 @@ class _StubGateway:
 
     base_url = "https://alpha.example"
 
-    def __init__(self, existing_units=()):
+    def __init__(self, existing_units=(), coverage_rules=None):
+        """`existing_units` may be plain names (complete, seeded by this same pack) or dicts
+        standing for whatever the service actually holds."""
         sql = _REFERENCE_SQL.read_text()
         self.areas = [{"id": mid, "name": name} for mid, name in _seeded_pairs(sql, "service_areas")]
         self.policies = [
             {"id": mid, "name": name} for mid, name in _seeded_pairs(sql, "travel_buffer_policies")]
-        self.existing = [{"name": name} for name in existing_units]
+        self.existing = [_as_unit(unit) for unit in existing_units]
+        self.coverage_rules = coverage_rules if coverage_rules is not None else {}
         self.posted = []
 
     def get(self, path, allow_error=False):
@@ -202,13 +268,33 @@ class _StubGateway:
         if path == "/location/service-areas":
             return 200, self.areas
         if path.startswith("/location/mobile-units?"):
-            return 200, {"content": self.existing, "totalPages": 1}
+            pages = getattr(self, "pages", 1)
+            index = int(path.split("page=")[1].split("&")[0])
+            size = max(1, -(-len(self.existing) // pages))
+            return 200, {"content": self.existing[index * size:(index + 1) * size],
+                         "totalPages": pages}
+        if path.startswith("/location/mobile-units/") and path.endswith("/coverage-rules"):
+            unit_id = path.split("/")[3]
+            return 200, self.coverage_rules.get(unit_id, [])
         raise AssertionError(f"unexpected GET {path}")
 
     def post_json(self, path, body, allow_error=False):
         assert path == "/location/mobile-units", path
         self.posted.append(body)
         return 201, {"id": "new"}
+
+
+def _as_unit(unit):
+    """A bare name means a unit this pack itself seeded: ACTIVE, with a policy and capabilities."""
+    if isinstance(unit, dict):
+        return {"id": unit.get("id", f"id-{unit['name']}"), **unit}
+    return {
+        "id": f"id-{unit}",
+        "name": unit,
+        "status": "ACTIVE",
+        "travelBufferPolicyId": "policy-1",
+        "capabilityIds": ["cap-1"],
+    }
 
 
 def _seeded_pairs(sql, table):
@@ -248,19 +334,100 @@ class MobileUnitPackTest(unittest.TestCase):
                 self.assertTrue(body["coverageRules"])
 
     def test_existingUnitsAreSkippedSoARerunAddsOnlyWhatIsMissing(self):
-        gateway = _StubGateway(existing_units=["MU-CLT-MAIN-01", "MU-Charlotte-02"])
+        gateway = _StubGateway(
+            existing_units=["MU-CLT-MAIN-01", "MU-Charlotte-02"],
+            coverage_rules={"id-MU-CLT-MAIN-01": [{"id": "r"}], "id-MU-Charlotte-02": [{"id": "r"}]})
         self.assertTrue(self._run(gateway))
         self.assertEqual([body["name"] for body in gateway.posted],
                          ["MU-CLT-MAIN-02", "MU-CLT-MAIN-03", "MU-CLT-NORTH-01", "MU-CLT-NORTH-02",
                           "MU-CLT-SOUTH-01", "MU-CLT-SOUTH-02", "MU-Charlotte-01"])
 
-    def test_capabilitiesAreSentAsCodesNotEmptyStrings(self):
+    def test_capabilityCodesAreSplitOnSemicolonsAndBlanksDropped(self):
+        """A trailing or doubled `;` would otherwise reach the service as an empty capability,
+        which resolveCapabilityIds rejects with "Invalid capabilityIds: <blank>" -- failing the
+        whole unit over a stray separator."""
         gateway = _StubGateway()
         self._run(gateway)
-        for body in gateway.posted:
-            with self.subTest(unit=body["name"]):
-                self.assertNotIn("", body["capabilityIds"])
-                self.assertTrue(all(code == code.upper() for code in body["capabilityIds"]))
+        by_name = {body["name"]: body for body in gateway.posted}
+        for row in _rows("mobile-units.csv"):
+            with self.subTest(unit=row["name"]):
+                expected = [code for code in row["capabilityCodes"].split(";") if code]
+                self.assertEqual(by_name[row["name"]]["capabilityIds"], expected)
+                self.assertNotIn("", by_name[row["name"]]["capabilityIds"])
+
+    def test_multiplePagesOfExistingUnitsAreAllRead(self):
+        """The skip check is only sound if it sees every unit; a reader that stops after page 0
+        would re-POST everything past the first page and collect 409s."""
+        gateway = _StubGateway()
+        gateway.existing = [_as_unit(f"MU-{index}") for index in range(150)]
+        gateway.pages = 2
+        found = seed_alpha.existing_mobile_units(gateway)
+        self.assertEqual(len(found), 150)
+
+    def test_totalPagesIsReadUnderEitherSpringSerialisation(self):
+        """Spring nests the page metadata under `page` in VIA_DTO mode and emits it flat otherwise."""
+        self.assertEqual(seed_alpha.total_pages({"totalPages": 3}), 3)
+        self.assertEqual(seed_alpha.total_pages({"page": {"totalPages": 4}}), 4)
+        self.assertEqual(seed_alpha.total_pages({}), 1)
+        self.assertEqual(seed_alpha.total_pages(None), 1)
+
+
+class LegacyIncompleteUnitTest(unittest.TestCase):
+    """An alpha seeded before #1986 carries all nine names as INACTIVE units with no policy,
+    capabilities or coverage (#1982 parked them). Skipping on the name alone would report a clean
+    run and leave `:eligible` empty forever, which is the failure this pack exists to end."""
+
+    def _legacy_nine(self):
+        return [{"name": row["name"], "status": "INACTIVE", "travelBufferPolicyId": None,
+                 "capabilityIds": []} for row in _rows("mobile-units.csv")]
+
+    def _run(self, gateway):
+        return seed_alpha.run_mobile_units(gateway, "location/mobile-units.csv", None)
+
+    def test_aLegacySeededAlphaFailsLoudlyInsteadOfReportingSuccess(self):
+        gateway = _StubGateway(existing_units=self._legacy_nine())
+        self.assertFalse(self._run(gateway), "must not report success when nothing was upgraded")
+        self.assertEqual(gateway.posted, [], "the names exist; posting would 409 per row")
+
+    def test_theParkedUnitIsNotFlaggedBecauseTheFixtureOnlyWantsItToExist(self):
+        """MU-CLT-MAIN-03 is INACTIVE in the fixture too, so a legacy INACTIVE row already matches
+        what is asked for -- flagging it would demand a reset for a unit that is correct."""
+        parked = next(unit for unit in self._legacy_nine() if unit["name"] == "MU-CLT-MAIN-03")
+        row = next(r for r in _rows("mobile-units.csv") if r["name"] == "MU-CLT-MAIN-03")
+        self.assertIsNone(seed_alpha.mobile_unit_shortfall(_StubGateway(), parked, row, []))
+
+    def test_eachWayOfBeingIncompleteIsNamedInTheMessage(self):
+        row = next(r for r in _rows("mobile-units.csv") if r["name"] == "MU-CLT-MAIN-01")
+        complete = {"id": "u1", "name": row["name"], "status": "ACTIVE",
+                    "travelBufferPolicyId": "p1", "capabilityIds": ["c1"]}
+        gateway = _StubGateway(coverage_rules={"u1": [{"id": "r1"}]})
+
+        self.assertIsNone(seed_alpha.mobile_unit_shortfall(gateway, complete, row, [{"ruleType": "X"}]))
+        self.assertIn("is not ACTIVE", seed_alpha.mobile_unit_shortfall(
+            gateway, {**complete, "status": "INACTIVE"}, row, []))
+        self.assertIn("no travel buffer policy", seed_alpha.mobile_unit_shortfall(
+            gateway, {**complete, "travelBufferPolicyId": None}, row, []))
+        self.assertIn("no capabilities", seed_alpha.mobile_unit_shortfall(
+            gateway, {**complete, "capabilityIds": []}, row, []))
+
+    def test_anActiveUnitThatLostItsCoverageRulesIsFlagged(self):
+        """Coverage is the one part the list response does not carry, and the one part that decides
+        whether `:eligible` returns anything."""
+        row = next(r for r in _rows("mobile-units.csv") if r["name"] == "MU-CLT-MAIN-01")
+        unit = {"id": "u1", "name": row["name"], "status": "ACTIVE",
+                "travelBufferPolicyId": "p1", "capabilityIds": ["c1"]}
+        gateway = _StubGateway(coverage_rules={"u1": []})
+        self.assertIn("no coverage rules",
+                      seed_alpha.mobile_unit_shortfall(gateway, unit, row, [{"ruleType": "X"}]))
+
+    def test_aUnitThisPackAlreadySeededIsSkippedNotReseeded(self):
+        """The legitimate idempotent case: running the new pack twice changes nothing and passes."""
+        gateway = _StubGateway(
+            existing_units=[row["name"] for row in _rows("mobile-units.csv")],
+            coverage_rules={f"id-{row['unitName']}": [{"id": "r"}]
+                            for row in _rows("mobile-unit-coverage-rules.csv")})
+        self.assertTrue(self._run(gateway))
+        self.assertEqual(gateway.posted, [])
 
 
 class PackRegistrationTest(unittest.TestCase):

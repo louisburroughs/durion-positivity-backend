@@ -60,7 +60,12 @@ class AlphaFixtureHeadersMapTest {
                 Arguments.of("inventory/on-hand.csv", DomainType.INVENTORY_STOCK_COUNT, Set.of("description")),
                 Arguments.of("location/storage-locations.csv", DomainType.STORAGE_LOCATION, Set.<String>of()),
                 Arguments.of("location/bays.csv", DomainType.BAY, Set.<String>of()),
-                Arguments.of("location/mobile-units.csv", DomainType.MOBILE_UNIT, Set.<String>of()),
+                // location/mobile-units.csv is deliberately absent: it became a gateway API pack in
+                // #1986, because an ACTIVE mobile unit needs a travel buffer policy, capabilities and
+                // coverage rules, and MobileUnitLoaderRecord carries none of the three. Its
+                // travelBufferPolicyName and capabilityCodes columns are read by scripts/seed-alpha.py,
+                // not by the loader, so they map to no record field by design. The other API pack,
+                // location/site-defaults.csv, has never appeared here either.
                 Arguments.of("people/staffing-assignments.csv", DomainType.STAFFING_ASSIGNMENT, Set.<String>of()),
                 Arguments.of("inventory/putaway-rules.csv", DomainType.PUTAWAY_RULE, Set.<String>of()),
                 Arguments.of("inventory/cycle-count-plans.csv", DomainType.CYCLE_COUNT_PLAN, Set.<String>of()),
