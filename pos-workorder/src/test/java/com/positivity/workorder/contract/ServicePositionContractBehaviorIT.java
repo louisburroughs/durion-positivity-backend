@@ -6,11 +6,13 @@ import static org.hamcrest.Matchers.nullValue;
 
 import com.positivity.workorder.internal.entity.ExtBayReplica;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
+import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.ServicePositionAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
@@ -61,6 +63,9 @@ class ServicePositionContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private com.positivity.workorder.internal.service.WorkorderStateMachine stateMachine;
 
+    @Autowired
+    private ExtPersonReplicaRepository extPersonReplicaRepository;
+
     @AfterEach
     void tearDown() {
         purgeTestData();
@@ -76,6 +81,14 @@ class ServicePositionContractBehaviorIT extends BaseContractIntegrationTest {
                 .baseLocationId(SITE)
                 .name("Van 1")
                 .active(true)
+                .aggregateVersion(1L)
+                .updatedAt(Instant.EPOCH)
+                .build());
+
+        // Assignment validates the technician against the ext_person replica (#1983), so SP-007's
+        // technician has to be known here just as its bay has to be in ext_bay.
+        extPersonReplicaRepository.save(ExtPersonReplica.builder()
+                .personId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .aggregateVersion(1L)
                 .updatedAt(Instant.EPOCH)
                 .build());

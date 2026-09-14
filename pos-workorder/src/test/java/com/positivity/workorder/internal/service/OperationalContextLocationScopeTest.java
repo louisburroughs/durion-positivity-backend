@@ -121,6 +121,15 @@ class OperationalContextLocationScopeTest {
     @InjectMocks
     private WorkorderServiceImpl workorderService;
 
+    @org.junit.jupiter.api.BeforeEach
+    void stubPositionSave() {
+        // #1984: the override persists through the position service, which owns the flush that turns
+        // a lost race against the occupancy index into a 409 rather than a 500.
+        org.mockito.Mockito.lenient()
+                .when(servicePositionService.savePositionChange(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
     @AfterEach
     void clearCaller() {
         SecurityContextHolder.clearContext();
@@ -190,7 +199,7 @@ class OperationalContextLocationScopeTest {
     void inReachApplies() {
         Workorder workorder = unstartedWorkorder();
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
-        when(workorderRepository.save(any(Workorder.class))).thenAnswer(inv -> inv.getArgument(0));
+        // #1984: persisted through the position service; stubPositionSave() answers for it.
 
         scopedManager();
         OperationalContextResponse response = workorderService.overrideOperationalContext(WORKORDER_ID, moveTo(SHOP_A));
@@ -214,6 +223,7 @@ class OperationalContextLocationScopeTest {
 
         assertThat(workorder.getLocationId()).isEqualTo(SHOP_B);
         verify(workorderRepository, never()).save(any());
+        verify(servicePositionService, never()).savePositionChange(any());
         verify(workorderFactPublisher, never()).markChanged(any());
     }
 
@@ -229,6 +239,7 @@ class OperationalContextLocationScopeTest {
 
         assertThat(workorder.getLocationId()).isEqualTo(SHOP_B);
         verify(workorderRepository, never()).save(any());
+        verify(servicePositionService, never()).savePositionChange(any());
         verify(workorderFactPublisher, never()).markChanged(any());
     }
 
@@ -242,6 +253,7 @@ class OperationalContextLocationScopeTest {
                 .isInstanceOf(LocationScopeDeniedException.class);
 
         verify(workorderRepository, never()).save(any());
+        verify(servicePositionService, never()).savePositionChange(any());
     }
 
     @Test
@@ -276,6 +288,7 @@ class OperationalContextLocationScopeTest {
                 .isInstanceOf(LocationScopeDeniedException.class);
 
         verify(workorderRepository, never()).save(any());
+        verify(servicePositionService, never()).savePositionChange(any());
     }
 
     @Test
@@ -283,12 +296,12 @@ class OperationalContextLocationScopeTest {
     void preRolloutUnchanged() {
         Workorder workorder = unstartedWorkorderAt(SHOP_B);
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
-        when(workorderRepository.save(any(Workorder.class))).thenAnswer(inv -> inv.getArgument(0));
+        // #1984: persisted through the position service; stubPositionSave() answers for it.
 
         preRolloutManager();
         OperationalContextResponse response = workorderService.overrideOperationalContext(WORKORDER_ID, moveTo(SHOP_B));
 
         assertThat(response.getLocationId()).isEqualTo(SHOP_B);
-        verify(workorderRepository).save(workorder);
+        verify(servicePositionService).savePositionChange(workorder);
     }
 }

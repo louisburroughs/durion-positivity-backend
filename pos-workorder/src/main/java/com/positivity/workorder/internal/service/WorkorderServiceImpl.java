@@ -33,7 +33,6 @@ import com.positivity.workorder.internal.exception.CustomerRequirementsNotMetExc
 import com.positivity.workorder.internal.exception.EstimateNotFoundException;
 import com.positivity.workorder.internal.exception.PartLineNotFoundException;
 import com.positivity.workorder.internal.exception.ServiceLineNotFoundException;
-import com.positivity.workorder.internal.exception.ServicePositionOccupiedException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.exception.WorkorderResourceConflictException;
@@ -973,26 +972,42 @@ public class WorkorderServiceImpl implements WorkorderService {
         // listener, so letting it out would cost the whole update — location and mechanics included —
         // for a conflict that concerns the resource alone. The rest of the update is applied and the
         // workorder keeps the position it had, which is the state the database can actually honour.
-        try {
-            servicePositionService.recordPositionChange(
-                    workorder,
-                    payload.getResourceId() != null ? resourceType : null,
-                    payload.getResourceId(),
-                    "System:ShopManagementService",
-                    "Assignment context updated");
-            workorder.setResourceId(payload.getResourceId());
-            workorder.setResourceType(payload.getResourceId() != null ? resourceType : null);
-        } catch (ServicePositionOccupiedException ex) {
+        // #1984: the position goes through the position service so the inbound fact is subject to the
+        // same one-open-workorder rule as a dispatcher's own assignment, and leaves the same history
+        // row. The occupancy question is asked rather than caught: recordPositionChange is
+        // transactional and joins this method's transaction, so a refusal thrown from it would mark
+        // that transaction rollback-only — catching it and carrying on would lose the location and
+        // mechanics too and then fail at commit, which is the opposite of applying the rest.
+        UUID incomingResourceId = payload.getResourceId();
+        ResourceType incomingResourceType = incomingResourceId != null ? resourceType : null;
+        Optional<UUID> occupant =
+                servicePositionService.findOccupant(workorder.getId(), incomingResourceType, incomingResourceId);
+        if (occupant.isPresent()) {
+            // The workorder moves to the new site with no position rather than keeping the old bay:
+            // a workorder sitting at site B while still pointing at site A's bay is a state the
+            // dispatch board cannot render honestly, and the old bay is not where this job is going.
             log.warn(
-                    "Inbound assignment for workorder {} names {} {}, which another open workorder holds;"
-                            + " keeping its current position and applying the rest of the update",
+                    "Inbound assignment for workorder {} names {} {}, which open workorder {} holds;"
+                            + " applying the location and mechanics and leaving this workorder unplaced",
                     workorder.getId(),
-                    resourceType,
-                    payload.getResourceId(),
-                    ex);
+                    incomingResourceType,
+                    incomingResourceId,
+                    occupant.get());
+            incomingResourceId = null;
+            incomingResourceType = null;
         }
+        servicePositionService.recordPositionChange(
+                workorder,
+                incomingResourceType,
+                incomingResourceId,
+                "System:ShopManagementService",
+                occupant.isPresent()
+                        ? "Assignment context updated; requested position was occupied"
+                        : "Assignment context updated");
+        workorder.setResourceId(incomingResourceId);
+        workorder.setResourceType(incomingResourceType);
         workorder.setMechanicIds(serializeMechanicIds(payload.getMechanicIds()));
-        workorderRepository.save(workorder);
+        servicePositionService.savePositionChange(workorder);
         workorderFactPublisher.markChanged(workorder.getId());
 
         String details = buildAuditDetails(
@@ -1055,6 +1070,7 @@ public class WorkorderServiceImpl implements WorkorderService {
     }
 
     @Override
+    @Transactional
     public OperationalContextResponse overrideOperationalContext(
             @NonNull UUID workorderId, @NonNull OperationalContextOverrideRequest override) {
         Workorder workorder = workorderRepository
@@ -1100,7 +1116,10 @@ public class WorkorderServiceImpl implements WorkorderService {
         workorder.setResourceId(resourceId);
         workorder.setResourceType(overrideResourceType);
         workorder.setMechanicIds(serializeMechanicIds(override.getAssignedMechanics()));
-        Workorder saved = workorderRepository.save(workorder);
+        // One transaction, and the same conflict translation the dedicated assignment operation uses:
+        // the history rows this method just wrote and the workorder they describe must commit or roll
+        // back together, and a lost race against the occupancy index is a 409 here as well as there.
+        Workorder saved = servicePositionService.savePositionChange(workorder);
         workorderFactPublisher.markChanged(saved.getId());
 
         return OperationalContextResponse.builder()

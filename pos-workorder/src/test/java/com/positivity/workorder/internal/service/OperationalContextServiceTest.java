@@ -105,6 +105,12 @@ class OperationalContextServiceTest {
                 "context-test-user", "n/a", List.of());
         org.springframework.security.core.context.SecurityContextHolder.getContext()
                 .setAuthentication(caller);
+
+        // #1984: every position write now persists through the position service, which owns the
+        // flush that turns a lost race against the occupancy index into a 409 instead of a 500.
+        org.mockito.Mockito.lenient()
+                .when(servicePositionService.savePositionChange(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @AfterEach
@@ -253,7 +259,8 @@ class OperationalContextServiceTest {
                 .constraints(List.of("LIFT_REQUIRED"))
                 .build();
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
-        when(workorderRepository.save(any(Workorder.class))).thenAnswer(inv -> inv.getArgument(0));
+        // #1984: the override persists through the position service; the shared stub in
+        // installUnscopedCaller() answers for it.
 
         OperationalContextResponse response =
                 workorderService.overrideOperationalContext(WORKORDER_ID, overrideRequest);
@@ -269,7 +276,7 @@ class OperationalContextServiceTest {
         assertThat(response.getAssignedResources()).containsExactly(RESOURCE_ID);
         assertThat(response.getConstraints()).containsExactly("LIFT_REQUIRED");
         assertThat(response.isLocked()).isFalse();
-        verify(workorderRepository).save(any(Workorder.class));
+        verify(servicePositionService).savePositionChange(any(Workorder.class));
     }
 
     // -----------------------------------------------------------------------
@@ -297,7 +304,8 @@ class OperationalContextServiceTest {
                 .assignedResources(List.of(unitId))
                 .build();
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
-        when(workorderRepository.save(any(Workorder.class))).thenAnswer(inv -> inv.getArgument(0));
+        // #1984: the override persists through the position service; the shared stub in
+        // installUnscopedCaller() answers for it.
 
         OperationalContextResponse response =
                 workorderService.overrideOperationalContext(WORKORDER_ID, overrideRequest);
@@ -323,7 +331,8 @@ class OperationalContextServiceTest {
                 .assignedResources(List.of())
                 .build();
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
-        when(workorderRepository.save(any(Workorder.class))).thenAnswer(inv -> inv.getArgument(0));
+        // #1984: the override persists through the position service; the shared stub in
+        // installUnscopedCaller() answers for it.
 
         OperationalContextResponse response =
                 workorderService.overrideOperationalContext(WORKORDER_ID, overrideRequest);

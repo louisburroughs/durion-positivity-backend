@@ -25,6 +25,7 @@ import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionExc
 import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundException;
 import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
+import com.positivity.workorder.internal.exception.TechnicianNotFoundException;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
 import com.positivity.workorder.internal.exception.TravelSegmentNotFoundException;
 import com.positivity.workorder.internal.exception.UomConversionUndefinedException;
@@ -399,6 +400,19 @@ public class GlobalExceptionHandler {
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
         return new ResponseEntity<>(body, headers, HttpStatus.CONFLICT);
+    }
+
+    /**
+     * A technician id that names nobody in the {@code ext_person} replica (#1983).
+     *
+     * <p>422 for the same reason {@link ServicePositionInvalidException} is: a cross-entity rule
+     * fails, and the technician is not what the URL addresses.
+     */
+    @ExceptionHandler(TechnicianNotFoundException.class)
+    public ResponseEntity<ApiError> handleTechnicianNotFound(
+            TechnicianNotFoundException ex, HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY, TechnicianNotFoundException.ERROR_CODE, ex.getMessage(), request);
     }
 
     /** Reassign was called on a workorder that has no current technician to reassign from (#1985). */

@@ -72,7 +72,7 @@ public class ServicePositionServiceImpl implements ServicePositionService {
         recordPositionChange(workorder, resourceType, resourceId, actor, request.getReason());
         workorder.setResourceType(resourceType);
         workorder.setResourceId(resourceId);
-        Workorder saved = saveHonouringOccupancyIndex(workorder, resourceType, resourceId);
+        Workorder saved = savePositionChange(workorder);
         workorderFactPublisher.markChanged(workorderId);
 
         log.info("Workorder {} placed on {} {} by {}", workorderId, resourceType, resourceId, actor);
@@ -91,7 +91,7 @@ public class ServicePositionServiceImpl implements ServicePositionService {
         recordPositionChange(workorder, null, null, actor, reason);
         workorder.setResourceType(null);
         workorder.setResourceId(null);
-        Workorder saved = workorderRepository.save(workorder);
+        Workorder saved = savePositionChange(workorder);
         workorderFactPublisher.markChanged(workorderId);
 
         log.info("Workorder {} released its service position, by {}: {}", workorderId, actor, reason);
@@ -151,6 +151,14 @@ public class ServicePositionServiceImpl implements ServicePositionService {
 
         UUID workorderId = workorder.getId();
         ResourceType effectiveType = resourceId == null ? null : resourceType;
+        // A hold is the workorder's own site, on every path. HOLD became bindable on the legacy
+        // override request the moment the enum gained it, and that path does not go through
+        // resolvePosition — without this check it could persist (HOLD, some other id) and the
+        // site-scoped hold would not be site-scoped at all.
+        if (effectiveType == ResourceType.HOLD && !resourceId.equals(workorder.getLocationId())) {
+            throw new ServicePositionInvalidException("A HOLD position is the workorder's own site: expected "
+                    + workorder.getLocationId() + " but got " + resourceId);
+        }
         Optional<ServicePositionAssignment> currentPlacement =
                 positionRepository.findByWorkorder_IdAndCurrentTrue(workorderId);
 
@@ -278,40 +286,51 @@ public class ServicePositionServiceImpl implements ServicePositionService {
 
     private void requirePositionFree(
             @NonNull UUID workorderId, @NonNull ResourceType resourceType, @NonNull UUID resourceId) {
-        List<Workorder> occupants =
-                workorderRepository.findOpenOccupantsOfPosition(resourceType, resourceId, workorderId);
-        if (!occupants.isEmpty()) {
-            UUID occupant = occupants.get(0).getId();
+        findOccupant(workorderId, resourceType, resourceId).ifPresent(occupant -> {
             throw new ServicePositionOccupiedException(
                     resourceType + " " + resourceId + " already holds open workorder " + occupant, occupant);
+        });
+    }
+
+    @Override
+    @NonNull
+    public Optional<UUID> findOccupant(
+            @NonNull UUID workorderId, @Nullable ResourceType resourceType, @Nullable UUID resourceId) {
+        if (resourceId == null || resourceType == null || !resourceType.isExclusive()) {
+            return Optional.empty();
         }
+        return workorderRepository.findOpenOccupantsOfPosition(resourceType, resourceId, workorderId).stream()
+                .map(Workorder::getId)
+                .findFirst();
     }
 
     /**
      * Flush the workorder now so a lost race surfaces as the same 409 the pre-check raises.
      *
-     * <p>Two dispatchers assigning the free bay at the same moment both pass
-     * {@link #requirePositionFree} — each reads before the other commits — and the partial unique
-     * index is what decides between them. Without the explicit flush the loser's violation would
-     * surface during commit, outside this method and outside the {@code @ExceptionHandler} that
-     * knows what it means, and the caller would get a 500 for what is an ordinary, expected refusal.
-     * The occupying workorder is left null: the winner is whichever transaction committed first, and
-     * this one cannot see it from inside its own snapshot.
+     * <p>Two dispatchers assigning the free bay at the same moment both pass the occupancy check —
+     * each reads before the other commits — and the partial unique index is what decides between
+     * them. Without the explicit flush the loser's violation would surface during commit, outside
+     * this method and outside the {@code @ExceptionHandler} that knows what it means, and the caller
+     * would get a 500 for what is an ordinary, expected refusal. The occupying workorder is left
+     * null: the winner is whichever transaction committed first, and this one cannot see it from
+     * inside its own snapshot.
      */
+    @Override
     @NonNull
-    private Workorder saveHonouringOccupancyIndex(
-            @NonNull Workorder workorder, @NonNull ResourceType resourceType, @NonNull UUID resourceId) {
+    public Workorder savePositionChange(@NonNull Workorder workorder) {
         try {
             return workorderRepository.saveAndFlush(workorder);
         } catch (DataIntegrityViolationException ex) {
             log.info(
                     "Concurrent assignment lost the race for {} {} on workorder {}",
-                    resourceType,
-                    resourceId,
+                    workorder.getResourceType(),
+                    workorder.getResourceId(),
                     workorder.getId(),
                     ex);
             throw new ServicePositionOccupiedException(
-                    resourceType + " " + resourceId + " was taken by another open workorder", null);
+                    workorder.getResourceType() + " " + workorder.getResourceId()
+                            + " was taken by another open workorder",
+                    null);
         }
     }
 

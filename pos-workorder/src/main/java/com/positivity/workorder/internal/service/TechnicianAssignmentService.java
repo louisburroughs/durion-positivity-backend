@@ -45,4 +45,13 @@ public interface TechnicianAssignmentService {
 
     @NonNull
     WorkorderStatus getWorkorderStatus(@NonNull UUID workorderId);
+
+    /**
+     * Assert the workorder exists and is still open, for operations the assignment lifecycle allows
+     * only while it is (#1983).
+     *
+     * @throws com.positivity.workorder.internal.exception.WorkorderNotFoundException no such workorder
+     * @throws com.positivity.workorder.internal.exception.WorkorderClosedException it is COMPLETED or CANCELLED
+     */
+    void requireOpenWorkorder(@NonNull UUID workorderId);
 }

@@ -4,6 +4,7 @@ import com.positivity.workorder.internal.dto.AssignServicePositionRequest;
 import com.positivity.workorder.internal.dto.ServicePositionResponse;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -97,4 +98,36 @@ public interface ServicePositionService {
             @Nullable UUID resourceId,
             @NonNull String actor,
             @Nullable String reason);
+
+    /**
+     * The open workorder occupying an exclusive position, if any — the question
+     * {@link #recordPositionChange} answers with an exception, asked without one.
+     *
+     * <p>This exists for callers that must not be unwound by the refusal. The inbound
+     * pos-shop-manager assignment applies a location, a resource and a set of mechanics in one
+     * transaction, and {@code recordPositionChange} is transactional too: a {@code
+     * ServicePositionOccupiedException} thrown from it marks the surrounding transaction
+     * rollback-only, so catching it and carrying on would lose the location and mechanics as well
+     * and then fail the commit anyway. Asking first keeps the decision in the caller's hands.
+     *
+     * <p>Answers empty for an unset position and for {@link ResourceType#HOLD}, neither of which can
+     * be occupied. It is a read, so it is advisory: a position free when this returns can be taken
+     * before the caller writes, and the partial unique index is still what finally decides.
+     *
+     * @return the occupying workorder's id, or empty when the position is free or unconstrained
+     */
+    @NonNull
+    Optional<UUID> findOccupant(
+            @NonNull UUID workorderId, @Nullable ResourceType resourceType, @Nullable UUID resourceId);
+
+    /**
+     * Persist a workorder whose position fields were just changed, turning a lost race against
+     * {@code workorder_open_position_uniq} into the same 409 the pre-check raises.
+     *
+     * <p>The flush is the point: without it the violation surfaces at commit, outside any handler
+     * that knows what it means, and an ordinary refusal reaches the client as a 500. Every path that
+     * writes a position goes through here so they all fail the same way.
+     */
+    @NonNull
+    Workorder savePositionChange(@NonNull Workorder workorder);
 }

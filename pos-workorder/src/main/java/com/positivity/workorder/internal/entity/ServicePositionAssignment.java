@@ -42,11 +42,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * assignments of the same workorder and answering "what changed on this job and who did it" should
  * not require reading two differently-shaped audit trails.
  *
- * <p>Exactly one row per workorder may have {@code current = true}. Unlike the technician's
- * single-current rule that constraint needs no unique index of its own here, because the stronger
- * one on {@code workorder} covers it: a position is released by the same transaction that takes the
- * next one, and the occupancy index {@code workorder_open_position_uniq} already prevents a
- * workorder from being on two exclusive positions at once.
+ * <p>Exactly one row per workorder may have {@code current = true}, guaranteed by the partial unique
+ * index {@code service_position_assignment_one_current_uniq}. That index is not redundant with the
+ * occupancy index on {@code workorder}: the latter constrains how many workorders may hold one
+ * <em>exclusive</em> position, and says nothing at all about {@link ResourceType#HOLD}, which is
+ * unlimited by design — so without this one a workorder could accumulate several open HOLD history
+ * rows and no longer have a single answer to "where is it now".
  */
 @Entity
 @Table(name = "service_position_assignment")

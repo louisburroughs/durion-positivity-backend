@@ -6,7 +6,10 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
+import com.positivity.workorder.internal.exception.TechnicianNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderClosedException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
+import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import java.time.Clock;
@@ -49,6 +52,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
     private final TechnicianAssignmentRepository assignmentRepository;
     private final WorkorderRepository workorderRepository;
     private final WorkorderStateMachine stateMachine;
+    private final ExtPersonReplicaRepository extPersonReplicaRepository;
 
     /**
      * Assign a technician to a workorder.
@@ -84,6 +88,8 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         // indistinguishable from a deliberate hand-over — the first technician's row was closed with
         // a canned reason and nobody was told. Changing hands is reassignTechnician, which takes a
         // reason; here a held workorder is a 409 naming its current technician.
+        requireKnownTechnician(technicianId);
+
         Optional<TechnicianAssignment> existingAssignment =
                 assignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId);
 
@@ -155,8 +161,10 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         // Reassign is deliberately not promoted to an assign when there is nobody to reassign from
         // (#1985): a caller that believed the workorder was held and gets a 200 has learned nothing
         // about its view being stale, which is the same ambiguity assign's new 409 removes.
+        requireKnownTechnician(newTechnicianId);
+
         TechnicianAssignment currentAssignment = assignmentRepository
-                .findByWorkorder_IdAndCurrentTrue(workorderId)
+                .findCurrentForUpdate(workorderId)
                 .orElseThrow(() -> new TechnicianNotAssignedException(
                         "Cannot reassign: workorder " + workorderId + " has no current technician assignment"));
 
@@ -172,7 +180,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         // so a plain save() here would have the new current row inserted while the old one still
         // says current = true, and the partial unique index
         // technician_assignment_one_current_uniq would refuse the reassignment outright (#1985).
-        currentAssignment.markAsNotCurrent(LocalDateTime.now(clock), reason);
+        currentAssignment.markAsNotCurrent(LocalDateTime.now(clock), reason, null);
         assignmentRepository.saveAndFlush(currentAssignment);
 
         // Create new assignment
@@ -199,15 +207,18 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
     }
 
     @Override
+    @Transactional
     public Optional<TechnicianAssignmentRecord> releaseAssignment(
             @NonNull UUID workorderId, @NonNull String releasedBy, @Nullable String reason) {
-        Optional<TechnicianAssignment> currentAssignment =
-                assignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId);
+        // Locked, not a plain read (#1985): a release that read T1 and a reassignment that replaces
+        // T1 with T2 would otherwise both succeed, and the release would report the workorder
+        // unassigned while T2 holds it. The lock makes the second one wait and see the truth.
+        Optional<TechnicianAssignment> currentAssignment = assignmentRepository.findCurrentForUpdate(workorderId);
         if (currentAssignment.isEmpty()) {
             return Optional.empty();
         }
         TechnicianAssignment assignment = currentAssignment.get();
-        assignment.markAsNotCurrent(LocalDateTime.now(clock), reason);
+        assignment.markAsNotCurrent(LocalDateTime.now(clock), reason, releasedBy);
         TechnicianAssignment saved = assignmentRepository.save(assignment);
         log.info(
                 "Released technician {} from workorder {} by {}: {}",
@@ -277,6 +288,23 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
     }
 
     /**
+     * Refuse a technician this module has never heard of (#1983).
+     *
+     * <p>Checked against the {@code ext_person} replica pos-people feeds, not by a synchronous call
+     * into that service (ADR-0044 §6). 422 rather than 404: the technician is not what the URL
+     * addresses, and the request is well-formed — it names someone who does not exist here.
+     *
+     * <p>This deliberately checks existence only. Whether a technician may hold a workorder at a
+     * site they are not staffed at is the staffing question #1985 left open and #1990 carries; it
+     * needs a decision before it can be enforced, and guessing one here would be worse than the gap.
+     */
+    private void requireKnownTechnician(@NonNull UUID technicianId) {
+        if (!extPersonReplicaRepository.existsById(technicianId)) {
+            throw new TechnicianNotFoundException(technicianId);
+        }
+    }
+
+    /**
      * Flush the new assignment now so a lost race surfaces as the same 409 the pre-check raises.
      *
      * <p>Two dispatchers assigning the same free workorder both read no current assignment — neither
@@ -299,6 +327,20 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         }
     }
 
+    @Override
+    public void requireOpenWorkorder(@NonNull UUID workorderId) {
+        Workorder workorder = workorderRepository
+                .findById(workorderId)
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
+        if (workorder.isLocked()) {
+            throw new WorkorderClosedException(
+                    workorderId,
+                    workorder.getStatus() == null
+                            ? "closed"
+                            : workorder.getStatus().name());
+        }
+    }
+
     /**
      * Validate that assignment is allowed for the workorder's current status.
      *
@@ -307,6 +349,13 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
      */
     private void validateAssignmentAllowed(@NonNull Workorder workorder) {
         WorkorderStatus status = workorder.getStatus();
+        // A closed workorder gets the same stable code the position operations use (#1983). Without
+        // this it fell through to the IllegalStateException below, which the controller renders as a
+        // 400 — so "this job is over" was indistinguishable from "this status cannot take a
+        // technician yet", and the two need different things from the caller.
+        if (workorder.isLocked()) {
+            throw new WorkorderClosedException(workorder.getId(), status == null ? "closed" : status.name());
+        }
         if (status != WorkorderStatus.APPROVED
                 && status != WorkorderStatus.ASSIGNED
                 && status != WorkorderStatus.WORK_IN_PROGRESS) {

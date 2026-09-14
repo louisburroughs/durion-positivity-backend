@@ -97,59 +97,64 @@ CREATE POLICY tenant_isolation ON public.service_position_assignment
     WITH CHECK (tenant_id = public.app_current_tenant());
 
 -- ---------------------------------------------------------------------------
--- 3. Resolve existing double-booked positions, then forbid them.
+-- 3. Normalise the placements that predate the constraints.
 -- ---------------------------------------------------------------------------
--- Nothing enforced occupancy before this migration, so an alpha seed can hold several open
--- workorders on one bay. Creating the index on that data would fail and leave the module unbootable,
--- so the duplicates are resolved first, exactly as the story requires: the earliest-created claim
--- keeps the position and every later one is moved to its site's hold position — parked, visible, and
--- nobody's assignment silently deleted. A duplicate with no location_id has no lot to be parked in,
--- so it is simply unplaced; unset is always allowed.
+-- 3a. An untyped placement is a bay. A row with resource_id set and resource_type null is legacy
+-- data from before the type column existed, and every reader already treats it as a bay
+-- (ResourceType.orDefault, which the dashboard resolves through). Left untyped it would be the one
+-- kind of occupant nothing can see: excluded from the duplicate resolution below, absent from the
+-- seeded history, and outside the partial index — so the bay it holds could be handed to a second
+-- workorder with no refusal anywhere. Typing it first puts it under every rule that follows.
+UPDATE public.workorder
+SET resource_type = 'BAY'
+WHERE resource_id IS NOT NULL
+  AND resource_type IS NULL;
+
+-- 3b. A closed workorder gives up its position, exactly as WorkorderStateMachine now does when it
+-- closes one. A COMPLETED or CANCELLED row that kept its resource_id is not merely untidy: the
+-- occupancy index reads is_reopened, so reopening such a workorder would put the stale claim back
+-- into the index, and if another workorder has taken that bay since, the reopen fails on a unique
+-- violation instead of succeeding. The release is recorded as history rather than silently erased.
+INSERT INTO public.service_position_assignment (
+    tenant_id, workorder_id, resource_type, resource_id, location_id,
+    assigned_at, assigned_by, released_at, released_by, reason, current, created_at, updated_at)
+SELECT w.tenant_id,
+       w.id,
+       w.resource_type,
+       w.resource_id,
+       w.location_id,
+       COALESCE(w.updated_at, w.created_at, now()) AT TIME ZONE 'UTC',
+       'system:migration',
+       COALESCE(w.completed_at, w.updated_at, now()) AT TIME ZONE 'UTC',
+       'system:migration',
+       'Placement released when the workorder closed, reconciled by migration (#1984)',
+       FALSE,
+       COALESCE(w.created_at, now()),
+       now()
+FROM public.workorder w
+WHERE w.resource_id IS NOT NULL
+  AND w.status IN ('COMPLETED', 'CANCELLED')
+  AND w.is_reopened IS DISTINCT FROM TRUE;
+
+UPDATE public.workorder
+SET resource_type = NULL,
+    resource_id = NULL
+WHERE resource_id IS NOT NULL
+  AND status IN ('COMPLETED', 'CANCELLED')
+  AND is_reopened IS DISTINCT FROM TRUE;
+
+-- ---------------------------------------------------------------------------
+-- 4. Seed the history from the placements that survive, then resolve duplicates.
+-- ---------------------------------------------------------------------------
+-- Order matters here. The history is seeded first so that a workorder about to be moved to its
+-- site's hold position still has its original bay recorded: parking it first and seeding afterwards
+-- would leave only the HOLD row, losing the very placement the move is undoing and contradicting
+-- the append-only rule this table exists for.
 --
--- "Open" here is Workorder.isLocked() in SQL, and has to be: a plain
--- status NOT IN ('COMPLETED','CANCELLED') would treat a reopened workorder as closed and leave a
--- live claim behind for the index to reject.
-WITH ranked AS (
-    SELECT id,
-           tenant_id,
-           location_id,
-           row_number() OVER (
-               PARTITION BY tenant_id, resource_type, resource_id
-               ORDER BY created_at, id
-           ) AS claim_rank
-    FROM public.workorder
-    WHERE resource_id IS NOT NULL
-      AND resource_type IN ('BAY', 'MOBILE_UNIT')
-      AND (status IS NULL OR status <> 'CANCELLED')
-      AND (status IS NULL OR status <> 'COMPLETED' OR is_reopened IS TRUE)
-)
-UPDATE public.workorder w
-SET resource_type = CASE WHEN ranked.location_id IS NULL THEN NULL ELSE 'HOLD' END,
-    resource_id   = ranked.location_id
-FROM ranked
-WHERE w.id = ranked.id
-  AND w.tenant_id = ranked.tenant_id
-  AND ranked.claim_rank > 1;
-
--- One open workorder per exclusive position, per tenant. HOLD is excluded: the parking lot takes as
--- many as fit. The open predicate mirrors Workorder.isLocked() and
--- WorkorderRepository.findOpenOccupantsOfPosition — the application check produces the 409 naming the
--- occupant, this index produces the same refusal for two assigns that race past that check. They
--- must keep agreeing; changing one without the other reintroduces the 500 this index exists to avoid.
-CREATE UNIQUE INDEX workorder_open_position_uniq
-    ON public.workorder (tenant_id, resource_type, resource_id)
-    WHERE resource_id IS NOT NULL
-      AND resource_type IN ('BAY', 'MOBILE_UNIT')
-      AND (status IS NULL OR status <> 'CANCELLED')
-      AND (status IS NULL OR status <> 'COMPLETED' OR is_reopened IS TRUE);
-
--- ---------------------------------------------------------------------------
--- 4. Seed the position history from the placements that already exist.
--- ---------------------------------------------------------------------------
--- Without this every workorder currently in a bay would read back with an empty history and a
--- current position that no row accounts for, and the first release would have nothing to close. The
--- synthesized row is honest about what is known: the placement is real, its actor and reason are not
--- recorded anywhere, so they say so rather than inventing a user.
+-- Without this seed a workorder already in a bay would read back with a current position that no
+-- row accounts for, and the first release would have nothing to close. The synthesized row is
+-- honest about what is known: the placement is real, its actor and reason are not recorded
+-- anywhere, so they say so rather than inventing a user.
 INSERT INTO public.service_position_assignment (
     tenant_id, workorder_id, resource_type, resource_id, location_id,
     assigned_at, assigned_by, reason, current, created_at, updated_at)
@@ -166,13 +171,129 @@ SELECT w.tenant_id,
        now()
 FROM public.workorder w
 WHERE w.resource_id IS NOT NULL
-  AND w.resource_type IS NOT NULL
-  AND (w.status IS NULL OR w.status <> 'CANCELLED')
-  AND (w.status IS NULL OR w.status <> 'COMPLETED' OR w.is_reopened IS TRUE);
+  AND w.resource_type IS NOT NULL;
+
+-- Nothing enforced occupancy before this migration, so an alpha seed can hold several open
+-- workorders on one bay. Creating the index on that data would fail and leave the module unbootable,
+-- so the duplicates are resolved first, exactly as the story requires: the earliest-created claim
+-- keeps the position and every later one is moved to its site's hold position — parked, visible, and
+-- nobody's assignment silently deleted. A duplicate with no location_id has no lot to be parked in,
+-- so it is simply unplaced; unset is always allowed.
+--
+-- Only open rows can conflict: section 3b has already released the closed ones.
+-- The parked set is recomputed by each of the three statements below rather than captured in a temp
+-- table. That is deliberate: a temp table created ON COMMIT DROP only survives if the whole script
+-- runs in one transaction, which is Flyway's default for PostgreSQL but not a property this file
+-- should silently depend on — run the same statements in autocommit and the table would vanish
+-- between them. Recomputation is safe because only the last statement touches `workorder`, so all
+-- three see the same set; the ordering below is what makes that true and must be preserved.
+
+-- Close the original placement in history before the workorder stops pointing at it, so the row
+-- that says "this job was in bay B" survives the move and the bay claim stays recoverable.
+WITH ranked AS (
+    SELECT id,
+           tenant_id,
+           location_id,
+           row_number() OVER (
+               PARTITION BY tenant_id, resource_type, resource_id
+               ORDER BY created_at, id
+           ) AS claim_rank
+    FROM public.workorder
+    WHERE resource_id IS NOT NULL
+      AND resource_type IN ('BAY', 'MOBILE_UNIT')
+),
+parked AS (
+    SELECT id, tenant_id, location_id FROM ranked WHERE claim_rank > 1
+)
+UPDATE public.service_position_assignment h
+SET current = FALSE,
+    released_at = now() AT TIME ZONE 'UTC',
+    released_by = 'system:migration',
+    reason = 'Double-booked position resolved by migration; moved to the site hold position (#1984)'
+FROM parked p
+WHERE h.workorder_id = p.id
+  AND h.tenant_id = p.tenant_id
+  AND h.current;
+
+-- The hold placement is a new history state, not an edit of the old one.
+WITH ranked AS (
+    SELECT id,
+           tenant_id,
+           location_id,
+           row_number() OVER (
+               PARTITION BY tenant_id, resource_type, resource_id
+               ORDER BY created_at, id
+           ) AS claim_rank
+    FROM public.workorder
+    WHERE resource_id IS NOT NULL
+      AND resource_type IN ('BAY', 'MOBILE_UNIT')
+),
+parked AS (
+    SELECT id, tenant_id, location_id FROM ranked WHERE claim_rank > 1
+)
+INSERT INTO public.service_position_assignment (
+    tenant_id, workorder_id, resource_type, resource_id, location_id,
+    assigned_at, assigned_by, reason, current, created_at, updated_at)
+SELECT p.tenant_id,
+       p.id,
+       'HOLD',
+       p.location_id,
+       p.location_id,
+       now() AT TIME ZONE 'UTC',
+       'system:migration',
+       'Parked by migration because the position it held was already taken (#1984)',
+       TRUE,
+       now(),
+       now()
+FROM parked p
+WHERE p.location_id IS NOT NULL;
+
+-- Last, because it is the statement that changes what `ranked` would compute.
+WITH ranked AS (
+    SELECT id,
+           tenant_id,
+           location_id,
+           row_number() OVER (
+               PARTITION BY tenant_id, resource_type, resource_id
+               ORDER BY created_at, id
+           ) AS claim_rank
+    FROM public.workorder
+    WHERE resource_id IS NOT NULL
+      AND resource_type IN ('BAY', 'MOBILE_UNIT')
+),
+parked AS (
+    SELECT id, tenant_id, location_id FROM ranked WHERE claim_rank > 1
+)
+UPDATE public.workorder w
+SET resource_type = CASE WHEN p.location_id IS NULL THEN NULL ELSE 'HOLD' END,
+    resource_id   = p.location_id
+FROM parked p
+WHERE w.id = p.id
+  AND w.tenant_id = p.tenant_id;
+
+-- One open workorder per exclusive position, per tenant. HOLD is excluded: the parking lot takes as
+-- many as fit. The open predicate mirrors Workorder.isLocked() and
+-- WorkorderRepository.findOpenOccupantsOfPosition — the application check produces the 409 naming the
+-- occupant, this index produces the same refusal for two assigns that race past that check. They
+-- must keep agreeing; changing one without the other reintroduces the 500 this index exists to avoid.
+CREATE UNIQUE INDEX workorder_open_position_uniq
+    ON public.workorder (tenant_id, resource_type, resource_id)
+    WHERE resource_id IS NOT NULL
+      AND resource_type IN ('BAY', 'MOBILE_UNIT')
+      AND (status IS NULL OR status <> 'CANCELLED')
+      AND (status IS NULL OR status <> 'COMPLETED' OR is_reopened IS TRUE);
 
 -- ---------------------------------------------------------------------------
 -- 5. Resolve existing multi-current technicians, then forbid them.
 -- ---------------------------------------------------------------------------
+-- A release names no replacement, so assigned_by on some later row cannot answer who ended this
+-- assignment; without a column of its own a release recorded when and why but not by whom (#1983).
+ALTER TABLE public.technician_assignment ADD COLUMN released_by text;
+
+COMMENT ON COLUMN public.technician_assignment.released_by IS
+    'Who released the technician, for a release naming no replacement; null on a reassignment, where '
+    'the incoming row''s assigned_by is the actor (#1983).';
+
 -- assignTechnician closed the previous row and inserted a new one in the application only, so a
 -- raced pair of assigns could leave two current rows behind. The latest assigned_at wins — it is the
 -- most recent statement of intent — and the losers are closed rather than deleted, because the

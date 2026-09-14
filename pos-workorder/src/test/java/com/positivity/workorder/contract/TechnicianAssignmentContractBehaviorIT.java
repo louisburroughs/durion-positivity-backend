@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.*;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
+import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
@@ -13,6 +14,7 @@ import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
@@ -60,6 +62,9 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
     @Autowired
     private TechnicianAssignmentRepository assignmentRepository;
+
+    @Autowired
+    private ExtPersonReplicaRepository extPersonReplicaRepository;
 
     private UUID testCustomerId;
     private UUID testLocationId;
@@ -421,6 +426,23 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
     /**
      * Seed an APPROVED workorder ready for technician assignment.
      */
+    /**
+     * Make the technicians these tests name known to the module (#1983).
+     *
+     * <p>Assignment validates the technician against the {@code ext_person} replica pos-people feeds,
+     * the same way a bay is validated against {@code ext_bay}, so a contract test has to seed the
+     * replica rather than assume a bare UUID resolves.
+     */
+    private void seedKnownTechnicians(UUID... technicianIds) {
+        for (UUID technicianId : technicianIds) {
+            extPersonReplicaRepository.save(ExtPersonReplica.builder()
+                    .personId(technicianId)
+                    .aggregateVersion(1L)
+                    .updatedAt(java.time.Instant.EPOCH)
+                    .build());
+        }
+    }
+
     private UUID seedApprovedWorkorder() {
         testCustomerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -449,6 +471,12 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 .createdById("test-user")
                 .build();
         estimateItemRepository.save(item);
+
+        seedKnownTechnicians(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                UUID.fromString("00000000-0000-0000-0000-000000000002"),
+                UUID.fromString("00000000-0000-0000-0000-000000000051"),
+                UUID.fromString("00000000-0000-0000-0000-000000000050"));
 
         // Create workorder in APPROVED status
         Workorder workorder = Workorder.builder()

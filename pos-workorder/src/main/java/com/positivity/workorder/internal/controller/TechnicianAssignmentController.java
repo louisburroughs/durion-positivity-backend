@@ -332,17 +332,23 @@ public class TechnicianAssignmentController {
                     Use this tool when a technician comes off a job without a replacement — capacity freed for a \
                     workorder that is blocked or parked; do not use reassignTechnician, which requires a \
                     replacement, and do not use it to change technicians.
-                    Preconditions: the workorder must exist. Releasing a workorder that has no current \
-                    technician succeeds and writes nothing, so the call is idempotent.
+                    Preconditions: the workorder must exist and must not be COMPLETED or CANCELLED; \
+                    releasing a workorder that has no current technician succeeds and writes nothing, so the \
+                    call is idempotent.
                     Required inputs: workorderId (UUID) as a path parameter; reason is an optional query \
                     parameter recorded on the closed assignment.
                     Emits a WORKORDER_TECHNICIAN_RELEASE event.
-                    Returns 404 when the workorder does not exist.
+                    Returns 404 when the workorder does not exist, and 409 WORKORDER_CLOSED when it is \
+                    COMPLETED or CANCELLED.
                     """,
             responses = {
                 @ApiResponse(responseCode = "204", description = "Technician released, or none was assigned"),
                 @ApiResponse(responseCode = "403", description = "Permission denied"),
-                @ApiResponse(responseCode = "404", description = "Workorder not found")
+                @ApiResponse(responseCode = "404", description = "Workorder not found"),
+                @ApiResponse(
+                        responseCode = "409",
+                        description = "Workorder is COMPLETED or CANCELLED (ApiError.code WORKORDER_CLOSED)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @DeleteMapping("/{workorderId}/technician")
     @EmitEvent(id = "WORKORDER_TECHNICIAN_RELEASE", apiVersion = "1")
@@ -362,7 +368,10 @@ public class TechnicianAssignmentController {
         // Existence is checked before the release so a release against an unknown workorder is a 404
         // rather than a silent 204 — releaseAssignment itself answers "nothing to release" and
         // "no such workorder" identically, which is right for its internal callers and wrong here.
-        assignmentService.getWorkorderStatus(workorderId);
+        // The same call carries the closed-lifecycle guard the position release has: a COMPLETED or
+        // CANCELLED workorder answers 409 WORKORDER_CLOSED rather than quietly closing an assignment
+        // on a finished job (#1983).
+        assignmentService.requireOpenWorkorder(workorderId);
         assignmentService.releaseAssignment(workorderId, releasedBy, reason);
         log.info("Released the technician on workorder {} by user {}", workorderId, releasedBy);
         return ResponseEntity.noContent().build();

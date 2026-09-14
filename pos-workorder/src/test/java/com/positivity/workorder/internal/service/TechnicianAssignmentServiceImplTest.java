@@ -13,6 +13,8 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
+import com.positivity.workorder.internal.exception.TechnicianNotFoundException;
+import com.positivity.workorder.internal.exception.WorkorderClosedException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
@@ -64,12 +66,22 @@ class TechnicianAssignmentServiceImplTest {
     @Mock
     private WorkorderStateMachine stateMachine;
 
+    @Mock
+    private com.positivity.workorder.internal.repository.ExtPersonReplicaRepository extPersonReplicaRepository;
+
     private TechnicianAssignmentServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new TechnicianAssignmentServiceImpl(
-                Clock.fixed(NOW, ZoneOffset.UTC), assignmentRepository, workorderRepository, stateMachine);
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                assignmentRepository,
+                workorderRepository,
+                stateMachine,
+                extPersonReplicaRepository);
+
+        // #1983: an assignment now names a technician this module knows from the ext_person replica.
+        when(extPersonReplicaRepository.existsById(any())).thenReturn(true);
 
         when(assignmentRepository.save(any())).thenAnswer(TechnicianAssignmentServiceImplTest::stampId);
         // Assign and reassign write the new current row through saveAndFlush so a lost race against
@@ -79,6 +91,9 @@ class TechnicianAssignmentServiceImplTest {
         when(assignmentRepository.saveAndFlush(any())).thenAnswer(TechnicianAssignmentServiceImplTest::stampId);
         when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
                 .thenReturn(Optional.empty());
+        // Reassign and release take the current row under a lock so they cannot disagree about which
+        // assignment they are ending (#1985); the stub mirrors the unlocked finder.
+        when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.empty());
     }
 
     private static TechnicianAssignment stampId(org.mockito.invocation.InvocationOnMock invocation) {
@@ -165,6 +180,7 @@ class TechnicianAssignmentServiceImplTest {
             TechnicianAssignment existing = currentAssignment(OTHER_TECHNICIAN_ID);
             when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
                     .thenReturn(Optional.of(existing));
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.of(existing));
 
             // This used to succeed, silently closing the incumbent's row with a canned reason, which
             // made an accidental double assign indistinguishable from a deliberate hand-over.
@@ -197,6 +213,17 @@ class TechnicianAssignmentServiceImplTest {
         }
 
         @Test
+        @DisplayName("#1983: a technician the ext_person replica does not know is refused")
+        void refusesUnknownTechnician() {
+            givenWorkorder(WorkorderStatus.APPROVED);
+            when(extPersonReplicaRepository.existsById(TECHNICIAN_ID)).thenReturn(false);
+
+            assertThatThrownBy(() -> service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null))
+                    .isInstanceOf(TechnicianNotFoundException.class);
+            verify(assignmentRepository, never()).saveAndFlush(any());
+        }
+
+        @Test
         @DisplayName("rejects an unknown workorder")
         void rejectsUnknownWorkorder() {
             when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.empty());
@@ -210,9 +237,10 @@ class TechnicianAssignmentServiceImplTest {
         void rejectsIneligibleStatus() {
             givenWorkorder(WorkorderStatus.COMPLETED);
 
+            // #1983: a closed workorder answers with the stable code, not the generic status message.
             assertThatThrownBy(() -> service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("Current status: COMPLETED");
+                    .isInstanceOf(WorkorderClosedException.class)
+                    .hasMessageContaining("COMPLETED");
             verify(assignmentRepository, never()).save(any());
         }
     }
@@ -228,6 +256,7 @@ class TechnicianAssignmentServiceImplTest {
             TechnicianAssignment existing = currentAssignment(OTHER_TECHNICIAN_ID);
             when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
                     .thenReturn(Optional.of(existing));
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.of(existing));
 
             TechnicianAssignmentRecord created = service.reassignTechnician(
                     WORKORDER_ID, TECHNICIAN_ID, "supervisor", "called out sick", "swap to bay 2");
@@ -253,6 +282,7 @@ class TechnicianAssignmentServiceImplTest {
             TechnicianAssignment existing = currentAssignment(OTHER_TECHNICIAN_ID);
             when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
                     .thenReturn(Optional.of(existing));
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.of(existing));
 
             service.reassignTechnician(WORKORDER_ID, TECHNICIAN_ID, "supervisor", null, null);
 
@@ -264,8 +294,10 @@ class TechnicianAssignmentServiceImplTest {
         @DisplayName("never transitions the workorder status")
         void doesNotTransitionWorkorder() {
             givenWorkorder(WorkorderStatus.APPROVED);
+            TechnicianAssignment seeded = currentAssignment(OTHER_TECHNICIAN_ID);
             when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
-                    .thenReturn(Optional.of(currentAssignment(OTHER_TECHNICIAN_ID)));
+                    .thenReturn(Optional.of(seeded));
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.of(seeded));
 
             service.reassignTechnician(WORKORDER_ID, TECHNICIAN_ID, "supervisor", "reason", null);
 
@@ -294,8 +326,65 @@ class TechnicianAssignmentServiceImplTest {
             givenWorkorder(WorkorderStatus.CANCELLED);
             assertThatThrownBy(
                             () -> service.reassignTechnician(WORKORDER_ID, TECHNICIAN_ID, "supervisor", "reason", null))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("Current status: CANCELLED");
+                    .isInstanceOf(WorkorderClosedException.class)
+                    .hasMessageContaining("CANCELLED");
+        }
+    }
+
+    @Nested
+    @DisplayName("releaseAssignment")
+    class ReleaseAssignment {
+
+        @Test
+        @DisplayName("#1983: closes the current assignment and records who ended it")
+        void releaseRecordsTheActor() {
+            TechnicianAssignment existing = currentAssignment(TECHNICIAN_ID);
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.of(existing));
+
+            service.releaseAssignment(WORKORDER_ID, "supervisor", "Shift ended");
+
+            assertThat(existing.getCurrent()).isFalse();
+            assertThat(existing.getUnassignedAt()).isEqualTo(NOW_LOCAL);
+            assertThat(existing.getReassignmentReason()).isEqualTo("Shift ended");
+            // assignedBy answers who put the technician on; without releasedBy nothing answered who
+            // took them off, and the story asks for who, when and why.
+            assertThat(existing.getReleasedBy()).isEqualTo("supervisor");
+        }
+
+        @Test
+        @DisplayName("#1985: reads the current row under a lock so a racing reassign cannot be missed")
+        void releaseTakesTheRowLock() {
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID))
+                    .thenReturn(Optional.of(currentAssignment(TECHNICIAN_ID)));
+
+            service.releaseAssignment(WORKORDER_ID, "supervisor", null);
+
+            verify(assignmentRepository).findCurrentForUpdate(WORKORDER_ID);
+            verify(assignmentRepository, never()).findByWorkorder_IdAndCurrentTrue(WORKORDER_ID);
+        }
+
+        @Test
+        @DisplayName("releasing a workorder with no technician writes nothing")
+        void releaseWithoutAssignmentIsEmpty() {
+            assertThat(service.releaseAssignment(WORKORDER_ID, "supervisor", null))
+                    .isEmpty();
+            verify(assignmentRepository, never()).save(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("requireOpenWorkorder")
+    class RequireOpenWorkorder {
+
+        @Test
+        @DisplayName("#1983: a closed workorder is refused with the stable code, an open one passes")
+        void guardsTheOpenLifecycle() {
+            givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
+            service.requireOpenWorkorder(WORKORDER_ID);
+
+            givenWorkorder(WorkorderStatus.COMPLETED);
+            assertThatThrownBy(() -> service.requireOpenWorkorder(WORKORDER_ID))
+                    .isInstanceOf(WorkorderClosedException.class);
         }
     }
 
@@ -309,6 +398,7 @@ class TechnicianAssignmentServiceImplTest {
             TechnicianAssignment existing = currentAssignment(TECHNICIAN_ID);
             when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
                     .thenReturn(Optional.of(existing));
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.of(existing));
 
             assertThat(service.getCurrentAssignment(WORKORDER_ID))
                     .contains(TechnicianAssignmentRecord.fromEntity(existing));
