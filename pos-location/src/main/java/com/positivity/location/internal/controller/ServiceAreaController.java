@@ -113,9 +113,9 @@ public class ServiceAreaController {
 
     @Operation(operationId = "patchServiceArea", summary = "Patch Fields of a Service Area", description = """
                     Applies a partial update to a service area, accepting only the keys description and active.
-                    Use this tool to retire an area with active=false or amend its description; use \
-                    replaceServiceAreaPostalCodes to change which postal codes it covers, which this tool \
-                    cannot do. An area cannot be renamed.
+                    Use this tool to retire an area with active=false or amend its description; do not use it to \
+                    change which postal codes an area covers, use replaceServiceAreaPostalCodes instead. An area \
+                    cannot be renamed.
                     Preconditions: the service area must exist.
                     Required inputs: id (UUID) as a path parameter and a JSON object; keys other than description \
                     and active are silently ignored.
