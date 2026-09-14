@@ -1170,7 +1170,7 @@ paths:
 
         Use this tool when a person starts working at a location; do not use updateStaffingAssignment, which modifies an existing assignment by id.
 
-        Preconditions: the person must exist in the identity replica with an ACTIVE employee record, the location must be active, and no assignment for the same person, location, and role may overlap the effective dates.
+        Preconditions: the person must hold an ACTIVE employee record here, the location must be active, and no assignment for the same person, location, and role may overlap the effective dates.
 
         Required inputs: personId (UUID), locationId (UUID), role, isPrimary, and effectiveFrom (yyyy-MM-dd); effectiveTo is optional and open-ended when null.
 
