@@ -811,7 +811,7 @@ paths:
 
         Required inputs: jobId (UUID), locationId (UUID) and records, each with a personId, a skillCode and a proficiencyLevel from 1 to 5. A mechanic appears once per skill; the rows are grouped here.
 
-        Emits a SHOP_MECHANIC_SKILLS_BULK_INGEST event, and routes each mechanic''s set through the same HR-feed path the Kafka projection uses, so dedupe, stale-guard and audit apply as usual; re-running the same file is safe, since each mechanic''s set is replaced rather than added to.
+        Emits a SHOP_MECHANIC_SKILLS_BULK_INGEST event, and routes each mechanic''s set through the same HR-feed path the Kafka projection uses, so dedupe and audit apply as usual while the mechanic''s feed-ordering version is left untouched; re-running the same file is safe, since each mechanic''s set is replaced rather than added to.
 
         Returns 200 with a per-record result, where every row of one mechanic shares that mechanic''s outcome since they were applied together: MECHANIC_SKILL_INGEST_FAILED with the reason for rows the service refused, REPLICATION_PENDING for rows naming a mechanic that has not replicated here yet and which are worth resubmitting, or INTERNAL_ERROR with a correlationId to quote for rows lost to a server-side fault.
 
@@ -875,7 +875,7 @@ paths:
 
         Required inputs: personId as a path parameter and skills, a non-empty array where each entry has skillCode and proficiencyLevel between 1 and 5; the array replaces all current skills.
 
-        Emits a SHOP_MECHANIC_SKILLS_REPLACE event and records a mechanic audit-log entry; the edit rides the HR-feed path as a synthetic skills event stamped with the current timestamp, advancing the sync version so ordering against in-flight feed events is last-write-wins.
+        Emits a SHOP_MECHANIC_SKILLS_REPLACE event and records a mechanic audit-log entry; the edit rides the HR-feed path as a synthetic skills event, so dedupe and audit apply as usual, but it does not advance the mechanic''s feed-ordering version: skills are shop-manager-owned enrichment the feed never carries, so an operator edit is ordered against other operator edits and leaves the feed''s own sequence untouched.
 
         Returns 204 on success, 400 when the body is invalid or personId is not a UUID, and 503 MECHANIC_REPLICATION_PENDING with a Retry-After when no mechanic exists for the person: the service waits briefly for the staffing assignment that creates one, and where it still finds none it answers 503 rather than 404 because it cannot tell an unreplicated mechanic from a person who has no active TECHNICIAN assignment at all. Retry a 503; if it persists, check that the person holds an active TECHNICIAN assignment.
 
