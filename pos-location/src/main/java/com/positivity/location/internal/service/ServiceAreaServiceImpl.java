@@ -1,5 +1,6 @@
 package com.positivity.location.internal.service;
 
+import com.positivity.location.internal.dto.ServiceAreaPostalCodesRequest;
 import com.positivity.location.internal.dto.ServiceAreaRequest;
 import com.positivity.location.internal.dto.ServiceAreaResponse;
 import com.positivity.location.internal.entity.ServiceAreaEntity;
@@ -12,8 +13,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -118,6 +121,56 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
         return serviceAreaRepository.findAll().stream().map(this::toResponse).toList();
     }
 
+    /**
+     * Replaces a service area's whole postal code set.
+     *
+     * <p>Postal codes were write-once until #1991: only createServiceArea accepted them, patch reads
+     * just description and active, and there is no delete. A coverage area was therefore permanent
+     * and unamendable, which no real shop is — coverage grows, shrinks, and gets typed wrong the
+     * first time. Replacement rather than merge because that is what the geography is: the set sent
+     * here is what the area covers afterwards.
+     *
+     * <p>Emptying the set is refused for the same reason createServiceArea refuses it. An area
+     * covering nothing matches no address, and because findEligibleCoverageRules inner-joins these
+     * rows, every coverage rule pointing at it would silently stop resolving. Retiring an area is
+     * what {@code active=false} is for.
+     *
+     * @param id      service area identifier
+     * @param request the complete replacement set
+     * @return the area as it stands after the replacement
+     */
+    @Override
+    @Transactional
+    public @NonNull ServiceAreaResponse replacePostalCodes(
+            @NonNull String id, @NonNull ServiceAreaPostalCodesRequest request) {
+        UUID areaId = parseUuidStrict(id);
+        ServiceAreaEntity entity = serviceAreaRepository
+                .findById(areaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Service area not found"));
+
+        List<ServiceAreaRequest.PostalCodeEntry> replacement = request.getPostalCodes();
+        validatePostalCodes(replacement);
+
+        // Mutated in place rather than assigned: postalCodes is an @ElementCollection, and Hibernate
+        // tracks the collection instance it loaded. Swapping the reference makes it drop every row
+        // and reinsert; clearing and refilling lets it write only the difference.
+        Set<ServiceAreaPostalCodeValue> current = entity.getPostalCodes();
+        if (current == null) {
+            entity.setPostalCodes(toPostalValues(replacement));
+        } else {
+            current.clear();
+            current.addAll(toPostalValues(replacement));
+        }
+
+        ServiceAreaEntity saved;
+        try {
+            saved = serviceAreaRepository.save(entity);
+        } catch (DataIntegrityViolationException exception) {
+            throw toServiceAreaConflictException(exception);
+        }
+        return toResponse(saved);
+    }
+
     private ServiceAreaRequest toRequest(Map<String, Object> map) {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rawPostalCodes =
@@ -140,13 +193,16 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
 
     private void validatePostalCodes(List<ServiceAreaRequest.PostalCodeEntry> postalCodes) {
         if (postalCodes == null || postalCodes.isEmpty()) {
-            throw new IllegalArgumentException("service area must include at least one postal code");
+            throw badRequest("service area must include at least one postal code");
+        }
+        if (postalCodes.stream().anyMatch(Objects::isNull)) {
+            throw badRequest("postal code entries must not be null");
         }
         boolean missingCountryCode = postalCodes.stream()
                 .anyMatch(entry ->
                         entry.getCountryCode() == null || entry.getCountryCode().isBlank());
         if (missingCountryCode) {
-            throw new IllegalArgumentException("postal code entries require countryCode");
+            throw badRequest("postal code entries require countryCode");
         }
     }
 
@@ -183,6 +239,18 @@ public class ServiceAreaServiceImpl implements ServiceAreaService {
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * A rejection the error envelope renders as 400.
+     *
+     * <p>These checks used to throw a bare IllegalArgumentException, which GlobalApiExceptionHandler
+     * has no handler for: it fell through to the catch-all and became a 500, for input both
+     * createServiceArea and replaceServiceAreaPostalCodes document as a 400. ResponseStatusException
+     * is what parseUuidStrict below already uses for the same purpose.
+     */
+    private ResponseStatusException badRequest(String message) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
 
     private UUID parseUuidStrict(String id) {

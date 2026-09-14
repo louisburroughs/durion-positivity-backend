@@ -7,6 +7,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.location.internal.dto.ServiceAreaPostalCodesRequest;
+import com.positivity.location.internal.dto.ServiceAreaRequest;
 import com.positivity.location.internal.dto.ServiceAreaResponse;
 import com.positivity.location.internal.entity.ServiceAreaEntity;
 import com.positivity.location.internal.entity.ServiceAreaPostalCodeValue;
@@ -18,6 +20,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -141,8 +144,8 @@ class ServiceAreaServiceTest {
         Map<String, Object> request = Map.of("name", "Invalid Area", "active", true, "postalCodes", List.of());
 
         assertThatThrownBy(() -> service.create(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("service area must include at least one postal code");
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("service area must include at least one postal code");
     }
 
     @Test
@@ -152,8 +155,8 @@ class ServiceAreaServiceTest {
                 "name", "Invalid Country", "active", true, "postalCodes", List.of(Map.of("postalCode", "10001")));
 
         assertThatThrownBy(() -> service.create(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("postal code entries require countryCode");
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("postal code entries require countryCode");
     }
 
     @Test
@@ -253,5 +256,121 @@ class ServiceAreaServiceTest {
                         Map.of("postalCode", "30301", "countryCode", "US"))));
 
         assertThat(created.getPostalCodes()).hasSize(1);
+    }
+
+    private static ServiceAreaEntity areaWith(UUID id, String... postalCodes) {
+        Set<ServiceAreaPostalCodeValue> values = new java.util.LinkedHashSet<>();
+        for (String postalCode : postalCodes) {
+            values.add(ServiceAreaPostalCodeValue.builder()
+                    .postalCode(postalCode)
+                    .countryCode("US")
+                    .build());
+        }
+        return ServiceAreaEntity.builder()
+                .id(id)
+                .name(DOWNTOWN_AREA)
+                .active(true)
+                .postalCodes(values)
+                .build();
+    }
+
+    private static ServiceAreaPostalCodesRequest replacementOf(String... postalCodes) {
+        return ServiceAreaPostalCodesRequest.builder()
+                .postalCodes(java.util.Arrays.stream(postalCodes)
+                        .map(code -> ServiceAreaRequest.PostalCodeEntry.builder()
+                                .postalCode(code)
+                                .countryCode("US")
+                                .build())
+                        .toList())
+                .build();
+    }
+
+    @Test
+    @DisplayName("#1991 - replacing postal codes swaps the whole set, adding and removing in one call")
+    void shouldReplaceTheWholePostalCodeSet() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000010");
+        ServiceAreaEntity existing = areaWith(id, "94107", "94110");
+        when(serviceAreaRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(serviceAreaRepository.save(any(ServiceAreaEntity.class))).thenAnswer(call -> call.getArgument(0));
+
+        ServiceAreaResponse updated = service.replacePostalCodes(id.toString(), replacementOf("94110", "94112"));
+
+        // 94107 is gone because it was not sent: this is a replace, not a merge.
+        assertThat(updated.getPostalCodes())
+                .extracting(ServiceAreaRequest.PostalCodeEntry::getPostalCode)
+                .containsExactlyInAnyOrder("94110", "94112");
+    }
+
+    @Test
+    @DisplayName("#1991 - the loaded collection is mutated in place rather than swapped")
+    void shouldMutateTheManagedCollectionRatherThanReplaceTheReference() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000011");
+        ServiceAreaEntity existing = areaWith(id, "94107");
+        Set<ServiceAreaPostalCodeValue> loaded = existing.getPostalCodes();
+        when(serviceAreaRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(serviceAreaRepository.save(any(ServiceAreaEntity.class))).thenAnswer(call -> call.getArgument(0));
+
+        service.replacePostalCodes(id.toString(), replacementOf("94112"));
+
+        // Hibernate tracks the instance it loaded for an @ElementCollection; swapping the reference
+        // makes it delete every row and reinsert instead of writing the difference.
+        assertThat(existing.getPostalCodes()).isSameAs(loaded);
+        assertThat(loaded).extracting(ServiceAreaPostalCodeValue::getPostalCode).containsExactly("94112");
+    }
+
+    @Test
+    @DisplayName("#1991 - an empty replacement set is refused rather than clearing coverage")
+    void shouldRefuseAnEmptyReplacementSet() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000012");
+        when(serviceAreaRepository.findById(id)).thenReturn(Optional.of(areaWith(id, "94107")));
+
+        assertThatThrownBy(() -> service.replacePostalCodes(
+                        id.toString(),
+                        ServiceAreaPostalCodesRequest.builder()
+                                .postalCodes(List.of())
+                                .build()))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("at least one postal code");
+
+        verify(serviceAreaRepository, never()).save(any(ServiceAreaEntity.class));
+    }
+
+    @Test
+    @DisplayName("#1991 - a replacement entry without a countryCode is refused")
+    void shouldRefuseAPostalCodeWithoutACountryCode() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000013");
+        when(serviceAreaRepository.findById(id)).thenReturn(Optional.of(areaWith(id, "94107")));
+        ServiceAreaPostalCodesRequest request = ServiceAreaPostalCodesRequest.builder()
+                .postalCodes(List.of(ServiceAreaRequest.PostalCodeEntry.builder()
+                        .postalCode("94112")
+                        .build()))
+                .build();
+
+        assertThatThrownBy(() -> service.replacePostalCodes(id.toString(), request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("countryCode");
+
+        verify(serviceAreaRepository, never()).save(any(ServiceAreaEntity.class));
+    }
+
+    @Test
+    @DisplayName("#1991 - replacing postal codes on an unknown service area is a 404")
+    void shouldRejectReplacementForUnknownServiceArea() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000014");
+        when(serviceAreaRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.replacePostalCodes(id.toString(), replacementOf("94112")))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(serviceAreaRepository, never()).save(any(ServiceAreaEntity.class));
+    }
+
+    @Test
+    @DisplayName("#1991 - a malformed service area id is a 400, not a 404")
+    void shouldRejectAMalformedServiceAreaId() {
+        assertThatThrownBy(() -> service.replacePostalCodes("not-a-uuid", replacementOf("94112")))
+                .isInstanceOf(ResponseStatusException.class);
+
+        verify(serviceAreaRepository, never()).save(any(ServiceAreaEntity.class));
     }
 }

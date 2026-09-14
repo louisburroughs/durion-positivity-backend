@@ -54,7 +54,8 @@ public class ServiceAreaRequest {
         @NotBlank
         private String postalCode;
 
-        @Schema(description = "ISO 3166-1 alpha-2 country code", example = "US", requiredMode = NOT_REQUIRED)
+        @Schema(description = "ISO 3166-1 alpha-2 country code", example = "US", requiredMode = REQUIRED)
+        @NotBlank
         private String countryCode;
     }
 }

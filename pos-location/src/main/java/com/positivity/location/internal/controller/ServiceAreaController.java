@@ -1,6 +1,7 @@
 package com.positivity.location.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.location.internal.dto.ServiceAreaPostalCodesRequest;
 import com.positivity.location.internal.dto.ServiceAreaRequest;
 import com.positivity.location.internal.dto.ServiceAreaResponse;
 import com.positivity.location.internal.security.LocationPermissions;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -44,6 +47,12 @@ public class ServiceAreaController {
                             {"postalCode":"62711","countryCode":"US"}]}
             """;
 
+    private static final String POSTAL_CODES_EXAMPLE = """
+            {"postalCodes":[{"postalCode":"62704","countryCode":"US"},
+                            {"postalCode":"62711","countryCode":"US"},
+                            {"postalCode":"62702","countryCode":"US"}]}
+            """;
+
     private final ServiceAreaService serviceAreaService;
 
     @Operation(operationId = "createServiceArea", summary = "Create a Postal Code Service Area", description = """
@@ -59,6 +68,7 @@ public class ServiceAreaController {
                     Returns 201 with the created area and 409 when the name is already taken.
                     """)
     @ApiResponse(responseCode = "201", description = "Service area created")
+    @ApiResponse(responseCode = "400", description = "Empty postal code set, or an entry missing its countryCode")
     @ApiResponse(responseCode = "409", description = "Service area name already taken")
     @EmitEvent(id = "LOCATION_SERVICE_AREA_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + LocationPermissions.SERVICE_AREA_MANAGE + "')")
@@ -76,6 +86,7 @@ public class ServiceAreaController {
                                             mediaType = "application/json",
                                             examples =
                                                     @ExampleObject(name = "Metro area", value = SERVICE_AREA_EXAMPLE)))
+                    @Valid
                     @RequestBody
                     ServiceAreaRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(serviceAreaService.create(request));
@@ -102,8 +113,9 @@ public class ServiceAreaController {
 
     @Operation(operationId = "patchServiceArea", summary = "Patch Fields of a Service Area", description = """
                     Applies a partial update to a service area, accepting only the keys description and active.
-                    Use this tool to retire an area with active=false or amend its description; do not use it to \
-                    rename an area or change its postal codes, which are immutable after createServiceArea.
+                    Use this tool to retire an area with active=false or amend its description; use \
+                    replaceServiceAreaPostalCodes to change which postal codes it covers, which this tool \
+                    cannot do. An area cannot be renamed.
                     Preconditions: the service area must exist.
                     Required inputs: id (UUID) as a path parameter and a JSON object; keys other than description \
                     and active are silently ignored.
@@ -136,5 +148,53 @@ public class ServiceAreaController {
                     @RequestBody
                     Map<String, Object> patch) {
         return ResponseEntity.ok(serviceAreaService.patch(id, patch));
+    }
+
+    @Operation(
+            operationId = "replaceServiceAreaPostalCodes",
+            summary = "Replace the Postal Codes a Service Area Covers",
+            description = """
+                    Replaces the whole postal code set of a service area, so the area afterwards covers exactly \
+                    the codes supplied and nothing else.
+                    Use this tool whenever coverage changes — a market expands, a rural route is dropped, or an \
+                    area was created with the wrong codes; patchServiceArea cannot touch postal codes and there \
+                    is no way to delete an area and start again.
+                    Preconditions: the service area must exist; at least one postal code entry must be supplied \
+                    and every entry must carry a countryCode. Sending an empty set is refused rather than \
+                    treated as "covers nothing" — retire an area with patchServiceArea active=false instead.
+                    Required inputs: id (UUID) as a path parameter and a body of the form \
+                    {"postalCodes": [...]}, each entry carrying postalCode and countryCode.
+                    Emits a LOCATION_SERVICE_AREA_POSTAL_CODES_REPLACE event.
+                    Returns 200 with the area as it stands afterwards, 400 when the id is not a valid UUID or \
+                    the set is empty or missing a countryCode, and 404 when no service area exists for the id.
+                    Coverage resolution reads these rows directly: findEligibleMobileUnits matches an address \
+                    through them, so removing a code stops every mobile unit covering that address.
+                    """)
+    @ApiResponse(responseCode = "200", description = "Postal codes replaced")
+    @ApiResponse(responseCode = "400", description = "Invalid service area id, or an empty or incomplete set")
+    @ApiResponse(responseCode = "404", description = "Service area not found")
+    @PreAuthorize("hasAuthority('" + LocationPermissions.SERVICE_AREA_MANAGE + "')")
+    @EmitEvent(id = "LOCATION_SERVICE_AREA_POSTAL_CODES_REPLACE", apiVersion = "1")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"location:service-area:manage"})
+    @PutMapping("/{id}/postal-codes")
+    public ResponseEntity<ServiceAreaResponse> replacePostalCodes(
+            @PathVariable String id,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The complete postal code set the area should cover afterwards;"
+                                    + " any code absent here stops being covered.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "Expanded metro coverage",
+                                                            value = POSTAL_CODES_EXAMPLE)))
+                    @Valid
+                    @RequestBody
+                    ServiceAreaPostalCodesRequest request) {
+        return ResponseEntity.ok(serviceAreaService.replacePostalCodes(id, request));
     }
 }
