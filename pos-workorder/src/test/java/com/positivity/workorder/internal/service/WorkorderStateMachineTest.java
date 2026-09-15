@@ -11,11 +11,14 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.workorder.internal.entity.ChangeRequest;
+import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderSnapshot;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
+import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
+import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
@@ -26,9 +29,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -75,6 +80,9 @@ class WorkorderStateMachineTest {
 
     @Mock
     private com.positivity.workorder.internal.repository.AuditEventRepository auditEventRepository;
+
+    @Mock
+    private TechnicianAssignmentRepository technicianAssignmentRepository;
 
     @InjectMocks
     private WorkorderStateMachine stateMachine;
@@ -171,6 +179,9 @@ class WorkorderStateMachineTest {
 
     @Test
     void testStartWorkorder_Success() throws Exception {
+        // #2011: work starts only from ASSIGNED now — the default APPROVED fixture is no longer
+        // start-eligible on its own.
+        testWorkorder.setStatus(WorkorderStatus.ASSIGNED);
         when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
         when(changeRequestRepository.findByWorkorder_IdAndStatus(
                         testWorkorderId, ChangeRequest.ChangeRequestStatus.AWAITING_ADVISOR_REVIEW))
@@ -198,6 +209,8 @@ class WorkorderStateMachineTest {
 
     @Test
     void testStartWorkorder_PendingChangeRequest_ThrowsException() {
+        // #2011: has to clear the ASSIGNED gate first to reach the pending-change-request check.
+        testWorkorder.setStatus(WorkorderStatus.ASSIGNED);
         when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
         ChangeRequest pendingRequest = ChangeRequest.builder()
                 .id(testChangeRequestId)
@@ -213,6 +226,40 @@ class WorkorderStateMachineTest {
         });
 
         assertTrue(exception.getMessage().contains("pending change request"));
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("#2011: an APPROVED workorder missing both halves names them both")
+    void testStartWorkorder_ApprovedMissingBothHalves_NamesBothInMessage() {
+        testWorkorder.setStatus(WorkorderStatus.APPROVED);
+        when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
+        when(technicianAssignmentRepository.findByWorkorder_IdAndCurrentTrue(testWorkorderId))
+                .thenReturn(Optional.empty());
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> stateMachine.startWorkorder(testWorkorderId, userId, "Starting work"));
+
+        assertTrue(exception.getMessage().contains("a technician"));
+        assertTrue(exception.getMessage().contains("a bay or mobile unit"));
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName(
+            "#2011: an APPROVED workorder with a technician but no position names only the missing position")
+    void testStartWorkorder_ApprovedWithTechnicianOnly_NamesOnlyPositionInMessage() {
+        testWorkorder.setStatus(WorkorderStatus.APPROVED);
+        when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
+        when(technicianAssignmentRepository.findByWorkorder_IdAndCurrentTrue(testWorkorderId))
+                .thenReturn(Optional.of(
+                        TechnicianAssignment.builder().id(1L).current(true).build()));
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> stateMachine.startWorkorder(testWorkorderId, userId, "Starting work"));
+
+        assertFalse(exception.getMessage().contains("missing a technician"));
+        assertTrue(exception.getMessage().contains("a bay or mobile unit"));
     }
 
     @Test
@@ -286,17 +333,24 @@ class WorkorderStateMachineTest {
     void testWorkorderStatus_AllowedTransitions() {
         assertTrue(WorkorderStatus.APPROVED.canTransitionTo(WorkorderStatus.ASSIGNED));
         assertTrue(WorkorderStatus.ASSIGNED.canTransitionTo(WorkorderStatus.WORK_IN_PROGRESS));
+        // #2010/#2011: releasing the technician, or giving up the bay, walks an ASSIGNED workorder
+        // back to APPROVED — the reverse of the APPROVED -> ASSIGNED transition above.
+        assertTrue(WorkorderStatus.ASSIGNED.canTransitionTo(WorkorderStatus.APPROVED));
         assertTrue(WorkorderStatus.WORK_IN_PROGRESS.canTransitionTo(WorkorderStatus.AWAITING_PARTS));
         assertTrue(WorkorderStatus.WORK_IN_PROGRESS.canTransitionTo(WorkorderStatus.AWAITING_APPROVAL));
 
         assertFalse(WorkorderStatus.DRAFT.canTransitionTo(WorkorderStatus.WORK_IN_PROGRESS));
         assertFalse(WorkorderStatus.COMPLETED.canTransitionTo(WorkorderStatus.WORK_IN_PROGRESS));
+        // #2011: APPROVED no longer goes straight to WORK_IN_PROGRESS — a workorder must be ASSIGNED
+        // (technician + bay/mobile unit) before work can start.
+        assertFalse(WorkorderStatus.APPROVED.canTransitionTo(WorkorderStatus.WORK_IN_PROGRESS));
     }
 
     @Test
     void testWorkorderStatus_StartEligibleStatuses() {
-        assertTrue(WorkorderStatus.getStartEligibleStatuses().contains(WorkorderStatus.APPROVED));
-        assertTrue(WorkorderStatus.getStartEligibleStatuses().contains(WorkorderStatus.ASSIGNED));
+        // #2011: ASSIGNED alone — an APPROVED workorder is not yet ready to be worked.
+        assertEquals(Set.of(WorkorderStatus.ASSIGNED), WorkorderStatus.getStartEligibleStatuses());
+        assertFalse(WorkorderStatus.getStartEligibleStatuses().contains(WorkorderStatus.APPROVED));
         assertFalse(WorkorderStatus.getStartEligibleStatuses().contains(WorkorderStatus.DRAFT));
     }
 

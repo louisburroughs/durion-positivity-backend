@@ -19,6 +19,7 @@ import com.positivity.workorder.internal.exception.PromotionIdempotencyInconsist
 import com.positivity.workorder.internal.exception.PromotionValidationException;
 import com.positivity.workorder.internal.exception.PurchaseOrderRequiredException;
 import com.positivity.workorder.internal.exception.ServiceLineNotFoundException;
+import com.positivity.workorder.internal.exception.ServicePositionInactiveException;
 import com.positivity.workorder.internal.exception.ServicePositionInvalidException;
 import com.positivity.workorder.internal.exception.ServicePositionOccupiedException;
 import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionException;
@@ -362,6 +363,21 @@ public class GlobalExceptionHandler {
             ServicePositionInvalidException ex, HttpServletRequest request) {
         return buildErrorResponse(
                 HttpStatus.UNPROCESSABLE_ENTITY, ServicePositionInvalidException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    /**
+     * A bay or mobile unit that is not active was named as a service position (#2001).
+     *
+     * <p>Its own code rather than {@code SERVICE_POSITION_INVALID}: the position exists and is at the
+     * right site, so the caller's request was not malformed — the resource is out of service, which
+     * is a different thing for a dispatcher to act on. 422 for the same reason the invalid-position
+     * refusal is (ADR-0017 §2): a cross-entity rule, not a parse failure and not a missing URL target.
+     */
+    @ExceptionHandler(ServicePositionInactiveException.class)
+    public ResponseEntity<ApiError> handleServicePositionInactive(
+            ServicePositionInactiveException ex, HttpServletRequest request) {
+        return buildErrorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY, ServicePositionInactiveException.ERROR_CODE, ex.getMessage(), request);
     }
 
     /**

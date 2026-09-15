@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -111,6 +113,12 @@ class WorkorderAssignmentServiceTest {
                         org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.any()))
                 .thenReturn(java.util.Optional.empty());
+        // #2001: the honest default for these tests is an active position — the inactive path gets
+        // its own tests below rather than silently dropping every inbound position here.
+        org.mockito.Mockito.lenient()
+                .when(servicePositionService.isPositionActive(
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(true);
     }
 
     @InjectMocks
@@ -199,6 +207,82 @@ class WorkorderAssignmentServiceTest {
     private Workorder workorderWithStatus(WorkorderStatus status) {
 
         return Workorder.builder().id(WORKORDER_ID).status(status).build();
+    }
+
+    // -----------------------------------------------------------------------
+    // #2001: an inbound position that pos-location has marked inactive is refused the same way an
+    // occupied one is — the location and mechanics still apply, the workorder is left unplaced, and
+    // the position-history reason says why.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2001: an inbound assignment naming an inactive bay leaves the workorder unplaced "
+            + "but still applies location and mechanics")
+    void whenHandleAssignmentUpdated_withInactiveBay_thenLeavesUnplacedButAppliesLocationAndMechanics() {
+        Workorder workorder = workorderWithStatus(WorkorderStatus.DRAFT);
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
+        when(servicePositionService.isPositionActive(ResourceType.BAY, RESOURCE_ID))
+                .thenReturn(false);
+
+        workorderService.handleAssignmentUpdated(eventWithResourceType(ResourceType.BAY));
+
+        assertThat(workorder.getResourceId()).isNull();
+        assertThat(workorder.getResourceType()).isNull();
+        assertThat(workorder.getLocationId()).isEqualTo(LOCATION_ID);
+        assertThat(workorder.getMechanicIds()).isNotNull().contains(MECHANIC_ID_1.toString());
+        verify(servicePositionService)
+                .recordPositionChange(
+                        eq(workorder),
+                        isNull(),
+                        isNull(),
+                        eq("System:ShopManagementService"),
+                        argThat(reason -> reason != null && reason.contains("was inactive")));
+        verify(servicePositionService).savePositionChange(workorder);
+    }
+
+    @Test
+    @DisplayName("#2001: an inbound assignment naming an inactive mobile unit leaves the workorder "
+            + "unplaced but still applies location and mechanics")
+    void whenHandleAssignmentUpdated_withInactiveMobileUnit_thenLeavesUnplacedButAppliesLocationAndMechanics() {
+        Workorder workorder = workorderWithStatus(WorkorderStatus.DRAFT);
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
+        when(servicePositionService.isPositionActive(ResourceType.MOBILE_UNIT, RESOURCE_ID))
+                .thenReturn(false);
+
+        workorderService.handleAssignmentUpdated(eventWithResourceType(ResourceType.MOBILE_UNIT));
+
+        assertThat(workorder.getResourceId()).isNull();
+        assertThat(workorder.getResourceType()).isNull();
+        assertThat(workorder.getLocationId()).isEqualTo(LOCATION_ID);
+        assertThat(workorder.getMechanicIds()).isNotNull().contains(MECHANIC_ID_1.toString());
+        verify(servicePositionService)
+                .recordPositionChange(
+                        eq(workorder),
+                        isNull(),
+                        isNull(),
+                        eq("System:ShopManagementService"),
+                        argThat(reason -> reason != null && reason.contains("was inactive")));
+        verify(servicePositionService).savePositionChange(workorder);
+    }
+
+    // -----------------------------------------------------------------------
+    // #2011: a placement that actually lands (active, free position) settles the workorder ASSIGNED
+    // through the same state-machine reconciliation the dispatcher-initiated paths use.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2011: an active, free position is applied and reconciles the workorder to ASSIGNED")
+    void whenHandleAssignmentUpdated_withActiveFreePosition_thenAppliesAndReconcilesAssigned() {
+        Workorder workorder = workorderWithStatus(WorkorderStatus.DRAFT);
+        when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
+
+        workorderService.handleAssignmentUpdated(validEvent());
+
+        assertThat(workorder.getResourceId()).isEqualTo(RESOURCE_ID);
+        assertThat(workorder.getLocationId()).isEqualTo(LOCATION_ID);
+        verify(servicePositionService).savePositionChange(workorder);
+        verify(stateMachine)
+                .reconcileAssigned(WORKORDER_ID, "System:ShopManagementService", "Assignment context updated");
     }
 
     // Issue CAP-140: AC1 — DRAFT workorder receives full assignment context update

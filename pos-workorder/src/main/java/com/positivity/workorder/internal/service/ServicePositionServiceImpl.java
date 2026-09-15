@@ -10,6 +10,7 @@ import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.ServicePositionAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
+import com.positivity.workorder.internal.exception.ServicePositionInactiveException;
 import com.positivity.workorder.internal.exception.ServicePositionInvalidException;
 import com.positivity.workorder.internal.exception.ServicePositionOccupiedException;
 import com.positivity.workorder.internal.exception.WorkorderClosedException;
@@ -30,6 +31,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,6 +61,21 @@ public class ServicePositionServiceImpl implements ServicePositionService {
     private final ExtMobileUnitReplicaRepository extMobileUnitReplicaRepository;
     private final WorkorderFactPublisher workorderFactPublisher;
 
+    private WorkorderStateMachine stateMachine;
+
+    /**
+     * Setter-injected and lazy because the dependency is genuinely circular (#2011): every status
+     * change belongs to {@link WorkorderStateMachine}, including the ASSIGNED reconciliation these
+     * operations must trigger, while the state machine calls back into this service to release a
+     * closed workorder's position. Constructor injection of both ends cannot be resolved, and
+     * duplicating the transition funnel here to avoid the cycle would put status changes in two
+     * places, which is the thing the funnel exists to prevent.
+     */
+    @Autowired
+    public void setStateMachine(@Lazy WorkorderStateMachine stateMachine) {
+        this.stateMachine = stateMachine;
+    }
+
     @Override
     @Transactional
     @NonNull
@@ -75,6 +93,10 @@ public class ServicePositionServiceImpl implements ServicePositionService {
         workorder.setResourceId(resourceId);
         Workorder saved = savePositionChange(workorder);
         workorderFactPublisher.markChanged(workorderId);
+        // #2011: the pair may have just been completed — a workorder that now holds both a technician
+        // and a bay or mobile unit is ASSIGNED. Reconciled after the write, inside this transaction,
+        // so the status the caller reads back already reflects the placement it just made.
+        reconcileAssigned(workorderId, actor, "Service position assigned");
 
         log.info("Workorder {} placed on {} {} by {}", workorderId, resourceType, resourceId, actor);
         return buildResponse(saved);
@@ -94,6 +116,9 @@ public class ServicePositionServiceImpl implements ServicePositionService {
         workorder.setResourceId(null);
         Workorder saved = savePositionChange(workorder);
         workorderFactPublisher.markChanged(workorderId);
+        // #2011: an ASSIGNED workorder that gives up its bay or unit is no longer ready to be
+        // worked, so it falls back to APPROVED.
+        reconcileAssigned(workorderId, actor, reason == null || reason.isBlank() ? "Service position released" : reason);
 
         log.info("Workorder {} released its service position, by {}: {}", workorderId, actor, reason);
         return buildResponse(saved);
@@ -220,6 +245,19 @@ public class ServicePositionServiceImpl implements ServicePositionService {
         }
     }
 
+    /**
+     * Let the state machine re-decide ASSIGNED for this workorder (#2011).
+     *
+     * <p>Null-tolerant so the unit tests that build this service by hand, and any caller that has
+     * not wired the state machine, keep working: the reconciliation is a status refinement on top of
+     * a placement that has already been persisted, never a precondition for it.
+     */
+    private void reconcileAssigned(@NonNull UUID workorderId, @NonNull String actor, @Nullable String reason) {
+        if (stateMachine != null) {
+            stateMachine.reconcileAssigned(workorderId, actor, reason);
+        }
+    }
+
     @NonNull
     private Workorder loadOpenWorkorder(@NonNull UUID workorderId) {
         Workorder workorder = workorderRepository
@@ -281,6 +319,7 @@ public class ServicePositionServiceImpl implements ServicePositionService {
                     .findById(requestedId)
                     .orElseThrow(() -> new ServicePositionInvalidException("Unknown bay " + requestedId));
             requireSameSite(resourceType, requestedId, bay.getLocationId(), siteId);
+            requireActive(resourceType, requestedId, bay.isActive(), bay.getName());
             return requestedId;
         }
 
@@ -288,6 +327,7 @@ public class ServicePositionServiceImpl implements ServicePositionService {
                 .findById(requestedId)
                 .orElseThrow(() -> new ServicePositionInvalidException("Unknown mobile unit " + requestedId));
         requireSameSite(resourceType, requestedId, unit.getBaseLocationId(), siteId);
+        requireActive(resourceType, requestedId, unit.isActive(), unit.getName());
         return requestedId;
     }
 
@@ -299,6 +339,27 @@ public class ServicePositionServiceImpl implements ServicePositionService {
         if (workorderSiteId == null || !workorderSiteId.equals(positionSiteId)) {
             throw new ServicePositionInvalidException(resourceType + " " + resourceId + " belongs to site "
                     + positionSiteId + ", not to the workorder's site " + workorderSiteId);
+        }
+    }
+
+    /**
+     * Refuse a bay that is out of service or a mobile unit that is not deployed (#2001).
+     *
+     * <p>pos-location's status reaches this module on {@code location.bay.updated} /
+     * {@code location.mobile-unit.updated} and lands on the replica's {@code active} column; until
+     * this check existed nothing read it, so the dispatch board could show open work on a bay that
+     * was out of service. Checked after the site check so a position belonging to another shop is
+     * still reported as the wrong site rather than as inactive — the caller's first mistake is the
+     * one worth naming.
+     *
+     * <p>A position that goes inactive while it already holds an open workorder is left in place and
+     * flagged on the dispatch board rather than released (decided on #2001); this gate governs
+     * taking a position, not keeping one.
+     */
+    private static void requireActive(
+            @NonNull ResourceType resourceType, @NonNull UUID resourceId, boolean active, @Nullable String name) {
+        if (!active) {
+            throw new ServicePositionInactiveException(resourceType, resourceId, name);
         }
     }
 
@@ -320,6 +381,32 @@ public class ServicePositionServiceImpl implements ServicePositionService {
         return workorderRepository.findOpenOccupantsOfPosition(resourceType, resourceId, workorderId).stream()
                 .map(Workorder::getId)
                 .findFirst();
+    }
+
+    /**
+     * Whether a bay or mobile unit is active, for the paths that must not throw (#2001).
+     *
+     * <p>Answers {@code true} for anything that is not an exclusive position, and for a position
+     * whose replica row has not arrived yet: the inbound assignment fact is deliberately not
+     * validated against the replicas (a dispatcher's own placement is, and gets a 422), so replica
+     * lag must not make this module drop a position pos-shop-manager really did assign. Only a
+     * replica row that positively says inactive is a no.
+     */
+    @Override
+    public boolean isPositionActive(@Nullable ResourceType resourceType, @Nullable UUID resourceId) {
+        if (resourceId == null || resourceType == null || !resourceType.isExclusive()) {
+            return true;
+        }
+        if (resourceType == ResourceType.BAY) {
+            return extBayReplicaRepository
+                    .findById(resourceId)
+                    .map(ExtBayReplica::isActive)
+                    .orElse(true);
+        }
+        return extMobileUnitReplicaRepository
+                .findById(resourceId)
+                .map(ExtMobileUnitReplica::isActive)
+                .orElse(true);
     }
 
     /**

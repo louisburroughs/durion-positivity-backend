@@ -1,6 +1,7 @@
 package com.positivity.workorder.contract;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.hasSize;
@@ -10,6 +11,8 @@ import com.positivity.workorder.internal.entity.ChangeRequest;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
+import com.positivity.workorder.internal.entity.ExtBayReplica;
+import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
@@ -18,6 +21,8 @@ import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
@@ -66,6 +71,15 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
     @Autowired
     private ChangeRequestRepository changeRequestRepository;
 
+    @Autowired
+    private ExtPersonReplicaRepository extPersonReplicaRepository;
+
+    @Autowired
+    private ExtBayReplicaRepository extBayReplicaRepository;
+
+    private static final UUID TEST_TECHNICIAN_ID = UUID.fromString("00000000-0000-0000-0000-000000002001");
+    private static final UUID TEST_BAY_ID = UUID.fromString("00000000-0000-0000-0000-000000002002");
+
     private UUID testCustomerId;
     private UUID testLocationId;
     private UUID testVehicleId;
@@ -78,12 +92,12 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
     // ========== WORKORDER START TESTS ==========
 
     @Test
-    @DisplayName("WS-001: Successfully start workorder from APPROVED status")
-    void testStartWorkorder_FromApprovedStatus() {
-        // Given: A workorder in APPROVED status
-        UUID workorderId = seedApprovedWorkorder();
+    @DisplayName("WS-001: Successfully start workorder from ASSIGNED status")
+    void testStartWorkorder_FromAssignedStatus() {
+        // Given: A workorder in ASSIGNED status (#2011: a technician and a bay)
+        UUID workorderId = seedAssignedWorkorder();
         Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
-        assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.APPROVED);
+        assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.ASSIGNED);
 
         // When: Start the workorder
         Map<String, Object> startRequest =
@@ -99,7 +113,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
                 .ifValidationFails()
                 .statusCode(200)
                 .body("workorderId", equalTo(workorderId.toString()))
-                .body("previousStatus", equalTo("APPROVED"))
+                .body("previousStatus", equalTo("ASSIGNED"))
                 .body("currentStatus", equalTo("WORK_IN_PROGRESS"))
                 .body("transitionedAt", notNullValue())
                 .body("message", notNullValue());
@@ -119,7 +133,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
                 .findFirst()
                 .orElseThrow();
 
-        assertThat(startTransition.getFromStatus()).isEqualTo(WorkorderStatus.APPROVED);
+        assertThat(startTransition.getFromStatus()).isEqualTo(WorkorderStatus.ASSIGNED);
         assertThat(startTransition.getToStatus()).isEqualTo(WorkorderStatus.WORK_IN_PROGRESS);
         assertThat(startTransition.getTransitionedBy()).isEqualTo(SYSTEM_USER_ID);
         assertThat(startTransition.getReason()).isEqualTo("Customer arrived and dropped off vehicle");
@@ -129,10 +143,10 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
     @Test
     @DisplayName("WS-002: Reject start if change request is AWAITING_ADVISOR_REVIEW")
     void testStartWorkorder_RejectWhenPendingChangeRequests() {
-        // Given: A workorder in APPROVED status with a pending change request
+        // Given: A workorder in ASSIGNED status with a pending change request
         UUID workorderId = seedApprovedWorkorderWithPendingChangeRequest();
         Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
-        assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.APPROVED);
+        assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.ASSIGNED);
 
         // Verify pending change request exists
         List<ChangeRequest> pendingChangeRequests = changeRequestRepository.findByWorkorder_IdAndStatus(
@@ -153,16 +167,60 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
                 .statusCode(400)
                 .body("message", notNullValue());
 
-        // Then: Verify workorder status is still APPROVED (unchanged)
+        // Then: Verify workorder status is still ASSIGNED (unchanged)
         Workorder unchangedWorkorder = workorderRepository.findById(workorderId).orElseThrow();
-        assertThat(unchangedWorkorder.getStatus()).isEqualTo(WorkorderStatus.APPROVED);
+        assertThat(unchangedWorkorder.getStatus()).isEqualTo(WorkorderStatus.ASSIGNED);
+    }
+
+    @Test
+    @DisplayName("WS-005: #2011 an APPROVED workorder missing a technician, a position, or both refuses "
+            + "start with 409 naming what's missing")
+    void testStartWorkorder_RefusedWhenMissingTechnicianOrPosition() {
+        seedTechnicianAndBay();
+
+        // Missing both: a fresh APPROVED workorder has neither a technician nor a position.
+        UUID missingBoth = seedApprovedWorkorder();
+        assertStartRefusedMissing(missingBoth, "a technician and a bay or mobile unit");
+
+        // Missing only a position: a technician is assigned, but there is no bay or mobile unit.
+        UUID missingPosition = seedApprovedWorkorder();
+        assignTechnician(missingPosition);
+        assertThat(workorderRepository.findById(missingPosition).orElseThrow().getStatus())
+                .isEqualTo(WorkorderStatus.APPROVED);
+        assertStartRefusedMissing(missingPosition, "a bay or mobile unit");
+
+        // Missing only a technician: the workorder is on a bay, but nobody is assigned to it.
+        UUID missingTechnician = seedApprovedWorkorder();
+        assignBay(missingTechnician);
+        assertThat(workorderRepository.findById(missingTechnician).orElseThrow().getStatus())
+                .isEqualTo(WorkorderStatus.APPROVED);
+        assertStartRefusedMissing(missingTechnician, "a technician");
+    }
+
+    private void assertStartRefusedMissing(UUID workorderId, String expectedMissing) {
+        Map<String, Object> startRequest =
+                Map.of("userId", SYSTEM_USER_ID, "reason", "Attempting to start an unready workorder");
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(startRequest)
+                .when()
+                .post("/v1/workorders/{workorderId}/start", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(409)
+                .body("message", containsString("missing " + expectedMissing));
+
+        assertThat(workorderRepository.findById(workorderId).orElseThrow().getStatus())
+                .isEqualTo(WorkorderStatus.APPROVED);
     }
 
     @Test
     @DisplayName("WS-003: Transition history is append-only and newest-first")
     void testTransitionHistory_AppendOnlyNewestFirst() {
-        // Given: A workorder that has been promoted and started
-        UUID workorderId = seedApprovedWorkorder();
+        // Given: A workorder that has been promoted, assigned, and started
+        UUID workorderId = seedAssignedWorkorder();
 
         // Start the workorder
         Map<String, Object> startRequest = Map.of("userId", SYSTEM_USER_ID, "reason", "Starting work");
@@ -195,7 +253,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
         Map<String, Object> newestTransition = transitions.get(0);
         assertThat(newestTransition)
                 .containsEntry("toStatus", "WORK_IN_PROGRESS")
-                .containsEntry("fromStatus", "APPROVED");
+                .containsEntry("fromStatus", "ASSIGNED");
 
         // Verify each transition has required fields
         for (Map<String, Object> transition : transitions) {
@@ -214,7 +272,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
     @DisplayName("WS-004: Snapshot history is retrievable and ordered newest-first")
     void testSnapshotHistory_OrderedNewestFirst() {
         // Given: A workorder that has been started (which creates snapshots)
-        UUID workorderId = seedApprovedWorkorder();
+        UUID workorderId = seedAssignedWorkorder();
 
         // Start the workorder (this should create a snapshot)
         Map<String, Object> startRequest = Map.of("userId", SYSTEM_USER_ID, "reason", "Starting work");
@@ -266,12 +324,12 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
     private UUID seedApprovedWorkorder() {
         initTestIds();
 
-        // Create and save estimate
+        // Create and save estimate. The number is randomised, not derived from the fixed test
+        // customer id, because WS-005 seeds several estimates at the same testLocationId in one
+        // test and (locationId, estimateNumber) is unique.
         Estimate estimate = Estimate.builder()
-                .estimateNumber("EST-START-"
-                        + UUID.fromString("00000000-0000-0000-0000-000000000001")
-                                .toString()
-                                .substring(0, 8))
+                .estimateNumber(
+                        "EST-START-" + UUID.randomUUID().toString().substring(0, 8))
                 .customerId(testCustomerId)
                 .vehicleId(testVehicleId)
                 .locationId(testLocationId)
@@ -337,10 +395,10 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
     }
 
     /**
-     * Seed an approved workorder with a pending change request
+     * Seed an ASSIGNED workorder with a pending change request
      */
     private UUID seedApprovedWorkorderWithPendingChangeRequest() {
-        UUID workorderId = seedApprovedWorkorder();
+        UUID workorderId = seedAssignedWorkorder();
         Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
 
         // Create a pending change request
@@ -365,5 +423,63 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
             testLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
             testVehicleId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         }
+    }
+
+    /**
+     * Make the technician and bay start-eligibility now requires known to the module (#2011): the
+     * same {@code ext_person} / {@code ext_bay} replica rows ServicePositionContractBehaviorIT and
+     * TechnicianAssignmentContractBehaviorIT seed for their own assignment checks.
+     */
+    private void seedTechnicianAndBay() {
+        initTestIds();
+        extPersonReplicaRepository.save(ExtPersonReplica.builder()
+                .personId(TEST_TECHNICIAN_ID)
+                .aggregateVersion(1L)
+                .updatedAt(Instant.EPOCH)
+                .build());
+        extBayReplicaRepository.save(ExtBayReplica.builder()
+                .bayId(TEST_BAY_ID)
+                .locationId(testLocationId)
+                .name("Start Test Bay")
+                .active(true)
+                .aggregateVersion(1L)
+                .updatedAt(Instant.EPOCH)
+                .build());
+    }
+
+    private void assignTechnician(UUID workorderId) {
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("technicianId", TEST_TECHNICIAN_ID.toString()))
+                .when()
+                .post("/v1/workorders/{workorderId}/technician", workorderId)
+                .then()
+                .statusCode(200);
+    }
+
+    private void assignBay(UUID workorderId) {
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("resourceType", "BAY", "resourceId", TEST_BAY_ID.toString()))
+                .when()
+                .put("/v1/workorders/{workorderId}/position", workorderId)
+                .then()
+                .statusCode(200);
+    }
+
+    /**
+     * Seed a workorder that has reached ASSIGNED (#2011): APPROVED plus a current technician and a
+     * bay, the two halves start now requires. Order matters only in that reconciliation runs after
+     * each half is completed — the workorder stays APPROVED until both are in place.
+     */
+    private UUID seedAssignedWorkorder() {
+        UUID workorderId = seedApprovedWorkorder();
+        seedTechnicianAndBay();
+        assignTechnician(workorderId);
+        assignBay(workorderId);
+
+        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+        assertThat(workorder.getStatus()).isEqualTo(WorkorderStatus.ASSIGNED);
+        return workorderId;
     }
 }

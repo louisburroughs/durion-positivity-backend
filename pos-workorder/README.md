@@ -55,12 +55,12 @@ Core workorder service for the Durion Positivity ETSMS platform. Manages the ful
 - `PUT /v1/workorders/{workorderId}/technician` — reassign to a different technician, with a reason
 - `DELETE /v1/workorders/{workorderId}/technician` — release the current technician
 
-## Service position and technician assignment (#1983, #1984, #1985)
+## Service position and technician assignment (#1983, #1984, #1985, #2001, #2010, #2011)
 
 Where a workorder happens and who works on it are two **independent** assignments of the same
 workorder. Each can be assigned, changed and released across the open lifecycle, each keeps its own
-append-only history (who, when, why), and changing one never changes the other. `GET .../position`
-answers both together.
+append-only history (who, when, why), and neither write touches the other's rows. `GET .../position`
+answers both together. The pair does decide one thing jointly — the `ASSIGNED` status, below.
 
 **One open workorder per position.** A `BAY` or a `MOBILE_UNIT` holds at most one open workorder;
 a second one is refused with `409 RESOURCE_OCCUPIED`, whose `referenceId` names the occupying
@@ -82,6 +82,52 @@ indistinguishable from a deliberate hand-over. `PUT` (reassign) requires a curre
 answers `409 TECHNICIAN_NOT_ASSIGNED` without one, rather than being quietly promoted to an assign.
 `DELETE` releases without naming a replacement. The partial unique index
 `technician_assignment_one_current_uniq` backs the rule the same way.
+
+**A position must be active (#2001).** A `BAY` or a `MOBILE_UNIT` whose replica row is not active —
+a bay out of service, a mobile unit that is not deployed — is refused with `422
+SERVICE_POSITION_INACTIVE`, and the workorder's position is unchanged. The status is pos-location's,
+carried on `location.bay.updated` / `location.mobile-unit.updated` into the `ext_bay` /
+`ext_mobile_unit` replicas' `active` column; nothing read it before this, so the dispatch board could
+show open work on a bay that was out of service. Its own code rather than `SERVICE_POSITION_INVALID`:
+the position exists and is at the right site, so the refusal is about the resource, not the request.
+A position whose replica row has not arrived yet is still the unknown-position `422
+SERVICE_POSITION_INVALID`, unchanged. Going inactive while a workorder is already there releases
+nothing: the job stays put and the dispatch board flags it. The inbound pos-shop-manager assignment
+fact is not validated against the replicas, so it does not refuse — an inactive position is dropped
+the way an occupied one is, and the location and mechanics are applied with the workorder left
+unplaced.
+
+**`ASSIGNED` means a technician *and* somewhere to work (#2010, #2011).** A workorder is `ASSIGNED`
+when it has a current technician **and** stands on a `BAY` or a `MOBILE_UNIT`; a `HOLD` is a parking
+space, not a place work happens, so it does not count. Either half missing is `APPROVED`. One method
+decides it — `WorkorderStateMachine.reconcileAssigned(workorderId, actor, reason)` — and every
+trigger calls it after its own write, inside its own transaction: technician assign, reassign and
+release; position assign and release; the inbound pos-shop-manager assignment fact; and the
+operational-context override. So assigning a technician to an unplaced workorder leaves it
+`APPROVED`, placing it then makes it `ASSIGNED`, and either order gives the same answer. Releasing
+the only technician, or the position, reverts it to `APPROVED` (#2010). A hand-over — reassigning the
+technician, or moving bay to bay — keeps the pair complete and changes nothing.
+
+`WorkorderStatus` carries the rule: `ASSIGNED → APPROVED` was added, `APPROVED → WORK_IN_PROGRESS`
+was removed, and `getStartEligibleStatuses()` is `{ASSIGNED}`. **Work therefore starts only from
+`ASSIGNED`**; starting an `APPROVED` workorder answers `409` naming what is missing — a technician, a
+bay or mobile unit, or both. A workorder that has already started is past the question: no position
+or technician change walks `WORK_IN_PROGRESS` or its sub-statuses back. Every revert goes through the
+state machine, so it writes a status history row and publishes the `workorder.events.v1` status event
+pos-shop-manager's `ext_workorder_replica` reads.
+
+Timers and labor sessions are deliberately **not** tightened to the same rule. `TIMER_ELIGIBLE_STATUSES`
+(`WorkexecTimeTrackingServiceImpl`) and the labor-session statuses still include `APPROVED`, which is
+what they included before #2011. Since `ASSIGNED` now covers strictly fewer workorders than it used
+to, narrowing those sets to it would take away clocking that works today, for a rule about when work
+may *start* rather than when time may be recorded. If clocking should require the pair too, that is
+its own change with its own story.
+
+`AssignedInvariantMigrationService` carries pre-existing rows over: at startup, once per tenant, every
+`ASSIGNED` workorder lacking either half is transitioned to `APPROVED` through the state machine, so
+each correction leaves a history row (actor `system`) and publishes its event. It is idempotent — a
+corrected workorder no longer matches — and disabled with
+`pos.workorder.assigned-invariant-migration.enabled=false`.
 
 **Closing frees the position.** A transition to `COMPLETED` or `CANCELLED` releases the position
 from inside `WorkorderStateMachine.transitionWorkorder` — the single funnel every status change goes

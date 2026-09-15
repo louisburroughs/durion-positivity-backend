@@ -288,6 +288,29 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
      * endpoint pages at 25 rows, so a client-side equivalent is one call per candidate customer.
      * Work orders with no customer are excluded — they cannot join to anything.
      */
+    /**
+     * ASSIGNED workorders that do not hold both halves of the pair the status stands for (#2011).
+     *
+     * <p>The migration's whole input: rows created before ASSIGNED meant "a technician <em>and</em> a
+     * bay or mobile unit", which therefore claim to be ready to be worked with nobody on them, or
+     * nowhere to work them, or both. A HOLD position does not count — a parking space is not
+     * somewhere work happens — so the predicate asks for an exclusive resource type rather than any
+     * non-null one.
+     *
+     * <p>Ids rather than entities: each one is transitioned in its own call through the state machine,
+     * so the rows are re-read there anyway, and the migration must not hold a large result set open
+     * across those writes.
+     */
+    @Query("SELECT w.id FROM Workorder w "
+            + "WHERE w.status = com.positivity.workorder.internal.enums.WorkorderStatus.ASSIGNED "
+            + "AND (w.resourceId IS NULL "
+            + "OR w.resourceType IS NULL "
+            + "OR w.resourceType = com.positivity.workorder.internal.enums.ResourceType.HOLD "
+            + "OR NOT EXISTS (SELECT 1 FROM TechnicianAssignment a "
+            + "WHERE a.workorder.id = w.id AND a.current = TRUE))")
+    @NonNull
+    List<UUID> findAssignedWithoutTechnicianAndPosition();
+
     @Query("SELECT w.customerId AS customerId, COUNT(w) AS openWorkorders FROM Workorder w "
             + "WHERE w.status IN :statuses AND w.customerId IS NOT NULL "
             + "GROUP BY w.customerId ORDER BY COUNT(w) DESC, w.customerId ASC")

@@ -980,6 +980,30 @@ public class WorkorderServiceImpl implements WorkorderService {
         // mechanics too and then fail at commit, which is the opposite of applying the rest.
         UUID incomingResourceId = payload.getResourceId();
         ResourceType incomingResourceType = incomingResourceId != null ? resourceType : null;
+        // #2001: an out-of-service bay or an undeployed mobile unit is refused on the dispatcher's own
+        // path with a 422, and this path must not quietly disagree with it — a workorder the dispatch
+        // board shows on a bay that is out of service is exactly what that refusal exists to prevent.
+        // Handled like an occupied position rather than thrown for the same reason: this listener
+        // applies a location and a set of mechanics in the same transaction, so a refusal would cost
+        // the whole update for a conflict that concerns the position alone. A position whose replica
+        // row has not arrived yet is not refused here (isPositionActive answers true), because this
+        // path is deliberately not validated against the replicas.
+        //
+        // One local carries both outcomes: the position asked for was dropped, and why. Two
+        // independent booleans read at the bottom of the method would let a later edit reorder the
+        // checks and report the wrong cause, or drop a position twice.
+        String droppedBecause = null;
+        if (!servicePositionService.isPositionActive(incomingResourceType, incomingResourceId)) {
+            log.warn(
+                    "Inbound assignment for workorder {} names {} {}, which is INACTIVE;"
+                            + " applying the location and mechanics and leaving this workorder unplaced",
+                    workorder.getId(),
+                    incomingResourceType,
+                    incomingResourceId);
+            droppedBecause = "inactive";
+            incomingResourceId = null;
+            incomingResourceType = null;
+        }
         Optional<UUID> occupant =
                 servicePositionService.findOccupant(workorder.getId(), incomingResourceType, incomingResourceId);
         if (occupant.isPresent()) {
@@ -993,22 +1017,24 @@ public class WorkorderServiceImpl implements WorkorderService {
                     incomingResourceType,
                     incomingResourceId,
                     occupant.get());
+            droppedBecause = "occupied";
             incomingResourceId = null;
             incomingResourceType = null;
         }
+        String positionReason = droppedBecause == null
+                ? "Assignment context updated"
+                : "Assignment context updated; requested position was " + droppedBecause;
         servicePositionService.recordPositionChange(
-                workorder,
-                incomingResourceType,
-                incomingResourceId,
-                "System:ShopManagementService",
-                occupant.isPresent()
-                        ? "Assignment context updated; requested position was occupied"
-                        : "Assignment context updated");
+                workorder, incomingResourceType, incomingResourceId, "System:ShopManagementService", positionReason);
         workorder.setResourceId(incomingResourceId);
         workorder.setResourceType(incomingResourceType);
         workorder.setMechanicIds(serializeMechanicIds(payload.getMechanicIds()));
         servicePositionService.savePositionChange(workorder);
         workorderFactPublisher.markChanged(workorder.getId());
+        // #2011: the same ASSIGNED rule as the dispatcher's own endpoints, applied to what was
+        // actually written — a position dropped as occupied or inactive leaves the pair incomplete, so
+        // the status follows the placement the database really holds rather than the one asked for.
+        stateMachine.reconcileAssigned(workorder.getId(), "System:ShopManagementService", positionReason);
 
         String details = buildAuditDetails(
                 oldLocationId,
@@ -1121,6 +1147,10 @@ public class WorkorderServiceImpl implements WorkorderService {
         // back together, and a lost race against the occupancy index is a 409 here as well as there.
         Workorder saved = servicePositionService.savePositionChange(workorder);
         workorderFactPublisher.markChanged(saved.getId());
+        // #2011: an override moves the position like any other placement, so it settles ASSIGNED the
+        // same way — a manager who re-slots a job onto a bay completes the pair, and one who clears
+        // the position or parks it on HOLD undoes it.
+        stateMachine.reconcileAssigned(workorderId, resolveCurrentActorUserId(), "Operational context override");
 
         return OperationalContextResponse.builder()
                 .version(saved.getOperationalContextVersion())

@@ -19,6 +19,7 @@ import com.positivity.workorder.internal.controller.ServicePositionController;
 import com.positivity.workorder.internal.dto.AssignServicePositionRequest;
 import com.positivity.workorder.internal.dto.ServicePositionResponse;
 import com.positivity.workorder.internal.enums.ResourceType;
+import com.positivity.workorder.internal.exception.ServicePositionInactiveException;
 import com.positivity.workorder.internal.exception.ServicePositionInvalidException;
 import com.positivity.workorder.internal.exception.ServicePositionOccupiedException;
 import com.positivity.workorder.internal.exception.WorkorderClosedException;
@@ -148,6 +149,20 @@ class ServicePositionControllerTest {
                         .content("{\"resourceType\":\"BAY\",\"resourceId\":\"" + BAY_ID + "\"}"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("SERVICE_POSITION_INVALID"));
+    }
+
+    @Test
+    @DisplayName("#2001: an inactive bay answers 422 SERVICE_POSITION_INACTIVE, naming the bay")
+    void inactivePositionIsUnprocessable() throws Exception {
+        doThrow(new ServicePositionInactiveException(ResourceType.BAY, BAY_ID, "Lift 3"))
+                .when(servicePositionService)
+                .assignPosition(eq(WORKORDER_ID), any(), any());
+
+        mockMvc.perform(put(URL, WORKORDER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"resourceType\":\"BAY\",\"resourceId\":\"" + BAY_ID + "\"}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("SERVICE_POSITION_INACTIVE"));
     }
 
     @Test

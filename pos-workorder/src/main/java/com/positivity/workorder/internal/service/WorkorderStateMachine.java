@@ -11,6 +11,7 @@ import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
+import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
@@ -51,6 +52,7 @@ public class WorkorderStateMachine {
     private final ObjectMapper objectMapper;
     private final ChangeRequestService changeRequestService;
     private final ServicePositionService servicePositionService;
+    private final TechnicianAssignmentRepository technicianAssignmentRepository;
 
     private static final Set<WorkorderStatus> COMPLETION_ELIGIBLE_STATUSES = Set.of(
             WorkorderStatus.WORK_IN_PROGRESS,
@@ -283,6 +285,99 @@ public class WorkorderStateMachine {
         return status == WorkorderStatus.COMPLETED || status == WorkorderStatus.READY_FOR_PICKUP;
     }
 
+    /**
+     * Re-decide whether a workorder is ASSIGNED, after either half of the pair changed (#2011).
+     *
+     * <p>{@code ASSIGNED} means ready to be worked: there is a current technician <em>and</em> the
+     * workorder stands on a bay or a mobile unit. A {@code HOLD} is a parking space, not a position
+     * work happens at, so it does not count. Every trigger — technician assign, reassign and
+     * release, position assign and release, the inbound pos-shop-manager assignment fact and the
+     * operational-context override — calls this after its own write, inside its own transaction, so
+     * the rule is decided in one place instead of being re-derived at six call sites that would
+     * drift apart.
+     *
+     * <p>Only {@code APPROVED} and {@code ASSIGNED} are touched. A workorder that has started is
+     * past this question: {@code WORK_IN_PROGRESS} and its sub-statuses are not walked back when a
+     * technician hands the job over or the vehicle moves bays, and there is no transition from them
+     * to {@code APPROVED} to walk back with. {@code DRAFT} and the terminal statuses are equally out
+     * of scope, and a status that is already the right one writes nothing — this runs on paths that
+     * re-assert an unchanged position, and a status history full of no-op rows would bury the real
+     * ones.
+     *
+     * <p>Reads, not locks. Both halves are read from rows the calling transaction has already
+     * written — the technician assignment it locked with {@code findCurrentForUpdate}, and the
+     * workorder row it is holding — so this adds no lock of its own and therefore no new ordering
+     * between the position and technician locks to invert (#1984, #1985).
+     */
+    @Transactional
+    public void reconcileAssigned(UUID workorderId, String actorId, String reason) {
+        Workorder workorder = workorderRepository.findById(workorderId).orElse(null);
+        if (workorder == null) {
+            return;
+        }
+        WorkorderStatus current = workorder.getStatus();
+        if (current != WorkorderStatus.APPROVED && current != WorkorderStatus.ASSIGNED) {
+            return;
+        }
+        WorkorderStatus target = isReadyToBeWorked(workorder) ? WorkorderStatus.ASSIGNED : WorkorderStatus.APPROVED;
+        if (current == target) {
+            return;
+        }
+        transitionWorkorder(
+                workorderId, target, actorId, reason == null || reason.isBlank() ? "Assignment changed" : reason);
+    }
+
+    /** Whether the workorder holds both halves of the pair {@code ASSIGNED} stands for (#2011). */
+    private boolean isReadyToBeWorked(Workorder workorder) {
+        return hasCurrentTechnician(workorder.getId()) && isOnWorkablePosition(workorder);
+    }
+
+    private boolean hasCurrentTechnician(UUID workorderId) {
+        return technicianAssignmentRepository
+                .findByWorkorder_IdAndCurrentTrue(workorderId)
+                .isPresent();
+    }
+
+    /**
+     * A bay or a mobile unit — the positions work is actually performed at (#2011). A workorder with
+     * no position, or parked on its site's {@code HOLD}, has nowhere to be worked.
+     */
+    private boolean isOnWorkablePosition(Workorder workorder) {
+        return workorder.getResourceId() != null
+                && workorder.getResourceType() != null
+                && workorder.getResourceType().isExclusive();
+    }
+
+    /**
+     * Say what a workorder that cannot be started is missing (#2011).
+     *
+     * <p>An {@code APPROVED} workorder is the interesting case: since work starts only from
+     * {@code ASSIGNED}, "wrong status" is never the answer a dispatcher needs — the answer is which
+     * half of the pair has not been filled in, so the message names it. Every other status is a
+     * genuine ordering error and keeps the status-based message.
+     */
+    private String startRefusalMessage(Workorder workorder) {
+        UUID workorderId = workorder.getId();
+        if (workorder.getStatus() == WorkorderStatus.APPROVED) {
+            List<String> missing = new ArrayList<>();
+            if (!hasCurrentTechnician(workorderId)) {
+                missing.add("a technician");
+            }
+            if (!isOnWorkablePosition(workorder)) {
+                missing.add("a bay or mobile unit");
+            }
+            if (!missing.isEmpty()) {
+                return String.format(
+                        "Workorder %s cannot be started: it is missing %s. Work starts once the workorder is ASSIGNED,"
+                                + " which means it has a technician and a bay or mobile unit",
+                        workorderId, String.join(" and ", missing));
+            }
+        }
+        return String.format(
+                "Workorder %s cannot be started from status %s. Must be one of: %s",
+                workorderId, workorder.getStatus(), WorkorderStatus.getStartEligibleStatuses());
+    }
+
     @Transactional
     public void startWorkorder(UUID workorderId, String actorId, String reason) {
         Workorder workorder = workorderRepository
@@ -290,9 +385,7 @@ public class WorkorderStateMachine {
                 .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         if (!WorkorderStatus.getStartEligibleStatuses().contains(workorder.getStatus())) {
-            throw new IllegalStateException(String.format(
-                    "Workorder %s cannot be started from status %s. Must be one of: %s",
-                    workorderId, workorder.getStatus(), WorkorderStatus.getStartEligibleStatuses()));
+            throw new IllegalStateException(startRefusalMessage(workorder));
         }
 
         List<ChangeRequest> pendingApprovalRequests = changeRequestRepository.findByWorkorder_IdAndStatus(

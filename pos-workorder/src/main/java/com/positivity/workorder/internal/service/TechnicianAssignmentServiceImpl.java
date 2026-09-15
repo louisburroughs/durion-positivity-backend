@@ -33,7 +33,11 @@ import org.springframework.transaction.annotation.Transactional;
  * <ul>
  * <li>Assignment is allowed only from APPROVED, ASSIGNED, or WORK_IN_PROGRESS
  * status</li>
- * <li>Initial assignment transitions workorder to ASSIGNED status</li>
+ * <li>ASSIGNED means the workorder is ready to be worked: a current technician
+ * <em>and</em> a bay or mobile unit. Every assign, reassign and release hands the
+ * status decision to {@code WorkorderStateMachine.reconcileAssigned}, so a workorder
+ * with nobody on it falls back to APPROVED and one with nowhere to be worked never
+ * reaches ASSIGNED (#2010, #2011)</li>
  * <li>A workorder has at most one current technician. Assign requires none, reassign
  * requires one, release gives the current one up; the partial unique index
  * {@code technician_assignment_one_current_uniq} guarantees the rule under
@@ -58,7 +62,8 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
      * Assign a technician to a workorder.
      *
      * <p>
-     * If the workorder is in APPROVED status, it will be transitioned to ASSIGNED.
+     * An APPROVED workorder becomes ASSIGNED only if it also stands on a bay or a mobile
+     * unit (#2011); with nowhere to be worked it stays APPROVED until it is placed.
      * The workorder must have no current technician: changing hands is
      * {@link #reassignTechnician}, which records a reason.
      *
@@ -114,11 +119,10 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         TechnicianAssignment saved = saveHonouringSingleCurrentIndex(assignment, workorderId);
         log.info("Assigned technician {} to workorder {} by user {}", technicianId, workorderId, assignedBy);
 
-        // Transition workorder to ASSIGNED status if currently APPROVED
-        if (workorder.getStatus() == WorkorderStatus.APPROVED) {
-            stateMachine.transitionWorkorder(workorderId, WorkorderStatus.ASSIGNED, assignedBy, "Technician assigned");
-            log.debug("Transitioned workorder {} to ASSIGNED status", workorderId);
-        }
+        // #2011: a technician is half of what ASSIGNED means — the workorder also has to stand on a
+        // bay or a mobile unit. The state machine decides, so a workorder with nowhere to be worked
+        // stays APPROVED until it is placed, and this no longer has to know the rule itself.
+        stateMachine.reconcileAssigned(workorderId, assignedBy, "Technician assigned");
 
         return TechnicianAssignmentRecord.fromEntity(saved);
     }
@@ -203,6 +207,11 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                 newTechnicianId,
                 reassignedBy);
 
+        // #2011: a hand-over leaves the pair complete, so an ASSIGNED workorder stays ASSIGNED. Asked
+        // anyway rather than skipped: an APPROVED workorder that was already on a bay and had somehow
+        // lost its status is put right here, and the rule stays in the one place that owns it.
+        stateMachine.reconcileAssigned(workorderId, reassignedBy, "Technician reassigned");
+
         return TechnicianAssignmentRecord.fromEntity(saved);
     }
 
@@ -219,7 +228,17 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         }
         TechnicianAssignment assignment = currentAssignment.get();
         assignment.markAsNotCurrent(LocalDateTime.now(clock), reason, releasedBy);
-        TechnicianAssignment saved = assignmentRepository.save(assignment);
+        TechnicianAssignment saved = assignmentRepository.saveAndFlush(assignment);
+        // #2010: the workorder is no longer held by anyone, so ASSIGNED would be a lie — the dispatch
+        // board and the shop dashboard would go on showing a job as assigned that nobody holds. The
+        // revert goes through the state machine like any other transition, so it leaves a status
+        // history row and publishes a status event. Flushed first so the reconciliation, which reads
+        // the current-assignment row back, sees this release rather than the row it just closed.
+        //
+        // The decision is made after the lock above and from the locked row, so a release racing a
+        // reassignment cannot revert a workorder the winner has just handed to somebody else.
+        stateMachine.reconcileAssigned(
+                workorderId, releasedBy, reason == null || reason.isBlank() ? "Technician released" : reason);
         log.info(
                 "Released technician {} from workorder {} by {}: {}",
                 assignment.getTechnicianId(),

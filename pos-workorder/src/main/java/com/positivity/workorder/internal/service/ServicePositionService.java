@@ -121,6 +121,21 @@ public interface ServicePositionService {
             @NonNull UUID workorderId, @Nullable ResourceType resourceType, @Nullable UUID resourceId);
 
     /**
+     * Whether a bay or mobile unit may take work, asked without an exception (#2001).
+     *
+     * <p>The companion to {@link #findOccupant} for the same reason it exists: the inbound
+     * pos-shop-manager assignment fact applies a location, a position and a set of mechanics in one
+     * transaction, and a refusal thrown from inside it would cost the whole update rather than the
+     * position alone.
+     *
+     * <p>Answers {@code true} for an unset position, for {@link ResourceType#HOLD}, and for a
+     * position whose replica row has not arrived yet — this path is deliberately not validated
+     * against the replicas, so replica lag must not drop a position that was really assigned. Only a
+     * replica row that positively says inactive answers {@code false}.
+     */
+    boolean isPositionActive(@Nullable ResourceType resourceType, @Nullable UUID resourceId);
+
+    /**
      * Persist a workorder whose position fields were just changed, turning a lost race against
      * {@code workorder_open_position_uniq} into the same 409 the pre-check raises.
      *

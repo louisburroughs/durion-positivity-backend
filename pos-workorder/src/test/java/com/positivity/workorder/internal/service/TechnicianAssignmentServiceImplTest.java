@@ -143,14 +143,16 @@ class TechnicianAssignmentServiceImplTest {
         }
 
         @Test
-        @DisplayName("drives an APPROVED workorder to ASSIGNED")
+        @DisplayName("#2011: leaves the ASSIGNED-vs-APPROVED decision to reconcileAssigned")
         void transitionsApprovedWorkorder() {
             givenWorkorder(WorkorderStatus.APPROVED);
 
             service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null);
 
-            verify(stateMachine)
-                    .transitionWorkorder(WORKORDER_ID, WorkorderStatus.ASSIGNED, "dispatch", "Technician assigned");
+            // The technician is only half the pair ASSIGNED stands for since #2011 — the state
+            // machine also has to know whether the workorder stands on a bay or mobile unit, so this
+            // no longer transitions the workorder itself; it hands the decision to reconcileAssigned.
+            verify(stateMachine).reconcileAssigned(WORKORDER_ID, "dispatch", "Technician assigned");
         }
 
         @Test
@@ -305,6 +307,23 @@ class TechnicianAssignmentServiceImplTest {
         }
 
         @Test
+        @DisplayName("#2011: delegates to reconcileAssigned after the hand-over")
+        void delegatesToReconcileAssigned() {
+            givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
+            TechnicianAssignment existing = currentAssignment(OTHER_TECHNICIAN_ID);
+            when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
+                    .thenReturn(Optional.of(existing));
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.of(existing));
+
+            service.reassignTechnician(WORKORDER_ID, TECHNICIAN_ID, "supervisor", "called out sick", null);
+
+            // A hand-over leaves the pair complete, so an ASSIGNED workorder stays ASSIGNED — asked
+            // anyway rather than skipped, since an APPROVED workorder that was already on a bay is put
+            // right here.
+            verify(stateMachine).reconcileAssigned(WORKORDER_ID, "supervisor", "Technician reassigned");
+        }
+
+        @Test
         @DisplayName("refuses to reassign a workorder that has no current assignment")
         void rejectsWithoutCurrentAssignment() {
             givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
@@ -369,6 +388,32 @@ class TechnicianAssignmentServiceImplTest {
             assertThat(service.releaseAssignment(WORKORDER_ID, "supervisor", null))
                     .isEmpty();
             verify(assignmentRepository, never()).save(any());
+            verify(stateMachine, never()).reconcileAssigned(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("#2010/#2011: delegates to reconcileAssigned with the release reason")
+        void delegatesToReconcileAssignedWithReason() {
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID))
+                    .thenReturn(Optional.of(currentAssignment(TECHNICIAN_ID)));
+
+            service.releaseAssignment(WORKORDER_ID, "supervisor", "Shift ended");
+
+            // The workorder is no longer held by anyone, so ASSIGNED would be a lie; the revert goes
+            // through reconcileAssigned like any other status change so it leaves history and publishes
+            // a fact.
+            verify(stateMachine).reconcileAssigned(WORKORDER_ID, "supervisor", "Shift ended");
+        }
+
+        @Test
+        @DisplayName("#2010/#2011: falls back to a default reason when none is supplied")
+        void delegatesToReconcileAssignedWithDefaultReason() {
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID))
+                    .thenReturn(Optional.of(currentAssignment(TECHNICIAN_ID)));
+
+            service.releaseAssignment(WORKORDER_ID, "supervisor", null);
+
+            verify(stateMachine).reconcileAssigned(WORKORDER_ID, "supervisor", "Technician released");
         }
     }
 

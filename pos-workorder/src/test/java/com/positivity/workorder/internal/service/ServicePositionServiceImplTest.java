@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,6 +21,7 @@ import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.exception.ServicePositionInactiveException;
 import com.positivity.workorder.internal.exception.ServicePositionInvalidException;
 import com.positivity.workorder.internal.exception.ServicePositionOccupiedException;
 import com.positivity.workorder.internal.exception.WorkorderClosedException;
@@ -92,6 +94,9 @@ class ServicePositionServiceImplTest {
     @Mock
     private WorkorderFactPublisher workorderFactPublisher;
 
+    @Mock
+    private WorkorderStateMachine stateMachine;
+
     private ServicePositionServiceImpl service;
 
     @BeforeEach
@@ -112,6 +117,7 @@ class ServicePositionServiceImplTest {
                 extBayReplicaRepository,
                 extMobileUnitReplicaRepository,
                 workorderFactPublisher);
+        service.setStateMachine(stateMachine);
 
         when(workorderRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(workorderRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -163,6 +169,32 @@ class ServicePositionServiceImplTest {
                         .mobileUnitId(unitId)
                         .baseLocationId(baseLocationId)
                         .active(true)
+                        .aggregateVersion(1L)
+                        .updatedAt(NOW)
+                        .build()));
+    }
+
+    /** #2001: a bay pos-location has marked out of service. */
+    private void givenInactiveBay(UUID bayId, UUID locationId, String name) {
+        when(extBayReplicaRepository.findById(bayId))
+                .thenReturn(Optional.of(ExtBayReplica.builder()
+                        .bayId(bayId)
+                        .locationId(locationId)
+                        .name(name)
+                        .active(false)
+                        .aggregateVersion(1L)
+                        .updatedAt(NOW)
+                        .build()));
+    }
+
+    /** #2001: a mobile unit pos-location has marked not deployed. */
+    private void givenInactiveMobileUnit(UUID unitId, UUID baseLocationId, String name) {
+        when(extMobileUnitReplicaRepository.findById(unitId))
+                .thenReturn(Optional.of(ExtMobileUnitReplica.builder()
+                        .mobileUnitId(unitId)
+                        .baseLocationId(baseLocationId)
+                        .name(name)
+                        .active(false)
                         .aggregateVersion(1L)
                         .updatedAt(NOW)
                         .build()));
@@ -675,6 +707,148 @@ class ServicePositionServiceImplTest {
             service.releasePosition(WORKORDER_ID, ACTOR, "customer rescheduled");
 
             assertThat(workorder.getScheduledDate()).isNull();
+        }
+    }
+
+    /**
+     * #2001: a bay out of service or a mobile unit not deployed cannot be taken, checked after the
+     * site check so a position at the wrong site is still reported as the wrong site.
+     */
+    @Nested
+    @DisplayName("inactive positions are refused")
+    class InactivePosition {
+
+        @Test
+        @DisplayName("an inactive bay is refused, naming the bay, and nothing is written")
+        void refusesAnInactiveBay() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            givenInactiveBay(BAY_ID, SITE_ID, "Lift 3");
+
+            assertThatThrownBy(() ->
+                            service.assignPosition(WORKORDER_ID, request(ResourceType.BAY, BAY_ID, null), ACTOR))
+                    .isInstanceOf(ServicePositionInactiveException.class)
+                    .hasMessageContaining("Lift 3")
+                    .hasMessageContaining("INACTIVE");
+
+            assertThat(workorder.getResourceType()).isNull();
+            assertThat(workorder.getResourceId()).isNull();
+            verify(positionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("an inactive mobile unit is refused, naming the unit, and nothing is written")
+        void refusesAnInactiveMobileUnit() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            givenInactiveMobileUnit(MOBILE_UNIT_ID, SITE_ID, "Van 2");
+
+            assertThatThrownBy(() -> service.assignPosition(
+                            WORKORDER_ID, request(ResourceType.MOBILE_UNIT, MOBILE_UNIT_ID, null), ACTOR))
+                    .isInstanceOf(ServicePositionInactiveException.class)
+                    .hasMessageContaining("Van 2")
+                    .hasMessageContaining("INACTIVE");
+
+            assertThat(workorder.getResourceType()).isNull();
+            assertThat(workorder.getResourceId()).isNull();
+            verify(positionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a bay at another site fails on site even when it is also inactive: the caller's "
+                + "first mistake is the one worth naming")
+        void siteCheckWinsOverInactive() {
+            givenWorkorder(WorkorderStatus.APPROVED);
+            givenInactiveBay(OTHER_BAY_ID, OTHER_SITE_ID, "Foreign lift");
+
+            assertThatThrownBy(() -> service.assignPosition(
+                            WORKORDER_ID, request(ResourceType.BAY, OTHER_BAY_ID, null), ACTOR))
+                    .isInstanceOf(ServicePositionInvalidException.class)
+                    .hasMessageContaining("not to the workorder's site");
+        }
+    }
+
+    /**
+     * #2001: the read-only companion to {@code resolvePosition}'s inactive check, for callers that
+     * must not be unwound by an exception.
+     */
+    @Nested
+    @DisplayName("isPositionActive")
+    class IsPositionActive {
+
+        @Test
+        @DisplayName("an inactive bay is not active")
+        void inactiveBayIsNotActive() {
+            givenInactiveBay(BAY_ID, SITE_ID, "Lift 3");
+
+            assertThat(service.isPositionActive(ResourceType.BAY, BAY_ID)).isFalse();
+        }
+
+        @Test
+        @DisplayName("an inactive mobile unit is not active")
+        void inactiveMobileUnitIsNotActive() {
+            givenInactiveMobileUnit(MOBILE_UNIT_ID, SITE_ID, "Van 2");
+
+            assertThat(service.isPositionActive(ResourceType.MOBILE_UNIT, MOBILE_UNIT_ID)).isFalse();
+        }
+
+        @Test
+        @DisplayName("an active bay is active")
+        void activeBayIsActive() {
+            assertThat(service.isPositionActive(ResourceType.BAY, BAY_ID)).isTrue();
+        }
+
+        @Test
+        @DisplayName("a HOLD position is always active: it is not exclusive")
+        void holdIsAlwaysActive() {
+            assertThat(service.isPositionActive(ResourceType.HOLD, SITE_ID)).isTrue();
+        }
+
+        @Test
+        @DisplayName("a null resourceType or resourceId is active: there is nothing to be inactive")
+        void nullResourceTypeOrIdIsActive() {
+            assertThat(service.isPositionActive(null, BAY_ID)).isTrue();
+            assertThat(service.isPositionActive(ResourceType.BAY, null)).isTrue();
+        }
+
+        @Test
+        @DisplayName("a position whose replica row has not arrived yet is active: replica lag must not "
+                + "drop a position that was really assigned")
+        void missingReplicaRowIsActive() {
+            UUID unreplicatedBay = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f330b");
+            when(extBayReplicaRepository.findById(unreplicatedBay)).thenReturn(Optional.empty());
+
+            assertThat(service.isPositionActive(ResourceType.BAY, unreplicatedBay)).isTrue();
+        }
+    }
+
+    /**
+     * #2011: a pair completed or broken by a position change is reconciled through the state
+     * machine, inside the same transaction as the write.
+     */
+    @Nested
+    @DisplayName("state-machine reconciliation")
+    class StateMachineReconciliation {
+
+        @Test
+        @DisplayName("assignPosition asks the state machine to reconcile ASSIGNED")
+        void assignReconciles() {
+            givenWorkorder(WorkorderStatus.APPROVED);
+
+            service.assignPosition(WORKORDER_ID, request(ResourceType.BAY, BAY_ID, null), ACTOR);
+
+            verify(stateMachine).reconcileAssigned(eq(WORKORDER_ID), eq(ACTOR), any());
+        }
+
+        @Test
+        @DisplayName("releasePosition asks the state machine to reconcile ASSIGNED")
+        void releaseReconciles() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
+            workorder.setResourceType(ResourceType.BAY);
+            workorder.setResourceId(BAY_ID);
+            givenCurrentPlacement(ResourceType.BAY, BAY_ID);
+
+            service.releasePosition(WORKORDER_ID, ACTOR, "Vehicle moved to the lot");
+
+            verify(stateMachine).reconcileAssigned(eq(WORKORDER_ID), eq(ACTOR), any());
         }
     }
 }

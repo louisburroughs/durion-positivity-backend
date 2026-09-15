@@ -20,8 +20,12 @@ public enum WorkorderStatus {
 
     static {
         ALLOWED_TRANSITIONS.put(DRAFT, Set.of(APPROVED, CANCELLED));
-        ALLOWED_TRANSITIONS.put(APPROVED, Set.of(ASSIGNED, WORK_IN_PROGRESS, AWAITING_APPROVAL, CANCELLED));
-        ALLOWED_TRANSITIONS.put(ASSIGNED, Set.of(WORK_IN_PROGRESS, CANCELLED));
+        // APPROVED no longer goes straight to WORK_IN_PROGRESS (#2011): work starts only once the
+        // workorder has both a technician and a bay or mobile unit, which is what ASSIGNED means.
+        ALLOWED_TRANSITIONS.put(APPROVED, Set.of(ASSIGNED, AWAITING_APPROVAL, CANCELLED));
+        // ASSIGNED -> APPROVED is the reverse of that (#2010, #2011): releasing the technician, or
+        // giving up the bay, leaves a workorder that is approved but no longer ready to be worked.
+        ALLOWED_TRANSITIONS.put(ASSIGNED, Set.of(APPROVED, WORK_IN_PROGRESS, CANCELLED));
         ALLOWED_TRANSITIONS.put(
                 WORK_IN_PROGRESS, Set.of(AWAITING_PARTS, AWAITING_APPROVAL, READY_FOR_PICKUP, COMPLETED, CANCELLED));
         ALLOWED_TRANSITIONS.put(AWAITING_PARTS, Set.of(WORK_IN_PROGRESS, COMPLETED, CANCELLED));
@@ -40,8 +44,15 @@ public enum WorkorderStatus {
         return ALLOWED_TRANSITIONS.getOrDefault(this, Set.of());
     }
 
+    /**
+     * The statuses work may start from — {@link #ASSIGNED} alone since #2011.
+     *
+     * <p>{@code ASSIGNED} means the workorder has a current technician and a bay or mobile unit, so
+     * requiring it is what makes "work starts when there is somebody to do it and somewhere to do
+     * it" true on every path rather than only on the ones that happen to check.
+     */
     public static Set<WorkorderStatus> getStartEligibleStatuses() {
-        return Set.of(APPROVED, ASSIGNED);
+        return Set.of(ASSIGNED);
     }
 
     public static Set<WorkorderStatus> getInProgressSubStatuses() {
