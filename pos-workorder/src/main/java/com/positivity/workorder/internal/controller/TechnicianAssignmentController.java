@@ -68,8 +68,9 @@ public class TechnicianAssignmentController {
                     Emits a WORKORDER_TECHNICIAN_ASSIGN event; an APPROVED workorder is transitioned to ASSIGNED \
                     with a recorded state transition.
                     Returns 404 when the workorder does not exist, 400 with the failure reason when the \
-                    workorder status does not allow assignment, and 409 TECHNICIAN_ALREADY_ASSIGNED when the \
-                    workorder already has a current technician — use reassignTechnician to change it.
+                    workorder's status cannot take a technician yet, 409 WORKORDER_CLOSED when it is COMPLETED \
+                    or CANCELLED and the job is over, and 409 TECHNICIAN_ALREADY_ASSIGNED when the workorder \
+                    already has a current technician — use reassignTechnician to change it.
                     """,
             responses = {
                 @ApiResponse(
@@ -81,8 +82,9 @@ public class TechnicianAssignmentController {
                 @ApiResponse(responseCode = "404", description = "Workorder or technician not found"),
                 @ApiResponse(
                         responseCode = "409",
-                        description = "The workorder already has a current technician (ApiError.code "
-                                + "TECHNICIAN_ALREADY_ASSIGNED, with the current technician id as referenceId)",
+                        description = "The workorder is closed (ApiError.code WORKORDER_CLOSED) or already has "
+                                + "a current technician (ApiError.code TECHNICIAN_ALREADY_ASSIGNED, with the "
+                                + "current technician id as referenceId)",
                         content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -175,9 +177,10 @@ public class TechnicianAssignmentController {
                     body; reason and notes are optional, the reassignedByUserId body field is ignored in favor \
                     of the security context, and the Idempotency-Key header is accepted but not currently used.
                     Emits a WORKORDER_TECHNICIAN_REASSIGN event.
-                    Returns 404 when the workorder does not exist, 400 with the failure reason when the workorder \
-                    status does not allow reassignment, and 409 TECHNICIAN_NOT_ASSIGNED when the workorder has no \
-                    current technician to reassign from — use assignTechnician for the first assignment.
+                    Returns 404 when the workorder does not exist, 400 with the failure reason when the workorder's \
+                    status cannot take a technician yet, 409 WORKORDER_CLOSED when it is COMPLETED or CANCELLED \
+                    and the job is over, and 409 TECHNICIAN_NOT_ASSIGNED when the workorder has no current \
+                    technician to reassign from — use assignTechnician for the first assignment.
                     """,
             responses = {
                 @ApiResponse(
@@ -189,8 +192,8 @@ public class TechnicianAssignmentController {
                 @ApiResponse(responseCode = "404", description = "Workorder not found"),
                 @ApiResponse(
                         responseCode = "409",
-                        description =
-                                "The workorder has no current technician (ApiError.code " + "TECHNICIAN_NOT_ASSIGNED)",
+                        description = "The workorder is closed (ApiError.code WORKORDER_CLOSED) or has no current "
+                                + "technician (ApiError.code TECHNICIAN_NOT_ASSIGNED)",
                         content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @io.swagger.v3.oas.annotations.parameters.RequestBody(

@@ -235,7 +235,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
     }
 
     @Test
-    @DisplayName("TA-004: Reject assignment if workorder status is COMPLETED")
+    @DisplayName("TA-004: A COMPLETED workorder refuses assignment with 409 WORKORDER_CLOSED")
     void testAssignTechnician_InvalidStatus() {
         // Given: A workorder in COMPLETED status
         UUID workorderId = seedCompletedWorkorder();
@@ -261,14 +261,51 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 .then()
                 .log()
                 .ifValidationFails()
-                .statusCode(400) // Bad request due to invalid state
-                // The reason is surfaced in the body, not an empty 400.
-                .body("message", org.hamcrest.Matchers.containsString("Cannot assign technician"));
+                // #1983 split this refusal in two, and this case is the closed half. A COMPLETED or
+                // CANCELLED workorder answers 409 WORKORDER_CLOSED — the same stable code the position
+                // operations use — rather than sharing the 400 with "this status cannot take a
+                // technician yet". The two need different things from the caller: one is over, the
+                // other is not ready. The 400 half is still asserted by the DRAFT case.
+                .statusCode(409)
+                .body("code", org.hamcrest.Matchers.equalTo("WORKORDER_CLOSED"))
+                .body("message", org.hamcrest.Matchers.containsString("can no longer be changed"));
 
         // Then: Verify no assignment was created
         List<TechnicianAssignment> assignments =
                 assignmentRepository.findByWorkorder_IdOrderByAssignedAtDesc(workorderId);
         assertThat(assignments).isEmpty();
+    }
+
+    @Test
+    @DisplayName("TA-004b: A DRAFT workorder refuses assignment with 400 — not yet ready, not over")
+    void testAssignTechnician_StatusNotYetAssignable() {
+        // The other half of the #1983 split, and the reason TA-004 no longer asserts 400: a status
+        // that cannot take a technician *yet* is a different refusal from a workorder that is
+        // closed, and only this case is a 400. Without it the 400 branch of
+        // validateAssignmentAllowed has no coverage at all.
+        UUID workorderId = seedDraftWorkorder();
+        testTechnicianId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of(
+                        "technicianId",
+                        testTechnicianId1.toString(),
+                        "assignedByUserId",
+                        SYSTEM_USER_ID,
+                        "notes",
+                        "Attempting to assign to a draft workorder"))
+                .when()
+                .post("/v1/workorders/{workorderId}/technician", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(400)
+                // The reason is surfaced in the body, not an empty 400.
+                .body("message", org.hamcrest.Matchers.containsString("Cannot assign technician"));
+
+        assertThat(assignmentRepository.findByWorkorder_IdOrderByAssignedAtDesc(workorderId))
+                .isEmpty();
     }
 
     @Test
@@ -568,6 +605,16 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
     /**
      * Seed a COMPLETED workorder for testing invalid state transitions.
      */
+    private UUID seedDraftWorkorder() {
+        UUID workorderId = seedApprovedWorkorder();
+
+        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+        workorder.setStatus(WorkorderStatus.DRAFT);
+        workorder = workorderRepository.save(workorder);
+
+        return workorder.getId();
+    }
+
     private UUID seedCompletedWorkorder() {
         UUID workorderId = seedApprovedWorkorder();
 
