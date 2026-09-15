@@ -37,6 +37,15 @@ import org.jspecify.annotations.Nullable;
  *     more than one, and the first element is not privileged
  * @param promisedAt the time the vehicle is promised back to the customer
  * @param scheduledDate the day the work is scheduled for (owner's {@code scheduled_date})
+ * @param workStartedAt when work actually began on the aggregate (owner's
+ *     {@code work_started_at}, written once by {@code startWork}), null while the job has not
+ *     started. This is the <em>actual</em> start; a consumer must never confuse it with a
+ *     planned or scheduled time.
+ * @param completedAt when the workorder actually completed (owner's {@code completed_at},
+ *     written by the state machine), null while the job is still open. Together with
+ *     {@code workStartedAt} this is the actual window the job occupied its resource for.
+ * @param expectedEndAt the owner's projection of when a running job will finish — see the note
+ *     below; null in every fact published today
  *
  * <p>{@code vehicleId} and the {@code services} list plus the extended {@code PartLine} fields
  * (description, unitPrice, lineTotal, photoEvidenceUrl) are additive within schema v1
@@ -56,6 +65,22 @@ import org.jspecify.annotations.Nullable;
  * {@code Workorder} aggregate has no promise-time field, so there is nothing to snapshot. The
  * field is declared here because it is part of the contract consumers sort on; it starts carrying
  * a value the day pos-workorder grows the column, with no consumer change.
+ *
+ * <p>The actual-time block — {@code workStartedAt}, {@code completedAt}, {@code expectedEndAt} —
+ * is additive within schema v1 (ADR-0044 §3, #2021). It exists so pos-shop-manager can show the
+ * promise against the reality on a dispatch board: the appointment's own {@code startAt}/
+ * {@code endAt} stay the <em>planned</em> window, and these carry the <em>actual</em> one. The
+ * appointment's actual window is the workorder aggregate's, not a roll-up of per-technician
+ * {@code work_session} rows, which overlap and are per task (#2021 F4); session detail stays in
+ * pos-workorder.
+ *
+ * <p><strong>{@code expectedEndAt} is null in every fact published today</strong>, for the same
+ * reason as {@code promisedAt}: a projected finish for a running job needs estimated remaining
+ * labour, which is ADR-0058/ADR-0059 territory and both are PROPOSED, not accepted. The slot is
+ * declared so the contract is stable when that lands. A consumer must <strong>not</strong>
+ * synthesise it from {@code now()}: "N minutes over planned" is derivable from
+ * {@code workStartedAt}, the appointment's planned end and the status, and a guessed projection
+ * would be indistinguishable from a known one.
  */
 public record WorkorderUpdatedV1(
         @NonNull UUID workorderId,
@@ -74,7 +99,10 @@ public record WorkorderUpdatedV1(
         @Nullable String resourceType,
         @Nullable List<UUID> mechanicIds,
         @Nullable Instant promisedAt,
-        @Nullable LocalDate scheduledDate) {
+        @Nullable LocalDate scheduledDate,
+        @Nullable Instant workStartedAt,
+        @Nullable Instant completedAt,
+        @Nullable Instant expectedEndAt) {
 
     public static final String EVENT_TYPE = "workorder.workorder.updated";
     public static final int SCHEMA_VERSION = 1;
@@ -223,6 +251,51 @@ public record WorkorderUpdatedV1(
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    /** Pre-#2021 arity (no actual-time block). */
+    public WorkorderUpdatedV1(
+            @NonNull UUID workorderId,
+            @Nullable String workorderNumber,
+            @Nullable String status,
+            @Nullable UUID shopId,
+            @Nullable UUID customerId,
+            @Nullable UUID vehicleId,
+            @Nullable UUID invoiceId,
+            @Nullable List<PartLine> parts,
+            @Nullable List<ServiceLine> services,
+            @Nullable Instant createdAt,
+            @Nullable Instant updatedAt,
+            @Nullable UUID locationId,
+            @Nullable UUID resourceId,
+            @Nullable String resourceType,
+            @Nullable List<UUID> mechanicIds,
+            @Nullable Instant promisedAt,
+            @Nullable LocalDate scheduledDate) {
+        this(
+                workorderId,
+                workorderNumber,
+                status,
+                shopId,
+                customerId,
+                vehicleId,
+                invoiceId,
+                parts,
+                services,
+                createdAt,
+                updatedAt,
+                locationId,
+                resourceId,
+                resourceType,
+                mechanicIds,
+                promisedAt,
+                scheduledDate,
                 null,
                 null,
                 null);

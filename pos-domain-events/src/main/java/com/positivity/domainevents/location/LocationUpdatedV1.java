@@ -1,6 +1,9 @@
 package com.positivity.domainevents.location;
 
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -38,6 +41,17 @@ import org.jspecify.annotations.Nullable;
  * @param parents typed parent edges of this location in the owner's hierarchy (issue #892 —
  *     consumers rebuild descendant queries over the replica; null on events emitted before
  *     this field existed, empty when the location has no parents)
+ * @param operatingHours the location's weekly opening windows, at most one per day-of-week and
+ *     sorted by {@link DayOfWeek} ordinal (issue #2023). A day with no entry is closed.
+ *     {@code null} means <em>not configured</em> — which is not the same fact as an empty list,
+ *     meaning <em>configured as closed every day</em> (DECISION-LOCATION-004). Also null on
+ *     events emitted before this field existed.
+ * @param holidayClosures dated closures, sorted by date (issue #2023). Same null-versus-empty
+ *     distinction as {@code operatingHours} (DECISION-LOCATION-005).
+ * @param checkInBufferMinutes minutes reserved before an appointment for check-in, null when
+ *     not configured
+ * @param cleanupBufferMinutes minutes reserved after an appointment for cleanup, null when not
+ *     configured
  * @param createdAt owner row creation timestamp
  * @param updatedAt owner row last-update timestamp
  */
@@ -59,6 +73,10 @@ public record LocationUpdatedV1(
         @Nullable UUID defaultStagingLocationId,
         @Nullable UUID defaultQuarantineLocationId,
         @Nullable List<ParentRef> parents,
+        @Nullable List<OperatingHoursEntry> operatingHours,
+        @Nullable List<HolidayClosure> holidayClosures,
+        @Nullable Integer checkInBufferMinutes,
+        @Nullable Integer cleanupBufferMinutes,
         @Nullable Instant createdAt,
         @Nullable Instant updatedAt) {
 
@@ -72,6 +90,48 @@ public record LocationUpdatedV1(
      * @param parentType the owner's {@code ParentType} name, e.g. {@code PHYSICAL}
      */
     public record ParentRef(@NonNull UUID parentId, @NonNull String parentType) {}
+
+    /**
+     * One weekly opening window.
+     *
+     * <p>{@code dayOfWeek} is the {@link DayOfWeek} enum rather than a string so the contract
+     * itself forbids the {@code "Monday"} / {@code "MONDAY"} / {@code "Mon"} drift the owner's
+     * write path still permits (issue #2020 F1). The publisher canonicalizes on the way out and
+     * fails loudly on a value it cannot parse rather than dropping the day.
+     *
+     * <p>The stored shape is one window per day: no split shifts and no overnight ranges.
+     *
+     * @param dayOfWeek the day this window applies to
+     * @param openTime local opening time in the location's {@code timezone}
+     * @param closeTime local closing time in the location's {@code timezone}, after {@code openTime}
+     */
+    public record OperatingHoursEntry(
+            @NonNull DayOfWeek dayOfWeek,
+            @Nullable LocalTime openTime,
+            @Nullable LocalTime closeTime) {
+
+        public OperatingHoursEntry {
+            if (dayOfWeek == null) {
+                throw new IllegalArgumentException("dayOfWeek must not be null");
+            }
+        }
+    }
+
+    /**
+     * One dated closure.
+     *
+     * @param date the closed date
+     * @param reason why the location is closed, null when none was recorded
+     */
+    public record HolidayClosure(
+            @NonNull LocalDate date, @Nullable String reason) {
+
+        public HolidayClosure {
+            if (date == null) {
+                throw new IllegalArgumentException("date must not be null");
+            }
+        }
+    }
 
     public LocationUpdatedV1 {
         if (locationId == null) {
