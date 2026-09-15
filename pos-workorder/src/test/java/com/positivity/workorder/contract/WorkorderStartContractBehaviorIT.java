@@ -126,7 +126,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
 
         // Verify transition was recorded
         List<WorkorderStateTransition> transitions =
-                transitionRepository.findByWorkorder_IdOrderByTransitionedAtDesc(workorderId);
+                transitionRepository.findByWorkorder_IdOrderByTransitionedAtDescIdDesc(workorderId);
         assertThat(transitions).isNotEmpty();
 
         // Find the transition to WORK_IN_PROGRESS

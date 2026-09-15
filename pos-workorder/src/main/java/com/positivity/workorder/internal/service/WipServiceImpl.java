@@ -107,7 +107,7 @@ public class WipServiceImpl implements WipService {
                 .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
         List<WorkorderStateTransition> transitions =
-                stateTransitionRepository.findByWorkorder_IdOrderByTransitionedAtDesc(workorderId);
+                stateTransitionRepository.findByWorkorder_IdOrderByTransitionedAtDescIdDesc(workorderId);
         List<WorkorderStatusHistoryEntry> history = transitions.stream()
                 .map(t -> WorkorderStatusHistoryEntry.builder()
                         .status(t.getToStatus())

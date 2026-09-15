@@ -552,7 +552,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
         // And a status history row records the reversion
         List<WorkorderStateTransition> transitions =
-                transitionRepository.findByWorkorder_IdOrderByTransitionedAtDesc(workorderId);
+                transitionRepository.findByWorkorder_IdOrderByTransitionedAtDescIdDesc(workorderId);
         WorkorderStateTransition revertTransition = transitions.stream()
                 .filter(t ->
                         t.getFromStatus() == WorkorderStatus.ASSIGNED && t.getToStatus() == WorkorderStatus.APPROVED)

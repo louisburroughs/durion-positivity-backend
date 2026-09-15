@@ -720,7 +720,7 @@ public class WorkorderStateMachine {
     }
 
     public List<WorkorderStateTransition> getTransitionHistory(UUID workorderId) {
-        return transitionRepository.findByWorkorder_IdOrderByTransitionedAtDesc(workorderId);
+        return transitionRepository.findByWorkorder_IdOrderByTransitionedAtDescIdDesc(workorderId);
     }
 
     public List<WorkorderSnapshot> getSnapshotHistory(UUID workorderId) {
