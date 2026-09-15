@@ -1,18 +1,23 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.workorder.internal.dto.TechnicianAssignmentRecord;
+import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotFoundException;
+import com.positivity.workorder.internal.exception.TechnicianNotStaffedAtSiteException;
 import com.positivity.workorder.internal.exception.WorkorderClosedException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
+import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -57,6 +62,8 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
     private final WorkorderRepository workorderRepository;
     private final WorkorderStateMachine stateMachine;
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
+    private final PeopleAvailabilityLocalService peopleAvailabilityLocalService;
+    private final ExtMobileUnitReplicaRepository extMobileUnitReplicaRepository;
 
     /**
      * Assign a technician to a workorder.
@@ -94,6 +101,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         // a canned reason and nobody was told. Changing hands is reassignTechnician, which takes a
         // reason; here a held workorder is a 409 naming its current technician.
         requireKnownTechnician(technicianId);
+        requireStaffedAtSite(technicianId, workorder);
 
         Optional<TechnicianAssignment> existingAssignment =
                 assignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId);
@@ -166,6 +174,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         // (#1985): a caller that believed the workorder was held and gets a 200 has learned nothing
         // about its view being stale, which is the same ambiguity assign's new 409 removes.
         requireKnownTechnician(newTechnicianId);
+        requireStaffedAtSite(newTechnicianId, workorder);
 
         TechnicianAssignment currentAssignment = assignmentRepository
                 .findCurrentForUpdate(workorderId)
@@ -314,13 +323,60 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
      * addresses, and the request is well-formed — it names someone who does not exist here.
      *
      * <p>This deliberately checks existence only. Whether a technician may hold a workorder at a
-     * site they are not staffed at is the staffing question #1985 left open and #1990 carries; it
-     * needs a decision before it can be enforced, and guessing one here would be worse than the gap.
+     * site they are not staffed at is a separate question, answered by {@link #requireStaffedAtSite}
+     * (#1990): a technician must be staffed at the workorder's site, with no override.
      */
     private void requireKnownTechnician(@NonNull UUID technicianId) {
         if (!extPersonReplicaRepository.existsById(technicianId)) {
             throw new TechnicianNotFoundException(technicianId);
         }
+    }
+
+    /**
+     * Refuse a technician who is not staffed at the workorder's site (#1990). There is no override.
+     *
+     * <p>pos-people owns the technician-to-site staffing relation; it is read only from the
+     * {@code ext_people_staffing_assignment} replica (ADR-0044 §6), never by a synchronous call into
+     * that service. {@link PeopleAvailabilityLocalService#isEligibleAtSite} is the single definition
+     * of "staffed here": ACTIVE, effective today, {@code is_primary} not considered, role not
+     * filtered on — and a technician with no ACTIVE staffing rows at all is let through, because
+     * replica lag, bootstrap and a stalled DLQ must not take a shop offline.
+     *
+     * @param technicianId the technician being assigned or reassigned
+     * @param workorder    the workorder they would hold, used to resolve the site to check against
+     */
+    private void requireStaffedAtSite(@NonNull UUID technicianId, @NonNull Workorder workorder) {
+        UUID siteId = resolveSiteId(workorder);
+        if (siteId == null) {
+            // Nothing to compare against — a workorder with no locationId and no mobile-unit
+            // position has no site this check could apply to.
+            return;
+        }
+        if (!peopleAvailabilityLocalService.isEligibleAtSite(technicianId, siteId, LocalDate.now(clock))) {
+            throw new TechnicianNotStaffedAtSiteException(technicianId, siteId);
+        }
+    }
+
+    /**
+     * The site a technician must be staffed at to hold this workorder (#1990).
+     *
+     * <p>For {@link ResourceType#MOBILE_UNIT} the site is the unit's own
+     * {@code ExtMobileUnitReplica.baseLocationId}; for {@link ResourceType#BAY}, {@link
+     * ResourceType#HOLD} and a workorder with no position yet, it is the workorder's own {@code
+     * locationId}. {@link ServicePositionServiceImpl#requireSameSite} forces the two to agree today,
+     * so this is currently a no-op that always returns the workorder's {@code locationId} — written
+     * this way anyway so the check keeps working, rather than silently drifting, the day a mobile
+     * workorder carries the customer's site instead of the unit's.
+     */
+    @Nullable
+    private UUID resolveSiteId(@NonNull Workorder workorder) {
+        if (workorder.getResourceType() == ResourceType.MOBILE_UNIT && workorder.getResourceId() != null) {
+            return extMobileUnitReplicaRepository
+                    .findById(workorder.getResourceId())
+                    .map(ExtMobileUnitReplica::getBaseLocationId)
+                    .orElse(workorder.getLocationId());
+        }
+        return workorder.getLocationId();
     }
 
     /**

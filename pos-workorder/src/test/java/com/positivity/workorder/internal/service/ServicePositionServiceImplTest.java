@@ -484,6 +484,10 @@ class ServicePositionServiceImplTest {
             assertThat(closed.getValue().getCurrent()).isFalse();
             assertThat(closed.getValue().getReason()).isEqualTo("Vehicle moved to the lot");
             verify(workorderFactPublisher).markChanged(WORKORDER_ID);
+            // #1990: releasing a position stays independent of who holds the workorder — the
+            // technician assignment is neither touched nor cleared by freeing a bay or mobile unit.
+            verify(technicianAssignmentRepository, never()).save(any());
+            verify(technicianAssignmentRepository, never()).saveAndFlush(any());
         }
 
         @Test
