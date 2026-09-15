@@ -14,20 +14,27 @@ import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse;
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse.BreakInfo;
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse.PersonAvailability;
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse.PtoBlock;
+import com.positivity.workorder.internal.dto.WorkorderSummary;
 import com.positivity.workorder.internal.entity.ExtBayReplica;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
+import com.positivity.workorder.internal.entity.ExtVehicleReplica;
+import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtVehicleReplicaRepository;
+import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -70,6 +77,13 @@ class DashboardServiceTest {
 
     @Mock
     private ExtMobileUnitReplicaRepository extMobileUnitReplicaRepository;
+
+    // Both answer empty unless a case stubs them: no current technician rows, no replicated vehicles.
+    @Mock
+    private ExtVehicleReplicaRepository extVehicleReplicaRepository;
+
+    @Mock
+    private TechnicianAssignmentRepository technicianAssignmentRepository;
 
     @Mock
     private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
@@ -788,6 +802,139 @@ class DashboardServiceTest {
             assertThat(m.getPersonId()).isEqualTo("MECH-030");
             assertThat(m.getAssignedWorkorderId()).isEqualTo(workorderId.toString());
         });
+    }
+
+    // -----------------------------------------------------------------------
+    // technician_assignment names the mechanic alongside mechanic_ids
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("A current technician_assignment names the mechanic when mechanic_ids is empty")
+    void getDashboard_currentTechnicianAssignment_populatesMechanicAndSummary() {
+        // Arrange — the technician assign API writes technician_assignment only, never mechanic_ids
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-00000000a001");
+        UUID technicianId = UUID.fromString("00000000-0000-0000-0000-00000000b001");
+        Workorder wo = Workorder.builder()
+                .id(workorderId)
+                .locationId(LOCATION_UUID)
+                .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .build();
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        when(technicianAssignmentRepository.findByWorkorder_IdInAndCurrentTrue(Set.of(workorderId)))
+                .thenReturn(List.of(currentAssignment(wo, technicianId)));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any()))
+                .thenReturn(PeopleAvailabilityResponse.builder()
+                        .people(List.of(personAvailability(technicianId.toString(), "Dana", "AVAILABLE")))
+                        .build());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getMechanics())
+                .singleElement()
+                .satisfies(m -> assertThat(m.getAssignedWorkorderId()).isEqualTo(workorderId.toString()));
+        assertThat(response.getWorkorders())
+                .singleElement()
+                .satisfies(s -> assertThat(s.getAssignedMechanicId()).isEqualTo(technicianId.toString()));
+    }
+
+    @Test
+    @DisplayName("A technician assigned on one workorder and in mechanic_ids on another is double-booked")
+    void getDashboard_technicianAssignmentAndMechanicIdsOnDifferentWorkorders_flagsDoubleBooking() {
+        // Arrange
+        UUID technicianId = UUID.fromString("00000000-0000-0000-0000-00000000b002");
+        Workorder assigned = Workorder.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-00000000a002"))
+                .locationId(LOCATION_UUID)
+                .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .build();
+        Workorder legacy =
+                buildWorkorder(UUID.fromString("00000000-0000-0000-0000-00000000a003"), technicianId.toString(), null);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(assigned, legacy));
+        when(technicianAssignmentRepository.findByWorkorder_IdInAndCurrentTrue(any()))
+                .thenReturn(List.of(currentAssignment(assigned, technicianId)));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getConflicts()).anySatisfy(c -> {
+            assertThat(c.getConflictType()).isEqualTo("DOUBLE_BOOKED_MECHANIC");
+            assertThat(c.getAffectedResourceId()).isEqualTo(technicianId.toString());
+        });
+    }
+
+    @Test
+    @DisplayName("A technician named by both sources on the same workorder is counted once")
+    void getDashboard_technicianInBothSourcesOnSameWorkorder_noDoubleBooking() {
+        // Arrange
+        UUID technicianId = UUID.fromString("00000000-0000-0000-0000-00000000b003");
+        Workorder wo =
+                buildWorkorder(UUID.fromString("00000000-0000-0000-0000-00000000a004"), technicianId.toString(), null);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        when(technicianAssignmentRepository.findByWorkorder_IdInAndCurrentTrue(any()))
+                .thenReturn(List.of(currentAssignment(wo, technicianId)));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getConflicts()).noneMatch(c -> "DOUBLE_BOOKED_MECHANIC".equals(c.getConflictType()));
+    }
+
+    // -----------------------------------------------------------------------
+    // vehicleDescription comes from the ext_vehicle replica
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Summary vehicleDescription names the vehicle from the ext_vehicle replica")
+    void getDashboard_vehicleOnReplica_populatesVehicleDescription() {
+        // Arrange
+        UUID describedVehicleId = UUID.fromString("00000000-0000-0000-0000-00000000c001");
+        UUID blankVehicleId = UUID.fromString("00000000-0000-0000-0000-00000000c002");
+        Workorder described = Workorder.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-00000000a005"))
+                .locationId(LOCATION_UUID)
+                .vehicleId(describedVehicleId)
+                .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .build();
+        Workorder blank = Workorder.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-00000000a006"))
+                .locationId(LOCATION_UUID)
+                .vehicleId(blankVehicleId)
+                .status(WorkorderStatus.DRAFT)
+                .build();
+        Workorder noVehicle = Workorder.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-00000000a007"))
+                .locationId(LOCATION_UUID)
+                .status(WorkorderStatus.DRAFT)
+                .build();
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                .thenReturn(List.of(described, blank, noVehicle));
+        when(extVehicleReplicaRepository.findAllById(Set.of(describedVehicleId, blankVehicleId)))
+                .thenReturn(List.of(
+                        ExtVehicleReplica.builder()
+                                .vehicleId(describedVehicleId)
+                                .unitNumber("T-12")
+                                .licensePlate(" ABC123 ")
+                                .vin("1HGCM82633A004352")
+                                .build(),
+                        ExtVehicleReplica.builder()
+                                .vehicleId(blankVehicleId)
+                                .unitNumber(" ")
+                                .build()));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getWorkorders())
+                .extracting(WorkorderSummary::getVehicleDescription)
+                .containsExactly("T-12 · ABC123 · 1HGCM82633A004352", null, null);
     }
 
     // -----------------------------------------------------------------------
@@ -1718,6 +1865,16 @@ class DashboardServiceTest {
                 .mechanicIds("[\"" + mechanicId + "\"]")
                 .resourceId(resourceId)
                 .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .build();
+    }
+
+    private static TechnicianAssignment currentAssignment(Workorder workorder, UUID technicianId) {
+        return TechnicianAssignment.builder()
+                .workorder(workorder)
+                .technicianId(technicianId)
+                .assignedAt(LocalDateTime.ofInstant(TEST_CLOCK.instant(), ZoneOffset.UTC))
+                .assignedBy("dispatcher")
+                .current(true)
                 .build();
     }
 

@@ -147,6 +147,7 @@ public class WorkorderServiceImpl implements WorkorderService {
                 .locationId(resolvedLocationId)
                 .status(WorkorderStatus.DRAFT)
                 .crmPartyId(estimate != null ? estimate.getCrmPartyId() : null)
+                .vehicleId(vehicleIdOf(estimate))
                 .crmVehicleId(estimate != null ? estimate.getCrmVehicleId() : null)
                 .crmContactIds(
                         estimate != null && estimate.getCrmContactIds() != null
@@ -154,6 +155,31 @@ public class WorkorderServiceImpl implements WorkorderService {
                                 : new ArrayList<>())
                 .build();
         return createWorkorderInternal(workorder);
+    }
+
+    /**
+     * The vehicle a workorder created from this estimate works on: the estimate's {@code vehicleId},
+     * else its {@code crmVehicleId}, which carries the same pos-vehicle-inventory id. Copying only
+     * the CRM field left {@code vehicle_id} null, and every read keyed on it — the detail view, the
+     * shop dashboard's registry lookup — reported the vehicle as unknown. A CRM value that is not a
+     * UUID names nothing in the registry and yields {@code null}.
+     */
+    private static UUID vehicleIdOf(Estimate estimate) {
+        if (estimate == null) {
+            return null;
+        }
+        if (estimate.getVehicleId() != null) {
+            return estimate.getVehicleId();
+        }
+        String crmVehicleId = estimate.getCrmVehicleId();
+        if (crmVehicleId == null || crmVehicleId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(crmVehicleId.strip());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /**

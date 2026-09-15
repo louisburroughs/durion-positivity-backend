@@ -181,6 +181,71 @@ class WorkorderServiceImplCrmPropagationTest {
         assertThat(workorderCaptor.getValue().getCrmVehicleId()).isEqualTo(CRM_VEHICLE_ID);
     }
 
+    // =====================================================================
+    // vehicleId — the estimate's vehicleId, else its UUID-shaped crmVehicleId
+    // =====================================================================
+
+    @Test
+    @DisplayName("createWorkorder(estimateId, customerId) — estimate vehicleId wins over crmVehicleId")
+    void createWorkorder_withEstimateVehicleId_workorderHasEstimateVehicleId() {
+        UUID vehicleId = UUID.fromString("30000000-0000-0000-0000-000000000003");
+        Estimate estimate = buildEstimateWithVehicle(vehicleId, "40000000-0000-0000-0000-000000000004");
+
+        assertThat(createFromEstimate(estimate).getVehicleId()).isEqualTo(vehicleId);
+    }
+
+    @Test
+    @DisplayName("createWorkorder(estimateId, customerId) — UUID-shaped crmVehicleId fills a missing vehicleId")
+    void createWorkorder_withOnlyCrmVehicleId_workorderHasVehicleIdFromCrmVehicleId() {
+        Estimate estimate = buildEstimateWithVehicle(null, " 40000000-0000-0000-0000-000000000004 ");
+
+        assertThat(createFromEstimate(estimate).getVehicleId())
+                .isEqualTo(UUID.fromString("40000000-0000-0000-0000-000000000004"));
+    }
+
+    @Test
+    @DisplayName("createWorkorder(estimateId, customerId) — a crmVehicleId that is not a UUID leaves vehicleId null")
+    void createWorkorder_withNonUuidCrmVehicleId_workorderHasNullVehicleId() {
+        Estimate estimate = buildEstimateWithVehicle(null, CRM_VEHICLE_ID);
+
+        Workorder created = createFromEstimate(estimate);
+
+        assertThat(created.getVehicleId()).isNull();
+        assertThat(created.getCrmVehicleId()).isEqualTo(CRM_VEHICLE_ID);
+    }
+
+    @Test
+    @DisplayName("createWorkorder(null, customerId) — workorder has null vehicleId")
+    void createWorkorder_nullEstimateId_workorderHasNullVehicleId() {
+        ArgumentCaptor<Workorder> workorderCaptor = ArgumentCaptor.forClass(Workorder.class);
+        when(workorderRepository.save(workorderCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+        workorderService.createWorkorder(null, CUSTOMER_ID);
+
+        assertThat(workorderCaptor.getValue().getVehicleId()).isNull();
+    }
+
+    private Workorder createFromEstimate(Estimate estimate) {
+        when(estimateRepository.findById(ESTIMATE_ID)).thenReturn(Optional.of(estimate));
+        ArgumentCaptor<Workorder> workorderCaptor = ArgumentCaptor.forClass(Workorder.class);
+        when(workorderRepository.save(workorderCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+        workorderService.createWorkorder(ESTIMATE_ID, CUSTOMER_ID);
+
+        return workorderCaptor.getValue();
+    }
+
+    private static Estimate buildEstimateWithVehicle(UUID vehicleId, String crmVehicleId) {
+        return Estimate.builder()
+                .id(ESTIMATE_ID)
+                .customerId(CUSTOMER_ID)
+                .vehicleId(vehicleId)
+                .crmPartyId(CRM_PARTY_ID)
+                .crmVehicleId(crmVehicleId)
+                .crmContactIds(List.of(CRM_CONTACT_ID))
+                .build();
+    }
+
     @Test
     @DisplayName("createWorkorder(estimateId, customerId) — workorder receives crmContactIds from estimate")
     void createWorkorder_withEstimateId_workorderHasCrmContactIdsFromEstimate() {
