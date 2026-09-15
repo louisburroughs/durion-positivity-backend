@@ -500,3 +500,33 @@ WIXF-XP50005F,,WIX XP Series Oil Filter XP50005,,Filters,Oil Filters,,XP50005F,E
 WIXF-XP50006F,,WIX XP Series Oil Filter XP50006,,Filters,Oil Filters,,XP50006F,EA,WIX,WIX Filters,US,PART
 WIXF-XP51394,,WIX Oil Filter XP51394,,Filters,Oil Filters,,XP51394,EA,WIX,WIX Filters,US,PART
 WIXF-XP57356,,WIX Oil Filter XP57356,,Filters,Oil Filters,,XP57356,EA,WIX,WIX Filters,US,PART
+OF-001,,Oil Filter 1,Oil Filter 1 seeded by sdk-seeder for filters workflows.,Filters,Oil Filters,,OFM-001,EA,,,,PART
+OF-002,,Oil Filter 2,Oil Filter 2 seeded by sdk-seeder for filters workflows.,Filters,Oil Filters,,OFM-002,EA,,,,PART
+OF-003,,Oil Filter 3,Oil Filter 3 seeded by sdk-seeder for filters workflows.,Filters,Oil Filters,,OFM-003,EA,,,,PART
+OF-004,,Oil Filter 4,Oil Filter 4 seeded by sdk-seeder for filters workflows.,Filters,Oil Filters,,OFM-004,EA,,,,PART
+OF-005,,Oil Filter 5,Oil Filter 5 seeded by sdk-seeder for filters workflows.,Filters,Oil Filters,,OFM-005,EA,,,,PART
+BP-001,,Brake Pad Set 1,Brake Pad Set 1 seeded by sdk-seeder for brakes workflows.,Brake System,Brake Pads & Shoes,,BPM-001,EA,,,,PART
+BP-002,,Brake Pad Set 2,Brake Pad Set 2 seeded by sdk-seeder for brakes workflows.,Brake System,Brake Pads & Shoes,,BPM-002,EA,,,,PART
+BP-003,,Brake Pad Set 3,Brake Pad Set 3 seeded by sdk-seeder for brakes workflows.,Brake System,Brake Pads & Shoes,,BPM-003,EA,,,,PART
+BP-004,,Brake Pad Set 4,Brake Pad Set 4 seeded by sdk-seeder for brakes workflows.,Brake System,Brake Pads & Shoes,,BPM-004,EA,,,,PART
+BP-005,,Brake Pad Set 5,Brake Pad Set 5 seeded by sdk-seeder for brakes workflows.,Brake System,Brake Pads & Shoes,,BPM-005,EA,,,,PART
+BP-006,,Brake Pad Set 6,Brake Pad Set 6 seeded by sdk-seeder for brakes workflows.,Brake System,Brake Pads & Shoes,,BPM-006,EA,,,,PART
+BAT-001,,Battery 1,Battery 1 seeded by sdk-seeder for electrical workflows.,Electrical System,Batteries,,BATM-001,EA,,,,PART
+BAT-002,,Battery 2,Battery 2 seeded by sdk-seeder for electrical workflows.,Electrical System,Batteries,,BATM-002,EA,,,,PART
+BAT-003,,Battery 3,Battery 3 seeded by sdk-seeder for electrical workflows.,Electrical System,Batteries,,BATM-003,EA,,,,PART
+AF-001,,Engine Air Filter 1,Engine Air Filter 1 seeded by sdk-seeder for filters workflows.,Filters,Air Filters,,AFM-001,EA,,,,PART
+AF-002,,Engine Air Filter 2,Engine Air Filter 2 seeded by sdk-seeder for filters workflows.,Filters,Air Filters,,AFM-002,EA,,,,PART
+AF-003,,Engine Air Filter 3,Engine Air Filter 3 seeded by sdk-seeder for filters workflows.,Filters,Air Filters,,AFM-003,EA,,,,PART
+AF-004,,Engine Air Filter 4,Engine Air Filter 4 seeded by sdk-seeder for filters workflows.,Filters,Air Filters,,AFM-004,EA,,,,PART
+WB-001,,Wiper Blade 1,Wiper Blade 1 seeded by sdk-seeder for visibility workflows.,Body & Lighting,Wiper Blades,,WBM-001,EA,,,,PART
+WB-002,,Wiper Blade 2,Wiper Blade 2 seeded by sdk-seeder for visibility workflows.,Body & Lighting,Wiper Blades,,WBM-002,EA,,,,PART
+WB-003,,Wiper Blade 3,Wiper Blade 3 seeded by sdk-seeder for visibility workflows.,Body & Lighting,Wiper Blades,,WBM-003,EA,,,,PART
+WB-004,,Wiper Blade 4,Wiper Blade 4 seeded by sdk-seeder for visibility workflows.,Body & Lighting,Wiper Blades,,WBM-004,EA,,,,PART
+SP-001,,Spark Plug 1,Spark Plug 1 seeded by sdk-seeder for ignition workflows.,Engine Parts,Spark Plugs & Ignition,,SPM-001,EA,,,,PART
+SP-002,,Spark Plug 2,Spark Plug 2 seeded by sdk-seeder for ignition workflows.,Engine Parts,Spark Plugs & Ignition,,SPM-002,EA,,,,PART
+SP-003,,Spark Plug 3,Spark Plug 3 seeded by sdk-seeder for ignition workflows.,Engine Parts,Spark Plugs & Ignition,,SPM-003,EA,,,,PART
+SP-004,,Spark Plug 4,Spark Plug 4 seeded by sdk-seeder for ignition workflows.,Engine Parts,Spark Plugs & Ignition,,SPM-004,EA,,,,PART
+CAF-001,,Cabin Air Filter 1,Cabin Air Filter 1 seeded by sdk-seeder for filters workflows.,Filters,Cabin Air Filters,,CAFM-001,EA,,,,PART
+CAF-002,,Cabin Air Filter 2,Cabin Air Filter 2 seeded by sdk-seeder for filters workflows.,Filters,Cabin Air Filters,,CAFM-002,EA,,,,PART
+CAF-003,,Cabin Air Filter 3,Cabin Air Filter 3 seeded by sdk-seeder for filters workflows.,Filters,Cabin Air Filters,,CAFM-003,EA,,,,PART
+CAF-004,,Cabin Air Filter 4,Cabin Air Filter 4 seeded by sdk-seeder for filters workflows.,Filters,Cabin Air Filters,,CAFM-004,EA,,,,PART

@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Issue #1536 gave {@code subcategory} a mandatory parent {@code category_id}, which makes a product's
  * category a function of its subcategory. This class is the home for that seed/fixture consistency check
- * too: the declared parents, the 500 seeded product rows, and the 501 alpha CSV rows (the fixture also
+ * too: the declared parents, the 500 seeded product rows, and the 531 alpha CSV rows (the fixture also
  * carries WIXF-51394, added in #1554 for the on-hand pack) must all agree, or the
  * seed itself would produce exactly the contradictory pair the issue removes.
  */
@@ -147,7 +147,7 @@ class AlphaFixtureCategoryNamesResolveTest {
             }
         }
 
-        assertThat(dataRows).as("alpha fixture product rows").isEqualTo(501);
+        assertThat(dataRows).as("alpha fixture product rows").isEqualTo(531);
         assertThat(unresolvedCategories)
                 .as("products.csv categoryName values with no matching seeded category — these rows would now"
                         + " fail bulk ingest with CATALOG_INGEST_FAILED")
@@ -278,7 +278,7 @@ class AlphaFixtureCategoryNamesResolveTest {
             }
         }
 
-        assertThat(checkedPairs).as("alpha fixture rows carrying both names").isEqualTo(501);
+        assertThat(checkedPairs).as("alpha fixture rows carrying both names").isEqualTo(531);
         assertThat(mismatches)
                 .as("products.csv rows whose categoryName contradicts the subcategoryName's declared parent —"
                         + " these rows would now fail bulk ingest with CATALOG_INGEST_FAILED")
