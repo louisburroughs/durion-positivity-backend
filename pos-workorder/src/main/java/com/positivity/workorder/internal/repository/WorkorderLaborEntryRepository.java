@@ -2,9 +2,11 @@ package com.positivity.workorder.internal.repository;
 
 import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -28,6 +30,24 @@ public interface WorkorderLaborEntryRepository extends JpaRepository<WorkorderLa
      */
     @NonNull
     List<WorkorderLaborEntry> findByWorkorder_IdOrderByStartTimeDesc(@NonNull UUID workorderId);
+
+    /** Hours worked on one workorder's service lines. */
+    interface WorkorderLaborHours {
+        UUID getWorkorderId();
+
+        BigDecimal getHours();
+    }
+
+    /**
+     * Hours worked per listed workorder, summed over entries on its service lines (#2025) — the same
+     * entries the workorder detail view totals line by line. One query covers a dashboard roster.
+     * A workorder with no entries has no row.
+     */
+    @Query("SELECT e.workorderService.workOrder.id AS workorderId, SUM(e.hoursWorked) AS hours"
+            + " FROM WorkorderLaborEntry e WHERE e.workorderService.workOrder.id IN :workorderIds"
+            + " GROUP BY e.workorderService.workOrder.id")
+    @NonNull
+    List<WorkorderLaborHours> sumHoursByWorkorderIds(@Param("workorderIds") @NonNull Set<UUID> workorderIds);
 
     /**
      * Find all labor entries for a specific service, ordered by start time

@@ -16,16 +16,21 @@ import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse.PersonAv
 import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse.PtoBlock;
 import com.positivity.workorder.internal.dto.WorkorderSummary;
 import com.positivity.workorder.internal.entity.ExtBayReplica;
+import com.positivity.workorder.internal.entity.ExtCustomerPartyReplica;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.ExtVehicleReplica;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
+import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtVehicleReplicaRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
+import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -79,6 +84,16 @@ class DashboardServiceTest {
     // Both answer empty unless a case stubs them: no current technician rows, no replicated vehicles.
     @Mock
     private ExtVehicleReplicaRepository extVehicleReplicaRepository;
+
+    @Mock
+    private ExtCustomerPartyReplicaRepository extCustomerPartyReplicaRepository;
+
+    // Both answer empty unless a case stubs them: no service lines, no logged hours.
+    @Mock
+    private WorkorderServiceRepository workorderServiceRepository;
+
+    @Mock
+    private WorkorderLaborEntryRepository workorderLaborEntryRepository;
 
     @Mock
     private TechnicianAssignmentRepository technicianAssignmentRepository;
@@ -1026,6 +1041,112 @@ class DashboardServiceTest {
         assertThat(response.getWorkorders())
                 .extracting(WorkorderSummary::getWorkorderNumber)
                 .containsExactly("WO-2026-1042", null);
+    }
+
+    @Test
+    @DisplayName("Summary customerName comes from the ext_customer_party replica")
+    void getDashboard_customerOnReplica_populatesCustomerName() {
+        // Arrange
+        UUID namedCustomer = UUID.fromString("00000000-0000-0000-0000-00000000d001");
+        UUID blankCustomer = UUID.fromString("00000000-0000-0000-0000-00000000d002");
+        UUID unreplicatedCustomer = UUID.fromString("00000000-0000-0000-0000-00000000d003");
+        Workorder named = Workorder.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-00000000a211"))
+                .customerId(namedCustomer)
+                .locationId(LOCATION_UUID)
+                .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .build();
+        Workorder blank = Workorder.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-00000000a212"))
+                .customerId(blankCustomer)
+                .locationId(LOCATION_UUID)
+                .status(WorkorderStatus.DRAFT)
+                .build();
+        Workorder unreplicated = Workorder.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-00000000a213"))
+                .customerId(unreplicatedCustomer)
+                .locationId(LOCATION_UUID)
+                .status(WorkorderStatus.DRAFT)
+                .build();
+        Workorder noCustomer = Workorder.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-00000000a214"))
+                .locationId(LOCATION_UUID)
+                .status(WorkorderStatus.DRAFT)
+                .build();
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                .thenReturn(List.of(named, blank, unreplicated, noCustomer));
+        when(extCustomerPartyReplicaRepository.findAllById(Set.of(namedCustomer, blankCustomer, unreplicatedCustomer)))
+                .thenReturn(List.of(
+                        ExtCustomerPartyReplica.builder()
+                                .partyId(namedCustomer)
+                                .displayName(" Carolina Concrete ")
+                                .build(),
+                        ExtCustomerPartyReplica.builder()
+                                .partyId(blankCustomer)
+                                .displayName(" ")
+                                .build()));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getWorkorders())
+                .extracting(WorkorderSummary::getCustomerName)
+                .containsExactly("Carolina Concrete", null, null, null);
+    }
+
+    // -----------------------------------------------------------------------
+    // Synopsis fields summarise the work on each workorder (#2025)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Summary synopsis counts lines in play, lists lead descriptions and sums logged hours")
+    void getDashboard_workorderWithServiceLines_populatesSynopsis() {
+        // Arrange
+        UUID busyId = UUID.fromString("00000000-0000-0000-0000-00000000a301");
+        UUID quietId = UUID.fromString("00000000-0000-0000-0000-00000000a302");
+        Workorder busy = Workorder.builder()
+                .id(busyId)
+                .locationId(LOCATION_UUID)
+                .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .build();
+        Workorder quiet = Workorder.builder()
+                .id(quietId)
+                .locationId(LOCATION_UUID)
+                .status(WorkorderStatus.DRAFT)
+                .build();
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(busy, quiet));
+        when(workorderServiceRepository.findGlancesByWorkorderIds(Set.of(busyId, quietId)))
+                .thenReturn(List.of(
+                        new ServiceLine(busyId, "Oil Change", WorkorderItemStatus.COMPLETED, false),
+                        new ServiceLine(busyId, "Brake Pads", WorkorderItemStatus.IN_PROGRESS, null),
+                        new ServiceLine(busyId, "Wipers", WorkorderItemStatus.CANCELLED, false),
+                        new ServiceLine(busyId, "Alignment", WorkorderItemStatus.OPEN, true),
+                        new ServiceLine(busyId, " ", WorkorderItemStatus.OPEN, false),
+                        new ServiceLine(busyId, " Tire Rotation ", WorkorderItemStatus.OPEN, false),
+                        new ServiceLine(busyId, "Cabin Filter", WorkorderItemStatus.OPEN, false)));
+        when(workorderLaborEntryRepository.sumHoursByWorkorderIds(Set.of(busyId, quietId)))
+                .thenReturn(List.of(
+                        new LaborHours(busyId, new java.math.BigDecimal("2.5")),
+                        new LaborHours(quietId, java.math.BigDecimal.ZERO)));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert — cancelled and declined lines are out; the blank one counts but is not described
+        WorkorderSummary busySummary = response.getWorkorders().get(0);
+        assertThat(busySummary.getServiceCount()).isEqualTo(5);
+        assertThat(busySummary.getCompletedServiceCount()).isEqualTo(1);
+        assertThat(busySummary.getServiceDescriptions()).containsExactly("Oil Change", "Brake Pads", "Tire Rotation");
+        assertThat(busySummary.getActualLaborHours()).isEqualByComparingTo("2.5");
+
+        WorkorderSummary quietSummary = response.getWorkorders().get(1);
+        assertThat(quietSummary.getServiceCount()).isZero();
+        assertThat(quietSummary.getCompletedServiceCount()).isZero();
+        assertThat(quietSummary.getServiceDescriptions()).isEmpty();
+        assertThat(quietSummary.getActualLaborHours()).isNull();
     }
 
     // -----------------------------------------------------------------------
@@ -2009,6 +2130,42 @@ class DashboardServiceTest {
                 .resourceId(resourceId)
                 .status(WorkorderStatus.WORK_IN_PROGRESS)
                 .build();
+    }
+
+    private record ServiceLine(UUID workorderId, String description, WorkorderItemStatus status, Boolean declined)
+            implements WorkorderServiceRepository.ServiceLineGlance {
+        @Override
+        public UUID getWorkorderId() {
+            return workorderId;
+        }
+
+        @Override
+        public String getDescription() {
+            return description;
+        }
+
+        @Override
+        public WorkorderItemStatus getStatus() {
+            return status;
+        }
+
+        @Override
+        public Boolean getDeclined() {
+            return declined;
+        }
+    }
+
+    private record LaborHours(UUID workorderId, java.math.BigDecimal hours)
+            implements WorkorderLaborEntryRepository.WorkorderLaborHours {
+        @Override
+        public UUID getWorkorderId() {
+            return workorderId;
+        }
+
+        @Override
+        public java.math.BigDecimal getHours() {
+            return hours;
+        }
     }
 
     private static TechnicianAssignmentRepository.CurrentTechnician currentTechnician(

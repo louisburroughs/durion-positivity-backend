@@ -14,17 +14,23 @@ import com.positivity.workorder.internal.dto.PeopleAvailabilityResponse.PtoBlock
 import com.positivity.workorder.internal.dto.PtoEntry;
 import com.positivity.workorder.internal.dto.WorkorderSummary;
 import com.positivity.workorder.internal.entity.ExtBayReplica;
+import com.positivity.workorder.internal.entity.ExtCustomerPartyReplica;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.ExtVehicleReplica;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
+import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtVehicleReplicaRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
+import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -70,13 +76,19 @@ public class DashboardServiceImpl implements DashboardService {
 
     private static final String BLOCKING = "BLOCKING";
 
+    /** Service-line descriptions a summary carries; a card has room for a lead line, not a list. */
+    private static final int MAX_SYNOPSIS_DESCRIPTIONS = 3;
+
     private final Clock clock;
 
     private final WorkorderRepository workorderRepository;
     private final ExtBayReplicaRepository extBayReplicaRepository;
     private final ExtMobileUnitReplicaRepository extMobileUnitReplicaRepository;
     private final ExtVehicleReplicaRepository extVehicleReplicaRepository;
+    private final ExtCustomerPartyReplicaRepository extCustomerPartyReplicaRepository;
     private final TechnicianAssignmentRepository technicianAssignmentRepository;
+    private final WorkorderServiceRepository workorderServiceRepository;
+    private final WorkorderLaborEntryRepository workorderLaborEntryRepository;
     private final PeopleAvailabilityLocalService peopleAvailabilityLocalService;
     private final EstimatedLaborService estimatedLaborService;
     private final ObjectMapper objectMapper;
@@ -117,8 +129,12 @@ public class DashboardServiceImpl implements DashboardService {
         List<Workorder> workorders = mergeRoster(scheduledForDate, resourceHolders);
 
         Map<Workorder, List<String>> mechanicsByWorkorder = assignedMechanics(workorders);
-        List<WorkorderSummary> workorderSummaries =
-                buildWorkorderSummaries(workorders, mechanicsByWorkorder, vehicleDescriptions(workorders));
+        List<WorkorderSummary> workorderSummaries = buildWorkorderSummaries(
+                workorders,
+                mechanicsByWorkorder,
+                vehicleDescriptions(workorders),
+                customerNames(workorders),
+                synopses(workorders));
         List<MechanicStatus> mechanicStatuses = buildMechanicStatuses(workorders, people, mechanicsByWorkorder);
         List<BayStatus> bayStatuses = buildBayStatuses(locationUuid, resourceHolders);
         List<MobileUnitStatus> mobileUnitStatuses = buildMobileUnitStatuses(locationUuid, resourceHolders);
@@ -276,37 +292,148 @@ public class DashboardServiceImpl implements DashboardService {
         return descriptions;
     }
 
+    /**
+     * The customer's display name per customer id on the roster, from the {@code ext_customer_party}
+     * replica (ADR-0044 §6), so the board can say who each job is for. One batched query; a party
+     * that is not replicated or has a blank name is left out.
+     */
+    private Map<UUID, String> customerNames(List<Workorder> workorders) {
+        Set<UUID> customerIds = workorders.stream()
+                .map(Workorder::getCustomerId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<UUID, String> names = new HashMap<>();
+        if (customerIds.isEmpty()) {
+            return names;
+        }
+        for (ExtCustomerPartyReplica party : extCustomerPartyReplicaRepository.findAllById(customerIds)) {
+            if (party.getDisplayName() != null && !party.getDisplayName().isBlank()) {
+                names.put(party.getPartyId(), party.getDisplayName().strip());
+            }
+        }
+        return names;
+    }
+
+    /** What a card says about the work on a job: line counts, the lead descriptions and hours logged. */
+    private record WorkSynopsis(
+            int serviceCount,
+            int completedServiceCount,
+            List<String> serviceDescriptions,
+            BigDecimal actualLaborHours) {
+        private static final WorkSynopsis NONE = new WorkSynopsis(0, 0, List.of(), null);
+    }
+
+    /**
+     * A glance at the work on each roster workorder (#2025): how many service lines are in play, how many
+     * are done, the first few descriptions, and the hours logged against them. Cancelled lines and lines
+     * the customer declined are not work anyone will do, so they are left out of every figure. Two batched
+     * queries cover the roster; hours sum over the workorder's service lines, which is what the detail view
+     * totals, and stay null when nothing has been logged.
+     */
+    private Map<UUID, WorkSynopsis> synopses(List<Workorder> workorders) {
+        Set<UUID> workorderIds = workorders.stream()
+                .map(Workorder::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<UUID, WorkSynopsis> synopses = new HashMap<>();
+        if (workorderIds.isEmpty()) {
+            return synopses;
+        }
+
+        Map<UUID, List<WorkorderServiceRepository.ServiceLineGlance>> linesByWorkorder = new HashMap<>();
+        for (WorkorderServiceRepository.ServiceLineGlance line :
+                workorderServiceRepository.findGlancesByWorkorderIds(workorderIds)) {
+            if (line.getWorkorderId() == null
+                    || line.getStatus() == WorkorderItemStatus.CANCELLED
+                    || Boolean.TRUE.equals(line.getDeclined())) {
+                continue;
+            }
+            linesByWorkorder
+                    .computeIfAbsent(line.getWorkorderId(), id -> new ArrayList<>())
+                    .add(line);
+        }
+
+        Map<UUID, BigDecimal> hoursByWorkorder = new HashMap<>();
+        for (WorkorderLaborEntryRepository.WorkorderLaborHours hours :
+                workorderLaborEntryRepository.sumHoursByWorkorderIds(workorderIds)) {
+            if (hours.getWorkorderId() != null
+                    && hours.getHours() != null
+                    && hours.getHours().signum() > 0) {
+                hoursByWorkorder.put(hours.getWorkorderId(), hours.getHours());
+            }
+        }
+
+        for (UUID workorderId : workorderIds) {
+            List<WorkorderServiceRepository.ServiceLineGlance> lines =
+                    linesByWorkorder.getOrDefault(workorderId, List.of());
+            synopses.put(
+                    workorderId,
+                    new WorkSynopsis(
+                            lines.size(),
+                            (int) lines.stream()
+                                    .filter(line -> line.getStatus() == WorkorderItemStatus.COMPLETED)
+                                    .count(),
+                            lines.stream()
+                                    .map(WorkorderServiceRepository.ServiceLineGlance::getDescription)
+                                    .filter(description -> description != null && !description.isBlank())
+                                    .map(String::strip)
+                                    .limit(MAX_SYNOPSIS_DESCRIPTIONS)
+                                    .toList(),
+                            hoursByWorkorder.get(workorderId)));
+        }
+        return synopses;
+    }
+
     private List<WorkorderSummary> buildWorkorderSummaries(
             List<Workorder> workorders,
             Map<Workorder, List<String>> mechanicsByWorkorder,
-            Map<UUID, String> vehicleDescriptions) {
+            Map<UUID, String> vehicleDescriptions,
+            Map<UUID, String> customerNames,
+            Map<UUID, WorkSynopsis> synopses) {
         return workorders.stream()
-                .map(wo -> WorkorderSummary.builder()
-                        .workorderId(wo.getId())
-                        // The board links each job by its human number; without it the client
-                        // could only fall back to printing the UUID.
-                        .workorderNumber(wo.getWorkorderNumber())
-                        .status(wo.getStatus() != null ? wo.getStatus().name() : null)
-                        .scheduledDate(wo.getScheduledDate())
-                        .vehicleDescription(
-                                wo.getVehicleId() != null ? vehicleDescriptions.get(wo.getVehicleId()) : null)
-                        .assignedMechanicId(mechanicsOf(wo, mechanicsByWorkorder).stream()
-                                .findFirst()
-                                .orElse(null))
-                        // #1656: id and type ship together. The retired assignedBayId key put a
-                        // mobile unit's id under a bay-named field that joined to nothing in bays[].
-                        .assignedResourceId(
-                                wo.getResourceId() != null ? wo.getResourceId().toString() : null)
-                        .resourceType(wo.getResourceId() != null ? effectiveResourceType(wo) : null)
-                        // #1569: the overlap-aware sum of the workorder's agreed labor hours —
-                        // the field stops serialising as an unkept promise. One line query per
-                        // workorder; dashboard pages are small, and the summation reads
-                        // snapshots, not the live catalog.
-                        .estimatedLaborHours(estimatedLaborService
-                                .estimateForWorkorder(wo.getId())
-                                .estimatedHours())
-                        .build())
+                .map(wo -> buildWorkorderSummary(
+                        wo,
+                        mechanicsByWorkorder,
+                        vehicleDescriptions,
+                        customerNames,
+                        wo.getId() != null ? synopses.getOrDefault(wo.getId(), WorkSynopsis.NONE) : WorkSynopsis.NONE))
                 .toList();
+    }
+
+    private WorkorderSummary buildWorkorderSummary(
+            Workorder wo,
+            Map<Workorder, List<String>> mechanicsByWorkorder,
+            Map<UUID, String> vehicleDescriptions,
+            Map<UUID, String> customerNames,
+            WorkSynopsis synopsis) {
+        return WorkorderSummary.builder()
+                .workorderId(wo.getId())
+                // The board links each job by its human number; without it the client
+                // could only fall back to printing the UUID.
+                .workorderNumber(wo.getWorkorderNumber())
+                .customerName(wo.getCustomerId() != null ? customerNames.get(wo.getCustomerId()) : null)
+                .status(wo.getStatus() != null ? wo.getStatus().name() : null)
+                .scheduledDate(wo.getScheduledDate())
+                .vehicleDescription(wo.getVehicleId() != null ? vehicleDescriptions.get(wo.getVehicleId()) : null)
+                .assignedMechanicId(mechanicsOf(wo, mechanicsByWorkorder).stream()
+                        .findFirst()
+                        .orElse(null))
+                // #1656: id and type ship together. The retired assignedBayId key put a
+                // mobile unit's id under a bay-named field that joined to nothing in bays[].
+                .assignedResourceId(
+                        wo.getResourceId() != null ? wo.getResourceId().toString() : null)
+                .resourceType(wo.getResourceId() != null ? effectiveResourceType(wo) : null)
+                // #1569: the overlap-aware sum of the workorder's agreed labor hours —
+                // the field stops serialising as an unkept promise. One line query per
+                // workorder; dashboard pages are small, and the summation reads
+                // snapshots, not the live catalog.
+                .estimatedLaborHours(
+                        estimatedLaborService.estimateForWorkorder(wo.getId()).estimatedHours())
+                .serviceCount(synopsis.serviceCount())
+                .completedServiceCount(synopsis.completedServiceCount())
+                .serviceDescriptions(synopsis.serviceDescriptions())
+                .actualLaborHours(synopsis.actualLaborHours())
+                .build();
     }
 
     private List<MechanicStatus> buildMechanicStatuses(
