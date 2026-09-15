@@ -4,10 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import com.positivity.workorder.internal.dto.WorkorderDetailResponse;
+import com.positivity.workorder.internal.entity.ExtCustomerPartyReplica;
+import com.positivity.workorder.internal.entity.ExtVehicleReplica;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.enums.WorkorderItemStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtVehicleReplicaRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
@@ -41,6 +45,12 @@ class WorkorderDetailServiceImplTest {
 
     @Mock
     private EstimatedLaborService estimatedLaborService;
+
+    @Mock
+    private ExtVehicleReplicaRepository extVehicleReplicaRepository;
+
+    @Mock
+    private ExtCustomerPartyReplicaRepository extCustomerPartyReplicaRepository;
 
     @InjectMocks
     private WorkorderDetailServiceImpl service;
@@ -114,6 +124,94 @@ class WorkorderDetailServiceImplTest {
         assertThat(response.getWorkorderNumber()).isEqualTo("WO-2026-1042");
         assertThat(response.getParts()).hasSize(1);
         assertThat(response.getParts().get(0).getDescription()).isEqualTo("Brake pad set");
+    }
+
+    // -----------------------------------------------------------------------
+    // #2016: vehicleDescription / customerName from the ext_vehicle / ext_customer_party replicas
+    // -----------------------------------------------------------------------
+
+    private Workorder workorderWithCustomerAndVehicle(UUID workorderId, UUID customerId, UUID vehicleId) {
+        return Workorder.builder()
+                .id(workorderId)
+                .customerId(customerId)
+                .vehicleId(vehicleId)
+                .shopId(UUID.fromString("44444444-4444-4444-4444-444444444444"))
+                .status(WorkorderStatus.APPROVED)
+                .updatedAt(Instant.parse("2026-04-18T12:00:00Z"))
+                .services(java.util.List.of())
+                .build();
+    }
+
+    @Test
+    @DisplayName("#2016: vehicleDescription and customerName are built from the ext_* replicas")
+    void getWorkorderDetail_buildsVehicleAndCustomerFromReplicas() {
+        UUID workorderId = UUID.fromString("aaaaaaaa-1111-1111-1111-111111111111");
+        UUID customerId = UUID.fromString("aaaaaaaa-2222-2222-2222-222222222222");
+        UUID vehicleId = UUID.fromString("aaaaaaaa-3333-3333-3333-333333333333");
+        Workorder workorder = workorderWithCustomerAndVehicle(workorderId, customerId, vehicleId);
+
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(technicianAssignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId))
+                .thenReturn(Optional.empty());
+        when(extCustomerPartyReplicaRepository.findById(customerId))
+                .thenReturn(Optional.of(ExtCustomerPartyReplica.builder()
+                        .partyId(customerId)
+                        .displayName("Jane Rider")
+                        .build()));
+        when(extVehicleReplicaRepository.findById(vehicleId))
+                .thenReturn(Optional.of(ExtVehicleReplica.builder()
+                        .vehicleId(vehicleId)
+                        .unitNumber("UNIT-42")
+                        .licensePlate("ABC-123")
+                        .vin("1HGBH41JXMN109186")
+                        .build()));
+
+        WorkorderDetailResponse response = service.getWorkorderDetail(workorderId, Set.of("workorder:workorder:view"));
+
+        assertThat(response.getCustomerName()).isEqualTo("Jane Rider");
+        assertThat(response.getVehicleDescription()).isEqualTo("UNIT-42 · ABC-123 · 1HGBH41JXMN109186");
+    }
+
+    @Test
+    @DisplayName("#2016: vehicleDescription and customerName are null, not placeholders, when not replicated")
+    void getWorkorderDetail_nullsVehicleAndCustomerWhenNotReplicated() {
+        UUID workorderId = UUID.fromString("bbbbbbbb-1111-1111-1111-111111111111");
+        UUID customerId = UUID.fromString("bbbbbbbb-2222-2222-2222-222222222222");
+        UUID vehicleId = UUID.fromString("bbbbbbbb-3333-3333-3333-333333333333");
+        Workorder workorder = workorderWithCustomerAndVehicle(workorderId, customerId, vehicleId);
+
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(technicianAssignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId))
+                .thenReturn(Optional.empty());
+        when(extCustomerPartyReplicaRepository.findById(customerId)).thenReturn(Optional.empty());
+        when(extVehicleReplicaRepository.findById(vehicleId)).thenReturn(Optional.empty());
+
+        WorkorderDetailResponse response = service.getWorkorderDetail(workorderId, Set.of("workorder:workorder:view"));
+
+        // Never a placeholder derived from the bare id ("Customer-<id>" / "Vehicle-<id>") — null.
+        assertThat(response.getCustomerName()).isNull();
+        assertThat(response.getVehicleDescription()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2016: a replicated vehicle with none of unit/plate/VIN known has a null description")
+    void getWorkorderDetail_vehicleReplicatedButNoIdentifyingFields_isNull() {
+        UUID workorderId = UUID.fromString("cccccccc-1111-1111-1111-111111111111");
+        UUID customerId = UUID.fromString("cccccccc-2222-2222-2222-222222222222");
+        UUID vehicleId = UUID.fromString("cccccccc-3333-3333-3333-333333333333");
+        Workorder workorder = workorderWithCustomerAndVehicle(workorderId, customerId, vehicleId);
+
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(technicianAssignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId))
+                .thenReturn(Optional.empty());
+        when(extCustomerPartyReplicaRepository.findById(customerId)).thenReturn(Optional.empty());
+        when(extVehicleReplicaRepository.findById(vehicleId))
+                .thenReturn(Optional.of(
+                        ExtVehicleReplica.builder().vehicleId(vehicleId).build()));
+
+        WorkorderDetailResponse response = service.getWorkorderDetail(workorderId, Set.of("workorder:workorder:view"));
+
+        assertThat(response.getVehicleDescription()).isNull();
     }
 
     // -----------------------------------------------------------------------

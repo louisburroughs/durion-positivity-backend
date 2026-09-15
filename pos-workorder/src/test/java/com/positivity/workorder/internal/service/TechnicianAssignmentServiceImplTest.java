@@ -69,6 +69,9 @@ class TechnicianAssignmentServiceImplTest {
     @Mock
     private com.positivity.workorder.internal.repository.ExtPersonReplicaRepository extPersonReplicaRepository;
 
+    @Mock
+    private WorkorderFactPublisher workorderFactPublisher;
+
     private TechnicianAssignmentServiceImpl service;
 
     @BeforeEach
@@ -78,7 +81,8 @@ class TechnicianAssignmentServiceImplTest {
                 assignmentRepository,
                 workorderRepository,
                 stateMachine,
-                extPersonReplicaRepository);
+                extPersonReplicaRepository,
+                workorderFactPublisher);
 
         // #1983: an assignment now names a technician this module knows from the ext_person replica.
         when(extPersonReplicaRepository.existsById(any())).thenReturn(true);
@@ -173,6 +177,20 @@ class TechnicianAssignmentServiceImplTest {
             service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null);
 
             verify(stateMachine, never()).transitionWorkorder(any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("#2015: publishes a workorder fact even when the status does not change")
+        void publishesFactOnWorkInProgressAssignment() {
+            // WORK_IN_PROGRESS is the case the state machine's own reconcileAssigned no-ops on
+            // (only APPROVED/ASSIGNED are reconciled), so nothing downstream of it would ever mark
+            // the workorder changed. Without an explicit call here a technician assigned to a job
+            // already under way would never be published.
+            givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
+
+            service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null);
+
+            verify(workorderFactPublisher).markChanged(WORKORDER_ID);
         }
 
         @Test
@@ -324,6 +342,23 @@ class TechnicianAssignmentServiceImplTest {
         }
 
         @Test
+        @DisplayName("#2015: publishes a workorder fact even though the hand-over never changes status")
+        void publishesFactOnHandover() {
+            // Reassignment never transitions the workorder itself (see doesNotTransitionWorkorder),
+            // and reconcileAssigned no-ops when the pair's completeness is unchanged by the
+            // hand-over, so this is the one place the changed current technician is marked.
+            givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
+            TechnicianAssignment existing = currentAssignment(OTHER_TECHNICIAN_ID);
+            when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
+                    .thenReturn(Optional.of(existing));
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.of(existing));
+
+            service.reassignTechnician(WORKORDER_ID, TECHNICIAN_ID, "supervisor", "called out sick", null);
+
+            verify(workorderFactPublisher).markChanged(WORKORDER_ID);
+        }
+
+        @Test
         @DisplayName("refuses to reassign a workorder that has no current assignment")
         void rejectsWithoutCurrentAssignment() {
             givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
@@ -389,6 +424,18 @@ class TechnicianAssignmentServiceImplTest {
                     .isEmpty();
             verify(assignmentRepository, never()).save(any());
             verify(stateMachine, never()).reconcileAssigned(any(), any(), any());
+            verify(workorderFactPublisher, never()).markChanged(any());
+        }
+
+        @Test
+        @DisplayName("#2015: publishes a workorder fact for the release")
+        void publishesFactOnRelease() {
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID))
+                    .thenReturn(Optional.of(currentAssignment(TECHNICIAN_ID)));
+
+            service.releaseAssignment(WORKORDER_ID, "supervisor", "Shift ended");
+
+            verify(workorderFactPublisher).markChanged(WORKORDER_ID);
         }
 
         @Test

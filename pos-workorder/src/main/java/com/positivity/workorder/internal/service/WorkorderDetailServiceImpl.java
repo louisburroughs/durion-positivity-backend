@@ -10,6 +10,8 @@ import com.positivity.workorder.internal.entity.WorkorderLaborEntry;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
+import com.positivity.workorder.internal.repository.ExtCustomerPartyReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtVehicleReplicaRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderLaborEntryRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
@@ -43,6 +45,8 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
     private final WorkorderLaborEntryRepository laborEntryRepository;
     private final WorkorderPartRepository workorderPartRepository;
     private final EstimatedLaborService estimatedLaborService;
+    private final ExtVehicleReplicaRepository extVehicleReplicaRepository;
+    private final ExtCustomerPartyReplicaRepository extCustomerPartyReplicaRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -252,13 +256,33 @@ public class WorkorderDetailServiceImpl implements WorkorderDetailService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /**
+     * The customer's display name from the {@code ext_customer_party} replica (ADR-0044 §6, #2016).
+     * {@code null} when the party is not replicated or has no name — never a placeholder built from
+     * the bare id, which a client cannot distinguish from a real value.
+     */
     private String lookupCustomerName(UUID customerId) {
-        // Placeholder - implement customer service lookup
-        return "Customer-" + customerId;
+        if (customerId == null) {
+            return null;
+        }
+        return extCustomerPartyReplicaRepository
+                .findById(customerId)
+                .map(ReplicaDisplayNames::customerName)
+                .orElse(null);
     }
 
+    /**
+     * The vehicle's display description from the {@code ext_vehicle} replica (ADR-0044 §6, #2016),
+     * the same formatting {@link DashboardServiceImpl} uses for the dispatch board. {@code null}
+     * when the vehicle is not replicated or has no unit number, plate or VIN.
+     */
     private String lookupVehicleDescription(UUID vehicleId) {
-        // Placeholder - implement vehicle service lookup
-        return "Vehicle-" + vehicleId;
+        if (vehicleId == null) {
+            return null;
+        }
+        return extVehicleReplicaRepository
+                .findById(vehicleId)
+                .map(ReplicaDisplayNames::vehicleDescription)
+                .orElse(null);
     }
 }

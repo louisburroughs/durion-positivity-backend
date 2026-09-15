@@ -46,6 +46,16 @@ import org.springframework.transaction.annotation.Transactional;
  * <li>Assignment history is append-only and ordered newest-first; closed rows are
  * never deleted</li>
  * </ul>
+ *
+ * <p>Every assign, reassign and release publishes a workorder fact (#2015). {@link
+ * WorkorderStateMachine#reconcileAssigned} only publishes one itself when the pair's completeness
+ * actually flips the status between {@code APPROVED} and {@code ASSIGNED} — it no-ops for every
+ * other status, including {@code WORK_IN_PROGRESS}, and for a hand-over that leaves an already-
+ * {@code ASSIGNED} workorder {@code ASSIGNED}. Without an explicit call here, those cases changed
+ * {@code technician_assignment} without ever telling a consumer the workorder's current technician
+ * had changed. {@link WorkorderFactPublisher#markChanged} is called on the row this operation
+ * itself wrote, before {@code reconcileAssigned} runs, matching how
+ * {@code ServicePositionServiceImpl} marks its own position writes.
  */
 @Service
 @RequiredArgsConstructor
@@ -57,6 +67,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
     private final WorkorderRepository workorderRepository;
     private final WorkorderStateMachine stateMachine;
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
+    private final WorkorderFactPublisher workorderFactPublisher;
 
     /**
      * Assign a technician to a workorder.
@@ -118,6 +129,9 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
 
         TechnicianAssignment saved = saveHonouringSingleCurrentIndex(assignment, workorderId);
         log.info("Assigned technician {} to workorder {} by user {}", technicianId, workorderId, assignedBy);
+        // #2015: the current technician just changed; reconcileAssigned below only republishes when
+        // it also flips the status, so this write needs its own mark.
+        workorderFactPublisher.markChanged(workorderId);
 
         // #2011: a technician is half of what ASSIGNED means — the workorder also has to stand on a
         // bay or a mobile unit. The state machine decides, so a workorder with nowhere to be worked
@@ -206,6 +220,9 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                 previousTechnicianId,
                 newTechnicianId,
                 reassignedBy);
+        // #2015: the current technician just changed; reconcileAssigned below no-ops for a
+        // hand-over that leaves the pair's completeness unchanged, so this write needs its own mark.
+        workorderFactPublisher.markChanged(workorderId);
 
         // #2011: a hand-over leaves the pair complete, so an ASSIGNED workorder stays ASSIGNED. Asked
         // anyway rather than skipped: an APPROVED workorder that was already on a bay and had somehow
@@ -229,6 +246,10 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         TechnicianAssignment assignment = currentAssignment.get();
         assignment.markAsNotCurrent(LocalDateTime.now(clock), reason, releasedBy);
         TechnicianAssignment saved = assignmentRepository.saveAndFlush(assignment);
+        // #2015: the workorder no longer has a current technician; reconcileAssigned below only
+        // republishes when the release also drops the workorder out of ASSIGNED, so this write
+        // needs its own mark.
+        workorderFactPublisher.markChanged(workorderId);
         // #2010: the workorder is no longer held by anyone, so ASSIGNED would be a lie — the dispatch
         // board and the shop dashboard would go on showing a job as assigned that nobody holds. The
         // revert goes through the state machine like any other transition, so it leaves a status

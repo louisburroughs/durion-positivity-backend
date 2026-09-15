@@ -17,6 +17,7 @@ import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
@@ -25,6 +26,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +50,8 @@ class WorkorderFactPublisherTest {
     private final WorkorderRepository workorderRepository = mock(WorkorderRepository.class);
     private final WorkorderPartRepository workorderPartRepository = mock(WorkorderPartRepository.class);
     private final WorkorderServiceRepository workorderServiceRepository = mock(WorkorderServiceRepository.class);
+    private final TechnicianAssignmentRepository technicianAssignmentRepository =
+            mock(TechnicianAssignmentRepository.class);
     private final EntityManager entityManager = mock(EntityManager.class);
 
     private WorkorderFactPublisher publisher;
@@ -55,11 +59,14 @@ class WorkorderFactPublisherTest {
     @BeforeEach
     void setUp() {
         when(writerProvider.getIfAvailable()).thenReturn(writer);
+        // No current technician_assignment unless a test says otherwise (#2015).
+        when(technicianAssignmentRepository.findCurrentTechnicians(any())).thenReturn(List.of());
         publisher = new WorkorderFactPublisher(
                 writerProvider,
                 workorderRepository,
                 workorderPartRepository,
                 workorderServiceRepository,
+                technicianAssignmentRepository,
                 entityManager);
         TransactionSynchronizationManager.initSynchronization();
     }
@@ -184,6 +191,87 @@ class WorkorderFactPublisherTest {
         verify(writer).publish(any(), anyInt(), any(), anyLong(), payloadCaptor.capture());
         assertThat(((WorkorderUpdatedV1) payloadCaptor.getValue()).mechanicIds())
                 .isEmpty();
+    }
+
+    private static TechnicianAssignmentRepository.CurrentTechnician currentTechnician(
+            UUID workorderId, UUID technicianId) {
+        return new TechnicianAssignmentRepository.CurrentTechnician() {
+            @Override
+            public UUID getWorkorderId() {
+                return workorderId;
+            }
+
+            @Override
+            public UUID getTechnicianId() {
+                return technicianId;
+            }
+        };
+    }
+
+    /**
+     * #2015: the technician assign API (#1985) records only {@code technician_assignment} and
+     * never writes {@code mechanic_ids}, so a workorder assigned that way must still publish its
+     * technician. Asserted on the technician-assignment-only case, not a combined list, so a
+     * mutation that drops the {@code technician_assignment} source (reading {@code mechanic_ids}
+     * alone, as before #2015) fails this test.
+     */
+    @Test
+    @DisplayName("#2015 - a workorder assigned only through technician_assignment publishes that technician")
+    void publishesCurrentTechnicianFromAssignmentOnly() {
+        UUID workorderId = UUID.randomUUID();
+        UUID technicianId = UUID.randomUUID();
+        Workorder workorder = Workorder.builder()
+                .id(workorderId)
+                .workorderNumber("WO-2026-2015")
+                .status(WorkorderStatus.ASSIGNED)
+                .version(1L)
+                .build();
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+        when(technicianAssignmentRepository.findCurrentTechnicians(Set.of(workorderId)))
+                .thenReturn(List.of(currentTechnician(workorderId, technicianId)));
+
+        publisher.markChanged(workorderId);
+        fireBeforeCommit();
+
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(writer).publish(any(), anyInt(), any(), anyLong(), payloadCaptor.capture());
+        assertThat(((WorkorderUpdatedV1) payloadCaptor.getValue()).mechanicIds())
+                .containsExactly(technicianId);
+    }
+
+    /**
+     * #2015: a technician present in both {@code technician_assignment} and the legacy {@code
+     * mechanic_ids} column is published exactly once, technician-assignment first, then the
+     * remaining legacy ids in their existing order.
+     */
+    @Test
+    @DisplayName("#2015 - de-duplicates a technician present in both sources, legacy order otherwise preserved")
+    void dedupesTechnicianPresentInBothSources() {
+        UUID workorderId = UUID.randomUUID();
+        UUID currentTechnicianId = UUID.randomUUID();
+        UUID legacyOnlyId = UUID.randomUUID();
+        Workorder workorder = Workorder.builder()
+                .id(workorderId)
+                .workorderNumber("WO-2026-2016")
+                .status(WorkorderStatus.ASSIGNED)
+                .mechanicIds("[\"" + legacyOnlyId + "\",\"" + currentTechnicianId + "\"]")
+                .version(2L)
+                .build();
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+        when(technicianAssignmentRepository.findCurrentTechnicians(Set.of(workorderId)))
+                .thenReturn(List.of(currentTechnician(workorderId, currentTechnicianId)));
+
+        publisher.markChanged(workorderId);
+        fireBeforeCommit();
+
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(writer).publish(any(), anyInt(), any(), anyLong(), payloadCaptor.capture());
+        // The current technician leads even though it appears second in the legacy column; the
+        // legacy-only id follows in its existing order, and nobody appears twice.
+        assertThat(((WorkorderUpdatedV1) payloadCaptor.getValue()).mechanicIds())
+                .containsExactly(currentTechnicianId, legacyOnlyId);
     }
 
     @Test
