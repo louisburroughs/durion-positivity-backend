@@ -283,6 +283,9 @@ public class DashboardServiceImpl implements DashboardService {
         return workorders.stream()
                 .map(wo -> WorkorderSummary.builder()
                         .workorderId(wo.getId())
+                        // The board links each job by its human number; without it the client
+                        // could only fall back to printing the UUID.
+                        .workorderNumber(wo.getWorkorderNumber())
                         .status(wo.getStatus() != null ? wo.getStatus().name() : null)
                         .scheduledDate(wo.getScheduledDate())
                         .vehicleDescription(

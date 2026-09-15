@@ -997,6 +997,38 @@ class DashboardServiceTest {
     }
 
     // -----------------------------------------------------------------------
+    // workorderNumber is carried on the summary
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Summary carries the workorder's human-readable number")
+    void getDashboard_workorderWithNumber_populatesWorkorderNumber() {
+        // Arrange
+        Workorder numbered = Workorder.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-00000000a201"))
+                .workorderNumber("WO-2026-1042")
+                .locationId(LOCATION_UUID)
+                .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .build();
+        Workorder unnumbered = Workorder.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-00000000a202"))
+                .locationId(LOCATION_UUID)
+                .status(WorkorderStatus.DRAFT)
+                .build();
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any()))
+                .thenReturn(List.of(numbered, unnumbered));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+
+        // Act
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        // Assert
+        assertThat(response.getWorkorders())
+                .extracting(WorkorderSummary::getWorkorderNumber)
+                .containsExactly("WO-2026-1042", null);
+    }
+
+    // -----------------------------------------------------------------------
     // vehicleDescription comes from the ext_vehicle replica
     // -----------------------------------------------------------------------
 
