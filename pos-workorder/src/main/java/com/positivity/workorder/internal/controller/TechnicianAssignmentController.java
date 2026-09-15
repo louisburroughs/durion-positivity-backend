@@ -86,7 +86,7 @@ public class TechnicianAssignmentController {
                         content = @Content(schema = @Schema(implementation = TechnicianAssignmentResponse.class))),
                 @ApiResponse(responseCode = "400", description = "Invalid state transition"),
                 @ApiResponse(responseCode = "403", description = "Permission denied"),
-                @ApiResponse(responseCode = "404", description = "Workorder or technician not found"),
+                @ApiResponse(responseCode = "404", description = "Workorder not found"),
                 @ApiResponse(
                         responseCode = "409",
                         description = "The workorder is closed (ApiError.code WORKORDER_CLOSED) or already has "

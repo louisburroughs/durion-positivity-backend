@@ -101,7 +101,6 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         // a canned reason and nobody was told. Changing hands is reassignTechnician, which takes a
         // reason; here a held workorder is a 409 naming its current technician.
         requireKnownTechnician(technicianId);
-        requireStaffedAtSite(technicianId, workorder);
 
         Optional<TechnicianAssignment> existingAssignment =
                 assignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId);
@@ -112,6 +111,11 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                     "Workorder " + workorderId + " is already assigned to technician " + currentTechnicianId,
                     currentTechnicianId);
         }
+
+        // The assign-vs-reassign conflict above is authoritative over staffing: a second technician
+        // on an already-held workorder is always 409 TECHNICIAN_ALREADY_ASSIGNED, even when the
+        // replacement is staffed only elsewhere.
+        requireStaffedAtSite(technicianId, workorder);
 
         // Create new assignment
         LocalDateTime now = LocalDateTime.now(clock);
@@ -174,12 +178,16 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         // (#1985): a caller that believed the workorder was held and gets a 200 has learned nothing
         // about its view being stale, which is the same ambiguity assign's new 409 removes.
         requireKnownTechnician(newTechnicianId);
-        requireStaffedAtSite(newTechnicianId, workorder);
 
         TechnicianAssignment currentAssignment = assignmentRepository
                 .findCurrentForUpdate(workorderId)
                 .orElseThrow(() -> new TechnicianNotAssignedException(
                         "Cannot reassign: workorder " + workorderId + " has no current technician assignment"));
+
+        // The no-current-assignment guard above is authoritative over staffing: a reassign against a
+        // workorder nobody holds is always 409 TECHNICIAN_NOT_ASSIGNED, even when the replacement is
+        // staffed only elsewhere.
+        requireStaffedAtSite(newTechnicianId, workorder);
 
         UUID previousTechnicianId = currentAssignment.getTechnicianId();
         log.debug(
@@ -342,14 +350,29 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
      * filtered on — and a technician with no ACTIVE staffing rows at all is let through, because
      * replica lag, bootstrap and a stalled DLQ must not take a shop offline.
      *
+     * <p>This runs only at the moment a technician is assigned or reassigned — from {@link
+     * #assignTechnician} and {@link #reassignTechnician}, both after the assign-vs-reassign conflict
+     * guard so that guard stays authoritative over staffing. It never runs again afterward, and
+     * nothing revalidates a workorder's already-assigned technician if the workorder's site changes
+     * later: {@code WorkorderServiceImpl.handleAssignmentUpdated} (the inbound
+     * {@code AssignmentUpdatedEvent} handler) and {@code WorkorderServiceImpl.overrideOperationalContext}
+     * both write {@code Workorder.locationId} while a current {@link TechnicianAssignment} can remain
+     * in place, and neither calls this method. A technician found staffed here at assignment time can
+     * therefore end up parked at a site they are not staffed at if the workorder itself moves
+     * afterward; closing that gap, if it is ever wanted, is separate future work.
+     *
      * @param technicianId the technician being assigned or reassigned
      * @param workorder    the workorder they would hold, used to resolve the site to check against
      */
     private void requireStaffedAtSite(@NonNull UUID technicianId, @NonNull Workorder workorder) {
         UUID siteId = resolveSiteId(workorder);
         if (siteId == null) {
-            // Nothing to compare against — a workorder with no locationId and no mobile-unit
-            // position has no site this check could apply to.
+            // Nothing to compare against: either the workorder has no locationId and no mobile-unit
+            // position, or (#1990 Finding 3) it is on a MOBILE_UNIT whose replica — or the replica's
+            // baseLocationId — has not arrived yet. Deliberately not falling back to the workorder's
+            // own locationId in that second case: ADR-0044 R3 treats absence of replicated data as
+            // never a contradiction, and comparing against a different site would be a positive
+            // answer manufactured from that absence, which is exactly what R3 forbids.
             return;
         }
         if (!peopleAvailabilityLocalService.isEligibleAtSite(technicianId, siteId, LocalDate.now(clock))) {
@@ -358,15 +381,23 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
     }
 
     /**
-     * The site a technician must be staffed at to hold this workorder (#1990).
+     * The site a technician must be staffed at to hold this workorder (#1990), or {@code null} when
+     * there is nothing to compare against.
      *
-     * <p>For {@link ResourceType#MOBILE_UNIT} the site is the unit's own
-     * {@code ExtMobileUnitReplica.baseLocationId}; for {@link ResourceType#BAY}, {@link
-     * ResourceType#HOLD} and a workorder with no position yet, it is the workorder's own {@code
-     * locationId}. {@link ServicePositionServiceImpl#requireSameSite} forces the two to agree today,
-     * so this is currently a no-op that always returns the workorder's {@code locationId} — written
-     * this way anyway so the check keeps working, rather than silently drifting, the day a mobile
-     * workorder carries the customer's site instead of the unit's.
+     * <p>For {@link ResourceType#BAY}, {@link ResourceType#HOLD} and a workorder with no position
+     * yet, the site is the workorder's own {@code locationId}.
+     *
+     * <p>For {@link ResourceType#MOBILE_UNIT} the site is the unit's own {@code
+     * ExtMobileUnitReplica.baseLocationId} — never the workorder's own {@code locationId}. The two
+     * are not always the same value: {@link ServicePositionServiceImpl#requireSameSite} forces them
+     * to agree only for a position placed through {@link ServicePositionServiceImpl#assignPosition},
+     * the dispatcher's own placement endpoint. {@code WorkorderServiceImpl.handleAssignmentUpdated}
+     * and {@code WorkorderServiceImpl.overrideOperationalContext} write {@code locationId} and the
+     * resource together from an inbound event or an override request, without going through {@code
+     * resolvePosition}/{@code requireSameSite}, so a mobile-unit workorder's {@code locationId} can
+     * genuinely diverge from its unit's base site. If the replica has not arrived yet, or its {@code
+     * baseLocationId} is null, this returns {@code null} rather than the workorder's {@code
+     * locationId} (#1990 Finding 3) — see {@link #requireStaffedAtSite} for why.
      */
     @Nullable
     private UUID resolveSiteId(@NonNull Workorder workorder) {
@@ -374,7 +405,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
             return extMobileUnitReplicaRepository
                     .findById(workorder.getResourceId())
                     .map(ExtMobileUnitReplica::getBaseLocationId)
-                    .orElse(workorder.getLocationId());
+                    .orElse(null);
         }
         return workorder.getLocationId();
     }

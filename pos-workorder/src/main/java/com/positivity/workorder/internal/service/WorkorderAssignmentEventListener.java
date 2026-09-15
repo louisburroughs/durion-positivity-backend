@@ -20,11 +20,13 @@ import org.springframework.stereotype.Component;
  * <p>{@code AssignmentUpdatedEvent} is therefore an input to this module, never a second system of
  * record for who is currently on the job. A multi-mechanic planned assignment does not become
  * multiple technicians here — {@link WorkorderService#handleAssignmentUpdated} only ever updates
- * the workorder's position context ({@code locationId}, {@code resourceId}, {@code resourceType}),
- * never {@code TechnicianAssignment}. pos-shop-manager's {@code AssignmentMechanic(LEAD|ASSIST)}
- * shape stops at that boundary and is not mirrored into pos-workorder; the current technician is
- * set and changed only through {@link TechnicianAssignmentService#assignTechnician} and {@link
- * TechnicianAssignmentService#reassignTechnician}, which this listener never calls.
+ * the workorder's position context ({@code locationId}, {@code resourceId}, {@code resourceType})
+ * and the legacy planned {@code mechanicIds} context; it never writes {@code TechnicianAssignment}.
+ * pos-shop-manager's {@code AssignmentMechanic(LEAD|ASSIST)} shape stops at that boundary and is
+ * not mirrored into pos-workorder; the current technician of record is set, changed, and cleared
+ * only through {@link TechnicianAssignmentService#assignTechnician}, {@link
+ * TechnicianAssignmentService#reassignTechnician}, and {@link
+ * TechnicianAssignmentService#releaseAssignment}, none of which this listener ever calls.
  */
 @Slf4j
 @Component

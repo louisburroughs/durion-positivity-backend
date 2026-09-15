@@ -552,6 +552,26 @@ class TechnicianAssignmentServiceImplTest {
         }
 
         @Test
+        @DisplayName(
+                "assign-vs-reassign conflict is authoritative: already-assigned wins over an unstaffed replacement")
+        void assignAlreadyAssignedWinsOverUnstaffedReplacement() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.ASSIGNED);
+            workorder.setLocationId(SITE_ID);
+            TechnicianAssignment existing = currentAssignment(OTHER_TECHNICIAN_ID);
+            when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
+                    .thenReturn(Optional.of(existing));
+            // The replacement is not staffed at this site — pinning that this must not surface as
+            // 422 TECHNICIAN_NOT_STAFFED_AT_SITE ahead of the established assign-vs-reassign 409.
+            when(peopleAvailabilityLocalService.isEligibleAtSite(eq(TECHNICIAN_ID), eq(SITE_ID), any()))
+                    .thenReturn(false);
+
+            assertThatThrownBy(() -> service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null))
+                    .isInstanceOf(TechnicianAlreadyAssignedException.class)
+                    .hasMessageContaining(OTHER_TECHNICIAN_ID.toString());
+            verify(assignmentRepository, never()).saveAndFlush(any());
+        }
+
+        @Test
         @DisplayName("assign succeeds when the technician is staffed at the workorder's site")
         void assignSucceedsWhenStaffedHere() {
             Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
@@ -611,6 +631,23 @@ class TechnicianAssignmentServiceImplTest {
         }
 
         @Test
+        @DisplayName("no-current-assignment guard is authoritative: not-assigned wins over an unstaffed replacement")
+        void reassignNotAssignedWinsOverUnstaffedReplacement() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
+            workorder.setLocationId(SITE_ID);
+            // No current assignment: findCurrentForUpdate stays empty (the setUp default).
+            // The replacement is not staffed at this site — pinning that this must not surface as
+            // 422 TECHNICIAN_NOT_STAFFED_AT_SITE ahead of the established 409 TECHNICIAN_NOT_ASSIGNED.
+            when(peopleAvailabilityLocalService.isEligibleAtSite(eq(TECHNICIAN_ID), eq(SITE_ID), any()))
+                    .thenReturn(false);
+
+            assertThatThrownBy(
+                            () -> service.reassignTechnician(WORKORDER_ID, TECHNICIAN_ID, "supervisor", "reason", null))
+                    .isInstanceOf(TechnicianNotAssignedException.class)
+                    .hasMessageContaining("no current technician assignment");
+        }
+
+        @Test
         @DisplayName("resolves the site from the mobile unit's baseLocationId, not the workorder's own locationId")
         void resolvesMobileUnitSite() {
             Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
@@ -634,6 +671,46 @@ class TechnicianAssignmentServiceImplTest {
 
             verify(peopleAvailabilityLocalService).isEligibleAtSite(eq(TECHNICIAN_ID), eq(MOBILE_UNIT_SITE_ID), any());
             verify(peopleAvailabilityLocalService, never()).isEligibleAtSite(eq(TECHNICIAN_ID), eq(SITE_ID), any());
+        }
+
+        @Test
+        @DisplayName("#1990 Finding 3: skips the check for a MOBILE_UNIT whose replica has not arrived, "
+                + "rather than falling back to the workorder's own locationId")
+        void skipsCheckWhenMobileUnitReplicaMissing() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            // Deliberately set: if the fallback wrongly used this, the technician would be validated
+            // against SITE_ID instead of being skipped, and the assign below would fail.
+            workorder.setLocationId(SITE_ID);
+            workorder.setResourceType(ResourceType.MOBILE_UNIT);
+            workorder.setResourceId(MOBILE_UNIT_ID);
+            when(extMobileUnitReplicaRepository.findById(MOBILE_UNIT_ID)).thenReturn(Optional.empty());
+
+            assertThatCode(() -> service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null))
+                    .doesNotThrowAnyException();
+
+            verify(peopleAvailabilityLocalService, never()).isEligibleAtSite(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("#1990 Finding 3: skips the check for a MOBILE_UNIT replica with a null baseLocationId")
+        void skipsCheckWhenMobileUnitReplicaHasNoBaseLocation() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setLocationId(SITE_ID);
+            workorder.setResourceType(ResourceType.MOBILE_UNIT);
+            workorder.setResourceId(MOBILE_UNIT_ID);
+            when(extMobileUnitReplicaRepository.findById(MOBILE_UNIT_ID))
+                    .thenReturn(Optional.of(ExtMobileUnitReplica.builder()
+                            .mobileUnitId(MOBILE_UNIT_ID)
+                            .baseLocationId(null)
+                            .active(true)
+                            .aggregateVersion(1L)
+                            .updatedAt(Instant.EPOCH)
+                            .build()));
+
+            assertThatCode(() -> service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null))
+                    .doesNotThrowAnyException();
+
+            verify(peopleAvailabilityLocalService, never()).isEligibleAtSite(any(), any(), any());
         }
 
         @Test
