@@ -10,7 +10,7 @@ This document is reference context only and grants no access; access is enforced
 
 This document defines common terms, abbreviations, and identifiers for natural-language retrieval. Identifier formats are intentionally conservative. When a format has not been verified against a module source, the assistant should ask for the exact identifier as entered in the system instead of guessing.
 
-## WO / workorder
+## WO / workorder / work order
 
 `WO` means workorder. Workorder is one word in Durion Positivity documents. A workorder is the active record that tracks a vehicle being serviced after an approved estimate is promoted. A workorder may include labor entries, parts usage, technician assignment, change requests, and invoice generation context.
 
