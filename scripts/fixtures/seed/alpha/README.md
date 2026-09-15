@@ -137,8 +137,8 @@ change.
 
 | File | Rows | Target |
 |---|---|---|
-| `employees.csv` | 39 employees (all staff — the seed has been employees-only since #875) | `POST /v1/people/bulk-ingest` (`domainType: PERSON`) |
-| `staffing-assignments.csv` | 39 role/location assignments | gateway API pack (`POST /people/staffing/assignments` per row) |
+| `employees.csv` | 46 employees (all staff — the seed has been employees-only since #875; EMP-T001…EMP-P001 are the SDK seeder's seven, staffed at ATX-RIV-001) | `POST /v1/people/bulk-ingest` (`domainType: PERSON`) |
+| `staffing-assignments.csv` | 46 role/location assignments | gateway API pack (`POST /people/staffing/assignments` per row) |
 
 The people seed contains no customers: customer/contact identities moved to the
 pos-people-contact seed under #875, and this file holds the 39 staff (`EMP-0001`–
@@ -257,7 +257,7 @@ until the alpha reseed is verified (§5.4).
 
 | File | Rows | Target |
 |---|---|---|
-| `products.csv` | 501 products (12 categories; 500 from the seed plus WIXF-51394, added in #1554 for the on-hand pack) | `POST /v1/catalog/bulk-ingest` (`domainType: CATALOG_PRODUCT`) |
+| `products.csv` | 531 products (12 categories; 500 from the seed, WIXF-51394 added in #1554 for the on-hand pack, and the SDK seeder's 30 parts OF-/BP-/BAT-/AF-/WB-/SP-/CAF-nnn) | `POST /v1/catalog/bulk-ingest` (`domainType: CATALOG_PRODUCT`) |
 
 Headers use the ingest record's field names directly, so the catalog job's flexible
 reader maps them 1:1. Each successful row publishes a product fact on
@@ -282,7 +282,7 @@ product landed uncategorized.
   match. Check `failureCount` and the per-row `results`, not just the HTTP status.
 - **Omitted name:** blank or absent is "unclassified" and resolves to null without
   error, so a row may legitimately carry neither.
-- All 501 rows in `products.csv` resolve today (verified by
+- All 531 rows in `products.csv` resolve today (verified by
   `AlphaFixtureCategoryNamesResolveTest`, which parses this CSV and the seed SQL at
   build time). Any future edit introducing an unseeded name fails that test rather
   than surfacing as a per-row ingest failure during a reseed.
@@ -312,7 +312,7 @@ product landed uncategorized.
 
 | File | Rows | Target |
 |---|---|---|
-| `tier0-services.csv` | 14 Durion-owned operations (tire service, Michelin procedures, fleet requirements) | `POST /v1/catalog/services/bulk-ingest` (`CATALOG_SERVICE`) |
+| `tier0-services.csv` | 28 operations: 17 Durion-owned (tire service, Michelin procedures, fleet requirements) and the SDK seeder's 11 shop services, whose default labor hours are derived from the seeder's intended sell price at the platform default labor rate (Tire Rotation was already Durion-owned) | `POST /v1/catalog/services/bulk-ingest` (`CATALOG_SERVICE`) |
 | `tier0-labor-standards.csv` | 21 vehicle-keyed labor standards | `POST /v1/catalog/labor-standards/bulk-ingest` (`SERVICE_LABOR_STANDARD`) |
 | `tier0-service-packages.csv` | 4 packages and 1 fleet requirement set | `POST /v1/service-packages/bulk-ingest` (`SERVICE_PACKAGE`) |
 | `tier0-service-package-members.csv` | 21 memberships | `POST /v1/service-package-members/bulk-ingest` (`SERVICE_PACKAGE_MEMBER`) |
@@ -361,7 +361,7 @@ upstream source states them yet.
 
 | File | Rows | Target |
 |---|---|---|
-| `base-prices.csv` | 500 MSRPs, one per catalog product | `POST /v1/price/bulk-ingest` (`domainType: BASE_PRICE`) |
+| `base-prices.csv` | 530 MSRPs, one per catalog product except WIXF-51394 | `POST /v1/price/bulk-ingest` (`domainType: BASE_PRICE`) |
 
 Columns: `sku,msrp,currency,effectiveFrom`. The amounts are the seed's own `product_msrp`
 values, not invented ones, so alpha prices what the catalog actually sells at.
@@ -419,10 +419,10 @@ about where part numbers come from first.
 
 | File | Rows | Target |
 |---|---|---|
-| `locations.csv` | 5 sites (3 service centers, mobile hub, corporate HQ) | `POST /v1/locations/bulk-ingest` (`domainType: LOCATION`) |
-| `storage-locations.csv` | 190 (38 per site: 3 floors, 2 cages, 7 shelves, 1 truck, 24 bins under the parts shelves, 1 retired bin) | gateway API pack (`POST .../storage-locations` per row, parents resolved in order; `status`/capacity applied by follow-up `PATCH`) |
-| `site-defaults.csv` | 5 rows, one per site | gateway API pack (`PUT /v1/locations/{id}/defaults` per row) |
-| `bays.csv` | 21 service bays (6 types, from the seed) | gateway API pack (`POST .../bays` per row; 409 = exists) |
+| `locations.csv` | 6 sites (4 service centers — including the SDK seeder's Riverside Auto Service, ATX-RIV-001 — mobile hub, corporate HQ) | `POST /v1/locations/bulk-ingest` (`domainType: LOCATION`) |
+| `storage-locations.csv` | 228 (38 per site: 3 floors, 2 cages, 7 shelves, 1 truck, 24 bins under the parts shelves, 1 retired bin) | gateway API pack (`POST .../storage-locations` per row, parents resolved in order; `status`/capacity applied by follow-up `PATCH`) |
+| `site-defaults.csv` | 6 rows, one per site | gateway API pack (`PUT /v1/locations/{id}/defaults` per row) |
+| `bays.csv` | 24 service bays (6 types; 21 from the seed and the SDK seeder's Bay 1–3 at ATX-RIV-001) | gateway API pack (`POST .../bays` per row; 409 = exists) |
 | `mobile-units.csv` | 9 mobile units, 8 `ACTIVE` and 1 parked (see below) | gateway API pack (`POST /location/mobile-units`, one call carrying the unit's policy, capabilities and coverage rules; existing names skipped via the list) |
 | `mobile-unit-coverage-rules.csv` | 21 rules across the 8 `ACTIVE` units | read by the `mobile-units.csv` pack, not loaded on its own |
 
@@ -551,14 +551,14 @@ leaving the defaults null.
 
 **Known deltas / not yet converted:**
 
-- The storage mix is deliberately uniform across all 5 sites (a richer, realistic
+- The storage mix is deliberately uniform across all 6 sites (a richer, realistic
   garage topology replacing the seed's thinner ad-hoc spread); the seed's
   staging/quarantine back-references on the location row
   (`default_staging_location_id`/`default_quarantine_location_id`) are now set by
   `site-defaults.csv` above (issue #1557); the note that no API wrote them was stale —
   `PUT /v1/locations/{id}/defaults` has existed since CAP-214. #1514 kept that uniformity: the Flyway seed adds its
   oil storage and battery racks to the 3 service centers only, whereas this
-  fixture gives all 5 sites the full set.
+  fixture gives all 6 sites the full set.
 - **`allowNewProduct` is not a fixture column**, so every row lands on the
   service default `MIXED`. Nothing in the alpha topology needs
   `SAME_PRODUCT_ONLY` or `EMPTY_ONLY` yet; add the column when something does.
