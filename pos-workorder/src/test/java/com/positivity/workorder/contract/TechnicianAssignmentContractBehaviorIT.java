@@ -8,6 +8,7 @@ import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
 import com.positivity.workorder.internal.entity.ExtBayReplica;
 import com.positivity.workorder.internal.entity.ExtPersonReplica;
+import com.positivity.workorder.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderStateTransition;
@@ -18,6 +19,7 @@ import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
 import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
@@ -72,6 +74,9 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
     @Autowired
     private ExtBayReplicaRepository extBayReplicaRepository;
+
+    @Autowired
+    private ExtStaffingAssignmentReplicaRepository extStaffingAssignmentReplicaRepository;
 
     @Autowired
     private WorkorderStateTransitionRepository transitionRepository;
@@ -575,6 +580,216 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 .log()
                 .ifValidationFails()
                 .statusCode(404);
+    }
+
+    // ========== #1990: TECHNICIAN MUST BE STAFFED AT THE WORKORDER'S SITE ==========
+
+    @Test
+    @DisplayName("TA-010: #1990 assign refuses a technician staffed only at another site, with the full "
+            + "guided envelope")
+    void testAssignTechnician_RefusedWhenNotStaffedAtSite() {
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000080");
+        UUID otherSiteId = UUID.fromString("00000000-0000-0000-0000-000000000081");
+        UUID workorderId = seedApprovedWorkorderAtSite(siteId);
+        testTechnicianId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+        // The technician is staffed, just not here — ACTIVE, effective today, at a different site.
+        seedActiveStaffing(testTechnicianId1, otherSiteId);
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("technicianId", testTechnicianId1.toString()))
+                .when()
+                .post("/v1/workorders/{workorderId}/technician", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(422)
+                .body("code", equalTo("TECHNICIAN_NOT_STAFFED_AT_SITE"))
+                .body("referenceId", equalTo(siteId.toString()))
+                .body("fieldErrors[0].field", equalTo("technicianId"))
+                .body("nextAction", not(emptyOrNullString()))
+                .body("supportAction", not(emptyOrNullString()));
+
+        assertThat(assignmentRepository.findByWorkorder_IdOrderByAssignedAtDesc(workorderId))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("TA-011: #1990 reassign refuses a new technician staffed only at another site")
+    void testReassignTechnician_RefusedWhenNotStaffedAtSite() {
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000082");
+        UUID otherSiteId = UUID.fromString("00000000-0000-0000-0000-000000000083");
+        UUID workorderId = seedApprovedWorkorderAtSite(siteId);
+        UUID incumbent = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID replacement = UUID.fromString("00000000-0000-0000-0000-000000000002");
+
+        // The incumbent holds the workorder with no staffing row at all (allowed); the replacement
+        // is staffed, just not at this site.
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("technicianId", incumbent.toString()))
+                .when()
+                .post("/v1/workorders/{workorderId}/technician", workorderId)
+                .then()
+                .statusCode(200);
+        seedActiveStaffing(replacement, otherSiteId);
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("newTechnicianId", replacement.toString(), "reason", "requested swap"))
+                .when()
+                .put("/v1/workorders/{workorderId}/technician", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(422)
+                .body("code", equalTo("TECHNICIAN_NOT_STAFFED_AT_SITE"))
+                .body("referenceId", equalTo(siteId.toString()));
+
+        // The incumbent still holds the workorder — the refused reassign changed nothing.
+        TechnicianAssignment current = assignmentRepository
+                .findByWorkorder_IdAndCurrentTrue(workorderId)
+                .orElseThrow();
+        assertThat(current.getTechnicianId()).isEqualTo(incumbent);
+    }
+
+    @Test
+    @DisplayName("TA-012: #1990 a technician with no ACTIVE staffing rows at all is allowed, even with a "
+            + "site set — replica lag, bootstrap and DLQ must not take a shop offline")
+    void testAssignTechnician_NoStaffingRowsAtAllIsAllowed() {
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000084");
+        UUID workorderId = seedApprovedWorkorderAtSite(siteId);
+        testTechnicianId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+        assertThat(extStaffingAssignmentReplicaRepository.findByPersonIdAndStatus(testTechnicianId1, "ACTIVE"))
+                .isEmpty();
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("technicianId", testTechnicianId1.toString()))
+                .when()
+                .post("/v1/workorders/{workorderId}/technician", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(200);
+    }
+
+    @Test
+    @DisplayName("TA-013: #1990 retry-safe — once the staffing row lands in the replica, the same "
+            + "request succeeds with no restart, re-auth or new workorder")
+    void testAssignTechnician_RetrySucceedsOnceStaffingReplicates() {
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000085");
+        UUID otherSiteId = UUID.fromString("00000000-0000-0000-0000-000000000086");
+        UUID workorderId = seedApprovedWorkorderAtSite(siteId);
+        testTechnicianId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        seedActiveStaffing(testTechnicianId1, otherSiteId);
+
+        Map<String, Object> assignRequest = Map.of("technicianId", testTechnicianId1.toString());
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(assignRequest)
+                .when()
+                .post("/v1/workorders/{workorderId}/technician", workorderId)
+                .then()
+                .statusCode(422)
+                .body("code", equalTo("TECHNICIAN_NOT_STAFFED_AT_SITE"));
+        assertThat(assignmentRepository.findByWorkorder_IdOrderByAssignedAtDesc(workorderId))
+                .isEmpty();
+
+        // The staffing event lands in the replica — same workorder, same request, no restart.
+        seedActiveStaffing(testTechnicianId1, siteId);
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(assignRequest)
+                .when()
+                .post("/v1/workorders/{workorderId}/technician", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(200)
+                .body("technicianId", equalTo(testTechnicianId1.toString()));
+
+        assertThat(assignmentRepository.findByWorkorder_IdAndCurrentTrue(workorderId))
+                .map(TechnicianAssignment::getTechnicianId)
+                .contains(testTechnicianId1);
+    }
+
+    @Test
+    @DisplayName(
+            "TA-014: #1990 no cap on concurrent workorders — one technician may hold two open " + "workorders at once")
+    void testAssignTechnician_SameTechnicianOnTwoWorkorders() {
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000087");
+        UUID firstWorkorderId = seedApprovedWorkorderAtSite(siteId);
+        UUID secondWorkorderId = seedApprovedWorkorderAtSite(siteId);
+        testTechnicianId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        seedActiveStaffing(testTechnicianId1, siteId);
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("technicianId", testTechnicianId1.toString()))
+                .when()
+                .post("/v1/workorders/{workorderId}/technician", firstWorkorderId)
+                .then()
+                .statusCode(200);
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("technicianId", testTechnicianId1.toString()))
+                .when()
+                .post("/v1/workorders/{workorderId}/technician", secondWorkorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(200);
+
+        assertThat(assignmentRepository
+                        .findByWorkorder_IdAndCurrentTrue(firstWorkorderId)
+                        .orElseThrow()
+                        .getTechnicianId())
+                .isEqualTo(testTechnicianId1);
+        assertThat(assignmentRepository
+                        .findByWorkorder_IdAndCurrentTrue(secondWorkorderId)
+                        .orElseThrow()
+                        .getTechnicianId())
+                .isEqualTo(testTechnicianId1);
+    }
+
+    /**
+     * An ACTIVE staffing row for {@code technicianId} at {@code siteId}, effective today with no
+     * end date — the shape the site-eligibility check reads (#1990).
+     */
+    private void seedActiveStaffing(UUID technicianId, UUID siteId) {
+        extStaffingAssignmentReplicaRepository.save(ExtStaffingAssignmentReplica.builder()
+                .assignmentId(UUID.randomUUID())
+                .employeeId(UUID.randomUUID())
+                .personId(technicianId)
+                .locationId(siteId)
+                .role("Technician")
+                .primary(false)
+                .status("ACTIVE")
+                .effectiveFrom(java.time.LocalDate.now(TEST_CLOCK))
+                .effectiveTo(null)
+                .aggregateVersion(1L)
+                .updatedAt(Instant.EPOCH)
+                .build());
+    }
+
+    /**
+     * An APPROVED workorder at a given site, for the #1990 staffing tests that need a real
+     * {@code locationId} to check the technician against — {@link #seedApprovedWorkorder()} leaves
+     * it unset.
+     */
+    private UUID seedApprovedWorkorderAtSite(UUID siteId) {
+        UUID workorderId = seedApprovedWorkorder();
+        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+        workorder.setLocationId(siteId);
+        workorder.setShopId(siteId);
+        workorderRepository.save(workorder);
+        return workorderId;
     }
 
     // ========== TEST DATA SEED METHODS ==========

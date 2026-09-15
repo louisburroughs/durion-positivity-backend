@@ -27,6 +27,7 @@ import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundExcepti
 import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotFoundException;
+import com.positivity.workorder.internal.exception.TechnicianNotStaffedAtSiteException;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
 import com.positivity.workorder.internal.exception.TravelSegmentNotFoundException;
 import com.positivity.workorder.internal.exception.UomConversionUndefinedException;
@@ -429,6 +430,36 @@ public class GlobalExceptionHandler {
             TechnicianNotFoundException ex, HttpServletRequest request) {
         return buildErrorResponse(
                 HttpStatus.UNPROCESSABLE_ENTITY, TechnicianNotFoundException.ERROR_CODE, ex.getMessage(), request);
+    }
+
+    /**
+     * A technician was assigned or reassigned to a workorder at a site they are not staffed at
+     * (#1990). There is no override.
+     *
+     * <p>422 for the same reason {@link #handleTechnicianNotFound} is: the technician exists, the
+     * request is well-formed, and what fails is a cross-entity rule. The workorder's site rides as
+     * {@code referenceId} so a dispatch board can link straight to it, {@code fieldErrors} marks
+     * {@code technicianId}, and {@code nextAction}/{@code supportAction} name the People-side fix
+     * and who can make it — a caller that retries once the staffing row lands succeeds with no
+     * restart, re-auth or new workorder.
+     */
+    @ExceptionHandler(TechnicianNotStaffedAtSiteException.class)
+    public ResponseEntity<ApiError> handleTechnicianNotStaffedAtSite(
+            TechnicianNotStaffedAtSiteException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        ApiError body = new ApiError(
+                TechnicianNotStaffedAtSiteException.ERROR_CODE,
+                ex.getMessage(),
+                HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                List.of(new ApiError.FieldError(TechnicianNotStaffedAtSiteException.FIELD, ex.getMessage())),
+                ex.getSiteId() == null ? null : ex.getSiteId().toString(),
+                TechnicianNotStaffedAtSiteException.NEXT_ACTION,
+                TechnicianNotStaffedAtSiteException.SUPPORT_ACTION);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        return new ResponseEntity<>(body, headers, HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
     /** Reassign was called on a workorder that has no current technician to reassign from (#1985). */

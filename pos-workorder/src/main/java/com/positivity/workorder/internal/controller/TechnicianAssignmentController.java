@@ -72,9 +72,12 @@ public class TechnicianAssignmentController {
                     parked on HOLD, stays APPROVED until it is placed.
                     Returns 404 when the workorder does not exist, 400 with the failure reason when the \
                     workorder's status cannot take a technician yet, which includes a reopened COMPLETED one, \
-                    409 WORKORDER_CLOSED when it is closed — CANCELLED, or COMPLETED and not reopened — and \
-                    409 TECHNICIAN_ALREADY_ASSIGNED when the workorder already has a current technician, which \
-                    reassignTechnician changes.
+                    409 WORKORDER_CLOSED when it is closed — CANCELLED, or COMPLETED and not reopened — 409 \
+                    TECHNICIAN_ALREADY_ASSIGNED when the workorder already has a current technician, which \
+                    reassignTechnician changes, and 422 TECHNICIAN_NOT_STAFFED_AT_SITE when the technician has \
+                    one or more ACTIVE staffing assignments effective today and none of them is at the \
+                    workorder's site — there is no override; have the technician staffed at this site in People, \
+                    effective today, and retry.
                     """,
             responses = {
                 @ApiResponse(
@@ -83,12 +86,21 @@ public class TechnicianAssignmentController {
                         content = @Content(schema = @Schema(implementation = TechnicianAssignmentResponse.class))),
                 @ApiResponse(responseCode = "400", description = "Invalid state transition"),
                 @ApiResponse(responseCode = "403", description = "Permission denied"),
-                @ApiResponse(responseCode = "404", description = "Workorder or technician not found"),
+                @ApiResponse(responseCode = "404", description = "Workorder not found"),
                 @ApiResponse(
                         responseCode = "409",
                         description = "The workorder is closed (ApiError.code WORKORDER_CLOSED) or already has "
                                 + "a current technician (ApiError.code TECHNICIAN_ALREADY_ASSIGNED, with the "
                                 + "current technician id as referenceId)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "422",
+                        description = "The technician is not known (ApiError.code TECHNICIAN_NOT_FOUND) or has "
+                                + "ACTIVE staffing effective today at one or more sites but not this workorder's "
+                                + "site (ApiError.code TECHNICIAN_NOT_STAFFED_AT_SITE, with the workorder's site "
+                                + "id as referenceId and a fieldErrors entry on technicianId). No override "
+                                + "exists for TECHNICIAN_NOT_STAFFED_AT_SITE; a technician with no ACTIVE "
+                                + "staffing rows at all is allowed.",
                         content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -183,9 +195,12 @@ public class TechnicianAssignmentController {
                     Emits a WORKORDER_TECHNICIAN_REASSIGN event.
                     Returns 404 when the workorder does not exist, 400 with the failure reason when the workorder's \
                     status cannot take a technician yet, which includes a reopened COMPLETED one, 409 \
-                    WORKORDER_CLOSED when it is closed — CANCELLED, or COMPLETED and not reopened — and 409 \
+                    WORKORDER_CLOSED when it is closed — CANCELLED, or COMPLETED and not reopened — 409 \
                     TECHNICIAN_NOT_ASSIGNED when the workorder has no current technician to reassign from, \
-                    which assignTechnician creates.
+                    which assignTechnician creates, and 422 TECHNICIAN_NOT_STAFFED_AT_SITE when the new \
+                    technician has one or more ACTIVE staffing assignments effective today and none of them is \
+                    at the workorder's site — there is no override; have the technician staffed at this site in \
+                    People, effective today, and retry.
                     """,
             responses = {
                 @ApiResponse(
@@ -199,6 +214,15 @@ public class TechnicianAssignmentController {
                         responseCode = "409",
                         description = "The workorder is closed (ApiError.code WORKORDER_CLOSED) or has no current "
                                 + "technician (ApiError.code TECHNICIAN_NOT_ASSIGNED)",
+                        content = @Content(schema = @Schema(implementation = ApiError.class))),
+                @ApiResponse(
+                        responseCode = "422",
+                        description = "The new technician is not known (ApiError.code TECHNICIAN_NOT_FOUND) or "
+                                + "has ACTIVE staffing effective today at one or more sites but not this "
+                                + "workorder's site (ApiError.code TECHNICIAN_NOT_STAFFED_AT_SITE, with the "
+                                + "workorder's site id as referenceId and a fieldErrors entry on technicianId). "
+                                + "No override exists for TECHNICIAN_NOT_STAFFED_AT_SITE; a technician with no "
+                                + "ACTIVE staffing rows at all is allowed.",
                         content = @Content(schema = @Schema(implementation = ApiError.class)))
             })
     @io.swagger.v3.oas.annotations.parameters.RequestBody(

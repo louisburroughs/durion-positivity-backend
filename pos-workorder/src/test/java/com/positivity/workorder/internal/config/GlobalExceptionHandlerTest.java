@@ -32,6 +32,7 @@ import com.positivity.workorder.internal.exception.SubstituteLinkNotFoundExcepti
 import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotFoundException;
+import com.positivity.workorder.internal.exception.TechnicianNotStaffedAtSiteException;
 import com.positivity.workorder.internal.exception.TravelSegmentConflictException;
 import com.positivity.workorder.internal.exception.TravelSegmentNotFoundException;
 import com.positivity.workorder.internal.exception.UomConversionUndefinedException;
@@ -222,6 +223,9 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleTechnicianNotAssigned", (HandlerInvocation)
                             request -> handler.handleTechnicianNotAssigned(
                                     new TechnicianNotAssignedException("none assigned"), request)),
+                    Named.of("handleTechnicianNotStaffedAtSite", (HandlerInvocation)
+                            request -> handler.handleTechnicianNotStaffedAtSite(
+                                    new TechnicianNotStaffedAtSiteException(SOME_ID, OTHER_ID), request)),
                     Named.of("handlePurchaseOrderRequired", (HandlerInvocation)
                             request -> handler.handlePurchaseOrderRequired(
                                     new PurchaseOrderRequiredException("PO required"), request)),

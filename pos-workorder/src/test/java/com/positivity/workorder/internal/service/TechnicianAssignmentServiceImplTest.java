@@ -1,28 +1,39 @@
 package com.positivity.workorder.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.workorder.internal.dto.AssignTechnicianRequest;
+import com.positivity.workorder.internal.dto.ReassignTechnicianRequest;
 import com.positivity.workorder.internal.dto.TechnicianAssignmentRecord;
+import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.TechnicianAlreadyAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotAssignedException;
 import com.positivity.workorder.internal.exception.TechnicianNotFoundException;
+import com.positivity.workorder.internal.exception.TechnicianNotStaffedAtSiteException;
 import com.positivity.workorder.internal.exception.WorkorderClosedException;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
+import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import java.lang.reflect.Field;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -70,6 +81,12 @@ class TechnicianAssignmentServiceImplTest {
     private com.positivity.workorder.internal.repository.ExtPersonReplicaRepository extPersonReplicaRepository;
 
     @Mock
+    private PeopleAvailabilityLocalService peopleAvailabilityLocalService;
+
+    @Mock
+    private ExtMobileUnitReplicaRepository extMobileUnitReplicaRepository;
+
+    @Mock
     private WorkorderFactPublisher workorderFactPublisher;
 
     private TechnicianAssignmentServiceImpl service;
@@ -82,10 +99,18 @@ class TechnicianAssignmentServiceImplTest {
                 workorderRepository,
                 stateMachine,
                 extPersonReplicaRepository,
+                peopleAvailabilityLocalService,
+                extMobileUnitReplicaRepository,
                 workorderFactPublisher);
 
         // #1983: an assignment now names a technician this module knows from the ext_person replica.
         when(extPersonReplicaRepository.existsById(any())).thenReturn(true);
+        // #1990: staffed-at-site defaults to eligible so existing tests, which do not set a
+        // workorder locationId, are unaffected — requireStaffedAtSite skips the check entirely when
+        // there is no site to compare against, so this stub is unused by them but keeps any test
+        // that does set a site safe by default unless it deliberately overrides this.
+        when(peopleAvailabilityLocalService.isEligibleAtSite(any(), any(), any()))
+                .thenReturn(true);
 
         when(assignmentRepository.save(any())).thenAnswer(TechnicianAssignmentServiceImplTest::stampId);
         // Assign and reassign write the new current row through saveAndFlush so a lost race against
@@ -108,11 +133,12 @@ class TechnicianAssignmentServiceImplTest {
         return assignment;
     }
 
-    private void givenWorkorder(WorkorderStatus status) {
+    private Workorder givenWorkorder(WorkorderStatus status) {
         Workorder workorder = new Workorder();
         workorder.setId(WORKORDER_ID);
         workorder.setStatus(status);
         when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.of(workorder));
+        return workorder;
     }
 
     private TechnicianAssignment currentAssignment(UUID technicianId) {
@@ -629,6 +655,227 @@ class TechnicianAssignmentServiceImplTest {
             when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.empty());
             assertThatThrownBy(() -> service.getWorkorderStatus(WORKORDER_ID))
                     .isInstanceOf(WorkorderNotFoundException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("#1990: a technician must be staffed at the workorder's site")
+    class StaffedAtSite {
+
+        private static final UUID SITE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f2290");
+        private static final UUID MOBILE_UNIT_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f2291");
+        private static final UUID MOBILE_UNIT_SITE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f2292");
+
+        @Test
+        @DisplayName("assign refuses a technician staffed only elsewhere, naming this site as referenceId")
+        void assignRefusesWhenNotStaffedHere() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setLocationId(SITE_ID);
+            when(peopleAvailabilityLocalService.isEligibleAtSite(eq(TECHNICIAN_ID), eq(SITE_ID), any()))
+                    .thenReturn(false);
+
+            assertThatThrownBy(() -> service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null))
+                    .isInstanceOf(TechnicianNotStaffedAtSiteException.class)
+                    .satisfies(ex -> {
+                        TechnicianNotStaffedAtSiteException typed = (TechnicianNotStaffedAtSiteException) ex;
+                        assertThat(typed.getTechnicianId()).isEqualTo(TECHNICIAN_ID);
+                        assertThat(typed.getSiteId()).isEqualTo(SITE_ID);
+                    });
+            verify(assignmentRepository, never()).saveAndFlush(any());
+        }
+
+        @Test
+        @DisplayName(
+                "assign-vs-reassign conflict is authoritative: already-assigned wins over an unstaffed replacement")
+        void assignAlreadyAssignedWinsOverUnstaffedReplacement() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.ASSIGNED);
+            workorder.setLocationId(SITE_ID);
+            TechnicianAssignment existing = currentAssignment(OTHER_TECHNICIAN_ID);
+            when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
+                    .thenReturn(Optional.of(existing));
+            // The replacement is not staffed at this site — pinning that this must not surface as
+            // 422 TECHNICIAN_NOT_STAFFED_AT_SITE ahead of the established assign-vs-reassign 409.
+            when(peopleAvailabilityLocalService.isEligibleAtSite(eq(TECHNICIAN_ID), eq(SITE_ID), any()))
+                    .thenReturn(false);
+
+            assertThatThrownBy(() -> service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null))
+                    .isInstanceOf(TechnicianAlreadyAssignedException.class)
+                    .hasMessageContaining(OTHER_TECHNICIAN_ID.toString());
+            verify(assignmentRepository, never()).saveAndFlush(any());
+        }
+
+        @Test
+        @DisplayName("assign succeeds when the technician is staffed at the workorder's site")
+        void assignSucceedsWhenStaffedHere() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setLocationId(SITE_ID);
+            when(peopleAvailabilityLocalService.isEligibleAtSite(eq(TECHNICIAN_ID), eq(SITE_ID), any()))
+                    .thenReturn(true);
+
+            assertThatCode(() -> service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("assign skips the check entirely when the workorder has no site to compare against")
+        void assignSkipsCheckWithNoSite() {
+            givenWorkorder(WorkorderStatus.APPROVED);
+
+            service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null);
+
+            verify(peopleAvailabilityLocalService, never()).isEligibleAtSite(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("reassign refuses the new technician when staffed only elsewhere")
+        void reassignRefusesWhenNotStaffedHere() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
+            workorder.setLocationId(SITE_ID);
+            TechnicianAssignment existing = currentAssignment(OTHER_TECHNICIAN_ID);
+            when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
+                    .thenReturn(Optional.of(existing));
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.of(existing));
+            when(peopleAvailabilityLocalService.isEligibleAtSite(eq(TECHNICIAN_ID), eq(SITE_ID), any()))
+                    .thenReturn(false);
+
+            assertThatThrownBy(
+                            () -> service.reassignTechnician(WORKORDER_ID, TECHNICIAN_ID, "supervisor", "reason", null))
+                    .isInstanceOf(TechnicianNotStaffedAtSiteException.class);
+
+            // Refused before the incumbent's row is touched.
+            assertThat(existing.getCurrent()).isTrue();
+            verify(assignmentRepository, never()).saveAndFlush(existing);
+        }
+
+        @Test
+        @DisplayName("reassign succeeds when the new technician is staffed at the workorder's site")
+        void reassignSucceedsWhenStaffedHere() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
+            workorder.setLocationId(SITE_ID);
+            TechnicianAssignment existing = currentAssignment(OTHER_TECHNICIAN_ID);
+            when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
+                    .thenReturn(Optional.of(existing));
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.of(existing));
+            when(peopleAvailabilityLocalService.isEligibleAtSite(eq(TECHNICIAN_ID), eq(SITE_ID), any()))
+                    .thenReturn(true);
+
+            assertThatCode(() -> service.reassignTechnician(WORKORDER_ID, TECHNICIAN_ID, "supervisor", "reason", null))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("no-current-assignment guard is authoritative: not-assigned wins over an unstaffed replacement")
+        void reassignNotAssignedWinsOverUnstaffedReplacement() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
+            workorder.setLocationId(SITE_ID);
+            // No current assignment: findCurrentForUpdate stays empty (the setUp default).
+            // The replacement is not staffed at this site — pinning that this must not surface as
+            // 422 TECHNICIAN_NOT_STAFFED_AT_SITE ahead of the established 409 TECHNICIAN_NOT_ASSIGNED.
+            when(peopleAvailabilityLocalService.isEligibleAtSite(eq(TECHNICIAN_ID), eq(SITE_ID), any()))
+                    .thenReturn(false);
+
+            assertThatThrownBy(
+                            () -> service.reassignTechnician(WORKORDER_ID, TECHNICIAN_ID, "supervisor", "reason", null))
+                    .isInstanceOf(TechnicianNotAssignedException.class)
+                    .hasMessageContaining("no current technician assignment");
+        }
+
+        @Test
+        @DisplayName("resolves the site from the mobile unit's baseLocationId, not the workorder's own locationId")
+        void resolvesMobileUnitSite() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            // Deliberately different from the unit's base site: today requireSameSite forces these
+            // equal, but this proves the resolution itself reads the unit, not the workorder.
+            workorder.setLocationId(SITE_ID);
+            workorder.setResourceType(ResourceType.MOBILE_UNIT);
+            workorder.setResourceId(MOBILE_UNIT_ID);
+            when(extMobileUnitReplicaRepository.findById(MOBILE_UNIT_ID))
+                    .thenReturn(Optional.of(ExtMobileUnitReplica.builder()
+                            .mobileUnitId(MOBILE_UNIT_ID)
+                            .baseLocationId(MOBILE_UNIT_SITE_ID)
+                            .active(true)
+                            .aggregateVersion(1L)
+                            .updatedAt(Instant.EPOCH)
+                            .build()));
+            when(peopleAvailabilityLocalService.isEligibleAtSite(eq(TECHNICIAN_ID), eq(MOBILE_UNIT_SITE_ID), any()))
+                    .thenReturn(true);
+
+            service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null);
+
+            verify(peopleAvailabilityLocalService).isEligibleAtSite(eq(TECHNICIAN_ID), eq(MOBILE_UNIT_SITE_ID), any());
+            verify(peopleAvailabilityLocalService, never()).isEligibleAtSite(eq(TECHNICIAN_ID), eq(SITE_ID), any());
+        }
+
+        @Test
+        @DisplayName("#1990 Finding 3: skips the check for a MOBILE_UNIT whose replica has not arrived, "
+                + "rather than falling back to the workorder's own locationId")
+        void skipsCheckWhenMobileUnitReplicaMissing() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            // Deliberately set: if the fallback wrongly used this, the technician would be validated
+            // against SITE_ID instead of being skipped, and the assign below would fail.
+            workorder.setLocationId(SITE_ID);
+            workorder.setResourceType(ResourceType.MOBILE_UNIT);
+            workorder.setResourceId(MOBILE_UNIT_ID);
+            when(extMobileUnitReplicaRepository.findById(MOBILE_UNIT_ID)).thenReturn(Optional.empty());
+
+            assertThatCode(() -> service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null))
+                    .doesNotThrowAnyException();
+
+            verify(peopleAvailabilityLocalService, never()).isEligibleAtSite(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("#1990 Finding 3: skips the check for a MOBILE_UNIT replica with a null baseLocationId")
+        void skipsCheckWhenMobileUnitReplicaHasNoBaseLocation() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setLocationId(SITE_ID);
+            workorder.setResourceType(ResourceType.MOBILE_UNIT);
+            workorder.setResourceId(MOBILE_UNIT_ID);
+            when(extMobileUnitReplicaRepository.findById(MOBILE_UNIT_ID))
+                    .thenReturn(Optional.of(ExtMobileUnitReplica.builder()
+                            .mobileUnitId(MOBILE_UNIT_ID)
+                            .baseLocationId(null)
+                            .active(true)
+                            .aggregateVersion(1L)
+                            .updatedAt(Instant.EPOCH)
+                            .build()));
+
+            assertThatCode(() -> service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null))
+                    .doesNotThrowAnyException();
+
+            verify(peopleAvailabilityLocalService, never()).isEligibleAtSite(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("resolves the site from the workorder's own locationId for BAY, HOLD and no position")
+        void resolvesWorkorderSiteWhenNotOnAMobileUnit() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setLocationId(SITE_ID);
+            workorder.setResourceType(ResourceType.BAY);
+            workorder.setResourceId(UUID.randomUUID());
+            when(peopleAvailabilityLocalService.isEligibleAtSite(eq(TECHNICIAN_ID), eq(SITE_ID), any()))
+                    .thenReturn(true);
+
+            service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null);
+
+            verify(peopleAvailabilityLocalService).isEligibleAtSite(eq(TECHNICIAN_ID), eq(SITE_ID), any());
+            verify(extMobileUnitReplicaRepository, never()).findById(any());
+        }
+
+        @Test
+        @DisplayName("no override: neither request DTO carries an override/force/bypass field")
+        void noOverrideFieldExistsOnEitherRequest() {
+            assertThat(fieldNames(AssignTechnicianRequest.class)).noneMatch(StaffedAtSite::looksLikeAnOverride);
+            assertThat(fieldNames(ReassignTechnicianRequest.class)).noneMatch(StaffedAtSite::looksLikeAnOverride);
+        }
+
+        private static java.util.stream.Stream<String> fieldNames(Class<?> type) {
+            return Arrays.stream(type.getDeclaredFields()).map(Field::getName);
+        }
+
+        private static boolean looksLikeAnOverride(String fieldName) {
+            String lower = fieldName.toLowerCase(Locale.ROOT);
+            return lower.contains("override") || lower.contains("force") || lower.contains("bypass");
         }
     }
 }

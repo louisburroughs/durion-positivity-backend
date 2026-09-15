@@ -91,6 +91,34 @@ public class PeopleAvailabilityLocalService {
                                 .map(ExtStaffingAssignmentReplica::getLocationId));
     }
 
+    /**
+     * Whether {@code personId} may hold a workorder at {@code siteId} on {@code date} (#1990).
+     *
+     * <p>True unless the person has one or more ACTIVE staffing rows effective on {@code date} and
+     * none of them is at {@code siteId}. A person with no active staffing at all answers {@code
+     * true}: replica lag, bootstrap and a stalled DLQ must not take a shop offline — that is the
+     * only softening, there is no staleness threshold. {@code is_primary} is not considered and
+     * role is not filtered on, for the same reasons {@link #fetchAvailability} does not: role is
+     * free text, and filtering on it would refuse a real technician over a typo. This is the exact
+     * inverse of {@link #fetchAvailability}'s site roster — same predicate (ACTIVE, effective
+     * today, no primary filter), filtered by person instead of by location — so the two must never
+     * disagree, and both go through the same {@link #effectiveOn} definition to guarantee it.
+     *
+     * @param personId the technician being checked
+     * @param siteId   the workorder's site — the unit's base site when the position is a mobile
+     *                 unit, the workorder's own {@code locationId} otherwise
+     * @param date     the date staffing must be effective on, normally today
+     * @return whether {@code personId} is eligible to hold a workorder at {@code siteId}
+     */
+    public boolean isEligibleAtSite(@NonNull UUID personId, @NonNull UUID siteId, @NonNull LocalDate date) {
+        List<ExtStaffingAssignmentReplica> activeAssignments =
+                assignmentReplicaRepository.findByPersonIdAndStatus(personId, ACTIVE).stream()
+                        .filter(a -> effectiveOn(a, date))
+                        .toList();
+        return activeAssignments.isEmpty()
+                || activeAssignments.stream().anyMatch(a -> siteId.equals(a.getLocationId()));
+    }
+
     private boolean effectiveOn(ExtStaffingAssignmentReplica assignment, LocalDate date) {
         boolean started = assignment.getEffectiveFrom() == null
                 || !assignment.getEffectiveFrom().isAfter(date);
