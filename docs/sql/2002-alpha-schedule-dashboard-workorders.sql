@@ -14,7 +14,24 @@
 -- touches NULL dates, the placements only touch workorders with no position and only use resources
 -- no open workorder holds, and the history insert skips workorders that already have a current row.
 --
--- Run it against the pos-workorder database, in one transaction:
+-- Run it against the pos-workorder database, in one transaction. Postgres runs in a container, so
+-- reach psql through it rather than expecting a client on the host — by compose service name:
+--
+--   docker compose exec -T postgres \
+--     psql -U "$POSTGRES_USER" -d pos_workorder_db -v tenant_id="'<tenant-uuid>'" \
+--     < docs/sql/2002-alpha-schedule-dashboard-workorders.sql
+--
+-- or by container name, which is what `docker ps` shows (docker-compose.yml pins it):
+--
+--   docker exec -i postgres-positivity \
+--     psql -U "$POSTGRES_USER" -d pos_workorder_db -v tenant_id="'<tenant-uuid>'" \
+--     < docs/sql/2002-alpha-schedule-dashboard-workorders.sql
+--
+-- `-T` / `-i` matter: without them the script never reaches psql's stdin. Run it from the repo root
+-- so the relative path resolves, and keep the inner quotes on tenant_id — psql substitutes :tenant_id
+-- literally, so an unquoted UUID would be parsed as an identifier rather than a string.
+--
+-- With a psql client on the host instead, the equivalent is:
 --
 --   psql "$POS_WORKORDER_URL" -v tenant_id="'<tenant-uuid>'" \
 --        -f docs/sql/2002-alpha-schedule-dashboard-workorders.sql
