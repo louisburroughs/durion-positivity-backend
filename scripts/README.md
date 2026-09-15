@@ -608,7 +608,7 @@ Root `pom.xml` checks each module against `<jacoco.line.min>` / `<jacoco.branch.
 - Refuses to score coverage produced with ITs. Failsafe inherits the JaCoCo agent through `@{argLine}` and appends to the same `jacoco.exec`, so an IT-inclusive run yields floors the gate can never reproduce. `--allow-its` overrides, at the cost of that guarantee.
 - Modules with no `jacoco.csv` are listed and skipped, not failed — only a build that ran tests produces one.
 - Runs nightly in the `Full Coverage SonarCloud Analysis` job, right after the ratchet itself.
-- `THIN` usually means coverage fell, not that the floor is wrong. Floors are never lowered (below), so each one sits `--cushion` under its module's best-ever measurement — a module that drops more than 2 points below that peak fails here. Check what the coverage did before reaching for `--allow-lower`; §6.6 works through a case of each.
+- `THIN` usually means coverage fell, not that the floor is wrong. Floors are never lowered (below), so each one sits `--cushion` under its module's best-ever measurement, rounded down to a whole point. A module fails here once its cushion over that floor falls under `--min-cushion` — which, with the default 3-point cushion and the rounding, is a fall of only 1 to 2 points from the peak, not the 3 the cushion suggests. Check what the coverage did before reaching for `--allow-lower`; §6.6 works through a case of each.
 - The PR gate cannot catch a `THIN`. It invokes `jacoco:check`, which only fails a `BREACH`, so a change that eats a module's cushion merges green and surfaces here the following night (§6.6).
 - Fix any finding with `./scripts/update-coverage-floors.sh --apply`.
 

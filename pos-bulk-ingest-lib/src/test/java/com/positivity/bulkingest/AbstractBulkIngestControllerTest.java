@@ -210,7 +210,7 @@ class AbstractBulkIngestControllerTest {
      * {@link BulkIngestFailures#retryable} behave; none of it proves {@code rowFailure} routes to
      * them, and {@code rowFailure} is the method every bulk-ingest endpoint on the platform
      * actually calls. The gap cost the module three points of line coverage and failed the
-     * nightly floor-drift check five weeks later (§6.6 of the coverage plan).
+     * next nightly floor-drift check, about fourteen hours later (§6.6 of the coverage plan).
      */
     @Nested
     @DisplayName("a deferred row")

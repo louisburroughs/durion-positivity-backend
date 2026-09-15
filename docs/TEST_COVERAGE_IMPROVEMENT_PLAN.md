@@ -942,11 +942,18 @@ module's **best measurement ever taken**, and `STALE` at +6 forces the
 re-derivation that moves that peak up.
 
 The consequence is worth stating plainly, because it is the thing that fails a
-nightly: **a guarded module may not fall more than `--min-cushion` (2 points)
-below its own best-ever measurement without turning the nightly red.** That is
-what a ratchet is. But the failure does not look like a coverage regression when
-it arrives — it names a *floor* (`THIN`), on a module nobody touched that night,
-in a job that runs long after the commit responsible merged green.
+nightly: **a guarded module fails as soon as its measured cushion over the
+standing floor falls under `--min-cushion` (2 points).** That is what a ratchet
+is. But the failure does not look like a coverage regression when it arrives —
+it names a *floor* (`THIN`), on a module nobody touched that night, in a job
+that runs long after the commit responsible merged green.
+
+Stated as a fall from the peak it is tighter than the 3-point cushion suggests,
+because `floor_for()` rounds the floor **down** to whole percentage points: the
+floor is `floor(peak − 3)`, so `THIN` arrives after a fall of anywhere between
+1.0 and 2.0 points, depending on where the peak sat inside its own point. Both
+modules below are examples. `pos-bulk-ingest-lib` had 1.9 points of room and
+used 3.0; `pos-tenancy-common`'s line counter had only 1.1.
 
 **Why the PR gate lets it through.** The two gates fail on different things
 (§6.2's table). The PR gate invokes `jacoco:check`, which only knows `BREACH`:
