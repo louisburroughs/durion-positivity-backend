@@ -268,9 +268,19 @@ repairs a missing date.
 nobody has set yet. An existing date is never rewritten, a past one included — a job that started on
 Monday is genuinely Monday's work, and the roster rule above is what puts it on Wednesday's board.
 
-Alpha was found in exactly the state this prevents: fourteen non-terminal workorders, none dated,
-and an empty board at every repair-capable location. The one-off repair for the rows that predate
-the invariant is `docs/sql/2002-alpha-schedule-dashboard-workorders.sql`.
+This is also the module's **only** writer of `scheduledDate`. No endpoint sets it directly and the
+inbound assignment fact does not carry it, which is why alpha was found in exactly the state the
+invariant prevents: fourteen non-terminal workorders, none dated, and an empty board at every
+repair-capable location. Repairing rows that predate the invariant therefore splits in two —
+placements go through `PUT /v1/workorders/{workorderId}/position`, which now dates them as a side
+effect and publishes the fact; the unplaced open work the roster also needs has no supported writer
+and is dated by `docs/sql/2002-alpha-schedule-dashboard-workorders.sql`, which documents what that
+costs (no fact, so consumer replicas converge on the next real mutation).
+
+Also worth knowing when reading `findOpenResourceHoldersAtLocation`: it asks only for a non-null
+`resource_id`, and a parked workorder has one — `(HOLD, its own locationId)`. The roster filters
+those out of the carryover half, because no panel renders a hold. A workorder parked *today* still
+reaches the board through the day's schedule.
 
 Two edge behaviours are deliberate and live in `DashboardServiceImpl.buildResourcePanel`:
 

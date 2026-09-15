@@ -1591,6 +1591,40 @@ class DashboardServiceTest {
     }
 
     @Test
+    @DisplayName("#2002: an open parked workorder carried from an earlier date stays off the roster")
+    void getDashboard_holdHolderFromAnEarlierDate_staysOffTheRoster() {
+        // findOpenResourceHoldersAtLocation asks only for a resource id, and a parked workorder has
+        // one: (HOLD, its own locationId). No panel renders a hold, so nothing obliges the roster to
+        // carry it, and admitting it would drag in every open parked job from every past date.
+        UUID parkedId = UUID.fromString("00000000-0000-0000-0000-0000000000c6");
+        Workorder parked = assignedWorkorder(parkedId, LOCATION_UUID, ResourceType.HOLD, WorkorderStatus.APPROVED);
+        parked.setScheduledDate(TEST_DATE.minusDays(5));
+        givenResourceHoldersOnly(parked);
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        assertThat(response.getWorkorders()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("#2002: a workorder parked today is on the roster — the day's schedule is not filtered")
+    void getDashboard_holdScheduledForToday_isOnTheRoster() {
+        UUID parkedId = UUID.fromString("00000000-0000-0000-0000-0000000000c7");
+        Workorder parked = assignedWorkorder(parkedId, LOCATION_UUID, ResourceType.HOLD, WorkorderStatus.APPROVED);
+        parked.setScheduledDate(TEST_DATE);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(parked));
+        when(workorderRepository.findOpenResourceHoldersAtLocation(any(), any()))
+                .thenReturn(List.of(parked));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        assertThat(response.getWorkorders())
+                .singleElement()
+                .satisfies(summary -> assertThat(summary.getWorkorderId()).isEqualTo(parkedId));
+    }
+
+    @Test
     @DisplayName("#2002: a workorder completed today stays on today's roster as completed work")
     void getDashboard_completedToday_staysOnTheRoster() {
         UUID completedId = UUID.fromString("00000000-0000-0000-0000-0000000000c5");

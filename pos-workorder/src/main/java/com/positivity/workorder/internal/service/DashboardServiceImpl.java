@@ -148,18 +148,24 @@ public class DashboardServiceImpl implements DashboardService {
      * honest about each other — the roster is, by construction, a superset of every workorder the
      * bay and mobile-unit panels name as an occupant.
      *
-     * <p>Locked holders are dropped for the same reason {@code buildResourcePanel} drops them:
-     * {@link Workorder#isLocked()} is the single authority on whether a job is still live, and a
-     * cancelled workorder that still carries a stale resource id is not work anybody is dispatching
-     * today. The day's own rows are not filtered — a workorder completed this morning belongs on
-     * today's board as completed work.
+     * <p>Two filters apply to the carryover half, and both are the panels' own. Locked holders are
+     * dropped because {@link Workorder#isLocked()} is the single authority on whether a job is
+     * still live, and a cancelled workorder that still carries a stale resource id is not work
+     * anybody is dispatching today. Non-exclusive holders are dropped because the query answers
+     * "holds a resource id", which a parked workorder does too — {@code (HOLD, its own locationId)}
+     * — and a hold is a lot, not a slot: no panel renders it, so nothing here obliges the roster to
+     * carry it, and admitting it would silently add every open parked job from every past date
+     * under a rule this method does not claim. A workorder parked today still reaches the board
+     * through the day's schedule, which is not filtered at all — a workorder completed this morning
+     * likewise belongs on today's board as completed work.
      *
      * <p>Order is the day's schedule first, then carryover, each in query order; ids already
      * present are not added twice. Rows without an id cannot be matched against anything, so they
      * are carried through as they arrive rather than silently collapsed.
      *
      * @param scheduledForDate rows whose {@code scheduledDate} is exactly the board's date
-     * @param resourceHolders open, resource-holding rows on or before the board's date
+     * @param resourceHolders open rows holding any resource id on or before the board's date,
+     *     {@link com.positivity.workorder.internal.enums.ResourceType#HOLD} included
      * @return the roster, deduplicated by workorder id
      */
     private static List<Workorder> mergeRoster(List<Workorder> scheduledForDate, List<Workorder> resourceHolders) {
@@ -171,7 +177,7 @@ public class DashboardServiceImpl implements DashboardService {
             }
         }
         for (Workorder holder : resourceHolders) {
-            if (holder.isLocked()) {
+            if (holder.isLocked() || !effectiveResourceType(holder).isExclusive()) {
                 continue;
             }
             if (holder.getId() != null && !seen.add(holder.getId())) {
