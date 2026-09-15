@@ -1394,6 +1394,9 @@ FROM (VALUES
     ('SELF_SERVICE_CUSTOMER', 'nlti:request:read'),
     ('SELF_SERVICE_CUSTOMER', 'nlti:request:submit'),
     ('SHOP_MANAGER', 'accounting:analytics:view'),
+    -- #2003: the count-plan form and every other inventory location read is gated on this; the
+    -- role held inventory:availability:read without it, so the page's only data load 403'd.
+    ('SHOP_MANAGER', 'inventory:location:view'),
     ('SHOP_MANAGER', 'invoice:analytics:view'),
     ('SHOP_MANAGER', 'invoice:finalize:override'),
     ('SHOP_MANAGER', 'location:bay:read'),

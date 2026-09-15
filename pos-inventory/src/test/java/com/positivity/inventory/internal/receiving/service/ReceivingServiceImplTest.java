@@ -26,6 +26,7 @@ import com.positivity.inventory.internal.entity.ReceivingSession;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.ReceivingLineStatus;
 import com.positivity.inventory.internal.enums.ReceivingSessionStatus;
+import com.positivity.inventory.internal.enums.SourceDocumentType;
 import com.positivity.inventory.internal.exception.FractionalQuantityNotAllowedException;
 import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.ReceivingSessionNotFoundException;
@@ -157,7 +158,9 @@ class ReceivingServiceImplTest {
 
     @BeforeEach
     void stubDefaultStagingLocation() {
-        lenient().when(stagingLocationResolver.resolveStagingLocationId()).thenReturn(STAGING_LOCATION_ID);
+        lenient()
+                .when(stagingLocationResolver.resolveStagingLocationIdFor(any()))
+                .thenReturn(STAGING_LOCATION_ID);
     }
 
     @AfterEach
@@ -655,13 +658,64 @@ class ReceivingServiceImplTest {
         assertThat(savedLedgerEntry.getChangeInQuantity()).isEqualByComparingTo("10");
     }
 
+    /**
+     * #2009: the session's source document names the site its stock is received at, so the ledger
+     * entry is stamped with that site's declared staging location without the caller sending
+     * X-Site-Id.
+     */
+    @Test
+    void receiveItemsIntoStaging_ledgerEntryUsesTheSessionsShipToSiteStagingLocation() {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID purchaseOrderId = UUID.fromString("00000000-0000-0000-0000-0000000000c2");
+        UUID shipToSiteId = UUID.fromString("00000000-0000-0000-0000-0000000000c3");
+        UUID siteStagingFloor = UUID.fromString("00000000-0000-0000-0000-0000000000c4");
+
+        when(sourceDocumentResolver.resolveShipToLocationId(SourceDocumentType.PO, purchaseOrderId.toString()))
+                .thenReturn(Optional.of(shipToSiteId));
+        when(stagingLocationResolver.resolveStagingLocationIdFor(shipToSiteId)).thenReturn(siteStagingFloor);
+
+        ReceivingLine line = ReceivingLine.builder()
+                .lineId(lineId)
+                .productId("PROD-001")
+                .expectedQuantity(new BigDecimal("10"))
+                .receivedQuantity(BigDecimal.ZERO)
+                .status(ReceivingLineStatus.EXPECTED)
+                .build();
+        ReceivingSession session = ReceivingSession.builder()
+                .sessionId(sessionId)
+                .sourceDocumentId(purchaseOrderId.toString())
+                .sourceDocumentType(SourceDocumentType.PO)
+                .status(ReceivingSessionStatus.OPEN)
+                .lines(new java.util.ArrayList<>(List.of(line)))
+                .build();
+        line.setSession(session);
+        when(receivingSessionRepository.findById(sessionId)).thenReturn(Optional.of(session));
+        when(receivingSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerPostingService.post(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(inventoryLedgerEntryRepository.calculateOnHandQuantityAtLocation("PROD-001", siteStagingFloor))
+                .thenReturn(new BigDecimal("7"));
+
+        ReceiveItemsRequest request = new ReceiveItemsRequest(
+                List.of(new ReceiveLineRequest(lineId, new BigDecimal("10"), null, null, null)));
+
+        receivingService.receiveItemsIntoStaging(sessionId, request, "test-user");
+
+        ArgumentCaptor<InventoryLedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(ledgerPostingService).post(ledgerCaptor.capture());
+        InventoryLedgerEntry savedLedgerEntry = ledgerCaptor.getValue();
+
+        assertThat(savedLedgerEntry.getLocationId()).isEqualTo(siteStagingFloor);
+        assertThat(savedLedgerEntry.getToLocationId()).isEqualTo(siteStagingFloor);
+    }
+
     @Test
     void receiveItemsIntoStaging_ledgerEntryUsesSiteDefaultStagingLocationWhenConfigured() {
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID lineId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID siteDefaultStagingLocationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-        when(stagingLocationResolver.resolveStagingLocationId()).thenReturn(siteDefaultStagingLocationId);
+        when(stagingLocationResolver.resolveStagingLocationIdFor(any())).thenReturn(siteDefaultStagingLocationId);
 
         ReceivingLine line = ReceivingLine.builder()
                 .lineId(lineId)

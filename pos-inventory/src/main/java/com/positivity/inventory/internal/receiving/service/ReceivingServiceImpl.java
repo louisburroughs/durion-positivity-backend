@@ -44,6 +44,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -183,6 +184,7 @@ public class ReceivingServiceImpl implements ReceivingService {
         line.setStatus(statusFor(cmp));
 
         createGoodsReceiptLedgerEntry(
+                session,
                 sessionId,
                 line.getLineId(),
                 line.getProductId(),
@@ -450,6 +452,7 @@ public class ReceivingServiceImpl implements ReceivingService {
     }
 
     private void createGoodsReceiptLedgerEntry(
+            ReceivingSession session,
             UUID sessionId,
             UUID lineId,
             String productId,
@@ -458,7 +461,7 @@ public class ReceivingServiceImpl implements ReceivingService {
             java.util.List<String> serialNumbers,
             String actorUserId) {
         BigDecimal quantityDelta = toLedgerQuantity(productId, quantity, "receivedQuantity");
-        UUID stagingLocationId = stagingLocationResolver.resolveStagingLocationId();
+        UUID stagingLocationId = stagingLocationResolver.resolveStagingLocationIdFor(sessionSiteId(session));
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
                 .stockItemId(productId)
                 .locationId(stagingLocationId)
@@ -477,6 +480,21 @@ public class ReceivingServiceImpl implements ReceivingService {
 
         ledgerPostingService.post(entry);
         inventoryFactPublisher.markEntry(entry);
+    }
+
+    /**
+     * The site this session is receiving at: its source document's ship-to location (#2009).
+     *
+     * <p>Staged stock belongs at the site's declared staging location, and the session already
+     * names the document that names the site — so receive-into-staging no longer depends on the
+     * caller sending {@code X-Site-Id}. Null when the source document does not say, which leaves
+     * the resolver on its configured fallback.
+     */
+    @Nullable
+    private UUID sessionSiteId(@NonNull ReceivingSession session) {
+        return sourceDocumentResolver
+                .resolveShipToLocationId(session.getSourceDocumentType(), session.getSourceDocumentId())
+                .orElse(null);
     }
 
     /**

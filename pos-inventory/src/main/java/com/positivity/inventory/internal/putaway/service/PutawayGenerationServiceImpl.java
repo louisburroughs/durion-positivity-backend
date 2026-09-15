@@ -48,7 +48,9 @@ public class PutawayGenerationServiceImpl implements PutawayGenerationService {
                 .findById(sourceReceiptId)
                 .orElseThrow(() -> new ResourceNotFoundException("GoodsReceipt", sourceReceiptId.toString()));
 
-        UUID stagingLocationId = stagingLocationResolver.resolveStagingLocationId();
+        // #2009: the receipt's own location names the site whose declared staging location applies,
+        // so this succeeds for a site with configured defaults without the caller sending X-Site-Id.
+        UUID stagingLocationId = stagingLocationResolver.resolveStagingLocationIdFor(sourceReceipt.getLocationId());
         if (!stagingLocationId.equals(sourceReceipt.getLocationId())) {
             throw new ReceiptNotStagedException(sourceReceiptId, sourceReceipt.getLocationId(), stagingLocationId);
         }

@@ -107,7 +107,9 @@ class PutawayGenerationServiceImplTest {
         lenient()
                 .when(goodsReceiptRepository.findById(any(UUID.class)))
                 .thenAnswer(inv -> Optional.of(receipt(inv.getArgument(0))));
-        lenient().when(stagingLocationResolver.resolveStagingLocationId()).thenReturn(STAGING_LOCATION);
+        lenient()
+                .when(stagingLocationResolver.resolveStagingLocationIdFor(any()))
+                .thenReturn(STAGING_LOCATION);
     }
 
     @Test
@@ -509,6 +511,39 @@ class PutawayGenerationServiceImplTest {
                 .isInstanceOf(ReceiptNotStagedException.class)
                 .hasMessageContaining(directOnHandLocation.toString())
                 .hasMessageContaining(STAGING_LOCATION.toString());
+    }
+
+    /**
+     * #2009: the staging location is resolved from the receipt's own location, so a receipt booked
+     * into the site's declared staging location is put away without the caller sending X-Site-Id.
+     */
+    @Test
+    void generateTasksForReceipt_resolvesStagingLocationFromTheReceiptsOwnLocation() {
+        UUID receiptId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID siteStagingFloor = UUID.fromString("00000000-0000-0000-0000-0000000000c1");
+        GoodsReceiptEntity receipt = new GoodsReceiptEntity();
+        receipt.setReceiptId(receiptId);
+        receipt.setLocationId(siteStagingFloor);
+        when(goodsReceiptRepository.findById(receiptId)).thenReturn(Optional.of(receipt));
+        // The site that owns Staging Floor declares it as its default staging location.
+        when(stagingLocationResolver.resolveStagingLocationIdFor(siteStagingFloor))
+                .thenReturn(siteStagingFloor);
+        when(putawayRuleRepository.findAllByIsEnabledTrueOrderByPriorityAscRuleIdAsc())
+                .thenReturn(List.of(anyRule(DEST_A)));
+        when(putawayTaskRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+
+        GeneratePutawayTasksRequest request = GeneratePutawayTasksRequest.builder()
+                .sourceReceiptId(receiptId.toString())
+                .productId(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001").toString())
+                .quantity(5)
+                .build();
+
+        List<PutawayTaskResponse> responses = service.generateTasksForReceipt(request);
+
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).getSourceLocationId()).isEqualTo(siteStagingFloor);
+        verify(stagingLocationResolver).resolveStagingLocationIdFor(siteStagingFloor);
     }
 
     @Test

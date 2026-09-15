@@ -134,6 +134,45 @@ class SourceDocumentResolverTest {
                 .hasMessageContaining("ASN");
     }
 
+    /**
+     * #2009 — receive-into-staging asks where its stock lands, and the order's ship-to answers it,
+     * so the caller no longer has to send X-Site-Id.
+     */
+    @Test
+    @DisplayName("the order's ship-to location is the site a session receives at (#2009)")
+    void shipToLocationIsTheSessionsSite() {
+        UUID shipTo = UUID.fromString("01a02fd3-b675-7000-8000-000000000005");
+        when(purchaseOrderRepository.findById(PO_ID))
+                .thenReturn(Optional.of(ExtPurchaseOrderReplica.builder()
+                        .purchaseOrderId(PO_ID)
+                        .poNumber("PO-2026-00042")
+                        .vendorId(UUID.fromString("01a02fd3-b675-7000-8000-00000000000f"))
+                        .status("APPROVED")
+                        .shipToLocationId(shipTo)
+                        .build()));
+
+        assertThat(resolver.resolveShipToLocationId(SourceDocumentType.PO, PO_ID.toString()))
+                .contains(shipTo);
+    }
+
+    /**
+     * Unanswerable is empty, not an exception: the caller has a fallback, and a session whose site
+     * cannot be established must still be able to receive.
+     */
+    @Test
+    @DisplayName("an unprojected order, a non-PO type and a non-UUID id all resolve to no ship-to")
+    void unanswerableShipToIsEmpty() {
+        when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.empty());
+
+        assertThat(resolver.resolveShipToLocationId(SourceDocumentType.PO, PO_ID.toString()))
+                .isEmpty();
+        assertThat(resolver.resolveShipToLocationId(SourceDocumentType.PO, "PO-123"))
+                .isEmpty();
+        assertThat(resolver.resolveShipToLocationId(SourceDocumentType.ASN, PO_ID.toString()))
+                .isEmpty();
+        assertThat(resolver.resolveShipToLocationId(null, PO_ID.toString())).isEmpty();
+    }
+
     private SourceDocumentResolver.SourceDocument resolve() {
         return resolver.resolve(SourceDocumentType.PO, PO_ID.toString());
     }

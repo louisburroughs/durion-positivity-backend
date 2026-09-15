@@ -16,6 +16,10 @@ import org.springframework.stereotype.Component;
  * transfer destination site); summary/scope/policy ids are frequently bin-level. A bin is
  * resolved to its parent site via the storage-location replica; ids not present in the
  * replica are assumed to already be site ids and pass through unchanged.
+ *
+ * <p>That normalisation is not specific to forecasting, and this is the module's one
+ * implementation of it: {@link StagingLocationResolver} uses it too, to find the site whose
+ * declared staging location applies to a receipt or a purchase order's ship-to (#2009).
  */
 @Component
 @RequiredArgsConstructor
