@@ -6,17 +6,21 @@ import static org.hamcrest.Matchers.*;
 import com.positivity.workorder.internal.entity.Estimate;
 import com.positivity.workorder.internal.entity.EstimateItem;
 import com.positivity.workorder.internal.entity.EstimateItemType;
+import com.positivity.workorder.internal.entity.ExtBayReplica;
 import com.positivity.workorder.internal.entity.ExtPersonReplica;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
+import com.positivity.workorder.internal.entity.WorkorderStateTransition;
 import com.positivity.workorder.internal.enums.ApprovalStatus;
 import com.positivity.workorder.internal.enums.EstimateStatus;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.EstimateItemRepository;
 import com.positivity.workorder.internal.repository.EstimateRepository;
+import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
+import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
 import com.positivity.workorder.support.BaseContractIntegrationTest;
 import io.restassured.http.ContentType;
 import java.math.BigDecimal;
@@ -66,6 +70,12 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
     @Autowired
     private ExtPersonReplicaRepository extPersonReplicaRepository;
 
+    @Autowired
+    private ExtBayReplicaRepository extBayReplicaRepository;
+
+    @Autowired
+    private WorkorderStateTransitionRepository transitionRepository;
+
     private UUID testCustomerId;
     private UUID testLocationId;
     private UUID testVehicleId;
@@ -80,9 +90,10 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
     // ========== TECHNICIAN ASSIGNMENT TESTS ==========
 
     @Test
-    @DisplayName("TA-001: Successfully assign technician to APPROVED workorder")
+    @DisplayName(
+            "TA-001: Assigning a technician to an APPROVED workorder with no position leaves it " + "APPROVED (#2011)")
     void testAssignTechnician_HappyPath() {
-        // Given: A workorder in APPROVED status
+        // Given: A workorder in APPROVED status, with no position
         UUID workorderId = seedApprovedWorkorder();
         testTechnicianId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
@@ -111,12 +122,14 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
                 .body("technicianId", equalTo(testTechnicianId1.toString()))
                 .body("assignedAt", notNullValue())
                 .body("assignedBy", equalTo(SYSTEM_USER_ID))
-                .body("status", equalTo("ASSIGNED"))
+                // #2011: ASSIGNED means both a technician and a bay or mobile unit. A technician
+                // alone, with nowhere to be worked, leaves the workorder APPROVED.
+                .body("status", equalTo("APPROVED"))
                 .body("message", containsString("successfully"));
 
-        // Then: Verify workorder status transitioned to ASSIGNED
+        // Then: Verify the workorder is still APPROVED — it has nowhere to be worked yet
         Workorder updatedWorkorder = workorderRepository.findById(workorderId).orElseThrow();
-        assertThat(updatedWorkorder.getStatus()).isEqualTo(WorkorderStatus.ASSIGNED);
+        assertThat(updatedWorkorder.getStatus()).isEqualTo(WorkorderStatus.APPROVED);
 
         // Verify assignment was recorded
         List<TechnicianAssignment> assignments =
@@ -472,6 +485,80 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
 
         assertThat(assignmentRepository.findByWorkorder_IdOrderByAssignedAtDesc(workorderId))
                 .isEmpty();
+    }
+
+    @Test
+    @DisplayName("TA-009: #2010 releasing the only technician of an ASSIGNED workorder (one on a bay) "
+            + "moves it back to APPROVED with a status history row")
+    void testReleaseTechnician_FromAssignedWorkorderRevertsToApproved() {
+        UUID workorderId = seedApprovedWorkorder();
+        testTechnicianId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-000000000070");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-000000000071");
+
+        // The workorder needs a site of its own before it can stand on a bay (#2011): assignPosition
+        // validates the bay against the workorder's own locationId, which seedApprovedWorkorder()
+        // leaves unset.
+        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+        workorder.setLocationId(siteId);
+        workorder.setShopId(siteId);
+        workorderRepository.save(workorder);
+
+        extBayReplicaRepository.save(ExtBayReplica.builder()
+                .bayId(bayId)
+                .locationId(siteId)
+                .name("TA Bay")
+                .active(true)
+                .aggregateVersion(1L)
+                .updatedAt(Instant.EPOCH)
+                .build());
+
+        // Complete the pair: a technician, then a bay.
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("technicianId", testTechnicianId1.toString()))
+                .when()
+                .post("/v1/workorders/{workorderId}/technician", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(200);
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("resourceType", "BAY", "resourceId", bayId.toString()))
+                .when()
+                .put("/v1/workorders/{workorderId}/position", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(200);
+
+        assertThat(workorderRepository.findById(workorderId).orElseThrow().getStatus())
+                .isEqualTo(WorkorderStatus.ASSIGNED);
+
+        // When: the only technician is released
+        givenWithGatewayAuth()
+                .when()
+                .delete("/v1/workorders/{workorderId}/technician?reason=Called%20out%20sick", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(204);
+
+        // Then: the pair is broken, so the workorder falls back to APPROVED
+        assertThat(workorderRepository.findById(workorderId).orElseThrow().getStatus())
+                .isEqualTo(WorkorderStatus.APPROVED);
+
+        // And a status history row records the reversion
+        List<WorkorderStateTransition> transitions =
+                transitionRepository.findByWorkorder_IdOrderByTransitionedAtDesc(workorderId);
+        WorkorderStateTransition revertTransition = transitions.stream()
+                .filter(t ->
+                        t.getFromStatus() == WorkorderStatus.ASSIGNED && t.getToStatus() == WorkorderStatus.APPROVED)
+                .findFirst()
+                .orElseThrow();
+        assertThat(revertTransition.getTransitionedAt()).isNotNull();
     }
 
     @Test

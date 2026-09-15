@@ -24,6 +24,7 @@ import com.positivity.workorder.internal.repository.WorkorderSnapshotRepository;
 import com.positivity.workorder.internal.repository.WorkorderStateTransitionRepository;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
@@ -125,6 +126,18 @@ class WorkorderStateMachineTest {
     @AfterEach
     void clearAuth() {
         SecurityContextHolder.clearContext();
+    }
+
+    /** A minimal current technician assignment for {@code testWorkorderId} (#2011). */
+    private TechnicianAssignment currentTechnicianAssignment() {
+        return TechnicianAssignment.builder()
+                .id(1L)
+                .workorder(new Workorder(testWorkorderId))
+                .technicianId(UUID.fromString("550e8400-e29b-41d4-a716-446655440061"))
+                .assignedBy("dispatch")
+                .assignedAt(LocalDateTime.now(TEST_CLOCK))
+                .current(true)
+                .build();
     }
 
     @Test
@@ -251,8 +264,7 @@ class WorkorderStateMachineTest {
         testWorkorder.setStatus(WorkorderStatus.APPROVED);
         when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(testWorkorder));
         when(technicianAssignmentRepository.findByWorkorder_IdAndCurrentTrue(testWorkorderId))
-                .thenReturn(Optional.of(
-                        TechnicianAssignment.builder().id(1L).current(true).build()));
+                .thenReturn(Optional.of(currentTechnicianAssignment()));
 
         IllegalStateException exception = assertThrows(
                 IllegalStateException.class,
@@ -398,5 +410,170 @@ class WorkorderStateMachineTest {
 
         verify(workorderRepository, org.mockito.Mockito.never()).save(any(Workorder.class));
         verify(transitionRepository, org.mockito.Mockito.never()).save(any(WorkorderStateTransition.class));
+    }
+
+    // -----------------------------------------------------------------------
+    // #2011: reconcileAssigned re-decides ASSIGNED vs APPROVED after either half of the
+    // technician/position pair changes.
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @org.junit.jupiter.api.DisplayName("reconcileAssigned")
+    class ReconcileAssigned {
+
+        private static final UUID POSITION_ID = UUID.fromString("550e8400-e29b-41d4-a716-446655440060");
+
+        private Workorder workorderWith(WorkorderStatus status, ResourceType resourceType, UUID resourceId) {
+            return Workorder.builder()
+                    .id(testWorkorderId)
+                    .shopId(testShopId)
+                    .vehicleId(testVehicleId)
+                    .customerId(testCustomerId)
+                    .status(status)
+                    .resourceType(resourceType)
+                    .resourceId(resourceId)
+                    .build();
+        }
+
+        private void givenCurrentTechnician(boolean present) {
+            Optional<TechnicianAssignment> assignment =
+                    present ? Optional.of(currentTechnicianAssignment()) : Optional.empty();
+            when(technicianAssignmentRepository.findByWorkorder_IdAndCurrentTrue(testWorkorderId))
+                    .thenReturn(assignment);
+        }
+
+        @Test
+        @org.junit.jupiter.api.DisplayName("APPROVED with a technician and a bay transitions to ASSIGNED")
+        void approvedWithTechnicianAndBayTransitionsToAssigned() {
+            Workorder workorder = workorderWith(WorkorderStatus.APPROVED, ResourceType.BAY, POSITION_ID);
+            when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(workorder));
+            givenCurrentTechnician(true);
+
+            stateMachine.reconcileAssigned(testWorkorderId, userId, "Position assigned");
+
+            assertEquals(WorkorderStatus.ASSIGNED, workorder.getStatus());
+            verify(workorderRepository).save(workorder);
+        }
+
+        @Test
+        @org.junit.jupiter.api.DisplayName("APPROVED with a technician and a mobile unit transitions to ASSIGNED")
+        void approvedWithTechnicianAndMobileUnitTransitionsToAssigned() {
+            Workorder workorder = workorderWith(WorkorderStatus.APPROVED, ResourceType.MOBILE_UNIT, POSITION_ID);
+            when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(workorder));
+            givenCurrentTechnician(true);
+
+            stateMachine.reconcileAssigned(testWorkorderId, userId, "Position assigned");
+
+            assertEquals(WorkorderStatus.ASSIGNED, workorder.getStatus());
+        }
+
+        @Test
+        @org.junit.jupiter.api.DisplayName("APPROVED with a technician but no position does not transition")
+        void approvedWithTechnicianNoPositionDoesNotTransition() {
+            Workorder workorder = workorderWith(WorkorderStatus.APPROVED, null, null);
+            when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(workorder));
+            givenCurrentTechnician(true);
+
+            stateMachine.reconcileAssigned(testWorkorderId, userId, "Technician assigned");
+
+            assertEquals(WorkorderStatus.APPROVED, workorder.getStatus());
+            verify(workorderRepository, org.mockito.Mockito.never()).save(any(Workorder.class));
+            verify(transitionRepository, org.mockito.Mockito.never()).save(any(WorkorderStateTransition.class));
+        }
+
+        @Test
+        @org.junit.jupiter.api.DisplayName(
+                "#1984: APPROVED with a technician on a HOLD does not transition — a hold is not a place work happens")
+        void approvedWithTechnicianOnHoldDoesNotTransition() {
+            Workorder workorder = workorderWith(WorkorderStatus.APPROVED, ResourceType.HOLD, POSITION_ID);
+            when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(workorder));
+            givenCurrentTechnician(true);
+
+            stateMachine.reconcileAssigned(testWorkorderId, userId, "Parked");
+
+            assertEquals(WorkorderStatus.APPROVED, workorder.getStatus());
+            verify(transitionRepository, org.mockito.Mockito.never()).save(any(WorkorderStateTransition.class));
+        }
+
+        @Test
+        @org.junit.jupiter.api.DisplayName("APPROVED with a position but no technician does not transition")
+        void approvedWithPositionNoTechnicianDoesNotTransition() {
+            Workorder workorder = workorderWith(WorkorderStatus.APPROVED, ResourceType.BAY, POSITION_ID);
+            when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(workorder));
+            givenCurrentTechnician(false);
+
+            stateMachine.reconcileAssigned(testWorkorderId, userId, "Position assigned");
+
+            assertEquals(WorkorderStatus.APPROVED, workorder.getStatus());
+            verify(transitionRepository, org.mockito.Mockito.never()).save(any(WorkorderStateTransition.class));
+        }
+
+        @Test
+        @org.junit.jupiter.api.DisplayName(
+                "#2010: ASSIGNED reverts to APPROVED when the technician is released, and records history")
+        void assignedRevertsToApprovedWhenTechnicianReleased() {
+            Workorder workorder = workorderWith(WorkorderStatus.ASSIGNED, ResourceType.BAY, POSITION_ID);
+            when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(workorder));
+            givenCurrentTechnician(false);
+
+            stateMachine.reconcileAssigned(testWorkorderId, userId, "Technician released");
+
+            assertEquals(WorkorderStatus.APPROVED, workorder.getStatus());
+            ArgumentCaptor<WorkorderStateTransition> captor = ArgumentCaptor.forClass(WorkorderStateTransition.class);
+            verify(transitionRepository).save(captor.capture());
+            WorkorderStateTransition recorded = captor.getValue();
+            assertEquals(WorkorderStatus.ASSIGNED, recorded.getFromStatus());
+            assertEquals(WorkorderStatus.APPROVED, recorded.getToStatus());
+            assertEquals("Technician released", recorded.getReason());
+        }
+
+        @Test
+        @org.junit.jupiter.api.DisplayName("ASSIGNED reverts to APPROVED when the position is cleared")
+        void assignedRevertsToApprovedWhenPositionCleared() {
+            Workorder workorder = workorderWith(WorkorderStatus.ASSIGNED, null, null);
+            when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(workorder));
+            givenCurrentTechnician(true);
+
+            stateMachine.reconcileAssigned(testWorkorderId, userId, "Position released");
+
+            assertEquals(WorkorderStatus.APPROVED, workorder.getStatus());
+        }
+
+        @Test
+        @org.junit.jupiter.api.DisplayName("ASSIGNED with both halves is idempotent: no transition, no history row")
+        void assignedWithBothHalvesIsIdempotent() {
+            Workorder workorder = workorderWith(WorkorderStatus.ASSIGNED, ResourceType.BAY, POSITION_ID);
+            when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(workorder));
+            givenCurrentTechnician(true);
+
+            stateMachine.reconcileAssigned(testWorkorderId, userId, "Assignment re-asserted");
+
+            assertEquals(WorkorderStatus.ASSIGNED, workorder.getStatus());
+            verify(workorderRepository, org.mockito.Mockito.never()).save(any(Workorder.class));
+            verify(transitionRepository, org.mockito.Mockito.never()).save(any(WorkorderStateTransition.class));
+        }
+
+        @Test
+        @org.junit.jupiter.api.DisplayName("WORK_IN_PROGRESS is untouched whichever half is missing")
+        void workInProgressIsUntouched() {
+            Workorder workorder = workorderWith(WorkorderStatus.WORK_IN_PROGRESS, null, null);
+            when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.of(workorder));
+
+            stateMachine.reconcileAssigned(testWorkorderId, userId, "Technician released");
+
+            assertEquals(WorkorderStatus.WORK_IN_PROGRESS, workorder.getStatus());
+            verify(workorderRepository, org.mockito.Mockito.never()).save(any(Workorder.class));
+            verify(technicianAssignmentRepository, org.mockito.Mockito.never()).findByWorkorder_IdAndCurrentTrue(any());
+        }
+
+        @Test
+        @org.junit.jupiter.api.DisplayName("an unknown workorder id is a no-op, not an exception")
+        void unknownWorkorderIsNoOp() {
+            when(workorderRepository.findById(testWorkorderId)).thenReturn(Optional.empty());
+
+            stateMachine.reconcileAssigned(testWorkorderId, userId, "irrelevant");
+
+            verify(transitionRepository, org.mockito.Mockito.never()).save(any(WorkorderStateTransition.class));
+        }
     }
 }

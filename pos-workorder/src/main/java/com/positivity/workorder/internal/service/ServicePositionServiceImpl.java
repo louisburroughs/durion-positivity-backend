@@ -118,7 +118,8 @@ public class ServicePositionServiceImpl implements ServicePositionService {
         workorderFactPublisher.markChanged(workorderId);
         // #2011: an ASSIGNED workorder that gives up its bay or unit is no longer ready to be
         // worked, so it falls back to APPROVED.
-        reconcileAssigned(workorderId, actor, reason == null || reason.isBlank() ? "Service position released" : reason);
+        reconcileAssigned(
+                workorderId, actor, reason == null || reason.isBlank() ? "Service position released" : reason);
 
         log.info("Workorder {} released its service position, by {}: {}", workorderId, actor, reason);
         return buildResponse(saved);

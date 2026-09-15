@@ -77,7 +77,8 @@ public class AssignedInvariantMigrationService implements ApplicationRunner {
             try {
                 transaction.executeWithoutResult(status -> migrateForTenant());
             } catch (RuntimeException e) {
-                log.error("ASSIGNED-invariant migration failed for tenant {}; it will be retried next boot", tenantId, e);
+                log.error(
+                        "ASSIGNED-invariant migration failed for tenant {}; it will be retried next boot", tenantId, e);
             }
         });
     }

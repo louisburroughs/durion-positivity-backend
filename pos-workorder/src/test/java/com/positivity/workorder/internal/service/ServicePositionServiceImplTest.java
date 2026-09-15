@@ -724,8 +724,8 @@ class ServicePositionServiceImplTest {
             Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
             givenInactiveBay(BAY_ID, SITE_ID, "Lift 3");
 
-            assertThatThrownBy(() ->
-                            service.assignPosition(WORKORDER_ID, request(ResourceType.BAY, BAY_ID, null), ACTOR))
+            assertThatThrownBy(
+                            () -> service.assignPosition(WORKORDER_ID, request(ResourceType.BAY, BAY_ID, null), ACTOR))
                     .isInstanceOf(ServicePositionInactiveException.class)
                     .hasMessageContaining("Lift 3")
                     .hasMessageContaining("INACTIVE");
@@ -759,8 +759,8 @@ class ServicePositionServiceImplTest {
             givenWorkorder(WorkorderStatus.APPROVED);
             givenInactiveBay(OTHER_BAY_ID, OTHER_SITE_ID, "Foreign lift");
 
-            assertThatThrownBy(() -> service.assignPosition(
-                            WORKORDER_ID, request(ResourceType.BAY, OTHER_BAY_ID, null), ACTOR))
+            assertThatThrownBy(() ->
+                            service.assignPosition(WORKORDER_ID, request(ResourceType.BAY, OTHER_BAY_ID, null), ACTOR))
                     .isInstanceOf(ServicePositionInvalidException.class)
                     .hasMessageContaining("not to the workorder's site");
         }
@@ -787,7 +787,8 @@ class ServicePositionServiceImplTest {
         void inactiveMobileUnitIsNotActive() {
             givenInactiveMobileUnit(MOBILE_UNIT_ID, SITE_ID, "Van 2");
 
-            assertThat(service.isPositionActive(ResourceType.MOBILE_UNIT, MOBILE_UNIT_ID)).isFalse();
+            assertThat(service.isPositionActive(ResourceType.MOBILE_UNIT, MOBILE_UNIT_ID))
+                    .isFalse();
         }
 
         @Test
@@ -816,7 +817,8 @@ class ServicePositionServiceImplTest {
             UUID unreplicatedBay = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f330b");
             when(extBayReplicaRepository.findById(unreplicatedBay)).thenReturn(Optional.empty());
 
-            assertThat(service.isPositionActive(ResourceType.BAY, unreplicatedBay)).isTrue();
+            assertThat(service.isPositionActive(ResourceType.BAY, unreplicatedBay))
+                    .isTrue();
         }
     }
 

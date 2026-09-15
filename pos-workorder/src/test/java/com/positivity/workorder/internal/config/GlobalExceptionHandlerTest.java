@@ -205,8 +205,7 @@ class GlobalExceptionHandlerTest {
                                     new WorkorderResourceConflictException("conflict"), request)),
                     Named.of("handleServicePositionInactive", (HandlerInvocation)
                             request -> handler.handleServicePositionInactive(
-                                    new ServicePositionInactiveException(ResourceType.BAY, SOME_ID, "Bay 3"),
-                                    request)),
+                                    new ServicePositionInactiveException(ResourceType.BAY, SOME_ID, "Bay 3"), request)),
                     Named.of("handleServicePositionOccupied", (HandlerInvocation)
                             request -> handler.handleServicePositionOccupied(
                                     new ServicePositionOccupiedException("bay taken", OTHER_ID), request)),

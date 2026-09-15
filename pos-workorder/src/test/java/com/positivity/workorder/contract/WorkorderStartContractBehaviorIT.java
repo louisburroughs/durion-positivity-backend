@@ -46,7 +46,9 @@ import org.springframework.context.annotation.Import;
  * CAP:005 Story #160 - Start Workorder and Track Status
  *
  * Tests cover:
- * - Starting workorder from APPROVED/ASSIGNED status
+ * - Starting workorder from ASSIGNED status (#2011: work starts only once a technician and a bay
+ *   or mobile unit are both in place)
+ * - Refusing to start an APPROVED workorder, naming what it is missing
  * - Rejecting start when pending change requests exist
  * - Transition history recording (append-only, newest-first)
  * - Snapshot history recording
@@ -328,8 +330,7 @@ class WorkorderStartContractBehaviorIT extends BaseContractIntegrationTest {
         // customer id, because WS-005 seeds several estimates at the same testLocationId in one
         // test and (locationId, estimateNumber) is unique.
         Estimate estimate = Estimate.builder()
-                .estimateNumber(
-                        "EST-START-" + UUID.randomUUID().toString().substring(0, 8))
+                .estimateNumber("EST-START-" + UUID.randomUUID().toString().substring(0, 8))
                 .customerId(testCustomerId)
                 .vehicleId(testVehicleId)
                 .locationId(testLocationId)
