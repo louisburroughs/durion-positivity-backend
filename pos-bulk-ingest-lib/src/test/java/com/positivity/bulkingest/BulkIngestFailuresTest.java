@@ -228,6 +228,19 @@ class BulkIngestFailuresTest {
 
             assertThat(result.getErrorMessage()).isEqualTo(FALLBACK);
         }
+
+        /**
+         * Blank is not the same absence as null, and the condition tests both. An exception
+         * carrying whitespace would otherwise put an empty {@code errorMessage} in the row result,
+         * which tells the caller nothing while looking like it did.
+         */
+        @Test
+        void fallsBackWhenTheMessageIsBlankRatherThanAbsent() {
+            BulkIngestResult result =
+                    BulkIngestFailures.rejected(0, REJECTION_CODE, new DomainValidationException("   "), FALLBACK);
+
+            assertThat(result.getErrorMessage()).isEqualTo(FALLBACK);
+        }
     }
 
     @Nested
@@ -283,6 +296,21 @@ class BulkIngestFailuresTest {
             RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
 
             assertThat(BulkIngestFailures.correlationId()).isEqualTo(BulkIngestFailures.correlationId());
+        }
+
+        /**
+         * A header present but empty is the same as absent. A client that sends
+         * {@code X-Correlation-Id:} with nothing after it would otherwise stamp every failing row
+         * of the batch with a blank id, which no log entry can be found by.
+         */
+        @Test
+        void generatesAUuidV7WhenTheInboundHeaderIsBlank() {
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.addHeader("X-Correlation-Id", "   ");
+            RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+            assertThat(UUID.fromString(BulkIngestFailures.correlationId()).version())
+                    .isEqualTo(7);
         }
 
         @Test
@@ -345,6 +373,17 @@ class BulkIngestFailuresTest {
         void fallsBackWhenTheExceptionCarriesNoReason() {
             BulkIngestResult result = BulkIngestFailures.retryable(
                     0, new AnnotatedUnavailableException(""), "Record could not be ingested yet; retry");
+
+            assertThat(result.getErrorMessage()).isEqualTo("Record could not be ingested yet; retry");
+        }
+
+        /** The other half of that condition: a {@code 503} raised with no reason at all. */
+        @Test
+        void fallsBackWhenAResponseStatusExceptionCarriesNoReason() {
+            BulkIngestResult result = BulkIngestFailures.retryable(
+                    0,
+                    new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE),
+                    "Record could not be ingested yet; retry");
 
             assertThat(result.getErrorMessage()).isEqualTo("Record could not be ingested yet; retry");
         }

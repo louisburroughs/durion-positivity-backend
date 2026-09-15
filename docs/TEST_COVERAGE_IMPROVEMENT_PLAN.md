@@ -710,7 +710,7 @@ Repo-wide, summing all per-module reports: **83.8% line** (15,265 missed of
 | `pos-document-helper` | 162 | 95.7 | 90.0 | 0.92 | 0.87 |
 | `pos-tax-common` | 106 | 89.6 | 74.1 | 0.86 | 0.71 |
 | `pos-vehicle-reference-carapi` | 69 | 78.3 | 88.9 | 0.75 | 0.85 |
-| `pos-bulk-ingest-lib` | 56 | 92.9 | 92.9 | 0.89 | 0.89 |
+| `pos-bulk-ingest-lib` † | 69 | 94.2 | 100.0 | 0.91 | 0.97 |
 | `pos-shared-dtos` | 34 | 0.0 | 0.0 | — *(unguarded)* | — |
 | `pos-inquiry` | 16 | 0.0 | — | — *(unguarded)* | — |
 | `pos-service-discovery` | 4 | 0.0 | — | — *(unguarded)* | — |
@@ -720,6 +720,11 @@ a handful of lines each, or all-zero coverage. A `0.00` floor is not a gate;
 they need first tests, not thresholds (§7). `pos-bulk-ingest-lib` left that
 group on 2026-09-06: it grew past the 50-line threshold and gained its first
 floors in the re-derivation below.
+
+† `pos-bulk-ingest-lib` was re-measured on 2026-09-15, after §6.6's tests closed
+the gap that had dropped it to 89.9/89.5. Every other row is from the 2026-09-06
+regeneration, so this one row and the rest describe two different builds — the
+next full re-derivation should bring them back into one.
 
 ### 6.2 How the ratchet works
 
@@ -799,15 +804,16 @@ are derived (§6.1).
   unstable, and it will fail on a night when nothing changed. Treat a
   thin-margin module as a bug in the floor or a gap in the tests, not as a
   module doing well.
-- The four all-zero modules (`pos-bulk-ingest-lib`, `pos-inquiry`,
-  `pos-service-discovery`, `pos-shared-dtos`) carry **no** floor — each is under
-  the `--min-lines` threshold (§6.5) with no coverage of its own to gate. A
-  `0.00` floor is not a gate, and pretending otherwise would misrepresent them
-  as guarded. They need first tests, not thresholds — see §7.
-  (`pos-image` and `pos-vehicle-reference-carapi` are no longer in this
-  category: both now measure real, non-zero coverage and carry real floors —
-  see the §6.1 table. An earlier version of this list still named them from
-  when they were genuinely all-zero.)
+- The three all-zero modules (`pos-inquiry`, `pos-service-discovery`,
+  `pos-shared-dtos`) carry **no** floor — each is under the `--min-lines`
+  threshold (§6.5) with no coverage of its own to gate. A `0.00` floor is not a
+  gate, and pretending otherwise would misrepresent them as guarded. They need
+  first tests, not thresholds — see §7.
+  (`pos-image`, `pos-vehicle-reference-carapi` and `pos-bulk-ingest-lib` are no
+  longer in this category: all three now measure real, non-zero coverage and
+  carry real floors — see the §6.1 table. `pos-bulk-ingest-lib` left the group
+  on 2026-09-06 and is the subject of §6.6. Earlier versions of this list still
+  named them from when they were genuinely all-zero.)
 - Deliberately **not** a single repo-wide bar. At 81.1% a uniform 85% would fail
   a third of the reactor on day one, and a uniform 70% would let the best modules
   rot 15 points before anyone noticed.
@@ -924,6 +930,172 @@ scripts/update-coverage-floors.sh --apply
 
 Then regenerate §6.1's table from the same reports, so the document and the poms
 describe one measurement rather than two.
+
+### 6.6 The ratchet has no ceiling (2026-09-15)
+
+**There is none, and that is the design.** `floor_for()` in
+`scripts/coverage_floors.py` is measured coverage minus `--cushion`, clamped
+only at the bottom (`max(0.0, ...)`); nothing caps it from above. A module at
+99% would carry a 0.96 floor. Combined with `proposed_floors()`, which drops any
+candidate below the standing floor unless `--allow-lower`, the floor tracks each
+module's **best measurement ever taken**, and `STALE` at +6 forces the
+re-derivation that moves that peak up.
+
+The consequence is worth stating plainly, because it is the thing that fails a
+nightly: **a guarded module fails as soon as its measured cushion over the
+standing floor falls under `--min-cushion` (2 points).** That is what a ratchet
+is. But the failure does not look like a coverage regression when it arrives —
+it names a *floor* (`THIN`), on a module nobody touched that night, in a job
+that runs long after the commit responsible merged green.
+
+Stated as a fall from the peak it is tighter than the 3-point cushion suggests,
+because `floor_for()` rounds the floor **down** to whole percentage points: the
+floor is `floor(peak − 3)`, so `THIN` arrives after a fall of anywhere between
+1.0 and 2.0 points, depending on where the peak sat inside its own point. Both
+modules below are examples. `pos-bulk-ingest-lib` had 1.9 points of room and
+used 3.0; `pos-tenancy-common`'s line counter had only 1.1.
+
+**Why the PR gate lets it through.** The two gates fail on different things
+(§6.2's table). The PR gate invokes `jacoco:check`, which only knows `BREACH`:
+89.9% against a 0.89 floor passes, because it is above it. `THIN` is computed
+only by `scripts/check-coverage-floor-drift.sh` in the nightly. So a change that
+eats most of a module's cushion merges green by design, and the nightly reports
+it afterwards. Nothing is misconfigured; the cost is that the diagnosis lands a
+day after the diff.
+
+**Run 34931240182** (nightly, `main` at `d3a2311`) failed on two modules, and
+they are not the same kind of failure:
+
+| module | counter | floor | floor derived from | measured 2026-09-15 | cushion |
+|---|---|---:|---:|---:|---:|
+| `pos-bulk-ingest-lib` | line | 0.89 | 92.9% | 89.9% | +0.9 |
+| `pos-bulk-ingest-lib` | branch | 0.89 | 92.9% | 89.5% | +0.5 |
+| `pos-tenancy-common` | line | 0.91 | 94.1% | 92.0% | +1.0 |
+| `pos-tenancy-common` | branch | 0.78 | 81.0–81.8% | 79.8% | +1.8 |
+
+`pos-tenancy-common` is the coin toss §6.2 already describes: its branch counter
+is 0.2 points short of the threshold. Its floor was re-derived in `ec47975` from
+a stack measuring 81.0–81.8%, so 79.8% is a point or so of real decline sitting
+inside exactly the range §6.2 says no single measurement can separate from
+parallel-CI variation. It needs no code change, only the re-derivation below.
+
+Its pom comment is separately wrong and worth fixing while there: it reads
+"measured 94.1% line / 78.1% branch" beside a 0.78 branch floor, which would be
+a zero-point cushion and was never true. `ec47975` edited the property by hand,
+and `refresh_comment()` only runs when `update-coverage-floors.sh` writes the
+file — so a hand-edited floor leaves the recorded measurement behind. Prefer the
+script even for a one-property change.
+
+`pos-bulk-ingest-lib` is a real regression, and it has one cause.
+
+**What dropped, and why.** Commit `986fc3f` (#1987) taught the library to tell a
+replication lag apart from a refusal: an exception declaring `503` is now
+reported as `REPLICATION_PENDING` with the module's own message, rather than
+being swept into `INTERNAL_ERROR`. Rebuilding each side with the gate's own
+command (`verify -DskipITs`) gives:
+
+```
+986fc3f~1   line 52/56 = 92.9%   branch 26/28 = 92.9%
+HEAD        line 62/69 = 89.9%   branch 34/38 = 89.5%
+```
+
+The "before" reproduces the pom comment exactly, so the floors were honest when
+written. The change added 13 countable lines and 10 branches; 3 lines and 2
+branches of that arrived with no test:
+
+| file | line | uncovered |
+|---|---:|---|
+| `AbstractBulkIngestController` | 70 | `if (BulkIngestFailures.isRetryable(exception))` — true arm never taken |
+| `AbstractBulkIngestController` | 71 | `log.warn("Deferred record at row {}: {}", ...)` |
+| `AbstractBulkIngestController` | 72 | `return BulkIngestFailures.retryable(...)` |
+| `AbstractBulkIngestController` | 130 | `rowRetryableFallbackMessage()`'s default return |
+| `BulkIngestFailures` | 151 | `message == null` half of `retryable()`'s fallback condition |
+
+The split is instructive: the *library* half of the change is covered
+thoroughly. `BulkIngestFailures` gained 9 lines and all 9 are exercised —
+`BulkIngestFailuresTest` has a whole `IsRetryable` nest, including a
+`ResponseStatusException`, an annotated type, a rejection, an unclassified
+exception, and the blank-message fallback. What nobody wrote is the test that
+drives the same behaviour through `AbstractBulkIngestController#rowFailure`,
+which is the method every bulk-ingest endpoint on the platform actually calls.
+`AbstractBulkIngestControllerTest` covers the rejection arm and the
+server-fault arm and stops there. Line 151 is the same omission one layer down:
+`retryable()` is tested with a message and with `""`, never with `null`,
+mirroring the identical half-covered condition `rejected()` has carried at line
+166 since before this change.
+
+`82a410a` and `c75833b` also touched the module in this window and moved nothing:
+the first added only Lombok annotations, the second only comments.
+
+**Why three lines was enough to do it.** The bundle is two classes and 69
+countable lines. The three Lombok DTOs (`BulkIngestRequest`, `BulkIngestResponse`,
+`BulkIngestResult`) carry `@lombok.Generated` via the root `lombok.config` and
+JaCoCo filters them out entirely, so the whole floor rests on
+`AbstractBulkIngestController` and `BulkIngestFailures`. One missed line is
+about 1.4 points; three is the entire 3-point cushion. §6.2 sets `--min-lines`
+at 50 on the reasoning that below it "a handful of lines swings the ratio by
+whole points" — at 56 lines this module cleared that bar by six lines, and it
+behaves exactly like the modules the threshold was meant to exclude.
+
+**The rule this adds.** In a module under ~100 countable lines, a new branch and
+its test belong in the same commit. There is no cushion to spend: the first
+untested branch is the whole margin, the PR gate will not say so, and the
+nightly will blame the floor.
+
+**Remediation.** Two different fixes for the two modules:
+
+1. `pos-bulk-ingest-lib` needs the tests, not a lower floor. **Done** — see below.
+2. `pos-tenancy-common` needs only a re-derivation from a fresh `-DskipITs`
+   build; its branch floor is 0.2 points from the threshold on coverage that has
+   not meaningfully moved. **Still open.**
+
+**Outcome for `pos-bulk-ingest-lib` (2026-09-15).** A `Deferred` nest in
+`AbstractBulkIngestControllerTest` now drives the 503 arm through `rowFailure`
+itself: the message passthrough, the annotated-type form, WARN-without-a-stack-trace,
+the `rowRetryableFallbackMessage()` default, the rejection-outranks-retryable
+ordering the source only commented, and the allowlist still holding for an
+unclassified failure. Two one-line additions in `BulkIngestFailuresTest` close
+the fallback conditions from both sides — `retryable()` had no `null` case,
+`rejected()` no blank-but-present case — and one covers a blank inbound
+`X-Correlation-Id`, which a caller can really send.
+
+```
+before   line 62/69 = 89.9%   branch 34/38 = 89.5%   THIN
+after    line 65/69 = 94.2%   branch 38/38 = 100.0%  OK
+```
+
+Coverage came back above the 92.9% peak the floors were derived from, so the
+ratchet went from `THIN` straight to `STALE` and the floors were re-derived to
+0.91/0.97. Three mutation checks back the new tests
+(`.claude/hooks/mutation-check-hook.sh`): disabling the `isRetryable` guard,
+changing the fallback string, and disabling the rejection guard each fail the
+test that claims to defend them.
+
+The four lines still uncovered are all pre-existing and none is new: the
+`bulkIngest` endpoint body, which no test posts through, and the
+`rowRejectionCode()` / `rowRejectionFallbackMessage()` defaults, which every test
+controller overrides.
+
+**And the ceiling question, answered concretely.** A 0.97 branch floor on a
+38-branch bundle leaves about one branch of headroom: a single uncovered
+condition reads 97.4%, which is `THIN` again. That is not a misconfiguration —
+in a bundle this size one branch genuinely is a real regression — but it is what
+"no ceiling" means in practice for a small module, and it is the strongest
+argument yet that `--min-lines` at 50 is set too low. A module whose whole gate
+turns on one condition is being measured more precisely than the measurement
+supports. Raising the threshold is a change to §6.2's contract and is left open
+rather than made here.
+
+```bash
+./mvnw -pl pos-coverage-aggregate -am verify -DskipITs -Darchunit.skipTests=true -T 1C
+scripts/update-coverage-floors.sh --apply
+```
+
+A floor that has to come **down** needs `--allow-lower` and its reason in the
+commit message (§6.2). Reach for it only once the coverage question is settled:
+lowering a floor to clear a `THIN` caused by a genuine regression buys a green
+nightly by writing off the points that caused it.
+
 
 ## 7. What is still open
 
