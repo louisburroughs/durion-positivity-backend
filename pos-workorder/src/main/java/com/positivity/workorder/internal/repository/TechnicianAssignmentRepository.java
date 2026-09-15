@@ -38,6 +38,25 @@ public interface TechnicianAssignmentRepository extends JpaRepository<Technician
     @NonNull
     List<TechnicianAssignment> findByWorkorder_IdInAndCurrentTrue(@NonNull Set<UUID> workorderIds);
 
+    /** Ids of a workorder's current technician, read without loading either entity. */
+    interface CurrentTechnician {
+        UUID getWorkorderId();
+
+        UUID getTechnicianId();
+    }
+
+    /**
+     * The current technician of each listed workorder, as ids only.
+     *
+     * <p>The dispatch dashboard needs just the two ids. Selecting {@code a.workorder.id} reads the
+     * foreign key column, so no LAZY {@code workorder} proxy is traversed after the query returns —
+     * with open-in-view off that proxy is detached — and no per-row workorder load can follow.
+     */
+    @Query("SELECT a.workorder.id AS workorderId, a.technicianId AS technicianId FROM TechnicianAssignment a"
+            + " WHERE a.workorder.id IN :workorderIds AND a.current = TRUE")
+    @NonNull
+    List<CurrentTechnician> findCurrentTechnicians(@Param("workorderIds") @NonNull Set<UUID> workorderIds);
+
     /**
      * The current assignment, locked for update, for the operations that replace or end it (#1985).
      *

@@ -175,8 +175,12 @@ public class WorkorderServiceImpl implements WorkorderService {
         if (crmVehicleId == null || crmVehicleId.isBlank()) {
             return null;
         }
+        String candidate = crmVehicleId.strip();
         try {
-            return UUID.fromString(crmVehicleId.strip());
+            UUID parsed = UUID.fromString(candidate);
+            // UUID.fromString also accepts short groups ("1-1-1-1-1"); only the canonical 8-4-4-4-12
+            // form round-trips, the same shape V4 requires of the backfilled rows.
+            return parsed.toString().equalsIgnoreCase(candidate) ? parsed : null;
         } catch (IllegalArgumentException e) {
             return null;
         }

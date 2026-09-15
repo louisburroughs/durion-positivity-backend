@@ -18,7 +18,6 @@ import com.positivity.workorder.internal.dto.WorkorderSummary;
 import com.positivity.workorder.internal.entity.ExtBayReplica;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.ExtVehicleReplica;
-import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
@@ -31,7 +30,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
@@ -820,8 +818,8 @@ class DashboardServiceTest {
                 .status(WorkorderStatus.WORK_IN_PROGRESS)
                 .build();
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
-        when(technicianAssignmentRepository.findByWorkorder_IdInAndCurrentTrue(Set.of(workorderId)))
-                .thenReturn(List.of(currentAssignment(wo, technicianId)));
+        when(technicianAssignmentRepository.findCurrentTechnicians(Set.of(workorderId)))
+                .thenReturn(List.of(currentTechnician(wo, technicianId)));
         when(peopleAvailabilityLocalService.fetchAvailability(any(), any()))
                 .thenReturn(PeopleAvailabilityResponse.builder()
                         .people(List.of(personAvailability(technicianId.toString(), "Dana", "AVAILABLE")))
@@ -852,8 +850,8 @@ class DashboardServiceTest {
         Workorder legacy =
                 buildWorkorder(UUID.fromString("00000000-0000-0000-0000-00000000a003"), technicianId.toString(), null);
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(assigned, legacy));
-        when(technicianAssignmentRepository.findByWorkorder_IdInAndCurrentTrue(any()))
-                .thenReturn(List.of(currentAssignment(assigned, technicianId)));
+        when(technicianAssignmentRepository.findCurrentTechnicians(any()))
+                .thenReturn(List.of(currentTechnician(assigned, technicianId)));
         when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
 
         // Act
@@ -874,8 +872,8 @@ class DashboardServiceTest {
         Workorder wo =
                 buildWorkorder(UUID.fromString("00000000-0000-0000-0000-00000000a004"), technicianId.toString(), null);
         when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
-        when(technicianAssignmentRepository.findByWorkorder_IdInAndCurrentTrue(any()))
-                .thenReturn(List.of(currentAssignment(wo, technicianId)));
+        when(technicianAssignmentRepository.findCurrentTechnicians(any()))
+                .thenReturn(List.of(currentTechnician(wo, technicianId)));
         when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
 
         // Act
@@ -883,6 +881,119 @@ class DashboardServiceTest {
 
         // Assert
         assertThat(response.getConflicts()).noneMatch(c -> "DOUBLE_BOOKED_MECHANIC".equals(c.getConflictType()));
+    }
+
+    // -----------------------------------------------------------------------
+    // Every mechanic conflict check sees an assignment-only technician
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Assignment-only technician with PTO on the date raises MECHANIC_PTO_OVERLAP")
+    void getDashboard_assignmentOnlyTechnicianOnPto_returnsPtoOverlap() {
+        UUID technicianId = UUID.fromString("00000000-0000-0000-0000-00000000b101");
+        Workorder wo = assignmentOnlyWorkorder("00000000-0000-0000-0000-00000000a101", null);
+        stubAssignmentOnly(
+                wo,
+                technicianId,
+                PersonAvailability.builder()
+                        .personId(technicianId.toString())
+                        .pto(List.of(PtoBlock.builder()
+                                .ptoId("PTO-A")
+                                .start(TEST_DATE.atStartOfDay().toInstant(ZoneOffset.UTC))
+                                .end(TEST_DATE.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC))
+                                .ptoType("ANNUAL")
+                                .build()))
+                        .build());
+
+        assertThat(dashboardService.getDashboard(LOCATION_ID, TEST_DATE).getConflicts())
+                .anySatisfy(c -> {
+                    assertThat(c.getConflictType()).isEqualTo("MECHANIC_PTO_OVERLAP");
+                    assertThat(c.getAffectedResourceId()).isEqualTo(technicianId.toString());
+                });
+    }
+
+    @Test
+    @DisplayName("Assignment-only technician returning from break within 15 min raises MECHANIC_BREAK_OVERLAP")
+    void getDashboard_assignmentOnlyTechnicianOnBreak_returnsBreakOverlap() {
+        UUID technicianId = UUID.fromString("00000000-0000-0000-0000-00000000b102");
+        Workorder wo = assignmentOnlyWorkorder("00000000-0000-0000-0000-00000000a102", null);
+        stubAssignmentOnly(
+                wo,
+                technicianId,
+                PersonAvailability.builder()
+                        .personId(technicianId.toString())
+                        .breakInfo(BreakInfo.builder()
+                                .onBreak(true)
+                                .expectedReturn(Instant.now(TEST_CLOCK).plusSeconds(600))
+                                .build())
+                        .build());
+
+        assertThat(dashboardService.getDashboard(LOCATION_ID, TEST_DATE).getConflicts())
+                .anySatisfy(c -> {
+                    assertThat(c.getConflictType()).isEqualTo("MECHANIC_BREAK_OVERLAP");
+                    assertThat(c.getAffectedResourceId()).isEqualTo(technicianId.toString());
+                });
+    }
+
+    @Test
+    @DisplayName("Assignment-only technician clocked in on another job raises CLOCK_OUT_MISMATCH")
+    void getDashboard_assignmentOnlyTechnicianOnJob_returnsClockOutMismatch() {
+        UUID technicianId = UUID.fromString("00000000-0000-0000-0000-00000000b103");
+        Workorder wo = assignmentOnlyWorkorder("00000000-0000-0000-0000-00000000a103", null);
+        stubAssignmentOnly(
+                wo,
+                technicianId,
+                PersonAvailability.builder()
+                        .personId(technicianId.toString())
+                        .currentStatus("ON_JOB")
+                        .build());
+
+        assertThat(dashboardService.getDashboard(LOCATION_ID, TEST_DATE).getConflicts())
+                .anySatisfy(c -> {
+                    assertThat(c.getConflictType()).isEqualTo("CLOCK_OUT_MISMATCH");
+                    assertThat(c.getAffectedResourceId()).isEqualTo(technicianId.toString());
+                });
+    }
+
+    @Test
+    @DisplayName("Assignment-only technician at another location raises LOCATION_MISMATCH")
+    void getDashboard_assignmentOnlyTechnicianElsewhere_returnsLocationMismatch() {
+        UUID technicianId = UUID.fromString("00000000-0000-0000-0000-00000000b104");
+        Workorder wo = assignmentOnlyWorkorder("00000000-0000-0000-0000-00000000a104", null);
+        stubAssignmentOnly(
+                wo,
+                technicianId,
+                PersonAvailability.builder()
+                        .personId(technicianId.toString())
+                        .currentLocationId("00000000-0000-0000-0000-000000000002")
+                        .build());
+
+        assertThat(dashboardService.getDashboard(LOCATION_ID, TEST_DATE).getConflicts())
+                .anySatisfy(c -> {
+                    assertThat(c.getConflictType()).isEqualTo("LOCATION_MISMATCH");
+                    assertThat(c.getAffectedResourceId()).isEqualTo(technicianId.toString());
+                });
+    }
+
+    @Test
+    @DisplayName("Assignment-only technician missing a required certification raises MECHANIC_SKILL_MISMATCH")
+    void getDashboard_assignmentOnlyTechnicianMissingCertification_returnsSkillMismatch() {
+        UUID technicianId = UUID.fromString("00000000-0000-0000-0000-00000000b105");
+        Workorder wo =
+                assignmentOnlyWorkorder("00000000-0000-0000-0000-00000000a105", "[\"BRAKE_CERT\",\"ALIGNMENT_CERT\"]");
+        stubAssignmentOnly(
+                wo,
+                technicianId,
+                PersonAvailability.builder()
+                        .personId(technicianId.toString())
+                        .certifications(List.of("BRAKE_CERT"))
+                        .build());
+
+        assertThat(dashboardService.getDashboard(LOCATION_ID, TEST_DATE).getConflicts())
+                .anySatisfy(c -> {
+                    assertThat(c.getConflictType()).isEqualTo("MECHANIC_SKILL_MISMATCH");
+                    assertThat(c.getAffectedResourceId()).isEqualTo(technicianId.toString());
+                });
     }
 
     // -----------------------------------------------------------------------
@@ -1868,14 +1979,39 @@ class DashboardServiceTest {
                 .build();
     }
 
-    private static TechnicianAssignment currentAssignment(Workorder workorder, UUID technicianId) {
-        return TechnicianAssignment.builder()
-                .workorder(workorder)
-                .technicianId(technicianId)
-                .assignedAt(LocalDateTime.ofInstant(TEST_CLOCK.instant(), ZoneOffset.UTC))
-                .assignedBy("dispatcher")
-                .current(true)
+    private static TechnicianAssignmentRepository.CurrentTechnician currentTechnician(
+            Workorder workorder, UUID technicianId) {
+        return new TechnicianAssignmentRepository.CurrentTechnician() {
+            @Override
+            public UUID getWorkorderId() {
+                return workorder.getId();
+            }
+
+            @Override
+            public UUID getTechnicianId() {
+                return technicianId;
+            }
+        };
+    }
+
+    /** A workorder whose only mechanic is its current technician_assignment: mechanic_ids stays empty. */
+    private static Workorder assignmentOnlyWorkorder(String id, String requiredCertifications) {
+        return Workorder.builder()
+                .id(UUID.fromString(id))
+                .locationId(LOCATION_UUID)
+                .requiredCertifications(requiredCertifications)
+                .status(WorkorderStatus.WORK_IN_PROGRESS)
                 .build();
+    }
+
+    private void stubAssignmentOnly(Workorder wo, UUID technicianId, PersonAvailability technician) {
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(wo));
+        when(technicianAssignmentRepository.findCurrentTechnicians(Set.of(wo.getId())))
+                .thenReturn(List.of(currentTechnician(wo, technicianId)));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any()))
+                .thenReturn(PeopleAvailabilityResponse.builder()
+                        .people(List.of(technician))
+                        .build());
     }
 
     private PersonAvailability personAvailability(String personId, String firstName, String status) {

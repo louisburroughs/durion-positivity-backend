@@ -16,7 +16,6 @@ import com.positivity.workorder.internal.dto.WorkorderSummary;
 import com.positivity.workorder.internal.entity.ExtBayReplica;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.ExtVehicleReplica;
-import com.positivity.workorder.internal.entity.TechnicianAssignment;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
@@ -229,14 +228,11 @@ public class DashboardServiceImpl implements DashboardService {
                 .collect(Collectors.toSet());
         Map<UUID, String> currentTechnicianByWorkorder = new HashMap<>();
         if (!workorderIds.isEmpty()) {
-            for (TechnicianAssignment assignment :
-                    technicianAssignmentRepository.findByWorkorder_IdInAndCurrentTrue(workorderIds)) {
-                if (assignment.getWorkorder() != null
-                        && assignment.getWorkorder().getId() != null
-                        && assignment.getTechnicianId() != null) {
+            for (TechnicianAssignmentRepository.CurrentTechnician current :
+                    technicianAssignmentRepository.findCurrentTechnicians(workorderIds)) {
+                if (current.getWorkorderId() != null && current.getTechnicianId() != null) {
                     currentTechnicianByWorkorder.putIfAbsent(
-                            assignment.getWorkorder().getId(),
-                            assignment.getTechnicianId().toString());
+                            current.getWorkorderId(), current.getTechnicianId().toString());
                 }
             }
         }

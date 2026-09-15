@@ -215,6 +215,15 @@ class WorkorderServiceImplCrmPropagationTest {
     }
 
     @Test
+    @DisplayName(
+            "createWorkorder(estimateId, customerId) — a non-canonical crmVehicleId (1-1-1-1-1) leaves vehicleId null")
+    void createWorkorder_withNonCanonicalCrmVehicleId_workorderHasNullVehicleId() {
+        Estimate estimate = buildEstimateWithVehicle(null, "1-1-1-1-1");
+
+        assertThat(createFromEstimate(estimate).getVehicleId()).isNull();
+    }
+
+    @Test
     @DisplayName("createWorkorder(null, customerId) — workorder has null vehicleId")
     void createWorkorder_nullEstimateId_workorderHasNullVehicleId() {
         ArgumentCaptor<Workorder> workorderCaptor = ArgumentCaptor.forClass(Workorder.class);
