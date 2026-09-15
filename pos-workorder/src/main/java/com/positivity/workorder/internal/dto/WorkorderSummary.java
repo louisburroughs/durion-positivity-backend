@@ -7,6 +7,7 @@ import com.positivity.workorder.internal.enums.ResourceType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.Value;
@@ -28,7 +29,11 @@ public class WorkorderSummary {
     @Schema(description = "Current workorder status", example = "WORK_IN_PROGRESS", requiredMode = NOT_REQUIRED)
     String status;
 
-    @Schema(description = "Name of the customer", example = "John Doe", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Display name of the customer; null when the customer is not replicated or has no name",
+            example = "John Doe",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     String customerName;
 
     @Schema(
@@ -71,4 +76,32 @@ public class WorkorderSummary {
 
     @Schema(description = "Estimated labor hours for the workorder", example = "2.5", requiredMode = NOT_REQUIRED)
     BigDecimal estimatedLaborHours;
+
+    @Schema(
+            description = "Service lines in play on the workorder: every line that is neither cancelled nor "
+                    + "declined by the customer",
+            example = "2",
+            requiredMode = NOT_REQUIRED)
+    Integer serviceCount;
+
+    @Schema(
+            description = "How many of the serviceCount lines are completed",
+            example = "1",
+            requiredMode = NOT_REQUIRED)
+    Integer completedServiceCount;
+
+    @Schema(
+            description = "Descriptions of the lines counted by serviceCount, in line order, at most three; "
+                    + "blank descriptions are skipped",
+            example = "[\"Oil Change - Full Synthetic\", \"Brake Pad Replacement - Front\"]",
+            requiredMode = NOT_REQUIRED)
+    List<String> serviceDescriptions;
+
+    @Schema(
+            description = "Hours worked on the workorder's service lines so far, whatever each line's status; "
+                    + "null when none are logged",
+            example = "1.5",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
+    BigDecimal actualLaborHours;
 }
