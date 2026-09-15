@@ -3,6 +3,7 @@ package com.positivity.workorder.internal.repository;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
@@ -14,6 +15,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -288,6 +290,13 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
      * endpoint pages at 25 rows, so a client-side equivalent is one call per candidate customer.
      * Work orders with no customer are excluded — they cannot join to anything.
      */
+    @Query("SELECT w.customerId AS customerId, COUNT(w) AS openWorkorders FROM Workorder w "
+            + "WHERE w.status IN :statuses AND w.customerId IS NOT NULL "
+            + "GROUP BY w.customerId ORDER BY COUNT(w) DESC, w.customerId ASC")
+    @NonNull
+    List<OpenCustomerCount> countOpenGroupedByCustomer(
+            @Param("statuses") @NonNull Collection<WorkorderStatus> statuses);
+
     /**
      * ASSIGNED workorders that do not hold both halves of the pair the status stands for (#2011).
      *
@@ -311,10 +320,23 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
     @NonNull
     List<UUID> findAssignedWithoutTechnicianAndPosition();
 
-    @Query("SELECT w.customerId AS customerId, COUNT(w) AS openWorkorders FROM Workorder w "
-            + "WHERE w.status IN :statuses AND w.customerId IS NOT NULL "
-            + "GROUP BY w.customerId ORDER BY COUNT(w) DESC, w.customerId ASC")
+    /**
+     * The workorder, locked for update, for the ASSIGNED reconciliation (#2011).
+     *
+     * <p>The lock is what makes the rule hold when the two halves are filled at the same moment.
+     * Unlocked, a technician assignment and a position assignment running concurrently each read the
+     * other half before the other transaction commits, so both decide the pair is still incomplete,
+     * both leave the workorder APPROVED — and nothing revisits it, because each transaction did
+     * exactly what it was asked. The reads are consistent only if they are serialised against the
+     * workorder row, which every position write already takes exclusively.
+     *
+     * <p>Lock order is unchanged (#1984, #1985): a technician operation takes its
+     * {@code technician_assignment} row first and this second, a position operation takes only this
+     * one, and the reconciliation reads technician rows without locking them. No path takes the
+     * workorder before a technician assignment, so there is no inversion to deadlock on.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT w FROM Workorder w WHERE w.id = :workorderId")
     @NonNull
-    List<OpenCustomerCount> countOpenGroupedByCustomer(
-            @Param("statuses") @NonNull Collection<WorkorderStatus> statuses);
+    Optional<Workorder> findByIdForUpdate(@Param("workorderId") @NonNull UUID workorderId);
 }

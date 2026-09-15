@@ -116,12 +116,20 @@ or technician change walks `WORK_IN_PROGRESS` or its sub-statuses back. Every re
 state machine, so it writes a status history row and publishes the `workorder.events.v1` status event
 pos-shop-manager's `ext_workorder_replica` reads.
 
-Timers and labor sessions are deliberately **not** tightened to the same rule. `TIMER_ELIGIBLE_STATUSES`
-(`WorkexecTimeTrackingServiceImpl`) and the labor-session statuses still include `APPROVED`, which is
-what they included before #2011. Since `ASSIGNED` now covers strictly fewer workorders than it used
-to, narrowing those sets to it would take away clocking that works today, for a rule about when work
-may *start* rather than when time may be recorded. If clocking should require the pair too, that is
-its own change with its own story.
+Neither timer nor labor eligibility was **edited** by #2011, but they are not affected equally, and
+the difference matters:
+
+- **Timers are unchanged.** `TIMER_ELIGIBLE_STATUSES` (`WorkexecTimeTrackingServiceImpl`) includes
+  `APPROVED`, and still does. Narrowing it to `ASSIGNED` would take away clocking that works today,
+  for a rule about when work may *start* rather than when time may be recorded. If clocking should
+  require the pair too, that is its own change with its own story.
+- **Labor sessions are tightened, as a consequence rather than an edit.**
+  `WorkorderLaborServiceImpl.LABOR_ALLOWED_STATUSES` is `{ASSIGNED, WORK_IN_PROGRESS,
+  AWAITING_PARTS, AWAITING_APPROVAL}` — it never included `APPROVED`. Because reaching `ASSIGNED`
+  now needs a bay or mobile unit as well as a technician, a workorder that would once have been
+  `ASSIGNED` on a technician alone can no longer start a labor session until it is placed. That
+  follows the same principle as the start gate — labor is work, and work needs somewhere to happen —
+  so it is left standing rather than papered over by adding `APPROVED` to the set.
 
 `AssignedInvariantMigrationService` carries pre-existing rows over: at startup, once per tenant, every
 `ASSIGNED` workorder lacking either half is transitioned to `APPROVED` through the state machine, so

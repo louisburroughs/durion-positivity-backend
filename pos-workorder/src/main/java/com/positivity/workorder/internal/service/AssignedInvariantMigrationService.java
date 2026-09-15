@@ -1,7 +1,6 @@
 package com.positivity.workorder.internal.service;
 
 import com.positivity.tenancy.TenantIterator;
-import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import java.util.List;
 import java.util.UUID;
@@ -89,11 +88,18 @@ public class AssignedInvariantMigrationService implements ApplicationRunner {
             log.debug("ASSIGNED-invariant migration found no workorder to correct");
             return;
         }
+        // Reconciled rather than transitioned outright. The query's answer is already stale by the
+        // time it is iterated — on a rolling deploy another instance can fill the missing technician
+        // or position in between — and an unconditional transition would demote a workorder that has
+        // just become genuinely ASSIGNED, or throw on one that has moved to a status with no path
+        // back to APPROVED and take the rest of the tenant's pass down with it. reconcileAssigned
+        // re-reads each row under its lock and acts only if the invariant is still broken, so the
+        // list is a work queue rather than a verdict.
         for (UUID workorderId : stranded) {
-            stateMachine.transitionWorkorder(workorderId, WorkorderStatus.APPROVED, ACTOR, REASON);
+            stateMachine.reconcileAssigned(workorderId, ACTOR, REASON);
         }
         log.info(
-                "ASSIGNED-invariant migration moved {} workorder(s) back to APPROVED: {} (#2011)",
+                "ASSIGNED-invariant migration reconciled {} stranded workorder(s): {} (#2011)",
                 stranded.size(),
                 stranded);
     }
