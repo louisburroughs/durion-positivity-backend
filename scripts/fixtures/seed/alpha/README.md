@@ -141,8 +141,8 @@ change.
 | `staffing-assignments.csv` | 46 role/location assignments | gateway API pack (`POST /people/staffing/assignments` per row) |
 
 The people seed contains no customers: customer/contact identities moved to the
-pos-people-contact seed under #875, and this file holds the 39 staff (`EMP-0001`–
-`EMP-0039`), their location assignments, and dev-only `ext_*` replica bootstraps.
+pos-people-contact seed under #875, and this file holds 46 staff (the seed's 39, `EMP-0001`–
+`EMP-0039`, plus the SDK seeder's seven, `EMP-T001`…`EMP-P001`), their location assignments, and dev-only `ext_*` replica bootstraps.
 Employees load through `createEmployee` (status forced ACTIVE, **STRICT duplicate
 policy** on employee number/email/phone — this pack genuinely converges on re-run),
 publishing the identity upsert command and `people.employee.updated` fact per row.
@@ -293,8 +293,10 @@ product landed uncategorized.
   `type` (Wave 2) — the manufacturer fields also travel on the product fact, so
   warranty/supplier replicas get them. Still not expressible: `manufacturerId`
   (there is no manufacturer table; the seed's ids were synthetic and are dropped).
-- `upc` and `description` are blank (the seed never had UPCs; description defaults
-  to the name server-side); `price` is blank (pricing is a separate seed).
+- `upc` is blank on every row (the seed never had UPCs). `description` is blank on the
+  seed's 501 rows (it defaults to the name server-side) and set on the SDK seeder's 30
+  rows, which carry the seeder's own descriptions. `price` is blank on every row (pricing
+  is a separate pack).
 - Categories/subcategories (`R__seed_reference_catalog.sql`) and `product_uom`
   (file 5) are **kept in Flyway and reclassified tier 1**: a taxonomy products and
   putaway rules resolve against, and units of measure, are reference data a working
@@ -317,7 +319,9 @@ product landed uncategorized.
 | `tier0-service-packages.csv` | 4 packages and 1 fleet requirement set | `POST /v1/service-packages/bulk-ingest` (`SERVICE_PACKAGE`) |
 | `tier0-service-package-members.csv` | 21 memberships | `POST /v1/service-package-members/bulk-ingest` (`SERVICE_PACKAGE_MEMBER`) |
 
-**Every number in these four files is invented.** Nothing here is, or is derived from,
+**Every number in these four files is invented** — the SDK seeder's 11 services included:
+their default labor hours are derived from the seeder's own placeholder sell prices, not from
+any labor data. Nothing here is, or is derived from,
 MOTOR / Mitchell 1 / ALLDATA / OEM warranty data; the shapes are real and the hours are
 placeholders that make the pipeline demonstrable before any licensing spend. Every labor
 standard carries `sourceRevision = tier0-fake-2026-09`, so the whole fake set is
@@ -361,10 +365,11 @@ upstream source states them yet.
 
 | File | Rows | Target |
 |---|---|---|
-| `base-prices.csv` | 530 MSRPs, one per catalog product except WIXF-51394 | `POST /v1/price/bulk-ingest` (`domainType: BASE_PRICE`) |
+| `base-prices.csv` | 530 MSRPs, one per catalog product except `WIXF-51394` (the #1554 on-hand addition; not to be confused with the priced `WIXF-XP51394`) | `POST /v1/price/bulk-ingest` (`domainType: BASE_PRICE`) |
 
-Columns: `sku,msrp,currency,effectiveFrom`. The amounts are the seed's own `product_msrp`
-values, not invented ones, so alpha prices what the catalog actually sells at.
+Columns: `sku,msrp,currency,effectiveFrom`. The seed's 500 amounts are its own `product_msrp`
+values, not invented ones, so alpha prices what the catalog actually sells at; the SDK seeder's
+30 rows carry the seeder's intended sell prices.
 
 **Keyed by SKU, not product id.** Product ids are generated when the catalog pack loads, so a
 file carrying them would only work against the environment it was written for. The loader
