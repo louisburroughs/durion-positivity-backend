@@ -29,7 +29,11 @@ public class WorkorderSummary {
     @Schema(description = "Current workorder status", example = "WORK_IN_PROGRESS", requiredMode = NOT_REQUIRED)
     String status;
 
-    @Schema(description = "Name of the customer", example = "John Doe", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Display name of the customer; null when the customer is not replicated or has no name",
+            example = "John Doe",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     String customerName;
 
     @Schema(
@@ -94,8 +98,10 @@ public class WorkorderSummary {
     List<String> serviceDescriptions;
 
     @Schema(
-            description = "Hours worked on the workorder's service lines so far; null when none are logged",
+            description = "Hours worked on the workorder's service lines so far, whatever each line's status; "
+                    + "null when none are logged",
             example = "1.5",
-            requiredMode = NOT_REQUIRED)
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     BigDecimal actualLaborHours;
 }

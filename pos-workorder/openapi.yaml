@@ -11089,9 +11089,11 @@ components:
       description: Summary view of a workorder for list displays
       properties:
         actualLaborHours:
-          description: Hours worked on the workorder's service lines so far; null when none are logged
+          description: Hours worked on the workorder's service lines so far, whatever each line's status; null when none are logged
           example: 1.5
-          type: number
+          type:
+          - number
+          - 'null'
         assignedMechanicId:
           description: Identifier of the assigned mechanic
           example: 01960003-0000-7000-8000-000000000002
@@ -11106,9 +11108,11 @@ components:
           format: int32
           type: integer
         customerName:
-          description: Name of the customer
+          description: Display name of the customer; null when the customer is not replicated or has no name
           example: John Doe
-          type: string
+          type:
+          - string
+          - 'null'
         estimatedLaborHours:
           description: Estimated labor hours for the workorder
           example: 2.5

@@ -326,9 +326,11 @@ public class DashboardServiceImpl implements DashboardService {
     /**
      * A glance at the work on each roster workorder (#2025): how many service lines are in play, how many
      * are done, the first few descriptions, and the hours logged against them. Cancelled lines and lines
-     * the customer declined are not work anyone will do, so they are left out of every figure. Two batched
-     * queries cover the roster; hours sum over the workorder's service lines, which is what the detail view
-     * totals, and stay null when nothing has been logged.
+     * the customer declined are not work anyone will do, so they are left out of the line counts and the
+     * descriptions. Hours are not filtered that way: they sum every entry on the workorder's service lines,
+     * whatever the line's status, because time already worked on a line cancelled later was still worked —
+     * and that is the total the detail view shows. They stay null when nothing has been logged. Two batched
+     * queries cover the roster.
      */
     private Map<UUID, WorkSynopsis> synopses(List<Workorder> workorders) {
         Set<UUID> workorderIds = workorders.stream()
