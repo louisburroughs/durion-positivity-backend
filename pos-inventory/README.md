@@ -197,7 +197,14 @@ have to agree on which location that is. The staging location is a property of a
 1. the request's `X-Site-Id` header or its `{siteId}` URI variable,
 2. the configured `pos.inventory.receiving.site-id`,
 3. **the site of the entity being acted on** — the goods receipt's own location for putaway
-   generation, the receiving session's source-order ship-to for receive-into-staging.
+   generation, the site stamped on the receiving session for receive-into-staging.
+
+`receiving_session.site_id` (V4) is captured from the source order's ship-to when the session
+opens, and read from the session thereafter. Re-reading the projection per receive call would let a
+mid-session revision move the site: `revisePurchaseOrder` overwrites `shipToLocationId` in any
+lifecycle state, `PARTIALLY_RECEIVED` included, and a session's stock does not move site because
+somebody edited the order behind it. A session opened before the column existed carries no site and
+falls back to the projection. The staging location is resolved once per receive call, not per line.
 
 The chosen site's declared default comes from the `location_ref` replica, fed by
 `location.location.updated` when a site configures defaults through

@@ -49,6 +49,15 @@ public class ReceivingSession extends TenantScopedEntity {
     @Column(nullable = false, length = 50)
     private SourceDocumentType sourceDocumentType;
 
+    /**
+     * Site this session receives at, captured from the source document's ship-to when the session
+     * opened (#2009). Fixed at creation on purpose: the source order's ship-to can be revised
+     * mid-session, and a session's stock does not move site when it is. Null for sessions opened
+     * before the column existed, which fall back to reading the projection.
+     */
+    @Column(name = "site_id")
+    private UUID siteId;
+
     @Column(length = 255)
     private String supplierId;
 
