@@ -17,7 +17,9 @@ and both are reported here:
 
   THIN   the floor sits within --min-cushion of measured coverage. Section 6.2:
          "a cushion any thinner than about two points is not a gate, it is a
-         coin toss".
+         coin toss". Since floors never fall, this usually means coverage did:
+         a floor tracks its module's best-ever measurement, so THIN is what a
+         regression looks like from here (section 6.6).
   STALE  the floor sits more than --max-cushion below measured coverage, i.e.
          coverage rose and the floor was never raised behind it. The module can
          shed everything it gained without failing a build.

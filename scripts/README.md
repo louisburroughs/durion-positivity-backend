@@ -608,6 +608,8 @@ Root `pom.xml` checks each module against `<jacoco.line.min>` / `<jacoco.branch.
 - Refuses to score coverage produced with ITs. Failsafe inherits the JaCoCo agent through `@{argLine}` and appends to the same `jacoco.exec`, so an IT-inclusive run yields floors the gate can never reproduce. `--allow-its` overrides, at the cost of that guarantee.
 - Modules with no `jacoco.csv` are listed and skipped, not failed — only a build that ran tests produces one.
 - Runs nightly in the `Full Coverage SonarCloud Analysis` job, right after the ratchet itself.
+- `THIN` usually means coverage fell, not that the floor is wrong. Floors are never lowered (below), so each one sits `--cushion` under its module's best-ever measurement — a module that drops more than 2 points below that peak fails here. Check what the coverage did before reaching for `--allow-lower`; §6.6 works through a case of each.
+- The PR gate cannot catch a `THIN`. It invokes `jacoco:check`, which only fails a `BREACH`, so a change that eats a module's cushion merges green and surfaces here the following night (§6.6).
 - Fix any finding with `./scripts/update-coverage-floors.sh --apply`.
 
 ---
@@ -630,6 +632,8 @@ Re-derives every module's JaCoCo floors from the last `-DskipITs` build and writ
 
 **Notes:**
 - Floors are raised, never lowered: a proposal below the standing floor is reported and dropped unless `--allow-lower`.
+- There is no upper bound on a floor — it is measured coverage minus the cushion, clamped only at zero. A module's floor therefore tracks its best-ever measurement for as long as nobody passes `--allow-lower` (§6.6).
+- Prefer this script to a hand-edited property even for a single floor: it refreshes the pom's `Coverage ratchet: measured …` comment, and a hand edit leaves that comment describing a measurement that no longer exists.
 - Never writes a `0.00` floor — "a 0.00 floor is not a gate" (§6.2); an all-zero module needs first tests, not a threshold.
 - Refreshes the `Coverage ratchet: measured …` comment in each pom it touches, so the recorded numbers and cushion stay honest.
 - Adds the properties (and a `<properties>` block, in POM-sequence position) to a module that has none.
