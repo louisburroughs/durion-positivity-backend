@@ -164,6 +164,16 @@ created later). Adopted modules connect as it; the rest switch in their WS3 wave
    global table); elsewhere the column stays unmapped, Hibernate's `validate` ignores it and the
    column default fills the value.
 
+Step 1 names the default home, not the whole rule: what makes a table compliant is the tenancy
+schema it carries, not the file the `CREATE TABLE` sits in (#1996). A table introduced in a
+post-baseline migration — `pos-security-service`'s `V3__ext_tenant.sql`,
+`pos-workorder`'s `V3__service_position_and_single_technician.sql` — is compliant when it carries
+steps 1–3 in full, and is not relocated into `V1` afterwards: moving DDL out of a migration other
+databases have already run needs a coordinated reset or `flyway repair`, and the next flatten folds
+it into the new baseline for free. Data reconciliation and indexes over pre-existing rows belong in
+a post-baseline migration in every case, since they only mean anything in a database that already
+ran `V1`.
+
 ## What the retrofit changed for application code
 
 - `INSERT ... ON CONFLICT (cols)` on a scoped table needs `(tenant_id, cols)`. The only
