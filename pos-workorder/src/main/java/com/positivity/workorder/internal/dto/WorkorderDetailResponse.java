@@ -61,7 +61,7 @@ public class WorkorderDetailResponse {
     @Schema(
             description = "Human-readable vehicle description (unit number, plate, VIN); null when the vehicle is not"
                     + " replicated or none of those fields is known",
-            example = "\"2020 Toyota Camry (VIN: 1HGBH41JXMN109186)\"",
+            example = "UNIT-42 · ABC-123 · 1HGBH41JXMN109186",
             requiredMode = NOT_REQUIRED,
             nullable = true)
     private String vehicleDescription;
