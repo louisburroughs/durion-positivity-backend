@@ -51,6 +51,19 @@
   `TenantKafkaHeaders.record(...)`; application code reads `TenantContext` and never binds it (the one exception is
   `pos-tenant`, whose rows are platform data: its `tenant.provisioned` handler re-binds to `PlatformTenant.ID`, and
   `TenantRegistrySecretFilter` binds it at the request edge for the internal registry endpoint).
+  **The rule constrains what a new table carries, not which file holds it (#1996).** The default home for a new
+  table is still `V1__baseline_<module>.sql`, hand-edited — but only on the reset path: a deploy against a
+  database that already ran the old `V1` fails Flyway validation (`checksum mismatch for migration version 1`)
+  unless it is reset (`build-push-ecr.yml` dispatch with `deploy_alpha=true` **and** `reset_alpha_databases=true`;
+  `docs/OPERATIONS_RUNBOOK.md` → "Schema reset") or repaired. A table introduced in a post-baseline migration
+  instead is equally compliant as long as it carries the whole tenancy schema above — `tenant_id` first with the
+  `app_current_tenant()` default, RLS enabled and forced, the `tenant_isolation` policy, a `(tenant_id, id)` unique
+  constraint and tenant-leading unique constraints and foreign keys. The precedent is `pos-workorder`'s own
+  `V3__service_position_and_single_technician.sql`; `pos-security-service`'s `V3__ext_tenant.sql` is a different
+  case — a *global* table (no `tenant_id`, no RLS, listed in `tenancy-global-tables.txt`), not a scoped-table
+  example. Such a table is not relocated into `V1` after the fact: moving DDL out of a migration other databases
+  have already run needs the same reset or repair, and the next flattening folds it into the new baseline for
+  free. Data reconciliation and any index over pre-existing rows always stay in a post-baseline migration.
 - Keep ArchUnit rules green.
 
 ## Where to Look

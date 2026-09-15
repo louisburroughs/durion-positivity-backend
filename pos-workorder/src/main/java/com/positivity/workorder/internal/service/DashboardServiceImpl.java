@@ -49,7 +49,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -281,11 +280,8 @@ public class DashboardServiceImpl implements DashboardService {
             return descriptions;
         }
         for (ExtVehicleReplica vehicle : extVehicleReplicaRepository.findAllById(vehicleIds)) {
-            String description = Stream.of(vehicle.getUnitNumber(), vehicle.getLicensePlate(), vehicle.getVin())
-                    .filter(part -> part != null && !part.isBlank())
-                    .map(String::strip)
-                    .collect(Collectors.joining(" · "));
-            if (!description.isEmpty()) {
+            String description = ReplicaDisplayNames.vehicleDescription(vehicle);
+            if (description != null) {
                 descriptions.put(vehicle.getVehicleId(), description);
             }
         }
@@ -307,8 +303,9 @@ public class DashboardServiceImpl implements DashboardService {
             return names;
         }
         for (ExtCustomerPartyReplica party : extCustomerPartyReplicaRepository.findAllById(customerIds)) {
-            if (party.getDisplayName() != null && !party.getDisplayName().isBlank()) {
-                names.put(party.getPartyId(), party.getDisplayName().strip());
+            String name = ReplicaDisplayNames.customerName(party);
+            if (name != null) {
+                names.put(party.getPartyId(), name);
             }
         }
         return names;

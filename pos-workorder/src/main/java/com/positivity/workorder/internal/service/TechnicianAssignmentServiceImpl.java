@@ -1,5 +1,6 @@
 package com.positivity.workorder.internal.service;
 
+import com.positivity.domainevents.AggregateTouch;
 import com.positivity.workorder.internal.dto.TechnicianAssignmentRecord;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
 import com.positivity.workorder.internal.entity.TechnicianAssignment;
@@ -51,6 +52,32 @@ import org.springframework.transaction.annotation.Transactional;
  * <li>Assignment history is append-only and ordered newest-first; closed rows are
  * never deleted</li>
  * </ul>
+ *
+ * <p>Every assign, reassign and release publishes a workorder fact (#2015). {@link
+ * WorkorderStateMachine#reconcileAssigned} only publishes one itself when the pair's completeness
+ * actually flips the status between {@code APPROVED} and {@code ASSIGNED} — it no-ops for every
+ * other status, including {@code WORK_IN_PROGRESS}, and for a hand-over that leaves an already-
+ * {@code ASSIGNED} workorder {@code ASSIGNED}. Without an explicit call here, those cases changed
+ * {@code technician_assignment} without ever telling a consumer the workorder's current technician
+ * had changed. {@link WorkorderFactPublisher#markChanged} is called on the row this operation
+ * itself wrote, before {@code reconcileAssigned} runs, matching how
+ * {@code ServicePositionServiceImpl} marks its own position writes.
+ *
+ * <p>Unlike {@code ServicePositionServiceImpl}, none of these three operations write a column on
+ * the {@code Workorder} row itself — {@code assignPosition}/{@code releasePosition} set {@code
+ * resourceType}/{@code resourceId} on the workorder and so dirty it (and its {@code @Version})
+ * naturally, but assign/reassign/release only ever touch {@code technician_assignment}. Left alone
+ * that breaks the {@code aggregateVersion} contract {@link WorkorderFactPublisher} documents
+ * (#1486): a technician-only fact would go out under the workorder's unchanged version, and a
+ * concurrent mutation that does bump it (racing ahead in the version order, arriving behind in
+ * delivery order) would make a strictly-below stale guard on the consuming side (e.g.
+ * pos-shop-manager's {@code ext_workorder} replica) drop this fact and its assignment change.
+ * {@link #dirtyWorkorder} is the same fix already applied to every part-only mutation site
+ * ({@code WorkorderPartAdjustmentServiceImpl}, {@code WorkorderPartUsageServiceImpl}, {@code
+ * WorkorderSubstitutionServiceImpl}) — stamp {@code updatedAt} forward and save, so the row is
+ * dirty and the publisher's pre-read flush has an increment to pick up. Called before {@code
+ * markChanged} so the dirtying happens even when {@code reconcileAssigned} below does not touch
+ * the row itself.
  */
 @Service
 @RequiredArgsConstructor
@@ -64,6 +91,7 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
     private final PeopleAvailabilityLocalService peopleAvailabilityLocalService;
     private final ExtMobileUnitReplicaRepository extMobileUnitReplicaRepository;
+    private final WorkorderFactPublisher workorderFactPublisher;
 
     /**
      * Assign a technician to a workorder.
@@ -130,6 +158,12 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
 
         TechnicianAssignment saved = saveHonouringSingleCurrentIndex(assignment, workorderId);
         log.info("Assigned technician {} to workorder {} by user {}", technicianId, workorderId, assignedBy);
+        // #1486 (PR #2029 review): this write never touches the workorder row itself, so its
+        // @Version would not advance for the fact below without this.
+        dirtyWorkorder(workorderId);
+        // #2015: the current technician just changed; reconcileAssigned below only republishes when
+        // it also flips the status, so this write needs its own mark.
+        workorderFactPublisher.markChanged(workorderId);
 
         // #2011: a technician is half of what ASSIGNED means — the workorder also has to stand on a
         // bay or a mobile unit. The state machine decides, so a workorder with nowhere to be worked
@@ -223,6 +257,12 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                 previousTechnicianId,
                 newTechnicianId,
                 reassignedBy);
+        // #1486 (PR #2029 review): this write never touches the workorder row itself, so its
+        // @Version would not advance for the fact below without this.
+        dirtyWorkorder(workorderId);
+        // #2015: the current technician just changed; reconcileAssigned below no-ops for a
+        // hand-over that leaves the pair's completeness unchanged, so this write needs its own mark.
+        workorderFactPublisher.markChanged(workorderId);
 
         // #2011: a hand-over leaves the pair complete, so an ASSIGNED workorder stays ASSIGNED. Asked
         // anyway rather than skipped: an APPROVED workorder that was already on a bay and had somehow
@@ -246,6 +286,13 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
         TechnicianAssignment assignment = currentAssignment.get();
         assignment.markAsNotCurrent(LocalDateTime.now(clock), reason, releasedBy);
         TechnicianAssignment saved = assignmentRepository.saveAndFlush(assignment);
+        // #1486 (PR #2029 review): this write never touches the workorder row itself, so its
+        // @Version would not advance for the fact below without this.
+        dirtyWorkorder(workorderId);
+        // #2015: the workorder no longer has a current technician; reconcileAssigned below only
+        // republishes when the release also drops the workorder out of ASSIGNED, so this write
+        // needs its own mark.
+        workorderFactPublisher.markChanged(workorderId);
         // #2010: the workorder is no longer held by anyone, so ASSIGNED would be a lie — the dispatch
         // board and the shop dashboard would go on showing a job as assigned that nobody holds. The
         // revert goes through the state machine like any other transition, so it leaves a status
@@ -408,6 +455,24 @@ public class TechnicianAssignmentServiceImpl implements TechnicianAssignmentServ
                     .orElse(null);
         }
         return workorder.getLocationId();
+    }
+
+    /**
+     * Dirties the workorder row itself for a mutation that only touched {@code
+     * technician_assignment} (#1486, PR #2029 review): {@link WorkorderFactPublisher} flushes
+     * before reading the aggregate's {@code @Version}, and a clean workorder row gives that flush
+     * no pending increment to pick up, so the emitted fact would carry the new assignment state
+     * under an unchanged {@code aggregateVersion}. Same pattern as {@code
+     * WorkorderPartAdjustmentServiceImpl.dirtyWorkorder}.
+     */
+    private void dirtyWorkorder(@NonNull UUID workorderId) {
+        // Fail fast on a missing row — silently skipping the bump would emit the fact under an
+        // unchanged aggregateVersion, the exact contract violation this helper exists to prevent.
+        Workorder workorder = workorderRepository
+                .findById(workorderId)
+                .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
+        workorder.setUpdatedAt(AggregateTouch.monotonicUpdatedAt(workorder.getUpdatedAt(), clock));
+        workorderRepository.save(workorder);
     }
 
     /**
