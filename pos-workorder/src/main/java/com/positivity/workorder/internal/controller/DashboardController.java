@@ -46,6 +46,10 @@ public class DashboardController {
     @Operation(operationId = "getDispatchDashboard", summary = "Get Daily Dispatch Board Dashboard", description = """
                     Returns the aggregated dispatch board for one location and one date: workorder summaries, \
                     mechanic statuses, bay statuses, mobile unit statuses, and detected scheduling conflicts.
+                    The workorders array is every workorder scheduled for the date at the location plus every \
+                    still-open workorder holding a bay or mobile unit there from an earlier date, each listed \
+                    once, so a multi-day job stays on the board while it occupies its resource and every unit \
+                    reported occupied has its workorder listed.
                     Bays and mobile units are reported in separate arrays because they are separate kinds of \
                     resource; each array lists every active unit of its kind at the location, including units \
                     with no work today, which report assignedWorkorderId null, and a unit reads as occupied \
@@ -55,7 +59,7 @@ public class DashboardController {
                     which returns flat work-in-progress rows without mechanic, bay, or conflict aggregation.
                     Preconditions: the location must exist as a UUID-keyed location; mechanic availability comes \
                     from local people replicas, and a failed replica lookup sets dataQualityWarning to true \
-                    instead of failing the call. Bay and mobile unit identity is served from local replicas of \
+                    instead of failing the call; bay and mobile unit identity is served from local replicas of \
                     the location domain, so a unit whose replica row has not arrived yet is listed by id with a \
                     null name rather than being omitted.
                     Required inputs: locationId (UUID as a string) as a query parameter; date (ISO date) is \
@@ -66,7 +70,8 @@ public class DashboardController {
                     read-only aggregation.
                     Returns 400 when locationId does not parse as a UUID, 403 LOCATION_SCOPE_DENIED when the \
                     caller's location scope does not cover locationId, and 200 with empty workorder and \
-                    conflict panels when no workorders are scheduled for the date.
+                    conflict panels when nothing is scheduled for the date and no open work is holding a \
+                    resource at the location.
                     """)
     @ApiResponse(responseCode = "200", description = "Dispatch board for the location and date")
     @ApiResponse(

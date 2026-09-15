@@ -21,6 +21,7 @@ import com.positivity.workorder.internal.repository.TechnicianAssignmentReposito
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.security.WorkorderPermissions;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -159,6 +160,23 @@ public class ServicePositionServiceImpl implements ServicePositionService {
             throw new ServicePositionInvalidException("A HOLD position is the workorder's own site: expected "
                     + workorder.getLocationId() + " but got " + resourceId);
         }
+        // #2002: taking a bay or a mobile unit schedules the workorder if nothing else has. This sits
+        // ahead of the unchanged-placement short-circuit below on purpose: an inbound assignment that
+        // merely re-asserts the position a workorder already holds is exactly the traffic that would
+        // otherwise leave an undated holder undated forever. HOLD is excluded because a parking lot
+        // is not dispatch work — a vehicle can wait in the lot for a date nobody has set yet.
+        if (effectiveType != null && effectiveType.isExclusive()) {
+            LocalDate businessDate = LocalDate.now(clock);
+            if (workorder.ensureScheduledForPosition(businessDate)) {
+                log.info(
+                        "Workorder {} had no scheduledDate when placed on {} {}; scheduling it for {}",
+                        workorderId,
+                        effectiveType,
+                        resourceId,
+                        businessDate);
+            }
+        }
+
         Optional<ServicePositionAssignment> currentPlacement =
                 positionRepository.findByWorkorder_IdAndCurrentTrue(workorderId);
 

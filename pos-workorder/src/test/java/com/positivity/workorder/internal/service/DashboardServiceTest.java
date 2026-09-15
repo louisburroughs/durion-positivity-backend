@@ -1254,9 +1254,14 @@ class DashboardServiceTest {
             assertThat(bay.isAvailable()).isFalse();
             assertThat(bay.getAssignedWorkorderId()).isEqualTo(WORKORDER_ID.toString());
         });
-        // The job is not on today's schedule, so it is correctly absent from the workorder panel —
-        // occupancy and the day's list are two different questions.
-        assertThat(response.getWorkorders()).isEmpty();
+        // #2002: and it is on the workorder panel too. This assertion used to read isEmpty(), on the
+        // reasoning that occupancy and the day's schedule are two different questions — true of the
+        // queries, but the board is one answer, and the version that omitted the job reported this
+        // bay OCCUPIED by a workorder the dispatcher could not find anywhere in the response.
+        assertThat(response.getWorkorders()).singleElement().satisfies(summary -> {
+            assertThat(summary.getWorkorderId()).isEqualTo(WORKORDER_ID);
+            assertThat(summary.getScheduledDate()).isEqualTo(TEST_DATE.minusDays(1));
+        });
     }
 
     @Test
@@ -1500,6 +1505,140 @@ class DashboardServiceTest {
         DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
 
         assertThat(response.getConflicts()).isEmpty();
+    }
+
+    // -----------------------------------------------------------------------
+    // #2002: the roster is the day's schedule plus the carryover still holding a
+    // resource. Selecting on scheduledDate alone hid every multi-day job and let
+    // bays[] name an occupant that workorders[] did not contain.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2002: a multi-day job scheduled earlier, still in its bay, is on today's roster")
+    void getDashboard_openCarryoverHoldingBay_appearsInRoster() {
+        UUID carryoverId = UUID.fromString("00000000-0000-0000-0000-0000000000c1");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
+        Workorder carryover = assignedWorkorder(carryoverId, bayId, ResourceType.BAY, WorkorderStatus.WORK_IN_PROGRESS);
+        carryover.setScheduledDate(TEST_DATE.minusDays(2));
+        givenActiveBays(bayReplica(bayId, "Bay 1"));
+        givenResourceHoldersOnly(carryover);
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        assertThat(response.getWorkorders()).singleElement().satisfies(summary -> {
+            assertThat(summary.getWorkorderId()).isEqualTo(carryoverId);
+            assertThat(summary.getScheduledDate()).isEqualTo(TEST_DATE.minusDays(2));
+            assertThat(summary.getAssignedResourceId()).isEqualTo(bayId.toString());
+        });
+    }
+
+    @Test
+    @DisplayName("#2002: every bay reported OCCUPIED names a workorder the roster also lists")
+    void getDashboard_occupiedBay_hasItsWorkorderOnTheRoster() {
+        UUID carryoverId = UUID.fromString("00000000-0000-0000-0000-0000000000c2");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-0000000000b2");
+        Workorder carryover = assignedWorkorder(carryoverId, bayId, ResourceType.BAY, WorkorderStatus.WORK_IN_PROGRESS);
+        carryover.setScheduledDate(TEST_DATE.minusDays(1));
+        givenActiveBays(bayReplica(bayId, "Bay 2"));
+        givenResourceHoldersOnly(carryover);
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        List<String> rosterIds = response.getWorkorders().stream()
+                .map(summary -> summary.getWorkorderId() == null
+                        ? null
+                        : summary.getWorkorderId().toString())
+                .toList();
+        assertThat(response.getBays())
+                .filteredOn(bay -> "OCCUPIED".equals(bay.getStatus()))
+                .isNotEmpty()
+                .allSatisfy(bay -> assertThat(rosterIds).contains(bay.getAssignedWorkorderId()));
+    }
+
+    @Test
+    @DisplayName("#2002: a workorder both scheduled for today and holding its bay is listed once")
+    void getDashboard_workorderInBothQueries_isNotDuplicated() {
+        UUID workorderId = UUID.fromString("00000000-0000-0000-0000-0000000000c3");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-0000000000b3");
+        Workorder today = assignedWorkorder(workorderId, bayId, ResourceType.BAY, WorkorderStatus.ASSIGNED);
+        today.setScheduledDate(TEST_DATE);
+        givenActiveBays(bayReplica(bayId, "Bay 3"));
+        givenWorkorders(today);
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        assertThat(response.getWorkorders()).hasSize(1);
+        assertThat(response.getWorkorders().get(0).getWorkorderId()).isEqualTo(workorderId);
+    }
+
+    @Test
+    @DisplayName("#2002: a cancelled workorder still carrying a stale bay id is not carried onto the roster")
+    void getDashboard_lockedHolder_staysOffTheRoster() {
+        UUID cancelledId = UUID.fromString("00000000-0000-0000-0000-0000000000c4");
+        UUID bayId = UUID.fromString("00000000-0000-0000-0000-0000000000b4");
+        Workorder cancelled = assignedWorkorder(cancelledId, bayId, ResourceType.BAY, WorkorderStatus.CANCELLED);
+        cancelled.setScheduledDate(TEST_DATE.minusDays(1));
+        givenActiveBays(bayReplica(bayId, "Bay 4"));
+        givenResourceHoldersOnly(cancelled);
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        assertThat(response.getWorkorders()).isEmpty();
+        assertThat(response.getBays()).singleElement().satisfies(bay -> {
+            assertThat(bay.getStatus()).isEqualTo("AVAILABLE");
+            assertThat(bay.getAssignedWorkorderId()).isNull();
+        });
+    }
+
+    @Test
+    @DisplayName("#2002: an open parked workorder carried from an earlier date stays off the roster")
+    void getDashboard_holdHolderFromAnEarlierDate_staysOffTheRoster() {
+        // findOpenResourceHoldersAtLocation asks only for a resource id, and a parked workorder has
+        // one: (HOLD, its own locationId). No panel renders a hold, so nothing obliges the roster to
+        // carry it, and admitting it would drag in every open parked job from every past date.
+        UUID parkedId = UUID.fromString("00000000-0000-0000-0000-0000000000c6");
+        Workorder parked = assignedWorkorder(parkedId, LOCATION_UUID, ResourceType.HOLD, WorkorderStatus.APPROVED);
+        parked.setScheduledDate(TEST_DATE.minusDays(5));
+        givenResourceHoldersOnly(parked);
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        assertThat(response.getWorkorders()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("#2002: a workorder parked today is on the roster — the day's schedule is not filtered")
+    void getDashboard_holdScheduledForToday_isOnTheRoster() {
+        UUID parkedId = UUID.fromString("00000000-0000-0000-0000-0000000000c7");
+        Workorder parked = assignedWorkorder(parkedId, LOCATION_UUID, ResourceType.HOLD, WorkorderStatus.APPROVED);
+        parked.setScheduledDate(TEST_DATE);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(parked));
+        when(workorderRepository.findOpenResourceHoldersAtLocation(any(), any()))
+                .thenReturn(List.of(parked));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        assertThat(response.getWorkorders())
+                .singleElement()
+                .satisfies(summary -> assertThat(summary.getWorkorderId()).isEqualTo(parkedId));
+    }
+
+    @Test
+    @DisplayName("#2002: a workorder completed today stays on today's roster as completed work")
+    void getDashboard_completedToday_staysOnTheRoster() {
+        UUID completedId = UUID.fromString("00000000-0000-0000-0000-0000000000c5");
+        Workorder completed = assignedWorkorder(completedId, null, null, WorkorderStatus.COMPLETED);
+        completed.setScheduledDate(TEST_DATE);
+        when(workorderRepository.findByScheduledDateAndLocationId(any(), any())).thenReturn(List.of(completed));
+        when(peopleAvailabilityLocalService.fetchAvailability(any(), any())).thenReturn(emptyAvailability());
+
+        DashboardResponse response = dashboardService.getDashboard(LOCATION_ID, TEST_DATE);
+
+        assertThat(response.getWorkorders()).singleElement().satisfies(summary -> {
+            assertThat(summary.getWorkorderId()).isEqualTo(completedId);
+            assertThat(summary.getStatus()).isEqualTo(WorkorderStatus.COMPLETED.name());
+        });
     }
 
     private void givenWorkorders(Workorder... workorders) {

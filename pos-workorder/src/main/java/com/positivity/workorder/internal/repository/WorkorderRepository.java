@@ -93,6 +93,13 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
      * Used by the Daily Dispatch Board Dashboard (CAP-142) to populate the day
      * view.
      *
+     * <p>This is the board's day <em>schedule</em>, not its whole roster (#2002). It is exact on
+     * the date by design — "what is booked for today" is a question about today — and the board
+     * unions it with {@link #findOpenResourceHoldersAtLocation} to pick up the multi-day job that
+     * was booked earlier and is still in its bay. Widening the predicate here instead would pull in
+     * every closed job from every past date; the union is bounded to work that is still open and
+     * still holding a resource, which is precisely the work a dispatcher still has to place.
+     *
      * @param scheduledDate the date to query
      * @param locationId    the location identifier
      * @return list of matching workorders

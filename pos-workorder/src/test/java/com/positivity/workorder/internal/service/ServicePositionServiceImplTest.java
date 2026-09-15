@@ -31,6 +31,7 @@ import com.positivity.workorder.internal.repository.TechnicianAssignmentReposito
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -590,6 +591,90 @@ class ServicePositionServiceImplTest {
             when(workorderRepository.findById(WORKORDER_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.getPosition(WORKORDER_ID)).isInstanceOf(WorkorderNotFoundException.class);
+        }
+    }
+
+    /**
+     * #2002: a workorder holding a bay or a mobile unit is dispatch-board work, and the board selects
+     * its roster on {@code scheduledDate}. Alpha was found with fourteen non-terminal workorders and
+     * an empty board at every location because nothing on the placement path ever supplied one.
+     */
+    @Nested
+    @DisplayName("scheduledDate invariant on placement")
+    class ScheduledDateOnPlacement {
+
+        private static final LocalDate TODAY = LocalDate.ofInstant(NOW, ZoneOffset.UTC);
+
+        @Test
+        @DisplayName("placing an undated workorder on a bay schedules it for today")
+        void bayPlacementSchedulesUndatedWorkorder() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            assertThat(workorder.getScheduledDate()).isNull();
+
+            service.assignPosition(WORKORDER_ID, request(ResourceType.BAY, BAY_ID, null), ACTOR);
+
+            assertThat(workorder.getScheduledDate()).isEqualTo(TODAY);
+        }
+
+        @Test
+        @DisplayName("placing an undated workorder on a mobile unit schedules it for today")
+        void mobileUnitPlacementSchedulesUndatedWorkorder() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+
+            service.assignPosition(WORKORDER_ID, request(ResourceType.MOBILE_UNIT, MOBILE_UNIT_ID, null), ACTOR);
+
+            assertThat(workorder.getScheduledDate()).isEqualTo(TODAY);
+        }
+
+        @Test
+        @DisplayName("a date already set is left alone, including a past one: a multi-day job stays due when it was")
+        void keepsAnExistingPastDate() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
+            LocalDate startedOn = TODAY.minusDays(3);
+            workorder.setScheduledDate(startedOn);
+
+            service.assignPosition(WORKORDER_ID, request(ResourceType.BAY, OTHER_BAY_ID, "moved rack"), ACTOR);
+
+            assertThat(workorder.getScheduledDate()).isEqualTo(startedOn);
+        }
+
+        @Test
+        @DisplayName("a hold position schedules nothing: the lot is not dispatch work")
+        void holdDoesNotSchedule() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+
+            service.assignPosition(WORKORDER_ID, request(ResourceType.HOLD, SITE_ID, "waiting on parts"), ACTOR);
+
+            assertThat(workorder.getResourceType()).isEqualTo(ResourceType.HOLD);
+            assertThat(workorder.getScheduledDate()).isNull();
+        }
+
+        @Test
+        @DisplayName("re-asserting the position a workorder already holds still supplies a missing date")
+        void repeatedPlacementStillRepairsAMissingDate() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.ASSIGNED);
+            workorder.setResourceType(ResourceType.BAY);
+            workorder.setResourceId(BAY_ID);
+            givenCurrentPlacement(ResourceType.BAY, BAY_ID);
+
+            service.assignPosition(WORKORDER_ID, request(ResourceType.BAY, BAY_ID, null), ACTOR);
+
+            // The placement itself is a no-op — no second history row for a move that did not happen.
+            verify(positionRepository, never()).save(any());
+            assertThat(workorder.getScheduledDate()).isEqualTo(TODAY);
+        }
+
+        @Test
+        @DisplayName("releasing a position schedules nothing")
+        void releaseDoesNotSchedule() {
+            Workorder workorder = givenWorkorder(WorkorderStatus.APPROVED);
+            workorder.setResourceType(ResourceType.BAY);
+            workorder.setResourceId(BAY_ID);
+            givenCurrentPlacement(ResourceType.BAY, BAY_ID);
+
+            service.releasePosition(WORKORDER_ID, ACTOR, "customer rescheduled");
+
+            assertThat(workorder.getScheduledDate()).isNull();
         }
     }
 }
