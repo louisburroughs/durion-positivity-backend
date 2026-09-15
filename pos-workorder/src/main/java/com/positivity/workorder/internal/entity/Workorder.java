@@ -183,6 +183,35 @@ public class Workorder extends TenantScopedEntity {
     @Column(name = "version", nullable = false)
     private long version;
 
+    /**
+     * Bind this workorder to a business date when it takes an exclusive service position (#2002).
+     *
+     * <p>A bay or a mobile unit is dispatch-board work by definition, and the board selects its
+     * roster on {@code scheduledDate}. A workorder holding a position with no date is therefore
+     * invisible on <em>every</em> date — not late, not unscheduled-and-listed, simply absent — while
+     * the resource panels report its bay as occupied by a workorder the roster does not contain.
+     * That is the state alpha was found in: fourteen non-terminal workorders, none of them dated,
+     * and an empty board at every location. The invariant is enforced here, on the entity, rather
+     * than at each of the three call sites that can place a workorder, so no future write path can
+     * reintroduce the gap.
+     *
+     * <p>Only a <em>missing</em> date is supplied. A date already in the past is left exactly as it
+     * is: a multi-day job that started on Monday is genuinely Monday's work and re-dating it every
+     * morning would destroy the one fact that says when it was due. The board reaches such a job
+     * through its on-or-before roster selection instead — see
+     * {@code WorkorderRepository#findOpenResourceHoldersAtLocation}.
+     *
+     * @param businessDate the date to schedule an undated workorder for; the caller's today
+     * @return true when a date was supplied, false when the workorder already had one
+     */
+    public boolean ensureScheduledForPosition(LocalDate businessDate) {
+        if (scheduledDate != null) {
+            return false;
+        }
+        scheduledDate = businessDate;
+        return true;
+    }
+
     public Workorder(UUID id) {
         this.id = id;
     }

@@ -235,6 +235,43 @@ other: double-booking is grouped by resource id **and** type, locked workorders 
 the conflict is reported as `BAY_DOUBLE_BOOKED` or `MOBILE_UNIT_DOUBLE_BOOKED` with a message
 naming the right kind of unit.
 
+### The roster: today's schedule plus carryover (#2002)
+
+`workorders[]` is **not** "rows whose `scheduledDate` is the requested date". It is that set unioned
+with the open work still holding a bay or mobile unit at the location on or before that date —
+the same `findOpenResourceHoldersAtLocation` result the panels use — deduplicated by workorder id.
+Two consequences, both intended:
+
+- A multi-day job appears on the board every day it occupies its resource, not only on the day it
+  was booked. Selecting on the date alone made the board contradict itself: `bays[]` reported the
+  bay `OCCUPIED` by a `workorderId` that appeared nowhere in `workorders[]`.
+- The roster is by construction a superset of every workorder the two resource panels name as an
+  occupant. A locked workorder still carrying a stale resource id is excluded from the carryover
+  half exactly as it is from the panels (`Workorder.isLocked()`, the one authority). The day's own
+  rows are not filtered: a workorder completed this morning stays on today's board as completed
+  work.
+
+Mechanic, status, location and skill conflicts are detected over this roster, so a mechanic put on
+a new job while still owning yesterday's unfinished one is reported as double-booked.
+
+### Taking a position schedules the workorder (#2002)
+
+`Workorder.ensureScheduledForPosition` gives a workorder today's date when it takes an **exclusive**
+position (`BAY` or `MOBILE_UNIT`) with `scheduledDate` still null. It is applied in
+`ServicePositionServiceImpl.recordPositionChange`, which every write path that can place a workorder
+already funnels through — the assignment endpoints, the inbound `AssignmentUpdated` fact, and
+`operationalContext/override` — and it runs ahead of that method's unchanged-placement
+short-circuit, so an inbound fact that merely re-asserts a position a workorder already holds still
+repairs a missing date.
+
+`HOLD` is exempt: the site parking lot is not dispatch work, and a vehicle can wait there for a date
+nobody has set yet. An existing date is never rewritten, a past one included — a job that started on
+Monday is genuinely Monday's work, and the roster rule above is what puts it on Wednesday's board.
+
+Alpha was found in exactly the state this prevents: fourteen non-terminal workorders, none dated,
+and an empty board at every repair-capable location. The one-off repair for the rows that predate
+the invariant is `docs/sql/2002-alpha-schedule-dashboard-workorders.sql`.
+
 Two edge behaviours are deliberate and live in `DashboardServiceImpl.buildResourcePanel`:
 
 - **Unknown or inactive resource still holding open work** — the row is rendered anyway (name from

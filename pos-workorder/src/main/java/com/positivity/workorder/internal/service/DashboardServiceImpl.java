@@ -28,9 +28,11 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -73,7 +75,7 @@ public class DashboardServiceImpl implements DashboardService {
     public DashboardResponse getDashboard(@NonNull String locationId, @NonNull LocalDate date) {
         UUID locationUuid = parseLocationUuid(locationId);
 
-        List<Workorder> workorders = workorderRepository.findByScheduledDateAndLocationId(date, locationUuid);
+        List<Workorder> scheduledForDate = workorderRepository.findByScheduledDateAndLocationId(date, locationUuid);
 
         // Availability is computed from local replicas (#877); a null response means the
         // replica lookup could not produce data, which the dashboard surfaces as degraded.
@@ -97,6 +99,13 @@ public class DashboardServiceImpl implements DashboardService {
         // not list; nothing in this method scales with the number of bays or units.
         List<Workorder> resourceHolders = workorderRepository.findOpenResourceHoldersAtLocation(locationUuid, date);
 
+        // #2002: the roster is the day's scheduled rows plus the carryover the panels already
+        // render. Selecting it on scheduledDate alone made the board contradict itself — a
+        // multi-day job that started yesterday held its bay, so bays[] reported that bay OCCUPIED
+        // by a workorderId that appeared nowhere in workorders[], and the dispatcher had an
+        // occupied resource with no job attached to it. Both panels now answer from one set.
+        List<Workorder> workorders = mergeRoster(scheduledForDate, resourceHolders);
+
         List<WorkorderSummary> workorderSummaries = buildWorkorderSummaries(workorders);
         List<MechanicStatus> mechanicStatuses = buildMechanicStatuses(workorders, people);
         List<BayStatus> bayStatuses = buildBayStatuses(locationUuid, resourceHolders);
@@ -106,8 +115,11 @@ public class DashboardServiceImpl implements DashboardService {
         // resource double-booking is an occupancy question, and answering it from the
         // day's rows while the panels answered it from the holders let the two disagree in the one
         // case that matters — a bay claimed by a job that started yesterday and a job scheduled for
-        // today. Mechanic, status, location and skill conflicts stay on the day's rows: those are
-        // questions about today's schedule, not about who is physically in the bay.
+        // today. Mechanic, status, location and skill conflicts run on the roster, which is the
+        // board's answer to "what is this shop working on today" — and since #2002 that answer
+        // includes the carryover job in bay 3. A mechanic put on a new job this morning while still
+        // owning yesterday's unfinished one is double-booked today whatever the second job's
+        // scheduledDate says.
         List<ConflictEntry> conflicts = detectAllConflicts(workorders, resourceHolders, people, date);
 
         return DashboardResponse.builder()
@@ -121,6 +133,53 @@ public class DashboardServiceImpl implements DashboardService {
                 .lastRefreshed(Instant.now(clock))
                 .dataQualityWarning(peopleDegraded)
                 .build();
+    }
+
+    /**
+     * The dispatch board's workorder roster: everything scheduled for the date, plus the open work
+     * still holding a resource from an earlier date (#2002).
+     *
+     * <p>The two inputs answer different questions and the board needs both. The first is the day's
+     * schedule — every workorder at this location dated today, whatever its status and whether or
+     * not it has been placed anywhere. The second is occupancy, bounded at the board's date by
+     * {@code WorkorderRepository#findOpenResourceHoldersAtLocation}: the multi-day job scheduled on
+     * Monday is still in its bay on Wednesday, and Wednesday's board must show it. Merging them
+     * here rather than widening the date predicate of the first query is what keeps the two panels
+     * honest about each other — the roster is, by construction, a superset of every workorder the
+     * bay and mobile-unit panels name as an occupant.
+     *
+     * <p>Locked holders are dropped for the same reason {@code buildResourcePanel} drops them:
+     * {@link Workorder#isLocked()} is the single authority on whether a job is still live, and a
+     * cancelled workorder that still carries a stale resource id is not work anybody is dispatching
+     * today. The day's own rows are not filtered — a workorder completed this morning belongs on
+     * today's board as completed work.
+     *
+     * <p>Order is the day's schedule first, then carryover, each in query order; ids already
+     * present are not added twice. Rows without an id cannot be matched against anything, so they
+     * are carried through as they arrive rather than silently collapsed.
+     *
+     * @param scheduledForDate rows whose {@code scheduledDate} is exactly the board's date
+     * @param resourceHolders open, resource-holding rows on or before the board's date
+     * @return the roster, deduplicated by workorder id
+     */
+    private static List<Workorder> mergeRoster(List<Workorder> scheduledForDate, List<Workorder> resourceHolders) {
+        List<Workorder> roster = new ArrayList<>(scheduledForDate);
+        Set<UUID> seen = new HashSet<>();
+        for (Workorder workorder : scheduledForDate) {
+            if (workorder.getId() != null) {
+                seen.add(workorder.getId());
+            }
+        }
+        for (Workorder holder : resourceHolders) {
+            if (holder.isLocked()) {
+                continue;
+            }
+            if (holder.getId() != null && !seen.add(holder.getId())) {
+                continue;
+            }
+            roster.add(holder);
+        }
+        return roster;
     }
 
     private UUID parseLocationUuid(String locationId) {
