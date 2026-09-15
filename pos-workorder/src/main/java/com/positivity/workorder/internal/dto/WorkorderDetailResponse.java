@@ -47,7 +47,11 @@ public class WorkorderDetailResponse {
     @NotNull
     private UUID customerId;
 
-    @Schema(description = "Customer name", example = "John Doe", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Display name of the customer; null when the customer is not replicated or has no name",
+            example = "John Doe",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private String customerName;
 
     @Schema(description = "Vehicle ID", example = "550e8400-e29b-41d4-a716-446655440002", requiredMode = REQUIRED)
@@ -55,9 +59,11 @@ public class WorkorderDetailResponse {
     private UUID vehicleId;
 
     @Schema(
-            description = "Vehicle description",
-            example = "\"2020 Toyota Camry (VIN: 1HGBH41JXMN109186)\"",
-            requiredMode = NOT_REQUIRED)
+            description = "Human-readable vehicle description (unit number, plate, VIN); null when the vehicle is not"
+                    + " replicated or none of those fields is known",
+            example = "UNIT-42 · ABC-123 · 1HGBH41JXMN109186",
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
     private String vehicleDescription;
 
     @Schema(description = "Creation timestamp", example = "2024-01-27T10:00:00Z", requiredMode = REQUIRED)

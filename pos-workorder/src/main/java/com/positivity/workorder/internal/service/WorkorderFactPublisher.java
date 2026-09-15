@@ -8,18 +8,22 @@ import com.positivity.workorder.internal.config.OutboxEventWriter;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.entity.WorkorderPart;
 import com.positivity.workorder.internal.entity.WorkorderServiceLine;
+import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import jakarta.persistence.EntityManager;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -40,6 +44,14 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * bay and mobile unit at a location from a local {@code ext_workorder} replica. Without it a
  * consumer knows a workorder changed but not what it occupies or who is on it, and would have to
  * call back into this module synchronously, which ADR-0044 R1 forbids.
+ *
+ * <p>{@code mechanicIds} (#2015) is the workorder's current {@code technician_assignment} first,
+ * followed by any {@code mechanic_ids} entry not already named — the same rule
+ * {@code DashboardServiceImpl.assignedMechanics} applies for the dispatch board. The technician
+ * assign API (#1985) records only {@code technician_assignment} and never writes {@code
+ * mechanic_ids}, so reading the column alone left every technician-assigned workorder publishing
+ * an empty mechanic list. Read via {@link TechnicianAssignmentRepository#findCurrentTechnicians},
+ * an id-only projection, so no LAZY {@code TechnicianAssignment.workorder} proxy is traversed.
  *
  * <p>{@code Workorder} carries a JPA {@code @Version}, and the envelope's {@code aggregateVersion}
  * is that counter (#1486): it strictly increments on every committed mutation, so — unlike the
@@ -69,6 +81,7 @@ public class WorkorderFactPublisher {
     private final WorkorderRepository workorderRepository;
     private final WorkorderPartRepository workorderPartRepository;
     private final WorkorderServiceRepository workorderServiceRepository;
+    private final TechnicianAssignmentRepository technicianAssignmentRepository;
     private final EntityManager entityManager;
 
     /** Mark a workorder as changed in the current transaction; one fact is emitted at commit. */
@@ -111,6 +124,18 @@ public class WorkorderFactPublisher {
         // pending @Version increment so each emitted fact carries the version its row is about to
         // commit as, not the one it held before this write (#1486).
         entityManager.flush();
+
+        // One batched query for the whole pending set (#2015), same shape as
+        // DashboardServiceImpl.assignedMechanics: ids only, via findCurrentTechnicians, so no LAZY
+        // TechnicianAssignment.workorder proxy is traversed.
+        Map<UUID, UUID> currentTechnicianByWorkorder = new HashMap<>();
+        for (TechnicianAssignmentRepository.CurrentTechnician current :
+                technicianAssignmentRepository.findCurrentTechnicians(pending)) {
+            if (current.getWorkorderId() != null && current.getTechnicianId() != null) {
+                currentTechnicianByWorkorder.putIfAbsent(current.getWorkorderId(), current.getTechnicianId());
+            }
+        }
+
         for (UUID workorderId : pending) {
             Workorder workorder = workorderRepository.findById(workorderId).orElse(null);
             if (workorder == null) {
@@ -141,7 +166,7 @@ public class WorkorderFactPublisher {
                     workorder.getResourceType() != null
                             ? workorder.getResourceType().name()
                             : null,
-                    parseMechanicIds(workorder.getMechanicIds()),
+                    mechanicIds(currentTechnicianByWorkorder.get(workorderId), workorder.getMechanicIds()),
                     // The owner has no promise-time field yet (#1658); the contract carries the
                     // slot so consumers can sort on it the day the column exists.
                     null,
@@ -153,6 +178,26 @@ public class WorkorderFactPublisher {
                     workorder.getVersion(),
                     payload);
         }
+    }
+
+    /**
+     * The fact's {@code mechanicIds}: the workorder's current {@code technician_assignment} first,
+     * then any {@code mechanic_ids} entry not already named (#2015).
+     *
+     * <p>Both sources are live writers. The technician assign API records only {@code
+     * technician_assignment} (#1985), while the assignment-context event and the dispatch override
+     * still write {@code mechanic_ids}. Reading the column alone left every technician-assigned
+     * workorder publishing an empty mechanic list. A {@link LinkedHashSet} both de-duplicates and
+     * preserves the required order — technician-assignment id first, then the legacy ids in their
+     * existing order.
+     */
+    private static List<UUID> mechanicIds(@Nullable UUID currentTechnicianId, String mechanicIdsJson) {
+        Set<UUID> ids = new LinkedHashSet<>();
+        if (currentTechnicianId != null) {
+            ids.add(currentTechnicianId);
+        }
+        ids.addAll(parseMechanicIds(mechanicIdsJson));
+        return List.copyOf(ids);
     }
 
     /**

@@ -69,6 +69,9 @@ class TechnicianAssignmentServiceImplTest {
     @Mock
     private com.positivity.workorder.internal.repository.ExtPersonReplicaRepository extPersonReplicaRepository;
 
+    @Mock
+    private WorkorderFactPublisher workorderFactPublisher;
+
     private TechnicianAssignmentServiceImpl service;
 
     @BeforeEach
@@ -78,7 +81,8 @@ class TechnicianAssignmentServiceImplTest {
                 assignmentRepository,
                 workorderRepository,
                 stateMachine,
-                extPersonReplicaRepository);
+                extPersonReplicaRepository,
+                workorderFactPublisher);
 
         // #1983: an assignment now names a technician this module knows from the ext_person replica.
         when(extPersonReplicaRepository.existsById(any())).thenReturn(true);
@@ -173,6 +177,20 @@ class TechnicianAssignmentServiceImplTest {
             service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null);
 
             verify(stateMachine, never()).transitionWorkorder(any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("#2015: publishes a workorder fact even when the status does not change")
+        void publishesFactOnWorkInProgressAssignment() {
+            // WORK_IN_PROGRESS is the case the state machine's own reconcileAssigned no-ops on
+            // (only APPROVED/ASSIGNED are reconciled), so nothing downstream of it would ever mark
+            // the workorder changed. Without an explicit call here a technician assigned to a job
+            // already under way would never be published.
+            givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
+
+            service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null);
+
+            verify(workorderFactPublisher).markChanged(WORKORDER_ID);
         }
 
         @Test
@@ -324,6 +342,23 @@ class TechnicianAssignmentServiceImplTest {
         }
 
         @Test
+        @DisplayName("#2015: publishes a workorder fact even though the hand-over never changes status")
+        void publishesFactOnHandover() {
+            // Reassignment never transitions the workorder itself (see doesNotTransitionWorkorder),
+            // and reconcileAssigned no-ops when the pair's completeness is unchanged by the
+            // hand-over, so this is the one place the changed current technician is marked.
+            givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
+            TechnicianAssignment existing = currentAssignment(OTHER_TECHNICIAN_ID);
+            when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
+                    .thenReturn(Optional.of(existing));
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.of(existing));
+
+            service.reassignTechnician(WORKORDER_ID, TECHNICIAN_ID, "supervisor", "called out sick", null);
+
+            verify(workorderFactPublisher).markChanged(WORKORDER_ID);
+        }
+
+        @Test
         @DisplayName("refuses to reassign a workorder that has no current assignment")
         void rejectsWithoutCurrentAssignment() {
             givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
@@ -357,6 +392,7 @@ class TechnicianAssignmentServiceImplTest {
         @Test
         @DisplayName("#1983: closes the current assignment and records who ended it")
         void releaseRecordsTheActor() {
+            givenWorkorder(WorkorderStatus.ASSIGNED);
             TechnicianAssignment existing = currentAssignment(TECHNICIAN_ID);
             when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.of(existing));
 
@@ -373,6 +409,7 @@ class TechnicianAssignmentServiceImplTest {
         @Test
         @DisplayName("#1985: reads the current row under a lock so a racing reassign cannot be missed")
         void releaseTakesTheRowLock() {
+            givenWorkorder(WorkorderStatus.ASSIGNED);
             when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID))
                     .thenReturn(Optional.of(currentAssignment(TECHNICIAN_ID)));
 
@@ -389,11 +426,42 @@ class TechnicianAssignmentServiceImplTest {
                     .isEmpty();
             verify(assignmentRepository, never()).save(any());
             verify(stateMachine, never()).reconcileAssigned(any(), any(), any());
+            verify(workorderFactPublisher, never()).markChanged(any());
+        }
+
+        @Test
+        @DisplayName("#2015: publishes a workorder fact for the release")
+        void publishesFactOnRelease() {
+            givenWorkorder(WorkorderStatus.ASSIGNED);
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID))
+                    .thenReturn(Optional.of(currentAssignment(TECHNICIAN_ID)));
+
+            service.releaseAssignment(WORKORDER_ID, "supervisor", "Shift ended");
+
+            verify(workorderFactPublisher).markChanged(WORKORDER_ID);
+        }
+
+        @Test
+        @DisplayName("#1486: dirties the workorder row so its @Version advances for the fact")
+        void dirtiesWorkorderForTheFact() {
+            givenWorkorder(WorkorderStatus.ASSIGNED);
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID))
+                    .thenReturn(Optional.of(currentAssignment(TECHNICIAN_ID)));
+
+            service.releaseAssignment(WORKORDER_ID, "supervisor", "Shift ended");
+
+            // release never writes a column on the workorder row itself, so without an explicit
+            // dirty its @Version — what the published fact's aggregateVersion is read from — would
+            // not advance, and a consumer's strictly-below stale guard could drop this fact.
+            org.mockito.ArgumentCaptor<Workorder> captor = org.mockito.ArgumentCaptor.forClass(Workorder.class);
+            verify(workorderRepository).save(captor.capture());
+            assertThat(captor.getValue().getUpdatedAt()).isNotNull();
         }
 
         @Test
         @DisplayName("#2010/#2011: delegates to reconcileAssigned with the release reason")
         void delegatesToReconcileAssignedWithReason() {
+            givenWorkorder(WorkorderStatus.ASSIGNED);
             when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID))
                     .thenReturn(Optional.of(currentAssignment(TECHNICIAN_ID)));
 
@@ -408,12 +476,77 @@ class TechnicianAssignmentServiceImplTest {
         @Test
         @DisplayName("#2010/#2011: falls back to a default reason when none is supplied")
         void delegatesToReconcileAssignedWithDefaultReason() {
+            givenWorkorder(WorkorderStatus.ASSIGNED);
             when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID))
                     .thenReturn(Optional.of(currentAssignment(TECHNICIAN_ID)));
 
             service.releaseAssignment(WORKORDER_ID, "supervisor", null);
 
             verify(stateMachine).reconcileAssigned(WORKORDER_ID, "supervisor", "Technician released");
+        }
+    }
+
+    @Nested
+    @DisplayName("#1486 (PR #2029 review): aggregateVersion advances across technician-only mutations")
+    class AggregateVersionAdvance {
+
+        /**
+         * Ordering regression for the review finding on PR #2029: assign, reassign and release
+         * write only {@code technician_assignment}, never a column on the {@code Workorder} row, so
+         * without an explicit dirty its {@code @Version} — what {@link WorkorderFactPublisher}
+         * reads {@code aggregateVersion} from — would not advance between them. Proven here without
+         * a real Hibernate session by driving the row through two successive mutations on a fixed
+         * clock (the tightest case: same millisecond, so only {@link
+         * com.positivity.domainevents.AggregateTouch}'s forced-forward branch can make it advance)
+         * and asserting the {@code updatedAt} stamp — the field the @Version increment piggybacks
+         * on — strictly advances each time, exactly as {@link
+         * com.positivity.domainevents.AggregateTouch#monotonicUpdatedAt} guarantees.
+         */
+        @Test
+        @DisplayName("assign then reassign strictly advance the workorder row's updatedAt stamp")
+        void successiveMutationsStrictlyAdvanceTheWorkorderRow() {
+            givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
+            Workorder workorder = workorderRepository.findById(WORKORDER_ID).orElseThrow();
+            assertThat(workorder.getUpdatedAt()).isNull();
+
+            service.assignTechnician(WORKORDER_ID, TECHNICIAN_ID, "dispatch", null);
+            Instant afterAssign = workorder.getUpdatedAt();
+            assertThat(afterAssign).isNotNull();
+
+            TechnicianAssignment currentAfterAssign = currentAssignment(TECHNICIAN_ID);
+            when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
+                    .thenReturn(Optional.of(currentAfterAssign));
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.of(currentAfterAssign));
+
+            service.reassignTechnician(WORKORDER_ID, OTHER_TECHNICIAN_ID, "supervisor", "handoff", null);
+            Instant afterReassign = workorder.getUpdatedAt();
+
+            // Same fixed clock reading for both calls — proves the advance cannot be an artifact of
+            // wall-clock time moving between them.
+            assertThat(afterReassign).isAfter(afterAssign);
+        }
+
+        @Test
+        @DisplayName("reassign then release strictly advance the workorder row's updatedAt stamp")
+        void reassignThenReleaseStrictlyAdvanceTheWorkorderRow() {
+            givenWorkorder(WorkorderStatus.WORK_IN_PROGRESS);
+            Workorder workorder = workorderRepository.findById(WORKORDER_ID).orElseThrow();
+            TechnicianAssignment existing = currentAssignment(OTHER_TECHNICIAN_ID);
+            when(assignmentRepository.findByWorkorder_IdAndCurrentTrue(WORKORDER_ID))
+                    .thenReturn(Optional.of(existing));
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.of(existing));
+
+            service.reassignTechnician(WORKORDER_ID, TECHNICIAN_ID, "supervisor", "handoff", null);
+            Instant afterReassign = workorder.getUpdatedAt();
+            assertThat(afterReassign).isNotNull();
+
+            TechnicianAssignment currentAfterReassign = currentAssignment(TECHNICIAN_ID);
+            when(assignmentRepository.findCurrentForUpdate(WORKORDER_ID)).thenReturn(Optional.of(currentAfterReassign));
+
+            service.releaseAssignment(WORKORDER_ID, "supervisor", "Shift ended");
+            Instant afterRelease = workorder.getUpdatedAt();
+
+            assertThat(afterRelease).isAfter(afterReassign);
         }
     }
 

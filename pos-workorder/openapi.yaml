@@ -10024,9 +10024,11 @@ components:
           format: uuid
           type: string
         customerName:
-          description: Customer name
+          description: Display name of the customer; null when the customer is not replicated or has no name
           example: John Doe
-          type: string
+          type:
+          - string
+          - 'null'
         estimatedLaborHours:
           description: Overlap-aware sum of the agreed labor hours across active service lines, in tenths. Null when no line carries hours.
           example: 3.4
@@ -10097,9 +10099,11 @@ components:
           example: 100.0
           type: number
         vehicleDescription:
-          description: Vehicle description
-          example: '"2020 Toyota Camry (VIN: 1HGBH41JXMN109186)"'
-          type: string
+          description: Human-readable vehicle description (unit number, plate, VIN); null when the vehicle is not replicated or none of those fields is known
+          example: UNIT-42 · ABC-123 · 1HGBH41JXMN109186
+          type:
+          - string
+          - 'null'
         vehicleId:
           description: Vehicle ID
           example: 550e8400-e29b-41d4-a716-446655440002
