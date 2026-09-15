@@ -47,8 +47,9 @@ public class TechnicianAssignmentController {
      * Assign a technician to a workorder.
      *
      * <p>
-     * This operation transitions the workorder to ASSIGNED status if it's currently
-     * APPROVED.
+     * This operation transitions the workorder to ASSIGNED when it is APPROVED and
+     * already stands on a bay or mobile unit; with nowhere to be worked it stays
+     * APPROVED until it is placed.
      * Supports idempotency via Idempotency-Key header.
      */
     @Operation(
@@ -56,7 +57,7 @@ public class TechnicianAssignmentController {
             summary = "Assign Technician to Workorder",
             description = """
                     Assigns a technician to a workorder that has none, transitioning the workorder from \
-                    APPROVED to ASSIGNED when applicable.
+                    APPROVED to ASSIGNED when it also stands on a BAY or a MOBILE_UNIT.
                     Use this tool for the first assignment on a workorder; do not use it to change technicians \
                     — reassignTechnician requires an existing current assignment and records a reassignment \
                     reason, and releaseTechnician takes the current one off without a replacement.
@@ -65,8 +66,10 @@ public class TechnicianAssignmentController {
                     Required inputs: workorderId (UUID) as a path parameter and technicianId (UUID) in the body; \
                     notes are optional, the assignedByUserId body field is ignored in favor of the security \
                     context, and the Idempotency-Key header is accepted but not currently used to deduplicate.
-                    Emits a WORKORDER_TECHNICIAN_ASSIGN event; an APPROVED workorder is transitioned to ASSIGNED \
-                    with a recorded state transition.
+                    Emits a WORKORDER_TECHNICIAN_ASSIGN event; an APPROVED workorder that also holds a BAY or \
+                    MOBILE_UNIT position is transitioned to ASSIGNED with a recorded state transition. ASSIGNED \
+                    means both halves — a technician and somewhere to work — so a workorder with no position, or \
+                    parked on HOLD, stays APPROVED until it is placed.
                     Returns 404 when the workorder does not exist, 400 with the failure reason when the \
                     workorder's status cannot take a technician yet, which includes a reopened COMPLETED one, \
                     409 WORKORDER_CLOSED when it is closed — CANCELLED, or COMPLETED and not reopened — and \
@@ -342,7 +345,9 @@ public class TechnicianAssignmentController {
                     call is idempotent.
                     Required inputs: workorderId (UUID) as a path parameter; reason is an optional query \
                     parameter recorded on the closed assignment.
-                    Emits a WORKORDER_TECHNICIAN_RELEASE event.
+                    Emits a WORKORDER_TECHNICIAN_RELEASE event. An ASSIGNED workorder left with nobody on it \
+                    moves back to APPROVED, with a status transition recorded and a status event published; a \
+                    workorder that has already started keeps its status.
                     Returns 404 when the workorder does not exist, and 409 WORKORDER_CLOSED when it is \
                     COMPLETED or CANCELLED.
                     """,

@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.positivity.shared.error.ApiError;
+import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.exception.ApprovalConfigurationNotFoundException;
 import com.positivity.workorder.internal.exception.BreakSegmentNotFoundException;
 import com.positivity.workorder.internal.exception.ChangeRequestNotFoundException;
@@ -23,6 +24,7 @@ import com.positivity.workorder.internal.exception.PromotionValidationException;
 import com.positivity.workorder.internal.exception.PromotionValidationException.PromotionErrorCode;
 import com.positivity.workorder.internal.exception.PurchaseOrderRequiredException;
 import com.positivity.workorder.internal.exception.ServiceLineNotFoundException;
+import com.positivity.workorder.internal.exception.ServicePositionInactiveException;
 import com.positivity.workorder.internal.exception.ServicePositionInvalidException;
 import com.positivity.workorder.internal.exception.ServicePositionOccupiedException;
 import com.positivity.workorder.internal.exception.StaleSubstituteLinkVersionException;
@@ -201,6 +203,9 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleWorkorderResourceConflict", (HandlerInvocation)
                             request -> handler.handleWorkorderResourceConflict(
                                     new WorkorderResourceConflictException("conflict"), request)),
+                    Named.of("handleServicePositionInactive", (HandlerInvocation)
+                            request -> handler.handleServicePositionInactive(
+                                    new ServicePositionInactiveException(ResourceType.BAY, SOME_ID, "Bay 3"), request)),
                     Named.of("handleServicePositionOccupied", (HandlerInvocation)
                             request -> handler.handleServicePositionOccupied(
                                     new ServicePositionOccupiedException("bay taken", OTHER_ID), request)),

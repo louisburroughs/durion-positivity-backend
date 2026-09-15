@@ -72,7 +72,11 @@ public class ServicePositionController {
                     Returns 403 when the caller's location scope does not cover the workorder's shop, 404 when \
                     no workorder exists for the id, 409 RESOURCE_OCCUPIED when the position already holds \
                     another open workorder, 409 WORKORDER_CLOSED when the workorder is COMPLETED or CANCELLED, \
-                    and 422 SERVICE_POSITION_INVALID when the position is unknown or at another site.
+                    422 SERVICE_POSITION_INVALID when the position is unknown or at another site, and 422 \
+                    SERVICE_POSITION_INACTIVE when the bay is out of service or the mobile unit is not deployed.
+                    Placing an APPROVED workorder that already has a technician on a BAY or MOBILE_UNIT moves it \
+                    to ASSIGNED; a HOLD does not, because it is a parking space rather than somewhere work \
+                    happens.
                     """)
     @ApiResponse(
             responseCode = "200",
@@ -92,8 +96,9 @@ public class ServicePositionController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description =
-                    "Unknown position, or one belonging to another site (ApiError.code " + "SERVICE_POSITION_INVALID)",
+            description = "Unknown position, or one belonging to another site (ApiError.code "
+                    + "SERVICE_POSITION_INVALID), or a bay or mobile unit that is not active (ApiError.code "
+                    + "SERVICE_POSITION_INACTIVE)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<ServicePositionResponse> assignServicePosition(
             @Parameter(description = "ID of the workorder", example = "550e8400-e29b-41d4-a716-446655440001")
@@ -143,6 +148,8 @@ public class ServicePositionController {
                     Required inputs: workorderId (UUID) as a path parameter; reason is an optional query \
                     parameter recorded on the closed history row.
                     Emits a WORKORDER_POSITION_RELEASE event and marks the workorder fact changed.
+                    Releasing the position of an ASSIGNED workorder moves it back to APPROVED: ASSIGNED means \
+                    a technician and a bay or mobile unit, and it now has nowhere to be worked.
                     Returns 403 when the caller's location scope does not cover the workorder's shop, 404 when \
                     no workorder exists for the id, and 409 WORKORDER_CLOSED when the workorder is COMPLETED or \
                     CANCELLED.

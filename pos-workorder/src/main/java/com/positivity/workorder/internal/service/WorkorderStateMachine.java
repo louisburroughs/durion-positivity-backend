@@ -11,6 +11,7 @@ import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.WorkorderNotFoundException;
 import com.positivity.workorder.internal.repository.AuditEventRepository;
 import com.positivity.workorder.internal.repository.ChangeRequestRepository;
+import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderPartRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
@@ -28,6 +29,8 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -51,6 +54,7 @@ public class WorkorderStateMachine {
     private final ObjectMapper objectMapper;
     private final ChangeRequestService changeRequestService;
     private final ServicePositionService servicePositionService;
+    private final TechnicianAssignmentRepository technicianAssignmentRepository;
 
     private static final Set<WorkorderStatus> COMPLETION_ELIGIBLE_STATUSES = Set.of(
             WorkorderStatus.WORK_IN_PROGRESS,
@@ -283,16 +287,121 @@ public class WorkorderStateMachine {
         return status == WorkorderStatus.COMPLETED || status == WorkorderStatus.READY_FOR_PICKUP;
     }
 
+    /**
+     * Re-decide whether a workorder is ASSIGNED, after either half of the pair changed (#2011).
+     *
+     * <p>{@code ASSIGNED} means ready to be worked: there is a current technician <em>and</em> the
+     * workorder stands on a bay or a mobile unit. A {@code HOLD} is a parking space, not a position
+     * work happens at, so it does not count. Every trigger — technician assign, reassign and
+     * release, position assign and release, the inbound pos-shop-manager assignment fact and the
+     * operational-context override — calls this after its own write, inside its own transaction, so
+     * the rule is decided in one place instead of being re-derived at six call sites that would
+     * drift apart.
+     *
+     * <p>Only {@code APPROVED} and {@code ASSIGNED} are touched. A workorder that has started is
+     * past this question: {@code WORK_IN_PROGRESS} and its sub-statuses are not walked back when a
+     * technician hands the job over or the vehicle moves bays, and there is no transition from them
+     * to {@code APPROVED} to walk back with. {@code DRAFT} and the terminal statuses are equally out
+     * of scope, and a status that is already the right one writes nothing — this runs on paths that
+     * re-assert an unchanged position, and a status history full of no-op rows would bury the real
+     * ones.
+     *
+     * <p>The workorder row is locked for the decision (see
+     * {@link com.positivity.workorder.internal.repository.WorkorderRepository#findByIdForUpdate}), so
+     * a technician assignment and a position assignment racing to complete the pair cannot both read
+     * a half-filled pair and both leave it APPROVED. The order stays the one the assignment
+     * operations already use — technician assignment row first, workorder second (#1984, #1985) —
+     * and technician rows are only read here, never locked, so there is no inversion to deadlock on.
+     */
+    @Transactional
+    public void reconcileAssigned(@NonNull UUID workorderId, @NonNull String actorId, @Nullable String reason) {
+        // Locked, not a plain read: see findByIdForUpdate. Two transactions filling the two halves at
+        // the same moment would otherwise each read the other half before it was committed, both
+        // conclude the pair was still incomplete, and both leave the workorder APPROVED with nothing
+        // left to revisit it.
+        Workorder workorder = workorderRepository.findByIdForUpdate(workorderId).orElse(null);
+        if (workorder == null) {
+            return;
+        }
+        WorkorderStatus current = workorder.getStatus();
+        if (current != WorkorderStatus.APPROVED && current != WorkorderStatus.ASSIGNED) {
+            return;
+        }
+        WorkorderStatus target = isReadyToBeWorked(workorder) ? WorkorderStatus.ASSIGNED : WorkorderStatus.APPROVED;
+        if (current == target) {
+            return;
+        }
+        transitionWorkorder(
+                workorderId, target, actorId, reason == null || reason.isBlank() ? "Assignment changed" : reason);
+    }
+
+    /** Whether the workorder holds both halves of the pair {@code ASSIGNED} stands for (#2011). */
+    private boolean isReadyToBeWorked(Workorder workorder) {
+        return hasCurrentTechnician(workorder.getId()) && isOnWorkablePosition(workorder);
+    }
+
+    private boolean hasCurrentTechnician(UUID workorderId) {
+        return technicianAssignmentRepository
+                .findByWorkorder_IdAndCurrentTrue(workorderId)
+                .isPresent();
+    }
+
+    /**
+     * A bay or a mobile unit — the positions work is actually performed at (#2011). A workorder with
+     * no position, or parked on its site's {@code HOLD}, has nowhere to be worked.
+     */
+    private boolean isOnWorkablePosition(Workorder workorder) {
+        return workorder.getResourceId() != null
+                && workorder.getResourceType() != null
+                && workorder.getResourceType().isExclusive();
+    }
+
+    /**
+     * Say what a workorder that cannot be started is missing (#2011).
+     *
+     * <p>{@code APPROVED} is the ordinary case: since work starts only from {@code ASSIGNED}, "wrong
+     * status" is never the answer a dispatcher needs — the answer is which half of the pair has not
+     * been filled in, so the message names it. {@code ASSIGNED} reaches here only for a row that
+     * claims the status without holding both halves, which the pair check above refuses; it gets the
+     * same message, because what the dispatcher has to do about it is the same. Every other status is
+     * a genuine ordering error and keeps the status-based message.
+     */
+    private String startRefusalMessage(Workorder workorder) {
+        UUID workorderId = workorder.getId();
+        if (workorder.getStatus() == WorkorderStatus.APPROVED || workorder.getStatus() == WorkorderStatus.ASSIGNED) {
+            List<String> missing = new ArrayList<>();
+            if (!hasCurrentTechnician(workorderId)) {
+                missing.add("a technician");
+            }
+            if (!isOnWorkablePosition(workorder)) {
+                missing.add("a bay or mobile unit");
+            }
+            if (!missing.isEmpty()) {
+                return String.format(
+                        "Workorder %s cannot be started: it is missing %s. Work starts once the workorder is ASSIGNED,"
+                                + " which means it has a technician and a bay or mobile unit",
+                        workorderId, String.join(" and ", missing));
+            }
+        }
+        return String.format(
+                "Workorder %s cannot be started from status %s. Must be one of: %s",
+                workorderId, workorder.getStatus(), WorkorderStatus.getStartEligibleStatuses());
+    }
+
     @Transactional
     public void startWorkorder(UUID workorderId, String actorId, String reason) {
         Workorder workorder = workorderRepository
                 .findById(workorderId)
                 .orElseThrow(() -> new WorkorderNotFoundException(workorderId));
 
-        if (!WorkorderStatus.getStartEligibleStatuses().contains(workorder.getStatus())) {
-            throw new IllegalStateException(String.format(
-                    "Workorder %s cannot be started from status %s. Must be one of: %s",
-                    workorderId, workorder.getStatus(), WorkorderStatus.getStartEligibleStatuses()));
+        // Both the status and the pair behind it. Checking the status alone would trust a row that
+        // says ASSIGNED without holding what ASSIGNED means — which is exactly what this change
+        // corrects, and which survives wherever the migration has not run: it is disable-able by
+        // property, a tenant's pass can fail, and a restored snapshot can predate it. The gate that
+        // lets work begin is the one place that must not take the status's word for it.
+        if (!WorkorderStatus.getStartEligibleStatuses().contains(workorder.getStatus())
+                || !isReadyToBeWorked(workorder)) {
+            throw new IllegalStateException(startRefusalMessage(workorder));
         }
 
         List<ChangeRequest> pendingApprovalRequests = changeRequestRepository.findByWorkorder_IdAndStatus(

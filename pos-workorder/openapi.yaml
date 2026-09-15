@@ -5894,6 +5894,8 @@ paths:
 
         Emits a WORKORDER_POSITION_RELEASE event and marks the workorder fact changed.
 
+        Releasing the position of an ASSIGNED workorder moves it back to APPROVED: ASSIGNED means a technician and a bay or mobile unit, and it now has nowhere to be worked.
+
         Returns 403 when the caller''s location scope does not cover the workorder''s shop, 404 when no workorder exists for the id, and 409 WORKORDER_CLOSED when the workorder is COMPLETED or CANCELLED.
 
         '
@@ -6003,7 +6005,9 @@ paths:
 
         Emits a WORKORDER_POSITION_ASSIGN event and marks the workorder fact changed.
 
-        Returns 403 when the caller''s location scope does not cover the workorder''s shop, 404 when no workorder exists for the id, 409 RESOURCE_OCCUPIED when the position already holds another open workorder, 409 WORKORDER_CLOSED when the workorder is COMPLETED or CANCELLED, and 422 SERVICE_POSITION_INVALID when the position is unknown or at another site.
+        Returns 403 when the caller''s location scope does not cover the workorder''s shop, 404 when no workorder exists for the id, 409 RESOURCE_OCCUPIED when the position already holds another open workorder, 409 WORKORDER_CLOSED when the workorder is COMPLETED or CANCELLED, 422 SERVICE_POSITION_INVALID when the position is unknown or at another site, and 422 SERVICE_POSITION_INACTIVE when the bay is out of service or the mobile unit is not deployed.
+
+        Placing an APPROVED workorder that already has a technician on a BAY or MOBILE_UNIT moves it to ASSIGNED; a HOLD does not, because it is a parking space rather than somewhere work happens.
 
         '
       operationId: assignServicePosition
@@ -6065,7 +6069,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Unknown position, or one belonging to another site (ApiError.code SERVICE_POSITION_INVALID)
+          description: Unknown position, or one belonging to another site (ApiError.code SERVICE_POSITION_INVALID), or a bay or mobile unit that is not active (ApiError.code SERVICE_POSITION_INACTIVE)
       security:
       - bearerAuth:
         - workorder:operationalContext:override
@@ -6336,13 +6340,13 @@ paths:
 
         Use this tool when the technician actually begins work; do not use overrideOperationalContext, which adjusts context and is only possible before this call.
 
-        Preconditions: the workorder must exist in APPROVED or ASSIGNED status, work must not already have started, and no change requests may be awaiting advisor review.
+        Preconditions: the workorder must exist in ASSIGNED status — which means it has both a current technician and a BAY or MOBILE_UNIT position, a HOLD not counting — work must not already have started, and no change requests may be awaiting advisor review.
 
         Required inputs: workorderId (UUID) as a path parameter; the body is optional and may carry a reason (defaults to "Work started") — the acting user is taken from the security context.
 
         Emits a WORKORDER_START event, captures a state snapshot, and records the status transition.
 
-        Returns 400 when pending change requests block the start, 404 when no workorder exists for the id, and 409 when work has already started or the status is not start-eligible.
+        Returns 400 when pending change requests block the start, 404 when no workorder exists for the id, and 409 when work has already started or the status is not start-eligible — for an APPROVED workorder the message names what is missing, a technician, a bay or mobile unit, or both.
 
         '
       operationId: startWorkorder
@@ -6388,7 +6392,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkorderStartResponse'
-          description: Work already started
+          description: Work already started, or the workorder is not ASSIGNED — an APPROVED workorder is missing a technician, a bay or mobile unit, or both, and the message names which
       security:
       - bearerAuth:
         - workorder:workorder:start
@@ -6457,7 +6461,7 @@ paths:
 
         Required inputs: workorderId (UUID) as a path parameter; reason is an optional query parameter recorded on the closed assignment.
 
-        Emits a WORKORDER_TECHNICIAN_RELEASE event.
+        Emits a WORKORDER_TECHNICIAN_RELEASE event. An ASSIGNED workorder left with nobody on it moves back to APPROVED, with a status transition recorded and a status event published; a workorder that has already started keeps its status.
 
         Returns 404 when the workorder does not exist, and 409 WORKORDER_CLOSED when it is COMPLETED or CANCELLED.
 
@@ -6546,7 +6550,7 @@ paths:
       x-required-permissions:
       - workorder:workorder:view
     post:
-      description: 'Assigns a technician to a workorder that has none, transitioning the workorder from APPROVED to ASSIGNED when applicable.
+      description: 'Assigns a technician to a workorder that has none, transitioning the workorder from APPROVED to ASSIGNED when it also stands on a BAY or a MOBILE_UNIT.
 
         Use this tool for the first assignment on a workorder; do not use it to change technicians — reassignTechnician requires an existing current assignment and records a reassignment reason, and releaseTechnician takes the current one off without a replacement.
 
@@ -6554,7 +6558,7 @@ paths:
 
         Required inputs: workorderId (UUID) as a path parameter and technicianId (UUID) in the body; notes are optional, the assignedByUserId body field is ignored in favor of the security context, and the Idempotency-Key header is accepted but not currently used to deduplicate.
 
-        Emits a WORKORDER_TECHNICIAN_ASSIGN event; an APPROVED workorder is transitioned to ASSIGNED with a recorded state transition.
+        Emits a WORKORDER_TECHNICIAN_ASSIGN event; an APPROVED workorder that also holds a BAY or MOBILE_UNIT position is transitioned to ASSIGNED with a recorded state transition. ASSIGNED means both halves — a technician and somewhere to work — so a workorder with no position, or parked on HOLD, stays APPROVED until it is placed.
 
         Returns 404 when the workorder does not exist, 400 with the failure reason when the workorder''s status cannot take a technician yet, which includes a reopened COMPLETED one, 409 WORKORDER_CLOSED when it is closed — CANCELLED, or COMPLETED and not reopened — and 409 TECHNICIAN_ALREADY_ASSIGNED when the workorder already has a current technician, which reassignTechnician changes.
 

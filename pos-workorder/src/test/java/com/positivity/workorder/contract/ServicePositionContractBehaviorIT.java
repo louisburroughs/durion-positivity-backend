@@ -45,6 +45,8 @@ class ServicePositionContractBehaviorIT extends BaseContractIntegrationTest {
     private static final UUID OTHER_BAY = UUID.fromString("00000000-0000-0000-0000-0000000019a4");
     private static final UUID FOREIGN_BAY = UUID.fromString("00000000-0000-0000-0000-0000000019a5");
     private static final UUID MOBILE_UNIT = UUID.fromString("00000000-0000-0000-0000-0000000019a6");
+    private static final UUID INACTIVE_BAY = UUID.fromString("00000000-0000-0000-0000-0000000019a7");
+    private static final UUID INACTIVE_MOBILE_UNIT = UUID.fromString("00000000-0000-0000-0000-0000000019a8");
 
     private static final String URL = "/v1/workorders/{workorderId}/position";
 
@@ -302,5 +304,103 @@ class ServicePositionContractBehaviorIT extends BaseContractIntegrationTest {
                 // touched the technician: two independent assignments, read as one answer.
                 .body("technicianId", equalTo(technicianId.toString()))
                 .body("history.size()", equalTo(1));
+    }
+
+    @Test
+    @DisplayName("SP-008: #2001 an INACTIVE bay is refused with 422 SERVICE_POSITION_INACTIVE")
+    void inactiveBayIsRefused() {
+        UUID workorderId = seedWorkorderAtSite(WorkorderStatus.APPROVED);
+        extBayReplicaRepository.save(ExtBayReplica.builder()
+                .bayId(INACTIVE_BAY)
+                .locationId(SITE)
+                .name("Bay Out Of Service")
+                .active(false)
+                .aggregateVersion(1L)
+                .updatedAt(Instant.EPOCH)
+                .build());
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("resourceType", "BAY", "resourceId", INACTIVE_BAY.toString()))
+                .when()
+                .put(URL, workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(422)
+                .body("code", equalTo("SERVICE_POSITION_INACTIVE"));
+
+        assertThat(workorderRepository.findById(workorderId).orElseThrow().getResourceId())
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("SP-009: #2001 an INACTIVE mobile unit is refused with 422 SERVICE_POSITION_INACTIVE")
+    void inactiveMobileUnitIsRefused() {
+        UUID workorderId = seedWorkorderAtSite(WorkorderStatus.APPROVED);
+        extMobileUnitReplicaRepository.save(ExtMobileUnitReplica.builder()
+                .mobileUnitId(INACTIVE_MOBILE_UNIT)
+                .baseLocationId(SITE)
+                .name("Van Out Of Service")
+                .active(false)
+                .aggregateVersion(1L)
+                .updatedAt(Instant.EPOCH)
+                .build());
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("resourceType", "MOBILE_UNIT", "resourceId", INACTIVE_MOBILE_UNIT.toString()))
+                .when()
+                .put(URL, workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(422)
+                .body("code", equalTo("SERVICE_POSITION_INACTIVE"));
+
+        assertThat(workorderRepository.findById(workorderId).orElseThrow().getResourceId())
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("SP-010: #2011 a bay placement completes the pair to ASSIGNED when a technician "
+            + "already holds the workorder, and releasing it reverts to APPROVED")
+    void placingBayWithTechnicianReachesAssignedAndReleaseReverts() {
+        UUID workorderId = seedWorkorderAtSite(WorkorderStatus.APPROVED);
+
+        UUID technicianId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("technicianId", technicianId.toString()))
+                .when()
+                .post("/v1/workorders/{workorderId}/technician", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(200);
+
+        // A technician alone is not enough (#2011): nowhere to be worked yet.
+        assertThat(workorderRepository.findById(workorderId).orElseThrow().getStatus())
+                .isEqualTo(WorkorderStatus.APPROVED);
+
+        assignPosition(workorderId, Map.of("resourceType", "BAY", "resourceId", BAY.toString()), 200);
+
+        // The pair is now complete: a technician and a workable position.
+        assertThat(workorderRepository.findById(workorderId).orElseThrow().getStatus())
+                .isEqualTo(WorkorderStatus.ASSIGNED);
+
+        givenWithGatewayAuth()
+                .when()
+                .delete(URL, workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(200)
+                .body("resourceId", nullValue())
+                .body("resourceType", nullValue());
+
+        // Giving up the bay breaks the pair again, so the workorder falls back to APPROVED.
+        assertThat(workorderRepository.findById(workorderId).orElseThrow().getStatus())
+                .isEqualTo(WorkorderStatus.APPROVED);
     }
 }

@@ -133,18 +133,24 @@ public class OperationalContextController {
                     context version, and locks the context against further overrides.
                     Use this tool when the technician actually begins work; do not use overrideOperationalContext, \
                     which adjusts context and is only possible before this call.
-                    Preconditions: the workorder must exist in APPROVED or ASSIGNED status, work must not already \
-                    have started, and no change requests may be awaiting advisor review.
+                    Preconditions: the workorder must exist in ASSIGNED status — which means it has both a \
+                    current technician and a BAY or MOBILE_UNIT position, a HOLD not counting — work must not \
+                    already have started, and no change requests may be awaiting advisor review.
                     Required inputs: workorderId (UUID) as a path parameter; the body is optional and may carry a \
                     reason (defaults to "Work started") — the acting user is taken from the security context.
                     Emits a WORKORDER_START event, captures a state snapshot, and records the status transition.
                     Returns 400 when pending change requests block the start, 404 when no workorder exists for \
-                    the id, and 409 when work has already started or the status is not start-eligible.
+                    the id, and 409 when work has already started or the status is not start-eligible — for an \
+                    APPROVED workorder the message names what is missing, a technician, a bay or mobile unit, or \
+                    both.
                     """)
     @ApiResponse(responseCode = "200", description = "Work started, context locked")
     @ApiResponse(responseCode = "400", description = "Cannot start workorder due to pending change requests")
     @ApiResponse(responseCode = "404", description = "Workorder not found")
-    @ApiResponse(responseCode = "409", description = "Work already started")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Work already started, or the workorder is not ASSIGNED — an APPROVED workorder is "
+                    + "missing a technician, a bay or mobile unit, or both, and the message names which")
     public ResponseEntity<WorkorderStartResponse> startWork(
             @PathVariable UUID workorderId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
