@@ -164,6 +164,21 @@ created later). Adopted modules connect as it; the rest switch in their WS3 wave
    global table); elsewhere the column stays unmapped, Hibernate's `validate` ignores it and the
    column default fills the value.
 
+Step 1 names the default home, not the whole rule: what makes a table compliant is the tenancy
+schema it carries, not the file the `CREATE TABLE` sits in (#1996). Editing `V1` in place is safe
+only on the reset path: a deploy against a database that already ran the old `V1` fails Flyway
+validation unless it is reset (`build-push-ecr.yml` dispatch with `reset_alpha_databases=true`) or
+repaired. A table introduced in a post-baseline migration instead is compliant when it carries step
+1's schema — `tenant_id` first, the policy block, the tenant index, the `(tenant_id, <pk>)` key,
+just not in `V1` — and step 2's constraint/foreign-key leading, as `pos-workorder`'s
+`V3__service_position_and_single_technician.sql` does for `service_position_assignment`.
+`pos-security-service`'s `V3__ext_tenant.sql` is a different case: a global table (no `tenant_id`,
+no RLS), listed in `tenancy-global-tables.txt` under step 3, not a scoped-table example. Such a
+table is not relocated into `V1` afterwards: moving DDL out of a migration other databases have
+already run needs the same reset or repair, and the next flatten folds it into the new baseline
+for free. Data reconciliation and indexes over pre-existing rows belong in a post-baseline
+migration in every case, since they only mean anything in a database that already ran `V1`.
+
 ## What the retrofit changed for application code
 
 - `INSERT ... ON CONFLICT (cols)` on a scoped table needs `(tenant_id, cols)`. The only
