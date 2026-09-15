@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -114,6 +115,31 @@ public class SourceDocumentResolver {
 
         log.debug("Resolved purchase order {}: status={} receivableLines={}", poId, status, lines.size());
         return new SourceDocument(sourceDocumentId, status, lines);
+    }
+
+    /**
+     * The location the session's source document is being received at — the purchase order's
+     * ship-to, which is the site its stock lands at (#2009).
+     *
+     * <p>Answered from the same projection {@link #resolve} reads, and empty rather than throwing
+     * whenever it cannot be answered: a document type with no ship-to, an id that is not a purchase
+     * order identifier, or an order not yet replicated. Callers use it to pick the site whose
+     * declared staging location applies, and a fallback already covers the unknown case.
+     */
+    public Optional<UUID> resolveShipToLocationId(
+            @Nullable SourceDocumentType sourceDocumentType, @Nullable String sourceDocumentId) {
+        if (sourceDocumentType != SourceDocumentType.PO || sourceDocumentId == null) {
+            return Optional.empty();
+        }
+
+        UUID poId;
+        try {
+            poId = UUID.fromString(sourceDocumentId.trim());
+        } catch (IllegalArgumentException ex) {
+            return Optional.empty();
+        }
+
+        return purchaseOrderRepository.findById(poId).map(ExtPurchaseOrderReplica::getShipToLocationId);
     }
 
     private List<SourceDocumentLine> receivableLines(UUID poId) {

@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.Map;
@@ -27,11 +28,14 @@ class StagingLocationResolverTest {
     @Mock
     private SiteDefaultsService siteDefaultsService;
 
+    @Mock
+    private ForecastSiteResolver siteResolver;
+
     private StagingLocationResolver resolver;
 
     @BeforeEach
     void setUp() {
-        resolver = new StagingLocationResolver(siteDefaultsService);
+        resolver = new StagingLocationResolver(siteDefaultsService, siteResolver);
     }
 
     @AfterEach
@@ -117,5 +121,67 @@ class StagingLocationResolverTest {
         assertThatThrownBy(() -> resolver.resolveStagingLocationId())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("pos.inventory.receiving.site-id");
+    }
+
+    /**
+     * #2009: the location the caller is acting on names the site, so a request with no
+     * {@code X-Site-Id} and no configured site still gets that site's declared staging location
+     * instead of the hardcoded constant.
+     */
+    @Test
+    void resolveStagingLocationIdFor_locationSiteWithDefault_usesSiteDefaultWithoutAnyRequestScope() {
+        UUID stagingFloor = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-0000000000b2");
+        when(siteResolver.resolveForecastSite(stagingFloor)).thenReturn(siteId);
+        when(siteDefaultsService.getDefaultStagingLocationId(siteId)).thenReturn(Optional.of(stagingFloor));
+
+        assertThat(resolver.resolveStagingLocationIdFor(stagingFloor)).isEqualTo(stagingFloor);
+    }
+
+    @Test
+    void resolveStagingLocationIdFor_locationSiteWithoutDefault_fallsBackToConstant() {
+        UUID someBin = UUID.fromString("00000000-0000-0000-0000-0000000000b3");
+        UUID siteId = UUID.fromString("00000000-0000-0000-0000-0000000000b4");
+        when(siteResolver.resolveForecastSite(someBin)).thenReturn(siteId);
+        when(siteDefaultsService.getDefaultStagingLocationId(siteId)).thenReturn(Optional.empty());
+
+        assertThat(resolver.resolveStagingLocationIdFor(someBin)).isEqualTo(DEFAULT_STAGING_LOCATION_ID);
+    }
+
+    /** An operator's explicit header still wins over the site the entity sits at. */
+    @Test
+    void resolveStagingLocationIdFor_requestScopedHeaderOverridesTheEntitySite() {
+        UUID stagingFloor = UUID.fromString("00000000-0000-0000-0000-0000000000b5");
+        UUID headerSiteId = UUID.fromString("00000000-0000-0000-0000-0000000000b6");
+        UUID headerSiteDefault = UUID.fromString("00000000-0000-0000-0000-0000000000b7");
+        when(siteDefaultsService.getDefaultStagingLocationId(headerSiteId)).thenReturn(Optional.of(headerSiteDefault));
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Site-Id", headerSiteId.toString());
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        assertThat(resolver.resolveStagingLocationIdFor(stagingFloor)).isEqualTo(headerSiteDefault);
+        verifyNoInteractions(siteResolver);
+    }
+
+    /** So does a configured site id, which the issue keeps as an explicit override. */
+    @Test
+    void resolveStagingLocationIdFor_configuredSiteOverridesTheEntitySite() {
+        UUID stagingFloor = UUID.fromString("00000000-0000-0000-0000-0000000000b8");
+        UUID configuredSiteId = UUID.fromString("00000000-0000-0000-0000-0000000000b9");
+        UUID configuredSiteDefault = UUID.fromString("00000000-0000-0000-0000-0000000000ba");
+        ReflectionTestUtils.setField(resolver, "configuredSiteId", configuredSiteId.toString());
+        when(siteDefaultsService.getDefaultStagingLocationId(configuredSiteId))
+                .thenReturn(Optional.of(configuredSiteDefault));
+
+        assertThat(resolver.resolveStagingLocationIdFor(stagingFloor)).isEqualTo(configuredSiteDefault);
+        verifyNoInteractions(siteResolver);
+    }
+
+    @Test
+    void resolveStagingLocationIdFor_noLocation_fallsBackToConstant() {
+        when(siteResolver.resolveForecastSite(null)).thenReturn(null);
+
+        assertThat(resolver.resolveStagingLocationIdFor(null)).isEqualTo(DEFAULT_STAGING_LOCATION_ID);
     }
 }

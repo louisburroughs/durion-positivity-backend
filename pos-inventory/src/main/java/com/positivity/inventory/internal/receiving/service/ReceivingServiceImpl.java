@@ -44,6 +44,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -86,6 +87,11 @@ public class ReceivingServiceImpl implements ReceivingService {
                 .status(ReceivingSessionStatus.OPEN)
                 .entryMethod(entryMethod)
                 .createdByUserId(actorUserId)
+                // #2009: the site is fixed here, not read per receive call — the source order's
+                // ship-to can be revised mid-session and the stock does not move site when it is.
+                .siteId(sourceDocumentResolver
+                        .resolveShipToLocationId(sourceDocumentType, sourceDocumentId)
+                        .orElse(null))
                 .build();
 
         List<ReceivingLine> lines = buildLinesFromDocument(sourceDocumentId, sourceDocumentType, session);
@@ -118,13 +124,17 @@ public class ReceivingServiceImpl implements ReceivingService {
         List<InventoryVariance> variances = new ArrayList<>();
         int linesProcessed = 0;
 
+        // Once for the whole call, not once per line: every line of a session stages at the same
+        // place, and resolving per line would repeat the site-default lookup N times (#2009).
+        UUID stagingLocationId = stagingLocationResolver.resolveStagingLocationIdFor(sessionSiteId(session));
+
         for (ReceiveLineRequest lineReq : request.getLines()) {
             ReceivingLine line = lineMap.get(lineReq.getLineId());
             if (line == null) {
                 // A line this session does not have: the request names it, we do not invent it.
                 continue;
             }
-            receiveLine(session, line, lineReq, sessionId, actorUserId, variances);
+            receiveLine(session, line, lineReq, sessionId, stagingLocationId, actorUserId, variances);
             linesProcessed++;
         }
 
@@ -144,6 +154,7 @@ public class ReceivingServiceImpl implements ReceivingService {
             @NonNull ReceivingLine line,
             @NonNull ReceiveLineRequest lineReq,
             @NonNull UUID sessionId,
+            @NonNull UUID stagingLocationId,
             @NonNull String actorUserId,
             @NonNull List<InventoryVariance> variances) {
         // odoo-parity B2 (#1034): an optional document UoM converts to base BEFORE the
@@ -183,6 +194,7 @@ public class ReceivingServiceImpl implements ReceivingService {
         line.setStatus(statusFor(cmp));
 
         createGoodsReceiptLedgerEntry(
+                stagingLocationId,
                 sessionId,
                 line.getLineId(),
                 line.getProductId(),
@@ -450,6 +462,7 @@ public class ReceivingServiceImpl implements ReceivingService {
     }
 
     private void createGoodsReceiptLedgerEntry(
+            UUID stagingLocationId,
             UUID sessionId,
             UUID lineId,
             String productId,
@@ -458,7 +471,6 @@ public class ReceivingServiceImpl implements ReceivingService {
             java.util.List<String> serialNumbers,
             String actorUserId) {
         BigDecimal quantityDelta = toLedgerQuantity(productId, quantity, "receivedQuantity");
-        UUID stagingLocationId = stagingLocationResolver.resolveStagingLocationId();
         InventoryLedgerEntry entry = InventoryLedgerEntry.builder()
                 .stockItemId(productId)
                 .locationId(stagingLocationId)
@@ -477,6 +489,30 @@ public class ReceivingServiceImpl implements ReceivingService {
 
         ledgerPostingService.post(entry);
         inventoryFactPublisher.markEntry(entry);
+    }
+
+    /**
+     * The site this session is receiving at (#2009).
+     *
+     * <p>Staged stock belongs at the site's declared staging location, and the session names the
+     * site — so receive-into-staging no longer depends on the caller sending {@code X-Site-Id}.
+     * The site is whatever was stamped on the session when it opened, never the source order's
+     * ship-to as it reads now: {@code revisePurchaseOrder} overwrites that field in any lifecycle
+     * state, {@code PARTIALLY_RECEIVED} included, and a session's stock does not move site because
+     * somebody edited the order behind it.
+     *
+     * <p>A session opened before the column existed carries no site and falls back to the
+     * projection, which is what it would have read anyway. Null when neither says, which leaves
+     * the resolver on its configured fallback.
+     */
+    @Nullable
+    private UUID sessionSiteId(@NonNull ReceivingSession session) {
+        if (session.getSiteId() != null) {
+            return session.getSiteId();
+        }
+        return sourceDocumentResolver
+                .resolveShipToLocationId(session.getSourceDocumentType(), session.getSourceDocumentId())
+                .orElse(null);
     }
 
     /**

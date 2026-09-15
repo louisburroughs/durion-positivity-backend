@@ -188,6 +188,35 @@ a pos-location storage-location republish have run — and pos-location's generi
 `docs/OPERATIONS_RUNBOOK.md` → "Replica seeding and drift repair (replay)" →
 "Issue #1514: rehydrating the putaway replica columns".
 
+## Staging location resolution (#2009)
+
+Receiving puts goods into a site's **staging** location and putaway takes them out of it, so both
+have to agree on which location that is. The staging location is a property of a site, and
+`StagingLocationResolver` picks the site in this order:
+
+1. the request's `X-Site-Id` header or its `{siteId}` URI variable,
+2. the configured `pos.inventory.receiving.site-id`,
+3. **the site of the entity being acted on** — the goods receipt's own location for putaway
+   generation, the site stamped on the receiving session for receive-into-staging.
+
+`receiving_session.site_id` (V4) is captured from the source order's ship-to when the session
+opens, and read from the session thereafter. Re-reading the projection per receive call would let a
+mid-session revision move the site: `revisePurchaseOrder` overwrites `shipToLocationId` in any
+lifecycle state, `PARTIALLY_RECEIVED` included, and a session's stock does not move site because
+somebody edited the order behind it. A session opened before the column existed carries no site and
+falls back to the projection. The staging location is resolved once per receive call, not per line.
+
+The chosen site's declared default comes from the `location_ref` replica, fed by
+`location.location.updated` when a site configures defaults through
+`PUT /v1/locations/{id}/defaults` in pos-location. A site that declares none falls back to
+`pos.inventory.receiving.staging-location-id`, then to `00000000-0000-0000-0000-000000000002`.
+
+Step 3 is what makes the header optional. `POST /v1/inventory/putaway/tasks/generate` and
+`POST /v1/inventory/receiving/sessions/{id}/receive` are not site-scoped by path, and no client
+sends `X-Site-Id`, so before #2009 both used the constant — and a receipt booked into a site's own
+declared staging location was refused with `422 RECEIPT_NOT_STAGED`. The header and the property
+remain as explicit overrides.
+
 ## Counter-sale consumption (order parity H2)
 
 When `pos.inventory.kafka.enabled` is on, `OrderEventsListener` consumes
