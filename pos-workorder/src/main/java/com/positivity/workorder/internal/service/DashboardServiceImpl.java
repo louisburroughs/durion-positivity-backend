@@ -15,12 +15,15 @@ import com.positivity.workorder.internal.dto.PtoEntry;
 import com.positivity.workorder.internal.dto.WorkorderSummary;
 import com.positivity.workorder.internal.entity.ExtBayReplica;
 import com.positivity.workorder.internal.entity.ExtMobileUnitReplica;
+import com.positivity.workorder.internal.entity.ExtVehicleReplica;
 import com.positivity.workorder.internal.entity.Workorder;
 import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.enums.WorkorderStatus;
 import com.positivity.workorder.internal.exception.WorkorderRequestValidationException;
 import com.positivity.workorder.internal.repository.ExtBayReplicaRepository;
 import com.positivity.workorder.internal.repository.ExtMobileUnitReplicaRepository;
+import com.positivity.workorder.internal.repository.ExtVehicleReplicaRepository;
+import com.positivity.workorder.internal.repository.TechnicianAssignmentRepository;
 import com.positivity.workorder.internal.repository.WorkorderRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -28,14 +31,19 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -67,6 +75,8 @@ public class DashboardServiceImpl implements DashboardService {
     private final WorkorderRepository workorderRepository;
     private final ExtBayReplicaRepository extBayReplicaRepository;
     private final ExtMobileUnitReplicaRepository extMobileUnitReplicaRepository;
+    private final ExtVehicleReplicaRepository extVehicleReplicaRepository;
+    private final TechnicianAssignmentRepository technicianAssignmentRepository;
     private final PeopleAvailabilityLocalService peopleAvailabilityLocalService;
     private final EstimatedLaborService estimatedLaborService;
     private final ObjectMapper objectMapper;
@@ -106,8 +116,10 @@ public class DashboardServiceImpl implements DashboardService {
         // occupied resource with no job attached to it. Both panels now answer from one set.
         List<Workorder> workorders = mergeRoster(scheduledForDate, resourceHolders);
 
-        List<WorkorderSummary> workorderSummaries = buildWorkorderSummaries(workorders);
-        List<MechanicStatus> mechanicStatuses = buildMechanicStatuses(workorders, people);
+        Map<Workorder, List<String>> mechanicsByWorkorder = assignedMechanics(workorders);
+        List<WorkorderSummary> workorderSummaries =
+                buildWorkorderSummaries(workorders, mechanicsByWorkorder, vehicleDescriptions(workorders));
+        List<MechanicStatus> mechanicStatuses = buildMechanicStatuses(workorders, people, mechanicsByWorkorder);
         List<BayStatus> bayStatuses = buildBayStatuses(locationUuid, resourceHolders);
         List<MobileUnitStatus> mobileUnitStatuses = buildMobileUnitStatuses(locationUuid, resourceHolders);
 
@@ -120,7 +132,8 @@ public class DashboardServiceImpl implements DashboardService {
         // includes the carryover job in bay 3. A mechanic put on a new job this morning while still
         // owning yesterday's unfinished one is double-booked today whatever the second job's
         // scheduledDate says.
-        List<ConflictEntry> conflicts = detectAllConflicts(workorders, resourceHolders, people, date);
+        List<ConflictEntry> conflicts =
+                detectAllConflicts(workorders, resourceHolders, people, date, mechanicsByWorkorder);
 
         return DashboardResponse.builder()
                 .date(date)
@@ -196,13 +209,87 @@ public class DashboardServiceImpl implements DashboardService {
         }
     }
 
-    private List<WorkorderSummary> buildWorkorderSummaries(List<Workorder> workorders) {
+    /**
+     * The mechanics on each roster workorder: its current {@code technician_assignment} first, then
+     * any {@code mechanic_ids} entry not already named.
+     *
+     * <p>Both are live writers. The technician assign API records only {@code technician_assignment}
+     * (#1985), while the assignment-context event and the dispatch override still write
+     * {@code mechanic_ids}. Reading the column alone left every technician-assigned workorder
+     * "Unassigned" on the board and invisible to the mechanic conflict checks. One batched query
+     * covers the roster.
+     *
+     * <p>Keyed by identity rather than id so a row without an id still carries its column value.
+     */
+    private Map<Workorder, List<String>> assignedMechanics(List<Workorder> workorders) {
+        Set<UUID> workorderIds = workorders.stream()
+                .map(Workorder::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<UUID, String> currentTechnicianByWorkorder = new HashMap<>();
+        if (!workorderIds.isEmpty()) {
+            for (TechnicianAssignmentRepository.CurrentTechnician current :
+                    technicianAssignmentRepository.findCurrentTechnicians(workorderIds)) {
+                if (current.getWorkorderId() != null && current.getTechnicianId() != null) {
+                    currentTechnicianByWorkorder.putIfAbsent(
+                            current.getWorkorderId(), current.getTechnicianId().toString());
+                }
+            }
+        }
+
+        Map<Workorder, List<String>> mechanicsByWorkorder = new IdentityHashMap<>();
+        for (Workorder wo : workorders) {
+            Set<String> mechanicIds = new LinkedHashSet<>();
+            String currentTechnician = wo.getId() != null ? currentTechnicianByWorkorder.get(wo.getId()) : null;
+            if (currentTechnician != null) {
+                mechanicIds.add(currentTechnician);
+            }
+            mechanicIds.addAll(parseMechanicIds(wo.getMechanicIds()));
+            mechanicsByWorkorder.put(wo, List.copyOf(mechanicIds));
+        }
+        return mechanicsByWorkorder;
+    }
+
+    /**
+     * A display description per vehicle id on the roster, from the {@code ext_vehicle} replica
+     * (ADR-0044 §6): unit number, plate and VIN, whichever are known. It is the board's fallback
+     * when the structured registry lookup cannot name the vehicle. One batched query.
+     */
+    private Map<UUID, String> vehicleDescriptions(List<Workorder> workorders) {
+        Set<UUID> vehicleIds = workorders.stream()
+                .map(Workorder::getVehicleId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<UUID, String> descriptions = new HashMap<>();
+        if (vehicleIds.isEmpty()) {
+            return descriptions;
+        }
+        for (ExtVehicleReplica vehicle : extVehicleReplicaRepository.findAllById(vehicleIds)) {
+            String description = Stream.of(vehicle.getUnitNumber(), vehicle.getLicensePlate(), vehicle.getVin())
+                    .filter(part -> part != null && !part.isBlank())
+                    .map(String::strip)
+                    .collect(Collectors.joining(" · "));
+            if (!description.isEmpty()) {
+                descriptions.put(vehicle.getVehicleId(), description);
+            }
+        }
+        return descriptions;
+    }
+
+    private List<WorkorderSummary> buildWorkorderSummaries(
+            List<Workorder> workorders,
+            Map<Workorder, List<String>> mechanicsByWorkorder,
+            Map<UUID, String> vehicleDescriptions) {
         return workorders.stream()
                 .map(wo -> WorkorderSummary.builder()
                         .workorderId(wo.getId())
                         .status(wo.getStatus() != null ? wo.getStatus().name() : null)
                         .scheduledDate(wo.getScheduledDate())
-                        .assignedMechanicId(parseFirstMechanic(wo.getMechanicIds()))
+                        .vehicleDescription(
+                                wo.getVehicleId() != null ? vehicleDescriptions.get(wo.getVehicleId()) : null)
+                        .assignedMechanicId(mechanicsOf(wo, mechanicsByWorkorder).stream()
+                                .findFirst()
+                                .orElse(null))
                         // #1656: id and type ship together. The retired assignedBayId key put a
                         // mobile unit's id under a bay-named field that joined to nothing in bays[].
                         .assignedResourceId(
@@ -219,10 +306,13 @@ public class DashboardServiceImpl implements DashboardService {
                 .toList();
     }
 
-    private List<MechanicStatus> buildMechanicStatuses(List<Workorder> workorders, List<PersonAvailability> people) {
+    private List<MechanicStatus> buildMechanicStatuses(
+            List<Workorder> workorders,
+            List<PersonAvailability> people,
+            Map<Workorder, List<String>> mechanicsByWorkorder) {
         Map<String, String> workorderByMechanicId = new LinkedHashMap<>();
         for (Workorder wo : workorders) {
-            for (String mId : parseMechanicIds(wo.getMechanicIds())) {
+            for (String mId : mechanicsOf(wo, mechanicsByWorkorder)) {
                 workorderByMechanicId.putIfAbsent(
                         mId, wo.getId() != null ? wo.getId().toString() : null);
             }
@@ -517,14 +607,19 @@ public class DashboardServiceImpl implements DashboardService {
             List<Workorder> workorders,
             List<Workorder> resourceHolders,
             List<PersonAvailability> people,
-            LocalDate date) {
+            LocalDate date,
+            Map<Workorder, List<String>> mechanicsByWorkorder) {
         List<ConflictEntry> conflicts = new ArrayList<>();
         detectResourceDoubleBooking(resourceHolders, conflicts);
-        detectMechanicDoubleBookingFromWorkorders(workorders, conflicts);
-        detectMechanicStatusConflicts(workorders, people, date, conflicts);
-        detectLocationMismatch(workorders, people, conflicts);
-        detectMechanicSkillMismatch(workorders, people, conflicts);
+        detectMechanicDoubleBookingFromWorkorders(workorders, mechanicsByWorkorder, conflicts);
+        detectMechanicStatusConflicts(workorders, people, date, mechanicsByWorkorder, conflicts);
+        detectLocationMismatch(workorders, people, mechanicsByWorkorder, conflicts);
+        detectMechanicSkillMismatch(workorders, people, mechanicsByWorkorder, conflicts);
         return conflicts;
+    }
+
+    private static List<String> mechanicsOf(Workorder wo, Map<Workorder, List<String>> mechanicsByWorkorder) {
+        return mechanicsByWorkorder.getOrDefault(wo, List.of());
     }
 
     private List<String> parseMechanicIds(String mechanicIds) {
@@ -538,11 +633,6 @@ public class DashboardServiceImpl implements DashboardService {
             log.warn("Failed to parse mechanicIds JSON: {}", mechanicIds, e);
             return Collections.emptyList();
         }
-    }
-
-    private String parseFirstMechanic(String mechanicIds) {
-        List<String> ids = parseMechanicIds(mechanicIds);
-        return ids.isEmpty() ? null : ids.get(0);
     }
 
     private List<String> parseCertifications(String certifications) {
@@ -624,9 +714,12 @@ public class DashboardServiceImpl implements DashboardService {
         return resourceType == ResourceType.MOBILE_UNIT ? "Mobile unit " : "Bay ";
     }
 
-    private void detectMechanicDoubleBookingFromWorkorders(List<Workorder> workorders, List<ConflictEntry> conflicts) {
+    private void detectMechanicDoubleBookingFromWorkorders(
+            List<Workorder> workorders,
+            Map<Workorder, List<String>> mechanicsByWorkorder,
+            List<ConflictEntry> conflicts) {
         Map<String, Long> mechanicCounts = workorders.stream()
-                .flatMap(wo -> parseMechanicIds(wo.getMechanicIds()).stream())
+                .flatMap(wo -> mechanicsOf(wo, mechanicsByWorkorder).stream())
                 .collect(Collectors.groupingBy(id -> id, Collectors.counting()));
         for (Map.Entry<String, Long> entry : mechanicCounts.entrySet()) {
             if (entry.getValue() > 1) {
@@ -644,13 +737,14 @@ public class DashboardServiceImpl implements DashboardService {
             List<Workorder> workorders,
             List<PersonAvailability> people,
             LocalDate date,
+            Map<Workorder, List<String>> mechanicsByWorkorder,
             List<ConflictEntry> conflicts) {
 
         Map<String, PersonAvailability> availabilityByPersonId =
                 people.stream().collect(Collectors.toMap(PersonAvailability::getPersonId, pa -> pa, (a, b) -> a));
 
         List<String> assignedMechanicIds = workorders.stream()
-                .flatMap(wo -> parseMechanicIds(wo.getMechanicIds()).stream())
+                .flatMap(wo -> mechanicsOf(wo, mechanicsByWorkorder).stream())
                 .distinct()
                 .toList();
 
@@ -745,6 +839,7 @@ public class DashboardServiceImpl implements DashboardService {
     private void detectLocationMismatch(
             List<Workorder> workorders,
             List<PeopleAvailabilityResponse.PersonAvailability> people,
+            Map<Workorder, List<String>> mechanicsByWorkorder,
             List<ConflictEntry> conflicts) {
         Map<String, PeopleAvailabilityResponse.PersonAvailability> availabilityByPersonId = people.stream()
                 .collect(Collectors.toMap(
@@ -754,7 +849,7 @@ public class DashboardServiceImpl implements DashboardService {
                 continue;
             }
             String workorderLocationStr = wo.getLocationId().toString();
-            for (String mechanicId : parseMechanicIds(wo.getMechanicIds())) {
+            for (String mechanicId : mechanicsOf(wo, mechanicsByWorkorder)) {
                 PeopleAvailabilityResponse.PersonAvailability pa = availabilityByPersonId.get(mechanicId);
                 if (pa == null || pa.getCurrentLocationId() == null) {
                     continue;
@@ -774,6 +869,7 @@ public class DashboardServiceImpl implements DashboardService {
     private void detectMechanicSkillMismatch(
             List<Workorder> workorders,
             List<PeopleAvailabilityResponse.PersonAvailability> people,
+            Map<Workorder, List<String>> mechanicsByWorkorder,
             List<ConflictEntry> conflicts) {
         Map<String, PeopleAvailabilityResponse.PersonAvailability> availabilityByPersonId = people.stream()
                 .collect(Collectors.toMap(
@@ -783,16 +879,17 @@ public class DashboardServiceImpl implements DashboardService {
             if (requiredCerts.isEmpty()) {
                 continue;
             }
-            detectMissingCertificationsForWorkorder(wo, requiredCerts, availabilityByPersonId, conflicts);
+            detectMissingCertificationsForWorkorder(
+                    mechanicsOf(wo, mechanicsByWorkorder), requiredCerts, availabilityByPersonId, conflicts);
         }
     }
 
     private void detectMissingCertificationsForWorkorder(
-            Workorder wo,
+            List<String> mechanicIds,
             List<String> requiredCerts,
             Map<String, PeopleAvailabilityResponse.PersonAvailability> availabilityByPersonId,
             List<ConflictEntry> conflicts) {
-        for (String mechanicId : parseMechanicIds(wo.getMechanicIds())) {
+        for (String mechanicId : mechanicIds) {
             PeopleAvailabilityResponse.PersonAvailability pa = availabilityByPersonId.get(mechanicId);
             if (pa == null) {
                 continue;
