@@ -355,13 +355,13 @@ class WorkorderStateMachineTest {
     @Test
     void testGetTransitionHistory() {
         List<WorkorderStateTransition> expectedHistory = Collections.emptyList();
-        when(transitionRepository.findByWorkorder_IdOrderByTransitionedAtDesc(testWorkorderId))
+        when(transitionRepository.findByWorkorder_IdOrderByTransitionedAtDescIdDesc(testWorkorderId))
                 .thenReturn(expectedHistory);
 
         List<WorkorderStateTransition> result = stateMachine.getTransitionHistory(testWorkorderId);
 
         assertEquals(expectedHistory, result);
-        verify(transitionRepository).findByWorkorder_IdOrderByTransitionedAtDesc(testWorkorderId);
+        verify(transitionRepository).findByWorkorder_IdOrderByTransitionedAtDescIdDesc(testWorkorderId);
     }
 
     @Test

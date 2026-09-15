@@ -16,8 +16,20 @@ public interface WorkorderStateTransitionRepository extends JpaRepository<Workor
     @NonNull
     List<WorkorderStateTransition> findByWorkorder_Id(@NonNull UUID workorderId);
 
+    /**
+     * Status history for one workorder, newest first, backing the workorder-detail and WIP views.
+     *
+     * <p>The id breaks ties on {@code transitionedAt}, exactly as
+     * {@code ServicePositionAssignmentRepository.findByWorkorder_IdOrderByAssignedAtDescIdDesc} does
+     * for position history, and for the same reason: two transitions can share an instant. Since
+     * #2011 that is ordinary rather than exotic — a single request now reconciles ASSIGNED and then
+     * transitions again inside the same transaction, off the same {@code Clock} — and ordering by
+     * the timestamp alone leaves the database free to return them either way round, so "newest
+     * first" was not a promise this query actually kept. The id is a UUIDv7, minted in insertion
+     * order, so descending id is a true later-first tiebreak rather than an arbitrary stable one.
+     */
     @NonNull
-    List<WorkorderStateTransition> findByWorkorder_IdOrderByTransitionedAtDesc(@NonNull UUID workorderId);
+    List<WorkorderStateTransition> findByWorkorder_IdOrderByTransitionedAtDescIdDesc(@NonNull UUID workorderId);
 
     /**
      * Chronological transitions for one workorder (E7, #1595) — used by the {@code woId}-only mode
