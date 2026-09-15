@@ -710,7 +710,7 @@ Repo-wide, summing all per-module reports: **83.8% line** (15,265 missed of
 | `pos-document-helper` | 162 | 95.7 | 90.0 | 0.92 | 0.87 |
 | `pos-tax-common` | 106 | 89.6 | 74.1 | 0.86 | 0.71 |
 | `pos-vehicle-reference-carapi` | 69 | 78.3 | 88.9 | 0.75 | 0.85 |
-| `pos-bulk-ingest-lib` | 56 | 92.9 | 92.9 | 0.89 | 0.89 |
+| `pos-bulk-ingest-lib` † | 69 | 94.2 | 100.0 | 0.91 | 0.97 |
 | `pos-shared-dtos` | 34 | 0.0 | 0.0 | — *(unguarded)* | — |
 | `pos-inquiry` | 16 | 0.0 | — | — *(unguarded)* | — |
 | `pos-service-discovery` | 4 | 0.0 | — | — *(unguarded)* | — |
@@ -720,6 +720,11 @@ a handful of lines each, or all-zero coverage. A `0.00` floor is not a gate;
 they need first tests, not thresholds (§7). `pos-bulk-ingest-lib` left that
 group on 2026-09-06: it grew past the 50-line threshold and gained its first
 floors in the re-derivation below.
+
+† `pos-bulk-ingest-lib` was re-measured on 2026-09-15, after §6.6's tests closed
+the gap that had dropped it to 89.9/89.5. Every other row is from the 2026-09-06
+regeneration, so this one row and the rest describe two different builds — the
+next full re-derivation should bring them back into one.
 
 ### 6.2 How the ratchet works
 
@@ -1032,13 +1037,47 @@ nightly will blame the floor.
 
 **Remediation.** Two different fixes for the two modules:
 
-1. `pos-bulk-ingest-lib` needs the tests, not a lower floor. The deferred arm of
-   `rowFailure` is shipped behaviour with no coverage at all, and the `null`
-   branch at line 151 is a one-line addition. Covering them restores roughly the
-   3 points and leaves the floor where it is.
+1. `pos-bulk-ingest-lib` needs the tests, not a lower floor. **Done** — see below.
 2. `pos-tenancy-common` needs only a re-derivation from a fresh `-DskipITs`
    build; its branch floor is 0.2 points from the threshold on coverage that has
-   not meaningfully moved.
+   not meaningfully moved. **Still open.**
+
+**Outcome for `pos-bulk-ingest-lib` (2026-09-15).** A `Deferred` nest in
+`AbstractBulkIngestControllerTest` now drives the 503 arm through `rowFailure`
+itself: the message passthrough, the annotated-type form, WARN-without-a-stack-trace,
+the `rowRetryableFallbackMessage()` default, the rejection-outranks-retryable
+ordering the source only commented, and the allowlist still holding for an
+unclassified failure. Two one-line additions in `BulkIngestFailuresTest` close
+the fallback conditions from both sides — `retryable()` had no `null` case,
+`rejected()` no blank-but-present case — and one covers a blank inbound
+`X-Correlation-Id`, which a caller can really send.
+
+```
+before   line 62/69 = 89.9%   branch 34/38 = 89.5%   THIN
+after    line 65/69 = 94.2%   branch 38/38 = 100.0%  OK
+```
+
+Coverage came back above the 92.9% peak the floors were derived from, so the
+ratchet went from `THIN` straight to `STALE` and the floors were re-derived to
+0.91/0.97. Three mutation checks back the new tests
+(`.claude/hooks/mutation-check-hook.sh`): disabling the `isRetryable` guard,
+changing the fallback string, and disabling the rejection guard each fail the
+test that claims to defend them.
+
+The four lines still uncovered are all pre-existing and none is new: the
+`bulkIngest` endpoint body, which no test posts through, and the
+`rowRejectionCode()` / `rowRejectionFallbackMessage()` defaults, which every test
+controller overrides.
+
+**And the ceiling question, answered concretely.** A 0.97 branch floor on a
+38-branch bundle leaves about one branch of headroom: a single uncovered
+condition reads 97.4%, which is `THIN` again. That is not a misconfiguration —
+in a bundle this size one branch genuinely is a real regression — but it is what
+"no ceiling" means in practice for a small module, and it is the strongest
+argument yet that `--min-lines` at 50 is set too low. A module whose whole gate
+turns on one condition is being measured more precisely than the measurement
+supports. Raising the threshold is a change to §6.2's contract and is left open
+rather than made here.
 
 ```bash
 ./mvnw -pl pos-coverage-aggregate -am verify -DskipITs -Darchunit.skipTests=true -T 1C
