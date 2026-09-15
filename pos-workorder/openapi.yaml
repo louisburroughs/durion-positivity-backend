@@ -11088,6 +11088,10 @@ components:
     WorkorderSummary:
       description: Summary view of a workorder for list displays
       properties:
+        actualLaborHours:
+          description: Hours worked on the workorder's service lines so far; null when none are logged
+          example: 1.5
+          type: number
         assignedMechanicId:
           description: Identifier of the assigned mechanic
           example: 01960003-0000-7000-8000-000000000002
@@ -11096,6 +11100,11 @@ components:
           description: Identifier of the resource assigned to the workorder; read together with resourceType, which says whether it is a bay or a mobile unit
           example: 01960003-0000-7000-8000-000000000003
           type: string
+        completedServiceCount:
+          description: How many of the serviceCount lines are completed
+          example: 1
+          format: int32
+          type: integer
         customerName:
           description: Name of the customer
           example: John Doe
@@ -11117,6 +11126,19 @@ components:
           example: '2026-01-15'
           format: date
           type: string
+        serviceCount:
+          description: 'Service lines in play on the workorder: every line that is neither cancelled nor declined by the customer'
+          example: 2
+          format: int32
+          type: integer
+        serviceDescriptions:
+          description: Descriptions of the lines counted by serviceCount, in line order, at most three; blank descriptions are skipped
+          example:
+          - Oil Change - Full Synthetic
+          - Brake Pad Replacement - Front
+          items:
+            type: string
+          type: array
         status:
           description: Current workorder status
           example: WORK_IN_PROGRESS
