@@ -68,9 +68,10 @@ public class TechnicianAssignmentController {
                     Emits a WORKORDER_TECHNICIAN_ASSIGN event; an APPROVED workorder is transitioned to ASSIGNED \
                     with a recorded state transition.
                     Returns 404 when the workorder does not exist, 400 with the failure reason when the \
-                    workorder's status cannot take a technician yet, 409 WORKORDER_CLOSED when it is COMPLETED \
-                    or CANCELLED and the job is over, and 409 TECHNICIAN_ALREADY_ASSIGNED when the workorder \
-                    already has a current technician — use reassignTechnician to change it.
+                    workorder's status cannot take a technician yet, which includes a reopened COMPLETED one, \
+                    409 WORKORDER_CLOSED when it is closed — CANCELLED, or COMPLETED and not reopened — and \
+                    409 TECHNICIAN_ALREADY_ASSIGNED when the workorder already has a current technician, which \
+                    reassignTechnician changes.
                     """,
             responses = {
                 @ApiResponse(
@@ -178,9 +179,10 @@ public class TechnicianAssignmentController {
                     of the security context, and the Idempotency-Key header is accepted but not currently used.
                     Emits a WORKORDER_TECHNICIAN_REASSIGN event.
                     Returns 404 when the workorder does not exist, 400 with the failure reason when the workorder's \
-                    status cannot take a technician yet, 409 WORKORDER_CLOSED when it is COMPLETED or CANCELLED \
-                    and the job is over, and 409 TECHNICIAN_NOT_ASSIGNED when the workorder has no current \
-                    technician to reassign from — use assignTechnician for the first assignment.
+                    status cannot take a technician yet, which includes a reopened COMPLETED one, 409 \
+                    WORKORDER_CLOSED when it is closed — CANCELLED, or COMPLETED and not reopened — and 409 \
+                    TECHNICIAN_NOT_ASSIGNED when the workorder has no current technician to reassign from, \
+                    which assignTechnician creates.
                     """,
             responses = {
                 @ApiResponse(

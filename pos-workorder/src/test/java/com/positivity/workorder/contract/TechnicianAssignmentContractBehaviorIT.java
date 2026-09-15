@@ -277,6 +277,38 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
     }
 
     @Test
+    @DisplayName("TA-004c: A reopened COMPLETED workorder refuses assignment with 400, not 409")
+    void testAssignTechnician_ReopenedCompletedIsNotClosed() {
+        // The seam between the two halves, and the one case the endpoint's documentation has to say
+        // out loud. Reopening never changes the status, so the row stays COMPLETED while
+        // isLocked() answers false: validateAssignmentAllowed walks past the closed check and
+        // refuses on the status instead. So "COMPLETED" alone does not mean 409 here — "closed"
+        // does, and a reopened workorder is not closed.
+        UUID workorderId = seedReopenedWorkorder();
+        testTechnicianId1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+        givenWithGatewayAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of(
+                        "technicianId",
+                        testTechnicianId1.toString(),
+                        "assignedByUserId",
+                        SYSTEM_USER_ID,
+                        "notes",
+                        "Attempting to assign to a reopened workorder"))
+                .when()
+                .post("/v1/workorders/{workorderId}/technician", workorderId)
+                .then()
+                .log()
+                .ifValidationFails()
+                .statusCode(400)
+                .body("message", org.hamcrest.Matchers.containsString("Cannot assign technician"));
+
+        assertThat(assignmentRepository.findByWorkorder_IdOrderByAssignedAtDesc(workorderId))
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("TA-004b: A DRAFT workorder refuses assignment with 400 — not yet ready, not over")
     void testAssignTechnician_StatusNotYetAssignable() {
         // The other half of the #1983 split, and the reason TA-004 no longer asserts 400: a status
@@ -603,7 +635,7 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
     }
 
     /**
-     * Seed a COMPLETED workorder for testing invalid state transitions.
+     * Seed a DRAFT workorder — open, but not yet in a status that can take a technician.
      */
     private UUID seedDraftWorkorder() {
         UUID workorderId = seedApprovedWorkorder();
@@ -615,11 +647,29 @@ class TechnicianAssignmentContractBehaviorIT extends BaseContractIntegrationTest
         return workorder.getId();
     }
 
+    /**
+     * Seed a COMPLETED workorder for testing invalid state transitions.
+     */
     private UUID seedCompletedWorkorder() {
         UUID workorderId = seedApprovedWorkorder();
 
         Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
         workorder.setStatus(WorkorderStatus.COMPLETED);
+        workorder = workorderRepository.save(workorder);
+
+        return workorder.getId();
+    }
+
+    /**
+     * Seed a reopened COMPLETED workorder. Reopening never changes the status, so the row stays
+     * COMPLETED while {@code Workorder.isLocked()} answers false — the one state where the two
+     * halves of the assignment refusal disagree about which applies.
+     */
+    private UUID seedReopenedWorkorder() {
+        UUID workorderId = seedCompletedWorkorder();
+
+        Workorder workorder = workorderRepository.findById(workorderId).orElseThrow();
+        workorder.setIsReopened(true);
         workorder = workorderRepository.save(workorder);
 
         return workorder.getId();
