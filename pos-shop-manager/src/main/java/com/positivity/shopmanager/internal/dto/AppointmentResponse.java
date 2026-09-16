@@ -74,6 +74,33 @@ public class AppointmentResponse {
     private Instant createdAt;
 
     @Schema(
+            description = "When work actually began, resolved from the linked workorder's actual-time "
+                    + "block through WorkOrderAppointmentMapping (issue #2021). Null when the appointment "
+                    + "has no linked workorder, the link has not replicated yet, or work has not started. "
+                    + "startAt above stays the planned window regardless.",
+            example = "2026-06-18T08:05:00Z",
+            requiredMode = NOT_REQUIRED)
+    private Instant actualStartAt;
+
+    @Schema(
+            description = "When work actually finished, resolved the same way as actualStartAt (#2021). "
+                    + "Null while the linked workorder is still open, or when there is no link. endAt above "
+                    + "stays the planned window regardless.",
+            example = "2026-06-18T10:40:00Z",
+            requiredMode = NOT_REQUIRED)
+    private Instant actualEndAt;
+
+    @Schema(
+            description = "The workorder owner's projection of when a still-running job will finish "
+                    + "(#2021). Null in every response today by design: a projected finish needs estimated "
+                    + "remaining labour (ADR-0058/ADR-0059, both PROPOSED, not accepted) and this field is "
+                    + "never synthesised from the current time. A caller states \"N minutes over planned\" "
+                    + "from actualStartAt, endAt and status instead of waiting on this field.",
+            example = "null",
+            requiredMode = NOT_REQUIRED)
+    private Instant expectedEndAt;
+
+    @Schema(
             description = "Cancellation reason code when the appointment has been cancelled",
             example = "CUSTOMER_REQUEST",
             requiredMode = NOT_REQUIRED)

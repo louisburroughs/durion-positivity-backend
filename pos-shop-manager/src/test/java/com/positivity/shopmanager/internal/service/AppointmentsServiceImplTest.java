@@ -39,6 +39,7 @@ import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestR
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
+import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappingRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -104,7 +105,8 @@ class AppointmentsServiceImplTest {
                 shopRepository,
                 sourceEligibilityService,
                 mock(ExtPersonReplicaRepository.class),
-                Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC),
+                mock(WorkOrderAppointmentMappingRepository.class));
     }
 
     @Test

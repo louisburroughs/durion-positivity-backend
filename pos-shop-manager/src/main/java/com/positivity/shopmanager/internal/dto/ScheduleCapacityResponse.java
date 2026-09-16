@@ -5,8 +5,10 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.positivity.shopmanager.internal.enums.ScheduleCapacityDayStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.Data;
@@ -120,9 +122,49 @@ public class ScheduleCapacityResponse {
         @Schema(
                 description = "One slot per hour of the day's window (a partial trailing hour still gets a "
                         + "slot); each value is the count of appointments overlapping that hour, so a "
-                        + "double-booking reads greater than 1",
+                        + "double-booking reads greater than 1. Carry-over from a prior open day (below) is "
+                        + "already reflected here, marked from the start of the window (issue #2021 AC5).",
                 example = "[0,0,1,1,1,0]",
                 requiredMode = REQUIRED)
         private List<Integer> occupancy;
+
+        @Schema(
+                description = "Bay-hours carried into this day from an appointment that overran a prior "
+                        + "open day's close (issue #2021 AC4/AC5/AC6). Already netted into occupiedMinutes "
+                        + "and occupancy above — this list is the detail behind that number, not an addition "
+                        + "to it. Empty when nothing carried over.",
+                requiredMode = REQUIRED)
+        private List<CarryOverView> carryOverIn = new ArrayList<>();
+    }
+
+    @Data
+    @Schema(
+            description = "One appointment's overrun, carried from a prior open day into this bay's "
+                    + "capacity on this date (issue #2021 AC4/AC5/AC6)")
+    public static class CarryOverView {
+
+        @Schema(
+                description = "The date the appointment actually overran its own operating-day close",
+                example = "2026-10-10",
+                requiredMode = REQUIRED)
+        private LocalDate fromDate;
+
+        @Schema(
+                description = "The overrunning appointment's identifier",
+                example = "01960003-0000-7000-8000-000000000001",
+                requiredMode = REQUIRED)
+        private UUID appointmentId;
+
+        @Schema(
+                description = "The linked workorder identifier the overrun comes from, when known",
+                example = "01960003-0000-7000-8000-000000000005",
+                requiredMode = NOT_REQUIRED)
+        private UUID workorderId;
+
+        @Schema(
+                description = "Bay-hours carried into this date from the overrun above, in tenths of an hour",
+                example = "1.5",
+                requiredMode = REQUIRED)
+        private BigDecimal bayHours;
     }
 }

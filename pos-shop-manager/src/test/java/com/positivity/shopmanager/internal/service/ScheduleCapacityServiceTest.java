@@ -8,12 +8,15 @@ import com.positivity.shopmanager.internal.dto.ScheduleCapacityResponse;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.ExtBayReplica;
 import com.positivity.shopmanager.internal.entity.ExtLocationReplica;
+import com.positivity.shopmanager.internal.entity.ExtWorkorderReplica;
+import com.positivity.shopmanager.internal.entity.WorkOrderAppointmentMapping;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.enums.ScheduleCapacityDayStatus;
 import com.positivity.shopmanager.internal.exception.ScheduleCapacityRangeExceededException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -21,6 +24,7 @@ import java.util.List;
 import java.util.UUID;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -451,14 +455,14 @@ class ScheduleCapacityServiceTest {
         return bayId;
     }
 
-    private void persistAppointment(
+    private Appointment persistAppointment(
             UUID locationId,
             UUID bayId,
             String resourceType,
             Instant startAt,
             Instant endAt,
             AppointmentStatus status) {
-        em.persist(Appointment.builder()
+        Appointment appointment = Appointment.builder()
                 .status(status)
                 .locationId(locationId)
                 .resourceId(bayId.toString())
@@ -467,11 +471,187 @@ class ScheduleCapacityServiceTest {
                 .crmVehicleId(VEHICLE_ID)
                 .startAt(startAt)
                 .endAt(endAt)
+                .build();
+        em.persist(appointment);
+        return appointment;
+    }
+
+    /**
+     * Links an appointment to a workorder the way #1658's status sync resolves through (F9), and
+     * seeds the workorder's actual-time block (#2021) on the replica the capacity read joins
+     * against.
+     */
+    private void persistWorkorderLink(
+            UUID workOrderId, Appointment appointment, @Nullable Instant workStartedAt, @Nullable Instant completedAt) {
+        em.persist(WorkOrderAppointmentMapping.builder()
+                .workOrderId(workOrderId)
+                .appointment(appointment)
+                .build());
+        em.persist(ExtWorkorderReplica.builder()
+                .workorderId(workOrderId)
+                .aggregateVersion(1)
+                .updatedAt(Instant.now())
+                .workStartedAt(workStartedAt)
+                .completedAt(completedAt)
                 .build());
     }
 
     private void flushAndClear() {
         em.flush();
         em.clear();
+    }
+
+    // -------------------------------------------------------------------------
+    // Actual-vs-planned occupancy and carry-over (#2021 AC1-AC6)
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2021 AC1/AC3 - occupancy on the source day reflects the actual window, bounded to that day")
+    void sourceDayOccupancyReflectsActualWindowBoundedToDay() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        Appointment appointment = persistAppointment(
+                locationId, bayId, "BAY", instant(MONDAY, 15, 0), instant(MONDAY, 17, 0), AppointmentStatus.SCHEDULED);
+        persistWorkorderLink(UUIDv7Generator.generate(), appointment, instant(MONDAY, 15, 5), instant(MONDAY, 18, 30));
+        flushAndClear();
+
+        ScheduleCapacityResponse.BayCapacityView mondayBay = scheduleCapacityService
+                .getCapacity(locationId, MONDAY, MONDAY)
+                .getDays()
+                .get(0)
+                .getBays()
+                .get(0);
+
+        // 15:05 -> day close 17:00 = 115 minutes; the overrun past close does not double count here.
+        assertThat(mondayBay.getOccupiedMinutes()).isEqualTo(115);
+        assertThat(mondayBay.getCarryOverIn()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("#2021 AC4/AC5 - an overrun past close carries onto the next open day, netted into occupiedMinutes")
+    void overrunPastCloseCarriesOverToNextOpenDayNetted() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        Appointment appointment = persistAppointment(
+                locationId, bayId, "BAY", instant(MONDAY, 15, 0), instant(MONDAY, 17, 0), AppointmentStatus.SCHEDULED);
+        UUID workOrderId = UUIDv7Generator.generate();
+        // 1.5 hours past Monday's 17:00 close.
+        persistWorkorderLink(workOrderId, appointment, instant(MONDAY, 15, 5), instant(MONDAY, 18, 30));
+        flushAndClear();
+
+        ScheduleCapacityResponse response = scheduleCapacityService.getCapacity(locationId, MONDAY, TUESDAY);
+
+        ScheduleCapacityResponse.BayCapacityView tuesdayBay =
+                response.getDays().get(1).getBays().get(0);
+        assertThat(tuesdayBay.getOccupiedMinutes()).isEqualTo(90);
+        assertThat(tuesdayBay.getCarryOverIn()).hasSize(1);
+        ScheduleCapacityResponse.CarryOverView carryOver =
+                tuesdayBay.getCarryOverIn().get(0);
+        assertThat(carryOver.getFromDate()).isEqualTo(MONDAY);
+        assertThat(carryOver.getAppointmentId()).isEqualTo(appointment.getAppointmentId());
+        assertThat(carryOver.getWorkorderId()).isEqualTo(workOrderId);
+        assertThat(carryOver.getBayHours()).isEqualByComparingTo(new BigDecimal("1.5"));
+        // Marked from the start of Tuesday's window (AC5 - netted, not merely annotated).
+        assertThat(tuesdayBay.getOccupancy().get(0)).isEqualTo(1);
+        assertThat(tuesdayBay.getOccupancy().get(1)).isEqualTo(1);
+        assertThat(tuesdayBay.getOccupancy().get(2)).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("#2021 AC6 - carry-over skips a closed day and lands on the next open day")
+    void overrunIntoClosedDayCarriesToNextOpenDayNotTheClosedOne() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        Appointment appointment = persistAppointment(
+                locationId,
+                bayId,
+                "BAY",
+                instant(SATURDAY, 10, 0),
+                instant(SATURDAY, 12, 0),
+                AppointmentStatus.SCHEDULED);
+        UUID workOrderId = UUIDv7Generator.generate();
+        // Short Saturday closes at 13:00; the job actually runs to 14:00. Sunday is CLOSED
+        // (WEEKDAY_HOURS has no Sunday entry), so the carry-over must land on the following Monday.
+        persistWorkorderLink(workOrderId, appointment, instant(SATURDAY, 10, 5), instant(SATURDAY, 14, 0));
+        LocalDate followingMonday = SATURDAY.plusDays(2);
+        flushAndClear();
+
+        ScheduleCapacityResponse response = scheduleCapacityService.getCapacity(locationId, SATURDAY, followingMonday);
+
+        assertThat(response.getDays())
+                .extracting(ScheduleCapacityResponse.DayCapacityView::getDate)
+                .containsExactly(SATURDAY, SUNDAY, followingMonday);
+        assertThat(response.getDays().get(1).getStatus()).isEqualTo(ScheduleCapacityDayStatus.CLOSED);
+        assertThat(response.getDays().get(1).getBays()).isEmpty();
+
+        ScheduleCapacityResponse.BayCapacityView mondayBay =
+                response.getDays().get(2).getBays().get(0);
+        assertThat(mondayBay.getCarryOverIn()).hasSize(1);
+        ScheduleCapacityResponse.CarryOverView carryOver =
+                mondayBay.getCarryOverIn().get(0);
+        assertThat(carryOver.getFromDate()).isEqualTo(SATURDAY);
+        assertThat(carryOver.getBayHours()).isEqualByComparingTo(new BigDecimal("1.0"));
+        assertThat(mondayBay.getOccupiedMinutes()).isEqualTo(60);
+    }
+
+    @Test
+    @DisplayName("#2021 AC2 - a rescheduled appointment's carry-over is computed from its current planned window")
+    void rescheduledAppointmentCarryOverUsesCurrentPlannedWindow() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        // No linked workorder: the "actual or planned finish" is the planned finish, which itself
+        // overruns the day's close after the appointment was moved here by a reschedule.
+        Appointment appointment = persistAppointment(
+                locationId, bayId, "BAY", instant(MONDAY, 16, 0), instant(MONDAY, 17, 30), AppointmentStatus.SCHEDULED);
+        flushAndClear();
+
+        ScheduleCapacityResponse response = scheduleCapacityService.getCapacity(locationId, MONDAY, TUESDAY);
+
+        ScheduleCapacityResponse.BayCapacityView tuesdayBay =
+                response.getDays().get(1).getBays().get(0);
+        assertThat(tuesdayBay.getCarryOverIn()).hasSize(1);
+        assertThat(tuesdayBay.getCarryOverIn().get(0).getAppointmentId()).isEqualTo(appointment.getAppointmentId());
+        assertThat(tuesdayBay.getCarryOverIn().get(0).getWorkorderId()).isNull();
+        assertThat(tuesdayBay.getCarryOverIn().get(0).getBayHours()).isEqualByComparingTo(new BigDecimal("0.5"));
+    }
+
+    @Test
+    @DisplayName("#2021 - a bay with no overrunning appointment reports no carry-over")
+    void noOverrunMeansNoCarryOver() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        persistAppointment(
+                locationId, bayId, "BAY", instant(MONDAY, 10, 0), instant(MONDAY, 12, 0), AppointmentStatus.SCHEDULED);
+        flushAndClear();
+
+        ScheduleCapacityResponse response = scheduleCapacityService.getCapacity(locationId, MONDAY, TUESDAY);
+
+        assertThat(response.getDays().get(1).getBays().get(0).getCarryOverIn()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("#2021 - the batched workorder-actuals query stays bounded across 1 vs 42 days")
+    void capacityReadWithWorkorderActualsStaysBoundedAcrossRangeLength() {
+        UUID locationId = persistLocation(UTC, WEEKDAY_HOURS, null);
+        UUID bayId = persistBay("Bay 1", locationId);
+        Appointment appointment = persistAppointment(
+                locationId, bayId, "BAY", instant(MONDAY, 10, 0), instant(MONDAY, 12, 0), AppointmentStatus.SCHEDULED);
+        persistWorkorderLink(UUIDv7Generator.generate(), appointment, instant(MONDAY, 10, 0), instant(MONDAY, 11, 30));
+        flushAndClear();
+
+        Statistics statistics =
+                entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        statistics.setStatisticsEnabled(true);
+
+        long queriesForOneDay = measureCapacityStatements(statistics, locationId, MONDAY, MONDAY);
+        long queriesForFortyTwoDays = measureCapacityStatements(statistics, locationId, MONDAY, MONDAY.plusDays(41));
+
+        assertThat(queriesForFortyTwoDays)
+                .as("42 days must not cost more queries than 1 day, even with actuals to resolve")
+                .isEqualTo(queriesForOneDay);
+        assertThat(queriesForOneDay)
+                .as("location replica, active bays, appointments in range, batched workorder actuals: "
+                        + "four fixed statements")
+                .isEqualTo(4L);
     }
 }
