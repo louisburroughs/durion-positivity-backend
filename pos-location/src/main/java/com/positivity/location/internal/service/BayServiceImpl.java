@@ -5,13 +5,15 @@ import com.positivity.location.internal.dto.BayRequest;
 import com.positivity.location.internal.dto.BayResponse;
 import com.positivity.location.internal.entity.BayEntity;
 import com.positivity.location.internal.entity.Location;
-import com.positivity.location.internal.entity.ServiceLocationCapabilityEntity;
+import com.positivity.location.internal.entity.ExtCatalogServiceReplica;
 import com.positivity.location.internal.enums.BayType;
 import com.positivity.location.internal.exception.DuplicateResourceException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.BayRepository;
 import com.positivity.location.internal.repository.LocationRepository;
-import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
+import com.positivity.location.internal.entity.BaySpecialtyOperationEntity;
+import com.positivity.location.internal.repository.BaySpecialtyOperationRepository;
+import com.positivity.location.internal.repository.ExtCatalogServiceReplicaRepository;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -44,17 +46,20 @@ public class BayServiceImpl implements BayService {
 
     private final BayRepository bayRepository;
     private final LocationRepository locationRepository;
-    private final ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
+    private final ExtCatalogServiceReplicaRepository extCatalogServiceReplicaRepository;
+    private final BaySpecialtyOperationRepository baySpecialtyOperationRepository;
     private final LocationFactPublisher locationFactPublisher;
 
     public BayServiceImpl(
             BayRepository bayRepository,
             LocationRepository locationRepository,
-            ServiceLocationCapabilityRepository serviceLocationCapabilityRepository,
+            ExtCatalogServiceReplicaRepository extCatalogServiceReplicaRepository,
+            BaySpecialtyOperationRepository baySpecialtyOperationRepository,
             LocationFactPublisher locationFactPublisher) {
         this.bayRepository = bayRepository;
         this.locationRepository = locationRepository;
-        this.serviceLocationCapabilityRepository = serviceLocationCapabilityRepository;
+        this.extCatalogServiceReplicaRepository = extCatalogServiceReplicaRepository;
+        this.baySpecialtyOperationRepository = baySpecialtyOperationRepository;
         this.locationFactPublisher = locationFactPublisher;
     }
 
@@ -78,7 +83,12 @@ public class BayServiceImpl implements BayService {
             throw new DuplicateResourceException(BAY_NAME_TAKEN);
         }
 
-        List<String> validatedCapabilityCodes = validateServiceCapabilityIds(request.getServiceCapabilityCodes());
+        // Null means "not stated" and takes the type's default from the specialty map (CAP-325
+        // D14); an explicit list — including an explicit empty one — is the caller's own claim and
+        // is validated as given. Same null-versus-empty discipline as the rest of the platform.
+        List<String> validatedCapabilityCodes = request.getServiceCapabilityCodes() == null
+                ? defaultSpecialtyCodesFor(bayType)
+                : validateServiceCapabilityIds(request.getServiceCapabilityCodes());
 
         BayEntity entity = BayEntity.builder()
                 .location(location)
@@ -150,7 +160,15 @@ public class BayServiceImpl implements BayService {
         }
 
         if (patch.getBayType() != null) {
-            existing.setBayType(normalizeBayType(patch.getBayType()));
+            String newBayType = normalizeBayType(patch.getBayType());
+            boolean typeChanged = !newBayType.equals(existing.getBayType());
+            existing.setBayType(newBayType);
+            // A retyped bay whose codes were not also stated re-defaults to the new type's map,
+            // otherwise a bay retyped to GENERAL_SERVICE would keep an alignment claim it no
+            // longer has the rack for (D14 rule 3: general bays declare nothing).
+            if (typeChanged && patch.getServiceCapabilityCodes() == null) {
+                existing.setServiceCapabilityCodes(defaultSpecialtyCodesFor(newBayType));
+            }
         }
 
         if (patch.getStatus() != null) {
@@ -281,12 +299,29 @@ public class BayServiceImpl implements BayService {
         return resolved;
     }
 
+    /**
+     * The specialty codes a bay of this type carries when the caller states none (CAP-325 D14).
+     * Empty for {@code GENERAL_SERVICE}, {@code HEAVY_DUTY} and {@code WASH_DETAIL} by
+     * construction — the seed gives them no rows — which is exactly "declares nothing".
+     */
+    private List<String> defaultSpecialtyCodesFor(String bayType) {
+        if (baySpecialtyOperationRepository == null) {
+            return List.of();
+        }
+        return baySpecialtyOperationRepository.findByBayType(bayType).stream()
+                .map(BaySpecialtyOperationEntity::getOperationCode)
+                .filter(code -> code != null && !code.isBlank())
+                .map(code -> code.trim().toUpperCase(Locale.ROOT))
+                .distinct()
+                .toList();
+    }
+
     private List<String> validateServiceCapabilityIds(List<String> serviceCapabilityIds) {
         if (serviceCapabilityIds == null || serviceCapabilityIds.isEmpty()) {
             return List.of();
         }
-        if (serviceLocationCapabilityRepository == null) {
-            throw new IllegalArgumentException("service capabilities are not configured");
+        if (extCatalogServiceReplicaRepository == null) {
+            throw new IllegalArgumentException("catalog service replica is not configured");
         }
 
         NormalizedServiceCapabilities normalized = normalizeServiceCapabilityIds(serviceCapabilityIds);
@@ -318,17 +353,26 @@ public class BayServiceImpl implements BayService {
         return serviceCapabilityId == null ? "" : serviceCapabilityId.trim().toUpperCase(Locale.ROOT);
     }
 
+    /**
+     * A specialty claim is valid only if it names an <em>active</em> catalog operation code (CAP-325
+     * D14), resolved against the {@code ext_catalog_service} replica rather than any synchronous
+     * read (ADR-0044 §6). A code whose service pos-catalog has since retired is present in the
+     * replica with {@code active = false} and therefore not returned here — so a retired code
+     * fails validation the same way an unknown one does, while remaining distinguishable in the
+     * replica for anyone who needs to know which it was.
+     */
     private Set<String> findServiceCapabilityCodes(Set<String> requestedCodes) {
         Set<String> foundCodes = new LinkedHashSet<>();
-        List<ServiceLocationCapabilityEntity> found = serviceLocationCapabilityRepository.findByCodeIn(requestedCodes);
+        List<ExtCatalogServiceReplica> found =
+                extCatalogServiceReplicaRepository.findByOperationCodeInAndActiveIsTrue(requestedCodes);
         if (found == null) {
             return foundCodes;
         }
-        for (ServiceLocationCapabilityEntity capability : found) {
-            if (capability.getCode() == null) {
+        for (ExtCatalogServiceReplica service : found) {
+            if (service.getOperationCode() == null) {
                 continue;
             }
-            foundCodes.add(capability.getCode().trim().toUpperCase(Locale.ROOT));
+            foundCodes.add(service.getOperationCode().trim().toUpperCase(Locale.ROOT));
         }
         return foundCodes;
     }

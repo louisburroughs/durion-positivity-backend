@@ -50,8 +50,10 @@ public class BayResponse {
     private String status;
 
     @Schema(
-            description = "Maximum number of vehicles that can be serviced concurrently in the bay",
-            example = "2",
+            description = "Number of vehicles the bay physically accommodates at once. A bay is a single "
+                    + "bookable resource regardless of this value; register separate bays for independently "
+                    + "bookable stalls.",
+            example = "1",
             requiredMode = NOT_REQUIRED)
     private Integer maxConcurrentVehicles;
 

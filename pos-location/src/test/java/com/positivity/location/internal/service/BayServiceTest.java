@@ -20,13 +20,14 @@ import com.positivity.location.internal.dto.BayRequest;
 import com.positivity.location.internal.dto.BayResponse;
 import com.positivity.location.internal.entity.BayEntity;
 import com.positivity.location.internal.entity.Location;
-import com.positivity.location.internal.entity.ServiceLocationCapabilityEntity;
+import com.positivity.location.internal.entity.ExtCatalogServiceReplica;
 import com.positivity.location.internal.enums.BayType;
 import com.positivity.location.internal.exception.DuplicateResourceException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.BayRepository;
 import com.positivity.location.internal.repository.LocationRepository;
-import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
+import com.positivity.location.internal.repository.BaySpecialtyOperationRepository;
+import com.positivity.location.internal.repository.ExtCatalogServiceReplicaRepository;
 import java.lang.reflect.Method;
 import java.time.Clock;
 import java.time.Instant;
@@ -70,7 +71,10 @@ class BayServiceTest {
     LocationRepository locationRepository;
 
     @Mock
-    ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
+    ExtCatalogServiceReplicaRepository extCatalogServiceReplicaRepository;
+
+    @Mock
+    BaySpecialtyOperationRepository baySpecialtyOperationRepository;
 
     /** Bay mutations publish location.bay.updated (issue #1668). */
     @Mock
@@ -81,19 +85,22 @@ class BayServiceTest {
 
     @BeforeEach
     void setUp() {
-        lenient().when(serviceLocationCapabilityRepository.findByCodeIn(any())).thenAnswer(invocation -> {
-            @SuppressWarnings("unchecked")
-            Collection<String> codes = (Collection<String>) invocation.getArgument(0);
-            if (codes == null) {
-                return List.of();
-            }
-            return codes.stream()
-                    .map(code -> ServiceLocationCapabilityEntity.builder()
-                            .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                            .code(code)
-                            .name("Capability " + code)
-                            .active(true)
-                            .build())
+        lenient()
+                .when(extCatalogServiceReplicaRepository.findByOperationCodeInAndActiveIsTrue(any()))
+                .thenAnswer(invocation -> {
+                    @SuppressWarnings("unchecked")
+                    Collection<String> codes = (Collection<String>) invocation.getArgument(0);
+                    if (codes == null) {
+                        return List.of();
+                    }
+                    return codes.stream()
+                            .map(code -> ExtCatalogServiceReplica.builder()
+                                    .serviceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                    .operationCode(code)
+                                    .name("Service " + code)
+                                    .active(true)
+                                    .aggregateVersion(1L)
+                                    .build())
                     .toList();
         });
     }
@@ -414,12 +421,13 @@ class BayServiceTest {
         when(bayRepository.findByLocationIdAndNormalizedName(
                         locationId, request.getName().toLowerCase()))
                 .thenReturn(Optional.empty());
-        when(serviceLocationCapabilityRepository.findByCodeIn(any()))
-                .thenReturn(List.of(ServiceLocationCapabilityEntity.builder()
-                        .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                        .code("ALIGN")
+        when(extCatalogServiceReplicaRepository.findByOperationCodeInAndActiveIsTrue(any()))
+                .thenReturn(List.of(ExtCatalogServiceReplica.builder()
+                        .serviceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                        .operationCode("ALIGN")
                         .name("Align")
                         .active(true)
+                        .aggregateVersion(1L)
                         .build()));
 
         assertThatThrownBy(() -> bayService.createBay(locationId, request))

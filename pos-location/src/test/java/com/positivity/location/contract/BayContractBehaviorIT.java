@@ -8,10 +8,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.positivity.location.BaseContractIntegrationTest;
 import com.positivity.location.internal.entity.BayEntity;
 import com.positivity.location.internal.entity.Location;
-import com.positivity.location.internal.entity.ServiceLocationCapabilityEntity;
+import com.positivity.location.internal.entity.ExtCatalogServiceReplica;
 import com.positivity.location.internal.repository.BayRepository;
 import com.positivity.location.internal.repository.LocationRepository;
-import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
+import com.positivity.location.internal.repository.ExtCatalogServiceReplicaRepository;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,13 +41,13 @@ class BayContractBehaviorIT extends BaseContractIntegrationTest {
     private BayRepository bayRepository;
 
     @Autowired
-    private ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
+    private ExtCatalogServiceReplicaRepository extCatalogServiceReplicaRepository;
 
     @BeforeEach
     void setUpData() {
         bayRepository.deleteAll();
         locationRepository.deleteAll();
-        serviceLocationCapabilityRepository.deleteAll();
+        extCatalogServiceReplicaRepository.deleteAll();
 
         Location location = Location.builder()
                 .name("Main Service Center")
@@ -68,10 +68,15 @@ class BayContractBehaviorIT extends BaseContractIntegrationTest {
         existingBay = bayRepository.save(existingBay);
         existingBayId = existingBay.getId();
 
-        serviceLocationCapabilityRepository.save(ServiceLocationCapabilityEntity.builder()
-                .code("CAP-TIRE-ROTATION")
+        // A specialty claim validates against the catalog replica (CAP-325 D14), so the IT plants
+        // the operation code there as pos-catalog's fact would.
+        extCatalogServiceReplicaRepository.save(ExtCatalogServiceReplica.builder()
+                .serviceId(java.util.UUID.randomUUID())
+                .operationCode("CAP-TIRE-ROTATION")
                 .name("Tire Rotation")
                 .active(true)
+                .aggregateVersion(1L)
+                .updatedAt(java.time.Instant.now())
                 .build());
     }
 
@@ -79,7 +84,7 @@ class BayContractBehaviorIT extends BaseContractIntegrationTest {
     void cleanUp() {
         bayRepository.deleteAll();
         locationRepository.deleteAll();
-        serviceLocationCapabilityRepository.deleteAll();
+        extCatalogServiceReplicaRepository.deleteAll();
     }
 
     @Test
