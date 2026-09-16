@@ -15,7 +15,7 @@ data wholesale, so it warrants the strictest preset (rationale in `CatalogEventT
 track from `docs/SPEC-tier-0-durion-owned-service-data.md` landed the Durion-owned half:
 shop-scoped labor standards, category-aware source precedence (Phase 3 item 2), the Tier 0
 tire/Michelin/fleet operation set with invented times, cross-source conflict surfacing (Phase 3
-item 3, reframed as *overlapping* keys — see that spec §9 for why the same-key form cannot
+item 3, reframed as _overlapping_ keys — see that spec §9 for why the same-key form cannot
 fire), service packages and fleet requirement sets, shop labor rates and the labor matrix in
 pos-price behind a second ADR-0044 grant, rate-driven pricing of LABOR estimate lines, and the
 Phase 4 labor-intelligence rollup. Phase 3 item 4 (warranty vs retail on the resolve request)
@@ -31,7 +31,7 @@ Next: Phase 2 (licensed aggregator) is gated on procurement per
 [#1575](https://github.com/louisburroughs/durion-positivity-backend/issues/1575)
 (repair specifications and book-time data strategy).
 **Location note:** parked in `pos-catalog/docs/` per module-plan convention
-(`pos-people/docs/PLAN-726-*`; the earlier accounting reset plan now lives in
+([durion People archival documentation](https://github.com/louisburroughs/durion/blob/master/domains/people/archive/PLAN-726-person-name-reconciliation.md); the earlier accounting reset plan now lives in
 [durion](https://github.com/louisburroughs/durion/blob/master/domains/accounting/archive/flyway-baseline-reset-plan.md)). The
 parts-fitment track (§9) may later split into `pos-vehicle-fitment/docs/` once vetted.
 
@@ -40,7 +40,7 @@ parts-fitment track (§9) may later split into `pos-vehicle-fitment/docs/` once 
 ## 1. Objective and end state
 
 pos-workorder needs a defensible **estimated service time** (book time / flat-rate time) for
-every `LABOR` line, resolved per operation *and* per vehicle, with source and revision
+every `LABOR` line, resolved per operation _and_ per vehicle, with source and revision
 attribution, so that:
 
 - `EstimateItem.quantity` defaults from book time instead of being hand-typed;
@@ -72,8 +72,8 @@ architecture (§3) so the second track is mostly repetition, not new design.
 - Shop labor **matrix** (percentage adjustments by job class/condition — shop policy, not
   catalog master data; belongs with location/shop configuration).
 - Appointment duration derivation in pos-shop-manager (consumer of this work, not part of it).
-- Timekeeping. Per the owner's comment on #1573: *time entry is clock-in/clock-out and breaks;
-  workorder time comes from service times, not from time entry.* Nothing in this plan reads or
+- Timekeeping. Per the owner's comment on #1573: _time entry is clock-in/clock-out and breaks;
+  workorder time comes from service times, not from time entry._ Nothing in this plan reads or
   writes `work_session`, `time_entry`, or `TimekeepingEntry`. The only touchpoint is the
   variance report, which compares this plan's estimate total against the already-computed
   actual `totalLaborHours` in pos-workorder.
@@ -83,12 +83,12 @@ architecture (§3) so the second track is mostly repetition, not new design.
 Both `work_session` tables are permanent clock tables with live writers, so this feature never
 uses that name. Canonical terms used throughout, and to be used in code:
 
-| Concept | Name in code/schema |
-|---|---|
-| One vehicle-specific published time for an operation | **labor time** (`labor_time`) |
-| The catalog-side stored row with provenance | **service labor standard** (`service_labor_standard`) |
-| The workorder-level aggregate | **estimated labor hours** (`estimatedLaborHours`, already declared) |
-| The upstream feed abstraction | **labor time provider** (`LaborTimeProvider`) |
+| Concept                                              | Name in code/schema                                                 |
+| ---------------------------------------------------- | ------------------------------------------------------------------- |
+| One vehicle-specific published time for an operation | **labor time** (`labor_time`)                                       |
+| The catalog-side stored row with provenance          | **service labor standard** (`service_labor_standard`)               |
+| The workorder-level aggregate                        | **estimated labor hours** (`estimatedLaborHours`, already declared) |
+| The upstream feed abstraction                        | **labor time provider** (`LaborTimeProvider`)                       |
 
 Unit is **decimal hours in tenths** (`numeric(5,1)`, 0.1 hr = 6 min) per industry convention —
 never minutes, never seconds.
@@ -118,7 +118,7 @@ These are constraints, not features; each shapes the schema or the resolution lo
 7. **Warranty time ≠ retail time.** `time_type` distinguishes `RETAIL_FLAT_RATE`,
    `OEM_WARRANTY`, `MANUFACTURER_INSTALL`, `DURION_STANDARD` (Tier 0 owned ops).
 8. **Licensing gates transport.** Whether a licensed time may be stored, replicated on a Kafka
-   fact, or shown only at point of use is a *per-source contract term*. The architecture must
+   fact, or shown only at point of use is a _per-source contract term_. The architecture must
    support both "ingest and store" and "query-through, cache-bounded, never persist" per source
    (§5.4). This is why the licensing question precedes the transport build in sequencing.
 
@@ -126,7 +126,7 @@ These are constraints, not features; each shapes the schema or the resolution lo
 
 ## 3. Architecture: one sourcing pattern for both tracks
 
-### 3.1 The pattern (mirrors pos-supplier, deliberately not pos-vehicle-reference-*)
+### 3.1 The pattern (mirrors pos-supplier, deliberately not pos-vehicle-reference-\*)
 
 The repo already contains two candidate patterns for third-party data:
 
@@ -142,7 +142,7 @@ The repo already contains two candidate patterns for third-party data:
   meant to feed.
 
 **Decision proposed:** adopt the pos-supplier shape. Sourcing SPIs and vendor adapters live
-*inside the owning domain module* (pos-catalog for labor times, pos-vehicle-fitment for
+_inside the owning domain module_ (pos-catalog for labor times, pos-vehicle-fitment for
 fitment), not in per-vendor microservices. The reference-module experiment demonstrates the
 failure mode of the alternative: an extra network hop and deployment unit with no owner, which
 the consumer eventually inlines around. (§9.4 proposes what to do with the two dead modules.)
@@ -214,9 +214,9 @@ Supporting records (in `internal/spi/model`):
   fields matching pos-vehicle-fitment vocabulary (§4.3); `acesVehicleId` nullable until an
   ACES-licensed source exists.
 - `ProviderLaborTime(providerOperationCode, hours, timeType, includedOperations[],
-  overlapGroup?, sourceRevision, publishedAt, notes)`.
+overlapGroup?, sourceRevision, publishedAt, notes)`.
 - `LaborTimeProviderDescriptor(sourceCode, displayName, licenseMode STORE|QUERY_ONLY,
-  timeTypes[], defaultPrecedence)`.
+timeTypes[], defaultPrecedence)`.
 
 Provider selection is config-driven (`pos.catalog.labor-guide.providers[...]`), one adapter per
 `sourceCode`, mirroring `SupplierProfileProperties` including the **sandbox base-url override**
@@ -255,15 +255,15 @@ query-only license.
 
 Reasons:
 
-- The decision on #1569 makes `ServiceEntity` the *system of record for estimated service
-  time*; putting the times in another module immediately re-splits the record.
+- The decision on #1569 makes `ServiceEntity` the _system of record for estimated service
+  time_; putting the times in another module immediately re-splits the record.
 - Every quote resolution would otherwise be a cross-module join at request time
   (pos-workorder → pos-catalog → pos-vehicle-fitment), tripling the latency-critical path and
   requiring a second ADR-0044 edge.
 - pos-vehicle-fitment's `PartFitmentEntity` is keyed by `partNumberId` (a `Long`, product-side
-  legacy) — it is a *parts* applicability table, not a generic vehicle-applicability service.
+  legacy) — it is a _parts_ applicability table, not a generic vehicle-applicability service.
 - No cross-service FKs exist in this platform anyway; what pos-catalog borrows from
-  pos-vehicle-fitment is the *vocabulary* (make/model/engine naming, §4.3), not rows.
+  pos-vehicle-fitment is the _vocabulary_ (make/model/engine naming, §4.3), not rows.
 
 What pos-vehicle-fitment contributes instead: the shared vehicle vocabulary and, in its own
 track (§9), the same provider architecture for parts applicability. The rejected alternative
@@ -345,7 +345,7 @@ Design points to vet:
 - **Append + supersede** rather than update-in-place: an invoice quoted against revision N must
   stay explainable after revision N+1 imports. Cheap with partial index on
   `superseded_at IS NULL`.
-- `default_labor_hours` on `service` is deliberately present *and* deliberately second-class:
+- `default_labor_hours` on `service` is deliberately present _and_ deliberately second-class:
   it is what rides the Kafka fact (degraded/offline default) and what a single-scalar shop can
   author by hand; the resolution service always prefers `service_labor_standard` rows.
 - `included_op_codes text[]` vs. a join table: array chosen for v1 (data arrives
@@ -399,10 +399,10 @@ corrections need a human write path, not just feeds:
 
 ### 5.1 Two license-shaped modes
 
-| Mode | When | Mechanics |
-|---|---|---|
-| **STORE** | License permits persistence (typical for bulk feed contracts, all mock/Tier-0 data) | Chunked-manifest import (§5.3) into `service_labor_standard` |
-| **QUERY_ONLY** | License forbids persistence (some OEM portals, per-lookup pricing) | Live call via `LaborTimeProviderPort`, TTL cache only, provenance shown at point of use |
+| Mode           | When                                                                                | Mechanics                                                                               |
+| -------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| **STORE**      | License permits persistence (typical for bulk feed contracts, all mock/Tier-0 data) | Chunked-manifest import (§5.3) into `service_labor_standard`                            |
+| **QUERY_ONLY** | License forbids persistence (some OEM portals, per-lookup pricing)                  | Live call via `LaborTimeProviderPort`, TTL cache only, provenance shown at point of use |
 
 The licensing review for each contracted source decides its mode **before** the adapter is
 built (sequencing rule from #1569 scope item 3). The mock runs in STORE mode so Phase 1
@@ -482,7 +482,7 @@ store and still miss QUERY_ONLY sources. So:
 - **Response contract** (typed degradation, never throws for miss):
   `status = RESOLVED | NO_TIME_AVAILABLE | SOURCE_UNAVAILABLE`, and on `RESOLVED`:
   `laborHours`, `timeType`, `sourceCode`, `sourceRevision`, `matchGrade
-  (EXACT | ENGINE_WILDCARD | MODEL_LEVEL | DEFAULT_HOURS)`, `overlapGroup`,
+(EXACT | ENGINE_WILDCARD | MODEL_LEVEL | DEFAULT_HOURS)`, `overlapGroup`,
   `includedOpCodes`, `attributionText?` (license-driven).
 - **Caller**: `pos-workorder/internal/client/CatalogLaborTimeClient(+Impl)` — load-balanced
   `RestClient` per the `DocumentClient` pattern (`loadBalancedRestClientBuilder`,
@@ -601,7 +601,7 @@ Deliverables:
    with the first source's active row — multi-source storage needs the source in the active
    key (or a cross-source supersession rule) before a second STORE feed is enabled.
 5. Attribution rendering on estimate/quote documents per license.
-6. The mock is retired from *default* config but kept green in CI as the contract-test double
+6. The mock is retired from _default_ config but kept green in CI as the contract-test double
    for the SPI (adapters are additionally contract-tested against recorded vendor fixtures).
 
 Exit: same Phase-1 demo runs against real aggregator data for real vehicles; mock only in tests.
@@ -723,7 +723,7 @@ hop.
 ## 10. The mock service: `pos-reference-mock`
 
 One new Maven module, one Spring Boot app, serving **both** tracks' vendor contracts — a fake
-*external vendor*, not a platform service. Design rules:
+_external vendor_, not a platform service. Design rules:
 
 - **Outside the mesh**: no Eureka registration, no gateway route, no JWT — reached only via
   adapter base-url config (the pos-supplier sandbox-override pattern,
@@ -736,8 +736,8 @@ One new Maven module, one Spring Boot app, serving **both** tracks' vendor contr
   checked in, deterministic, documented per §7 Phase 1 item 1 (overlap, included-ops,
   diagnostic, warranty-vs-retail cases are mandatory fixtures, not nice-to-haves — they keep
   the summation and precedence logic honest from day one).
-- **Contract-first**: the mock's OpenAPI file is the normative description of the *Durion
-  normalized provider contract*; Phase-2 adapters translate vendor reality onto it. Mock stays
+- **Contract-first**: the mock's OpenAPI file is the normative description of the _Durion
+  normalized provider contract_; Phase-2 adapters translate vendor reality onto it. Mock stays
   alive forever as the SPI contract-test double (Phase 2 item 6).
 - Endpoints (v1): `GET /mock/labor-guide/v1/operations`,
   `GET /mock/labor-guide/v1/labor-times`, `GET /mock/labor-guide/v1/feed/manifest`,
@@ -827,21 +827,21 @@ One new Maven module, one Spring Boot app, serving **both** tracks' vendor contr
 
 ## 13. Issue → plan traceability
 
-| Source | Item | Where addressed |
-|---|---|---|
-| #1569 scope 1 | vehicle-keying decision | §4.1 (proposed), §12 Q1 |
-| #1569 scope 2 | book-time fields + authoring surface | §4.2, §4.4, Phase 0/1 |
-| #1569 scope 3 | feed importer on chunked-manifest pattern; licensing first | §5, Phase 2 item 1 |
-| #1569 scope 4 | transport to pos-workorder; marketing tolerance | §6, Phase 1 items 5/8 |
-| #1569 scope 5 | default `EstimateItem.quantity`; dual snapshot | §6.3 items 1–2 |
-| #1569 scope 6 | overlap-aware `estimatedLaborHours` | §6.3 item 3 |
-| #1569 scope 7 | estimate vs. actual | §6.3 item 4, Phase 4 |
-| #1569 naming | own name, avoid `work_session` | §1 naming table |
-| #1573 | timekeeping boundary | §8 |
-| #1575 Tier 0 | Durion-owned ops, tire/fleet IP | §4.4, Phase 3 item 1, Phase 4 |
-| #1575 Tier 1 | direct OEM access, no bulk ingest w/o license | §5.1 QUERY_ONLY, Phase 3 |
-| #1575 Tier 2 | one licensed provider as default paid integration | Phase 2 |
-| #1575 Tier 3 | advanced diagnostic content as optional subscription | out of scope here; provider config's per-source enablement leaves the door open |
-| #1575 Tier 4 | Durion labor intelligence | Phase 4 |
-| #1575 architecture | `LaborGuideProvider` abstraction, vendor-replaceable | §3.3 (`LaborTimeProviderPort`) |
-| #1575 recommendation | buy commodity data, own workflow, build tire/fleet IP | the phase ordering itself |
+| Source               | Item                                                       | Where addressed                                                                 |
+| -------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| #1569 scope 1        | vehicle-keying decision                                    | §4.1 (proposed), §12 Q1                                                         |
+| #1569 scope 2        | book-time fields + authoring surface                       | §4.2, §4.4, Phase 0/1                                                           |
+| #1569 scope 3        | feed importer on chunked-manifest pattern; licensing first | §5, Phase 2 item 1                                                              |
+| #1569 scope 4        | transport to pos-workorder; marketing tolerance            | §6, Phase 1 items 5/8                                                           |
+| #1569 scope 5        | default `EstimateItem.quantity`; dual snapshot             | §6.3 items 1–2                                                                  |
+| #1569 scope 6        | overlap-aware `estimatedLaborHours`                        | §6.3 item 3                                                                     |
+| #1569 scope 7        | estimate vs. actual                                        | §6.3 item 4, Phase 4                                                            |
+| #1569 naming         | own name, avoid `work_session`                             | §1 naming table                                                                 |
+| #1573                | timekeeping boundary                                       | §8                                                                              |
+| #1575 Tier 0         | Durion-owned ops, tire/fleet IP                            | §4.4, Phase 3 item 1, Phase 4                                                   |
+| #1575 Tier 1         | direct OEM access, no bulk ingest w/o license              | §5.1 QUERY_ONLY, Phase 3                                                        |
+| #1575 Tier 2         | one licensed provider as default paid integration          | Phase 2                                                                         |
+| #1575 Tier 3         | advanced diagnostic content as optional subscription       | out of scope here; provider config's per-source enablement leaves the door open |
+| #1575 Tier 4         | Durion labor intelligence                                  | Phase 4                                                                         |
+| #1575 architecture   | `LaborGuideProvider` abstraction, vendor-replaceable       | §3.3 (`LaborTimeProviderPort`)                                                  |
+| #1575 recommendation | buy commodity data, own workflow, build tire/fleet IP      | the phase ordering itself                                                       |
