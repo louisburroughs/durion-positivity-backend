@@ -34,7 +34,9 @@ import tools.jackson.databind.ObjectMapper;
  * payload shape in its outbox history — replay could only re-send that stale shape. Regenerating
  * from current state picks up the new columns. {@code payload.aggregate} selects {@code bay},
  * {@code mobile-unit}, {@code location}, or {@code all} (the default); optional
- * {@code payload.afterId} resumes a bounded run from the cursor the previous run logged.</li>
+ * {@code payload.afterId} resumes a bounded run from the cursor the previous run logged, and
+ * requires a specific {@code payload.aggregate} because a cursor belongs to one aggregate's id
+ * space.</li>
  * </ul>
  */
 @Slf4j
@@ -157,6 +159,17 @@ public class LocationCommandListener {
         }
 
         UUID afterId = parseUuid(payloadNode);
+        if (afterId != null && AGGREGATE_ALL.equals(aggregate)) {
+            // Each aggregate walks its own table in its own id space, so one cursor cannot resume
+            // three of them: whichever table it came from, it is an arbitrary point in the other
+            // two and silently skips every row below it there. Resuming has to name one aggregate.
+            log.warn(
+                    "Ignoring fact backfill command with payload.afterId={} and aggregate=all: a cursor "
+                            + "belongs to one aggregate's id space and would skip rows in the others. "
+                            + "Re-send with payload.aggregate set to bay, mobile-unit or location.",
+                    afterId);
+            return;
+        }
         BackfillResult bays = null;
         BackfillResult mobileUnits = null;
         BackfillResult locations = null;
@@ -170,8 +183,9 @@ public class LocationCommandListener {
             locations = factBackfillService.backfillLocations(afterId);
         }
         // A run stops at the configured bound so it cannot outlive max.poll.interval.ms and get the
-        // consumer evicted. When rows remain, the operator re-sends the command with afterId set to
-        // the cursor logged here; the run is idempotent, so an overlapping resume is harmless.
+        // consumer evicted. When rows remain, the operator re-sends the command with payload.aggregate
+        // naming the aggregate that has more, and payload.afterId set to that aggregate's own cursor
+        // logged here; the run is idempotent, so an overlapping resume is harmless.
         log.info(
                 "Fact backfill command processed aggregate={} afterId={} bays={} mobileUnits={} locations={}",
                 aggregate,
@@ -181,8 +195,9 @@ public class LocationCommandListener {
                 describe(locations));
         if (hasMore(bays) || hasMore(mobileUnits) || hasMore(locations)) {
             log.warn(
-                    "Fact backfill hit its per-run bound; re-send location.fact-backfill.requested "
-                            + "with payload.afterId to continue (bays={}, mobileUnits={}, locations={})",
+                    "Fact backfill hit its per-run bound; re-send location.fact-backfill.requested per "
+                            + "aggregate with payload.aggregate and that aggregate's own payload.afterId "
+                            + "to continue (bays={}, mobileUnits={}, locations={})",
                     describe(bays),
                     describe(mobileUnits),
                     describe(locations));

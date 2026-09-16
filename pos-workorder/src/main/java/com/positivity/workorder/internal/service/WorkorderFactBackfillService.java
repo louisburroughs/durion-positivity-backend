@@ -1,6 +1,7 @@
 package com.positivity.workorder.internal.service;
 
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -42,23 +43,37 @@ public interface WorkorderFactBackfillService {
      *
      * @param published number of facts queued to the outbox
      * @param lastId highest workorder id processed, or null when nothing was processed; pass it back
-     *     as the next run's {@code afterId} to resume a single tenant's walk. Always null for a
-     *     platform-tenant operator's multi-tenant fan-out — a cursor cannot span tenants, whose id
-     *     spaces are independent
+     *     as the next run's {@code afterId} to resume. A cursor belongs to one tenant's id space, so
+     *     it is only meaningful alongside {@code tenantId}
+     * @param tenantId the tenant {@code lastId} belongs to. For a platform operator's fan-out this
+     *     is the tenant the run stopped inside when the budget ran out; pass both back to finish it
      * @param more true when the bound was reached and rows remain. For a fan-out, true when any
-     *     tenant's own run reached its bound
+     *     tenant's own run reached its bound or a tenant was not reached at all
      */
-    record BackfillResult(int published, @Nullable UUID lastId, boolean more) {}
+    record BackfillResult(
+            int published, @Nullable UUID lastId, @Nullable UUID tenantId, boolean more) {}
 
     /**
      * Regenerate fresh facts for the calling tenant (ADR-0062 §3) — or, when the caller is bound to
      * the platform tenant, which owns no workorder rows of its own, every active tenant's in turn
      * through {@code TenantIterator}, mirroring {@code OutboxReplayServiceImpl#replaySinceForCaller}.
      *
+     * <p>One run carries <strong>one</strong> budget. A platform fan-out spends it across tenants
+     * rather than giving each tenant its own, because a per-tenant budget lets a single command do
+     * {@code maxRowsPerRun x tenantCount} rows of work on the Kafka listener thread — the eviction
+     * the bound exists to prevent. When the budget runs out mid-fleet the result names the tenant it
+     * stopped inside and that tenant's cursor, and the operator sends both straight back; without a
+     * resume point a tenant holding more rows than one budget could never be finished, because every
+     * re-run would restart it from the beginning.
+     *
      * @param afterId exclusive cursor for a single tenant's walk; null starts from the beginning.
-     *     Ignored, with a warning logged, for a platform-tenant fan-out: each tenant's id space is
-     *     independent, so one cursor cannot resume every tenant's walk at once.
+     *     Meaningful only alongside {@code tenantId} for a platform caller, since each tenant's id
+     *     space is independent; ignored with a warning otherwise.
+     * @param tenantId the single tenant to walk. A platform caller uses it to resume one tenant; a
+     *     non-platform caller may only name its own tenant, and naming another is refused rather
+     *     than silently run, since the command arrives over Kafka.
      * @return the outcome of the run — summed across tenants for a platform-tenant fan-out
      */
-    BackfillResult backfillForCaller(@Nullable UUID afterId);
+    @NonNull
+    BackfillResult backfillForCaller(@Nullable UUID afterId, @Nullable UUID tenantId);
 }
