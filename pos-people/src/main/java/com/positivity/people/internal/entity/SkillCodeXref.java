@@ -5,6 +5,7 @@ import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tenancy.TenantGlobal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
@@ -17,6 +18,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * A vendor's credential code cross-referenced onto a registry {@link Skill} (CAP-328, spec D8;
@@ -30,6 +34,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "skill_code_xref")
 @TenantGlobal(
         reason = "national credential codes cross-referenced onto the global skill registry (ADR-0059 section 3,"
@@ -51,9 +56,11 @@ public class SkillCodeXref {
     @Column(name = "source_skill_code", nullable = false, length = 128)
     private String sourceSkillCode;
 
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
