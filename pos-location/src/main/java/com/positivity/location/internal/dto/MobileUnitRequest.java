@@ -53,10 +53,12 @@ public class MobileUnitRequest {
     private String notes;
 
     @Schema(
-            description = "Identifiers of capabilities the mobile unit can perform",
-            example = "[\"01960003-0000-7000-8000-000000000010\"]",
+            description = "Catalog operation codes this unit can perform off-site (CAP-325 D14): each must be an"
+                    + " active catalog operationCode (UPPER-DASH, ADR-0059 §3), matched case-insensitively;"
+                    + " unknown or retired codes are rejected 422. Required, non-empty, for an ACTIVE unit.",
+            example = "[\"OIL-CHANGE-FULL-SYNTHETIC\", \"BATTERY-REPLACEMENT\"]",
             requiredMode = NOT_REQUIRED)
-    private List<String> capabilityIds;
+    private List<String> serviceCapabilityCodes;
 
     @Schema(description = "Coverage rules defining where the mobile unit can operate", requiredMode = NOT_REQUIRED)
     @Valid

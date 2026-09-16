@@ -198,9 +198,9 @@ class OpeningSearchServiceImplTest {
         assertThat(response.getNoOpeningReason()).isNull();
         assertThat(response.getStaffingAdvisory()).isNull();
         assertThat(response.getTimezone()).isEqualTo("America/New_York");
-        // Two general bays (the rack claims alignment only, so it is not general); one opening per bay per day.
-        assertThat(response.getBayEligibility().getEligibleBays()).isEqualTo(2);
-        assertThat(response.getBayEligibility().getExcludedByCapability()).isEqualTo(1);
+        // D14: general work may go to every bay but a wash bay — the rack too, ranked after the general bays.
+        assertThat(response.getBayEligibility().getEligibleBays()).isEqualTo(3);
+        assertThat(response.getBayEligibility().getExcludedByCapability()).isEqualTo(0);
         Opening first = response.getOpenings().getFirst();
         // Day opens 08:00; the 15-minute check-in buffer is honoured against earliestStart 09:00 → 09:00 exactly.
         assertThat(first.getStartAt()).isEqualTo(TUE_0900);
@@ -231,6 +231,7 @@ class OpeningSearchServiceImplTest {
         held.add(bay(BAY_1, "2026-06-16T18:45:00Z", "2026-06-16T21:00:00Z"));
         // Bay 2 fully booked Tuesday so it does not compete.
         held.add(bay(BAY_2, "2026-06-16T12:00:00Z", "2026-06-16T21:00:00Z"));
+        held.add(bay(RACK, "2026-06-16T12:00:00Z", "2026-06-16T21:00:00Z"));
 
         OpeningSearchResponse response = service.search(
                 new OpeningSearchQuery(LOCATION, List.of(BRAKE_JOB), 90, TUE_0900, VEHICLE, null, 1, 10));
@@ -249,6 +250,7 @@ class OpeningSearchServiceImplTest {
         held.add(bay(BAY_1, "2026-06-16T12:00:00Z", "2026-06-16T16:45:00Z"));
         held.add(bay(BAY_1, "2026-06-16T18:44:00Z", "2026-06-16T21:00:00Z"));
         held.add(bay(BAY_2, "2026-06-16T12:00:00Z", "2026-06-16T21:00:00Z"));
+        held.add(bay(RACK, "2026-06-16T12:00:00Z", "2026-06-16T21:00:00Z"));
 
         OpeningSearchResponse response = service.search(
                 new OpeningSearchQuery(LOCATION, List.of(BRAKE_JOB), 90, TUE_0900, VEHICLE, null, 1, 10));
@@ -263,6 +265,7 @@ class OpeningSearchServiceImplTest {
         // Bay 1: 09:00–10:00 free, 10:00–10:15 booked, 10:15–17:00 free. A 90-minute job cannot use 09:00.
         held.add(bay(BAY_1, "2026-06-16T14:00:00Z", "2026-06-16T14:15:00Z"));
         held.add(bay(BAY_2, "2026-06-16T12:00:00Z", "2026-06-16T21:00:00Z"));
+        held.add(bay(RACK, "2026-06-16T12:00:00Z", "2026-06-16T21:00:00Z"));
 
         OpeningSearchResponse response = service.search(
                 new OpeningSearchQuery(LOCATION, List.of(BRAKE_JOB), 90, TUE_0900, VEHICLE, null, 1, 10));
@@ -282,6 +285,7 @@ class OpeningSearchServiceImplTest {
         held.add(bay(BAY_1, "2026-06-16T12:00:00Z", "2026-06-16T13:00:00Z"));
         held.add(bay(BAY_2, "2026-06-16T12:00:00Z", "2026-06-16T14:00:00Z"));
         held.add(bay(BAY_2, "2026-06-16T15:00:00Z", "2026-06-16T21:00:00Z"));
+        held.add(bay(RACK, "2026-06-16T12:00:00Z", "2026-06-16T21:00:00Z"));
 
         OpeningSearchResponse response = service.search(
                 new OpeningSearchQuery(LOCATION, List.of(BRAKE_JOB), 90, TUE_0900, VEHICLE, null, 1, 10));
@@ -297,6 +301,7 @@ class OpeningSearchServiceImplTest {
     void rollsIntoNextOpenDay() {
         held.add(bay(BAY_1, "2026-06-16T12:00:00Z", "2026-06-16T21:00:00Z"));
         held.add(bay(BAY_2, "2026-06-16T12:00:00Z", "2026-06-16T21:00:00Z"));
+        held.add(bay(RACK, "2026-06-16T12:00:00Z", "2026-06-16T21:00:00Z"));
 
         OpeningSearchResponse response =
                 service.search(new OpeningSearchQuery(LOCATION, List.of(BRAKE_JOB), 90, TUE_0900, VEHICLE, null, 2, 1));
@@ -315,6 +320,7 @@ class OpeningSearchServiceImplTest {
         Instant thu = Instant.parse("2026-06-18T13:00:00Z");
         held.add(bay(BAY_1, "2026-06-18T12:00:00Z", "2026-06-18T21:00:00Z"));
         held.add(bay(BAY_2, "2026-06-18T12:00:00Z", "2026-06-18T21:00:00Z"));
+        held.add(bay(RACK, "2026-06-18T12:00:00Z", "2026-06-18T21:00:00Z"));
 
         OpeningSearchResponse response =
                 service.search(new OpeningSearchQuery(LOCATION, List.of(BRAKE_JOB), 90, thu, VEHICLE, null, 7, 1));
@@ -331,16 +337,34 @@ class OpeningSearchServiceImplTest {
     @DisplayName(
             "AC6: no bay at the location can do the work → NO_ELIGIBLE_BAY_AT_LOCATION, before any appointment is read")
     void noEligibleBay() {
+        // D14: a wash bay never absorbs general mechanical work, and it is the only bay here.
         when(bayRepository.findActiveByLocationOrdered(LOCATION))
-                .thenReturn(List.of(bay(RACK, "Rack", List.of("WHEEL-ALIGNMENT-4-WHEEL"), null)));
-        // A general brake job at a location whose only bay is a specialty rack that claims something else:
-        // nobody claims BRAKE-PAD-REPLACE-FRONT, so general bays would do — and there are none.
+                .thenReturn(List.of(ExtBayReplica.builder()
+                        .bayId(RACK)
+                        .locationId(LOCATION)
+                        .name("Wash")
+                        .bayType("WASH_DETAIL")
+                        .active(true)
+                        .serviceCapabilityCodes(List.of())
+                        .build()));
+
         OpeningSearchResponse response = service.search(query(BRAKE_JOB, 60, TUE_0900));
 
         assertThat(response.getOpenings()).isEmpty();
         assertThat(response.getNoOpeningReason()).isEqualTo(NoOpeningReason.NO_ELIGIBLE_BAY_AT_LOCATION);
         assertThat(response.getBayEligibility().getExcludedByCapability()).isEqualTo(1);
         verify(appointmentRepository, never()).findHeldOverlappingAtLocation(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("D14: a specialty bay takes general work, offered after the general bays at the same start")
+    void specialtyBayTakesGeneralWorkRankedLast() {
+        requirements.clear();
+        OpeningSearchResponse response = service.search(
+                new OpeningSearchQuery(LOCATION, List.of(BRAKE_JOB), 60, TUE_0900, VEHICLE, null, 1, 10));
+
+        // Tuesday, three openings at 09:00: Bay 1, Bay 2, then the rack.
+        assertThat(response.getOpenings()).extracting(Opening::getBayId).containsExactly(BAY_1, BAY_2, RACK);
     }
 
     @Test
@@ -355,12 +379,11 @@ class OpeningSearchServiceImplTest {
 
         OpeningSearchResponse response = service.search(query(BRAKE_JOB, 60, TUE_0900));
 
-        // Bay 2's ceiling is class 3; Bay 1 is unconstrained; the rack is a capability miss.
-        assertThat(response.getBayEligibility().getEligibleBays()).isEqualTo(1);
-        assertThat(response.getBayEligibility().getExcludedByCapability()).isEqualTo(1);
+        // Bay 2's ceiling is class 3; Bay 1 and the rack are unconstrained (the rack takes general work, D14).
+        assertThat(response.getBayEligibility().getEligibleBays()).isEqualTo(2);
+        assertThat(response.getBayEligibility().getExcludedByCapability()).isEqualTo(0);
         assertThat(response.getBayEligibility().getExcludedByDutyClass()).isEqualTo(1);
-        assertThat(response.getOpenings())
-                .allSatisfy(opening -> assertThat(opening.getBayId()).isEqualTo(BAY_1));
+        assertThat(response.getOpenings()).extracting(Opening::getBayId).doesNotContain(BAY_2);
     }
 
     @Test

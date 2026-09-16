@@ -427,22 +427,22 @@ about where part numbers come from first.
 
 Columns (`locations.csv`): `name,code,addressLine1,addressLine2,city,stateOrProvince,postalCode,countryCode,phoneNumber,active,locationTypeName,timezone`.
 
-Columns (`mobile-units.csv`): `name,baseLocationCode,status,travelBufferPolicyName,capabilityCodes` — `capabilityCodes` is `;`-separated.
+Columns (`mobile-units.csv`): `name,baseLocationCode,status,travelBufferPolicyName,capabilityCodes` — `capabilityCodes` is `;`-separated and holds **catalog operation codes** (CAP-325 D14: the same vocabulary as a bay's specialty claim, validated by pos-location against its `ext_catalog_service` replica, so the Tier 0 catalog pack must have landed first). The location-owned capability registry is retired (V5).
 
 Columns (`mobile-unit-coverage-rules.csv`): `unitName,serviceAreaName,ruleType,priority,maxDistance,validFrom,validTo` — `maxDistance` blank is the catch-all tier, and `validFrom`/`validTo` blank means always in effect.
 
 **Mobile units are an API pack, not a loader domain (#1986).** pos-location refuses an `ACTIVE`
-mobile unit that has no `travelBufferPolicyId`, `capabilityIds` and `coverageRules` —
+mobile unit that has no `travelBufferPolicyId`, `serviceCapabilityCodes` and `coverageRules` —
 `MobileUnitServiceImpl.validateCreateMobileUnitRequest` rejects it with "ACTIVE mobile unit requires
-travelBufferPolicyId, capabilityIds, and coverageRules" — and the loader's `MOBILE_UNIT` strategy
+travelBufferPolicyId, serviceCapabilityCodes, and coverageRules" — and the loader's `MOBILE_UNIT` strategy
 carries only `name`, `baseLocationCode`, `status` and `notes`, so it cannot express an active unit
 at all. `POST /v1/mobile-units` takes the whole unit in one call, coverage rules included, so the
 driver assembles it rather than the loader growing three fields.
 
 Both fixtures key off names, like every other pack here. `travelBufferPolicyName` and
 `serviceAreaName` are resolved through `GET /location/travel-buffer-policies` and
-`GET /location/service-areas` once per run; `capabilityCodes` is a `;`-separated list of codes sent
-as-is, since the service resolves a capability by code as readily as by id.
+`GET /location/service-areas` once per run; `capabilityCodes` is a `;`-separated list of catalog
+operation codes sent as `serviceCapabilityCodes`, normalized UPPER-DASH by the service.
 
 **Row order in `mobile-unit-coverage-rules.csv` is load-bearing.**
 `MobileUnitServiceImpl.validateDistanceTiers` walks a unit's rules in the order sent and requires

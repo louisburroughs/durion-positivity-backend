@@ -383,7 +383,7 @@ def mobile_unit_shortfall(gateway, unit, row, rules):
     the list response does not carry -- fetched per unit, which only happens on a re-run.
 
     There is deliberately no repair path here. A missing policy could be PATCHed and missing coverage
-    PUT, but capabilityIds is not a PATCH key (MobileUnitServiceImpl:58-60), so an incomplete unit
+    PUT, but serviceCapabilityCodes was not a PATCH key before CAP-325 (MobileUnitServiceImpl:58-60), so an incomplete unit
     cannot be completed through the API at all; PATCHing it ACTIVE anyway would use PATCH's lack of
     validation to build the exact state the create path refuses. Saying so and requiring a reset is
     the honest option."""
@@ -395,7 +395,7 @@ def mobile_unit_shortfall(gateway, unit, row, rules):
         missing.append("is not ACTIVE")
     if not unit.get("travelBufferPolicyId"):
         missing.append("has no travel buffer policy")
-    if not unit.get("capabilityIds"):
+    if not unit.get("serviceCapabilityCodes"):
         missing.append("has no capabilities")
     if rules and not missing:
         # Only worth a call once the cheap checks pass: a unit failing those needs a reset regardless.
@@ -514,7 +514,7 @@ def run_mobile_units(gateway, relative_path, _location_id):
             # Counted as a failure rather than a skip: this is the state an alpha seeded before
             # #1986 is in, and reporting it as "skipped" is how eligibility stays quietly empty.
             print(f"  WARN: mobile unit {name} already exists but {shortfall}. It predates #1986 and "
-                  "cannot be completed through the API -- capabilityIds is not a PATCH key. Reset the "
+                  "cannot be completed through the API -- serviceCapabilityCodes was not a PATCH key before CAP-325. Reset the "
                   "database and reseed, or delete this unit, to get an ACTIVE unit with coverage.")
             failures += 1
             continue
@@ -523,7 +523,9 @@ def run_mobile_units(gateway, relative_path, _location_id):
             "name": name,
             "baseLocationId": base_location_id,
             "status": row["status"],
-            "capabilityIds": [code for code in (row.get("capabilityCodes") or "").split(";") if code],
+            # CAP-325 D14: catalog operation codes, the same vocabulary a bay's specialty claim uses;
+            # pos-location validates each against its ext_catalog_service replica (422 otherwise).
+            "serviceCapabilityCodes": [code for code in (row.get("capabilityCodes") or "").split(";") if code],
             "coverageRules": rules,
         }
         if policy_id:

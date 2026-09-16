@@ -1889,9 +1889,9 @@ paths:
 
         Use this tool when commissioning a van or truck that serves customers off-site; do not use patchMobileUnit, which updates an existing unit, and change coverage later with replaceCoverageRules.
 
-        Preconditions: a unit created with status ACTIVE must include travelBufferPolicyId, capabilityIds and coverageRules; the travel buffer policy must exist, capability ids or codes must resolve to registered capabilities, DISTANCE_TIER coverage rules must be strictly ascending by maxDistance and end with a null catch-all tier, and the name must be unique at the base location.
+        Preconditions: a unit created with status ACTIVE must include travelBufferPolicyId, serviceCapabilityCodes and coverageRules; the travel buffer policy must exist, every serviceCapabilityCode must be an active catalog operationCode known to the location service''s catalog replica, DISTANCE_TIER coverage rules must be strictly ascending by maxDistance and end with a null catch-all tier, and the name must be unique at the base location.
 
-        Required inputs: name; status defaults to INACTIVE when omitted, and baseLocationId, travelBufferPolicyId, notes, capabilityIds and coverageRules are optional for inactive units.
+        Required inputs: name; status defaults to INACTIVE when omitted, and baseLocationId, travelBufferPolicyId, notes, serviceCapabilityCodes and coverageRules are optional for inactive units.
 
         Emits a LOCATION_MOBILE_UNIT_CREATE event and persists any supplied coverage rules in the same transaction.
 
@@ -1907,8 +1907,6 @@ paths:
                 description: Active mobile unit
                 value:
                   baseLocationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a01
-                  capabilityIds:
-                  - 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
                   coverageRules:
                   - priority: 1
                     ruleType: SERVICE_AREA
@@ -1916,6 +1914,9 @@ paths:
                     validFrom: '2026-06-18'
                   name: Van 7
                   notes: Equipped with hydraulic lift
+                  serviceCapabilityCodes:
+                  - OIL-CHANGE-FULL-SYNTHETIC
+                  - BATTERY-REPLACEMENT
                   status: ACTIVE
                   travelBufferPolicyId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02
             schema:
@@ -3731,13 +3732,6 @@ components:
           example: 01960003-0000-7000-8000-000000000001
           format: uuid
           type: string
-        capabilityIds:
-          description: Identifiers of capabilities the mobile unit can perform
-          example:
-          - 01960003-0000-7000-8000-000000000010
-          items:
-            type: string
-          type: array
         coverageRules:
           description: Coverage rules defining where the mobile unit can operate
           items:
@@ -3752,6 +3746,14 @@ components:
           description: Free-text notes about the mobile unit
           example: Equipped with hydraulic lift
           type: string
+        serviceCapabilityCodes:
+          description: 'Catalog operation codes this unit can perform off-site (CAP-325 D14): each must be an active catalog operationCode (UPPER-DASH, ADR-0059 §3), matched case-insensitively; unknown or retired codes are rejected 422. Required, non-empty, for an ACTIVE unit.'
+          example:
+          - OIL-CHANGE-FULL-SYNTHETIC
+          - BATTERY-REPLACEMENT
+          items:
+            type: string
+          type: array
         status:
           description: Operational status of the mobile unit
           example: ACTIVE
@@ -3772,13 +3774,6 @@ components:
           example: 01960003-0000-7000-8000-000000000002
           format: uuid
           type: string
-        capabilityIds:
-          description: Identifiers of capabilities the mobile unit can perform
-          example:
-          - 01960003-0000-7000-8000-000000000010
-          items:
-            type: string
-          type: array
         createdAt:
           description: Timestamp when the mobile unit was created (ISO 8601)
           example: '2026-06-18T08:00:00Z'
@@ -3797,6 +3792,14 @@ components:
           description: Free-text notes about the mobile unit
           example: Equipped with hydraulic lift
           type: string
+        serviceCapabilityCodes:
+          description: Catalog operation codes this unit can perform off-site (CAP-325 D14), UPPER-DASH per ADR-0059 §3; empty for a unit that has not declared any.
+          example:
+          - OIL-CHANGE-FULL-SYNTHETIC
+          - BATTERY-REPLACEMENT
+          items:
+            type: string
+          type: array
         status:
           description: Operational status of the mobile unit
           example: ACTIVE

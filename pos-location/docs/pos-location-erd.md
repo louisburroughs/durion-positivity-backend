@@ -14,8 +14,8 @@ String normalized_name
 String bay_type
 String status
 Integer max_concurrent_vehicles
-TEXT service_capability_ids
-TEXT skill_requirement_ids
+TEXT service_capability_codes
+Integer max_duty_class
 Instant created_at
 Instant last_modified_at
 }
@@ -46,14 +46,6 @@ String name
 String buffer_type
 BigDecimal buffer_value
 String notes
-Instant created_at
-Instant updated_at
-}
-service_location_capabilities {
-UUID id
-String code
-String name
-Boolean active
 Instant created_at
 Instant updated_at
 }

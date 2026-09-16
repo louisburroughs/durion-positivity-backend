@@ -60,9 +60,10 @@ import org.springframework.transaction.annotation.Transactional;
  * credentials, and one appointment read spanning the whole horizon. The per-day, per-bay work is
  * then in memory.
  *
- * <p>Eligibility (CAP-325 D13/D14): a bay is eligible for an operation when it claims the operation
- * code, or when no bay at the location claims it and the bay is general (no codes) — absence from
- * the specialty map is a definite "general work", not an unknown. A bay whose {@code maxDutyClass}
+ * <p>Eligibility (CAP-325 D13/D14): a bay is eligible for an operation it claims; an operation no
+ * bay at the location claims is general work — a definite answer, not an unknown — which every bay
+ * but a {@code WASH_DETAIL} one may do, general bays ranked before specialty bays so the rack stays
+ * free for alignment work without the shop ever reading as full. A bay whose {@code maxDutyClass}
  * is below the vehicle's GVWR class is out, and counted separately from a capability miss.
  *
  * <p>An opening is the earliest start in a free gap of one eligible bay at which the job, with the
@@ -233,8 +234,14 @@ public class OpeningSearchServiceImpl implements OpeningSearchService {
             }
         }
 
+        Set<UUID> specialtyBays = eligibility.eligible().stream()
+                .filter(bay -> !isGeneral(bay))
+                .map(ExtBayReplica::getBayId)
+                .collect(Collectors.toSet());
         openings.sort(Comparator.comparing(Opening::getStartAt)
                 .thenComparing(opening -> opening.getSkillFulfillment() == SkillFulfillment.CERTIFIED ? 0 : 1)
+                // D14: a specialty bay doing general work ranks after the general bays at the same start.
+                .thenComparing(opening -> specialtyBays.contains(opening.getBayId()) ? 1 : 0)
                 .thenComparing(opening -> Objects.requireNonNullElse(opening.getBayName(), ""))
                 .thenComparing(Opening::getBayId));
         response.setOpenings(
@@ -322,14 +329,15 @@ public class OpeningSearchServiceImpl implements OpeningSearchService {
             }
             List<ExtBayReplica> claimants =
                     bays.stream().filter(bay -> claims(bay, operation)).toList();
-            // Somebody claims it: only they may do it. Nobody claims it: general bays may (D14.1).
+            // Somebody claims it: only they may do it. Nobody claims it: general work, which every bay
+            // but a wash bay may do — a specialty bay too, ranked last (D14).
             eligible.retainAll(
                     claimants.isEmpty()
-                            ? bays.stream()
-                                    .filter(OpeningSearchServiceImpl::isGeneral)
-                                    .toList()
+                            ? bays.stream().filter(bay -> !isWashDetail(bay)).toList()
                             : claimants);
         }
+        // General bays first, so a specialty bay is offered for general work only after them.
+        eligible.sort(Comparator.comparing((ExtBayReplica bay) -> isGeneral(bay) ? 0 : 1));
         int byCapability = bays.size() - eligible.size();
         int before = eligible.size();
         if (gvwrClass != null) {
@@ -348,6 +356,13 @@ public class OpeningSearchServiceImpl implements OpeningSearchService {
     private static boolean isGeneral(ExtBayReplica bay) {
         return bay.getServiceCapabilityCodes() == null
                 || bay.getServiceCapabilityCodes().isEmpty();
+    }
+
+    /** The one bay type that never absorbs general mechanical work (D14: the exception to the default). */
+    static final String WASH_DETAIL = "WASH_DETAIL";
+
+    private static boolean isWashDetail(ExtBayReplica bay) {
+        return WASH_DETAIL.equalsIgnoreCase(bay.getBayType());
     }
 
     // ── time ────────────────────────────────────────────────────────────────────────────────────

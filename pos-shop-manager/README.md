@@ -154,8 +154,10 @@ holiday closures are skipped, never reported as full. Ranking: earliest start, t
 before `AWAITING`, then bay.
 
 Bay eligibility (CAP-325 D13/D14): a bay is eligible for an operation when it claims the
-operation code in `serviceCapabilityCodes`, or when no bay at the location claims it and the
-bay is general (no codes). A bay whose `maxDutyClass` is below the vehicle's class is out;
+operation code in `serviceCapabilityCodes`; an operation no bay at the location claims is
+general work, which every bay but a `WASH_DETAIL` one may do — general bays ranked before
+specialty bays at the same start, so the rack stays free for alignment work without the shop
+ever reading as full. A bay whose `maxDutyClass` is below the vehicle's class is out;
 `bayEligibility` counts the two misses separately. Empty list reasons are exactly two:
 `NO_ELIGIBLE_BAY_AT_LOCATION` and `ALL_ELIGIBLE_BAYS_BOOKED`.
 

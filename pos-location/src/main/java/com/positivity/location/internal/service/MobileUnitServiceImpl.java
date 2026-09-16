@@ -8,14 +8,13 @@ import com.positivity.location.internal.dto.MobileUnitResponse;
 import com.positivity.location.internal.entity.MobileUnitCoverageRuleEntity;
 import com.positivity.location.internal.entity.MobileUnitEntity;
 import com.positivity.location.internal.entity.ServiceAreaEntity;
-import com.positivity.location.internal.entity.ServiceLocationCapabilityEntity;
 import com.positivity.location.internal.exception.DuplicateResourceException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
+import com.positivity.location.internal.repository.ExtCatalogServiceReplicaRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.MobileUnitCoverageRuleRepository;
 import com.positivity.location.internal.repository.MobileUnitRepository;
 import com.positivity.location.internal.repository.ServiceAreaRepository;
-import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
 import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -58,13 +57,14 @@ public class MobileUnitServiceImpl implements MobileUnitService {
     private static final String PATCH_KEY_STATUS = "status";
     private static final String PATCH_KEY_TRAVEL_BUFFER_POLICY_ID = "travelBufferPolicyId";
     private static final String PATCH_KEY_NOTES = "notes";
+    private static final String PATCH_KEY_SERVICE_CAPABILITY_CODES = "serviceCapabilityCodes";
     private static final String FIELD_MAX_DISTANCE = "maxDistance";
 
     protected final MobileUnitRepository mobileUnitRepository;
     protected final MobileUnitCoverageRuleRepository coverageRuleRepository;
     protected final ServiceAreaRepository serviceAreaRepository;
     protected final TravelBufferPolicyRepository travelBufferPolicyRepository;
-    protected final ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
+    protected final ServiceCapabilityCodeValidator serviceCapabilityCodeValidator;
     protected final LocationRepository locationRepository;
     protected final LocationFactPublisher locationFactPublisher;
 
@@ -73,7 +73,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
             MobileUnitCoverageRuleRepository coverageRuleRepository,
             ServiceAreaRepository serviceAreaRepository,
             TravelBufferPolicyRepository travelBufferPolicyRepository,
-            ServiceLocationCapabilityRepository serviceLocationCapabilityRepository,
+            ExtCatalogServiceReplicaRepository extCatalogServiceReplicaRepository,
             LocationRepository locationRepository,
             LocationFactPublisher locationFactPublisher,
             Clock clock) {
@@ -82,7 +82,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         this.coverageRuleRepository = coverageRuleRepository;
         this.serviceAreaRepository = serviceAreaRepository;
         this.travelBufferPolicyRepository = travelBufferPolicyRepository;
-        this.serviceLocationCapabilityRepository = serviceLocationCapabilityRepository;
+        this.serviceCapabilityCodeValidator = new ServiceCapabilityCodeValidator(extCatalogServiceReplicaRepository);
         this.locationRepository = locationRepository;
         this.locationFactPublisher = locationFactPublisher;
     }
@@ -112,17 +112,20 @@ public class MobileUnitServiceImpl implements MobileUnitService {
 
     private MobileUnitResponse createMobileUnitInternal(MobileUnitRequest request) {
         String normalizedStatus = normalizeStatus(request.getStatus());
-        List<String> capabilityIds = nonNullList(request.getCapabilityIds());
+        List<String> serviceCapabilityCodes = nonNullList(request.getServiceCapabilityCodes());
         List<CoverageRuleRequest> coverageRules = nonNullList(request.getCoverageRules());
 
         validateCreateMobileUnitRequest(
-                normalizedStatus, request.getTravelBufferPolicyId(), capabilityIds, coverageRules);
+                normalizedStatus, request.getTravelBufferPolicyId(), serviceCapabilityCodes, coverageRules);
 
-        Set<UUID> resolvedCapabilityIds = resolveCapabilityIds(capabilityIds);
+        // CAP-325 D14: a unit's claim is catalog operation codes, validated against the replica the
+        // same way a bay's specialty claim is — one vocabulary for "what can this resource perform".
+        Set<String> validatedCodes =
+                new LinkedHashSet<>(serviceCapabilityCodeValidator.validate(serviceCapabilityCodes));
         validateDistanceTierRules(coverageRules);
         validateUnitNameUniqueness(request.getBaseLocationId(), request.getName());
 
-        MobileUnitEntity persisted = persistMobileUnitEntity(request, normalizedStatus, resolvedCapabilityIds);
+        MobileUnitEntity persisted = persistMobileUnitEntity(request, normalizedStatus, validatedCodes);
         if (!coverageRules.isEmpty()) {
             replaceCoverageRulesInternal(persisted.getId(), coverageRules);
         }
@@ -141,12 +144,12 @@ public class MobileUnitServiceImpl implements MobileUnitService {
     private void validateCreateMobileUnitRequest(
             String normalizedStatus,
             UUID travelBufferPolicyId,
-            List<String> capabilityIds,
+            List<String> serviceCapabilityCodes,
             List<CoverageRuleRequest> coverageRules) {
         if (STATUS_ACTIVE.equals(normalizedStatus)
-                && (travelBufferPolicyId == null || capabilityIds.isEmpty() || coverageRules.isEmpty())) {
+                && (travelBufferPolicyId == null || serviceCapabilityCodes.isEmpty() || coverageRules.isEmpty())) {
             throw new IllegalArgumentException(
-                    "ACTIVE mobile unit requires travelBufferPolicyId, capabilityIds, and coverageRules");
+                    "ACTIVE mobile unit requires travelBufferPolicyId, serviceCapabilityCodes, and coverageRules");
         }
 
         if (travelBufferPolicyId != null
@@ -173,7 +176,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
     }
 
     private MobileUnitEntity persistMobileUnitEntity(
-            MobileUnitRequest request, String normalizedStatus, Set<UUID> resolvedCapabilityIds) {
+            MobileUnitRequest request, String normalizedStatus, Set<String> serviceCapabilityCodes) {
         UUID baseLocationId = request.getBaseLocationId();
         MobileUnitEntity entity = MobileUnitEntity.builder()
                 .name(request.getName())
@@ -184,7 +187,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
                 .status(normalizedStatus)
                 .travelBufferPolicyId(request.getTravelBufferPolicyId())
                 .notes(request.getNotes())
-                .capabilityIds(resolvedCapabilityIds)
+                .serviceCapabilityCodes(serviceCapabilityCodes)
                 .build();
 
         try {
@@ -197,15 +200,16 @@ public class MobileUnitServiceImpl implements MobileUnitService {
     }
 
     /**
-     * Validates capability IDs against story #76 rules.
+     * Validates a unit's specialty claim: every value an active catalog operation code (CAP-325 D14).
      *
-     * @param capabilityIds capability IDs from request payload
+     * @param serviceCapabilityCodes codes from the request payload
      */
-    public void validateCapabilityIds(List<?> capabilityIds) {
-        if (capabilityIds == null) {
+    public void validateServiceCapabilityCodes(List<?> serviceCapabilityCodes) {
+        if (serviceCapabilityCodes == null) {
             return;
         }
-        resolveCapabilityIds(capabilityIds.stream().map(String::valueOf).toList());
+        serviceCapabilityCodeValidator.validate(
+                serviceCapabilityCodes.stream().map(String::valueOf).toList());
     }
 
     /**
@@ -302,6 +306,12 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         if (patch.containsKey(PATCH_KEY_TRAVEL_BUFFER_POLICY_ID)) {
             entity.setTravelBufferPolicyId(parseUuid(patch.get(PATCH_KEY_TRAVEL_BUFFER_POLICY_ID)));
         }
+        if (patch.containsKey(PATCH_KEY_SERVICE_CAPABILITY_CODES)) {
+            // Replace-set, like a bay's claim: the request is the whole truth, and an empty list is a
+            // unit that claims nothing — the way an incomplete unit is completed after creation.
+            entity.setServiceCapabilityCodes(new LinkedHashSet<>(serviceCapabilityCodeValidator.validate(
+                    stringList(patch.get(PATCH_KEY_SERVICE_CAPABILITY_CODES)))));
+        }
         entity.setUpdatedAt(Instant.now(clock));
 
         MobileUnitEntity saved;
@@ -336,8 +346,8 @@ public class MobileUnitServiceImpl implements MobileUnitService {
      *
      * <p>Coverage rules are removed first because {@code mobile_unit_coverage_rules} carries a
      * plain foreign key to {@code mobile_units} with no cascade, so deleting the unit while rules
-     * still reference it fails on the constraint. The {@code capabilityIds} element collection is
-     * owned by the entity, so Hibernate clears {@code mobile_unit_capabilities} itself.
+     * still reference it fails on the constraint. The {@code serviceCapabilityCodes} element
+     * collection is owned by the entity, so Hibernate clears it itself.
      *
      * <p>Standing a unit down is a status change via {@link #patch}, not a delete; consumers remove
      * the replica row unconditionally here.
@@ -469,15 +479,14 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rawCoverage =
                 (List<Map<String, Object>>) request.getOrDefault("coverageRules", Collections.emptyList());
-        @SuppressWarnings("unchecked")
-        List<Object> rawCapabilityIds = (List<Object>) request.getOrDefault("capabilityIds", Collections.emptyList());
+        List<String> rawServiceCapabilityCodes = stringList(request.get(PATCH_KEY_SERVICE_CAPABILITY_CODES));
         return MobileUnitRequest.builder()
                 .name((String) request.get("name"))
                 .baseLocationId(parseUuid(request.get("baseLocationId")))
                 .status(request.get(PATCH_KEY_STATUS) == null ? null : String.valueOf(request.get(PATCH_KEY_STATUS)))
                 .travelBufferPolicyId(parseUuid(request.get(PATCH_KEY_TRAVEL_BUFFER_POLICY_ID)))
                 .notes((String) request.get(PATCH_KEY_NOTES))
-                .capabilityIds(rawCapabilityIds.stream().map(String::valueOf).toList())
+                .serviceCapabilityCodes(rawServiceCapabilityCodes)
                 .coverageRules(
                         rawCoverage.stream().map(this::toCoverageRuleRequest).toList())
                 .build();
@@ -500,85 +509,11 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         return map;
     }
 
-    private Set<UUID> resolveCapabilityIds(List<String> capabilityIds) {
-        if (capabilityIds == null || capabilityIds.isEmpty()) {
-            return Set.of();
+    private static List<String> stringList(Object value) {
+        if (!(value instanceof List<?> values)) {
+            return List.of();
         }
-
-        CapabilityResolutionContext context = buildCapabilityResolutionContext(capabilityIds);
-        Set<UUID> resolvedIds = new LinkedHashSet<>();
-        resolvedIds.addAll(resolveCapabilityIdsByUuid(context.requestedIds, context.invalidValues));
-        resolvedIds.addAll(resolveCapabilityIdsByCode(context.requestedCodes, context.invalidValues));
-        assertNoInvalidCapabilityValues(context.invalidValues);
-        return resolvedIds;
-    }
-
-    private CapabilityResolutionContext buildCapabilityResolutionContext(List<String> capabilityIds) {
-        CapabilityResolutionContext context = new CapabilityResolutionContext();
-        List<String> normalizedValues = capabilityIds.stream()
-                .map(value -> value == null ? "" : value.trim())
-                .toList();
-        for (String value : normalizedValues) {
-            if (value.isBlank()) {
-                context.invalidValues.add("<blank>");
-                continue;
-            }
-            UUID parsedId = parseUuid(value);
-            if (parsedId != null) {
-                context.requestedIds.add(parsedId);
-            } else {
-                context.requestedCodes.put(value.toUpperCase(Locale.ROOT), null);
-            }
-        }
-        return context;
-    }
-
-    private Set<UUID> resolveCapabilityIdsByUuid(Set<UUID> requestedIds, Set<String> invalidValues) {
-        if (requestedIds.isEmpty()) {
-            return Set.of();
-        }
-        Set<UUID> foundIds = new LinkedHashSet<>();
-        for (ServiceLocationCapabilityEntity capability :
-                serviceLocationCapabilityRepository.findAllById(requestedIds)) {
-            foundIds.add(capability.getId());
-        }
-        Set<UUID> resolvedIds = new LinkedHashSet<>();
-        for (UUID requestedId : requestedIds) {
-            if (foundIds.contains(requestedId)) {
-                resolvedIds.add(requestedId);
-            } else {
-                invalidValues.add(requestedId.toString());
-            }
-        }
-        return resolvedIds;
-    }
-
-    private Set<UUID> resolveCapabilityIdsByCode(Map<String, UUID> requestedCodes, Set<String> invalidValues) {
-        if (requestedCodes.isEmpty()) {
-            return Set.of();
-        }
-        List<String> requestedCodeKeys = new ArrayList<>(requestedCodes.keySet());
-        for (ServiceLocationCapabilityEntity capability :
-                serviceLocationCapabilityRepository.findByCodeIn(requestedCodeKeys)) {
-            if (capability.getCode() != null) {
-                requestedCodes.put(capability.getCode().toUpperCase(Locale.ROOT), capability.getId());
-            }
-        }
-        Set<UUID> resolvedIds = new LinkedHashSet<>();
-        for (Map.Entry<String, UUID> entry : requestedCodes.entrySet()) {
-            if (entry.getValue() == null) {
-                invalidValues.add(entry.getKey());
-            } else {
-                resolvedIds.add(entry.getValue());
-            }
-        }
-        return resolvedIds;
-    }
-
-    private void assertNoInvalidCapabilityValues(Set<String> invalidValues) {
-        if (!invalidValues.isEmpty()) {
-            throw new IllegalArgumentException("Invalid capabilityIds: " + String.join(", ", invalidValues));
-        }
+        return values.stream().map(String::valueOf).toList();
     }
 
     private MobileUnitResponse toMobileUnitResponse(MobileUnitEntity entity) {
@@ -589,12 +524,10 @@ public class MobileUnitServiceImpl implements MobileUnitService {
                 .status(entity.getStatus())
                 .travelBufferPolicyId(entity.getTravelBufferPolicyId())
                 .notes(entity.getNotes())
-                .capabilityIds(
-                        entity.getCapabilityIds() == null
+                .serviceCapabilityCodes(
+                        entity.getServiceCapabilityCodes() == null
                                 ? List.of()
-                                : entity.getCapabilityIds().stream()
-                                        .map(UUID::toString)
-                                        .toList())
+                                : List.copyOf(entity.getServiceCapabilityCodes()))
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
@@ -637,12 +570,6 @@ public class MobileUnitServiceImpl implements MobileUnitService {
             return request.getMaxDistance();
         }
         return parseBigDecimal(entry);
-    }
-
-    private static final class CapabilityResolutionContext {
-        private final Set<String> invalidValues = new LinkedHashSet<>();
-        private final Set<UUID> requestedIds = new LinkedHashSet<>();
-        private final Map<String, UUID> requestedCodes = new LinkedHashMap<>();
     }
 
     private Integer parseInteger(Object value) {

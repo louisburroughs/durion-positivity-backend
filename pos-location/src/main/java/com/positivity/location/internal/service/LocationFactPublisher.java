@@ -534,7 +534,13 @@ public class LocationFactPublisher {
 
     private void publishMobileUnitFact(@NonNull OutboxEventWriter writer, @NonNull MobileUnitEntity mobileUnit) {
         MobileUnitUpdatedV1 payload = new MobileUnitUpdatedV1(
-                mobileUnit.getId(), mobileUnit.getBaseLocationId(), mobileUnit.getName(), mobileUnit.getStatus());
+                mobileUnit.getId(),
+                mobileUnit.getBaseLocationId(),
+                mobileUnit.getName(),
+                mobileUnit.getStatus(),
+                mobileUnit.getServiceCapabilityCodes() == null
+                        ? List.of()
+                        : List.copyOf(mobileUnit.getServiceCapabilityCodes()));
         publish(
                 writer,
                 MobileUnitUpdatedV1.EVENT_TYPE,
