@@ -163,7 +163,32 @@ roster, then `createStaffingAssignment` — employees and locations must load fi
 - The Flyway seed (`R__seed_people_operational_data.sql`) was deleted in #1554
   along with the location operational seed it referenced by fixed location UUID.
 
-### `shop-manager/` — nothing to seed
+### `shop-manager/` — `shops.csv`
+
+`shops.csv` gives each service centre its `shop` row, keyed on the location it
+belongs to (`locationCode` → the pos-location id, which the shop carries by
+convention). Loaded by the `@shops` API pack as one idempotent upsert per site,
+the `@site-defaults` shape, because there is no `SHOP` bulk-loader domain.
+
+It has no `R__seed_*` ancestor — and that is the point. `pos-shop-manager` gates
+every location-parameterised scheduling endpoint on this table:
+`getScheduleView` throws `LocationNotFoundException` when the requested day
+holds no appointment and `shopRepository.existsById` is false, and the dashboard
+and roster queries resolve a location the same way. `shop` is **not** a replica —
+`ExtLocationReplica` mirrors pos-location, but `shop` is the module's own
+scheduling configuration, and nothing in `src/main` ever writes it: no seed, no
+bulk-loader domain, no endpoint, no consumer. Since §5 left a fresh database
+with no demo data at all, no location has ever had a shop row, so the capacity
+calendar answers 404 for every site until this pack runs.
+
+The pack calls `PUT /shop-manager/shops/{locationId}`, added with it: the table
+had no writer of any kind before, so seeding it needed one. A Flyway seed was
+the alternative and is not available — §2 classifies a row in a scheduling
+table as exactly the tier 2 operational data that may not be a migration.
+
+Only the four sites with bays are shops. The mobile hub and corporate HQ have
+none and are deliberately absent: a shop row for them would advertise
+schedulable capacity that no bay backs.
 
 The former `mechanic-skills.csv` (23 skills across 7 technicians) is now
 `people/credentials.csv`: competence is the People domain's credential aggregate

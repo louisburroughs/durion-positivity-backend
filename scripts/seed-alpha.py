@@ -82,6 +82,7 @@ PACK_FILES = [
     ("security/role-permissions.csv", "SECURITY_ROLE_PERMISSION"),
     ("security/users.csv", "SECURITY_USER"),
     ("location/locations.csv", "LOCATION"),
+    ("shop-manager/shops.csv", "@shops"),
     ("location/storage-locations.csv", "STORAGE_LOCATION"),
     ("location/site-defaults.csv", "@site-defaults"),
     ("people/employees.csv", "PERSON"),
@@ -546,6 +547,50 @@ def run_mobile_units(gateway, relative_path, _location_id):
     return failures == 0
 
 
+def run_shops(gateway, relative_path, _location_id):
+    """API pack: give each service centre its pos-shop-manager shop record.
+
+    pos-shop-manager gates every location-parameterised scheduling endpoint on
+    its own `shop` table -- `getScheduleView` throws LocationNotFoundException
+    when the day holds no appointment and `shopRepository.existsById` is false,
+    and the dashboard and roster queries resolve the same way. `shop` is not a
+    replica: ExtLocationReplica mirrors pos-location, but `shop` is this
+    module's own scheduling configuration and nothing in the service ever
+    writes it. With no Flyway seed and no bulk-loader domain either, a fresh
+    database has no shop rows at all, so the capacity calendar answers 404 for
+    every location until this pack runs.
+
+    Runs after locations.csv, since the shop carries the pos-location id by
+    convention, and before anything that books work. PUT /shop-manager/shops/{id}
+    is an idempotent upsert keyed on that id, so re-runs converge -- the same
+    shape as @site-defaults. Only the sites with bays are listed: a shop row for
+    a warehouse would advertise capacity no bay backs."""
+    location_ids = location_id_map(gateway)
+    configured, failures = 0, 0
+
+    for row in read_fixture_rows(relative_path):
+        code = row["locationCode"]
+        site_id = location_ids.get(code)
+        if site_id is None:
+            print(f"  WARN: shop for {code}: location not found")
+            failures += 1
+            continue
+
+        status_code, _ = gateway.put_json(
+            f"/shop-manager/shops/{site_id}",
+            {"name": row["name"], "timezone": row["timezone"]},
+            allow_error=True,
+        )
+        if 200 <= status_code < 300:
+            configured += 1
+        else:
+            print(f"  WARN: shop for {code}: HTTP {status_code}")
+            failures += 1
+
+    print(f"  shops: configured={configured} failures={failures}")
+    return failures == 0
+
+
 def run_service_skill_requirements(gateway, relative_path, _location_id):
     """API pack: declare each service's skill requirement (CAP-329, spec D8/D13).
 
@@ -611,6 +656,7 @@ def run_service_skill_requirements(gateway, relative_path, _location_id):
 
 
 API_PACKS = {
+    "@shops": run_shops,
     "@site-defaults": run_site_defaults,
     "@mobile-units": run_mobile_units,
     "@service-skill-requirements": run_service_skill_requirements,
