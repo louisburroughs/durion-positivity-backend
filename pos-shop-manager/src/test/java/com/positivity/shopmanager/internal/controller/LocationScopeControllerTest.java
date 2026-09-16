@@ -20,6 +20,8 @@ import com.positivity.security.common.LocationAncestorResolver;
 import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.LocationScopeAutoConfiguration;
 import com.positivity.security.common.LocationScopeDeniedException;
+import com.positivity.shopmanager.internal.dto.AppointmentCreation;
+import com.positivity.shopmanager.internal.exception.KeylessDuplicateReplayException;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
 import com.positivity.shopmanager.internal.dto.PersonDTO;
 import com.positivity.shopmanager.internal.dto.ScheduleViewRequest;
@@ -243,7 +245,34 @@ class LocationScopeControllerTest {
 
         private void stubCreate(UUID locationId) {
             when(appointmentsService.createAppointment(any(), isNull(), isNull()))
-                    .thenReturn(appointmentAt(locationId));
+                    .thenReturn(AppointmentCreation.created(appointmentAt(locationId)));
+        }
+
+        @Test
+        @DisplayName("a replay — Idempotency-Key or keyless exact duplicate — answers 200, not 201 (CAP-326)")
+        void replayAnswersOk() throws Exception {
+            when(appointmentsService.createAppointment(any(), isNull(), isNull()))
+                    .thenReturn(AppointmentCreation.replayed(appointmentAt(SHOP_A)));
+            asScoped(ShopPermissions.APPOINTMENTS_CREATE);
+
+            mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(createBody(SHOP_A)))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("a keyless double-submit that lost the race to its twin is loaded afresh and answers 200")
+        void racedKeylessDuplicateReplaysTheTwin() throws Exception {
+            UUID twinId = UUID.fromString("01960003-0000-7000-8000-000000000777");
+            when(appointmentsService.createAppointment(any(), isNull(), isNull()))
+                    .thenThrow(new KeylessDuplicateReplayException(twinId));
+            AppointmentResponse twin = appointmentAt(SHOP_A);
+            twin.setAppointmentId(twinId);
+            when(appointmentsService.getById(eq(twinId.toString()), isNull())).thenReturn(twin);
+            asScoped(ShopPermissions.APPOINTMENTS_CREATE);
+
+            mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(createBody(SHOP_A)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.appointmentId").value(twinId.toString()));
         }
 
         @Test

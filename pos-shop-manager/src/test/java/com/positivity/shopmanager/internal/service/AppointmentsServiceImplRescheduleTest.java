@@ -76,6 +76,11 @@ class AppointmentsServiceImplRescheduleTest {
     private static final Instant FIXED_NOW = Instant.parse("2026-03-01T12:00:00Z");
     private static final UUID APPOINTMENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
+    private final SchedulingConflictEvaluator conflictEvaluator =
+            org.mockito.Mockito.mock(SchedulingConflictEvaluator.class);
+    private final SchedulingConflictRecorder conflictRecorder =
+            org.mockito.Mockito.mock(SchedulingConflictRecorder.class);
+
     @BeforeEach
     void setUp() {
         appointmentsService = new AppointmentsServiceImpl(
@@ -92,7 +97,9 @@ class AppointmentsServiceImplRescheduleTest {
                 sourceEligibilityService,
                 mock(ExtPersonReplicaRepository.class),
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
-                mock(WorkOrderAppointmentMappingRepository.class));
+                mock(WorkOrderAppointmentMappingRepository.class),
+                conflictEvaluator,
+                conflictRecorder);
     }
 
     @Test

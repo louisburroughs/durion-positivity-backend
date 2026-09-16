@@ -24,17 +24,6 @@ class InternalServiceImplementationsTest {
     }
 
     @Test
-    void conflictDetectionService_returnsExpectedDefaults() {
-        ConflictDetectionServiceImpl service = new ConflictDetectionServiceImpl();
-
-        service.detectConflicts(null, UUID.fromString("00000000-0000-0000-0000-000000000001"));
-
-        assertTrue(service.isWithinOperatingHours("FAC-1", "start", "end", "UTC"));
-        assertTrue(service.checkMechanicAvailability("FAC-1", "start", "end").isEmpty());
-        assertTrue(service.checkBayAvailability("FAC-1", "start", "end").isEmpty());
-    }
-
-    @Test
     void appointmentLoadService_returnsCreateModelAndUtcTimeZone() {
         AppointmentLoadServiceImpl service = new AppointmentLoadServiceImpl();
         UUID facilityId = UUID.fromString("00000000-0000-0000-0000-000000000001");

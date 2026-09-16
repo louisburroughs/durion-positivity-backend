@@ -3,7 +3,9 @@ package com.positivity.shopmanager.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
+import com.positivity.shopmanager.internal.dto.AppointmentCreation;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
+import com.positivity.shopmanager.internal.exception.KeylessDuplicateReplayException;
 import com.positivity.shopmanager.internal.dto.CancelAppointmentRequest;
 import com.positivity.shopmanager.internal.dto.RescheduleAppointmentRequest;
 import com.positivity.shopmanager.internal.security.LocationScopeGuard;
@@ -98,9 +100,13 @@ public class AppointmentsController {
                     """)
     @ApiResponse(responseCode = "201", description = "Appointment created successfully.")
     @ApiResponse(
+            responseCode = "200",
+            description = "Replay of an existing appointment: a repeated Idempotency-Key, or an exact keyless"
+                    + " resubmission of the same booking (CAP-326). No new appointment was created.")
+    @ApiResponse(
             responseCode = "400",
             description =
-                    "Validation or conflict error — requested slot is unavailable, duplicate source appointment, or request fields are invalid.",
+                    "Validation error — duplicate source appointment, or request fields are invalid.",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
@@ -112,7 +118,8 @@ public class AppointmentsController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Vehicle does not belong to the supplied customer.",
+            description = "Scheduling conflict — a HARD rule fired (DECISION-SHOPMGMT-002 envelope listing every rule"
+                    + " that fired, code verbatim) — or the vehicle does not belong to the supplied customer.",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -164,7 +171,20 @@ public class AppointmentsController {
         // every caller; the scope gate only ever sees a well-formed id (ADR-0061 §3, #1872).
         LocationScopeGuard.requireAny(
                 request.getLocationId(), ShopPermissions.APPOINTMENTS_CREATE, ShopPermissions.SCHEDULE_EDIT);
-        AppointmentResponse response = appointmentsService.createAppointment(request, idempotencyKey, correlationId);
+        AppointmentCreation creation;
+        try {
+            creation = appointmentsService.createAppointment(request, idempotencyKey, correlationId);
+        } catch (KeylessDuplicateReplayException raced) {
+            // An exact keyless double-submit lost the race to its twin (CAP-326, spec D17 item 3):
+            // the booking transaction is gone, so the twin is loaded afresh and replayed.
+            return ResponseEntity.ok(
+                    appointmentsService.getById(raced.getExistingAppointmentId().toString(), correlationId));
+        }
+        AppointmentResponse response = creation.appointment();
+        if (creation.replayed()) {
+            // Idempotency-Key or keyless exact duplicate: the existing appointment, not a new one.
+            return ResponseEntity.ok(response);
+        }
         return ResponseEntity.created(ServletUriComponentsBuilder.fromCurrentRequest()
                         .path("/{appointmentId}")
                         .buildAndExpand(response.getAppointmentId())

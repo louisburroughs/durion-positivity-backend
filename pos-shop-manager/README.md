@@ -4,10 +4,10 @@ Shop operations service for the Durion Positivity ETSMS platform. Manages shop a
 
 ## Responsibilities
 
-- Create and manage service appointments with scheduling conflict detection
+- Create and manage service appointments, refusing HARD scheduling conflicts and warning on SOFT ones at submit time (DECISION-SHOPMGMT-002, CAP-326)
 - Schedule bays and mobile units for appointments
 - Track mechanic availability and assign technicians to appointments
-- Resolve scheduling conflicts with override support
+- Record manager overrides of SOFT scheduling conflicts (`shop:conflict:override`); a HARD conflict is never overridable
 - Provide workorder operational context (bay, mechanic, vehicle, customer details)
 - Serve the aggregate shop manager dashboard for a location in a single read
 - Process workorder status events to update scheduling state
@@ -17,7 +17,7 @@ Shop operations service for the Durion Positivity ETSMS platform. Manages shop a
 ## Key Classes
 
 - `AppointmentsService` — appointment lifecycle (create, reschedule, cancel)
-- `ConflictDetectionService` — checks for overlapping bay/mechanic/mobile unit bookings
+- `SchedulingConflictEvaluator` — evaluates DECISION-SHOPMGMT-002's rules at create and reschedule (HOURS, BAY, MECHANIC, CAPACITY); `BAY_DOUBLE_BOOKED` is enforced by an exclusion constraint
 - `ConflictOverrideService` — records a manager's override of SOFT scheduling conflicts (`shop:conflict:override`; HARD is never overridable)
 - `MechanicAvailabilityService` — evaluates technician availability windows
 - `WorkorderOperationalContextService` — assembles the full operational context for a workorder
@@ -26,9 +26,18 @@ Shop operations service for the Durion Positivity ETSMS platform. Manages shop a
 
 ## API Endpoints
 
-- `POST /v1/appointments` — create an appointment
+- `POST /v1/appointments` — create an appointment. `201` with the new appointment; `200` when the
+  request replays one that already exists (a repeated `Idempotency-Key`, or an exact keyless
+  resubmission of the same booking); `409` with the DECISION-SHOPMGMT-002 envelope when a HARD rule
+  fires (`FACILITY_CLOSED`, `OUTSIDE_OPERATING_HOURS`, `BAY_DOUBLE_BOOKED`, `MECHANIC_UNAVAILABLE`),
+  listing every rule that fired with its code verbatim. SOFT rules (`FACILITY_NEAR_CAPACITY`) book
+  and appear on the response as `conflicts[]`, each overridable until a manager overrides it.
+- `POST /v1/appointments/{appointmentId}/conflict-override` — a manager accepts SOFT conflicts by id
+  (`{conflictIds, overrideReason}`); requires `shop:conflict:override` and the appointment's location
+  in scope. `400` for a conflict not recorded against the appointment, `409` for a HARD one (envelope,
+  nothing written) or one already overridden (`CONFLICT_ALREADY_OVERRIDDEN`).
 - `GET /v1/appointments/{appointmentId}` — retrieve an appointment
-- `PUT /v1/appointments/{appointmentId}/reschedule` — reschedule an appointment
+- `PUT /v1/appointments/{appointmentId}/reschedule` — reschedule an appointment; the same rules as creation apply, and the appointment's own slot does not count against it
 - `DELETE /v1/appointments/{appointmentId}/cancel` — cancel an appointment
 - `GET /v1/schedules/view` — shop schedule view
 - `GET /v1/bays` / `GET /v1/{locationId}/bays/{bayId}` — retrieve bays
@@ -50,6 +59,30 @@ and defaults to that same ordering.
 Both emit audit events registered in `internal/config/EventTypes` —
 `SHOPMGR_MECHANIC_ROSTER_LIST` and `SHOPMGR_LOCATION_TECHNICIAN_LIST`, each with
 the `search` latency preset.
+
+## Scheduling conflicts (CAP-326)
+
+The conflict model is DECISION-SHOPMGMT-002's, persisted: `conflict_rule` is a platform-global
+catalog of eight rules whose `code` is the API reason code verbatim (one namespace, no mapping
+table); `scheduling_conflict` records every rule that fired against a booking attempt, with
+`appointment_id` null for a refused attempt; `conflict_override` is a manager's immutable
+acceptance of one SOFT conflict, single-actor approved. The record's audit — HARD conflicts with
+overrides, which should be zero — is a join and runs.
+
+`SchedulingConflictEvaluator` runs at create and reschedule in the order HOURS, BAY, MECHANIC,
+CAPACITY, and stops at the first HOURS refusal so a closed day is answered as closed, never as
+full. Hours never published, an unknown timezone or no location replica row mean the HOURS rules
+do not fire and a WARN is logged — an unknown fact is not a confirmed closure. The two SKILL rules
+and `MECHANIC_OVERTIME` are seeded but not evaluated until CAP-328 supplies credentials and
+timekeeping supplies hours.
+
+`BAY_DOUBLE_BOOKED` is enforced by the database: `appointment_resource_no_overlap` (V8) is an
+exclusion constraint on `(tenant_id, resource_id, tstzrange(start_at, end_at, '[)'))` over the
+statuses in `AppointmentStatus.holdingAResource()`. The evaluator's pre-check is reporting; the
+constraint is what makes two concurrent bookings of one bay yield exactly one appointment. A
+refusal (`23P01`) is recorded as a `BAY_DOUBLE_BOOKED` conflict on a fresh connection by
+`SchedulingConflictRecorder` — unless the refused insert was an exact keyless double-submit of the
+appointment that won, in which case the winner is replayed with `200`.
 
 ## Shop dashboard (`GET /v1/shop-dashboard`)
 

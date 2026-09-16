@@ -8,6 +8,13 @@ import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
+import com.positivity.shopmanager.internal.dto.AppointmentCreation;
+import com.positivity.shopmanager.internal.dto.ConflictResponse;
+import com.positivity.shopmanager.internal.exception.KeylessDuplicateReplayException;
+import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
+import com.positivity.shopmanager.internal.service.SchedulingConflictEvaluator.BookingAttempt;
+import com.positivity.shopmanager.internal.service.SchedulingConflictEvaluator.DetectedConflict;
+import org.springframework.dao.DataIntegrityViolationException;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
 import com.positivity.shopmanager.internal.dto.CancelAppointmentRequest;
 import com.positivity.shopmanager.internal.dto.RescheduleAppointmentRequest;
@@ -98,6 +105,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
     private final Clock clock;
     private final WorkOrderAppointmentMappingRepository workOrderAppointmentMappingRepository;
+    private final SchedulingConflictEvaluator conflictEvaluator;
+    private final SchedulingConflictRecorder conflictRecorder;
 
     /**
      * Creates an appointment from an Estimate or Workorder.
@@ -123,7 +132,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      */
     @Override
     @Transactional
-    public AppointmentResponse createAppointment(
+    public AppointmentCreation createAppointment(
             @NonNull AppointmentCreateRequest request, String idempotencyKey, UUID correlationId) {
         UUID normalizedCorrelationId = normalizeCorrelationId(correlationId);
         String normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
@@ -140,7 +149,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
 
         Optional<AppointmentResponse> idempotentDuplicate = findIdempotentDuplicate(normalizedIdempotencyKey, request);
         if (idempotentDuplicate.isPresent()) {
-            return idempotentDuplicate.get();
+            return AppointmentCreation.replayed(idempotentDuplicate.get());
         }
 
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
@@ -152,14 +161,81 @@ public class AppointmentsServiceImpl implements AppointmentsService {
 
         // Source eligibility validation (CAP-249 Story #12)
         validateSourceEligibility(request);
-        rejectIfSlotConflicts(request);
+
+        // A keyless exact resubmission replays the appointment it duplicates rather than booking a
+        // second one (spec D17 item 3, DECISION-SHOPMGMT-014): not a new row, not a 409.
+        Optional<Appointment> keylessDuplicate = conflictRecorder.findKeylessDuplicate(request);
+        if (keylessDuplicate.isPresent()) {
+            return AppointmentCreation.replayed(toResponse(keylessDuplicate.get()));
+        }
+
+        // The submit-time tier (DECISION-SHOPMGMT-002/-011, CAP-326): HARD refuses, SOFT warns and allows.
+        BookingAttempt attempt = new BookingAttempt(
+                request.getLocationId(), request.getResourceId(), request.getStartAt(), request.getEndAt(), null);
+        List<DetectedConflict> conflicts = conflictEvaluator.evaluate(attempt);
+        refuseIfHard(attempt, conflicts);
 
         Appointment saved =
                 persistAppointment(request, actor, normalizedIdempotencyKey, customerSnapshot, vehicleSnapshot);
+        flushOrRefuseOverlap(attempt, request);
+        conflictRecorder.recordAccepted(saved, conflicts);
         saveServiceRequests(saved, request.getServiceRequestIds());
         publishAppointmentCreatedEvents(saved);
 
-        return toResponse(saved);
+        return AppointmentCreation.created(toResponse(saved));
+    }
+
+    /** HARD blocks: the refusal is recorded on its own connection, then the booking is refused. */
+    private void refuseIfHard(BookingAttempt attempt, List<DetectedConflict> conflicts) {
+        if (conflicts.stream().noneMatch(DetectedConflict::isHard)) {
+            return;
+        }
+        conflictRecorder.recordRefused(attempt, conflicts);
+        throw new SchedulingConflictException(conflictEnvelope(conflicts));
+    }
+
+    /**
+     * Sends the pending INSERT or UPDATE to PostgreSQL so {@code appointment_resource_no_overlap}
+     * (V8) answers now, inside this method, rather than at commit. A refusal aborts this
+     * transaction, so everything after it runs on the recorder's fresh connection: first the
+     * re-query that tells an exact keyless double-submit (replay) from a real double-booking, then
+     * the BAY_DOUBLE_BOOKED record. Anything that is not the overlap constraint is rethrown as is.
+     */
+    private void flushOrRefuseOverlap(BookingAttempt attempt, @Nullable AppointmentCreateRequest request) {
+        try {
+            appointmentRepository.flush();
+        } catch (DataIntegrityViolationException violation) {
+            if (!ResourceOverlapViolation.matches(violation)) {
+                throw violation;
+            }
+            if (request != null) {
+                Optional<Appointment> raced = conflictRecorder.findKeylessDuplicate(request);
+                if (raced.isPresent()) {
+                    throw new KeylessDuplicateReplayException(raced.get().getAppointmentId());
+                }
+            }
+            DetectedConflict overlap = conflictRecorder.recordRefusedOverlap(attempt);
+            throw new SchedulingConflictException(conflictEnvelope(List.of(overlap)));
+        }
+    }
+
+    /** DECISION-SHOPMGMT-002's envelope: every conflict that fired, HARD and SOFT, with the rule code verbatim. */
+    private ConflictResponse conflictEnvelope(List<DetectedConflict> conflicts) {
+        long hard = conflicts.stream().filter(DetectedConflict::isHard).count();
+        List<ConflictResponse.Conflict> views = conflicts.stream()
+                .map(conflict -> new ConflictResponse.Conflict(
+                        conflict.severity().name(),
+                        conflict.code(),
+                        conflict.detail(),
+                        conflict.severity().isOverridable(),
+                        conflict.resourceId()))
+                .toList();
+        return new ConflictResponse(
+                "SCHEDULING_CONFLICT",
+                hard + " HARD scheduling conflict(s) block this booking",
+                null,
+                Instant.now(clock),
+                views);
     }
 
     private void validateServiceRequestIdsPresent(List<UUID> serviceRequestIds) {
@@ -224,38 +300,6 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 throw new AppointmentValidationException(
                         "No eligibility validation defined for sourceType " + request.getSourceType());
         }
-    }
-
-    private void rejectIfSlotConflicts(@NonNull AppointmentCreateRequest request) {
-        List<Appointment> conflicts = findConflictingAppointments(request);
-        if (!conflicts.isEmpty()) {
-            throw new AppointmentValidationException(
-                    "Requested slot is already booked. " + conflicts.size() + " conflicting appointment(s) found.");
-        }
-    }
-
-    private List<Appointment> findConflictingAppointments(@NonNull AppointmentCreateRequest request) {
-        return appointmentRepository
-                .findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
-                        request.getLocationId(), request.getEndAt(), request.getStartAt())
-                .stream()
-                .filter(existing -> Objects.equals(existing.getResourceId(), request.getResourceId()))
-                .filter(existing -> existing.getStatus() == AppointmentStatus.SCHEDULED)
-                .filter(existing -> differsFromRequestedSlot(existing, request))
-                .toList();
-    }
-
-    /**
-     * An existing SCHEDULED appointment on the same resource/time window is only
-     * a real conflict if it differs from the request in customer, vehicle, start,
-     * or end — an exact duplicate (e.g. a resubmission without an
-     * Idempotency-Key) is not flagged.
-     */
-    private boolean differsFromRequestedSlot(Appointment existing, AppointmentCreateRequest request) {
-        return !Objects.equals(existing.getCrmCustomerId(), request.getCrmCustomerId())
-                || !Objects.equals(existing.getCrmVehicleId(), request.getCrmVehicleId())
-                || !Objects.equals(existing.getStartAt(), request.getStartAt())
-                || !Objects.equals(existing.getEndAt(), request.getEndAt());
     }
 
     private Appointment persistAppointment(
@@ -370,9 +414,22 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         Instant previousStartAt = appointment.getStartAt();
         Instant previousEndAt = appointment.getEndAt();
 
+        // Same rules as creation (CAP-326): the appointment's own current slot does not count
+        // against it, and the exclusion constraint checks the UPDATE exactly as it would an INSERT.
+        BookingAttempt attempt = new BookingAttempt(
+                appointment.getLocationId(),
+                appointment.getResourceId(),
+                request.getNewStartAt(),
+                request.getNewEndAt(),
+                appointmentId);
+        List<DetectedConflict> conflicts = conflictEvaluator.evaluate(attempt);
+        refuseIfHard(attempt, conflicts);
+
         appointment.setStartAt(request.getNewStartAt());
         appointment.setEndAt(request.getNewEndAt());
         Appointment saved = appointmentRepository.save(appointment);
+        flushOrRefuseOverlap(attempt, null);
+        conflictRecorder.recordAccepted(saved, conflicts);
 
         String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         Instant rescheduledAt = Instant.now(clock);
@@ -1099,6 +1156,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     private AppointmentResponse toResponse(Appointment appointment) {
         AppointmentResponse response = new AppointmentResponse();
         response.setAppointmentId(appointment.getAppointmentId());
+        response.setConflicts(conflictRecorder.viewsFor(appointment.getAppointmentId()));
         response.setStatus(appointment.getStatus().name());
         response.setLocationId(appointment.getLocationId());
         response.setResourceId(appointment.getResourceId());

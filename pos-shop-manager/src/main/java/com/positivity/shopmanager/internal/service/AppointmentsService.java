@@ -2,6 +2,7 @@ package com.positivity.shopmanager.internal.service;
 
 import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
+import com.positivity.shopmanager.internal.dto.AppointmentCreation;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
 import com.positivity.shopmanager.internal.dto.CancelAppointmentRequest;
 import com.positivity.shopmanager.internal.dto.RescheduleAppointmentRequest;
@@ -34,7 +35,7 @@ public interface AppointmentsService {
      *                                                                                   detection
      *                                                                                   (409)
      */
-    AppointmentResponse createAppointment(
+    AppointmentCreation createAppointment(
             @NonNull AppointmentCreateRequest request, String idempotencyKey, UUID correlationId);
 
     AppointmentResponse rescheduleAppointment(

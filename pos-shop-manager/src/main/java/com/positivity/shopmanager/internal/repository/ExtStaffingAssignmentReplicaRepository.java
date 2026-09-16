@@ -12,4 +12,7 @@ public interface ExtStaffingAssignmentReplicaRepository extends JpaRepository<Ex
     List<ExtStaffingAssignmentReplica> findByPersonIdAndStatus(@NonNull UUID personId, @NonNull String status);
 
     boolean existsByLocationIdAndStatus(@NonNull UUID locationId, @NonNull String status);
+
+    @NonNull
+    List<ExtStaffingAssignmentReplica> findByLocationIdAndStatus(@NonNull UUID locationId, @NonNull String status);
 }

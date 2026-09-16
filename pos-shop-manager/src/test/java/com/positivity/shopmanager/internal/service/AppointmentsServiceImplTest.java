@@ -94,6 +94,11 @@ class AppointmentsServiceImplTest {
 
     private AppointmentsServiceImpl appointmentsService;
 
+    private final SchedulingConflictEvaluator conflictEvaluator =
+            org.mockito.Mockito.mock(SchedulingConflictEvaluator.class);
+    private final SchedulingConflictRecorder conflictRecorder =
+            org.mockito.Mockito.mock(SchedulingConflictRecorder.class);
+
     @BeforeEach
     void setUp() {
         appointmentsService = new AppointmentsServiceImpl(
@@ -110,7 +115,9 @@ class AppointmentsServiceImplTest {
                 sourceEligibilityService,
                 mock(ExtPersonReplicaRepository.class),
                 Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC),
-                workOrderAppointmentMappingRepository);
+                workOrderAppointmentMappingRepository,
+                conflictEvaluator,
+                conflictRecorder);
     }
 
     @Test
@@ -392,7 +399,7 @@ class AppointmentsServiceImplTest {
                         .serviceEntityId(serviceRequestId)
                         .build()));
 
-        AppointmentResponse response = appointmentsService.createAppointment(request, null, null);
+        AppointmentResponse response = appointmentsService.createAppointment(request, null, null).appointment();
 
         assertEquals(appointmentId, response.getAppointmentId());
         assertEquals(AppointmentStatus.SCHEDULED.name(), response.getStatus());
@@ -476,7 +483,7 @@ class AppointmentsServiceImplTest {
                         .serviceEntityId(serviceRequestId)
                         .build()));
 
-        AppointmentResponse response = appointmentsService.createAppointment(request, idempotencyKey, null);
+        AppointmentResponse response = appointmentsService.createAppointment(request, idempotencyKey, null).appointment();
 
         assertEquals(appointmentId, response.getAppointmentId());
         verify(appointmentRepository, never()).save(any(Appointment.class));

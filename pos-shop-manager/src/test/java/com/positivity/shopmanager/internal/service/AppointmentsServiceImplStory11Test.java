@@ -99,6 +99,11 @@ class AppointmentsServiceImplStory11Test {
     private static final Instant NEW_START = Instant.parse("2026-03-11T10:00:00Z");
     private static final Instant NEW_END = Instant.parse("2026-03-11T11:00:00Z");
 
+    private final SchedulingConflictEvaluator conflictEvaluator =
+            org.mockito.Mockito.mock(SchedulingConflictEvaluator.class);
+    private final SchedulingConflictRecorder conflictRecorder =
+            org.mockito.Mockito.mock(SchedulingConflictRecorder.class);
+
     @BeforeEach
     void setUp() {
         appointmentsService = new AppointmentsServiceImpl(
@@ -115,7 +120,9 @@ class AppointmentsServiceImplStory11Test {
                 sourceEligibilityService,
                 mock(ExtPersonReplicaRepository.class),
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
-                mock(WorkOrderAppointmentMappingRepository.class));
+                mock(WorkOrderAppointmentMappingRepository.class),
+                conflictEvaluator,
+                conflictRecorder);
     }
 
     // ─── AC: Expanded eligibility — allowed statuses ──────────────────────────
