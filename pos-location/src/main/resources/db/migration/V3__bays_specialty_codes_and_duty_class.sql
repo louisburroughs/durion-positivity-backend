@@ -22,7 +22,7 @@ UPDATE public.bays SET service_capability_codes = NULL;
 
 ALTER TABLE public.bays DROP COLUMN skill_requirement_ids;
 
-ALTER TABLE public.bays ADD COLUMN max_duty_class smallint;
+ALTER TABLE public.bays ADD COLUMN max_duty_class integer;
 ALTER TABLE public.bays
     ADD CONSTRAINT bays_max_duty_class_check
     CHECK (max_duty_class IS NULL OR max_duty_class BETWEEN 1 AND 8);

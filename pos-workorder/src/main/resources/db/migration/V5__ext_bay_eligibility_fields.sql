@@ -10,7 +10,7 @@
 ALTER TABLE public.ext_bay ADD COLUMN bay_type character varying(50);
 ALTER TABLE public.ext_bay ADD COLUMN service_capability_codes text[];
 ALTER TABLE public.ext_bay ADD COLUMN max_concurrent_vehicles integer;
-ALTER TABLE public.ext_bay ADD COLUMN max_duty_class smallint;
+ALTER TABLE public.ext_bay ADD COLUMN max_duty_class integer;
 ALTER TABLE public.ext_bay
     ADD CONSTRAINT ext_bay_max_duty_class_check
     CHECK (max_duty_class IS NULL OR max_duty_class BETWEEN 1 AND 8);

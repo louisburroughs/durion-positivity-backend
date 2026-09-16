@@ -9,7 +9,7 @@
 -- OPERATOR_SET; DECODED is reserved for the decode that arrives once real VINs exist. The source
 -- is stored so an operator's correction is never silently mistaken for a decode.
 
-ALTER TABLE public.vehicle_records ADD COLUMN gvwr_class smallint;
+ALTER TABLE public.vehicle_records ADD COLUMN gvwr_class integer;
 ALTER TABLE public.vehicle_records ADD COLUMN gvwr_class_source character varying(16);
 
 ALTER TABLE public.vehicle_records

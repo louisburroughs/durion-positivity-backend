@@ -4,7 +4,7 @@
 -- additively within schema version 1; rows read NULL until the owner republishes or the facts are
 -- replayed, and NULL means "not determined or not yet published", never a class.
 
-ALTER TABLE public.ext_vehicle ADD COLUMN gvwr_class smallint;
+ALTER TABLE public.ext_vehicle ADD COLUMN gvwr_class integer;
 ALTER TABLE public.ext_vehicle
     ADD CONSTRAINT ext_vehicle_gvwr_class_check
     CHECK (gvwr_class IS NULL OR gvwr_class BETWEEN 1 AND 8);

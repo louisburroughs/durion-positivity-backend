@@ -29,8 +29,8 @@ CREATE TABLE public.ext_catalog_service_skill (
     service_id uuid NOT NULL,
     skill_id uuid NOT NULL,
     skill_code character varying(64) NOT NULL,
-    min_gvwr_class smallint,
-    max_gvwr_class smallint,
+    min_gvwr_class integer,
+    max_gvwr_class integer,
     CONSTRAINT ext_catalog_service_skill_pkey PRIMARY KEY (id),
     CONSTRAINT ext_catalog_service_skill_tenant_key UNIQUE (tenant_id, id),
     CONSTRAINT ext_catalog_service_skill_service_fkey
