@@ -93,7 +93,8 @@ CREATE INDEX idx_rag_preload_document_id ON mcp_rag_preload_record (document_id,
 - `pos-mcp-server/src/main/java/com/positivity/mcp/internal/service/RagPreloadRunner.java` (NEW ApplicationRunner)
 - `pos-mcp-server/src/main/resources/rag/de-bookkeeping-rag.md` (runtime corpus resource; conceptual documentation source now in
   [durion](https://github.com/louisburroughs/durion/blob/master/domains/accounting/reference/de-bookkeeping-rag.md), reviewed separately before any corpus update)
-- `pos-mcp-server/src/main/resources/rag/inv-cntrl-rag.md` (COPY from pos-inventory/docs/)
+- `pos-mcp-server/src/main/resources/rag/inv-cntrl-rag.md` (copy from
+  `durion/domains/inventory/reference/inv-cntrl-rag.md`)
 
 **Service interface:**
 

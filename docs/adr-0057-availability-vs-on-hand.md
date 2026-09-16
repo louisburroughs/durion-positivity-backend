@@ -16,7 +16,7 @@ availability, that permission grants nothing, and the technician cannot read ava
 The bug is a symptom. The underlying problem is that the platform never wrote down what
 *availability* means as distinct from *on-hand*, so the two permission families drifted into meaning
 whatever the endpoint that happened to be written last needed. The computation has been defined since
-ADR-0001 (`pos-inventory/docs/inventory-ledger-atp.md`); the *authority* over each has not.
+ADR-0001 (`durion/domains/inventory/inventory-ledger-atp.md`); the *authority* over each has not.
 
 Two facts about the domain force the distinction to be real rather than cosmetic:
 
@@ -162,7 +162,7 @@ seed change and leaves the definition clean.
 
 ## References
 
-- `pos-inventory/docs/inventory-ledger-atp.md` — the ATP and forecast computation this ADR gates
+- `durion/domains/inventory/inventory-ledger-atp.md` — the ATP and forecast computation this ADR gates
 - ADR-0001 — inventory ledger ATP computation (soft reservations are not subtracted by `by-sku`)
 - `docs/OPERATIONS_RUNBOOK.md` — permission registration
 - Issue #1494 — `inventory:availability:read` granted but enforced nowhere
