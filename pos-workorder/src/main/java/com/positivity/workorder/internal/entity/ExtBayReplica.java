@@ -68,7 +68,7 @@ public class ExtBayReplica extends TenantScopedEntity {
      * publisher predates the field and nothing may be inferred; never read NULL as "none".
      */
     @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(name = "service_capability_codes", columnDefinition = "text[]")
+    @Column(name = "service_capability_codes")
     private List<String> serviceCapabilityCodes;
 
     /** How many vehicles the bay physically holds; NULL until the publisher emits it. */

@@ -50,16 +50,15 @@ public class ExtBayReplica extends TenantScopedEntity {
     @Column(name = "name")
     private String name;
 
-    /** Owner's bay type discriminator, stored verbatim (#2023/#2021). */
+    /**
+     * Owner's bay type discriminator, stored verbatim (#2023/#2021). Display-only for eligibility:
+     * the two fields below carry what the bay can take (CAP-325 D5, D14).
+     */
     @Column(name = "bay_type", length = 64)
     private String bayType;
 
     @Column(name = "active", nullable = false)
     private boolean active;
-
-    /** Owner's bay type discriminator. Display-only once the two fields below exist (CAP-325 D5). */
-    @Column(name = "bay_type", length = 50)
-    private String bayType;
 
     /**
      * Catalog operation codes this bay type is the only one able to perform (CAP-325 D14). Empty
@@ -67,7 +66,7 @@ public class ExtBayReplica extends TenantScopedEntity {
      * publisher predates the field and nothing may be inferred; never read NULL as "none".
      */
     @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(name = "service_capability_codes", columnDefinition = "text[]")
+    @Column(name = "service_capability_codes")
     private List<String> serviceCapabilityCodes;
 
     /** How many vehicles the bay physically holds; NULL until the publisher emits it. */
