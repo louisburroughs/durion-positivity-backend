@@ -12,7 +12,6 @@
     "nlti:request:read": "granted broadly, enforced nowhere: no NLTI status/read endpoint exists yet -- see §7 task 5.",
     "people:skill:assign": "granted to ADMIN, enforced nowhere: no skill feature exists anywhere in pos-people -- see §7 task 5.",
     "people:skill:edit": "granted to ADMIN, enforced nowhere: no skill feature exists anywhere in pos-people -- see §7 task 5.",
-    "people:skill:view": "granted to ADMIN, enforced nowhere: no skill feature exists anywhere in pos-people -- see §7 task 5.",
     "pricing:normalization:view": "granted to ADMIN, enforced nowhere: no read endpoint for pricing normalization exists -- see §7 task 5.",
     "workorder:estimate_item:view": "granted to ADMIN/LOCATION_MANAGER/SERVICE_ADVISOR, enforced nowhere: no GET endpoint for estimate items exists -- see §7 task 5.",
     "workorder:estimate_snapshot:view": "granted to ADMIN/LOCATION_MANAGER/SERVICE_ADVISOR/TECHNICIAN, enforced nowhere: no GET endpoint for estimate snapshots exists -- see §7 task 5."

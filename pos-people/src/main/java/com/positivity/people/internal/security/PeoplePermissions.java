@@ -83,6 +83,9 @@ public final class PeoplePermissions {
      */
     public static final String SELF_VIEW = "people:self:view";
 
+    /** Read the skill registry — the vocabulary every credential names (CAP-328). */
+    public static final String SKILL_VIEW = "people:skill:view";
+
     /** Approve timeAdjustment. */
     public static final String TIMEADJUSTMENT_APPROVE = "people:timeAdjustment:approve";
 

@@ -1,10 +1,10 @@
-generatedAt: "2026-09-16T11:32:41.465434+00:00"
+generatedAt: "2026-09-16T12:08:52.385835+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 496
+  permissionCount: 497
   uniquePermissionCount: 496
-  duplicatePermissionNameCount: 0
+  duplicatePermissionNameCount: 1
   parseIssueCount: 0
 manifests:
   - module: "pos-accounting"
@@ -670,7 +670,7 @@ manifests:
     domain: "people"
     serviceName: "pos-people"
     version: "1.0"
-    permissionCount: 26
+    permissionCount: 27
     permissions:
       - name: "people:availability:view"
         description: "View availability"
@@ -694,6 +694,8 @@ manifests:
         description: "Edit skill assignments"
       - name: "people:skill:view"
         description: "View employee skills"
+      - name: "people:skill:view"
+        description: "Read the skill registry (CAP-328): codes, competences, GVWR class ranges and vendor cross-references"
       - name: "people:timeAdjustment:approve"
         description: "Approve timeAdjustment"
       - name: "people:timeAdjustment:create"
@@ -3028,6 +3030,12 @@ permissions:
     serviceName: "pos-people"
     module: "pos-people"
     source: "pos-people/src/main/resources/permissions.yaml"
+  - name: "people:skill:view"
+    description: "Read the skill registry (CAP-328): codes, competences, GVWR class ranges and vendor cross-references"
+    domain: "people"
+    serviceName: "pos-people"
+    module: "pos-people"
+    source: "pos-people/src/main/resources/permissions.yaml"
   - name: "people:timeAdjustment:approve"
     description: "Approve timeAdjustment"
     domain: "people"
@@ -4145,6 +4153,17 @@ permissions:
     module: "pos-workorder"
     source: "pos-workorder/src/main/resources/permissions.yaml"
 duplicates:
-  []
+  - name: "people:skill:view"
+    occurrences:
+      - module: "pos-people"
+        path: "pos-people/src/main/resources/permissions.yaml"
+        domain: "people"
+        serviceName: "pos-people"
+        description: "View employee skills"
+      - module: "pos-people"
+        path: "pos-people/src/main/resources/permissions.yaml"
+        domain: "people"
+        serviceName: "pos-people"
+        description: "Read the skill registry (CAP-328): codes, competences, GVWR class ranges and vendor cross-references"
 parseIssues:
   []

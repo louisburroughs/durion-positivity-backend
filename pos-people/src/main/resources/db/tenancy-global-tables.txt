@@ -3,3 +3,5 @@
 # TenancySchemaConformanceIT (plan WS1) reads this file.
 event_outbox  # transactional outbox; the unbound poller publishes every tenant's rows (tenant_id carried as data)
 processed_events  # consumer idempotency ledger keyed by eventId, deduplicated across tenants; tenant_id carried as data for per-tenant reconciliation
+skill  # CAP-328 skill registry (spec D2): an ASE certification means the same thing in every shop; a per-tenant vocabulary would let tenants disagree about what a code certifies
+skill_code_xref  # CAP-328 vendor cross-reference onto the global registry (ADR-0059 section 3); national codes, one mapping for every tenant

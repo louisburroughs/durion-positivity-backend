@@ -29,6 +29,7 @@ ADR-0044 Phase 3 split (#874/#875); this module reads them from event-fed
 - `TimeEntryService` — time entry lifecycle (submit, approve, adjust)
 - `WorkSessionService` — work session tracking with clock-in/out timestamps
 - `StaffingAssignmentService` — location-based staffing assignments
+- `SkillRegistryService` — the platform skill registry (CAP-328): Durion skill codes with GVWR class ranges, and the ASE cross-reference that resolves vendor codes onto them; an unknown code fails loudly
 - `UserPersonLinkService` — links a user account UUID to a person record
 
 ## API Endpoints
@@ -39,6 +40,7 @@ ADR-0044 Phase 3 split (#874/#875); this module reads them from event-fed
   (auth: `people:employee_pii:view`, not the `people:employee:view` the structural reads use — #1898)
 - `DELETE /v1/people/{personId}` — deactivate a person
 - `GET /v1/people/availability` — employee availability query (auth: `people:availability:view`)
+- `GET /v1/people/skills` — the active skill registry with vendor codes (auth: `people:skill:view`)
 - `GET /v1/people/me/primary-location` — authenticated user's primary location
   (auth: `people:self:view`)
 - `GET /v1/people/me/locations` — authenticated user's active location assignments

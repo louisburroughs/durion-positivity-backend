@@ -136,6 +136,10 @@ public final class EventTypes {
                 EventTypeRegistration.search(
                                 "REPORT_INACTIVE_PERSON_ACTIVE_USER_GENERATED",
                                 "Generate identity-compliance report of active users linked to inactive persons")
+                        .build(),
+
+                // SkillController - 1 event (CAP-328)
+                EventTypeRegistration.fastRead("PEOPLE_SKILL_LIST", "List the platform skill registry")
                         .build());
     }
 }
