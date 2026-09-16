@@ -126,7 +126,9 @@ public class AllocationConsistencyVerifier {
         this.violationCounter = meterRegistry.counter("inventory.allocation.consistency.violations.total");
     }
 
-    @Scheduled(fixedDelayString = "${pos.inventory.allocation-verify.interval-ms:3600000}", initialDelayString = "${pos.inventory.allocation-verify.initial-delay-ms:600000}")
+    @Scheduled(
+            fixedDelayString = "${pos.inventory.allocation-verify.interval-ms:3600000}",
+            initialDelayString = "${pos.inventory.allocation-verify.initial-delay-ms:600000}")
     public void verifyScheduled() {
         // The transaction opens inside the tenant binding, so its connection carries
         // the tenant.
@@ -150,10 +152,10 @@ public class AllocationConsistencyVerifier {
         String created = InventoryLedgerEventType.ALLOCATION_CREATED.name();
         String released = InventoryLedgerEventType.ALLOCATION_RELEASED.name();
 
-        List<AllocationRepository.AllocationConsistencyRow> perAllocation = allocationRepository
-                .findConsistencyViolations(created, released);
-        List<InventoryStockSummaryRepository.AllocatedDriftRow> perLocation = summaryRepository
-                .findAllocatedDriftByLocation(created, released);
+        List<AllocationRepository.AllocationConsistencyRow> perAllocation =
+                allocationRepository.findConsistencyViolations(created, released);
+        List<InventoryStockSummaryRepository.AllocatedDriftRow> perLocation =
+                summaryRepository.findAllocatedDriftByLocation(created, released);
 
         int logged = 0;
         for (AllocationRepository.AllocationConsistencyRow row : perAllocation) {
