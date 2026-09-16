@@ -183,7 +183,7 @@ class AssignmentServiceImplStory10Test {
         return Assignment.builder()
                 .assignmentId(assignmentId)
                 .appointment(appointment)
-                .status(AssignmentStatusEnum.CONFIRMED)
+                .status(AssignmentStatusEnum.ASSIGNED)
                 .version(1)
                 .createdAt(CREATED)
                 .updatedAt(CREATED);

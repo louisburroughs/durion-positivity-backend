@@ -49,13 +49,13 @@ public class AssignmentController {
             operationId = "createAssignment",
             summary = "Create Mechanic Assignments for an Appointment",
             description = """
-                    Creates the mechanic assignment for a scheduled appointment in CONFIRMED status, linking one \
+                    Creates the mechanic assignment for a scheduled appointment in ASSIGNED status, linking one \
                     LEAD mechanic and optional ASSIST mechanics and optionally reserving a bay or mobile-unit \
                     resource.
                     Use this tool when staffing a booked appointment; do not use executeConflictOverride, which \
                     records a schedule-conflict bypass without assigning anyone, and use listAssignments to read \
                     what is already assigned.
-                    Preconditions: the appointment must exist and be in SCHEDULED status, no CONFIRMED or \
+                    Preconditions: the appointment must exist and be in SCHEDULED status, no ASSIGNED, AWAITING_SKILL_FULFILLMENT or \
                     IN_PROGRESS assignment may already exist for it, and every mechanicPersonId must resolve to a \
                     known mechanic.
                     Required inputs: mechanics with exactly one LEAD role (a single mechanic with a null role \

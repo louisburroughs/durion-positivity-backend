@@ -23,7 +23,6 @@ import com.positivity.shopmanager.internal.repository.MechanicRepository;
 import com.positivity.shopmanager.internal.service.dto.AssignmentResponse;
 import com.positivity.shopmanager.internal.service.dto.CreateAssignmentRequest;
 import com.positivity.shopmanager.internal.service.dto.MechanicAssignmentItem;
-import com.positivity.shopmanager.internal.service.enums.AssignmentStatus;
 import com.positivity.shopmanager.internal.service.enums.MechanicRole;
 import java.time.Clock;
 import java.time.Instant;
@@ -174,7 +173,7 @@ class AssignmentServiceTest {
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
         when(assignmentRepository.findByAppointment_AppointmentIdAndStatusIn(
-                        appointmentId, List.of(AssignmentStatusEnum.CONFIRMED, AssignmentStatusEnum.IN_PROGRESS)))
+                        appointmentId, AssignmentStatusEnum.active()))
                 .thenReturn(Optional.of(existingAssignment));
 
         assertThatThrownBy(() -> service.create(request))
@@ -213,7 +212,7 @@ class AssignmentServiceTest {
         var savedAssignment = Assignment.builder()
                 .assignmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .appointment(appointment)
-                .status(AssignmentStatusEnum.CONFIRMED)
+                .status(AssignmentStatusEnum.ASSIGNED)
                 .version(1)
                 .createdAt(FIXED_NOW)
                 .updatedAt(FIXED_NOW)
@@ -237,7 +236,7 @@ class AssignmentServiceTest {
         AssignmentResponse response = service.create(request);
 
         assertThat(response).isNotNull();
-        assertThat(response.getStatus()).isEqualTo(AssignmentStatus.CONFIRMED);
+        assertThat(response.getStatus()).isEqualTo(AssignmentStatusEnum.ASSIGNED);
         assertThat(response.getAppointmentId()).isEqualTo(appointmentId);
         assertThat(response.getMechanics()).hasSize(1);
         assertThat(response.getMechanics().get(0).getRole()).isEqualTo(MechanicRole.LEAD);
@@ -255,7 +254,7 @@ class AssignmentServiceTest {
         var savedAssignment = Assignment.builder()
                 .assignmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .appointment(appointment)
-                .status(AssignmentStatusEnum.CONFIRMED)
+                .status(AssignmentStatusEnum.ASSIGNED)
                 .isOverride(true)
                 .overrideReason("manager approved")
                 .version(1)
@@ -305,7 +304,7 @@ class AssignmentServiceTest {
         var assignment = Assignment.builder()
                 .assignmentId(assignmentId)
                 .appointment(buildAppointment(appointmentId, AppointmentStatus.SCHEDULED))
-                .status(AssignmentStatusEnum.CONFIRMED)
+                .status(AssignmentStatusEnum.ASSIGNED)
                 .version(1)
                 .createdAt(FIXED_NOW)
                 .updatedAt(FIXED_NOW)
@@ -325,7 +324,7 @@ class AssignmentServiceTest {
         List<AssignmentResponse> results = service.getByAppointmentId(appointmentId);
 
         assertThat(results).hasSize(1);
-        assertThat(results.get(0).getStatus()).isEqualTo(AssignmentStatus.CONFIRMED);
+        assertThat(results.get(0).getStatus()).isEqualTo(AssignmentStatusEnum.ASSIGNED);
         assertThat(results.get(0).getMechanics()).hasSize(1);
         assertThat(results.get(0).getMechanics().get(0).getMechanicId()).isEqualTo(mechanicId);
     }
@@ -367,7 +366,7 @@ class AssignmentServiceTest {
         return Assignment.builder()
                 .assignmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .appointment(buildAppointment(appointmentId, AppointmentStatus.SCHEDULED))
-                .status(AssignmentStatusEnum.CONFIRMED)
+                .status(AssignmentStatusEnum.ASSIGNED)
                 .version(1)
                 .createdAt(FIXED_NOW)
                 .updatedAt(FIXED_NOW)
@@ -379,7 +378,7 @@ class AssignmentServiceTest {
                 .assignmentId(assignmentId)
                 .appointment(buildAppointment(
                         UUID.fromString("00000000-0000-0000-0000-000000000010"), AppointmentStatus.SCHEDULED))
-                .status(AssignmentStatusEnum.CONFIRMED)
+                .status(AssignmentStatusEnum.ASSIGNED)
                 .version(1)
                 .createdAt(FIXED_NOW)
                 .updatedAt(FIXED_NOW)

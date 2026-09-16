@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.shopmanager.internal.service.AssignmentService;
 import com.positivity.shopmanager.internal.service.dto.AssignmentResponse;
-import com.positivity.shopmanager.internal.service.enums.AssignmentStatus;
+import com.positivity.shopmanager.internal.enums.AssignmentStatusEnum;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -76,7 +76,7 @@ class AssignmentControllerStory10Test {
         AssignmentResponse mockResponse = AssignmentResponse.builder()
                 .assignmentId(assignmentId)
                 .appointmentId(appointmentId)
-                .status(AssignmentStatus.CONFIRMED)
+                .status(AssignmentStatusEnum.ASSIGNED)
                 .mechanics(List.of())
                 .build();
 

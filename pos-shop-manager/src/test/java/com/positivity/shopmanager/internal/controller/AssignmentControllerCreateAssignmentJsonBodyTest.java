@@ -15,7 +15,7 @@ import com.positivity.shopmanager.internal.service.AssignmentService;
 import com.positivity.shopmanager.internal.service.dto.AssignedMechanicInfo;
 import com.positivity.shopmanager.internal.service.dto.AssignmentResponse;
 import com.positivity.shopmanager.internal.service.dto.CreateAssignmentRequest;
-import com.positivity.shopmanager.internal.service.enums.AssignmentStatus;
+import com.positivity.shopmanager.internal.enums.AssignmentStatusEnum;
 import com.positivity.shopmanager.internal.service.enums.MechanicRole;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.time.Clock;
@@ -73,7 +73,7 @@ class AssignmentControllerCreateAssignmentJsonBodyTest {
                         .build()))
                 .resourceId(RESOURCE_ID)
                 .resourceType("BAY")
-                .status(AssignmentStatus.CONFIRMED)
+                .status(AssignmentStatusEnum.ASSIGNED)
                 .override(false)
                 .assignedAt(Instant.parse("2026-09-04T12:00:00Z"))
                 .build();
@@ -91,7 +91,7 @@ class AssignmentControllerCreateAssignmentJsonBodyTest {
                         .content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.assignmentId").value("01960003-0000-7000-8000-000000000099"))
-                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+                .andExpect(jsonPath("$.status").value("ASSIGNED"));
 
         ArgumentCaptor<CreateAssignmentRequest> captor = ArgumentCaptor.forClass(CreateAssignmentRequest.class);
         verify(assignmentService).create(captor.capture());

@@ -3,7 +3,7 @@ package com.positivity.shopmanager.internal.service.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
-import com.positivity.shopmanager.internal.service.enums.AssignmentStatus;
+import com.positivity.shopmanager.internal.enums.AssignmentStatusEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -40,8 +40,8 @@ public class AssignmentResponse {
     @Schema(description = "Type of the associated resource", example = "BAY", requiredMode = NOT_REQUIRED)
     String resourceType;
 
-    @Schema(description = "Current assignment status", example = "CONFIRMED", requiredMode = REQUIRED)
-    AssignmentStatus status;
+    @Schema(description = "Current assignment status", example = "ASSIGNED", requiredMode = REQUIRED)
+    AssignmentStatusEnum status;
 
     @Schema(
             description = "Whether the assignment was created with a conflict override",

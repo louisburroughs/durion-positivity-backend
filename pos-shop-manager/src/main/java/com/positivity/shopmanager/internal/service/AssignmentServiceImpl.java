@@ -16,7 +16,6 @@ import com.positivity.shopmanager.internal.service.dto.AssignedMechanicInfo;
 import com.positivity.shopmanager.internal.service.dto.AssignmentResponse;
 import com.positivity.shopmanager.internal.service.dto.CreateAssignmentRequest;
 import com.positivity.shopmanager.internal.service.dto.MechanicAssignmentItem;
-import com.positivity.shopmanager.internal.service.enums.AssignmentStatus;
 import com.positivity.shopmanager.internal.service.enums.MechanicRole;
 import java.time.Clock;
 import java.time.Instant;
@@ -75,10 +74,8 @@ public class AssignmentServiceImpl implements AssignmentService {
                     + appointment.getStatus());
         }
 
-        List<AssignmentStatusEnum> activeStatuses =
-                List.of(AssignmentStatusEnum.CONFIRMED, AssignmentStatusEnum.IN_PROGRESS);
         assignmentRepository
-                .findByAppointment_AppointmentIdAndStatusIn(request.getAppointmentId(), activeStatuses)
+                .findByAppointment_AppointmentIdAndStatusIn(request.getAppointmentId(), AssignmentStatusEnum.active())
                 .ifPresent(existing -> {
                     throw new IllegalStateException(
                             "An active assignment already exists for appointment: " + request.getAppointmentId());
@@ -98,7 +95,7 @@ public class AssignmentServiceImpl implements AssignmentService {
 
         Assignment assignment = assignmentRepository.save(Assignment.builder()
                 .appointment(appointment)
-                .status(AssignmentStatusEnum.CONFIRMED)
+                .status(AssignmentStatusEnum.ASSIGNED)
                 .resourceId(request.getResourceId())
                 .resourceType(request.getResourceType())
                 .isOverride(request.isOverride())
@@ -175,7 +172,7 @@ public class AssignmentServiceImpl implements AssignmentService {
                 .mechanics(mechanicInfos)
                 .resourceId(assignment.getResourceId())
                 .resourceType(assignment.getResourceType())
-                .status(AssignmentStatus.valueOf(assignment.getStatus().name()))
+                .status(assignment.getStatus())
                 .override(assignment.isOverride())
                 .assignmentNotes(assignment.getNotes())
                 .assignedAt(assignment.getCreatedAt())
