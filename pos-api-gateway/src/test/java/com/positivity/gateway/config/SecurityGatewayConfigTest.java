@@ -1402,13 +1402,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 86")
+    @DisplayName("CATALOG_VERSION is 88")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(86);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(88);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 528")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 532")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -1712,8 +1712,12 @@ class SecurityGatewayConfigTest {
         // catalog v86 (ADR-0062 §7, WS2b-4): tenant impersonation tokens, minted by
         // pos-security-service for the platform tenant only (bit 530)
         assertThat(GatewayPermissionCatalog.authorityForBit(530)).isEqualTo("PERM_platform:tenant:impersonate");
+        // catalog v87 (CAP-326, DECISION-SHOPMGMT-002): overriding a SOFT scheduling conflict (bit 531)
+        assertThat(GatewayPermissionCatalog.authorityForBit(531)).isEqualTo("PERM_shop:conflict:override");
+        // catalog v88 (CAP-329): declaring a catalog service's skill requirements (bit 532)
+        assertThat(GatewayPermissionCatalog.authorityForBit(532)).isEqualTo("PERM_catalog:service_requirement:manage");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(531)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(533)).isNull();
     }
 
     @Test
