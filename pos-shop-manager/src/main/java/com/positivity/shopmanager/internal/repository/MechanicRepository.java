@@ -26,11 +26,10 @@ public interface MechanicRepository extends JpaRepository<Mechanic, UUID> {
     /**
      * The HR-synchronized roster, optionally narrowed to people holding a credential for {@code
      * skillCode} on {@code onDate} (CAP-328). The filter matches the Durion skill code or the
-     * issuer's own code, uppercase-and-trimmed on the column side; the caller passes {@code
-     * skillCode} already normalized (see {@code SkillRequirementResolver.normalize}) or null. The
-     * parameter is deliberately bare in the query: wrapped in {@code TRIM}, a null bind has no
-     * type Postgres can infer and it becomes {@code bytea}, so the whole query fails with
-     * "btrim(bytea) does not exist". It counts a credential as held only
+     * issuer's own code, uppercase-and-trimmed on both sides. The parameter is CAST to String
+     * on purpose: a bare {@code :skillCode} inside {@code TRIM} gives Hibernate no type to bind a
+     * null with, Postgres infers {@code bytea}, and the whole query fails with "btrim(bytea)
+     * does not exist" whenever the filter is absent. It counts a credential as held only
      * while it is neither revoked nor superseded by its owner and not past {@code expiresOn} on
      * that date — a null {@code expiresOn} never expires. It sits in the query so paging is right.
      */
@@ -44,8 +43,8 @@ public interface MechanicRepository extends JpaRepository<Mechanic, UUID> {
                 WHERE credential.personId = mechanic.personId
                   AND credential.status NOT IN ('REVOKED', 'SUPERSEDED')
                   AND (credential.expiresOn IS NULL OR credential.expiresOn >= :onDate)
-                  AND (UPPER(TRIM(credential.skillCode)) = :skillCode
-                       OR UPPER(TRIM(credential.sourceCredentialCode)) = :skillCode)))
+                  AND (UPPER(TRIM(credential.skillCode)) = UPPER(TRIM(CAST(:skillCode AS String)))
+                       OR UPPER(TRIM(credential.sourceCredentialCode)) = UPPER(TRIM(CAST(:skillCode AS String))))))
             """)
     @NonNull
     Page<Mechanic> findRoster(
@@ -78,8 +77,8 @@ public interface MechanicRepository extends JpaRepository<Mechanic, UUID> {
                 WHERE credential.personId = mechanic.personId
                   AND credential.status NOT IN ('REVOKED', 'SUPERSEDED')
                   AND (credential.expiresOn IS NULL OR credential.expiresOn >= :onDate)
-                  AND (UPPER(TRIM(credential.skillCode)) = :skillCode
-                       OR UPPER(TRIM(credential.sourceCredentialCode)) = :skillCode)))
+                  AND (UPPER(TRIM(credential.skillCode)) = UPPER(TRIM(CAST(:skillCode AS String)))
+                       OR UPPER(TRIM(credential.sourceCredentialCode)) = UPPER(TRIM(CAST(:skillCode AS String))))))
             ORDER BY mechanic.lastName, mechanic.firstName, mechanic.personId
             """)
     @NonNull

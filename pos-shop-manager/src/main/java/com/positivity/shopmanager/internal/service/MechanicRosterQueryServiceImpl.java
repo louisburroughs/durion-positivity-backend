@@ -124,10 +124,10 @@ public class MechanicRosterQueryServiceImpl implements MechanicRosterQueryServic
     }
 
     /**
-     * The skill filter as the repository expects it: uppercase-and-trimmed (the same reading
-     * {@link SkillRequirementResolver#normalize} gives every skill code), or null when absent or
-     * blank so the query's {@code :skillCode IS NULL} branch applies. The repository binds the
-     * parameter bare — see {@code MechanicRepository} for why.
+     * The skill filter with a blank read as absent, so the query's {@code :skillCode IS NULL}
+     * branch applies rather than a filter that matches nobody; normalized the way
+     * {@link SkillRequirementResolver#normalize} reads every skill code (the repository
+     * normalizes again, harmlessly, so a direct caller gets the same case-insensitive match).
      */
     private static @Nullable String skillFilter(@Nullable String skillCode) {
         String normalized = SkillRequirementResolver.normalize(skillCode);
