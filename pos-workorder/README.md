@@ -380,6 +380,54 @@ Two details worth knowing:
 
 No endpoint, status semantics or transition changed — this is payload only.
 
+## Published workorder fact: actual-time block (#2021)
+
+`WorkorderUpdatedV1` also carries `workStartedAt`, `completedAt` and `expectedEndAt`, additive within
+schema v1. They let pos-shop-manager's dispatch board show the promise against the reality: the
+appointment's own `startAt`/`endAt` stay the *planned* window, and these carry the *actual* one —
+`workStartedAt` from `startWork`, `completedAt` from the completion state machine transition, both
+null until they happen. `expectedEndAt` is declared but **never populated**: a projected finish for a
+running job needs estimated remaining labour (ADR-0058/ADR-0059, both PROPOSED and not built), and a
+value guessed from `now()` would be indistinguishable from a known one to a consumer — do not
+synthesise it.
+
+### Backfilling workorders that started before this fact existed (#2021 AC8)
+
+`workorder.outbox.replay-requested` **cannot** seed `workStartedAt`/`completedAt` on a replica for a
+workorder that started before this fact shipped: replay only re-queues rows already in
+`event_outbox`, and those rows' stored JSON predates the fields — replaying them re-sends the same
+gap.
+
+Use the regenerate-from-state command on `workorder.commands.v1` instead:
+
+```json
+{"commandType": "workorder.fact-backfill.requested", "payload": {}}
+```
+
+The selection is scoped to workorders that actually need it — a non-null `workStartedAt` and/or
+`completedAt` — so a run does not have to walk every workorder in the module to reach the ones that
+do. It pages through the owner's table (`pos.workorder.fact-backfill.page-size`, default 500), one
+transaction per page, and is idempotent: a replica applies an equal version and skips only a
+strictly-greater one, so re-running repairs a stale replica without duplicating rows. Because the
+backfill only reads a row and asks the publisher to snapshot it — it never dirties the row — the fact
+it re-emits carries the **same** `aggregateVersion` the row already published at; that is intended,
+not a bug, since the replica's stale guard is strictly-below.
+
+A run is **bounded** at `pos.workorder.fact-backfill.max-rows-per-run` (default 20000) and resumable,
+for the same reason as `pos-location`'s equivalent command (#1668): it executes on the Kafka
+command-listener thread shared with `workorder.outbox.replay-requested`, so an unbounded walk risks
+exceeding `max.poll.interval.ms`; an evicted consumer never commits its offset, so the command would
+be redelivered and the whole backfill would restart in a loop. When a run hits the bound it logs a
+WARN naming the cursor to resume from — re-send the command with `payload.afterId` set to that value.
+
+Paging is **keyset** (`id > afterId`), not offset, for the same reason as `pos-location`'s: deleting a
+row below an offset shifts every later row back one position, which would skip a surviving row an
+offset page would otherwise have reached.
+
+Tenant-scoped per ADR-0062 §3, mirroring `POST /v1/outbox/replay`: an ordinary tenant's run covers
+only its own rows, and a platform-tenant operator — who owns no workorder rows — fans out over every
+active tenant in turn, each from the beginning of its own bounded run (a cursor cannot span tenants).
+
 ## Location scope (ADR-0061, #1871/#1872)
 
 Location-scoped permissions are enforced on top of `@PreAuthorize` using the caller's
@@ -433,6 +481,8 @@ never everything). Reach is expanded once per request by `LocationHierarchyServi
 | `workorder.kafka.catalog-events-consumer-group` | `pos-workorder-catalog-events` | Consumer group for the catalog fact topic |
 | `workorder.kafka.location-events-topic` | `location.events.v1` | Location fact topic feeding the `ext_location`, `ext_bay` and `ext_mobile_unit` replicas |
 | `workorder.kafka.location-events-consumer-group` | `pos-workorder-location-events` | Consumer group for the location fact topic |
+| `pos.workorder.fact-backfill.page-size` | `500` | Rows per transaction when backfilling actual-time workorder facts |
+| `pos.workorder.fact-backfill.max-rows-per-run` | `20000` | Rows per backfill command before it stops and reports a resume cursor |
 
 ## Multitenancy (ADR-0062, WS3 wave 3)
 

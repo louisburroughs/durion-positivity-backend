@@ -339,4 +339,26 @@ public interface WorkorderRepository extends JpaRepository<Workorder, UUID> {
     @Query("SELECT w FROM Workorder w WHERE w.id = :workorderId")
     @NonNull
     Optional<Workorder> findByIdForUpdate(@Param("workorderId") @NonNull UUID workorderId);
+
+    /**
+     * One keyset page of workorder ids needing an actual-time fact backfill (#2021 AC8): those with
+     * a non-null {@code workStartedAt} and/or {@code completedAt}. A workorder that never started has
+     * nothing new to publish — {@code workStartedAt}, {@code completedAt} and {@code expectedEndAt}
+     * would all still be null — so excluding it keeps a repair that only concerns started/completed
+     * jobs from having to walk the whole table to skip most of it.
+     *
+     * <p>Ids only, not entities: each is re-read individually by
+     * {@link com.positivity.workorder.internal.service.WorkorderFactPublisher#markChanged}, so this
+     * query never holds a large set of full workorder rows open across those re-reads.
+     *
+     * @param afterId exclusive keyset cursor; the caller passes the minimum UUID to match every row
+     *     on the first page of a run
+     * @param pageable page size only — the sort is fixed to id ascending by the query itself
+     * @return up to {@code pageable}'s page size worth of ids, ordered by id ascending
+     */
+    @Query("SELECT w.id FROM Workorder w WHERE w.id > :afterId "
+            + "AND (w.workStartedAt IS NOT NULL OR w.completedAt IS NOT NULL) "
+            + "ORDER BY w.id ASC")
+    @NonNull
+    List<UUID> findActualTimeBackfillPage(@Param("afterId") @NonNull UUID afterId, @NonNull Pageable pageable);
 }

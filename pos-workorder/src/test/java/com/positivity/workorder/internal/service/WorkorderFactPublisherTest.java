@@ -23,6 +23,7 @@ import com.positivity.workorder.internal.repository.WorkorderRepository;
 import com.positivity.workorder.internal.repository.WorkorderServiceRepository;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -206,6 +207,111 @@ class WorkorderFactPublisherTest {
                 return technicianId;
             }
         };
+    }
+
+    // -----------------------------------------------------------------------
+    // Actual-time block (#2021): workStartedAt, completedAt, expectedEndAt
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2021 - a started-but-open workorder publishes workStartedAt, completedAt null")
+    void publishesWorkStartedAtOnly() {
+        UUID workorderId = UUID.randomUUID();
+        Instant startedAt = Instant.parse("2026-09-10T08:00:00Z");
+        Workorder workorder = Workorder.builder()
+                .id(workorderId)
+                .workorderNumber("WO-2026-2021")
+                .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .workStartedAt(startedAt)
+                .version(1L)
+                .build();
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+
+        publisher.markChanged(workorderId);
+        fireBeforeCommit();
+
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(writer).publish(any(), anyInt(), any(), anyLong(), payloadCaptor.capture());
+        WorkorderUpdatedV1 fact = (WorkorderUpdatedV1) payloadCaptor.getValue();
+        assertThat(fact.workStartedAt()).isEqualTo(startedAt);
+        assertThat(fact.completedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2021 - a completed workorder publishes both workStartedAt and completedAt")
+    void publishesWorkStartedAtAndCompletedAt() {
+        UUID workorderId = UUID.randomUUID();
+        Instant startedAt = Instant.parse("2026-09-10T08:00:00Z");
+        Instant completedAt = Instant.parse("2026-09-10T12:30:00Z");
+        Workorder workorder = Workorder.builder()
+                .id(workorderId)
+                .workorderNumber("WO-2026-2022")
+                .status(WorkorderStatus.COMPLETED)
+                .workStartedAt(startedAt)
+                .completedAt(completedAt)
+                .version(2L)
+                .build();
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+
+        publisher.markChanged(workorderId);
+        fireBeforeCommit();
+
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(writer).publish(any(), anyInt(), any(), anyLong(), payloadCaptor.capture());
+        WorkorderUpdatedV1 fact = (WorkorderUpdatedV1) payloadCaptor.getValue();
+        assertThat(fact.workStartedAt()).isEqualTo(startedAt);
+        assertThat(fact.completedAt()).isEqualTo(completedAt);
+    }
+
+    @Test
+    @DisplayName("#2021 - a never-started workorder publishes workStartedAt and completedAt both null")
+    void publishesNullActualTimesForNeverStartedWorkorder() {
+        UUID workorderId = UUID.randomUUID();
+        Workorder workorder = Workorder.builder()
+                .id(workorderId)
+                .workorderNumber("WO-2026-2023")
+                .status(WorkorderStatus.DRAFT)
+                .version(1L)
+                .build();
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+
+        publisher.markChanged(workorderId);
+        fireBeforeCommit();
+
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(writer).publish(any(), anyInt(), any(), anyLong(), payloadCaptor.capture());
+        WorkorderUpdatedV1 fact = (WorkorderUpdatedV1) payloadCaptor.getValue();
+        assertThat(fact.workStartedAt()).isNull();
+        assertThat(fact.completedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2021 - expectedEndAt is never populated: a projected finish is not synthesised from now()")
+    void expectedEndAtIsAlwaysNull() {
+        UUID workorderId = UUID.randomUUID();
+        Workorder workorder = Workorder.builder()
+                .id(workorderId)
+                .workorderNumber("WO-2026-2024")
+                .status(WorkorderStatus.WORK_IN_PROGRESS)
+                .workStartedAt(Instant.parse("2026-09-10T08:00:00Z"))
+                .version(1L)
+                .build();
+        when(workorderRepository.findById(workorderId)).thenReturn(Optional.of(workorder));
+        when(workorderPartRepository.findByWorkorderId(workorderId)).thenReturn(List.of());
+
+        publisher.markChanged(workorderId);
+        fireBeforeCommit();
+
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(writer).publish(any(), anyInt(), any(), anyLong(), payloadCaptor.capture());
+        // The owner has no way to project a finish time without estimated remaining labour
+        // (ADR-0058/ADR-0059, both PROPOSED, not built); a guessed projection from now() would be
+        // indistinguishable from a known one to a consumer, so the slot stays null.
+        assertThat(((WorkorderUpdatedV1) payloadCaptor.getValue()).expectedEndAt())
+                .isNull();
     }
 
     /**

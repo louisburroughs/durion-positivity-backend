@@ -9,6 +9,8 @@ import com.positivity.workorder.internal.dto.AssignmentUpdatedEvent;
 import com.positivity.workorder.internal.enums.ResourceType;
 import com.positivity.workorder.internal.service.KafkaCommandListener;
 import com.positivity.workorder.internal.service.OutboxReplayService;
+import com.positivity.workorder.internal.service.WorkorderFactBackfillService;
+import com.positivity.workorder.internal.service.WorkorderFactBackfillService.BackfillResult;
 import com.positivity.workorder.internal.service.WorkorderInvoiceService;
 import java.time.Clock;
 import java.time.Instant;
@@ -29,15 +31,25 @@ class WorkorderKafkaCommandListenerTest {
     private final OutboxReplayService outboxReplayService = org.mockito.Mockito.mock(OutboxReplayService.class);
     private final WorkorderInvoiceService workorderInvoiceService =
             org.mockito.Mockito.mock(WorkorderInvoiceService.class);
+    private final WorkorderFactBackfillService workorderFactBackfillService =
+            org.mockito.Mockito.mock(WorkorderFactBackfillService.class);
 
     private KafkaCommandListener listener;
 
     @BeforeEach
     void setUp() {
         listener = new KafkaCommandListener(
-                FIXED_CLOCK, objectMapper, eventPublisher, outboxReplayService, workorderInvoiceService);
+                FIXED_CLOCK,
+                objectMapper,
+                eventPublisher,
+                outboxReplayService,
+                workorderInvoiceService,
+                workorderFactBackfillService);
         org.springframework.test.util.ReflectionTestUtils.setField(
                 listener, "replayMaxLookback", java.time.Duration.ofDays(30));
+        org.mockito.Mockito.lenient()
+                .when(workorderFactBackfillService.backfillForCaller(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new BackfillResult(0, null, false));
     }
 
     @Test
@@ -262,5 +274,62 @@ class WorkorderKafkaCommandListenerTest {
                 """.formatted(workorderId));
 
         verify(workorderInvoiceService).generateInvoice(workorderId, null);
+    }
+
+    // -----------------------------------------------------------------------
+    // Fact backfill command (#2021 AC8)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2021 - a fact backfill command with no afterId starts from the beginning")
+    void backfillCommandWithNoCursorStartsFromBeginning() {
+        listener.onCommand("""
+                {"commandType":"workorder.fact-backfill.requested","payload":{}}
+                """);
+
+        verify(workorderFactBackfillService).backfillForCaller(null);
+    }
+
+    @Test
+    @DisplayName("#2021 - a fact backfill command carrying afterId resumes from that cursor")
+    void backfillCommandResumesFromCursor() {
+        UUID afterId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+
+        listener.onCommand("""
+                {"commandType":"WORKORDER_FACT_BACKFILL_REQUESTED","payload":{"afterId":"%s"}}
+                """.formatted(afterId));
+
+        verify(workorderFactBackfillService).backfillForCaller(afterId);
+    }
+
+    @Test
+    @DisplayName("#2021 - a malformed afterId restarts from the beginning rather than dropping the command")
+    void backfillCommandWithMalformedCursorRestarts() {
+        listener.onCommand("""
+                {"commandType":"workorder.fact-backfill.requested","payload":{"afterId":"not-a-uuid"}}
+                """);
+
+        // The run is idempotent, so restarting is safe -- but it must still happen.
+        verify(workorderFactBackfillService).backfillForCaller(null);
+    }
+
+    @Test
+    @DisplayName("#2021 - a missing payload starts a fact backfill from the beginning")
+    void backfillCommandWithNoPayloadStartsFromBeginning() {
+        listener.onCommand("""
+                {"commandType":"workorder.fact-backfill.requested"}
+                """);
+
+        verify(workorderFactBackfillService).backfillForCaller(null);
+    }
+
+    @Test
+    @DisplayName("#2021 - fact backfill is not triggered by an unrelated command type")
+    void backfillNotTriggeredByOtherCommands() {
+        listener.onCommand("""
+                {"commandType":"workorder.outbox.replay-requested","payload":{"since":"2026-07-08T10:00:00Z"}}
+                """);
+
+        verify(workorderFactBackfillService, never()).backfillForCaller(any());
     }
 }
