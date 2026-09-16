@@ -12,4 +12,8 @@ public class ConflictOverrideStateException extends RuntimeException {
     public ConflictOverrideStateException(String message) {
         super(message);
     }
+
+    public ConflictOverrideStateException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

@@ -58,6 +58,8 @@ public class MobileUnitServiceImpl implements MobileUnitService {
     private static final String PATCH_KEY_TRAVEL_BUFFER_POLICY_ID = "travelBufferPolicyId";
     private static final String PATCH_KEY_NOTES = "notes";
     private static final String PATCH_KEY_SERVICE_CAPABILITY_CODES = "serviceCapabilityCodes";
+    static final String ACTIVE_UNIT_INCOMPLETE =
+            "ACTIVE mobile unit requires travelBufferPolicyId, serviceCapabilityCodes, and coverageRules";
     private static final String FIELD_MAX_DISTANCE = "maxDistance";
 
     protected final MobileUnitRepository mobileUnitRepository;
@@ -137,6 +139,21 @@ public class MobileUnitServiceImpl implements MobileUnitService {
         return toMobileUnitResponse(persisted);
     }
 
+    /** 422 when an ACTIVE unit lacks a travel buffer policy, a capability claim or coverage rules. */
+    private void requireCompleteWhenActive(MobileUnitEntity entity) {
+        if (!STATUS_ACTIVE.equals(entity.getStatus())) {
+            return;
+        }
+        boolean complete = entity.getTravelBufferPolicyId() != null
+                && !entity.getServiceCapabilityCodes().isEmpty()
+                && !coverageRuleRepository
+                        .findByMobileUnit_IdOrderByPriorityAsc(entity.getId())
+                        .isEmpty();
+        if (!complete) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, ACTIVE_UNIT_INCOMPLETE);
+        }
+    }
+
     private <T> List<T> nonNullList(List<T> values) {
         return values == null ? List.of() : values;
     }
@@ -148,8 +165,7 @@ public class MobileUnitServiceImpl implements MobileUnitService {
             List<CoverageRuleRequest> coverageRules) {
         if (STATUS_ACTIVE.equals(normalizedStatus)
                 && (travelBufferPolicyId == null || serviceCapabilityCodes.isEmpty() || coverageRules.isEmpty())) {
-            throw new IllegalArgumentException(
-                    "ACTIVE mobile unit requires travelBufferPolicyId, serviceCapabilityCodes, and coverageRules");
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, ACTIVE_UNIT_INCOMPLETE);
         }
 
         if (travelBufferPolicyId != null
@@ -312,6 +328,10 @@ public class MobileUnitServiceImpl implements MobileUnitService {
             entity.setServiceCapabilityCodes(new LinkedHashSet<>(serviceCapabilityCodeValidator.validate(
                     stringList(patch.get(PATCH_KEY_SERVICE_CAPABILITY_CODES)))));
         }
+        // The merged state, not the patch alone, has to satisfy what create demands of an ACTIVE
+        // unit: a status flip, a cleared claim or a dropped policy each leave it incomplete
+        // otherwise (#2045 review). Coverage rules live in their own table, so they are read back.
+        requireCompleteWhenActive(entity);
         entity.setUpdatedAt(Instant.now(clock));
 
         MobileUnitEntity saved;

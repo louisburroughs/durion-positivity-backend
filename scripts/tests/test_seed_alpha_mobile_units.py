@@ -153,6 +153,20 @@ class CoverageFixtureIntegrityTest(unittest.TestCase):
             seen[key] = row["unitName"]
 
 
+class PackOrderTest(unittest.TestCase):
+    """Bays and mobile units claim catalog operation codes that pos-location validates against its
+    ext_catalog_service replica (CAP-325 D14), so both packs must run after the catalog services
+    that publish those codes -- a bay seeded first would have every default claim refused."""
+
+    def test_baysAndMobileUnitsFollowTheCatalogServices(self):
+        paths = [path for path, _ in seed_alpha.PACK_FILES]
+        services = paths.index("catalog/tier0-services.csv")
+        self.assertGreater(paths.index("location/bays.csv"), services)
+        self.assertGreater(paths.index("location/mobile-units.csv"), services)
+        # Still ahead of anything that books against them.
+        self.assertLess(paths.index("location/bays.csv"), paths.index("price/base-prices.csv"))
+
+
 class LoaderPackClassificationTest(unittest.TestCase):
     """Pins the cross-language half of the move to an API pack.
 

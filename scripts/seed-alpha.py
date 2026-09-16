@@ -84,8 +84,6 @@ PACK_FILES = [
     ("location/locations.csv", "LOCATION"),
     ("location/storage-locations.csv", "STORAGE_LOCATION"),
     ("location/site-defaults.csv", "@site-defaults"),
-    ("location/bays.csv", "BAY"),
-    ("location/mobile-units.csv", "@mobile-units"),
     ("people/employees.csv", "PERSON"),
     ("people/staffing-assignments.csv", "STAFFING_ASSIGNMENT"),
     ("people/credentials.csv", "PERSON_CREDENTIAL"),
@@ -105,6 +103,12 @@ PACK_FILES = [
     # catalog's own endpoint (validated against its skill-registry replica), so it follows the
     # operations it names and the people pack that published the registry.
     ("catalog/tier0-service-skill-requirements.csv", "@service-skill-requirements"),
+    # Bays and mobile units come after the catalog services on purpose: a bay's specialty claim and
+    # a unit's serviceCapabilityCodes are catalog operation codes that pos-location validates against
+    # its ext_catalog_service replica (CAP-325 D14), so the services must have been published first.
+    # The four catalog packs between the services and the first bay row give the replica time to land.
+    ("location/bays.csv", "BAY"),
+    ("location/mobile-units.csv", "@mobile-units"),
     ("price/base-prices.csv", "BASE_PRICE"),
     ("price/labor-rates.csv", "LABOR_RATE"),
     ("price/labor-rate-adjustments.csv", "LABOR_RATE_ADJUSTMENT"),

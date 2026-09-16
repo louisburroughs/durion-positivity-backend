@@ -21,6 +21,7 @@ import com.positivity.location.internal.entity.MobileUnitEntity;
 import com.positivity.location.internal.entity.ServiceAreaEntity;
 import com.positivity.location.internal.entity.TravelBufferPolicyEntity;
 import com.positivity.location.internal.exception.DuplicateResourceException;
+import com.positivity.location.internal.exception.InvalidServiceCapabilityCodesException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.ExtCatalogServiceReplicaRepository;
 import com.positivity.location.internal.repository.LocationRepository;
@@ -48,6 +49,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Unit tests for {@link MobileUnitServiceImpl}.
@@ -98,9 +101,10 @@ class MobileUnitServiceTest {
                 "coverageRules", List.of());
 
         assertThatThrownBy(() -> service.createMobileUnit(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage(
-                        "ACTIVE mobile unit requires travelBufferPolicyId, serviceCapabilityCodes, and coverageRules");
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining(MobileUnitServiceImpl.ACTIVE_UNIT_INCOMPLETE)
+                .extracting("statusCode")
+                .isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
     @Test
@@ -174,8 +178,10 @@ class MobileUnitServiceTest {
         List<String> codes = List.of(" oil-change-full-synthetic ", "cap-missing-1", "CAP-MISSING-2");
 
         assertThatThrownBy(() -> service.validateServiceCapabilityCodes(codes))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid serviceCapabilityCodes: CAP-MISSING-1, CAP-MISSING-2");
+                .isInstanceOf(InvalidServiceCapabilityCodesException.class)
+                .hasMessageContaining("Invalid serviceCapabilityCodes: CAP-MISSING-1, CAP-MISSING-2")
+                .extracting("statusCode")
+                .isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
     @Test
@@ -348,14 +354,12 @@ class MobileUnitServiceTest {
     @DisplayName("#76 - patch updates existing fields and persists")
     void shouldPatchExistingMobileUnit() {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        MobileUnitEntity existing = MobileUnitEntity.builder()
-                .id(id)
-                .name("Old")
-                .status("INACTIVE")
-                .notes("old")
-                .build();
+        // Complete apart from its status: the flip to ACTIVE is what the patch tests.
+        MobileUnitEntity existing = completeUnit(id, "INACTIVE");
         when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.of(existing));
         when(mobileUnitRepository.save(existing)).thenReturn(existing);
+        when(coverageRuleRepository.findByMobileUnit_IdOrderByPriorityAsc(id))
+                .thenReturn(List.of(MobileUnitCoverageRuleEntity.builder().build()));
 
         MobileUnitResponse patched = service.patch(
                 id,
@@ -369,6 +373,51 @@ class MobileUnitServiceTest {
         assertThat(patched.getNotes()).isEqualTo("updated");
         // The status transition must reach consumers as a fact (issue #1668).
         verify(locationFactPublisher).mobileUnitChanged(existing);
+    }
+
+    @Test
+    @DisplayName("CAP-325 D14.2 - clearing an ACTIVE unit's claim is refused: the merged state must stay complete")
+    void shouldRefuseClearingTheClaimOfAnActiveUnit() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        MobileUnitEntity existing = completeUnit(id, "ACTIVE");
+        when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.of(existing));
+
+        assertThatThrownBy(() -> service.patch(id, Map.of("serviceCapabilityCodes", List.of())))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining(MobileUnitServiceImpl.ACTIVE_UNIT_INCOMPLETE)
+                .extracting("statusCode")
+                .isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        verify(mobileUnitRepository, never()).save(any());
+        verify(locationFactPublisher, never()).mobileUnitChanged(any());
+    }
+
+    @Test
+    @DisplayName("CAP-325 D14.2 - activating a unit that claims nothing is refused the way create refuses it")
+    void shouldRefuseActivatingAnIncompleteUnit() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        MobileUnitEntity existing = MobileUnitEntity.builder()
+                .id(id)
+                .name("Bare")
+                .status("INACTIVE")
+                .build();
+        when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.of(existing));
+
+        assertThatThrownBy(() -> service.patch(id, Map.of("status", "ACTIVE")))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining(MobileUnitServiceImpl.ACTIVE_UNIT_INCOMPLETE);
+        verify(mobileUnitRepository, never()).save(any());
+    }
+
+    private static MobileUnitEntity completeUnit(UUID id, String status) {
+        MobileUnitEntity unit = MobileUnitEntity.builder()
+                .id(id)
+                .name("Old")
+                .status(status)
+                .notes("old")
+                .travelBufferPolicyId(UUID.fromString("00000000-0000-0000-0000-000000000009"))
+                .build();
+        unit.getServiceCapabilityCodes().add("OIL-CHANGE-FULL-SYNTHETIC");
+        return unit;
     }
 
     @Test

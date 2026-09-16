@@ -14,5 +14,13 @@ public interface ConflictOverrideRepository extends Repository<ConflictOverride,
     @NonNull
     ConflictOverride save(@NonNull ConflictOverride override);
 
+    /**
+     * {@link #save} plus an immediate flush, so that the {@code conflict_override_conflict_key}
+     * unique constraint (V7) is hit inside the caller's try block rather than at commit, where a
+     * second override racing the first would otherwise surface as a generic duplicate-resource 409.
+     */
+    @NonNull
+    ConflictOverride saveAndFlush(@NonNull ConflictOverride override);
+
     boolean existsByConflict_Id(@NonNull UUID conflictId);
 }

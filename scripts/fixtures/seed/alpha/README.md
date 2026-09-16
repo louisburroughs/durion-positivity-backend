@@ -88,11 +88,13 @@ Afterwards, verify: row counts on the owner, `replica_drift_total` flat, expecte
 event volume in pos-event-receiver.
 
 Run order (services must exist before data referencing them): security users/roles →
-**location** (sites, storage topology, site defaults, bays, mobile units) → people →
-people-contact → **customer** → vehicle → catalog → price → catalog → price →
-inventory (putaway rules, then on-hand, then cycle count plans). Locations must be
-loaded (or already present)
-first in any case — bulk-load jobs themselves require a valid `locationId`.
+**location** (sites, storage topology, site defaults) → people → people-contact →
+**customer** → vehicle → catalog (products, services, labor, packages, skill
+requirements) → **location bays and mobile units** → price → inventory (putaway rules,
+then on-hand, then cycle count plans). Locations must be loaded (or already present)
+first in any case — bulk-load jobs themselves require a valid `locationId`. Bays and
+mobile units follow the catalog because their capability codes are catalog operation
+codes, validated by pos-location against its `ext_catalog_service` replica (CAP-325 D14).
 
 ## Packs
 

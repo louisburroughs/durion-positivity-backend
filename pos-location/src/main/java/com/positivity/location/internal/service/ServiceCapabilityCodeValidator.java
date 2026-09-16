@@ -1,6 +1,7 @@
 package com.positivity.location.internal.service;
 
 import com.positivity.location.internal.entity.ExtCatalogServiceReplica;
+import com.positivity.location.internal.exception.InvalidServiceCapabilityCodesException;
 import com.positivity.location.internal.repository.ExtCatalogServiceReplicaRepository;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -33,7 +34,8 @@ public final class ServiceCapabilityCodeValidator {
      * Normalizes and validates {@code codes}; returns them normalized, de-duplicated, in request
      * order. Empty (or null) in, empty out.
      *
-     * @throws IllegalArgumentException naming every blank, unknown or retired code
+     * @throws InvalidServiceCapabilityCodesException (422) naming every blank, unknown or retired code
+     * @throws IllegalArgumentException when no replica repository is wired, a deployment defect
      */
     public @NonNull List<String> validate(@Nullable List<String> codes) {
         if (codes == null || codes.isEmpty()) {
@@ -76,7 +78,7 @@ public final class ServiceCapabilityCodeValidator {
 
     private static void throwIfInvalid(Set<String> invalid) {
         if (!invalid.isEmpty()) {
-            throw new IllegalArgumentException("Invalid serviceCapabilityCodes: " + String.join(", ", invalid));
+            throw new InvalidServiceCapabilityCodesException(invalid);
         }
     }
 }

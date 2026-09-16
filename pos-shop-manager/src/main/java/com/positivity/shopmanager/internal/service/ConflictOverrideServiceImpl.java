@@ -30,6 +30,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -94,14 +95,24 @@ public class ConflictOverrideServiceImpl implements ConflictOverrideService {
         Instant now = Instant.now(clock);
         List<ConflictOverrideResponse.OverrideEntry> entries = new ArrayList<>(conflicts.size());
         for (SchedulingConflict conflict : conflicts) {
-            ConflictOverride saved = conflictOverrideRepository.save(ConflictOverride.builder()
-                    .conflict(conflict)
-                    .overriddenBy(actor)
-                    .overrideReason(request.getOverrideReason())
-                    .approvedBy(actor)
-                    .approvedAt(now)
-                    .createdAt(now)
-                    .build());
+            ConflictOverride saved;
+            try {
+                saved = conflictOverrideRepository.saveAndFlush(ConflictOverride.builder()
+                        .conflict(conflict)
+                        .overriddenBy(actor)
+                        .overrideReason(request.getOverrideReason())
+                        .approvedBy(actor)
+                        .approvedAt(now)
+                        .createdAt(now)
+                        .build());
+            } catch (DataIntegrityViolationException exception) {
+                // Two override requests racing on one conflict both pass the exists check above;
+                // the loser lands on conflict_override_conflict_key (V7) here. Same contract as the
+                // pre-check — 409 CONFLICT_ALREADY_OVERRIDDEN — not the generic duplicate envelope
+                // (#2045 review).
+                throw new ConflictOverrideStateException(
+                        "Conflict " + conflict.getId() + " already carries an override", exception);
+            }
             entries.add(ConflictOverrideResponse.OverrideEntry.builder()
                     .overrideId(saved.getId())
                     .conflictId(conflict.getId())

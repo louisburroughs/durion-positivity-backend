@@ -23,10 +23,16 @@ pos-catalog/R__seed_reference_catalog_7_labor_time_source_policy.sql tier1
 pos-inventory/R__seed_reference_inventory.sql tier1
 pos-invoice/R__seed_reference_invoice.sql tier1
 pos-location/R__seed_location_1_reference.sql tier1
+pos-location/R__seed_location_2_bay_specialty.sql tier1
 pos-people-contact/R__seed_reference_people_contact.sql tier1
 pos-people/R__seed_reference_people.sql tier1
+# The skill registry is replicated into pos-catalog (ext_skill), which rule (b) forbids for a
+# Flyway seed; it stays tier1 because SkillRegistryFactPublisher republishes every row on each
+# ApplicationReadyEvent, so a consumer is never starved by the seed path (CAP-329 1/3).
+pos-people/R__seed_people_2_skill_registry.sql tier1
 pos-price/R__seed_reference_price.sql tier1
 pos-security-service/R__seed_reference_security.sql tier1
 pos-security-service/R__seed_role_location_scope.sql tier1
 pos-security-service/R__seed_role_permissions.sql tier1
 pos-security-service/R__seed_tenant_template.sql tier1
+pos-shop-manager/R__seed_shop_manager_1_conflict_rules.sql tier1

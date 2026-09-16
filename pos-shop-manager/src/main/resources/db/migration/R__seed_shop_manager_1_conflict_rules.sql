@@ -7,31 +7,36 @@
 -- so reruns are deterministic; ON CONFLICT (code) lets a template or a severity be corrected by
 -- editing this file. Column-targeted ON CONFLICT is permitted on a global table (TENANCY_SCHEMA.md).
 --
+-- MECHANIC_OVERTIME is seeded inactive: SchedulingConflictEvaluator has no timekeeping input to fire
+-- it from, and an active rule the evaluator never evaluates advertises enforcement that does not
+-- exist (#2045 review). Flip is_active here when weekly hours arrive.
+--
 -- Templates use {placeholders} rendered by the enforcement tier: {resource}, {start}, {end}, {date},
 -- {reason}, {skills}. Times render in the facility's timezone (DECISION-SHOPMGMT-015).
 SET TIME ZONE 'UTC';
 
 INSERT INTO public.conflict_rule (id, code, severity, resource_type, message_template, is_active)
-SELECT md5('conflict_rule:' || r.code)::uuid, r.code, r.severity, r.resource_type, r.message_template, true
+SELECT md5('conflict_rule:' || r.code)::uuid, r.code, r.severity, r.resource_type, r.message_template, r.is_active
 FROM (VALUES
     ('BAY_DOUBLE_BOOKED',             'HARD', 'BAY',
-        'Bay {resource} is already booked for part of {start}–{end}.'),
+        'Bay {resource} is already booked for part of {start}–{end}.', true),
     ('MECHANIC_UNAVAILABLE',          'HARD', 'MECHANIC',
-        'No mechanic is present at this location for {start}–{end}.'),
+        'No mechanic is present at this location for {start}–{end}.', true),
     ('MECHANIC_OVERTIME',             'SOFT', 'MECHANIC',
-        'Booking {start}–{end} puts the assigned mechanic into overtime.'),
+        'Booking {start}–{end} puts the assigned mechanic into overtime.', false),
     ('FACILITY_NEAR_CAPACITY',        'SOFT', 'CAPACITY',
-        'The location is near capacity for {start}–{end}.'),
+        'The location is near capacity for {start}–{end}.', true),
     ('COMPETENT_MECHANIC_UNAVAILABLE','SOFT', 'SKILL',
-        'A mechanic holding {skills} works at this location but none is free for {start}–{end}.'),
+        'A mechanic holding {skills} works at this location but none is free for {start}–{end}.', true),
     ('NO_COMPETENT_MECHANIC_ROSTERED','SOFT', 'SKILL',
-        'No mechanic at this location holds {skills}.'),
+        'No mechanic at this location holds {skills}.', true),
     ('OUTSIDE_OPERATING_HOURS',       'HARD', 'HOURS',
-        '{start}–{end} falls outside the location''s operating hours for that day.'),
+        '{start}–{end} falls outside the location''s operating hours for that day.', true),
     ('FACILITY_CLOSED',               'HARD', 'HOURS',
-        'The location is closed on {date}{reason}.')
-) AS r(code, severity, resource_type, message_template)
+        'The location is closed on {date}{reason}.', true)
+) AS r(code, severity, resource_type, message_template, is_active)
 ON CONFLICT (code) DO UPDATE SET
     severity = EXCLUDED.severity,
     resource_type = EXCLUDED.resource_type,
-    message_template = EXCLUDED.message_template;
+    message_template = EXCLUDED.message_template,
+    is_active = EXCLUDED.is_active;

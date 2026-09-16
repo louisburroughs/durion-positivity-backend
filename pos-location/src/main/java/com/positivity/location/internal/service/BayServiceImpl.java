@@ -5,17 +5,15 @@ import com.positivity.location.internal.dto.BayRequest;
 import com.positivity.location.internal.dto.BayResponse;
 import com.positivity.location.internal.entity.BayEntity;
 import com.positivity.location.internal.entity.BaySpecialtyOperationEntity;
-import com.positivity.location.internal.entity.ExtCatalogServiceReplica;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.enums.BayType;
 import com.positivity.location.internal.exception.DuplicateResourceException;
+import com.positivity.location.internal.exception.InvalidServiceCapabilityCodesException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.BayRepository;
 import com.positivity.location.internal.repository.BaySpecialtyOperationRepository;
 import com.positivity.location.internal.repository.ExtCatalogServiceReplicaRepository;
 import com.positivity.location.internal.repository.LocationRepository;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -88,7 +86,7 @@ public class BayServiceImpl implements BayService {
         // is validated as given. Same null-versus-empty discipline as the rest of the platform.
         List<String> validatedCapabilityCodes = request.getServiceCapabilityCodes() == null
                 ? defaultSpecialtyCodesFor(bayType)
-                : validateServiceCapabilityIds(request.getServiceCapabilityCodes());
+                : validateServiceCapabilityCodes(request.getServiceCapabilityCodes());
 
         BayEntity entity = BayEntity.builder()
                 .location(location)
@@ -190,7 +188,7 @@ public class BayServiceImpl implements BayService {
         }
 
         if (patch.getServiceCapabilityCodes() != null) {
-            existing.setServiceCapabilityCodes(validateServiceCapabilityIds(patch.getServiceCapabilityCodes()));
+            existing.setServiceCapabilityCodes(validateServiceCapabilityCodes(patch.getServiceCapabilityCodes()));
         }
         if (patch.getMaxDutyClass() != null) {
             existing.setMaxDutyClass(patch.getMaxDutyClass());
@@ -308,89 +306,30 @@ public class BayServiceImpl implements BayService {
         if (baySpecialtyOperationRepository == null) {
             return List.of();
         }
-        return baySpecialtyOperationRepository.findByBayType(bayType).stream()
+        List<String> seeded = baySpecialtyOperationRepository.findByBayType(bayType).stream()
                 .map(BaySpecialtyOperationEntity::getOperationCode)
                 .filter(code -> code != null && !code.isBlank())
-                .map(code -> code.trim().toUpperCase(Locale.ROOT))
-                .distinct()
                 .toList();
-    }
-
-    private List<String> validateServiceCapabilityIds(List<String> serviceCapabilityIds) {
-        if (serviceCapabilityIds == null || serviceCapabilityIds.isEmpty()) {
-            return List.of();
+        try {
+            // The map is a seed, not caller input, and it is held to the same rule: a row naming a
+            // code the catalog has retired or never published must not enter a bay as a claim the
+            // API would refuse from a caller (#2045 review). Named as the seed's defect, so the seed
+            // gets fixed rather than the request.
+            return validateServiceCapabilityCodes(seeded);
+        } catch (InvalidServiceCapabilityCodesException exception) {
+            throw new InvalidServiceCapabilityCodesException(
+                    "Specialty map for bayType " + bayType + " names codes that are not active catalog operation"
+                            + " codes: " + String.join(", ", exception.getInvalidCodes()),
+                    exception.getInvalidCodes());
         }
-        if (extCatalogServiceReplicaRepository == null) {
-            throw new IllegalArgumentException("catalog service replica is not configured");
-        }
-
-        NormalizedServiceCapabilities normalized = normalizeServiceCapabilityIds(serviceCapabilityIds);
-        throwIfInvalidServiceCapabilityIds(normalized.invalidCodes());
-
-        Set<String> requestedCodes = new LinkedHashSet<>(normalized.normalizedCodes());
-        Set<String> foundCodes = findServiceCapabilityCodes(requestedCodes);
-        Set<String> missingCodes = findMissingServiceCapabilityCodes(requestedCodes, foundCodes);
-        throwIfInvalidServiceCapabilityIds(missingCodes);
-
-        return normalized.normalizedCodes();
-    }
-
-    private NormalizedServiceCapabilities normalizeServiceCapabilityIds(List<String> serviceCapabilityIds) {
-        List<String> normalizedCodes = new ArrayList<>();
-        Set<String> invalidCodes = new LinkedHashSet<>();
-        for (String serviceCapabilityId : serviceCapabilityIds) {
-            String normalized = normalizeServiceCapabilityId(serviceCapabilityId);
-            if (normalized.isBlank()) {
-                invalidCodes.add("<blank>");
-                continue;
-            }
-            normalizedCodes.add(normalized);
-        }
-        return new NormalizedServiceCapabilities(normalizedCodes, invalidCodes);
-    }
-
-    private String normalizeServiceCapabilityId(String serviceCapabilityId) {
-        return serviceCapabilityId == null ? "" : serviceCapabilityId.trim().toUpperCase(Locale.ROOT);
     }
 
     /**
-     * A specialty claim is valid only if it names an <em>active</em> catalog operation code (CAP-325
-     * D14), resolved against the {@code ext_catalog_service} replica rather than any synchronous
-     * read (ADR-0044 §6). A code whose service pos-catalog has since retired is present in the
-     * replica with {@code active = false} and therefore not returned here — so a retired code
-     * fails validation the same way an unknown one does, while remaining distinguishable in the
-     * replica for anyone who needs to know which it was.
+     * A caller's explicit claim, read by the one validator bays share with mobile units (CAP-325
+     * D14): active catalog operation codes only, normalized and de-duplicated; 422 otherwise.
      */
-    private Set<String> findServiceCapabilityCodes(Set<String> requestedCodes) {
-        Set<String> foundCodes = new LinkedHashSet<>();
-        List<ExtCatalogServiceReplica> found =
-                extCatalogServiceReplicaRepository.findByOperationCodeInAndActiveIsTrue(requestedCodes);
-        if (found == null) {
-            return foundCodes;
-        }
-        for (ExtCatalogServiceReplica service : found) {
-            if (service.getOperationCode() == null) {
-                continue;
-            }
-            foundCodes.add(service.getOperationCode().trim().toUpperCase(Locale.ROOT));
-        }
-        return foundCodes;
-    }
-
-    private Set<String> findMissingServiceCapabilityCodes(Set<String> requestedCodes, Set<String> foundCodes) {
-        Set<String> missingCodes = new LinkedHashSet<>();
-        for (String requestedCode : requestedCodes) {
-            if (!foundCodes.contains(requestedCode)) {
-                missingCodes.add(requestedCode);
-            }
-        }
-        return missingCodes;
-    }
-
-    private void throwIfInvalidServiceCapabilityIds(Set<String> invalidCodes) {
-        if (!invalidCodes.isEmpty()) {
-            throw new IllegalArgumentException("Invalid serviceCapabilityCodes: " + String.join(", ", invalidCodes));
-        }
+    private List<String> validateServiceCapabilityCodes(List<String> serviceCapabilityCodes) {
+        return new ServiceCapabilityCodeValidator(extCatalogServiceReplicaRepository).validate(serviceCapabilityCodes);
     }
 
     private DuplicateResourceException toBayConflictException(DataIntegrityViolationException exception) {
@@ -435,6 +374,4 @@ public class BayServiceImpl implements BayService {
                 .lastModifiedAt(entity.getUpdatedAt())
                 .build();
     }
-
-    private record NormalizedServiceCapabilities(List<String> normalizedCodes, Set<String> invalidCodes) {}
 }

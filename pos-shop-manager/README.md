@@ -89,8 +89,9 @@ overrides, which should be zero — is a join and runs.
 CAPACITY, and stops at the first HOURS refusal so a closed day is answered as closed, never as
 full. Hours never published, an unknown timezone or no location replica row mean the HOURS rules
 do not fire and a WARN is logged — an unknown fact is not a confirmed closure. The two SKILL rules
-and `MECHANIC_OVERTIME` are seeded but not evaluated until CAP-328 supplies credentials and
-timekeeping supplies hours.
+are evaluated from the `ext_person_credential` and `ext_catalog_service_skill` replicas (CAP-328,
+CAP-329). `MECHANIC_OVERTIME` is seeded `is_active = false`: nothing supplies weekly hours yet, and
+an active rule the evaluator never evaluates would advertise enforcement that does not exist.
 
 `BAY_DOUBLE_BOOKED` is enforced by the database: `appointment_resource_no_overlap` (V8) is an
 exclusion constraint on `(tenant_id, resource_id, tstzrange(start_at, end_at, '[)'))` over the

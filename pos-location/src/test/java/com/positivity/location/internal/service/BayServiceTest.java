@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -19,10 +20,12 @@ import com.positivity.location.internal.dto.BayPatchRequest;
 import com.positivity.location.internal.dto.BayRequest;
 import com.positivity.location.internal.dto.BayResponse;
 import com.positivity.location.internal.entity.BayEntity;
+import com.positivity.location.internal.entity.BaySpecialtyOperationEntity;
 import com.positivity.location.internal.entity.ExtCatalogServiceReplica;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.enums.BayType;
 import com.positivity.location.internal.exception.DuplicateResourceException;
+import com.positivity.location.internal.exception.InvalidServiceCapabilityCodesException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.BayRepository;
 import com.positivity.location.internal.repository.BaySpecialtyOperationRepository;
@@ -431,8 +434,55 @@ class BayServiceTest {
                         .build()));
 
         assertThatThrownBy(() -> bayService.createBay(locationId, request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid serviceCapabilityCodes: UNKNOWN_CAP");
+                .isInstanceOf(InvalidServiceCapabilityCodesException.class)
+                .hasMessageContaining("Invalid serviceCapabilityCodes: UNKNOWN_CAP")
+                .extracting("invalidCodes")
+                .isEqualTo(List.of("UNKNOWN_CAP"));
+    }
+
+    @Test
+    @DisplayName("CAP-325 D14 - a specialty-map default the catalog does not know is refused like a caller's claim")
+    void createBay_refusesSeededDefaultTheCatalogDoesNotKnow() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        BayRequest request = validCreateRequest();
+        request.setBayType(BayType.ALIGNMENT.name());
+        request.setServiceCapabilityCodes(null);
+
+        when(locationRepository.findById(locationId))
+                .thenReturn(Optional.of(Location.builder().id(locationId).build()));
+        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName()))
+                .thenReturn(false);
+        when(bayRepository.findByLocationIdAndNormalizedName(
+                        locationId, request.getName().toLowerCase()))
+                .thenReturn(Optional.empty());
+        when(baySpecialtyOperationRepository.findByBayType(BayType.ALIGNMENT.name()))
+                .thenReturn(List.of(
+                        BaySpecialtyOperationEntity.builder()
+                                .bayType(BayType.ALIGNMENT.name())
+                                .operationCode("WHEEL-ALIGNMENT-4-WHEEL")
+                                .build(),
+                        BaySpecialtyOperationEntity.builder()
+                                .bayType(BayType.ALIGNMENT.name())
+                                .operationCode("RETIRED-ALIGNMENT-OP")
+                                .build()));
+        // The catalog replica knows the first code as active and nothing of the second.
+        doReturn(List.of(ExtCatalogServiceReplica.builder()
+                        .serviceId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                        .operationCode("WHEEL-ALIGNMENT-4-WHEEL")
+                        .name("Alignment")
+                        .active(true)
+                        .aggregateVersion(1L)
+                        .build()))
+                .when(extCatalogServiceReplicaRepository)
+                .findByOperationCodeInAndActiveIsTrue(any());
+
+        assertThatThrownBy(() -> bayService.createBay(locationId, request))
+                .isInstanceOf(InvalidServiceCapabilityCodesException.class)
+                .hasMessageContaining("Specialty map for bayType ALIGNMENT")
+                .hasMessageContaining("RETIRED-ALIGNMENT-OP")
+                .extracting("invalidCodes")
+                .isEqualTo(List.of("RETIRED-ALIGNMENT-OP"));
+        verify(bayRepository, never()).save(any());
     }
 
     @Test

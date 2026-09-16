@@ -40,6 +40,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -109,7 +110,7 @@ class ConflictOverrideServiceTest {
                         conflict(CONFLICT_B, APPT_ID, "FACILITY_NEAR_CAPACITY", ConflictSeverity.SOFT),
                         conflict(CONFLICT_A, APPT_ID, "MECHANIC_OVERTIME", ConflictSeverity.SOFT)));
         when(conflictOverrideRepository.existsByConflict_Id(any())).thenReturn(false);
-        when(conflictOverrideRepository.save(any())).thenAnswer(invocation -> {
+        when(conflictOverrideRepository.saveAndFlush(any())).thenAnswer(invocation -> {
             ConflictOverride saved = invocation.getArgument(0);
             saved.setId(UUID.randomUUID());
             return saved;
@@ -119,7 +120,7 @@ class ConflictOverrideServiceTest {
                 service.execute(APPT_ID, request(List.of(CONFLICT_A, CONFLICT_B), "Customer waiting"));
 
         ArgumentCaptor<ConflictOverride> captor = ArgumentCaptor.forClass(ConflictOverride.class);
-        verify(conflictOverrideRepository, times(2)).save(captor.capture());
+        verify(conflictOverrideRepository, times(2)).saveAndFlush(captor.capture());
         for (ConflictOverride row : captor.getAllValues()) {
             assertThat(row.getOverriddenBy()).isEqualTo(MANAGER);
             assertThat(row.getApprovedBy()).isEqualTo(MANAGER);
@@ -142,6 +143,23 @@ class ConflictOverrideServiceTest {
     }
 
     @Test
+    @DisplayName("two overrides racing on one conflict: the loser's constraint hit is 409 CONFLICT_ALREADY_OVERRIDDEN")
+    void constraintRaceIsTheSameRefusalAsThePreCheck() {
+        when(appointmentRepository.findById(APPT_ID)).thenReturn(Optional.of(appointment(APPT_ID)));
+        when(schedulingConflictRepository.findAllById(any()))
+                .thenReturn(List.of(conflict(CONFLICT_A, APPT_ID, "FACILITY_NEAR_CAPACITY", ConflictSeverity.SOFT)));
+        // The pre-check passed for both requests; this one flushes second.
+        when(conflictOverrideRepository.existsByConflict_Id(CONFLICT_A)).thenReturn(false);
+        when(conflictOverrideRepository.saveAndFlush(any()))
+                .thenThrow(new DataIntegrityViolationException("conflict_override_conflict_key"));
+
+        assertThatThrownBy(() -> service.execute(APPT_ID, request(List.of(CONFLICT_A), "Customer waiting")))
+                .isInstanceOf(ConflictOverrideStateException.class)
+                .hasMessageContaining(CONFLICT_A.toString())
+                .hasCauseInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     @DisplayName("a HARD conflict is refused with the DECISION-002 envelope and nothing is written")
     void hardConflictIsRefusedWithTheEnvelopeAndNoRow() {
         when(appointmentRepository.findById(APPT_ID)).thenReturn(Optional.of(appointment(APPT_ID)));
@@ -160,7 +178,7 @@ class ConflictOverrideServiceTest {
                     assertThat(envelope.getConflicts().get(0).getOverridable()).isFalse();
                 });
         // All-or-nothing: the SOFT sibling is not overridden either.
-        verify(conflictOverrideRepository, never()).save(any());
+        verify(conflictOverrideRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -173,7 +191,7 @@ class ConflictOverrideServiceTest {
 
         assertThatThrownBy(() -> service.execute(APPT_ID, request(List.of(CONFLICT_A), "Again")))
                 .isInstanceOf(ConflictOverrideStateException.class);
-        verify(conflictOverrideRepository, never()).save(any());
+        verify(conflictOverrideRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -186,7 +204,7 @@ class ConflictOverrideServiceTest {
         assertThatThrownBy(() -> service.execute(APPT_ID, request(List.of(CONFLICT_A), "Wrong one")))
                 .isInstanceOf(ShopManagerValidationException.class)
                 .hasMessageContaining(CONFLICT_A.toString());
-        verify(conflictOverrideRepository, never()).save(any());
+        verify(conflictOverrideRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -197,7 +215,7 @@ class ConflictOverrideServiceTest {
 
         assertThatThrownBy(() -> service.execute(APPT_ID, request(List.of(CONFLICT_A), "Ghost")))
                 .isInstanceOf(ShopManagerValidationException.class);
-        verify(conflictOverrideRepository, never()).save(any());
+        verify(conflictOverrideRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -208,7 +226,7 @@ class ConflictOverrideServiceTest {
         assertThatThrownBy(() -> service.execute(APPT_ID, request(List.of(), "Reason")))
                 .isInstanceOf(ShopManagerValidationException.class);
         verify(appointmentRepository, never()).findById(any());
-        verify(conflictOverrideRepository, never()).save(any());
+        verify(conflictOverrideRepository, never()).saveAndFlush(any());
     }
 
     @Test
