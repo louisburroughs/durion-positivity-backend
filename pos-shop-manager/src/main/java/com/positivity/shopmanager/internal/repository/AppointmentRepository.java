@@ -3,6 +3,7 @@ package com.positivity.shopmanager.internal.repository;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,6 +29,42 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
 
     List<Appointment> findByResourceIdAndResourceTypeAndStartAtLessThanAndEndAtGreaterThan(
             String resourceId, String resourceType, Instant windowEnd, Instant windowStart);
+
+    /**
+     * Appointments still holding {@code resourceId} for any part of {@code [startAt, endAt)} — the
+     * BAY_DOUBLE_BOOKED pre-check (CAP-326). Reporting only: the exclusion constraint (V8) is the
+     * enforcement, and the caller drops its own row on a reschedule.
+     */
+    @Query("""
+                        SELECT appointment
+                        FROM Appointment appointment
+                        WHERE appointment.resourceId = :resourceId
+                          AND appointment.status IN :held
+                          AND appointment.startAt < :endAt
+                          AND appointment.endAt > :startAt
+                        """)
+    @NonNull
+    List<Appointment> findHeldOverlappingForResource(
+            @NonNull String resourceId,
+            @NonNull Instant startAt,
+            @NonNull Instant endAt,
+            @NonNull Collection<AppointmentStatus> held);
+
+    /** Every held appointment at the location overlapping the window, whatever its resource. */
+    @Query("""
+                        SELECT appointment
+                        FROM Appointment appointment
+                        WHERE appointment.locationId = :locationId
+                          AND appointment.status IN :held
+                          AND appointment.startAt < :endAt
+                          AND appointment.endAt > :startAt
+                        """)
+    @NonNull
+    List<Appointment> findHeldOverlappingAtLocation(
+            @NonNull UUID locationId,
+            @NonNull Instant startAt,
+            @NonNull Instant endAt,
+            @NonNull Collection<AppointmentStatus> held);
 
     /**
      * Every non-cancelled appointment overlapping a date range at one location, for {@code GET

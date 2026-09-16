@@ -16,8 +16,15 @@ ADR-0044 Phase 3 split (#874/#875); this module reads them from event-fed
 - Record work sessions (clock-in/clock-out) and compute job time totals
 - Manage staffing assignments across locations
 - Evaluate employee availability for scheduling
-- Publish `people.employee.updated` / `people.staffing-assignment.updated` facts on
-  `people.events.v1` via a transactional outbox (ADR-0044)
+- Publish `people.employee.updated` / `people.staffing-assignment.updated` /
+  `people.person-credential.updated` facts on `people.events.v1` via a transactional
+  outbox (ADR-0044)
+- Publish the `@TenantGlobal` skill registry as `people.skill.updated` facts once the
+  application is ready (`SkillRegistryFactPublisher`, CAP-329): the registry has no write
+  endpoint, so this is the only way a consumer's replica (pos-catalog's `ext_skill`) is
+  fed. Each row is versioned by its `updated_at`, so a restart converges and a re-seed
+  arrives as a newer version; with no resolvable tenant the publication is skipped with
+  a warning.
 - Translate between user identity and person records (`UserPersonTranslationService`)
 - Ingest timekeeping data from external sources (`TimekeepingIngestionService`)
 - Support bulk employee import via `POST /v1/people/bulk-ingest`
@@ -29,6 +36,8 @@ ADR-0044 Phase 3 split (#874/#875); this module reads them from event-fed
 - `TimeEntryService` — time entry lifecycle (submit, approve, adjust)
 - `WorkSessionService` — work session tracking with clock-in/out timestamps
 - `StaffingAssignmentService` — location-based staffing assignments
+- `SkillRegistryService` — the platform skill registry (CAP-328): Durion skill codes with GVWR class ranges, and the ASE cross-reference that resolves vendor codes onto them; an unknown code fails loudly
+- `PersonCredentialService` — the credentials a person holds (CAP-328): upsert by natural key (person, skill, issuer, issuedOn) so a renewal is a new row; status derived from the dates; a credential a feed stops sending is SUPERSEDED, never deleted; every write publishes `people.person-credential.updated`
 - `UserPersonLinkService` — links a user account UUID to a person record
 
 ## API Endpoints
@@ -39,6 +48,9 @@ ADR-0044 Phase 3 split (#874/#875); this module reads them from event-fed
   (auth: `people:employee_pii:view`, not the `people:employee:view` the structural reads use — #1898)
 - `DELETE /v1/people/{personId}` — deactivate a person
 - `GET /v1/people/availability` — employee availability query (auth: `people:availability:view`)
+- `GET /v1/people/skills` — the active skill registry with vendor codes (auth: `people:skill:view`)
+- `GET /v1/people/{personId}/credentials` — the credentials a person holds or held, with today's status (auth: `people:employee:view`)
+- `POST /v1/people/credentials/bulk-ingest[?supersedeAbsent=true]` — bulk import credentials by employee number and vendor code or skill code (auth: `people:employee:edit`)
 - `GET /v1/people/me/primary-location` — authenticated user's primary location
   (auth: `people:self:view`)
 - `GET /v1/people/me/locations` — authenticated user's active location assignments

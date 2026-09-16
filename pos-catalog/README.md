@@ -71,6 +71,7 @@ Routing rule for new stories: computing **what a customer pays** → pos-price; 
 - `POST|GET /v1/catalog-items/service/{serviceId}/labor-standards`, `POST /.../{standardId}/supersede` — vehicle-keyed estimated service times (book time) with provenance (auth: `catalog:labor_standard:manage` / `:view`)
 - `POST /v1/catalog/labor-guide-imports?sourceCode=`, `GET /.../incomplete`, `GET /.../unmapped` — chunked labor-guide feed import from STORE-licensed sources, with counted completeness and the unmapped-operation curation queue (auth: `catalog:labor_standard:import` / `:view`)
 - `POST /v1/catalog/labor-times/resolve` — the ADR-0058 §5 service-to-service edge: resolve the applicable labor time for (service operation, vehicle) with provenance and typed degradation; sole approved caller is pos-workorder's `CatalogLaborTimeClientImpl` (auth: `catalog:labor_time:resolve`)
+- `PUT /v1/products/services/{serviceId}/requirements` — declare the skills a service requires, each scoped to a GVWR class range or ANY (CAP-329, `catalog:service_requirement:manage`); an empty list declares the service unconstrained. `ServiceDto` carries `requirementsConfiguredAt` and `requiredSkills` on every service read, and `catalog.service.updated` (schema v3) carries them to consumers. Skill ids are validated against the `ext_skill` replica (422 `SKILL_UNKNOWN` / `SKILL_RETIRED` / `SKILL_DUPLICATE` / `SKILL_CLASS_RANGE_INVALID`).
 - `GET /v1/catalog/tread-designs/for-product/{productId}` — vendor-supplied MKCAT enrichment matched to a product (auth: `catalog:tread_design:view`)
 - `GET /v1/catalog/tread-designs/unmatched` — enrichment review worklist (`matchState` defaults to `UNMATCHED,REVIEW`; auth: `catalog:tread_design:view`)
 - `GET /v1/catalog/tread-designs/{treadDesignId}/candidates` — every scored candidate for one design (auth: `catalog:tread_design:view`)
@@ -87,6 +88,18 @@ Routing rule for new stories: computing **what a customer pays** → pos-price; 
 Product mutations queue a `catalog.product.updated` fact (payload `ProductUpdatedV1`, schema version 2) on `catalog.events.v1` via the transactional outbox (`pos.catalog.kafka.enabled`), reconciled hourly on `catalog.manifest.v1`. Schema version 2 (#1023, additive) added `baseUom`, `trackingLevel`, `uomConversions[]` (`uomCode`, `uomType`, `factorToBase`, `precisionScale`), `substitutionGroupId`, and `substitutionProductIds[]` so pos-inventory can replicate UoM conversions, tracking level, and substitution membership (`ext_product_uom` et al.). UoM and substitution-membership mutations bump the product's `updatedAt` (the envelope `aggregateVersion`) and re-emit the fact for every affected product.
 
 Issue #1514 added `subcategoryId` and `subcategory` additively within schema version 2, following the precedent set when `productCode` was added: pos-inventory replicates the product's category *and* subcategory so putaway rules can route on them, and the subcategory level is what carries hazard containment (`Batteries` is a subcategory of `Electrical System`). Consumers match on the **id**, not the name — pos-catalog publishes product facts, not category facts, so a category rename only reaches a replica after a product replay, which makes the name an un-refreshed snapshot.
+
+### Consumed: the skill registry (CAP-329)
+
+`PeopleEventsListener` consumes `people.events.v1` for one fact, `people.skill.updated`, and
+mirrors it into `ext_skill` — a replica of the People domain's `@TenantGlobal` skill registry,
+global like its source (`db/tenancy-global-tables.txt`). A service's skill requirement is
+validated against this table, never by a synchronous call into pos-people (ADR-0044 §6). Rows are
+upserted by skill id under the usual aggregate-version stale guard; a retirement
+(`active=false`) keeps the row, so a requirement that still names the skill can be told the
+vocabulary moved rather than that the skill never existed. Every other people fact on the topic
+is acknowledged and ignored. Config: `pos.catalog.kafka.people-events-topic` /
+`people-events-consumer-group`.
 
 ## Category and subcategory resolution (#1514)
 

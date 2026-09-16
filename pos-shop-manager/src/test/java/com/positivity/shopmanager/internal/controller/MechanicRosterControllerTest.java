@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.shopmanager.internal.dto.MechanicRosterEntryResponse;
+import com.positivity.shopmanager.internal.dto.TechnicianCredentialResponse;
+import com.positivity.shopmanager.internal.enums.CredentialStatus;
 import com.positivity.shopmanager.internal.enums.MechanicStatus;
 import com.positivity.shopmanager.internal.service.MechanicRosterQueryService;
 import java.time.Clock;
@@ -52,7 +54,10 @@ class MechanicRosterControllerTest {
                 .firstName("Ada")
                 .lastName("Lovelace")
                 .status(MechanicStatus.INACTIVE)
-                .skills(List.of("ALIGNMENT"))
+                .credentials(List.of(TechnicianCredentialResponse.builder()
+                        .skillCode("ALIGNMENT")
+                        .status(CredentialStatus.EXPIRED)
+                        .build()))
                 .build();
         when(mechanicRosterQueryService.listMechanics(eq(MechanicStatus.INACTIVE), eq("ALIGNMENT"), any()))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(entry)));
@@ -66,7 +71,8 @@ class MechanicRosterControllerTest {
                 .andExpect(jsonPath("$.content[0].mechanicId").value(mechanicId.toString()))
                 .andExpect(jsonPath("$.content[0].personId").value(personId.toString()))
                 .andExpect(jsonPath("$.content[0].status").value("INACTIVE"))
-                .andExpect(jsonPath("$.content[0].skills[0]").value("ALIGNMENT"))
+                .andExpect(jsonPath("$.content[0].credentials[0].skillCode").value("ALIGNMENT"))
+                .andExpect(jsonPath("$.content[0].credentials[0].status").value("EXPIRED"))
                 .andExpect(jsonPath("$.page.totalElements").value(1));
     }
 

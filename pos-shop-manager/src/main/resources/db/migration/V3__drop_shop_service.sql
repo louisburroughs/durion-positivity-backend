@@ -1,0 +1,13 @@
+-- Drop shop_service.
+--
+-- The table carried service_entity_id as a bigint, described in ShopServiceEntry as a
+-- "Reference to ServiceEntity in pos-catalog" — but pos-catalog's ServiceEntity key is a UUID
+-- (ADR-0013, ADR-0027), so the column could never hold a valid reference. Nothing read it: no
+-- repository, no service, no controller, no test, and no seeded rows. Its only consumer was a
+-- dead @OneToMany collection on Shop.
+--
+-- Removed rather than re-keyed because pos-shop-manager is about to gain ext_catalog_service
+-- (CAP-325), a replica that does hold a valid UUID service reference. Leaving a second,
+-- permanently-broken service-reference table beside it would leave the next reader to pick the
+-- wrong one. Pre-production policy (CLAUDE.md) permits the removal without a shim.
+DROP TABLE IF EXISTS public.shop_service;

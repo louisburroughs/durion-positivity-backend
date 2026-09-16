@@ -57,10 +57,11 @@ public class MobileUnitResponse {
     private String notes;
 
     @Schema(
-            description = "Identifiers of capabilities the mobile unit can perform",
-            example = "[\"01960003-0000-7000-8000-000000000010\"]",
+            description = "Catalog operation codes this unit can perform off-site (CAP-325 D14), UPPER-DASH per"
+                    + " ADR-0059 §3; empty for a unit that has not declared any.",
+            example = "[\"OIL-CHANGE-FULL-SYNTHETIC\", \"BATTERY-REPLACEMENT\"]",
             requiredMode = NOT_REQUIRED)
-    private List<String> capabilityIds;
+    private List<String> serviceCapabilityCodes;
 
     @Schema(
             description = "Timestamp when the mobile unit was created (ISO 8601)",

@@ -88,11 +88,13 @@ Afterwards, verify: row counts on the owner, `replica_drift_total` flat, expecte
 event volume in pos-event-receiver.
 
 Run order (services must exist before data referencing them): security users/roles →
-**location** (sites, storage topology, site defaults, bays, mobile units) → people →
-people-contact → **customer** → vehicle → catalog → price → catalog → price →
-inventory (putaway rules, then on-hand, then cycle count plans). Locations must be
-loaded (or already present)
-first in any case — bulk-load jobs themselves require a valid `locationId`.
+**location** (sites, storage topology, site defaults) → people → people-contact →
+**customer** → vehicle → catalog (products, services, labor, packages, skill
+requirements) → **location bays and mobile units** → price → inventory (putaway rules,
+then on-hand, then cycle count plans). Locations must be loaded (or already present)
+first in any case — bulk-load jobs themselves require a valid `locationId`. Bays and
+mobile units follow the catalog because their capability codes are catalog operation
+codes, validated by pos-location against its `ext_catalog_service` replica (CAP-325 D14).
 
 ## Packs
 
@@ -139,6 +141,7 @@ change.
 |---|---|---|
 | `employees.csv` | 46 employees (all staff — the seed has been employees-only since #875; EMP-T001…EMP-P001 are the SDK seeder's seven, staffed at ATX-RIV-001) | `POST /v1/people/bulk-ingest` (`domainType: PERSON`) |
 | `staffing-assignments.csv` | 46 role/location assignments | gateway API pack (`POST /people/staffing/assignments` per row) |
+| `credentials.csv` | 25 credentials across 7 technicians with real issue and expiry dates (CAP-328): the 23 ASE certifications the shop-manager `mechanic-skills.csv` carried as bare codes, two of them deliberately expired (EMP-0007 T7-HVAC, EMP-0009 T8-PMI), plus two `DOT-INSPECTOR` qualifications issued by the shop | `POST /v1/people/credentials/bulk-ingest` (`domainType: PERSON_CREDENTIAL`) |
 
 The people seed contains no customers: customer/contact identities moved to the
 pos-people-contact seed under #875, and this file holds 46 staff (the seed's 39, `EMP-0001`–
@@ -160,22 +163,14 @@ roster, then `createStaffingAssignment` — employees and locations must load fi
 - The Flyway seed (`R__seed_people_operational_data.sql`) was deleted in #1554
   along with the location operational seed it referenced by fixed location UUID.
 
-### `shop-manager/` — from `pos-shop-manager R__seed_shop_manager_mechanics.sql`
+### `shop-manager/` — nothing to seed
 
-| File | Rows | Target |
-|---|---|---|
-| `mechanic-skills.csv` | 23 skills across 7 technicians | gateway API pack (`PUT /shop-manager/mechanics/by-person/{personId}/skills` per mechanic) |
-
-Skills are the seed's one piece of genuine shop-manager data (proficiency/ASE codes
-exist nowhere else); the mechanic *rows* themselves are projected from TECHNICIAN
-staffing assignments over Kafka and are not seeded. The endpoint routes the edit
-through the same HR-feed path as the projection (a synthetic
-MECHANIC_SKILLS_UPDATED event), so dedupe/stale-guard/audit apply uniformly and
-each PUT replace-sets the mechanic's skills — re-runs converge. **Ordering:** the
-pack runs after the staffing assignments, but mechanics materialize
-asynchronously from Kafka; a 404 means the projection hasn't caught up — re-run
-this pack alone (`--only shop-manager/mechanic-skills.csv`) once it has. Delta:
-the seed's `certified_date` is not carried (the skill payload has no such field).
+The former `mechanic-skills.csv` (23 skills across 7 technicians) is now
+`people/credentials.csv`: competence is the People domain's credential aggregate
+(CAP-328), `pos-shop-manager` reads it from its `ext_person_credential` replica over
+Kafka, and the `PUT /shop-manager/mechanics/by-person/{personId}/skills` pack is gone
+with the tables it fed. Mechanic *rows* are still projected from TECHNICIAN staffing
+assignments and are not seeded.
 
 ### `vehicle/` — from `pos-vehicle-inventory R__seed_vehicle_inventory_operational_data.sql`
 
@@ -318,6 +313,7 @@ product landed uncategorized.
 | `tier0-labor-standards.csv` | 21 vehicle-keyed labor standards | `POST /v1/catalog/labor-standards/bulk-ingest` (`SERVICE_LABOR_STANDARD`) |
 | `tier0-service-packages.csv` | 4 packages and 1 fleet requirement set | `POST /v1/service-packages/bulk-ingest` (`SERVICE_PACKAGE`) |
 | `tier0-service-package-members.csv` | 21 memberships | `POST /v1/service-package-members/bulk-ingest` (`SERVICE_PACKAGE_MEMBER`) |
+| `tier0-service-skill-requirements.csv` | 8 requirements over 5 operations (CAP-329): brake jobs and the 4-wheel alignment class-forked (`*-LIGHT` on GVWR 1–3, `*-MEDIUM_HEAVY` on 4–8), `DOT-ANNUAL-INSPECTION` → `DOT-INSPECTOR` on any class, `FLEET-PM-B-SERVICE` → `PMI-MEDIUM_HEAVY` | API pack: `PUT /v1/products/services/{id}/requirements` once per operation, the service resolved by name and each skill by its registry code (`GET /v1/people/skills`); needs `catalog:service_requirement:manage`, `catalog:service_type:view`, `people:skill:view` |
 
 **Every number in these four files is invented** — the SDK seeder's 11 services included:
 their default labor hours are derived from the seeder's own placeholder sell prices, not from
@@ -433,22 +429,22 @@ about where part numbers come from first.
 
 Columns (`locations.csv`): `name,code,addressLine1,addressLine2,city,stateOrProvince,postalCode,countryCode,phoneNumber,active,locationTypeName,timezone`.
 
-Columns (`mobile-units.csv`): `name,baseLocationCode,status,travelBufferPolicyName,capabilityCodes` — `capabilityCodes` is `;`-separated.
+Columns (`mobile-units.csv`): `name,baseLocationCode,status,travelBufferPolicyName,capabilityCodes` — `capabilityCodes` is `;`-separated and holds **catalog operation codes** (CAP-325 D14: the same vocabulary as a bay's specialty claim, validated by pos-location against its `ext_catalog_service` replica, so the Tier 0 catalog pack must have landed first). The location-owned capability registry is retired (V5).
 
 Columns (`mobile-unit-coverage-rules.csv`): `unitName,serviceAreaName,ruleType,priority,maxDistance,validFrom,validTo` — `maxDistance` blank is the catch-all tier, and `validFrom`/`validTo` blank means always in effect.
 
 **Mobile units are an API pack, not a loader domain (#1986).** pos-location refuses an `ACTIVE`
-mobile unit that has no `travelBufferPolicyId`, `capabilityIds` and `coverageRules` —
+mobile unit that has no `travelBufferPolicyId`, `serviceCapabilityCodes` and `coverageRules` —
 `MobileUnitServiceImpl.validateCreateMobileUnitRequest` rejects it with "ACTIVE mobile unit requires
-travelBufferPolicyId, capabilityIds, and coverageRules" — and the loader's `MOBILE_UNIT` strategy
+travelBufferPolicyId, serviceCapabilityCodes, and coverageRules" — and the loader's `MOBILE_UNIT` strategy
 carries only `name`, `baseLocationCode`, `status` and `notes`, so it cannot express an active unit
 at all. `POST /v1/mobile-units` takes the whole unit in one call, coverage rules included, so the
 driver assembles it rather than the loader growing three fields.
 
 Both fixtures key off names, like every other pack here. `travelBufferPolicyName` and
 `serviceAreaName` are resolved through `GET /location/travel-buffer-policies` and
-`GET /location/service-areas` once per run; `capabilityCodes` is a `;`-separated list of codes sent
-as-is, since the service resolves a capability by code as readily as by id.
+`GET /location/service-areas` once per run; `capabilityCodes` is a `;`-separated list of catalog
+operation codes sent as `serviceCapabilityCodes`, normalized UPPER-DASH by the service.
 
 **Row order in `mobile-unit-coverage-rules.csv` is load-bearing.**
 `MobileUnitServiceImpl.validateDistanceTiers` walks a unit's rules in the order sent and requires

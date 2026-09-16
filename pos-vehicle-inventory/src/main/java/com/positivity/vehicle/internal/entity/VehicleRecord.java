@@ -6,10 +6,13 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tenancy.TenantScopedEntity;
+import com.positivity.vehicle.internal.enums.GvwrClassSource;
 import com.positivity.vehicle.internal.enums.OdometerUnit;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
@@ -94,6 +97,18 @@ public class VehicleRecord extends TenantScopedEntity {
 
     @Column(name = "trim")
     private String trim;
+
+    /**
+     * FHWA GVWR class 1–8 (CAP-327 D13); null means undetermined. The duty category is derived from
+     * it ({@link com.positivity.vehicle.internal.enums.DutyCategory}), never stored beside it.
+     */
+    @Column(name = "gvwr_class")
+    private Integer gvwrClass;
+
+    /** Always paired with {@link #gvwrClass}: who set it. Only OPERATOR_SET exists until a decode ships. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gvwr_class_source", length = 16)
+    private GvwrClassSource gvwrClassSource;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "odometer", columnDefinition = "jsonb")

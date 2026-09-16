@@ -26,6 +26,10 @@ decisions:
     shape: gate
     permission: shop:schedule:view
     reason: locationId names the capacity board being read; denied outside the caller's reach.
+  - operation: ScheduleController.searchOpenings
+    shape: gate
+    permission: shop:schedule:view
+    reason: locationId names the shop whose openings are searched (#2022); denied outside the caller's reach before any replica is read.
   - operation: ShopDashboardController.getShopDashboard
     shape: gate
     permission: shop:dashboard:view

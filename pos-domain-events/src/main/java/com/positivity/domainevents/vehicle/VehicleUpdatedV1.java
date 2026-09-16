@@ -26,6 +26,13 @@ import org.jspecify.annotations.Nullable;
  * {@code odometerUnit} is the {@code OdometerUnit} name ({@code MILES}/{@code KILOMETERS}). They
  * feed pos-warranty's {@code ext_vehicle} replica, which froze the VIN + odometer onto a claim
  * that the retired synchronous {@code VehicleInventoryClient} previously supplied (#924).
+ *
+ * <p>{@code gvwrClass}/{@code gvwrClassSource} are the vehicle's FHWA GVWR class 1–8 and where it
+ * came from ({@code OPERATOR_SET} or {@code DECODED}), additive within schema v1 for CAP-327 (spec
+ * D13) — null when undetermined, and absent altogether from a fact serialized by a producer that
+ * predates the field, which consumers must not read as "cleared". pos-shop-manager's {@code
+ * ext_vehicle} replica holds the class for the bay duty-class ceiling check; the duty category is
+ * derived from the class by whoever needs it and is never carried.
  */
 public record VehicleUpdatedV1(
         @NonNull UUID vehicleId,
@@ -43,6 +50,8 @@ public record VehicleUpdatedV1(
         boolean active,
         @Nullable Integer odometerValue,
         @Nullable String odometerUnit,
+        @Nullable Integer gvwrClass,
+        @Nullable String gvwrClassSource,
         @Nullable Instant createdAt,
         @Nullable Instant updatedAt) {
 

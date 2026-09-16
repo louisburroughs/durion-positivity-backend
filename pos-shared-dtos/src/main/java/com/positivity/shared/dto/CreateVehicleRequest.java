@@ -1,6 +1,8 @@
 package com.positivity.shared.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
@@ -66,4 +68,16 @@ public class CreateVehicleRequest {
 
     @Schema(description = "Vehicle trim.", example = "XL", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String trim;
+
+    @Min(1)
+    @Max(8)
+    @Schema(
+            description = "FHWA GVWR class 1-8 (CAP-327). Omit when undetermined. Setting it records the"
+                    + " source as OPERATOR_SET; the duty category (LIGHT 1-3, MEDIUM 4-6, HEAVY 7-8) is"
+                    + " derived from it on the response.",
+            example = "2",
+            minimum = "1",
+            maximum = "8",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private Integer gvwrClass;
 }

@@ -1,9 +1,9 @@
-generatedAt: "2026-09-16T11:54:09.847515+00:00"
+generatedAt: "2026-09-16T16:02:57.144526+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 495
-  uniquePermissionCount: 495
+  permissionCount: 497
+  uniquePermissionCount: 497
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -138,7 +138,7 @@ manifests:
     domain: "catalog"
     serviceName: "pos-catalog"
     version: "1.0"
-    permissionCount: 47
+    permissionCount: 48
     permissions:
       - name: "catalog:catalog_grouping:delete"
         description: "Delete a catalog grouping"
@@ -198,6 +198,8 @@ manifests:
         description: "View a product's alternate units of measure"
       - name: "catalog:service:ingest"
         description: "Bulk import service operations through the seed pipeline"
+      - name: "catalog:service_requirement:manage"
+        description: "Declare the skills a catalog service requires, conditioned on vehicle GVWR class (CAP-329)"
       - name: "catalog:service_package:manage"
         description: "Define service packages and fleet requirement sets, and compose their members"
       - name: "catalog:service_package:view"
@@ -693,7 +695,7 @@ manifests:
       - name: "people:skill:edit"
         description: "Edit skill assignments"
       - name: "people:skill:view"
-        description: "View employee skills"
+        description: "Read the skill registry (CAP-328): codes, competences, GVWR class ranges and vendor cross-references"
       - name: "people:timeAdjustment:approve"
         description: "Approve timeAdjustment"
       - name: "people:timeAdjustment:create"
@@ -850,7 +852,7 @@ manifests:
     domain: "shop"
     serviceName: "pos-shop-manager"
     version: "1.0"
-    permissionCount: 16
+    permissionCount: 17
     permissions:
       - name: "shop:location:view"
         description: "View shop/location details"
@@ -868,6 +870,8 @@ manifests:
         description: "Edit service bays"
       - name: "shop:bay:assign"
         description: "Assign work to bays"
+      - name: "shop:conflict:override"
+        description: "Record a manager override of a SOFT scheduling conflict on an appointment"
       - name: "shop:dashboard:view"
         description: "View the aggregate shop manager dashboard for a location"
       - name: "shop:technician:view"
@@ -1702,6 +1706,12 @@ permissions:
     source: "pos-catalog/src/main/resources/permissions.yaml"
   - name: "catalog:service_package:view"
     description: "List and read service packages and fleet requirement sets"
+    domain: "catalog"
+    serviceName: "pos-catalog"
+    module: "pos-catalog"
+    source: "pos-catalog/src/main/resources/permissions.yaml"
+  - name: "catalog:service_requirement:manage"
+    description: "Declare the skills a catalog service requires, conditioned on vehicle GVWR class (CAP-329)"
     domain: "catalog"
     serviceName: "pos-catalog"
     module: "pos-catalog"
@@ -3021,7 +3031,7 @@ permissions:
     module: "pos-people"
     source: "pos-people/src/main/resources/permissions.yaml"
   - name: "people:skill:view"
-    description: "View employee skills"
+    description: "Read the skill registry (CAP-328): codes, competences, GVWR class ranges and vendor cross-references"
     domain: "people"
     serviceName: "pos-people"
     module: "pos-people"
@@ -3454,6 +3464,12 @@ permissions:
     source: "pos-shop-manager/src/main/resources/permissions.yaml"
   - name: "shop:bay:view"
     description: "View service bays"
+    domain: "shop"
+    serviceName: "pos-shop-manager"
+    module: "pos-shop-manager"
+    source: "pos-shop-manager/src/main/resources/permissions.yaml"
+  - name: "shop:conflict:override"
+    description: "Record a manager override of a SOFT scheduling conflict on an appointment"
     domain: "shop"
     serviceName: "pos-shop-manager"
     module: "pos-shop-manager"

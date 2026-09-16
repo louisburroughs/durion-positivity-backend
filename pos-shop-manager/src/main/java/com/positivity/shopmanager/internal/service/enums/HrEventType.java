@@ -6,6 +6,5 @@ package com.positivity.shopmanager.internal.service.enums;
  */
 public enum HrEventType {
     MECHANIC_UPSERTED,
-    MECHANIC_DEACTIVATED,
-    MECHANIC_SKILLS_UPDATED
+    MECHANIC_DEACTIVATED
 }

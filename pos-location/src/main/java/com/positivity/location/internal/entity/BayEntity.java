@@ -79,15 +79,24 @@ public class BayEntity extends TenantScopedEntity {
     @Column(name = "max_concurrent_vehicles", nullable = false)
     private Integer maxConcurrentVehicles;
 
+    /**
+     * Catalog {@code operationCode}s this bay type is the only one able to perform (CAP-325 D14).
+     * Empty for a general bay. Values are validated against the {@code ext_catalog_service}
+     * replica on write and stored uppercased. Renamed from {@code serviceCapabilityIds}: the
+     * values were always codes, never identifiers, and the old name lied.
+     */
     @Builder.Default
     @Convert(converter = StringListJsonConverter.class)
-    @Column(name = "service_capability_ids", columnDefinition = "TEXT")
-    private List<String> serviceCapabilityIds = new ArrayList<>();
+    @Column(name = "service_capability_codes", columnDefinition = "TEXT")
+    private List<String> serviceCapabilityCodes = new ArrayList<>();
 
-    @Builder.Default
-    @Convert(converter = StringListJsonConverter.class)
-    @Column(name = "skill_requirement_ids", columnDefinition = "TEXT")
-    private List<String> skillRequirementIds = new ArrayList<>();
+    /**
+     * Heaviest GVWR class (1–8) the bay accepts; null when unconstrained (CAP-325 D13). A class
+     * number, not a token: Light 1–3, Medium 4–6, Heavy 7–8, and the boundary at class 4 is where
+     * ASE's Medium/Heavy Truck series begins.
+     */
+    @Column(name = "max_duty_class")
+    private Integer maxDutyClass;
 
     /**
      * Aggregate version backing the {@code location.bay.*} facts' {@code aggregateVersion}
@@ -114,11 +123,8 @@ public class BayEntity extends TenantScopedEntity {
         if (status == null || status.isBlank()) {
             status = "ACTIVE";
         }
-        if (serviceCapabilityIds == null) {
-            serviceCapabilityIds = new ArrayList<>();
-        }
-        if (skillRequirementIds == null) {
-            skillRequirementIds = new ArrayList<>();
+        if (serviceCapabilityCodes == null) {
+            serviceCapabilityCodes = new ArrayList<>();
         }
     }
 

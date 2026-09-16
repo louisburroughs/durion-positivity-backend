@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
@@ -48,8 +49,14 @@ public class MechanicAvailabilityServiceImpl implements MechanicAvailabilityServ
                     "windowStart must be before windowEnd, got: " + windowStart + " >= " + windowEnd);
         }
 
+        UUID personUuid;
+        try {
+            personUuid = UUID.fromString(personId.trim());
+        } catch (IllegalArgumentException notAUuid) {
+            throw new ShopManagerValidationException("personId is not a UUID: " + personId);
+        }
         var mechanic = mechanicRepository
-                .findByPersonId(personId)
+                .findByPersonId(personUuid)
                 .orElseThrow(() -> new ShopManagerValidationException("Mechanic not found for personId: " + personId));
 
         // Schedule blocks come from the local staffing-assignment replica (#877); the HR

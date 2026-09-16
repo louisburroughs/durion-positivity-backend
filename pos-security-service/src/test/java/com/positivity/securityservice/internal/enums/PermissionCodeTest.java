@@ -32,15 +32,17 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
-    // 531 / 86: catalog v86 added platform:tenant:impersonate (530, ADR-0062 section 7, WS2b-4),
-    // v85 platform:tenant:provision (529, WS2b-3), and v84 the platform:account:{create,read,update}
+    // 533 / 88: catalog v87 added shop:conflict:override (531, CAP-326 conflict override) and v88
+    // catalog:service_requirement:manage (532, CAP-329 service skill requirements), on top of
+    // v86's platform:tenant:impersonate (530, ADR-0062 section 7, WS2b-4), v85's
+    // platform:tenant:provision (529, WS2b-3), and v84's platform:account:{create,read,update}
     // and platform:tenant:{create,decommission,reactivate,read,suspend,update} families of the
-    // pos-tenant registry (#1924, ADR-0062 section 7) at bits 520-528, on top of v83's
+    // pos-tenant registry (#1924, ADR-0062 section 7) at bits 520-528, v83's
     // people:employee_pii:view (519), v82's crm:fact:replay (518), v81's people:self:view (517)
     // and v80's catalog:service:ingest (516). Both numbers move together by design: the version
     // bump is what tells a running gateway its cached catalog is stale.
-    private static final int EXPECTED_PERMISSION_COUNT = 531;
-    private static final int EXPECTED_CATALOG_VERSION = 86;
+    private static final int EXPECTED_PERMISSION_COUNT = 533;
+    private static final int EXPECTED_CATALOG_VERSION = 88;
 
     // -------------------------------------------------------------------------
     // AC-1: Catalog size — EXPECTED_PERMISSION_COUNT entries

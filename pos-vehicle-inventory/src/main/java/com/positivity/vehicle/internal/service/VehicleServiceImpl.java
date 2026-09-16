@@ -5,6 +5,8 @@ import com.positivity.shared.dto.UpdateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.internal.config.VehicleEventPublisher;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
+import com.positivity.vehicle.internal.enums.DutyCategory;
+import com.positivity.vehicle.internal.enums.GvwrClassSource;
 import com.positivity.vehicle.internal.exception.VehicleVinConflictException;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import com.positivity.vehicle.internal.util.VinUtils;
@@ -61,6 +63,8 @@ public class VehicleServiceImpl implements VehicleService {
                 .make(request.getMake())
                 .model(request.getModel())
                 .trim(request.getTrim())
+                .gvwrClass(request.getGvwrClass())
+                .gvwrClassSource(request.getGvwrClass() == null ? null : GvwrClassSource.OPERATOR_SET)
                 .isActive(true)
                 .build();
 
@@ -132,6 +136,11 @@ public class VehicleServiceImpl implements VehicleService {
         if (request.getTrim() != null) {
             vehicle.setTrim(request.getTrim());
         }
+        if (request.getGvwrClass() != null) {
+            // An operator's value always wins over a decode (CAP-327 D13), so the source moves with it.
+            vehicle.setGvwrClass(request.getGvwrClass());
+            vehicle.setGvwrClassSource(GvwrClassSource.OPERATOR_SET);
+        }
 
         VehicleRecord saved = vehicleRepository.save(vehicle);
         vehicleEventPublisher.publishVehicleUpdated(saved);
@@ -174,6 +183,16 @@ public class VehicleServiceImpl implements VehicleService {
                 .make(vehicle.getMake())
                 .model(vehicle.getModel())
                 .trim(vehicle.getTrim())
+                .gvwrClass(vehicle.getGvwrClass())
+                .gvwrClassSource(
+                        vehicle.getGvwrClassSource() == null
+                                ? null
+                                : vehicle.getGvwrClassSource().name())
+                .dutyCategory(
+                        vehicle.getGvwrClass() == null
+                                ? null
+                                : DutyCategory.fromGvwrClass(vehicle.getGvwrClass())
+                                        .name())
                 .odometerValue(
                         odometer == null || odometer.getValue() == null ? null : Math.toIntExact(odometer.getValue()))
                 .odometerUnit(

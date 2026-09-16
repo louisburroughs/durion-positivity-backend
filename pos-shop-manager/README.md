@@ -4,10 +4,10 @@ Shop operations service for the Durion Positivity ETSMS platform. Manages shop a
 
 ## Responsibilities
 
-- Create and manage service appointments with scheduling conflict detection
+- Create and manage service appointments, refusing HARD scheduling conflicts and warning on SOFT ones at submit time (DECISION-SHOPMGMT-002, CAP-326)
 - Schedule bays and mobile units for appointments
 - Track mechanic availability and assign technicians to appointments
-- Resolve scheduling conflicts with override support
+- Record manager overrides of SOFT scheduling conflicts (`shop:conflict:override`); a HARD conflict is never overridable
 - Provide workorder operational context (bay, mechanic, vehicle, customer details)
 - Serve the aggregate shop manager dashboard for a location in a single read
 - Process workorder status events to update scheduling state
@@ -17,8 +17,8 @@ Shop operations service for the Durion Positivity ETSMS platform. Manages shop a
 ## Key Classes
 
 - `AppointmentsService` — appointment lifecycle (create, reschedule, cancel)
-- `ConflictDetectionService` — checks for overlapping bay/mechanic/mobile unit bookings
-- `ConflictOverrideService` — records operator overrides for detected conflicts
+- `SchedulingConflictEvaluator` — evaluates DECISION-SHOPMGMT-002's rules at create and reschedule (HOURS, BAY, MECHANIC, CAPACITY); `BAY_DOUBLE_BOOKED` is enforced by an exclusion constraint
+- `ConflictOverrideService` — records a manager's override of SOFT scheduling conflicts (`shop:conflict:override`; HARD is never overridable)
 - `MechanicAvailabilityService` — evaluates technician availability windows
 - `WorkorderOperationalContextService` — assembles the full operational context for a workorder
 - `ShopDashboardService` — the single-call dashboard read model over this module's local replicas
@@ -26,9 +26,18 @@ Shop operations service for the Durion Positivity ETSMS platform. Manages shop a
 
 ## API Endpoints
 
-- `POST /v1/appointments` — create an appointment
+- `POST /v1/appointments` — create an appointment. `201` with the new appointment; `200` when the
+  request replays one that already exists (a repeated `Idempotency-Key`, or an exact keyless
+  resubmission of the same booking); `409` with the DECISION-SHOPMGMT-002 envelope when a HARD rule
+  fires (`FACILITY_CLOSED`, `OUTSIDE_OPERATING_HOURS`, `BAY_DOUBLE_BOOKED`, `MECHANIC_UNAVAILABLE`),
+  listing every rule that fired with its code verbatim. SOFT rules (`FACILITY_NEAR_CAPACITY`) book
+  and appear on the response as `conflicts[]`, each overridable until a manager overrides it.
+- `POST /v1/appointments/{appointmentId}/conflict-override` — a manager accepts SOFT conflicts by id
+  (`{conflictIds, overrideReason}`); requires `shop:conflict:override` and the appointment's location
+  in scope. `400` for a conflict not recorded against the appointment, `409` for a HARD one (envelope,
+  nothing written) or one already overridden (`CONFLICT_ALREADY_OVERRIDDEN`).
 - `GET /v1/appointments/{appointmentId}` — retrieve an appointment
-- `PUT /v1/appointments/{appointmentId}/reschedule` — reschedule an appointment
+- `PUT /v1/appointments/{appointmentId}/reschedule` — reschedule an appointment; the same rules as creation apply, and the appointment's own slot does not count against it
 - `DELETE /v1/appointments/{appointmentId}/cancel` — cancel an appointment
 - `GET /v1/schedules/view` — shop schedule view
 - `GET /v1/bays` / `GET /v1/{locationId}/bays/{bayId}` — retrieve bays
@@ -41,15 +50,129 @@ Shop operations service for the Durion Positivity ETSMS platform. Manages shop a
 - `GET /v1/shop-manager/{locationId}/technicians/{personId}/person` — technician person detail
 - `GET /v1/shop-dashboard?locationId={uuid}&date={yyyy-MM-dd}` — aggregate shop dashboard
 
-Both roster endpoints require `shop:technician:view` and support optional exact
-`status` and `skillCode` filters. Status defaults to `ACTIVE`. The location roster
-is ordered by mechanic last name, first name, and person ID before pagination, so
-it accepts `page` and `size` but ignores `sort`; the mechanic roster honours `sort`
-and defaults to that same ordering.
+Both roster endpoints require `shop:technician:view` and support optional `status`
+and `skillCode` filters. Status defaults to `ACTIVE`. The location roster lists
+mechanics whose person holds an ACTIVE `TECHNICIAN` staffing assignment at the
+location (the `ext_people_staffing_assignment` replica); it is ordered by mechanic
+last name, first name, and person ID before pagination, so it accepts `page` and
+`size` but ignores `sort`. The mechanic roster honours `sort` and defaults to that
+same ordering.
+
+Competence is read from the `ext_person_credential` replica of the People domain's
+credential aggregate (CAP-328) and never stored here. Each entry carries
+`credentials`: every credential the person holds, with `skillCode`, the issuer's own
+`sourceCredentialCode`, `issuedOn`, `expiresOn`, display-only `proficiency`, and a
+`status` judged on the roster's reference date — the facility's local date for the
+location roster (DECISION-SHOPMGMT-015), the clock's date for the mechanic roster.
+An expired, revoked or superseded credential is listed with that status, not dropped
+and not read as held. `skillCode` matches either the Durion skill code or the
+issuer's code (`T4-BRAKES`), uppercase-and-trimmed on both sides, and counts only
+credentials held on that date. The former `mechanic_skill` and `certification` tables,
+the `PUT .../skills` and `POST /mechanics/bulk-ingest` endpoints and the `technician`
+table are gone; credentials are ingested in pos-people
+(`POST /v1/people/credentials/bulk-ingest`).
 
 Both emit audit events registered in `internal/config/EventTypes` —
 `SHOPMGR_MECHANIC_ROSTER_LIST` and `SHOPMGR_LOCATION_TECHNICIAN_LIST`, each with
 the `search` latency preset.
+
+## Scheduling conflicts (CAP-326)
+
+The conflict model is DECISION-SHOPMGMT-002's, persisted: `conflict_rule` is a platform-global
+catalog of eight rules whose `code` is the API reason code verbatim (one namespace, no mapping
+table); `scheduling_conflict` records every rule that fired against a booking attempt, with
+`appointment_id` null for a refused attempt; `conflict_override` is a manager's immutable
+acceptance of one SOFT conflict, single-actor approved. The record's audit — HARD conflicts with
+overrides, which should be zero — is a join and runs.
+
+`SchedulingConflictEvaluator` runs at create and reschedule in the order HOURS, BAY, MECHANIC,
+CAPACITY, and stops at the first HOURS refusal so a closed day is answered as closed, never as
+full. Hours never published, an unknown timezone or no location replica row mean the HOURS rules
+do not fire and a WARN is logged — an unknown fact is not a confirmed closure. The two SKILL rules
+are evaluated from the `ext_person_credential` and `ext_catalog_service_skill` replicas (CAP-328,
+CAP-329). `MECHANIC_OVERTIME` is seeded `is_active = false`: nothing supplies weekly hours yet, and
+an active rule the evaluator never evaluates would advertise enforcement that does not exist.
+
+`BAY_DOUBLE_BOOKED` is enforced by the database: `appointment_resource_no_overlap` (V8) is an
+exclusion constraint on `(tenant_id, resource_id, tstzrange(start_at, end_at, '[)'))` over the
+statuses in `AppointmentStatus.holdingAResource()`. The evaluator's pre-check is reporting; the
+constraint is what makes two concurrent bookings of one bay yield exactly one appointment. A
+refusal (`23P01`) is recorded as a `BAY_DOUBLE_BOOKED` conflict on a fresh connection by
+`SchedulingConflictRecorder` — unless the refused insert was an exact keyless double-submit of the
+appointment that won, in which case the winner is replayed with `200`.
+
+### Skill rules (CAP-329, spec D10.1)
+
+The two `SKILL` rules are evaluated at create and reschedule from replicas alone. The
+booking's services are resolved on `ext_catalog_service` / `ext_catalog_service_skill`
+(the `catalog.service.updated` v3 fact): a service whose requirements were never
+configured contributes nothing — "not configured" is not "requires nothing" — and a
+requirement applies when its GVWR class range covers the vehicle's `gvwr_class`
+(`ext_vehicle`, CAP-327) or is unranged (ANY). Without a vehicle class only ANY
+requirements apply and the detail says so. The technicians rostered at the location that
+local day are checked on `ext_person_credential`, a credential counting only while held on
+the facility-local date (DECISION-SHOPMGMT-015; expiry inclusive, REVOKED/SUPERSEDED never).
+Nobody holding a required skill → `NO_COMPETENT_MECHANIC_ROSTERED` (SOFT, names the codes);
+holders present but every one already the technician on an overlapping held appointment →
+`COMPETENT_MECHANIC_UNAVAILABLE` (SOFT). Zero technicians at the location is
+`MECHANIC_UNAVAILABLE` alone, never a competence failure (#2035 answer 5). Neither rule
+withholds a booking; both are manager-overridable (`shop:conflict:override`).
+
+### Assignment and competence (spec D10 (c), CAP-329)
+
+Booking only warns; assignment is where competence has a consequence. `POST /v1/assignments`
+resolves the appointment's service requests and vehicle class through `SkillRequirementResolver`
+and, when a required skill is held by none of the assigned mechanics on the appointment's
+facility-local date, creates the assignment in `AWAITING_SKILL_FULFILLMENT`
+(DECISION-SHOPMGMT-010) rather than `ASSIGNED`; a request carrying an authorised `override`
+(`shop:schedule:edit`, with a reason) assigns anyway. No requirement — none configured, or none
+for this vehicle class — parks nothing. The status machine already allows
+`AWAITING_SKILL_FULFILLMENT → ASSIGNED` once a holder is assigned.
+
+## Opening search (`GET /v1/schedules/openings`, #2022)
+
+"When is the next slot that fits a 90-minute alignment?" answered in one call, from replicas
+alone (ADR-0044 §6) and in a fixed number of queries whatever the horizon: the location, its
+bays, the services, the vehicle, the technician roster, everyone's credentials, and one
+appointment read spanning the whole horizon. Advisory by the domain's own contract
+(DECISION-SHOPMGMT-011): `POST /v1/appointments` decides, and every opening carries
+`constraintsEvaluated` so nothing reads as enforcement (spec D11).
+
+Parameters: `locationId`, `serviceIds` (1–10 catalog service ids), `durationMinutes` (1–1440),
+`earliestStart`; optional `vehicleId` (resolves the GVWR class), `technicianId` (restricts to
+openings that person can take), `horizonDays` (default and maximum 30, facility-local days from
+`earliestStart`'s date), `limit` (default 10, maximum 50). Malformed values are 400; exceeding a
+bound is 422 `OPENING_HORIZON_EXCEEDED` / `OPENING_LIMIT_EXCEEDED` / `OPENING_TOO_MANY_SERVICES`;
+a location without a recognised timezone and published hours is 422 `LOCATION_HOURS_UNKNOWN`
+(hours are HARD and Location is authoritative — without them every instant would read as open).
+
+An opening is the earliest start in a free gap of one eligible bay at which the job, with the
+location's `checkInBufferMinutes` before and `cleanupBufferMinutes` after, fits inside the gap and
+inside the day's operating window, and at which a technician rostered that day (day grain, from
+`ext_staffing_assignment`; PTO is not modelled) is not on an overlapping held appointment
+(minute grain). One opening per gap per bay, at real minute resolution; closed days and
+holiday closures are skipped, never reported as full. Ranking: earliest start, then `CERTIFIED`
+before `AWAITING`, then bay.
+
+Bay eligibility (CAP-325 D13/D14): a bay is eligible for an operation when it claims the
+operation code in `serviceCapabilityCodes`; an operation no bay at the location claims is
+general work, which every bay but a `WASH_DETAIL` one may do — general bays ranked before
+specialty bays at the same start, so the rack stays free for alignment work without the shop
+ever reading as full. A bay whose `maxDutyClass` is below the vehicle's class is out;
+`bayEligibility` counts the two misses separately. Empty list reasons are exactly two:
+`NO_ELIGIBLE_BAY_AT_LOCATION` and `ALL_ELIGIBLE_BAYS_BOOKED`.
+
+Skill (CAP-329 D10, read through `SkillRequirementResolver`, the same reading the submit-time
+evaluator uses): competence never withholds an opening. A technician holding every required
+skill on the opening's facility-local date is preferred (`skillFulfillment: CERTIFIED`);
+otherwise the opening names a free technician with `AWAITING` and `unmetSkillCodes`. The
+window-invariant fact is reported once as `staffingAdvisory` alongside the (non-empty) list,
+never as a `noOpeningReason`: `NO_COMPETENT_MECHANIC_ROSTERED` with `missingSkillCodes` and
+`absenceScope` `NOT_AT_THIS_LOCATION` (nobody staffed here holds it) or `NOT_ROSTERED_THIS_DAY`
+(a holder works here, not in the searched days); and `MECHANIC_UNAVAILABLE` when no technician
+is rostered on any open day in the horizon (#2035 answer 5 — never a competence rule), in which
+case the list is empty and `noOpeningReason` stays null. `NOT_IN_TENANT` and
+`alternateLocations[]` are deliberately absent (DECISION-SHOPMGMT-012).
 
 ## Shop dashboard (`GET /v1/shop-dashboard`)
 
@@ -103,6 +226,8 @@ but the event consumer writes them, and no synchronous call crosses a domain wal
 | `ext_customer_party` | `customer.events.v1` | `CustomerEventsListener` |
 | `ext_vehicle` | `vehicle.events.v1` | `VehicleEventsListener` |
 | `ext_people_staffing_assignment` | `people.events.v1` | `PeopleEventsListener` |
+| `ext_person_credential` | `people.events.v1` | `PeopleEventsListener` |
+| `ext_catalog_service`, `ext_catalog_service_skill` | `catalog.events.v1` | `CatalogEventsListener` |
 | `ext_people_contact_person` | `people-contact.events.v1` | `PeopleContactEventsListener` |
 | `ext_workorder` | `workorder.events.v1` | `WorkorderEventsListener` |
 | `ext_bay`, `ext_mobile_unit` | `location.events.v1` | `LocationEventsListener` |

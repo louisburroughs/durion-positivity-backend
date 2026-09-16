@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -19,14 +20,17 @@ import com.positivity.location.internal.dto.BayPatchRequest;
 import com.positivity.location.internal.dto.BayRequest;
 import com.positivity.location.internal.dto.BayResponse;
 import com.positivity.location.internal.entity.BayEntity;
+import com.positivity.location.internal.entity.BaySpecialtyOperationEntity;
+import com.positivity.location.internal.entity.ExtCatalogServiceReplica;
 import com.positivity.location.internal.entity.Location;
-import com.positivity.location.internal.entity.ServiceLocationCapabilityEntity;
 import com.positivity.location.internal.enums.BayType;
 import com.positivity.location.internal.exception.DuplicateResourceException;
+import com.positivity.location.internal.exception.InvalidServiceCapabilityCodesException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
 import com.positivity.location.internal.repository.BayRepository;
+import com.positivity.location.internal.repository.BaySpecialtyOperationRepository;
+import com.positivity.location.internal.repository.ExtCatalogServiceReplicaRepository;
 import com.positivity.location.internal.repository.LocationRepository;
-import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
 import java.lang.reflect.Method;
 import java.time.Clock;
 import java.time.Instant;
@@ -70,7 +74,10 @@ class BayServiceTest {
     LocationRepository locationRepository;
 
     @Mock
-    ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
+    ExtCatalogServiceReplicaRepository extCatalogServiceReplicaRepository;
+
+    @Mock
+    BaySpecialtyOperationRepository baySpecialtyOperationRepository;
 
     /** Bay mutations publish location.bay.updated (issue #1668). */
     @Mock
@@ -81,21 +88,24 @@ class BayServiceTest {
 
     @BeforeEach
     void setUp() {
-        lenient().when(serviceLocationCapabilityRepository.findByCodeIn(any())).thenAnswer(invocation -> {
-            @SuppressWarnings("unchecked")
-            Collection<String> codes = (Collection<String>) invocation.getArgument(0);
-            if (codes == null) {
-                return List.of();
-            }
-            return codes.stream()
-                    .map(code -> ServiceLocationCapabilityEntity.builder()
-                            .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                            .code(code)
-                            .name("Capability " + code)
-                            .active(true)
-                            .build())
-                    .toList();
-        });
+        lenient()
+                .when(extCatalogServiceReplicaRepository.findByOperationCodeInAndActiveIsTrue(any()))
+                .thenAnswer(invocation -> {
+                    @SuppressWarnings("unchecked")
+                    Collection<String> codes = (Collection<String>) invocation.getArgument(0);
+                    if (codes == null) {
+                        return List.of();
+                    }
+                    return codes.stream()
+                            .map(code -> ExtCatalogServiceReplica.builder()
+                                    .serviceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                                    .operationCode(code)
+                                    .name("Service " + code)
+                                    .active(true)
+                                    .aggregateVersion(1L)
+                                    .build())
+                            .toList();
+                });
     }
 
     @Test
@@ -376,8 +386,7 @@ class BayServiceTest {
     void createBay_successWithCapabilitiesAndSkills_savesAndReturnsResponse() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayRequest request = validCreateRequest();
-        request.setServiceCapabilityIds(List.of("ALIGN", "TIRE"));
-        request.setSkillRequirementIds(List.of("ASE-A1"));
+        request.setServiceCapabilityCodes(List.of("ALIGN", "TIRE"));
         request.setStatus("active");
 
         when(locationRepository.findById(locationId))
@@ -397,17 +406,16 @@ class BayServiceTest {
 
         assertThat(response.getLocationId()).isEqualTo(locationId);
         assertThat(response.getStatus()).isEqualTo("ACTIVE");
-        assertThat(response.getServiceCapabilityIds()).containsExactly("ALIGN", "TIRE");
-        assertThat(response.getSkillRequirementIds()).containsExactly("ASE-A1");
+        assertThat(response.getServiceCapabilityCodes()).containsExactly("ALIGN", "TIRE");
         verify(bayRepository).save(any(BayEntity.class));
     }
 
     @Test
-    @DisplayName("createBay_invalidServiceCapabilityIds_throwsIllegalArgumentException")
-    void createBay_invalidServiceCapabilityIds_throwsIllegalArgumentException() {
+    @DisplayName("createBay_invalidServiceCapabilityCodes_throwsIllegalArgumentException")
+    void createBay_invalidServiceCapabilityCodes_throwsIllegalArgumentException() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayRequest request = validCreateRequest();
-        request.setServiceCapabilityIds(List.of("ALIGN", "UNKNOWN_CAP"));
+        request.setServiceCapabilityCodes(List.of("ALIGN", "UNKNOWN_CAP"));
 
         when(locationRepository.findById(locationId))
                 .thenReturn(Optional.of(Location.builder().id(locationId).build()));
@@ -416,17 +424,65 @@ class BayServiceTest {
         when(bayRepository.findByLocationIdAndNormalizedName(
                         locationId, request.getName().toLowerCase()))
                 .thenReturn(Optional.empty());
-        when(serviceLocationCapabilityRepository.findByCodeIn(any()))
-                .thenReturn(List.of(ServiceLocationCapabilityEntity.builder()
-                        .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                        .code("ALIGN")
+        when(extCatalogServiceReplicaRepository.findByOperationCodeInAndActiveIsTrue(any()))
+                .thenReturn(List.of(ExtCatalogServiceReplica.builder()
+                        .serviceId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                        .operationCode("ALIGN")
                         .name("Align")
                         .active(true)
+                        .aggregateVersion(1L)
                         .build()));
 
         assertThatThrownBy(() -> bayService.createBay(locationId, request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid serviceCapabilityIds: UNKNOWN_CAP");
+                .isInstanceOf(InvalidServiceCapabilityCodesException.class)
+                .hasMessageContaining("Invalid serviceCapabilityCodes: UNKNOWN_CAP")
+                .extracting("invalidCodes")
+                .isEqualTo(List.of("UNKNOWN_CAP"));
+    }
+
+    @Test
+    @DisplayName("CAP-325 D14 - a specialty-map default the catalog does not know is refused like a caller's claim")
+    void createBay_refusesSeededDefaultTheCatalogDoesNotKnow() {
+        UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        BayRequest request = validCreateRequest();
+        request.setBayType(BayType.ALIGNMENT.name());
+        request.setServiceCapabilityCodes(null);
+
+        when(locationRepository.findById(locationId))
+                .thenReturn(Optional.of(Location.builder().id(locationId).build()));
+        when(bayRepository.existsByLocationIdAndNameIgnoreCase(locationId, request.getName()))
+                .thenReturn(false);
+        when(bayRepository.findByLocationIdAndNormalizedName(
+                        locationId, request.getName().toLowerCase()))
+                .thenReturn(Optional.empty());
+        when(baySpecialtyOperationRepository.findByBayType(BayType.ALIGNMENT.name()))
+                .thenReturn(List.of(
+                        BaySpecialtyOperationEntity.builder()
+                                .bayType(BayType.ALIGNMENT.name())
+                                .operationCode("WHEEL-ALIGNMENT-4-WHEEL")
+                                .build(),
+                        BaySpecialtyOperationEntity.builder()
+                                .bayType(BayType.ALIGNMENT.name())
+                                .operationCode("RETIRED-ALIGNMENT-OP")
+                                .build()));
+        // The catalog replica knows the first code as active and nothing of the second.
+        doReturn(List.of(ExtCatalogServiceReplica.builder()
+                        .serviceId(UUID.fromString("00000000-0000-0000-0000-000000000002"))
+                        .operationCode("WHEEL-ALIGNMENT-4-WHEEL")
+                        .name("Alignment")
+                        .active(true)
+                        .aggregateVersion(1L)
+                        .build()))
+                .when(extCatalogServiceReplicaRepository)
+                .findByOperationCodeInAndActiveIsTrue(any());
+
+        assertThatThrownBy(() -> bayService.createBay(locationId, request))
+                .isInstanceOf(InvalidServiceCapabilityCodesException.class)
+                .hasMessageContaining("Specialty map for bayType ALIGNMENT")
+                .hasMessageContaining("RETIRED-ALIGNMENT-OP")
+                .extracting("invalidCodes")
+                .isEqualTo(List.of("RETIRED-ALIGNMENT-OP"));
+        verify(bayRepository, never()).save(any());
     }
 
     @Test
@@ -690,8 +746,7 @@ class BayServiceTest {
         existing.setId(bayId);
 
         BayPatchRequest patch = BayPatchRequest.builder()
-                .serviceCapabilityIds(List.of("ALIGN", "BRAKE"))
-                .skillRequirementIds(List.of("ASE-A4"))
+                .serviceCapabilityCodes(List.of("ALIGN", "BRAKE"))
                 .build();
 
         when(locationRepository.existsById(locationId)).thenReturn(true);
@@ -701,8 +756,7 @@ class BayServiceTest {
 
         BayResponse response = bayService.patchBay(locationId, bayId, patch);
 
-        assertThat(response.getServiceCapabilityIds()).containsExactly("ALIGN", "BRAKE");
-        assertThat(response.getSkillRequirementIds()).containsExactly("ASE-A4");
+        assertThat(response.getServiceCapabilityCodes()).containsExactly("ALIGN", "BRAKE");
         verify(bayRepository).save(any(BayEntity.class));
     }
 
@@ -748,8 +802,7 @@ class BayServiceTest {
                 .bayType(BayType.GENERAL_SERVICE.name())
                 .status("ACTIVE")
                 .maxConcurrentVehicles(2)
-                .serviceCapabilityIds(List.of())
-                .skillRequirementIds(List.of())
+                .serviceCapabilityCodes(List.of())
                 .build();
     }
 

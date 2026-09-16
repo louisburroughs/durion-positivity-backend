@@ -11,11 +11,16 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.people.EmployeeUpdatedV1;
+import com.positivity.domainevents.people.PersonCredentialUpdatedV1;
+import com.positivity.domainevents.people.SkillUpdatedV1;
 import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpsertRequestedV1;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
+import com.positivity.people.internal.entity.PersonCredential;
+import com.positivity.people.internal.entity.Skill;
 import com.positivity.people.internal.enums.AssignmentStatus;
+import com.positivity.people.internal.enums.CredentialStatus;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import java.time.Clock;
 import java.time.Instant;
@@ -112,6 +117,29 @@ class PeopleEventPublisherTest {
         return assignment;
     }
 
+    private static PersonCredential credential() {
+        Skill skill = Skill.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-0000000000f4"))
+                .code("BRAKES-MEDIUM_HEAVY")
+                .competenceCode("BRAKES")
+                .minGvwrClass(4)
+                .maxGvwrClass(8)
+                .active(true)
+                .build();
+        return PersonCredential.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-0000000000c9"))
+                .personId(PERSON_ID)
+                .skill(skill)
+                .issuer("ASE")
+                .sourceCode("ASE")
+                .sourceCredentialCode("T4-BRAKES")
+                .issuedOn(LocalDate.of(2024, 3, 15))
+                .expiresOn(LocalDate.of(2026, 3, 15))
+                .proficiency(4)
+                .status(CredentialStatus.ACTIVE)
+                .build();
+    }
+
     private DomainEventEnvelope<?> captureEnvelope() {
         ArgumentCaptor<DomainEventEnvelope<?>> captor = ArgumentCaptor.captor();
         verify(writer).publish(org.mockito.ArgumentMatchers.eq(EVENTS_TOPIC), captor.capture());
@@ -172,6 +200,51 @@ class PeopleEventPublisherTest {
             assertThat(payload.role()).isEqualTo("TECHNICIAN");
             assertThat(payload.primary()).isTrue();
             assertThat(payload.status()).isEqualTo("ACTIVE");
+        }
+
+        @Test
+        @DisplayName(
+                "people.person-credential.updated carries the credential and its registry skill, status as of today")
+        void credentialFact() {
+            publisher.publishPersonCredentialUpdated(credential());
+
+            DomainEventEnvelope<?> envelope = captureEnvelope();
+            assertThat(envelope.eventType()).isEqualTo(PersonCredentialUpdatedV1.EVENT_TYPE);
+            assertThat(envelope.aggregateId()).isEqualTo(UUID.fromString("00000000-0000-0000-0000-0000000000c9"));
+            PersonCredentialUpdatedV1 payload = (PersonCredentialUpdatedV1) envelope.payload();
+            assertThat(payload.personId()).isEqualTo(PERSON_ID);
+            assertThat(payload.skillCode()).isEqualTo("BRAKES-MEDIUM_HEAVY");
+            assertThat(payload.competenceCode()).isEqualTo("BRAKES");
+            assertThat(payload.minGvwrClass()).isEqualTo(4);
+            assertThat(payload.maxGvwrClass()).isEqualTo(8);
+            assertThat(payload.issuer()).isEqualTo("ASE");
+            assertThat(payload.sourceCredentialCode()).isEqualTo("T4-BRAKES");
+            assertThat(payload.expiresOn()).isEqualTo(LocalDate.of(2026, 3, 15));
+            // The publisher's clock is 2026-08-11: the row's ACTIVE column is not trusted, the dates decide.
+            assertThat(payload.status()).isEqualTo("EXPIRED");
+        }
+
+        @Test
+        @DisplayName("people.skill.updated carries the registry row, versioned by its updatedAt rather than the clock")
+        void skillFact() {
+            Skill skill = credential().getSkill();
+            skill.setName("Brakes (medium/heavy duty)");
+            skill.setUpdatedAt(Instant.parse("2026-06-01T00:00:00Z"));
+
+            publisher.publishSkillUpdated(skill);
+
+            DomainEventEnvelope<?> envelope = captureEnvelope();
+            assertThat(envelope.eventType()).isEqualTo(SkillUpdatedV1.EVENT_TYPE);
+            assertThat(envelope.aggregateId()).isEqualTo(UUID.fromString("00000000-0000-0000-0000-0000000000f4"));
+            assertThat(envelope.aggregateVersion())
+                    .isEqualTo(Instant.parse("2026-06-01T00:00:00Z").toEpochMilli());
+            SkillUpdatedV1 payload = (SkillUpdatedV1) envelope.payload();
+            assertThat(payload.code()).isEqualTo("BRAKES-MEDIUM_HEAVY");
+            assertThat(payload.name()).isEqualTo("Brakes (medium/heavy duty)");
+            assertThat(payload.competenceCode()).isEqualTo("BRAKES");
+            assertThat(payload.minGvwrClass()).isEqualTo(4);
+            assertThat(payload.maxGvwrClass()).isEqualTo(8);
+            assertThat(payload.active()).isTrue();
         }
 
         @Test

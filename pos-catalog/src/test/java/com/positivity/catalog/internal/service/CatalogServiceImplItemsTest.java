@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.catalog.internal.config.CatalogFactPublisher;
+import com.positivity.catalog.internal.config.ServiceRequirementProjector;
 import com.positivity.catalog.internal.dto.CatalogDto;
 import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
 import com.positivity.catalog.internal.dto.CatalogItemResponseDto;
@@ -61,6 +62,9 @@ class CatalogServiceImplItemsTest {
     private static final Instant CREATED_AT = Instant.parse("2026-01-04T08:00:00Z");
 
     @Mock
+    private ServiceRequirementProjector serviceRequirementProjector;
+
+    @Mock
     private ProductRepository productRepository;
 
     @Mock
@@ -84,7 +88,8 @@ class CatalogServiceImplItemsTest {
                 serviceRepository,
                 nonInventoryProductRepository,
                 catalogRepository,
-                catalogFactPublisher);
+                catalogFactPublisher,
+                serviceRequirementProjector);
         when(productRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(serviceRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
         when(nonInventoryProductRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));

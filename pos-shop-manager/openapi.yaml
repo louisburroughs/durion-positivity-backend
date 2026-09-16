@@ -14,22 +14,18 @@ tags:
   name: Shop Dashboard API
 - description: Operations for creating and loading appointments in shop management
   name: Appointments API
-- description: Bulk set mechanics' skill sets
-  name: Mechanic Skill Bulk Ingest API
 - description: Read-only HR-synchronized mechanic roster queries
   name: Mechanic Roster API
-- description: Operator maintenance of mechanic skill enrichment
-  name: Mechanic Skills API
 - description: Create and list technician and resource assignments for an appointment
   name: Appointment Assignments
 - description: Shop schedule and assignment audit trail.
   name: Shop Audit
 - description: Read-only schedule view operations for shop management UI
   name: Schedule API
+- description: Manager acceptance of SOFT scheduling conflicts
+  name: Conflict Override API
 - description: Technician identity lookups for a shop location
   name: Technician API
-- description: Operations for appointment conflict override decisions
-  name: Conflict Override API
 paths:
   /v1/appointments:
     post:
@@ -85,6 +81,12 @@ paths:
         description: 'Booking details for the appointment: customer, vehicle, location, time window, service requests and optional originating source document.'
         required: true
       responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+          description: 'Replay of an existing appointment: a repeated Idempotency-Key, or an exact keyless resubmission of the same booking (CAP-326). No new appointment was created.'
         '201':
           content:
             application/json:
@@ -96,7 +98,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Validation or conflict error — requested slot is unavailable, duplicate source appointment, or request fields are invalid.
+          description: Validation error — duplicate source appointment, or request fields are invalid.
         '403':
           content:
             application/json:
@@ -114,7 +116,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Vehicle does not belong to the supplied customer.
+          description: Scheduling conflict — a HARD rule fired (DECISION-SHOPMGMT-002 envelope listing every rule that fired, code verbatim) — or the vehicle does not belong to the supplied customer.
         '422':
           content:
             application/json:
@@ -263,11 +265,11 @@ paths:
       - appointments:view
       - shop:schedule:view
     post:
-      description: 'Creates the mechanic assignment for a scheduled appointment in CONFIRMED status, linking one LEAD mechanic and optional ASSIST mechanics and optionally reserving a bay or mobile-unit resource.
+      description: 'Creates the mechanic assignment for a scheduled appointment in ASSIGNED status, linking one LEAD mechanic and optional ASSIST mechanics and optionally reserving a bay or mobile-unit resource.
 
         Use this tool when staffing a booked appointment; do not use executeConflictOverride, which records a schedule-conflict bypass without assigning anyone, and use listAssignments to read what is already assigned.
 
-        Preconditions: the appointment must exist and be in SCHEDULED status, no CONFIRMED or IN_PROGRESS assignment may already exist for it, and every mechanicPersonId must resolve to a known mechanic.
+        Preconditions: the appointment must exist and be in SCHEDULED status, no ASSIGNED, AWAITING_SKILL_FULFILLMENT or IN_PROGRESS assignment may already exist for it, and every mechanicPersonId must resolve to a known mechanic.
 
         Required inputs: mechanics with exactly one LEAD role (a single mechanic with a null role defaults to LEAD); resourceId and resourceType are optional, and override=true requires the shop:schedule:edit authority plus a non-blank overrideReason.
 
@@ -403,17 +405,17 @@ paths:
       - appointments:cancel
   /v1/appointments/{appointmentId}/conflict-override:
     post:
-      description: 'Records a manager-authorized bypass of a detected scheduling conflict, flagging the appointment as conflict-overridden and persisting an immutable override record with the acting user and timestamp.
+      description: 'Records a manager''s acceptance of one or more SOFT scheduling conflicts already recorded against the appointment (DECISION-SHOPMGMT-002), writing one immutable override row per conflict with the acting manager as both overrider and approver (DECISION-SHOPMGMT-007).
 
-        Use this tool when a blocking conflict on an appointment must be deliberately accepted; do not use createAssignment with override=true, which overrides assignment constraints while staffing, and do not use rescheduleAppointment, which resolves the conflict by moving the appointment instead.
+        Use this tool after a booking or reschedule answered with SOFT conflicts and the manager has decided to keep the appointment as booked; do not use it to force past a HARD conflict, which is never overridable, and do not use createAssignment with override=true, which overrides staffing constraints rather than scheduling ones.
 
-        Preconditions: the appointment must exist, and the caller must hold the shop:schedule:edit or appointments:reschedule authority.
+        Preconditions: the caller holds shop:conflict:override and the appointment''s location is in the caller''s scope; each conflictId is recorded against this appointment, is SOFT, and does not already carry an override.
 
-        Required inputs: appointmentId in the body matching the path parameter, and a non-blank overrideReason; conflictDetails is an optional JSON string describing the conflict being bypassed.
+        Required inputs: conflictIds (at least one) and a non-blank overrideReason.
 
-        Emits a SHOPMGR_APPOINTMENT_CONFLICT_OVERRIDE_CREATE event, sets the appointment''s conflict-override flag and stores the override record with the actor resolved from the security context.
+        Emits a SHOPMGR_APPOINTMENT_CONFLICT_OVERRIDE_CREATE event.
 
-        Returns 400 when the path and body appointmentId differ or the overrideReason is blank, 404 when the appointment cannot be resolved, and 403 when the caller lacks the required authority.
+        Returns 400 when a conflictId is not recorded against this appointment or the body is invalid, 403 when the caller lacks the authority or the location is out of scope, 404 when the appointment cannot be resolved, and 409 either with the scheduling-conflict envelope (a named conflict is HARD; nothing is written) or with code CONFLICT_ALREADY_OVERRIDDEN.
 
         '
       operationId: executeConflictOverride
@@ -429,15 +431,15 @@ paths:
         content:
           application/json:
             examples:
-              Override for a waiting customer:
-                description: Override for a waiting customer
+              Accept an overtime warning:
+                description: Accept an overtime warning
                 value:
-                  appointmentId: 01960003-0000-7000-8000-000000000001
-                  conflictDetails: '{"type":"TECHNICIAN_DOUBLE_BOOKED","resourceId":"01960003-0000-7000-8000-000000000010"}'
-                  overrideReason: Customer waiting on-site
+                  conflictIds:
+                  - 01960003-0000-7000-8000-000000000010
+                  overrideReason: Customer waiting on-site; second technician arrives at 10:00
             schema:
               $ref: '#/components/schemas/ConflictOverrideRequest'
-        description: Override decision naming the appointment, the justification, and an optional description of the conflict being bypassed.
+        description: The conflicts being accepted and the justification.
         required: true
       responses:
         '201':
@@ -445,35 +447,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConflictOverrideResponse'
-          description: Conflict override executed.
+          description: Override recorded for every named conflict.
         '400':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Invalid request or appointment ID mismatch.
+          description: Invalid body, or a conflict not recorded against this appointment.
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Forbidden.
+          description: Caller lacks shop:conflict:override or the appointment's location is out of scope.
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Appointment not found.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictResponse'
+          description: A named conflict is HARD (scheduling-conflict envelope, nothing written) or already overridden (ApiError CONFLICT_ALREADY_OVERRIDDEN).
       security:
       - bearerAuth:
-        - shop:schedule:edit
-        - appointments:reschedule
-      summary: Override a Scheduling Conflict on an Appointment
+        - shop:conflict:override
+      summary: Override SOFT scheduling conflicts on an appointment
       tags:
       - Conflict Override API
       x-required-permissions:
-      - shop:schedule:edit
-      - appointments:reschedule
+      - shop:conflict:override
   /v1/appointments/{appointmentId}/reschedule:
     put:
       description: 'Moves an existing appointment to a new time window while preserving its resource, customer and service requests, recording the change in reschedule history and the appointment audit trail.
@@ -630,6 +636,131 @@ paths:
       - bearerAuth:
         - shop:schedule:view
       summary: Get per-day, per-bay occupancy for a location across a date range
+      tags:
+      - Schedule API
+      x-required-permissions:
+      - shop:schedule:view
+  /v1/schedules/openings:
+    get:
+      description: 'Finds the windows at one location in which a whole job fits, unbroken, in one eligible bay, with a technician rostered that day and free in the window, honouring the location''s check-in and cleanup buffers, and ranks them earliest start first with CERTIFIED openings before AWAITING ones at equal starts.
+
+        Use this tool when a service advisor asks when the next slot for a job of a given length is; use getScheduleCapacity instead for per-day, per-bay occupancy of a calendar range rather than bookable windows.
+
+        Preconditions: the location must be known to shop management with a recognised timezone and published operating hours, and every serviceId must be a catalog service known to shop management.
+
+        Required inputs: locationId (UUID), serviceIds (one to ten catalog service UUIDs), durationMinutes (1 to 1440) and earliestStart (ISO-8601 instant); vehicleId and technicianId are optional, horizonDays defaults to 30 (the maximum) and limit defaults to 10 (maximum 50).
+
+        Emits a SHOPMGR_SCHEDULE_OPENING_SEARCH audit event and changes no state; the search is advisory and the submit-time conflict evaluation on appointment creation remains authoritative, which is why every opening lists constraintsEvaluated.
+
+        Skill never withholds an opening: a technician lacking a required skill makes the opening AWAITING, and nobody competent rostered in the horizon is reported once as staffingAdvisory alongside the openings rather than as a noOpeningReason, which names only NO_ELIGIBLE_BAY_AT_LOCATION or ALL_ELIGIBLE_BAYS_BOOKED.
+
+        Returns 400 for a malformed or out-of-range value, 403 LOCATION_SCOPE_DENIED when the caller''s location scope does not cover locationId, 404 when the location or a service is unknown, and 422 OPENING_HORIZON_EXCEEDED, OPENING_LIMIT_EXCEEDED, OPENING_TOO_MANY_SERVICES or LOCATION_HOURS_UNKNOWN when a policy bound or a facility fact is not met.
+
+        '
+      operationId: searchOpenings
+      parameters:
+      - description: Location ID
+        in: query
+        name: locationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Catalog service ids the job consists of (1-10)
+        in: query
+        name: serviceIds
+        required: true
+        schema:
+          items:
+            format: uuid
+            type: string
+          type: array
+      - description: Job duration in minutes (1-1440)
+        in: query
+        name: durationMinutes
+        required: true
+        schema:
+          format: int32
+          type: integer
+      - description: No opening starts before this instant (ISO-8601)
+        in: query
+        name: earliestStart
+        required: true
+        schema:
+          format: date-time
+          type: string
+      - description: Vehicle whose GVWR class narrows bays and skill requirements
+        in: query
+        name: vehicleId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Restrict openings to ones this technician (person id) can take
+        in: query
+        name: technicianId
+        required: false
+        schema:
+          format: uuid
+          type: string
+      - description: Facility-local days to search forward from earliestStart (1-30)
+        in: query
+        name: horizonDays
+        required: false
+        schema:
+          default: 30
+          format: int32
+          type: integer
+      - description: Most openings to return (1-50)
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 10
+          format: int32
+          type: integer
+      - description: Correlation ID for request tracing
+        in: header
+        name: X-Correlation-Id
+        required: false
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpeningSearchResponse'
+          description: Openings computed; the list may be empty with noOpeningReason set.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Malformed or out-of-range input
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds shop:schedule:view but its location scope does not cover the requested location (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Location or catalog service unknown to shop management
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A policy bound exceeded or the location's hours unpublished (ApiError.code OPENING_HORIZON_EXCEEDED, OPENING_LIMIT_EXCEEDED, OPENING_TOO_MANY_SERVICES, LOCATION_HOURS_UNKNOWN).
+      security:
+      - bearerAuth:
+        - shop:schedule:view
+      summary: Search duration-aware eligible openings for a job
       tags:
       - Schedule API
       x-required-permissions:
@@ -881,135 +1012,6 @@ paths:
       - Mechanic Roster API
       x-required-permissions:
       - shop:technician:view
-  /v1/shop-manager/mechanics/bulk-ingest:
-    post:
-      description: 'Sets many mechanics'' skill sets at once, folding the rows of each mechanic into a single replacement.
-
-        Use this tool when seeding a workshop''s capabilities; use replaceMechanicSkills instead for a single mechanic.
-
-        Preconditions: each person must already exist as a mechanic. Mechanics are projected from ACTIVE TECHNICIAN staffing assignments over Kafka, so run this after those assignments; the service waits briefly for the projection itself, and a row it is still waiting on is reported as retryable rather than failed.
-
-        Required inputs: jobId (UUID), locationId (UUID) and records, each with a personId, a skillCode and a proficiencyLevel from 1 to 5. A mechanic appears once per skill; the rows are grouped here.
-
-        Emits a SHOP_MECHANIC_SKILLS_BULK_INGEST event, and routes each mechanic''s set through the same HR-feed path the Kafka projection uses, so dedupe and audit apply as usual while the mechanic''s feed-ordering version is left untouched; re-running the same file is safe, since each mechanic''s set is replaced rather than added to.
-
-        Returns 200 with a per-record result, where every row of one mechanic shares that mechanic''s outcome since they were applied together: MECHANIC_SKILL_INGEST_FAILED with the reason for rows the service refused, REPLICATION_PENDING for rows naming a mechanic that has not replicated here yet and which are worth resubmitting, or INTERNAL_ERROR with a correlationId to quote for rows lost to a server-side fault.
-
-        '
-      operationId: bulkIngestMechanicSkills
-      requestBody:
-        content:
-          application/json:
-            examples:
-              Skills:
-                description: Skills
-                value:
-                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a00
-                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
-                  operatorId: seed-operator
-                  records:
-                  - personId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
-                    proficiencyLevel: 4
-                    skillCode: T4-BRAKES
-                  - personId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
-                    proficiencyLevel: 3
-                    skillCode: T3-ALIGN
-            schema:
-              $ref: '#/components/schemas/BulkIngestRequestMechanicSkillBulkIngestRecord'
-        description: Mechanic skills, one row per skill.
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
-          description: Batch processed; inspect per-record results
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
-          description: Invalid request payload
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BulkIngestResponse'
-          description: Forbidden
-      security:
-      - bearerAuth:
-        - shop:schedule:edit
-      summary: Set Mechanics' Skill Sets in Bulk
-      tags:
-      - Mechanic Skill Bulk Ingest API
-      x-required-permissions:
-      - shop:schedule:edit
-  /v1/shop-manager/mechanics/by-person/{personId}/skills:
-    put:
-      description: 'Replaces the full skill set of the mechanic linked to a person with the supplied codes and proficiency levels.
-
-        Use this tool for operator maintenance of skills, which are shop-manager-owned enrichment the HR feed never carries; do not use this tool to edit the mechanic record itself, which is projected from people.events.v1.
-
-        Preconditions: the caller must hold shop:schedule:edit and a mechanic must exist for the personId (technicians are projected from ACTIVE TECHNICIAN staffing assignments over Kafka; this endpoint waits briefly for that projection rather than refusing immediately).
-
-        Required inputs: personId as a path parameter and skills, a non-empty array where each entry has skillCode and proficiencyLevel between 1 and 5; the array replaces all current skills.
-
-        Emits a SHOP_MECHANIC_SKILLS_REPLACE event and records a mechanic audit-log entry; the edit rides the HR-feed path as a synthetic skills event, so dedupe and audit apply as usual, but it does not advance the mechanic''s feed-ordering version: skills are shop-manager-owned enrichment the feed never carries, so an operator edit is ordered against other operator edits and leaves the feed''s own sequence untouched.
-
-        Returns 204 on success, 400 when the body is invalid or personId is not a UUID, and 503 MECHANIC_REPLICATION_PENDING with a Retry-After when no mechanic exists for the person: the service waits briefly for the staffing assignment that creates one, and where it still finds none it answers 503 rather than 404 because it cannot tell an unreplicated mechanic from a person who has no active TECHNICIAN assignment at all. Retry a 503; if it persists, check that the person holds an active TECHNICIAN assignment.
-
-        '
-      operationId: replaceMechanicSkills
-      parameters:
-      - in: path
-        name: personId
-        required: true
-        schema:
-          type: string
-      requestBody:
-        content:
-          application/json:
-            examples:
-              Replace mechanic skills:
-                description: Replace mechanic skills
-                value:
-                  skills:
-                  - proficiencyLevel: 4
-                    skillCode: T4-BRAKES
-            schema:
-              $ref: '#/components/schemas/ReplaceMechanicSkillsRequest'
-        description: The full replacement skill set for the mechanic.
-        required: true
-      responses:
-        '204':
-          description: Skill set replaced.
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Invalid request body, or personId is not a UUID.
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: Forbidden.
-        '503':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: No mechanic for that person here yet; retry (MECHANIC_REPLICATION_PENDING).
-      security:
-      - bearerAuth:
-        - shop:schedule:edit
-      summary: Replace a Mechanic's Skill Set
-      tags:
-      - Mechanic Skills API
-      x-required-permissions:
-      - shop:schedule:edit
   /v1/shop-manager/{locationId}/technicians:
     get:
       description: 'Returns the technicians assigned to one shop location, enriched with mechanic identity and skills from the eventually consistent HR read model.
@@ -1389,6 +1391,41 @@ components:
       - status
       - timestamp
       type: object
+    AppointmentConflictView:
+      description: A SOFT scheduling conflict the appointment was booked under
+      properties:
+        code:
+          description: The rule that fired — the API reason code verbatim
+          example: FACILITY_NEAR_CAPACITY
+          type: string
+        conflictId:
+          description: Conflict id; what POST …/conflict-override names in conflictIds
+          format: uuid
+          type: string
+        message:
+          description: Rendered explanation
+          type: string
+        overridable:
+          description: Whether a manager may still override it (SOFT and not yet overridden)
+          type: boolean
+        overridden:
+          description: Whether a manager has recorded an override
+          type: boolean
+        resourceId:
+          description: The contended resource, when the rule names one
+          type: string
+        severity:
+          description: HARD or SOFT; SOFT on an appointment
+          example: SOFT
+          type: string
+      required:
+      - code
+      - conflictId
+      - message
+      - overridable
+      - overridden
+      - severity
+      type: object
     AppointmentCreateRequest:
       description: Request to create an appointment from an estimate or workorder source document
       properties:
@@ -1479,6 +1516,11 @@ components:
           description: Cancellation reason code when the appointment has been cancelled
           example: CUSTOMER_REQUEST
           type: string
+        conflicts:
+          description: 'SOFT scheduling conflicts recorded against this appointment (DECISION-SHOPMGMT-002), each overridable via POST /v1/appointments/{id}/conflict-override until overridden. Empty when the booking raised none. A HARD conflict never reaches here: it refuses the booking with 409.'
+          items:
+            $ref: '#/components/schemas/AppointmentConflictView'
+          type: array
         createdAt:
           description: Timestamp the appointment was created in UTC (ISO-8601)
           example: '2026-06-17T15:30:00Z'
@@ -1613,11 +1655,13 @@ components:
         status:
           description: Current assignment status
           enum:
-          - CONFIRMED
+          - UNASSIGNED
+          - ASSIGNED
+          - AWAITING_SKILL_FULFILLMENT
           - IN_PROGRESS
           - COMPLETED
           - CANCELLED
-          example: CONFIRMED
+          example: ASSIGNED
           type: string
       required:
       - appointmentId
@@ -1668,95 +1712,30 @@ components:
       - occupancy
       - occupiedMinutes
       type: object
-    BulkIngestRequestMechanicSkillBulkIngestRecord:
-      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+    BayEligibility:
+      description: Bay eligibility summary for the requested services and vehicle
       properties:
-        jobId:
-          description: Identifier of the bulk ingest job
-          example: 01960003-0000-7000-8000-000000000001
-          format: uuid
-          type: string
-        locationId:
-          description: Location the records are ingested for
-          example: 01960003-0000-7000-8000-000000000002
-          format: uuid
-          type: string
-        operatorId:
-          description: Identifier of the operator submitting the batch
-          example: user-jdoe
-          type: string
-        records:
-          description: The records to ingest (at least one); shape depends on the target domain
-          items:
-            $ref: '#/components/schemas/MechanicSkillBulkIngestRecord'
-          minItems: 1
-          type: array
-      required:
-      - jobId
-      - locationId
-      - records
-      type: object
-    BulkIngestResponse:
-      description: 'Summary outcome of a bulk ingest job: per-record results plus aggregate counts'
-      properties:
-        failureCount:
-          description: Number of records that failed ingest
-          example: 2
+        activeBays:
+          description: Active bays at the location
           format: int32
           type: integer
-        results:
-          description: Per-record outcomes in submission order
-          items:
-            $ref: '#/components/schemas/BulkIngestResult'
-          type: array
-        successCount:
-          description: Number of records ingested successfully
-          example: 98
+        eligibleBays:
+          description: Bays eligible for every requested service and the vehicle's duty class
           format: int32
           type: integer
-        totalSubmitted:
-          description: Total number of records submitted in the batch
-          example: 100
+        excludedByCapability:
+          description: Bays excluded because a specialty bay claims one of the operations and this bay does not
+          format: int32
+          type: integer
+        excludedByDutyClass:
+          description: Bays excluded because their maxDutyClass is below the vehicle's GVWR class
           format: int32
           type: integer
       required:
-      - failureCount
-      - results
-      - successCount
-      - totalSubmitted
-      type: object
-    BulkIngestResult:
-      description: Per-record outcome of a bulk ingest submission
-      properties:
-        correlationId:
-          description: 'Correlation id to quote when reporting a row that failed for a server-side reason. Present only alongside errorCode INTERNAL_ERROR, where it is the whole of what the caller can act on: the exception itself is logged at ERROR against this id and never returned (ADR-0056). Every failed row of one request carries the same id.'
-          example: 01960003-0000-7000-8000-0000000000ff
-          type: string
-        entityId:
-          description: Identifier of the entity created/updated for this record, when successful
-          example: 01960003-0000-7000-8000-000000000001
-          format: uuid
-          type: string
-        errorCode:
-          description: Machine-readable error code when the record failed
-          example: VALIDATION_FAILED
-          type: string
-        errorMessage:
-          description: Human-readable error detail when the record failed
-          example: vin must be 17 characters
-          type: string
-        rowIndex:
-          description: Zero-based index of the record within the submitted batch
-          example: 0
-          format: int32
-          type: integer
-        success:
-          description: Whether this record was ingested successfully
-          example: true
-          type: boolean
-      required:
-      - rowIndex
-      - success
+      - activeBays
+      - eligibleBays
+      - excludedByCapability
+      - excludedByDutyClass
       type: object
     CancelAppointmentRequest:
       description: Request to cancel an existing appointment with a mandatory reason code
@@ -1807,6 +1786,35 @@ components:
       - bayHours
       - fromDate
       type: object
+    Conflict:
+      description: A single detected scheduling conflict
+      properties:
+        affectedResource:
+          description: Resource affected by the conflict
+          example: 'Mechanic: John Doe'
+          type: string
+        code:
+          description: Machine-readable conflict code
+          example: MECHANIC_UNAVAILABLE
+          type: string
+        message:
+          description: User-safe description of the conflict
+          example: The selected mechanic is already booked
+          type: string
+        overridable:
+          description: Whether the conflict can be overridden (HARD=false, SOFT=true)
+          example: true
+          type: boolean
+        severity:
+          description: Conflict severity (HARD or SOFT)
+          example: SOFT
+          type: string
+      required:
+      - code
+      - message
+      - overridable
+      - severity
+      type: object
     ConflictDetails:
       description: Details about a conflict associated with a schedule event
       properties:
@@ -1819,60 +1827,93 @@ components:
           type: array
       type: object
     ConflictOverrideRequest:
-      description: Request to bypass a scheduling conflict with manager permission
+      description: Manager override of SOFT scheduling conflicts recorded against an appointment
       properties:
-        appointmentId:
-          description: Appointment identifier whose conflict is being overridden
-          example: 01960003-0000-7000-8000-000000000001
-          format: uuid
-          type: string
-        conflictDetails:
-          description: Optional JSON string describing the conflict being overridden
+        conflictIds:
+          description: Ids of the scheduling conflicts being accepted. Each must be recorded against the appointment in the path (400 otherwise), be SOFT (409 with the conflict envelope otherwise) and not already overridden (409 CONFLICT_ALREADY_OVERRIDDEN).
           example:
-            resourceId: 01960003-0000-7000-8000-000000000010
-            type: TECHNICIAN_DOUBLE_BOOKED
-          type: string
+          - 01960003-0000-7000-8000-000000000010
+          items:
+            format: uuid
+            type: string
+          minItems: 1
+          type: array
         overrideReason:
-          description: Non-blank reason justifying the override
-          example: Customer waiting on-site
-          minLength: 1
+          description: Non-blank justification, recorded immutably with the acting manager
+          example: Customer waiting on-site; second technician arrives at 10:00
+          maxLength: 2000
+          minLength: 0
           type: string
       required:
-      - appointmentId
+      - conflictIds
       - overrideReason
       type: object
     ConflictOverrideResponse:
-      description: Response returned after a successful scheduling conflict override
+      description: Result of a manager override of SOFT scheduling conflicts
       properties:
         appointmentId:
-          description: Appointment identifier whose conflict was overridden
-          example: 01960003-0000-7000-8000-000000000002
+          description: Appointment the conflicts belong to
           format: uuid
           type: string
-        overriddenByUserId:
-          description: User identifier of the manager who performed the override
-          example: 01960003-0000-7000-8000-000000000020
+        approvedAt:
+          description: When the override was recorded and approved, UTC
+          format: date-time
           type: string
-        overrideId:
-          description: Unique override record identifier
-          example: 01960003-0000-7000-8000-000000000001
-          format: uuid
+        overriddenBy:
+          description: Manager who recorded the override; also the approver (single-actor approval)
+          example: jane.manager
           type: string
         overrideReason:
-          description: Reason recorded for the override
-          example: Customer waiting on-site
+          description: Justification as recorded
           type: string
-        overrideTimestamp:
-          description: Instant the override was performed in UTC (ISO-8601)
+        overrides:
+          description: One entry per conflict accepted
+          items:
+            $ref: '#/components/schemas/OverrideEntry'
+          type: array
+      required:
+      - appointmentId
+      - approvedAt
+      - overriddenBy
+      - overrideReason
+      - overrides
+      type: object
+    ConflictResponse:
+      description: Error envelope returned when an appointment scheduling conflict is detected (HTTP 409)
+      properties:
+        conflicts:
+          description: List of specific detected conflicts
+          items:
+            $ref: '#/components/schemas/Conflict'
+          type: array
+        correlationId:
+          description: Correlation/trace identifier for the request
+          example: 01960003-0000-7000-8000-0000000000ff
+          type: string
+        errorCode:
+          description: Machine-readable error code
+          example: SCHEDULING_CONFLICT
+          type: string
+        message:
+          description: User-friendly conflict summary
+          example: The selected time conflicts with an existing booking
+          type: string
+        suggestedAlternatives:
+          description: Optional suggested alternative slots (may be null or empty)
+          items:
+            $ref: '#/components/schemas/SuggestedAlternative'
+          type: array
+        timestamp:
+          description: Timestamp the error was generated in UTC (ISO-8601)
           example: '2026-06-18T08:00:00Z'
           format: date-time
           type: string
       required:
-      - appointmentId
-      - overriddenByUserId
-      - overrideId
-      - overrideReason
-      - overrideTimestamp
+      - conflicts
+      - correlationId
+      - errorCode
+      - message
+      - timestamp
       type: object
     CreateAssignmentRequest:
       description: Request to assign mechanics and an optional resource to an appointment
@@ -1966,8 +2007,12 @@ components:
       - message
       type: object
     LocationTechnicianRosterEntryResponse:
-      description: Location-scoped technician assignment enriched from the HR-synchronized mechanic roster
+      description: A technician with an ACTIVE staffing assignment at the location, from the HR-synchronized mechanic roster
       properties:
+        credentials:
+          items:
+            $ref: '#/components/schemas/TechnicianCredentialResponse'
+          type: array
         firstName:
           type: string
         hireDate:
@@ -1987,18 +2032,11 @@ components:
         personId:
           format: uuid
           type: string
-        skills:
-          items:
-            type: string
-          type: array
         status:
           enum:
           - ACTIVE
           - INACTIVE
           - ON_LEAVE
-          type: string
-        technicianId:
-          format: uuid
           type: string
         terminationDate:
           format: date
@@ -2025,6 +2063,10 @@ components:
     MechanicRosterEntryResponse:
       description: HR-synchronized mechanic roster entry
       properties:
+        credentials:
+          items:
+            $ref: '#/components/schemas/TechnicianCredentialResponse'
+          type: array
         firstName:
           type: string
         hireDate:
@@ -2041,10 +2083,6 @@ components:
         personId:
           format: uuid
           type: string
-        skills:
-          items:
-            type: string
-          type: array
         status:
           enum:
           - ACTIVE
@@ -2055,29 +2093,167 @@ components:
           format: date
           type: string
       type: object
-    MechanicSkillBulkIngestRecord:
-      description: One mechanic's proficiency in one skill
+    Opening:
+      description: 'One opening: bay, technician, and the constraints actually evaluated'
       properties:
-        personId:
-          description: Canonical person id of the mechanic
-          example: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b
-          minLength: 1
+        bayId:
+          description: Bay the whole duration is free in
+          format: uuid
           type: string
-        proficiencyLevel:
-          description: Proficiency, 1 to 5
-          example: 4
+        bayName:
+          description: Bay display name
+          example: Bay 3
+          type: string
+        constraintsEvaluated:
+          description: Constraints this opening actually evaluated (D11)
+          items:
+            enum:
+            - HOURS
+            - BAY
+            - DURATION
+            - BUFFER
+            - ROSTER
+            - SKILL
+            type: string
+          type: array
+        endAt:
+          description: Window end (ISO-8601); the cleanup buffer follows it
+          format: date-time
+          type: string
+        localDate:
+          description: Facility-local date of the opening
+          example: '2026-10-04'
+          type: string
+        skillFulfillment:
+          description: Whether the named technician holds every required skill on this date
+          enum:
+          - CERTIFIED
+          - AWAITING
+          type: string
+        startAt:
+          description: Window start (ISO-8601); the check-in buffer precedes it
+          format: date-time
+          type: string
+        technicianId:
+          description: Technician (person id) rostered that day and free in the window
+          format: uuid
+          type: string
+        technicianRosterGrain:
+          description: 'Grain of the roster check. DAY: rostered is day-grain from the staffing replica, busy is minute-grain from appointments; PTO is not modelled'
+          example: DAY
+          type: string
+        unmetSkillCodes:
+          description: Required skill codes the named technician does not hold; empty when CERTIFIED
+          items:
+            type: string
+          type: array
+      required:
+      - bayId
+      - constraintsEvaluated
+      - endAt
+      - localDate
+      - skillFulfillment
+      - startAt
+      - technicianId
+      - technicianRosterGrain
+      - unmetSkillCodes
+      type: object
+    OpeningSearchResponse:
+      description: Duration-aware eligible openings for a job at a location, earliest first
+      properties:
+        bayEligibility:
+          $ref: '#/components/schemas/BayEligibility'
+        durationMinutes:
+          description: Requested job duration in minutes
+          example: 90
           format: int32
-          maximum: 5
-          minimum: 1
           type: integer
-        skillCode:
-          description: Skill code
-          example: T4-BRAKES
-          minLength: 1
+        generatedAt:
+          description: Instant this search was computed (ISO-8601)
+          format: date-time
+          type: string
+        locationId:
+          description: Location searched
+          example: 01960003-0000-7000-8000-000000000003
+          format: uuid
+          type: string
+        noOpeningReason:
+          description: Why openings is empty. Null whenever openings is non-empty, and null when the list is empty solely because no technician is rostered (see staffingAdvisory)
+          enum:
+          - NO_ELIGIBLE_BAY_AT_LOCATION
+          - ALL_ELIGIBLE_BAYS_BOOKED
+          type: string
+        openings:
+          description: Openings ranked earliest start first; CERTIFIED before AWAITING at equal starts
+          items:
+            $ref: '#/components/schemas/Opening'
+          type: array
+        requiredSkillCodes:
+          description: Skill codes the job requires for this vehicle class, from the catalog replica
+          items:
+            type: string
+          type: array
+        searchedFrom:
+          description: Start of the searched horizon (the earliestStart requested, ISO-8601)
+          format: date-time
+          type: string
+        searchedTo:
+          description: 'Exclusive end of the searched horizon: earliestStart plus horizonDays (ISO-8601)'
+          format: date-time
+          type: string
+        serviceIds:
+          description: Catalog service ids the job consists of
+          items:
+            format: uuid
+            type: string
+          type: array
+        staffingAdvisory:
+          $ref: '#/components/schemas/StaffingAdvisory'
+        timezone:
+          description: IANA timezone the day windows were computed in, from the location replica
+          example: America/New_York
+          type: string
+        vehicleGvwrClass:
+          description: Vehicle GVWR class (1-8) the requirements were resolved for; null when no vehicle was given or its class is undetermined, in which case only ANY-class requirements applied
+          example: 2
+          format: int32
+          type: integer
+      required:
+      - bayEligibility
+      - durationMinutes
+      - generatedAt
+      - locationId
+      - openings
+      - requiredSkillCodes
+      - searchedFrom
+      - searchedTo
+      - serviceIds
+      - timezone
+      type: object
+    OverrideEntry:
+      description: One accepted conflict
+      properties:
+        conflictId:
+          description: The conflict accepted
+          format: uuid
+          type: string
+        overrideId:
+          description: The immutable override row
+          format: uuid
+          type: string
+        ruleCode:
+          description: The rule that fired — the API reason code verbatim
+          example: MECHANIC_OVERTIME
+          type: string
+        severity:
+          description: 'Always SOFT: a HARD conflict is never overridden'
+          example: SOFT
           type: string
       required:
-      - personId
-      - skillCode
+      - conflictId
+      - overrideId
+      - ruleCode
+      - severity
       type: object
     PageMetadata:
       properties:
@@ -2143,17 +2319,6 @@ components:
           description: Secondary email address of the person
           example: jane.d@example.com
           type: string
-      type: object
-    ReplaceMechanicSkillsRequest:
-      properties:
-        skills:
-          description: Full replacement skill set for the mechanic
-          items:
-            $ref: '#/components/schemas/SkillInput'
-          minItems: 1
-          type: array
-      required:
-      - skills
       type: object
     RescheduleAppointmentRequest:
       description: Request to reschedule an appointment to a new time window with a mandatory reason
@@ -2553,22 +2718,108 @@ components:
           example: WO-2026-1001
           type: string
       type: object
-    SkillInput:
+    StaffingAdvisory:
+      description: Response-level staffing advisory
       properties:
-        proficiencyLevel:
-          description: Proficiency 1 (beginner) to 5 (master)
-          example: 4
-          format: int32
-          maximum: 5
-          minimum: 1
-          type: integer
-        skillCode:
-          description: Skill code (ASE T-series convention)
-          example: T4-BRAKES
-          minLength: 1
+        absenceScope:
+          description: Which remedy applies
+          enum:
+          - NOT_ROSTERED_THIS_DAY
+          - NOT_AT_THIS_LOCATION
+          type: string
+        code:
+          description: Condition code, shared with conflict_rule.code
+          enum:
+          - NO_COMPETENT_MECHANIC_ROSTERED
+          - MECHANIC_UNAVAILABLE
+          type: string
+        missingSkillCodes:
+          description: Required skill codes nobody rostered here holds; empty for MECHANIC_UNAVAILABLE
+          items:
+            type: string
+          type: array
+      required:
+      - absenceScope
+      - code
+      - missingSkillCodes
+      type: object
+    SuggestedAlternative:
+      description: A suggested alternative appointment slot that avoids detected conflicts
+      properties:
+        endDateTime:
+          description: Suggested end time (ISO-8601 with offset)
+          example: '2026-06-18T13:00:00-04:00'
+          type: string
+        reason:
+          description: Reason this alternative is suggested
+          example: Mechanic available
+          type: string
+        startDateTime:
+          description: Suggested start time (ISO-8601 with offset)
+          example: '2026-06-18T11:00:00-04:00'
           type: string
       required:
-      - skillCode
+      - endDateTime
+      - startDateTime
+      type: object
+    TechnicianCredentialResponse:
+      description: A credential the technician holds, with its status on the roster's reference date
+      properties:
+        competenceCode:
+          description: Competence the skill certifies, independent of duty class
+          example: BRAKES
+          type: string
+        credentialId:
+          description: Credential id in the People domain
+          example: 01960011-0000-7000-8000-000000000031
+          format: uuid
+          type: string
+        expiresOn:
+          description: Date the credential expires; null never expires
+          example: '2029-03-15'
+          format: date
+          type: string
+        issuedOn:
+          description: Date the credential was issued
+          example: '2024-03-15'
+          format: date
+          type: string
+        issuer:
+          description: Issuing body
+          example: ASE
+          type: string
+        maxGvwrClass:
+          description: Highest GVWR class (1-8) the skill covers
+          example: 8
+          format: int32
+          type: integer
+        minGvwrClass:
+          description: Lowest GVWR class (1-8) the skill covers
+          example: 4
+          format: int32
+          type: integer
+        proficiency:
+          description: Display-only proficiency 1-5; no requirement thresholds on it
+          example: 4
+          format: int32
+          type: integer
+        skillCode:
+          description: Durion skill code from the registry
+          example: BRAKES-MEDIUM_HEAVY
+          type: string
+        sourceCredentialCode:
+          description: The issuer's own code for the credential, as received
+          example: T4-BRAKES
+          type: string
+        status:
+          description: 'Status on the roster''s reference date: expiry is judged there, not taken from the feed'
+          enum:
+          - ACTIVE
+          - EXPIRED
+          - REVOKED
+          - SUPERSEDED
+          example: ACTIVE
+          type: string
       type: object
   securitySchemes:
     bearerAuth:

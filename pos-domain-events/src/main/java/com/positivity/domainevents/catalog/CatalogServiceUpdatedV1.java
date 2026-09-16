@@ -2,6 +2,7 @@ package com.positivity.domainevents.catalog;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -38,6 +39,13 @@ import org.jspecify.annotations.Nullable;
  * vehicle-correct answer, and vehicle-keyed times never ride this fact (volume + licensing,
  * ADR-0058 §4).
  *
+ * <p>Schema version 3 (CAP-329, additive per ADR-0044 §3): appends the service's requirement
+ * profile — {@code requirementsConfiguredAt} and {@code requiredSkills}. Null {@code
+ * requirementsConfiguredAt} means the requirements were never configured (a consumer warns, never
+ * denies); a non-null one with an empty list means the service is declared unconstrained. The two
+ * are different answers and consumers must keep them apart. Version-2 consumers are unaffected;
+ * version-3 consumers must treat both fields as absent on older events.
+ *
  * @param serviceId service identifier (also the envelope aggregateId)
  * @param name service display name
  * @param shortDescription short description, as shown in a picker
@@ -52,6 +60,10 @@ import org.jspecify.annotations.Nullable;
  *     within schema v2
  * @param defaultLaborHours vehicle-agnostic fallback hours in tenths; degraded-mode prefill
  *     only. Additive within schema v2
+ * @param requirementsConfiguredAt when the requirement profile was last declared; null = not
+ *     configured. Additive within schema v3
+ * @param requiredSkills the skills the service requires, per GVWR class range; empty with a
+ *     non-null {@code requirementsConfiguredAt} = unconstrained. Additive within schema v3
  */
 public record CatalogServiceUpdatedV1(
         @NonNull UUID serviceId,
@@ -63,10 +75,24 @@ public record CatalogServiceUpdatedV1(
         @Nullable Instant updatedAt,
         @Nullable String operationCode,
         @Nullable String operationCategory,
-        @Nullable BigDecimal defaultLaborHours) {
+        @Nullable BigDecimal defaultLaborHours,
+        @Nullable Instant requirementsConfiguredAt,
+        @Nullable List<RequiredSkill> requiredSkills) {
 
     public static final String EVENT_TYPE = "catalog.service.updated";
-    public static final int SCHEMA_VERSION = 2;
+    public static final int SCHEMA_VERSION = 3;
+
+    /**
+     * One skill the service requires (CAP-329). {@code minGvwrClass}/{@code maxGvwrClass} both
+     * null means ANY class — the requirement holds for every vehicle, class-less ones included; a
+     * range means it applies only to vehicles whose GVWR class falls inside it. {@code skillCode}
+     * rides along so a consumer can name the requirement without a registry lookup.
+     */
+    public record RequiredSkill(
+            @NonNull UUID skillId,
+            @NonNull String skillCode,
+            @Nullable Integer minGvwrClass,
+            @Nullable Integer maxGvwrClass) {}
 
     public CatalogServiceUpdatedV1 {
         if (serviceId == null) {

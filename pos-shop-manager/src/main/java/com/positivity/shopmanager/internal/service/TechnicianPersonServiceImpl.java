@@ -7,9 +7,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.positivity.shopmanager.internal.dto.PersonDTO;
 import com.positivity.shopmanager.internal.entity.ExtPersonReplica;
-import com.positivity.shopmanager.internal.entity.Technician;
+import com.positivity.shopmanager.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
-import com.positivity.shopmanager.internal.repository.TechnicianRepository;
+import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -20,37 +20,49 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * Person identity for a technician at a location. "Works here" is an ACTIVE TECHNICIAN staffing
+ * assignment on the {@code ext_people_staffing_assignment} replica (CAP-328 replaced the unwritten
+ * {@code technician} table); names and contact points come from the people-contact replica.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class TechnicianPersonServiceImpl implements TechnicianPersonService {
 
+    static final String TECHNICIAN_ROLE = "TECHNICIAN";
+    private static final String ASSIGNMENT_STATUS_ACTIVE = "ACTIVE";
     private static final ObjectMapper JSON_MAPPER = JsonMapper.builder().build();
 
-    private final TechnicianRepository technicianRepository;
+    private final ExtStaffingAssignmentReplicaRepository assignmentReplicaRepository;
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
 
     @Override
     @Transactional(readOnly = true)
     @NonNull
     public PersonDTO getTechnicianPerson(@NonNull UUID locationId, @NonNull UUID personId) {
-        Technician technician = technicianRepository
-                .findFirstByShopIdAndPersonId(locationId, personId)
-                .orElseThrow(
-                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TECHNICIAN_NOT_FOUND_AT_LOCATION"));
-        UUID technicianPersonId = technician.getPersonId();
+        boolean worksHere =
+                assignmentReplicaRepository.findByPersonIdAndStatus(personId, ASSIGNMENT_STATUS_ACTIVE).stream()
+                        .anyMatch(assignment -> isTechnicianAt(assignment, locationId));
+        if (!worksHere) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TECHNICIAN_NOT_FOUND_AT_LOCATION");
+        }
         return extPersonReplicaRepository
-                .findById(technicianPersonId)
+                .findById(personId)
                 .map(this::toPersonDto)
                 .orElseGet(() -> {
-                    // The technician exists; the replica row is missing (feed lag or not yet
+                    // The assignment is here; the person row is not yet (feed lag or not yet
                     // bootstrapped), so answer with the id and let names arrive with the feed.
                     log.debug(
                             "No people-contact replica row for technician person {} at location {}",
-                            technicianPersonId,
+                            personId,
                             locationId);
-                    return PersonDTO.builder().id(technicianPersonId).build();
+                    return PersonDTO.builder().id(personId).build();
                 });
+    }
+
+    private static boolean isTechnicianAt(ExtStaffingAssignmentReplica assignment, UUID locationId) {
+        return TECHNICIAN_ROLE.equals(assignment.getRole()) && locationId.equals(assignment.getLocationId());
     }
 
     private PersonDTO toPersonDto(ExtPersonReplica replica) {
@@ -87,7 +99,6 @@ public class TechnicianPersonServiceImpl implements TechnicianPersonService {
         }
     }
 
-    /** Local mirror of {@code PersonUpdatedV1.ContactPointV1} as persisted in the replica. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record ContactPoint(String contactType, String value, boolean primary) {}
 }

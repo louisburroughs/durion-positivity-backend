@@ -6,6 +6,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -45,23 +46,31 @@ public class BayRequest {
     private BayCapacityRequest capacity;
 
     @Schema(
-            description = "Maximum number of vehicles that can be serviced concurrently in the bay",
-            example = "2",
+            description = "Number of vehicles the bay physically accommodates at once. A bay is a single "
+                    + "bookable resource regardless of this value; register separate bays for independently "
+                    + "bookable stalls.",
+            example = "1",
             requiredMode = NOT_REQUIRED)
     @Min(1)
     private Integer maxConcurrentVehicles;
 
     @Schema(
-            description = "Identifiers of service capabilities supported by the bay",
-            example = "[\"01960003-0000-7000-8000-000000000010\"]",
+            description = "Catalog operation codes this bay type is the only one able to perform "
+                    + "(CAP-325 D14). Omit or send empty for a general bay. Each value must be an active "
+                    + "catalog operationCode (UPPER-DASH, ADR-0059 §3); unknown codes are rejected 422.",
+            example = "[\"WHEEL-ALIGNMENT-4-WHEEL\"]",
             requiredMode = NOT_REQUIRED)
-    private List<String> serviceCapabilityIds;
+    private List<String> serviceCapabilityCodes;
 
     @Schema(
-            description = "Identifiers of skills required to operate the bay",
-            example = "[\"01960003-0000-7000-8000-000000000020\"]",
+            description = "Heaviest GVWR class (1–8) the bay accepts; omit for unconstrained (CAP-325 D13).",
+            example = "3",
+            minimum = "1",
+            maximum = "8",
             requiredMode = NOT_REQUIRED)
-    private List<String> skillRequirementIds;
+    @Min(1)
+    @Max(8)
+    private Integer maxDutyClass;
 
     @Schema(description = "Operational status of the bay", example = "ACTIVE", requiredMode = NOT_REQUIRED)
     private String status;

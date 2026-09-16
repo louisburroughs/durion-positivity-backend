@@ -45,7 +45,9 @@ inventory:putaway_rule:view/inventory:putaway_rule:manage, and for the on-hand
 pack inventory:adjustment:create and inventory:adjustment:approve, and for the
 cycle-count-plans pack
 inventory:cycle_count:view and inventory:cycle_count:initiate, for the Tier 0 catalog packs
-catalog:service:ingest, catalog:labor_standard:import and catalog:service_package:manage, and
+catalog:service:ingest, catalog:labor_standard:import and catalog:service_package:manage, for the
+service-skill-requirements pack catalog:service_requirement:manage plus catalog:service_type:view and
+people:skill:view to resolve the services and skills it names, and
 for the labor-rate packs pricing:labor_rate:manage). The mobile-units pack additionally needs
 location:mobile-unit:manage and location:mobile-unit:read to create and list the units, plus
 location:travel-buffer-policy:read and location:service-area:read to resolve the policy and
@@ -82,12 +84,10 @@ PACK_FILES = [
     ("location/locations.csv", "LOCATION"),
     ("location/storage-locations.csv", "STORAGE_LOCATION"),
     ("location/site-defaults.csv", "@site-defaults"),
-    ("location/bays.csv", "BAY"),
-    ("location/mobile-units.csv", "@mobile-units"),
     ("people/employees.csv", "PERSON"),
     ("people/staffing-assignments.csv", "STAFFING_ASSIGNMENT"),
+    ("people/credentials.csv", "PERSON_CREDENTIAL"),
     ("security/user-person-links.csv", "USER_PERSON_LINK"),
-    ("shop-manager/mechanic-skills.csv", "MECHANIC_SKILL"),
     ("customer/person-customers.csv", "CUSTOMER"),
     ("customer/commercial-customers.csv", "COMMERCIAL_CUSTOMER"),
     ("vehicle/vehicles.csv", "VEHICLE"),
@@ -99,6 +99,16 @@ PACK_FILES = [
     ("catalog/tier0-labor-standards.csv", "SERVICE_LABOR_STANDARD"),
     ("catalog/tier0-service-packages.csv", "SERVICE_PACKAGE"),
     ("catalog/tier0-service-package-members.csv", "SERVICE_PACKAGE_MEMBER"),
+    # CAP-329: which skills each operation needs, per GVWR class range. Declared through the
+    # catalog's own endpoint (validated against its skill-registry replica), so it follows the
+    # operations it names and the people pack that published the registry.
+    ("catalog/tier0-service-skill-requirements.csv", "@service-skill-requirements"),
+    # Bays and mobile units come after the catalog services on purpose: a bay's specialty claim and
+    # a unit's serviceCapabilityCodes are catalog operation codes that pos-location validates against
+    # its ext_catalog_service replica (CAP-325 D14), so the services must have been published first.
+    # The four catalog packs between the services and the first bay row give the replica time to land.
+    ("location/bays.csv", "BAY"),
+    ("location/mobile-units.csv", "@mobile-units"),
     ("price/base-prices.csv", "BASE_PRICE"),
     ("price/labor-rates.csv", "LABOR_RATE"),
     ("price/labor-rate-adjustments.csv", "LABOR_RATE_ADJUSTMENT"),
@@ -123,8 +133,8 @@ POLL_INTERVAL_SECONDS = 5
 #
 # Re-running is safe for the packs this can fire for, and the property has to be established before
 # adding any pack that might see this code: STAFFING_ASSIGNMENT refuses a row overlapping one
-# already stored, so a landed row cannot be written twice, and MECHANIC_SKILL replaces a mechanic's
-# whole skill set, so a replay converges rather than accumulating. Absent both, a retry duplicates.
+# already stored, so a landed row cannot be written twice, and PERSON_CREDENTIAL upserts by its
+# natural key, so a replay converges rather than accumulating. Absent both, a retry duplicates.
 REPLICATION_PENDING_CODE = "REPLICATION_PENDING"
 MAX_REPLICATION_ATTEMPTS = 4
 REPLICATION_BACKOFF_SECONDS = 5
@@ -377,7 +387,7 @@ def mobile_unit_shortfall(gateway, unit, row, rules):
     the list response does not carry -- fetched per unit, which only happens on a re-run.
 
     There is deliberately no repair path here. A missing policy could be PATCHed and missing coverage
-    PUT, but capabilityIds is not a PATCH key (MobileUnitServiceImpl:58-60), so an incomplete unit
+    PUT, but serviceCapabilityCodes was not a PATCH key before CAP-325 (MobileUnitServiceImpl:58-60), so an incomplete unit
     cannot be completed through the API at all; PATCHing it ACTIVE anyway would use PATCH's lack of
     validation to build the exact state the create path refuses. Saying so and requiring a reset is
     the honest option."""
@@ -389,7 +399,7 @@ def mobile_unit_shortfall(gateway, unit, row, rules):
         missing.append("is not ACTIVE")
     if not unit.get("travelBufferPolicyId"):
         missing.append("has no travel buffer policy")
-    if not unit.get("capabilityIds"):
+    if not unit.get("serviceCapabilityCodes"):
         missing.append("has no capabilities")
     if rules and not missing:
         # Only worth a call once the cheap checks pass: a unit failing those needs a reset regardless.
@@ -508,7 +518,7 @@ def run_mobile_units(gateway, relative_path, _location_id):
             # Counted as a failure rather than a skip: this is the state an alpha seeded before
             # #1986 is in, and reporting it as "skipped" is how eligibility stays quietly empty.
             print(f"  WARN: mobile unit {name} already exists but {shortfall}. It predates #1986 and "
-                  "cannot be completed through the API -- capabilityIds is not a PATCH key. Reset the "
+                  "cannot be completed through the API -- serviceCapabilityCodes was not a PATCH key before CAP-325. Reset the "
                   "database and reseed, or delete this unit, to get an ACTIVE unit with coverage.")
             failures += 1
             continue
@@ -517,7 +527,9 @@ def run_mobile_units(gateway, relative_path, _location_id):
             "name": name,
             "baseLocationId": base_location_id,
             "status": row["status"],
-            "capabilityIds": [code for code in (row.get("capabilityCodes") or "").split(";") if code],
+            # CAP-325 D14: catalog operation codes, the same vocabulary a bay's specialty claim uses;
+            # pos-location validates each against its ext_catalog_service replica (422 otherwise).
+            "serviceCapabilityCodes": [code for code in (row.get("capabilityCodes") or "").split(";") if code],
             "coverageRules": rules,
         }
         if policy_id:
@@ -534,9 +546,74 @@ def run_mobile_units(gateway, relative_path, _location_id):
     return failures == 0
 
 
+def run_service_skill_requirements(gateway, relative_path, _location_id):
+    """API pack: declare each service's skill requirement (CAP-329, spec D8/D13).
+
+    The requirement is a function of (service, GVWR class range): BRAKE-PAD-REPLACE-FRONT needs
+    BRAKES-LIGHT on classes 1-3 and BRAKES-MEDIUM_HEAVY on 4-8 — one SKU, class-conditional
+    competence — while DOT-ANNUAL-INSPECTION needs DOT-INSPECTOR whatever the class (both bounds
+    blank). PUT /v1/products/services/{id}/requirements replaces the whole set for a service, so the
+    rows are grouped by operation and sent once each; the catalog validates every skill against its
+    registry replica and refuses an unknown or retired code with 422, which fails that operation's
+    row group and nothing else.
+
+    Operations are keyed by operationCode as every other Tier 0 fixture keys them; the catalog
+    resolves a service by exact name, so the name is read off tier0-services.csv. Skills are keyed
+    by the Durion code the registry publishes (people/skills), never by a vendor code."""
+    names_by_operation = {row["operationCode"]: row["name"] for row in read_fixture_rows("catalog/tier0-services.csv")}
+    status_code, skills = gateway.get("/people/people/skills", allow_error=True)
+    if status_code != 200:
+        print(f"  WARN: cannot list the skill registry (HTTP {status_code}) — check people:skill:view on the token")
+        return False
+    skill_ids = {entry["code"]: entry["skillId"] for entry in skills or []}
+
+    grouped = {}
+    for row in read_fixture_rows(relative_path):
+        grouped.setdefault(row["operationCode"], []).append(row)
+
+    ok = True
+    for operation, rows in grouped.items():
+        name = names_by_operation.get(operation)
+        if name is None:
+            print(f"  WARN: {operation}: not in tier0-services.csv; skipped")
+            ok = False
+            continue
+        status_code, services = gateway.get(f"/catalog/products/services/name/{urllib.parse.quote(name, safe='')}", allow_error=True)
+        if status_code != 200 or not services:
+            print(f"  WARN: {operation}: catalog has no service named {name!r} (HTTP {status_code}); skipped")
+            ok = False
+            continue
+        service_id = services[0]["id"]
+        required = []
+        for row in rows:
+            skill_id = skill_ids.get(row["skillCode"])
+            if skill_id is None:
+                print(f"  WARN: {operation}: skill {row['skillCode']} is not in the registry; skipped")
+                ok = False
+                required = None
+                break
+            required.append({
+                "skillId": skill_id,
+                "minGvwrClass": int(row["minGvwrClass"]) if row.get("minGvwrClass") else None,
+                "maxGvwrClass": int(row["maxGvwrClass"]) if row.get("maxGvwrClass") else None,
+            })
+        if required is None:
+            continue
+        status_code, body = gateway.put_json(
+            f"/catalog/products/services/{service_id}/requirements", {"requiredSkills": required}, allow_error=True)
+        if status_code != 200:
+            detail = body if isinstance(body, str) else json.dumps(body)[:300]
+            print(f"  WARN: {operation}: requirements refused (HTTP {status_code}): {detail}")
+            ok = False
+            continue
+        print(f"  {operation}: {len(required)} requirement(s) declared")
+    return ok
+
+
 API_PACKS = {
     "@site-defaults": run_site_defaults,
     "@mobile-units": run_mobile_units,
+    "@service-skill-requirements": run_service_skill_requirements,
 }
 
 

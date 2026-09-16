@@ -1271,6 +1271,13 @@ components:
           description: Human-readable vehicle description. Optional; stored as empty when omitted.
           example: 2024 Ford F-150 XL
           type: string
+        gvwrClass:
+          description: FHWA GVWR class 1-8 (CAP-327). Omit when undetermined. Setting it records the source as OPERATOR_SET; the duty category (LIGHT 1-3, MEDIUM 4-6, HEAVY 7-8) is derived from it on the response.
+          example: 2
+          format: int32
+          maximum: 8
+          minimum: 1
+          type: integer
         licensePlate:
           description: License plate value.
           example: ABC1234
@@ -1445,6 +1452,13 @@ components:
           maxLength: 4000
           minLength: 0
           type: string
+        gvwrClass:
+          description: FHWA GVWR class 1-8 (CAP-327). Null leaves the current class unchanged; a value replaces it and records the source as OPERATOR_SET, which a later decode never overrides.
+          example: 6
+          format: int32
+          maximum: 8
+          minimum: 1
+          type: integer
         licensePlate:
           description: License plate value.
           example: XYZ7890
@@ -1736,6 +1750,26 @@ components:
         description:
           description: Human-readable vehicle description.
           example: 2024 Ford F-150 XL
+          type: string
+        dutyCategory:
+          description: 'Duty category derived from gvwrClass: LIGHT (1-3), MEDIUM (4-6), HEAVY (7-8). Never stored; null when the class is undetermined.'
+          enum:
+          - LIGHT
+          - MEDIUM
+          - HEAVY
+          example: LIGHT
+          type: string
+        gvwrClass:
+          description: FHWA GVWR class 1-8 (CAP-327); null when undetermined.
+          example: 2
+          format: int32
+          type: integer
+        gvwrClassSource:
+          description: 'Where the current gvwrClass came from: OPERATOR_SET or DECODED. Null when undetermined.'
+          enum:
+          - OPERATOR_SET
+          - DECODED
+          example: OPERATOR_SET
           type: string
         isActive:
           description: Whether vehicle is active.

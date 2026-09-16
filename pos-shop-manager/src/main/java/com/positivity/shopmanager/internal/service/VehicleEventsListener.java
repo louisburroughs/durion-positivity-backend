@@ -108,7 +108,8 @@ public class VehicleEventsListener {
     }
 
     private void applyVehicleUpdated(JsonNode envelope) {
-        VehicleUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), VehicleUpdatedV1.class);
+        JsonNode payloadNode = envelope.path("payload");
+        VehicleUpdatedV1 payload = objectMapper.treeToValue(payloadNode, VehicleUpdatedV1.class);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         ExtVehicleReplica existing =
                 extVehicleReplicaRepository.findById(payload.vehicleId()).orElse(null);
@@ -125,6 +126,13 @@ public class VehicleEventsListener {
                 .year(payload.year())
                 .make(payload.make())
                 .model(payload.model())
+                // gvwrClass arrived after this listener started running (CAP-327): a fact from a
+                // pre-change producer has no such field, which must not clear a class already
+                // replicated during a rolling deploy or a replay of an older stored event.
+                .gvwrClass(
+                        payloadNode.has("gvwrClass")
+                                ? payload.gvwrClass()
+                                : existing == null ? null : existing.getGvwrClass())
                 .active(payload.active())
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))

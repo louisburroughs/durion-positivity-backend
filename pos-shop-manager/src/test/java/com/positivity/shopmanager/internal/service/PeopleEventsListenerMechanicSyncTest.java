@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.shopmanager.internal.entity.ExtPersonReplica;
 import com.positivity.shopmanager.internal.entity.ExtStaffingAssignmentReplica;
+import com.positivity.shopmanager.internal.repository.ExtPersonCredentialReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ProcessedEventRepository;
@@ -43,6 +44,8 @@ class PeopleEventsListenerMechanicSyncTest {
             mock(ExtStaffingAssignmentReplicaRepository.class);
     private final MechanicSyncService mechanicSyncService = mock(MechanicSyncService.class);
     private final ExtPersonReplicaRepository personReplicaRepository = mock(ExtPersonReplicaRepository.class);
+    private final ExtPersonCredentialReplicaRepository credentialReplicaRepository =
+            mock(ExtPersonCredentialReplicaRepository.class);
 
     private PeopleEventsListener listener;
 
@@ -55,6 +58,7 @@ class PeopleEventsListenerMechanicSyncTest {
                 assignmentRepository,
                 mechanicSyncService,
                 personReplicaRepository,
+                credentialReplicaRepository,
                 mock(ObjectProvider.class));
         when(processedEventRepository.existsById(any())).thenReturn(false);
         when(assignmentRepository.findById(any())).thenReturn(Optional.empty());
@@ -105,7 +109,6 @@ class PeopleEventsListenerMechanicSyncTest {
         assertThat(event.getVersion()).isEqualTo(1756200000000L);
         assertThat(event.getPayload().getFirstName()).isEqualTo("Kyle");
         assertThat(event.getPayload().getLastName()).isEqualTo("Brennan");
-        assertThat(event.getPayload().getSkills()).isNull();
     }
 
     @Test

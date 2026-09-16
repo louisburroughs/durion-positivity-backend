@@ -1,10 +1,14 @@
 package com.positivity.vehicle.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.positivity.shared.dto.CreateVehicleRequest;
+import com.positivity.shared.dto.UpdateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
+import com.positivity.vehicle.internal.enums.GvwrClassSource;
 import com.positivity.vehicle.internal.enums.OdometerUnit;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import java.time.Instant;
@@ -98,5 +102,89 @@ class VehicleServiceImplTest {
 
         assertThat(response.getOdometerValue()).isEqualTo(120_500);
         assertThat(response.getOdometerUnit()).isNull();
+    }
+
+    // ── CAP-327 (spec D13): gvwr_class is operator-set, its source travels with it, duty category is derived ──
+
+    private static VehicleRecord classified(Integer gvwrClass, GvwrClassSource source) {
+        VehicleRecord record = vehicle(null);
+        record.setGvwrClass(gvwrClass);
+        record.setGvwrClassSource(source);
+        return record;
+    }
+
+    @Test
+    void createWithGvwrClassRecordsOperatorSetAndDerivesTheDutyCategory() {
+        when(vehicleRepository.existsByVinNormalizedAndIsActiveTrue(any())).thenReturn(false);
+        when(vehicleRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        VehicleResponse response = service.createVehicle(CreateVehicleRequest.builder()
+                .accountId(UUID.fromString("018f0000-0000-7000-8000-000000000302"))
+                .vin("1HGCM82633A004352")
+                .gvwrClass(6)
+                .build());
+
+        assertThat(response.getGvwrClass()).isEqualTo(6);
+        assertThat(response.getGvwrClassSource()).isEqualTo("OPERATOR_SET");
+        assertThat(response.getDutyCategory()).isEqualTo("MEDIUM");
+    }
+
+    @Test
+    void createWithoutGvwrClassLeavesItUndetermined() {
+        when(vehicleRepository.existsByVinNormalizedAndIsActiveTrue(any())).thenReturn(false);
+        when(vehicleRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        VehicleResponse response = service.createVehicle(CreateVehicleRequest.builder()
+                .accountId(UUID.fromString("018f0000-0000-7000-8000-000000000302"))
+                .vin("1HGCM82633A004352")
+                .build());
+
+        assertThat(response.getGvwrClass()).isNull();
+        assertThat(response.getGvwrClassSource()).isNull();
+        assertThat(response.getDutyCategory()).isNull();
+    }
+
+    @Test
+    void undeterminedClassMapsAllThreeFieldsToNull() {
+        VehicleResponse response = map(vehicle(null));
+
+        assertThat(response.getGvwrClass()).isNull();
+        assertThat(response.getGvwrClassSource()).isNull();
+        assertThat(response.getDutyCategory()).isNull();
+    }
+
+    @Test
+    void classThreeIsLightDutyOnTheResponse() {
+        VehicleResponse response = map(classified(3, GvwrClassSource.OPERATOR_SET));
+
+        assertThat(response.getDutyCategory()).isEqualTo("LIGHT");
+    }
+
+    @Test
+    void updateWithGvwrClassReplacesTheValueAndMarksItOperatorSet() {
+        when(vehicleRepository.findByVehicleId(VEHICLE_ID))
+                .thenReturn(Optional.of(classified(2, GvwrClassSource.DECODED)));
+        when(vehicleRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        VehicleResponse response = service.updateVehicle(
+                VEHICLE_ID, UpdateVehicleRequest.builder().gvwrClass(7).build());
+
+        assertThat(response.getGvwrClass()).isEqualTo(7);
+        assertThat(response.getGvwrClassSource()).isEqualTo("OPERATOR_SET");
+        assertThat(response.getDutyCategory()).isEqualTo("HEAVY");
+    }
+
+    @Test
+    void updateWithoutGvwrClassLeavesADecodedValueUntouched() {
+        when(vehicleRepository.findByVehicleId(VEHICLE_ID))
+                .thenReturn(Optional.of(classified(2, GvwrClassSource.DECODED)));
+        when(vehicleRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        VehicleResponse response = service.updateVehicle(
+                VEHICLE_ID, UpdateVehicleRequest.builder().trim("XLT").build());
+
+        assertThat(response.getGvwrClass()).isEqualTo(2);
+        assertThat(response.getGvwrClassSource()).isEqualTo("DECODED");
+        assertThat(response.getDutyCategory()).isEqualTo("LIGHT");
     }
 }

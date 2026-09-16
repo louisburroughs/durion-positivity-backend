@@ -51,6 +51,16 @@ class AssignmentServiceImplStory10Test {
     @Mock
     private AssignmentMechanicRepository assignmentMechanicRepository;
 
+    @Mock
+    private com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository
+            appointmentServiceRequestRepository;
+
+    @Mock
+    private com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository extLocationReplicaRepository;
+
+    @Mock
+    private SkillRequirementResolver skillRequirementResolver;
+
     private AssignmentServiceImpl service;
 
     @BeforeEach
@@ -60,6 +70,10 @@ class AssignmentServiceImplStory10Test {
                 mechanicRepository,
                 assignmentRepository,
                 assignmentMechanicRepository,
+                appointmentServiceRequestRepository,
+                extLocationReplicaRepository,
+                new LocationHoursParser(new com.fasterxml.jackson.databind.ObjectMapper()),
+                skillRequirementResolver,
                 FIXED_CLOCK);
     }
 
@@ -183,7 +197,7 @@ class AssignmentServiceImplStory10Test {
         return Assignment.builder()
                 .assignmentId(assignmentId)
                 .appointment(appointment)
-                .status(AssignmentStatusEnum.CONFIRMED)
+                .status(AssignmentStatusEnum.ASSIGNED)
                 .version(1)
                 .createdAt(CREATED)
                 .updatedAt(CREATED);

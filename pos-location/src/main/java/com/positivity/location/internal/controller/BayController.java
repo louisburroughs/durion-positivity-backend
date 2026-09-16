@@ -47,8 +47,8 @@ public class BayController {
             {"name":"Bay A1",
              "bayType":"GENERAL_SERVICE",
              "capacity":{"maxConcurrentVehicles":2},
-             "serviceCapabilityIds":["ALIGNMENT"],
-             "skillRequirementIds":["018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a20"],
+             "serviceCapabilityCodes":[],
+             "maxDutyClass":3,
              "status":"ACTIVE"}
             """;
 
@@ -145,8 +145,8 @@ public class BayController {
                     modifies a bay that already exists, and use createStorageLocation for inventory storage \
                     rather than vehicle bays.
                     Preconditions: the location must exist, no bay of that location may already use the name \
-                    (case-insensitive), and any serviceCapabilityIds must match registered service capability \
-                    codes.
+                    (case-insensitive), and any serviceCapabilityCodes must name active catalog operation \
+                    codes (a GENERAL_SERVICE bay declares none).
                     Required inputs: name, bayType (one of GENERAL_SERVICE, ALIGNMENT, TIRE_SERVICE, HEAVY_DUTY, \
                     INSPECTION or WASH_DETAIL) and capacity.maxConcurrentVehicles of at least 1; status is \
                     optional, defaults to ACTIVE and only also accepts OUT_OF_SERVICE.

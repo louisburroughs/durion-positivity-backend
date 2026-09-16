@@ -67,13 +67,13 @@ class AlphaFixtureHeadersMapTest {
                 // not by the loader, so they map to no record field by design. The other API pack,
                 // location/site-defaults.csv, has never appeared here either.
                 Arguments.of("people/staffing-assignments.csv", DomainType.STAFFING_ASSIGNMENT, Set.<String>of()),
+                Arguments.of("people/credentials.csv", DomainType.PERSON_CREDENTIAL, Set.<String>of()),
                 Arguments.of("inventory/putaway-rules.csv", DomainType.PUTAWAY_RULE, Set.<String>of()),
                 Arguments.of("inventory/cycle-count-plans.csv", DomainType.CYCLE_COUNT_PLAN, Set.<String>of()),
                 Arguments.of("security/roles.csv", DomainType.SECURITY_ROLE, Set.<String>of()),
                 Arguments.of("security/role-permissions.csv", DomainType.SECURITY_ROLE_PERMISSION, Set.<String>of()),
                 Arguments.of("security/users.csv", DomainType.SECURITY_USER, Set.<String>of()),
                 Arguments.of("security/user-person-links.csv", DomainType.USER_PERSON_LINK, Set.<String>of()),
-                Arguments.of("shop-manager/mechanic-skills.csv", DomainType.MECHANIC_SKILL, Set.<String>of()),
                 Arguments.of("price/base-prices.csv", DomainType.BASE_PRICE, Set.<String>of()),
                 // Tier 0 packs (#1575). Every column is named by its record; the resolvable keys
                 // (ownerLocationCode, fleetCustomerName, locationCode) are record fields too, so

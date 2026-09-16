@@ -96,6 +96,10 @@ pos:
       # answer the ADR-0061 location-scope check on createLocationPriceOverride (#1885).
       location-events-topic: ${POS_CATALOG_LOCATION_EVENTS_TOPIC:location.events.v1}
       location-events-consumer-group: ${POS_CATALOG_LOCATION_EVENTS_CONSUMER_GROUP:pos-catalog-location-events}
+      # People fact feed maintaining the ext_skill replica of the @TenantGlobal skill registry, which a
+      # service's skill requirement is validated against (CAP-329, ADR-0044 §6).
+      people-events-topic: ${POS_CATALOG_PEOPLE_EVENTS_TOPIC:people.events.v1}
+      people-events-consumer-group: ${POS_CATALOG_PEOPLE_EVENTS_CONSUMER_GROUP:pos-catalog-people-events}
       # catalog.product.updated fact producer (#924)
       events-topic: ${POS_CATALOG_EVENTS_TOPIC:catalog.events.v1}
       # Own command inbox (ADR-0044 §4, #1537): CatalogCommandListener's replay-only listener,

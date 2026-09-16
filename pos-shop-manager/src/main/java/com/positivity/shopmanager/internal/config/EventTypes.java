@@ -37,12 +37,6 @@ public final class EventTypes {
                 EventTypeRegistration.write(
                                 "SHOP_MOBILE_UNIT_DELETE", "Delete a mobile unit from a specific shop location")
                         .build(),
-                EventTypeRegistration.write("SHOP_MECHANIC_SKILLS_REPLACE", "Replace a mechanic's skill set")
-                        .apiVersion("1")
-                        .build(),
-                EventTypeRegistration.write("SHOP_MECHANIC_SKILLS_BULK_INGEST", "Bulk set mechanics' skill sets")
-                        .apiVersion("1")
-                        .build(),
 
                 // AppointmentsController - 5 events
                 EventTypeRegistration.write("SHOPMGR_APPOINTMENT_CREATE", "Create an appointment")
@@ -62,10 +56,16 @@ public final class EventTypes {
                                 "View per-day, per-bay occupancy for a location across a bounded date range")
                         .apiVersion("1")
                         .build(),
+                // ScheduleController opening search - 1 event (#2022)
+                EventTypeRegistration.search(
+                                "SHOPMGR_SCHEDULE_OPENING_SEARCH",
+                                "Search duration-aware eligible openings for a job at a location")
+                        .apiVersion("1")
+                        .build(),
                 // ConflictOverrideController - 1 event
                 EventTypeRegistration.write(
                                 "SHOPMGR_APPOINTMENT_CONFLICT_OVERRIDE_CREATE",
-                                "Override appointment scheduling conflict with manager permission")
+                                "Record a manager override of SOFT scheduling conflicts on an appointment (shop:conflict:override)")
                         .build(),
                 // AssignmentController - 2 events
                 EventTypeRegistration.write(

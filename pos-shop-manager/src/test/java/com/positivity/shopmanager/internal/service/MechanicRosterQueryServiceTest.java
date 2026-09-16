@@ -2,25 +2,35 @@ package com.positivity.shopmanager.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.shopmanager.internal.dto.LocationTechnicianRosterEntryResponse;
 import com.positivity.shopmanager.internal.dto.MechanicRosterEntryResponse;
+import com.positivity.shopmanager.internal.dto.TechnicianCredentialResponse;
+import com.positivity.shopmanager.internal.entity.ExtLocationReplica;
+import com.positivity.shopmanager.internal.entity.ExtPersonCredentialReplica;
 import com.positivity.shopmanager.internal.entity.Mechanic;
-import com.positivity.shopmanager.internal.entity.MechanicSkill;
 import com.positivity.shopmanager.internal.entity.Shop;
-import com.positivity.shopmanager.internal.entity.Technician;
+import com.positivity.shopmanager.internal.enums.CredentialStatus;
 import com.positivity.shopmanager.internal.enums.MechanicStatus;
+import com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtPersonCredentialReplicaRepository;
 import com.positivity.shopmanager.internal.repository.MechanicRepository;
-import com.positivity.shopmanager.internal.repository.MechanicSkillRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
-import com.positivity.shopmanager.internal.repository.TechnicianRepository;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -33,55 +43,88 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * CAP-328: rosters project credentials (with a status judged on the roster's reference date) and
+ * never flatten to codes; the location roster's date is the facility's local date.
+ */
 @ExtendWith(MockitoExtension.class)
 class MechanicRosterQueryServiceTest {
 
     private static final UUID MECHANIC_ID = UUID.fromString("01960011-0000-7000-8000-000000000001");
     private static final UUID PERSON_ID = UUID.fromString("01960011-0000-7000-8000-000000000002");
     private static final UUID LOCATION_ID = UUID.fromString("01960011-0000-7000-8000-000000000003");
-    private static final UUID TECHNICIAN_ID = UUID.fromString("01960011-0000-7000-8000-000000000004");
+    private static final UUID CREDENTIAL_ID = UUID.fromString("01960011-0000-7000-8000-000000000031");
+
+    /** 2026-09-16T03:30Z is still 2026-09-15 in Los Angeles: the two dates differ on purpose. */
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-09-16T03:30:00Z"), ZoneOffset.UTC);
 
     @Mock
     private MechanicRepository mechanicRepository;
 
     @Mock
-    private MechanicSkillRepository mechanicSkillRepository;
-
-    @Mock
-    private TechnicianRepository technicianRepository;
+    private ExtPersonCredentialReplicaRepository credentialRepository;
 
     @Mock
     private ShopRepository shopRepository;
+
+    @Mock
+    private ExtLocationReplicaRepository locationReplicaRepository;
 
     private MechanicRosterQueryService service;
 
     @BeforeEach
     void setUp() {
         service = new MechanicRosterQueryServiceImpl(
-                mechanicRepository, mechanicSkillRepository, technicianRepository, shopRepository);
+                mechanicRepository,
+                credentialRepository,
+                shopRepository,
+                locationReplicaRepository,
+                new LocationHoursParser(new ObjectMapper()),
+                CLOCK);
     }
 
-    @Test
-    void listMechanicsDefaultsToActiveAndMapsSkills() {
-        Pageable pageable = PageRequest.of(0, 20);
-        Mechanic mechanic = Mechanic.builder()
+    private static Mechanic ada() {
+        return Mechanic.builder()
                 .mechanicId(MECHANIC_ID)
-                .personId(PERSON_ID.toString())
+                .personId(PERSON_ID)
                 .firstName("Ada")
                 .lastName("Lovelace")
                 .status(MechanicStatus.ACTIVE)
                 .hireDate(LocalDate.parse("2025-01-15"))
                 .lastSyncedAt(Instant.parse("2026-08-31T15:30:00Z"))
                 .build();
-        MechanicSkill skill = MechanicSkill.builder()
-                .mechanic(mechanic)
-                .skillCode("ALIGNMENT")
-                .build();
+    }
 
-        when(mechanicRepository.findRoster(MechanicStatus.ACTIVE, null, pageable))
-                .thenReturn(new PageImpl<>(List.of(mechanic), pageable, 1));
-        when(mechanicSkillRepository.findAllByMechanicIdIn(List.of(MECHANIC_ID)))
-                .thenReturn(List.of(skill));
+    private static ExtPersonCredentialReplica brakes(LocalDate expiresOn, String feedStatus) {
+        return ExtPersonCredentialReplica.builder()
+                .credentialId(CREDENTIAL_ID)
+                .personId(PERSON_ID)
+                .skillId(UUID.fromString("01960011-0000-7000-8000-000000000041"))
+                .skillCode("BRAKES-MEDIUM_HEAVY")
+                .competenceCode("BRAKES")
+                .minGvwrClass(4)
+                .maxGvwrClass(8)
+                .issuer("ASE")
+                .sourceCode("ASE")
+                .sourceCredentialCode("T4-BRAKES")
+                .issuedOn(LocalDate.parse("2021-09-16"))
+                .expiresOn(expiresOn)
+                .proficiency(4)
+                .status(feedStatus)
+                .aggregateVersion(3)
+                .updatedAt(Instant.parse("2026-08-31T15:30:00Z"))
+                .build();
+    }
+
+    @Test
+    @DisplayName(
+            "the mechanic roster defaults to ACTIVE, judges credentials on the clock's date, and projects them whole")
+    void listMechanicsDefaultsToActiveAndProjectsCredentials() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(mechanicRepository.findRoster(MechanicStatus.ACTIVE, null, LocalDate.parse("2026-09-16"), pageable))
+                .thenReturn(new PageImpl<>(List.of(ada()), pageable, 1));
+        when(credentialRepository.findByPersonIdInOrderByIssuedOnDesc(List.of(PERSON_ID)))
+                .thenReturn(List.of(brakes(LocalDate.parse("2026-09-15"), "ACTIVE")));
 
         Page<MechanicRosterEntryResponse> result = service.listMechanics(null, null, pageable);
 
@@ -90,63 +133,111 @@ class MechanicRosterQueryServiceTest {
             assertThat(entry.getMechanicId()).isEqualTo(MECHANIC_ID);
             assertThat(entry.getPersonId()).isEqualTo(PERSON_ID);
             assertThat(entry.getFirstName()).isEqualTo("Ada");
-            assertThat(entry.getLastName()).isEqualTo("Lovelace");
             assertThat(entry.getStatus()).isEqualTo(MechanicStatus.ACTIVE);
-            assertThat(entry.getSkills()).containsExactly("ALIGNMENT");
+            assertThat(entry.getCredentials()).singleElement().satisfies(credential -> {
+                assertThat(credential.getCredentialId()).isEqualTo(CREDENTIAL_ID);
+                assertThat(credential.getSkillCode()).isEqualTo("BRAKES-MEDIUM_HEAVY");
+                assertThat(credential.getSourceCredentialCode()).isEqualTo("T4-BRAKES");
+                assertThat(credential.getIssuer()).isEqualTo("ASE");
+                assertThat(credential.getProficiency()).isEqualTo(4);
+                assertThat(credential.getExpiresOn()).isEqualTo(LocalDate.parse("2026-09-15"));
+                // Expired yesterday on the clock's date: listed, and listed as EXPIRED — not dropped,
+                // and not read as held.
+                assertThat(credential.getStatus()).isEqualTo(CredentialStatus.EXPIRED);
+            });
         });
     }
 
     @Test
-    void listLocationTechniciansReturnsOnlyLocationAssignmentsWithMechanicDetails() {
+    @DisplayName("the location roster judges expiry on the facility's local date from the location replica")
+    void listLocationTechniciansUsesTheFacilityLocalDate() {
         Pageable pageable = PageRequest.of(0, 20);
-        Shop shop = Shop.builder().id(LOCATION_ID).build();
-        Technician technician = Technician.builder()
-                .id(TECHNICIAN_ID)
-                .personId(PERSON_ID)
-                .shop(shop)
-                .build();
-        Mechanic mechanic = Mechanic.builder()
-                .mechanicId(MECHANIC_ID)
-                .personId(PERSON_ID.toString())
-                .firstName("Ada")
-                .lastName("Lovelace")
-                .status(MechanicStatus.ACTIVE)
-                .build();
-
-        when(shopRepository.existsById(LOCATION_ID)).thenReturn(true);
-        when(technicianRepository.findRosterByLocation(LOCATION_ID, MechanicStatus.ACTIVE, null, pageable))
-                .thenReturn(new PageImpl<>(List.of(technician), pageable, 1));
-        when(mechanicRepository.findAllByPersonIdIn(List.of(PERSON_ID.toString())))
-                .thenReturn(List.of(mechanic));
-        when(mechanicSkillRepository.findAllByMechanicIdIn(List.of(MECHANIC_ID)))
-                .thenReturn(List.of());
+        when(shopRepository.findById(LOCATION_ID))
+                .thenReturn(Optional.of(
+                        Shop.builder().id(LOCATION_ID).timezone("UTC").build()));
+        when(locationReplicaRepository.findById(LOCATION_ID))
+                .thenReturn(Optional.of(ExtLocationReplica.builder()
+                        .locationId(LOCATION_ID)
+                        .timezone("America/Los_Angeles")
+                        .build()));
+        // Still the 15th in Los Angeles, so the roster asks the repository about the 15th.
+        LocalDate facilityDate = LocalDate.parse("2026-09-15");
+        when(mechanicRepository.findRosterByLocation(
+                        LOCATION_ID, MechanicStatus.ACTIVE, "T4-BRAKES", facilityDate, pageable))
+                .thenReturn(new PageImpl<>(List.of(ada()), pageable, 1));
+        when(credentialRepository.findByPersonIdInOrderByIssuedOnDesc(List.of(PERSON_ID)))
+                .thenReturn(List.of(brakes(facilityDate, "ACTIVE")));
 
         Page<LocationTechnicianRosterEntryResponse> result =
-                service.listLocationTechnicians(LOCATION_ID, null, null, pageable);
+                service.listLocationTechnicians(LOCATION_ID, null, "T4-BRAKES", pageable);
 
         assertThat(result.getContent()).singleElement().satisfies(entry -> {
-            assertThat(entry.getTechnicianId()).isEqualTo(TECHNICIAN_ID);
             assertThat(entry.getLocationId()).isEqualTo(LOCATION_ID);
             assertThat(entry.getMechanicId()).isEqualTo(MECHANIC_ID);
             assertThat(entry.getPersonId()).isEqualTo(PERSON_ID);
+            // Expires on the facility's today: held through the day, so ACTIVE.
+            assertThat(entry.getCredentials())
+                    .extracting(TechnicianCredentialResponse::getStatus)
+                    .containsExactly(CredentialStatus.ACTIVE);
         });
+    }
+
+    @Test
+    @DisplayName("without a location replica the facility date falls back to the shop's own timezone")
+    void listLocationTechniciansFallsBackToShopTimezone() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(shopRepository.findById(LOCATION_ID))
+                .thenReturn(Optional.of(Shop.builder()
+                        .id(LOCATION_ID)
+                        .timezone("America/Chicago")
+                        .build()));
+        when(locationReplicaRepository.findById(LOCATION_ID)).thenReturn(Optional.empty());
+        when(mechanicRepository.findRosterByLocation(
+                        eq(LOCATION_ID), eq(MechanicStatus.ACTIVE), eq(null), eq(LocalDate.parse("2026-09-15")), any()))
+                .thenReturn(Page.empty(pageable));
+
+        service.listLocationTechnicians(LOCATION_ID, null, null, pageable);
+
+        verify(mechanicRepository)
+                .findRosterByLocation(
+                        LOCATION_ID, MechanicStatus.ACTIVE, null, LocalDate.parse("2026-09-15"), pageable);
+    }
+
+    @Test
+    @DisplayName("revoked stays revoked on the projection regardless of dates")
+    void revokedCredentialProjectsAsRevoked() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(mechanicRepository.findRoster(MechanicStatus.ACTIVE, null, LocalDate.parse("2026-09-16"), pageable))
+                .thenReturn(new PageImpl<>(List.of(ada()), pageable, 1));
+        when(credentialRepository.findByPersonIdInOrderByIssuedOnDesc(List.of(PERSON_ID)))
+                .thenReturn(List.of(brakes(null, "REVOKED")));
+
+        Page<MechanicRosterEntryResponse> result = service.listMechanics(null, null, pageable);
+
+        assertThat(result.getContent().getFirst().getCredentials())
+                .extracting(TechnicianCredentialResponse::getStatus)
+                .containsExactly(CredentialStatus.REVOKED);
     }
 
     @Test
     void listLocationTechniciansReturnsNotFoundForUnknownLocation() {
-        when(shopRepository.existsById(LOCATION_ID)).thenReturn(false);
+        when(shopRepository.findById(LOCATION_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.listLocationTechnicians(LOCATION_ID, null, null, PageRequest.of(0, 20)))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
                         .isEqualTo(HttpStatus.NOT_FOUND));
+        verifyNoInteractions(mechanicRepository, credentialRepository);
     }
 
     @Test
-    void listLocationTechniciansReturnsEmptyPageWithoutEnrichmentQueries() {
+    void listLocationTechniciansReturnsEmptyPageWithoutCredentialQueries() {
         Pageable pageable = PageRequest.of(0, 20);
-        when(shopRepository.existsById(LOCATION_ID)).thenReturn(true);
-        when(technicianRepository.findRosterByLocation(LOCATION_ID, MechanicStatus.INACTIVE, "BRAKES", pageable))
+        when(shopRepository.findById(LOCATION_ID))
+                .thenReturn(Optional.of(Shop.builder().id(LOCATION_ID).build()));
+        when(locationReplicaRepository.findById(LOCATION_ID)).thenReturn(Optional.empty());
+        when(mechanicRepository.findRosterByLocation(
+                        LOCATION_ID, MechanicStatus.INACTIVE, "BRAKES", LocalDate.parse("2026-09-16"), pageable))
                 .thenReturn(Page.empty(pageable));
 
         Page<LocationTechnicianRosterEntryResponse> result =
@@ -154,15 +245,18 @@ class MechanicRosterQueryServiceTest {
 
         assertThat(result).isEmpty();
         assertThat(result.getTotalElements()).isZero();
-        verifyNoInteractions(mechanicRepository, mechanicSkillRepository);
+        verifyNoInteractions(credentialRepository);
     }
 
     @Test
     void listLocationTechniciansUsesFixedRepositoryOrdering() {
         Pageable requestedPageable = PageRequest.of(1, 5, Sort.by(Sort.Direction.DESC, "lastName"));
         Pageable repositoryPageable = PageRequest.of(1, 5);
-        when(shopRepository.existsById(LOCATION_ID)).thenReturn(true);
-        when(technicianRepository.findRosterByLocation(LOCATION_ID, MechanicStatus.ACTIVE, null, repositoryPageable))
+        when(shopRepository.findById(LOCATION_ID))
+                .thenReturn(Optional.of(Shop.builder().id(LOCATION_ID).build()));
+        when(locationReplicaRepository.findById(LOCATION_ID)).thenReturn(Optional.empty());
+        when(mechanicRepository.findRosterByLocation(
+                        LOCATION_ID, MechanicStatus.ACTIVE, null, LocalDate.parse("2026-09-16"), repositoryPageable))
                 .thenReturn(Page.empty(repositoryPageable));
 
         Page<LocationTechnicianRosterEntryResponse> result =

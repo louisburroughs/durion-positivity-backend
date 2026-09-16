@@ -289,10 +289,11 @@ class JwtServiceImplLocationScopeTest {
 
         // The literal moves only when a permission is added to the catalog — #1924 added the
         // platform:* families at bits 520-528 (83 → 84), WS2b-3 added platform:tenant:provision
-        // at bit 529 (84 → 85) and WS2b-4 platform:tenant:impersonate at bit 530 (85 → 86). What
-        // this test guards is that the location-scope claims are not what moved it: they ride the
-        // same catalog version.
-        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(86);
+        // at bit 529 (84 → 85), WS2b-4 platform:tenant:impersonate at bit 530 (85 → 86), CAP-326
+        // shop:conflict:override at bit 531 (86 → 87) and CAP-329 catalog:service_requirement:manage
+        // at bit 532 (87 → 88). What this test guards is that the location-scope claims are not
+        // what moved it: they ride the same catalog version.
+        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(88);
         Claims claims = claims(token);
         assertThat(claims.get(JwtService.PERM_VER, Integer.class)).isEqualTo(PermissionCode.CATALOG_VERSION);
         // Both scope bitsets decode under that same version: same codec, same bit indexes.

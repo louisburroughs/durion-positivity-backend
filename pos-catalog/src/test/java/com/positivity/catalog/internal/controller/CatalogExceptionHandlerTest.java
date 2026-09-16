@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
 import com.positivity.catalog.internal.exception.CatalogForbiddenOperationException;
 import com.positivity.catalog.internal.exception.CatalogNotFoundException;
+import com.positivity.catalog.internal.exception.CatalogUnprocessableException;
 import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.shared.error.ApiError;
 import jakarta.servlet.ServletException;
@@ -117,6 +118,8 @@ class CatalogExceptionHandlerTest {
                             request -> sut.handleBadRequest(new CatalogValidationException("bad value"), request)),
                     Named.of("handleBusinessConflict", (HandlerInvocation) request ->
                             sut.handleBusinessConflict(new CatalogBusinessRuleException("rule violated"), request)),
+                    Named.of("handleUnprocessable", (HandlerInvocation) request -> sut.handleUnprocessable(
+                            new CatalogUnprocessableException("SKILL_UNKNOWN", "unknown skill"), request)),
                     Named.of("handleConflict", (HandlerInvocation) request -> sut.handleConflict(
                             new ObjectOptimisticLockingFailureException(Object.class, "id-123"), request)),
                     Named.of("handleServletException", (HandlerInvocation)

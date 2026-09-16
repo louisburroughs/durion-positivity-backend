@@ -8,8 +8,10 @@ import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
+import com.positivity.shopmanager.internal.dto.AppointmentCreation;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
 import com.positivity.shopmanager.internal.dto.CancelAppointmentRequest;
+import com.positivity.shopmanager.internal.dto.ConflictResponse;
 import com.positivity.shopmanager.internal.dto.RescheduleAppointmentRequest;
 import com.positivity.shopmanager.internal.dto.ScheduleViewRequest;
 import com.positivity.shopmanager.internal.dto.ScheduleViewResponse;
@@ -19,7 +21,6 @@ import com.positivity.shopmanager.internal.entity.AppointmentServiceRequest;
 import com.positivity.shopmanager.internal.entity.ExtPersonReplica;
 import com.positivity.shopmanager.internal.entity.RescheduleHistory;
 import com.positivity.shopmanager.internal.entity.Shop;
-import com.positivity.shopmanager.internal.entity.Technician;
 import com.positivity.shopmanager.internal.enums.AppointmentAction;
 import com.positivity.shopmanager.internal.enums.AppointmentSourceType;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
@@ -32,8 +33,10 @@ import com.positivity.shopmanager.internal.event.AppointmentRescheduledEvent;
 import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
 import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
+import com.positivity.shopmanager.internal.exception.KeylessDuplicateReplayException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
+import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
 import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
@@ -43,6 +46,8 @@ import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepositor
 import com.positivity.shopmanager.internal.repository.ShopRepository;
 import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappingRepository;
 import com.positivity.shopmanager.internal.repository.WorkorderActuals;
+import com.positivity.shopmanager.internal.service.SchedulingConflictEvaluator.BookingAttempt;
+import com.positivity.shopmanager.internal.service.SchedulingConflictEvaluator.DetectedConflict;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -68,6 +73,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -98,6 +104,8 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     private final ExtPersonReplicaRepository extPersonReplicaRepository;
     private final Clock clock;
     private final WorkOrderAppointmentMappingRepository workOrderAppointmentMappingRepository;
+    private final SchedulingConflictEvaluator conflictEvaluator;
+    private final SchedulingConflictRecorder conflictRecorder;
 
     /**
      * Creates an appointment from an Estimate or Workorder.
@@ -123,7 +131,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
      */
     @Override
     @Transactional
-    public AppointmentResponse createAppointment(
+    public AppointmentCreation createAppointment(
             @NonNull AppointmentCreateRequest request, String idempotencyKey, UUID correlationId) {
         UUID normalizedCorrelationId = normalizeCorrelationId(correlationId);
         String normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
@@ -140,7 +148,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
 
         Optional<AppointmentResponse> idempotentDuplicate = findIdempotentDuplicate(normalizedIdempotencyKey, request);
         if (idempotentDuplicate.isPresent()) {
-            return idempotentDuplicate.get();
+            return AppointmentCreation.replayed(idempotentDuplicate.get());
         }
 
         String actor = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
@@ -152,14 +160,87 @@ public class AppointmentsServiceImpl implements AppointmentsService {
 
         // Source eligibility validation (CAP-249 Story #12)
         validateSourceEligibility(request);
-        rejectIfSlotConflicts(request);
+
+        // A keyless exact resubmission replays the appointment it duplicates rather than booking a
+        // second one (spec D17 item 3, DECISION-SHOPMGMT-014): not a new row, not a 409.
+        Optional<Appointment> keylessDuplicate = conflictRecorder.findKeylessDuplicate(request);
+        if (keylessDuplicate.isPresent()) {
+            return AppointmentCreation.replayed(toResponse(keylessDuplicate.get()));
+        }
+
+        // The submit-time tier (DECISION-SHOPMGMT-002/-011, CAP-326): HARD refuses, SOFT warns and allows.
+        BookingAttempt attempt = new BookingAttempt(
+                request.getLocationId(),
+                request.getResourceId(),
+                request.getStartAt(),
+                request.getEndAt(),
+                null,
+                request.getServiceRequestIds() == null ? List.of() : request.getServiceRequestIds(),
+                request.getCrmVehicleId());
+        List<DetectedConflict> conflicts = conflictEvaluator.evaluate(attempt);
+        refuseIfHard(attempt, conflicts);
 
         Appointment saved =
                 persistAppointment(request, actor, normalizedIdempotencyKey, customerSnapshot, vehicleSnapshot);
+        flushOrRefuseOverlap(attempt, request);
+        conflictRecorder.recordAccepted(saved, conflicts);
         saveServiceRequests(saved, request.getServiceRequestIds());
         publishAppointmentCreatedEvents(saved);
 
-        return toResponse(saved);
+        return AppointmentCreation.created(toResponse(saved));
+    }
+
+    /** HARD blocks: the refusal is recorded on its own connection, then the booking is refused. */
+    private void refuseIfHard(BookingAttempt attempt, List<DetectedConflict> conflicts) {
+        if (conflicts.stream().noneMatch(DetectedConflict::isHard)) {
+            return;
+        }
+        conflictRecorder.recordRefused(attempt, conflicts);
+        throw new SchedulingConflictException(conflictEnvelope(conflicts));
+    }
+
+    /**
+     * Sends the pending INSERT or UPDATE to PostgreSQL so {@code appointment_resource_no_overlap}
+     * (V8) answers now, inside this method, rather than at commit. A refusal aborts this
+     * transaction, so everything after it runs on the recorder's fresh connection: first the
+     * re-query that tells an exact keyless double-submit (replay) from a real double-booking, then
+     * the BAY_DOUBLE_BOOKED record. Anything that is not the overlap constraint is rethrown as is.
+     */
+    private void flushOrRefuseOverlap(BookingAttempt attempt, @Nullable AppointmentCreateRequest request) {
+        try {
+            appointmentRepository.flush();
+        } catch (DataIntegrityViolationException violation) {
+            if (!ResourceOverlapViolation.matches(violation)) {
+                throw violation;
+            }
+            if (request != null) {
+                Optional<Appointment> raced = conflictRecorder.findKeylessDuplicate(request);
+                if (raced.isPresent()) {
+                    throw new KeylessDuplicateReplayException(raced.get().getAppointmentId());
+                }
+            }
+            DetectedConflict overlap = conflictRecorder.recordRefusedOverlap(attempt);
+            throw new SchedulingConflictException(conflictEnvelope(List.of(overlap)));
+        }
+    }
+
+    /** DECISION-SHOPMGMT-002's envelope: every conflict that fired, HARD and SOFT, with the rule code verbatim. */
+    private ConflictResponse conflictEnvelope(List<DetectedConflict> conflicts) {
+        long hard = conflicts.stream().filter(DetectedConflict::isHard).count();
+        List<ConflictResponse.Conflict> views = conflicts.stream()
+                .map(conflict -> new ConflictResponse.Conflict(
+                        conflict.severity().name(),
+                        conflict.code(),
+                        conflict.detail(),
+                        conflict.severity().isOverridable(),
+                        conflict.resourceId()))
+                .toList();
+        return new ConflictResponse(
+                "SCHEDULING_CONFLICT",
+                hard + " HARD scheduling conflict(s) block this booking",
+                null,
+                Instant.now(clock),
+                views);
     }
 
     private void validateServiceRequestIdsPresent(List<UUID> serviceRequestIds) {
@@ -224,38 +305,6 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 throw new AppointmentValidationException(
                         "No eligibility validation defined for sourceType " + request.getSourceType());
         }
-    }
-
-    private void rejectIfSlotConflicts(@NonNull AppointmentCreateRequest request) {
-        List<Appointment> conflicts = findConflictingAppointments(request);
-        if (!conflicts.isEmpty()) {
-            throw new AppointmentValidationException(
-                    "Requested slot is already booked. " + conflicts.size() + " conflicting appointment(s) found.");
-        }
-    }
-
-    private List<Appointment> findConflictingAppointments(@NonNull AppointmentCreateRequest request) {
-        return appointmentRepository
-                .findByLocationIdAndStartAtLessThanAndEndAtGreaterThan(
-                        request.getLocationId(), request.getEndAt(), request.getStartAt())
-                .stream()
-                .filter(existing -> Objects.equals(existing.getResourceId(), request.getResourceId()))
-                .filter(existing -> existing.getStatus() == AppointmentStatus.SCHEDULED)
-                .filter(existing -> differsFromRequestedSlot(existing, request))
-                .toList();
-    }
-
-    /**
-     * An existing SCHEDULED appointment on the same resource/time window is only
-     * a real conflict if it differs from the request in customer, vehicle, start,
-     * or end — an exact duplicate (e.g. a resubmission without an
-     * Idempotency-Key) is not flagged.
-     */
-    private boolean differsFromRequestedSlot(Appointment existing, AppointmentCreateRequest request) {
-        return !Objects.equals(existing.getCrmCustomerId(), request.getCrmCustomerId())
-                || !Objects.equals(existing.getCrmVehicleId(), request.getCrmVehicleId())
-                || !Objects.equals(existing.getStartAt(), request.getStartAt())
-                || !Objects.equals(existing.getEndAt(), request.getEndAt());
     }
 
     private Appointment persistAppointment(
@@ -370,9 +419,26 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         Instant previousStartAt = appointment.getStartAt();
         Instant previousEndAt = appointment.getEndAt();
 
+        // Same rules as creation (CAP-326): the appointment's own current slot does not count
+        // against it, and the exclusion constraint checks the UPDATE exactly as it would an INSERT.
+        BookingAttempt attempt = new BookingAttempt(
+                appointment.getLocationId(),
+                appointment.getResourceId(),
+                request.getNewStartAt(),
+                request.getNewEndAt(),
+                appointmentId,
+                appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId).stream()
+                        .map(AppointmentServiceRequest::getServiceEntityId)
+                        .toList(),
+                appointment.getCrmVehicleId());
+        List<DetectedConflict> conflicts = conflictEvaluator.evaluate(attempt);
+        refuseIfHard(attempt, conflicts);
+
         appointment.setStartAt(request.getNewStartAt());
         appointment.setEndAt(request.getNewEndAt());
         Appointment saved = appointmentRepository.save(appointment);
+        flushOrRefuseOverlap(attempt, null);
+        conflictRecorder.recordAccepted(saved, conflicts);
 
         String actorId = SecurityContextHelper.getCurrentUsernameOrDefault(SYSTEM);
         Instant rescheduledAt = Instant.now(clock);
@@ -398,7 +464,6 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .rescheduleReasonNotes(request.getRescheduleReasonNotes())
                 .rescheduledBy(actorId)
                 .rescheduledAt(rescheduledAt)
-                .conflictOverridden(false)
                 .notifyCustomer(request.isNotifyCustomer())
                 .createdAt(rescheduledAt)
                 .build());
@@ -582,7 +647,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             }
         }
 
-        Map<ResourceLaneKey, String> resourceNames = resolveResourceNames(shop, filteredByType.keySet());
+        Map<ResourceLaneKey, String> resourceNames = resolveResourceNames(filteredByType.keySet());
         List<ScheduleViewResponse.ScheduleResourceView> resources = filteredByType.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .map(entry -> toResourceView(entry.getKey(), entry.getValue(), resourceNames.get(entry.getKey())))
@@ -620,7 +685,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     /**
      * Resolves the schedule window's timezone from an already-loaded {@link Shop} (#2023 F6): {@code
      * getScheduleView} loads the shop once and passes it here and to {@link
-     * #resolveResourceNames(Shop, Set)} rather than querying it twice for the same location.
+     * #resolveResourceNames(Set)} rather than querying it twice for the same location.
      */
     private ZoneId resolveZoneId(@Nullable Shop shop, UUID locationId) {
         String configuredTimezone = shop == null
@@ -778,7 +843,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         return resourceView;
     }
 
-    private Map<ResourceLaneKey, String> resolveResourceNames(@Nullable Shop shop, Set<ResourceLaneKey> laneKeys) {
+    private Map<ResourceLaneKey, String> resolveResourceNames(Set<ResourceLaneKey> laneKeys) {
         Map<ResourceLaneKey, String> resourceNames = HashMap.newHashMap(laneKeys.size());
         if (laneKeys.isEmpty()) {
             return resourceNames;
@@ -789,11 +854,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
             return resourceNames;
         }
 
-        if (!shopHasTechnicians(shop)) {
-            return resourceNames;
-        }
-
-        applyTechnicianDisplayNames(shop, technicianLanesByResourceId, resourceNames);
+        applyTechnicianDisplayNames(technicianLanesByResourceId, resourceNames);
         return resourceNames;
     }
 
@@ -818,39 +879,42 @@ public class AppointmentsServiceImpl implements AppointmentsService {
         return laneKey.resourceId();
     }
 
-    private boolean shopHasTechnicians(Shop shop) {
-        return shop != null
-                && shop.getTechnicians() != null
-                && !shop.getTechnicians().isEmpty();
-    }
-
+    /**
+     * Technician lanes are keyed by the person id (the one identity this module has for a
+     * technician, CAP-328), so a lane's display name is the person's name from the people-contact
+     * replica — one replica read for the whole view (#885), a placeholder while it catches up, and
+     * the raw id for a lane key that is not a person id at all.
+     */
     private void applyTechnicianDisplayNames(
-            Shop shop,
             Map<String, List<ResourceLaneKey>> technicianLanesByResourceId,
             Map<ResourceLaneKey, String> resourceNames) {
-        // #885: one replica read for the whole schedule view, not one per technician.
-        List<UUID> personIds = shop.getTechnicians().stream()
-                .filter(t -> t != null && t.getId() != null && t.getPersonId() != null)
-                .map(Technician::getPersonId)
-                .toList();
-        Map<UUID, ExtPersonReplica> replicasByPersonId = personIds.isEmpty()
-                ? Map.of()
-                : extPersonReplicaRepository.findAllById(personIds).stream()
-                        .collect(Collectors.toMap(ExtPersonReplica::getPersonId, r -> r));
-        for (var technician : shop.getTechnicians()) {
-            if (technician != null && technician.getId() != null) {
-                List<ResourceLaneKey> technicianLanes =
-                        technicianLanesByResourceId.get(technician.getId().toString());
-                if (technicianLanes != null) {
-                    String technicianName = resolveTechnicianDisplayName(
-                            technician.getId().toString(),
-                            technician.getPersonId(),
-                            replicasByPersonId.get(technician.getPersonId()));
-                    for (ResourceLaneKey laneKey : technicianLanes) {
-                        resourceNames.put(laneKey, technicianName);
-                    }
-                }
+        Map<String, UUID> personIdsByResourceId = new HashMap<>();
+        for (String resourceId : technicianLanesByResourceId.keySet()) {
+            UUID personId = parsePersonId(resourceId);
+            if (personId != null) {
+                personIdsByResourceId.put(resourceId, personId);
             }
+        }
+        if (personIdsByResourceId.isEmpty()) {
+            return;
+        }
+        Map<UUID, ExtPersonReplica> replicasByPersonId =
+                extPersonReplicaRepository.findAllById(personIdsByResourceId.values()).stream()
+                        .collect(Collectors.toMap(ExtPersonReplica::getPersonId, r -> r));
+        personIdsByResourceId.forEach((resourceId, personId) -> {
+            String technicianName =
+                    resolveTechnicianDisplayName(resourceId, personId, replicasByPersonId.get(personId));
+            for (ResourceLaneKey laneKey : technicianLanesByResourceId.get(resourceId)) {
+                resourceNames.put(laneKey, technicianName);
+            }
+        });
+    }
+
+    private static @Nullable UUID parsePersonId(String resourceId) {
+        try {
+            return UUID.fromString(resourceId);
+        } catch (IllegalArgumentException notAPersonId) {
+            return null;
         }
     }
 
@@ -1100,6 +1164,7 @@ public class AppointmentsServiceImpl implements AppointmentsService {
     private AppointmentResponse toResponse(Appointment appointment) {
         AppointmentResponse response = new AppointmentResponse();
         response.setAppointmentId(appointment.getAppointmentId());
+        response.setConflicts(conflictRecorder.viewsFor(appointment.getAppointmentId()));
         response.setStatus(appointment.getStatus().name());
         response.setLocationId(appointment.getLocationId());
         response.setResourceId(appointment.getResourceId());

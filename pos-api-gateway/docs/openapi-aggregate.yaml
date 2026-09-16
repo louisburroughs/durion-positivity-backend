@@ -357,6 +357,8 @@ paths:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1services~1search
   /v1/products/services/{serviceId}:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1services~1{serviceId}
+  /v1/products/services/{serviceId}/requirements:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1services~1{serviceId}~1requirements
   /v1/products/substitution-groups:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1substitution-groups
   /v1/products/substitution-groups/{groupId}:
@@ -1095,6 +1097,8 @@ paths:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1bulk-ingest
   /v1/people/compliance/inactive-person-active-user:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1compliance~1inactive-person-active-user
+  /v1/people/credentials/bulk-ingest:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1credentials~1bulk-ingest
   /v1/people/employees:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1employees
   /v1/people/employees/by-number/{employeeNumber}:
@@ -1119,6 +1123,8 @@ paths:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1reports~1approvedTime
   /v1/people/reports/attendanceJobtimeDiscrepancy:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1reports~1attendanceJobtimeDiscrepancy
+  /v1/people/skills:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1skills
   /v1/people/staffing/assignments:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1staffing~1assignments
   /v1/people/staffing/assignments/{assignmentId}:
@@ -1165,6 +1171,8 @@ paths:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1workSessions~1{id}~1breaks~1stop
   /v1/people/workSessions/{id}/submit:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1workSessions~1{id}~1submit
+  /v1/people/{personId}/credentials:
+    $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1{personId}~1credentials
   /v1/people/{personId}/locations:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1{personId}~1locations
   /v1/people/{personId}/primary-location:
@@ -1359,16 +1367,14 @@ paths:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1appointments~1{appointmentId}~1reschedule
   /v1/schedules/capacity:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1schedules~1capacity
+  /v1/schedules/openings:
+    $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1schedules~1openings
   /v1/schedules/view:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1schedules~1view
   /v1/shop-dashboard:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop-dashboard
   /v1/shop-manager/mechanics:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop-manager~1mechanics
-  /v1/shop-manager/mechanics/bulk-ingest:
-    $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop-manager~1mechanics~1bulk-ingest
-  /v1/shop-manager/mechanics/by-person/{personId}/skills:
-    $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop-manager~1mechanics~1by-person~1{personId}~1skills
   /v1/shop-manager/{locationId}/technicians:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1shop-manager~1{locationId}~1technicians
   /v1/shop-manager/{locationId}/technicians/{personId}/person:

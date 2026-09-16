@@ -16,7 +16,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import java.time.Instant;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -72,11 +72,16 @@ public class MobileUnitEntity extends TenantScopedEntity {
 
     private String notes;
 
+    /**
+     * Catalog operation codes the unit can perform off-site (CAP-325 D14) — the same vocabulary a
+     * bay's specialty claims use, validated against the {@code ext_catalog_service} replica. The
+     * location-owned capability registry this once referenced is retired (V5).
+     */
     @Builder.Default
     @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "mobile_unit_capabilities", joinColumns = @JoinColumn(name = "mobile_unit_id"))
-    @Column(name = "service_capability_id", columnDefinition = "UUID")
-    private Set<UUID> capabilityIds = new HashSet<>();
+    @CollectionTable(name = "mobile_unit_service_capability_codes", joinColumns = @JoinColumn(name = "mobile_unit_id"))
+    @Column(name = "operation_code", length = 64, nullable = false)
+    private Set<String> serviceCapabilityCodes = new LinkedHashSet<>();
 
     /**
      * Aggregate version backing the {@code location.mobile-unit.*} facts'

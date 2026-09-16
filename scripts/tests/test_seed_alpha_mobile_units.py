@@ -88,13 +88,17 @@ class FixtureReferenceNamesTest(unittest.TestCase):
             with self.subTest(unit=row["name"]):
                 self.assertIn(row["travelBufferPolicyName"], seeded)
 
-    def test_capabilityCodesAreSeeded(self):
-        seeded = _seeded("service_location_capabilities", 1)
-        self.assertEqual(len(seeded), 20, f"expected the 20 seeded capabilities, got {len(seeded)}")
+    def test_capabilityCodesAreTierZeroOperationCodes(self):
+        # CAP-325 D14: a unit claims catalog operation codes — the same vocabulary as a bay's specialty
+        # claim — and pos-location validates them against its ext_catalog_service replica, which the
+        # Tier 0 catalog pack fills. The location-owned capability registry is retired (V5).
+        with (_SCRIPTS / "fixtures" / "seed" / "alpha" / "catalog" / "tier0-services.csv").open(newline="") as handle:
+            operations = {row["operationCode"] for row in csv.DictReader(handle)}
+        self.assertGreater(len(operations), 20)
         for row in _rows("mobile-units.csv"):
             for code in row["capabilityCodes"].split(";"):
                 with self.subTest(unit=row["name"], code=code):
-                    self.assertIn(code, seeded)
+                    self.assertIn(code, operations)
 
     def test_serviceAreaNamesAreSeeded(self):
         seeded = _seeded("service_areas", 1)
@@ -147,6 +151,20 @@ class CoverageFixtureIntegrityTest(unittest.TestCase):
             with self.subTest(area=row["serviceAreaName"], priority=row["priority"]):
                 self.assertNotIn(key, seen, f"tied with {seen.get(key)}")
             seen[key] = row["unitName"]
+
+
+class PackOrderTest(unittest.TestCase):
+    """Bays and mobile units claim catalog operation codes that pos-location validates against its
+    ext_catalog_service replica (CAP-325 D14), so both packs must run after the catalog services
+    that publish those codes -- a bay seeded first would have every default claim refused."""
+
+    def test_baysAndMobileUnitsFollowTheCatalogServices(self):
+        paths = [path for path, _ in seed_alpha.PACK_FILES]
+        services = paths.index("catalog/tier0-services.csv")
+        self.assertGreater(paths.index("location/bays.csv"), services)
+        self.assertGreater(paths.index("location/mobile-units.csv"), services)
+        # Still ahead of anything that books against them.
+        self.assertLess(paths.index("location/bays.csv"), paths.index("price/base-prices.csv"))
 
 
 class LoaderPackClassificationTest(unittest.TestCase):
@@ -293,7 +311,7 @@ def _as_unit(unit):
         "name": unit,
         "status": "ACTIVE",
         "travelBufferPolicyId": "policy-1",
-        "capabilityIds": ["cap-1"],
+        "serviceCapabilityCodes": ["cap-1"],
     }
 
 
@@ -322,7 +340,7 @@ class MobileUnitPackTest(unittest.TestCase):
         parked = next(body for body in gateway.posted if body["name"] == "MU-CLT-MAIN-03")
         self.assertEqual(parked["status"], "INACTIVE")
         self.assertEqual(parked["coverageRules"], [])
-        self.assertTrue(parked["capabilityIds"], "parked, but still an equipped van")
+        self.assertTrue(parked["serviceCapabilityCodes"], "parked, but still an equipped van")
 
     def test_everyActivePayloadCarriesTheTrioTheServiceDemands(self):
         gateway = _StubGateway()
@@ -330,7 +348,7 @@ class MobileUnitPackTest(unittest.TestCase):
         for body in (b for b in gateway.posted if b["status"] == "ACTIVE"):
             with self.subTest(unit=body["name"]):
                 self.assertTrue(body.get("travelBufferPolicyId"))
-                self.assertTrue(body["capabilityIds"])
+                self.assertTrue(body["serviceCapabilityCodes"])
                 self.assertTrue(body["coverageRules"])
 
     def test_existingUnitsAreSkippedSoARerunAddsOnlyWhatIsMissing(self):
@@ -344,7 +362,7 @@ class MobileUnitPackTest(unittest.TestCase):
 
     def test_capabilityCodesAreSplitOnSemicolonsAndBlanksDropped(self):
         """A trailing or doubled `;` would otherwise reach the service as an empty capability,
-        which resolveCapabilityIds rejects with "Invalid capabilityIds: <blank>" -- failing the
+        which resolveCapabilityIds rejects with "Invalid serviceCapabilityCodes: <blank>" -- failing the
         whole unit over a stray separator."""
         gateway = _StubGateway()
         self._run(gateway)
@@ -352,8 +370,8 @@ class MobileUnitPackTest(unittest.TestCase):
         for row in _rows("mobile-units.csv"):
             with self.subTest(unit=row["name"]):
                 expected = [code for code in row["capabilityCodes"].split(";") if code]
-                self.assertEqual(by_name[row["name"]]["capabilityIds"], expected)
-                self.assertNotIn("", by_name[row["name"]]["capabilityIds"])
+                self.assertEqual(by_name[row["name"]]["serviceCapabilityCodes"], expected)
+                self.assertNotIn("", by_name[row["name"]]["serviceCapabilityCodes"])
 
     def test_multiplePagesOfExistingUnitsAreAllRead(self):
         """The skip check is only sound if it sees every unit; a reader that stops after page 0
@@ -379,7 +397,7 @@ class LegacyIncompleteUnitTest(unittest.TestCase):
 
     def _legacy_nine(self):
         return [{"name": row["name"], "status": "INACTIVE", "travelBufferPolicyId": None,
-                 "capabilityIds": []} for row in _rows("mobile-units.csv")]
+                 "serviceCapabilityCodes": []} for row in _rows("mobile-units.csv")]
 
     def _run(self, gateway):
         return seed_alpha.run_mobile_units(gateway, "location/mobile-units.csv", None)
@@ -399,7 +417,7 @@ class LegacyIncompleteUnitTest(unittest.TestCase):
     def test_eachWayOfBeingIncompleteIsNamedInTheMessage(self):
         row = next(r for r in _rows("mobile-units.csv") if r["name"] == "MU-CLT-MAIN-01")
         complete = {"id": "u1", "name": row["name"], "status": "ACTIVE",
-                    "travelBufferPolicyId": "p1", "capabilityIds": ["c1"]}
+                    "travelBufferPolicyId": "p1", "serviceCapabilityCodes": ["c1"]}
         gateway = _StubGateway(coverage_rules={"u1": [{"id": "r1"}]})
 
         self.assertIsNone(seed_alpha.mobile_unit_shortfall(gateway, complete, row, [{"ruleType": "X"}]))
@@ -408,14 +426,14 @@ class LegacyIncompleteUnitTest(unittest.TestCase):
         self.assertIn("no travel buffer policy", seed_alpha.mobile_unit_shortfall(
             gateway, {**complete, "travelBufferPolicyId": None}, row, []))
         self.assertIn("no capabilities", seed_alpha.mobile_unit_shortfall(
-            gateway, {**complete, "capabilityIds": []}, row, []))
+            gateway, {**complete, "serviceCapabilityCodes": []}, row, []))
 
     def test_anActiveUnitThatLostItsCoverageRulesIsFlagged(self):
         """Coverage is the one part the list response does not carry, and the one part that decides
         whether `:eligible` returns anything."""
         row = next(r for r in _rows("mobile-units.csv") if r["name"] == "MU-CLT-MAIN-01")
         unit = {"id": "u1", "name": row["name"], "status": "ACTIVE",
-                "travelBufferPolicyId": "p1", "capabilityIds": ["c1"]}
+                "travelBufferPolicyId": "p1", "serviceCapabilityCodes": ["c1"]}
         gateway = _StubGateway(coverage_rules={"u1": []})
         self.assertIn("no coverage rules",
                       seed_alpha.mobile_unit_shortfall(gateway, unit, row, [{"ruleType": "X"}]))

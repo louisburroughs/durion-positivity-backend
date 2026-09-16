@@ -118,6 +118,12 @@ public class AppointmentResponse {
             requiredMode = NOT_REQUIRED)
     private List<UUID> serviceRequestIds;
 
+    @Schema(
+            description = "SOFT scheduling conflicts recorded against this appointment (DECISION-SHOPMGMT-002), each"
+                    + " overridable via POST /v1/appointments/{id}/conflict-override until overridden. Empty when"
+                    + " the booking raised none. A HARD conflict never reaches here: it refuses the booking with 409.")
+    private List<AppointmentConflictView> conflicts = List.of();
+
     @Schema(description = "Snapshot of customer attributes captured at booking time", requiredMode = NOT_REQUIRED)
     private Map<String, Object> customerSnapshot;
 

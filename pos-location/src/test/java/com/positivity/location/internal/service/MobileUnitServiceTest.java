@@ -14,19 +14,20 @@ import com.positivity.location.internal.dto.CoverageRuleRequest;
 import com.positivity.location.internal.dto.CoverageRuleResponse;
 import com.positivity.location.internal.dto.MobileUnitRequest;
 import com.positivity.location.internal.dto.MobileUnitResponse;
+import com.positivity.location.internal.entity.ExtCatalogServiceReplica;
 import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.MobileUnitCoverageRuleEntity;
 import com.positivity.location.internal.entity.MobileUnitEntity;
 import com.positivity.location.internal.entity.ServiceAreaEntity;
-import com.positivity.location.internal.entity.ServiceLocationCapabilityEntity;
 import com.positivity.location.internal.entity.TravelBufferPolicyEntity;
 import com.positivity.location.internal.exception.DuplicateResourceException;
+import com.positivity.location.internal.exception.InvalidServiceCapabilityCodesException;
 import com.positivity.location.internal.exception.ResourceNotFoundException;
+import com.positivity.location.internal.repository.ExtCatalogServiceReplicaRepository;
 import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.MobileUnitCoverageRuleRepository;
 import com.positivity.location.internal.repository.MobileUnitRepository;
 import com.positivity.location.internal.repository.ServiceAreaRepository;
-import com.positivity.location.internal.repository.ServiceLocationCapabilityRepository;
 import com.positivity.location.internal.repository.TravelBufferPolicyRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -48,6 +49,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Unit tests for {@link MobileUnitServiceImpl}.
@@ -74,7 +77,7 @@ class MobileUnitServiceTest {
     private TravelBufferPolicyRepository travelBufferPolicyRepository;
 
     @Mock
-    private ServiceLocationCapabilityRepository serviceLocationCapabilityRepository;
+    private ExtCatalogServiceReplicaRepository extCatalogServiceReplicaRepository;
 
     @Mock
     private LocationRepository locationRepository;
@@ -94,12 +97,14 @@ class MobileUnitServiceTest {
                 "baseLocationId",
                         UUID.fromString("00000000-0000-0000-0000-000000000001").toString(),
                 "status", "ACTIVE",
-                "capabilityIds", List.of(),
+                "serviceCapabilityCodes", List.of(),
                 "coverageRules", List.of());
 
         assertThatThrownBy(() -> service.createMobileUnit(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("ACTIVE mobile unit requires travelBufferPolicyId, capabilityIds, and coverageRules");
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining(MobileUnitServiceImpl.ACTIVE_UNIT_INCOMPLETE)
+                .extracting("statusCode")
+                .isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
     @Test
@@ -113,7 +118,7 @@ class MobileUnitServiceTest {
                 .status("ACTIVE")
                 .baseLocationId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .travelBufferPolicyId(policyId)
-                .capabilityIds(List.of("cap-ok"))
+                .serviceCapabilityCodes(List.of("OIL-CHANGE-FULL-SYNTHETIC"))
                 .coverageRules(List.of(CoverageRuleRequest.builder()
                         .ruleType("ZIP")
                         .priority(1)
@@ -166,20 +171,34 @@ class MobileUnitServiceTest {
     }
 
     @Test
-    @DisplayName("#76 - invalid capability IDs are listed in validation error")
-    void shouldListInvalidCapabilityIdsWhenCatalogValidationFails() {
-        ServiceLocationCapabilityEntity existing = ServiceLocationCapabilityEntity.builder()
-                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .code("CAP-OK")
-                .name("Cap ok")
+    @DisplayName("CAP-325 D14 - unknown or retired operation codes are listed, normalized, in the validation error")
+    void shouldListInvalidOperationCodesWhenCatalogValidationFails() {
+        when(extCatalogServiceReplicaRepository.findByOperationCodeInAndActiveIsTrue(any()))
+                .thenReturn(List.of(activeService("OIL-CHANGE-FULL-SYNTHETIC")));
+        List<String> codes = List.of(" oil-change-full-synthetic ", "cap-missing-1", "CAP-MISSING-2");
+
+        assertThatThrownBy(() -> service.validateServiceCapabilityCodes(codes))
+                .isInstanceOf(InvalidServiceCapabilityCodesException.class)
+                .hasMessageContaining("Invalid serviceCapabilityCodes: CAP-MISSING-1, CAP-MISSING-2")
+                .extracting("statusCode")
+                .isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+    }
+
+    @Test
+    @DisplayName("CAP-325 D14 - a valid claim is normalized to the catalog's UPPER-DASH code")
+    void shouldAcceptKnownOperationCodesCaseInsensitively() {
+        when(extCatalogServiceReplicaRepository.findByOperationCodeInAndActiveIsTrue(any()))
+                .thenReturn(List.of(activeService("OIL-CHANGE-FULL-SYNTHETIC")));
+
+        service.validateServiceCapabilityCodes(List.of(" oil-change-full-synthetic "));
+    }
+
+    private static ExtCatalogServiceReplica activeService(String operationCode) {
+        return ExtCatalogServiceReplica.builder()
+                .serviceId(UUID.nameUUIDFromBytes(operationCode.getBytes()))
+                .operationCode(operationCode)
                 .active(true)
                 .build();
-        when(serviceLocationCapabilityRepository.findByCodeIn(anyList())).thenReturn(List.of(existing));
-        List<String> capabilityIds = List.of("cap-ok", "cap-missing-1", "cap-missing-2");
-
-        assertThatThrownBy(() -> service.validateCapabilityIds(capabilityIds))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid capabilityIds: CAP-MISSING-1, CAP-MISSING-2");
     }
 
     @Test
@@ -223,13 +242,8 @@ class MobileUnitServiceTest {
                 .build();
         when(mobileUnitRepository.save(any(MobileUnitEntity.class))).thenReturn(savedEntity);
         when(mobileUnitRepository.findById(savedId)).thenReturn(java.util.Optional.of(savedEntity));
-        when(serviceLocationCapabilityRepository.findAllById(any()))
-                .thenReturn(List.of(ServiceLocationCapabilityEntity.builder()
-                        .id(UUID.fromString(requestCapabilityId()))
-                        .code("CAP-UUID")
-                        .name("Capability UUID")
-                        .active(true)
-                        .build()));
+        when(extCatalogServiceReplicaRepository.findByOperationCodeInAndActiveIsTrue(any()))
+                .thenReturn(List.of(activeService("BATTERY-REPLACEMENT")));
 
         List<MobileUnitCoverageRuleEntity> savedRules = List.of(
                 MobileUnitCoverageRuleEntity.builder()
@@ -257,7 +271,7 @@ class MobileUnitServiceTest {
                 .status("ACTIVE")
                 .travelBufferPolicyId(policyId)
                 .notes("ready")
-                .capabilityIds(List.of(requestCapabilityId()))
+                .serviceCapabilityCodes(List.of("battery-replacement"))
                 .coverageRules(List.of(
                         CoverageRuleRequest.builder()
                                 .ruleType("DISTANCE_TIER")
@@ -278,10 +292,6 @@ class MobileUnitServiceTest {
         assertThat(response.getName()).isEqualTo("Unit-1");
         verify(coverageRuleRepository).deleteByMobileUnit_Id(savedId);
         verify(coverageRuleRepository).saveAll(anyList());
-    }
-
-    private static String requestCapabilityId() {
-        return "11111111-1111-1111-1111-111111111111";
     }
 
     @Test
@@ -344,14 +354,12 @@ class MobileUnitServiceTest {
     @DisplayName("#76 - patch updates existing fields and persists")
     void shouldPatchExistingMobileUnit() {
         UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        MobileUnitEntity existing = MobileUnitEntity.builder()
-                .id(id)
-                .name("Old")
-                .status("INACTIVE")
-                .notes("old")
-                .build();
+        // Complete apart from its status: the flip to ACTIVE is what the patch tests.
+        MobileUnitEntity existing = completeUnit(id, "INACTIVE");
         when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.of(existing));
         when(mobileUnitRepository.save(existing)).thenReturn(existing);
+        when(coverageRuleRepository.findByMobileUnit_IdOrderByPriorityAsc(id))
+                .thenReturn(List.of(MobileUnitCoverageRuleEntity.builder().build()));
 
         MobileUnitResponse patched = service.patch(
                 id,
@@ -365,6 +373,51 @@ class MobileUnitServiceTest {
         assertThat(patched.getNotes()).isEqualTo("updated");
         // The status transition must reach consumers as a fact (issue #1668).
         verify(locationFactPublisher).mobileUnitChanged(existing);
+    }
+
+    @Test
+    @DisplayName("CAP-325 D14.2 - clearing an ACTIVE unit's claim is refused: the merged state must stay complete")
+    void shouldRefuseClearingTheClaimOfAnActiveUnit() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        MobileUnitEntity existing = completeUnit(id, "ACTIVE");
+        when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.of(existing));
+
+        assertThatThrownBy(() -> service.patch(id, Map.of("serviceCapabilityCodes", List.of())))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining(MobileUnitServiceImpl.ACTIVE_UNIT_INCOMPLETE)
+                .extracting("statusCode")
+                .isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        verify(mobileUnitRepository, never()).save(any());
+        verify(locationFactPublisher, never()).mobileUnitChanged(any());
+    }
+
+    @Test
+    @DisplayName("CAP-325 D14.2 - activating a unit that claims nothing is refused the way create refuses it")
+    void shouldRefuseActivatingAnIncompleteUnit() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        MobileUnitEntity existing = MobileUnitEntity.builder()
+                .id(id)
+                .name("Bare")
+                .status("INACTIVE")
+                .build();
+        when(mobileUnitRepository.findById(id)).thenReturn(java.util.Optional.of(existing));
+
+        assertThatThrownBy(() -> service.patch(id, Map.of("status", "ACTIVE")))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining(MobileUnitServiceImpl.ACTIVE_UNIT_INCOMPLETE);
+        verify(mobileUnitRepository, never()).save(any());
+    }
+
+    private static MobileUnitEntity completeUnit(UUID id, String status) {
+        MobileUnitEntity unit = MobileUnitEntity.builder()
+                .id(id)
+                .name("Old")
+                .status(status)
+                .notes("old")
+                .travelBufferPolicyId(UUID.fromString("00000000-0000-0000-0000-000000000009"))
+                .build();
+        unit.getServiceCapabilityCodes().add("OIL-CHANGE-FULL-SYNTHETIC");
+        return unit;
     }
 
     @Test

@@ -85,6 +85,11 @@ class AppointmentsServiceImplWorkorderActualsTest {
 
     private AppointmentsServiceImpl appointmentsService;
 
+    private final SchedulingConflictEvaluator conflictEvaluator =
+            org.mockito.Mockito.mock(SchedulingConflictEvaluator.class);
+    private final SchedulingConflictRecorder conflictRecorder =
+            org.mockito.Mockito.mock(SchedulingConflictRecorder.class);
+
     @BeforeEach
     void setUp() {
         appointmentsService = new AppointmentsServiceImpl(
@@ -101,7 +106,9 @@ class AppointmentsServiceImplWorkorderActualsTest {
                 sourceEligibilityService,
                 mock(ExtPersonReplicaRepository.class),
                 Clock.fixed(Instant.parse("2026-06-18T00:00:00Z"), ZoneOffset.UTC),
-                workOrderAppointmentMappingRepository);
+                workOrderAppointmentMappingRepository,
+                conflictEvaluator,
+                conflictRecorder);
 
         when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(APPOINTMENT_ID))
                 .thenReturn(List.<AppointmentServiceRequest>of());

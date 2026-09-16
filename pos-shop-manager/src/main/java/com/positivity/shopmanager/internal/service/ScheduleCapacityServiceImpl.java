@@ -1,7 +1,5 @@
 package com.positivity.shopmanager.internal.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.shopmanager.internal.dto.ScheduleCapacityResponse;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.ExtBayReplica;
@@ -14,6 +12,7 @@ import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappingRepository;
 import com.positivity.shopmanager.internal.repository.WorkorderActuals;
+import com.positivity.shopmanager.internal.service.LocationHoursParser.RawOperatingHoursEntry;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -28,7 +27,6 @@ import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -112,7 +110,7 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
     private final ExtBayReplicaRepository extBayReplicaRepository;
     private final AppointmentRepository appointmentRepository;
     private final WorkOrderAppointmentMappingRepository workOrderAppointmentMappingRepository;
-    private final ObjectMapper objectMapper;
+    private final LocationHoursParser locationHoursParser;
 
     @Override
     @Transactional(readOnly = true)
@@ -126,10 +124,12 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
 
         ZoneId zoneId = resolveZoneId(location);
         boolean hoursNeverConfigured = location == null || location.getOperatingHours() == null;
-        Map<DayOfWeek, RawOperatingHoursEntry> hoursByDow =
-                hoursNeverConfigured ? null : parseOperatingHours(locationId, location.getOperatingHours());
-        Map<LocalDate, String> closuresByDate =
-                location == null ? Map.of() : parseHolidayClosures(locationId, location.getHolidayClosures());
+        Map<DayOfWeek, RawOperatingHoursEntry> hoursByDow = hoursNeverConfigured
+                ? null
+                : locationHoursParser.parseOperatingHours(locationId, location.getOperatingHours());
+        Map<LocalDate, String> closuresByDate = location == null
+                ? Map.of()
+                : locationHoursParser.parseHolidayClosures(locationId, location.getHolidayClosures());
 
         List<LocalDate> dates = from.datesUntil(to.plusDays(1)).toList();
         List<DayAssembly> assemblies = dates.stream()
@@ -197,83 +197,6 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
                     location.getLocationId(),
                     timezone);
             return null;
-        }
-    }
-
-    /**
-     * Parses the replicated {@code operating_hours} JSON into a per-day-of-week map.
-     *
-     * <p>A malformed {@code dayOfWeek} entry (missing, or not one of the seven names) invalidates
-     * the whole payload rather than just that entry (#2023 F7): dropping only the bad entry would
-     * leave {@code byDayOfWeek} silently missing that weekday, and {@code assembleDay} reports a
-     * missing weekday entry as {@code CLOSED} — a confirmed closure the data never actually stated.
-     * A malformed hours fact is <em>unknown</em>, not a closure, so it must degrade the same way an
-     * entirely unparsable JSON payload does: every date in the range reports {@code UNAVAILABLE}.
-     * This mirrors the producer's own all-or-nothing rule (publishing {@code operatingHours = null}
-     * rather than a partial list) instead of inventing a third, more lenient rule on the consumer
-     * side.
-     *
-     * @return {@code null} when the JSON cannot be parsed at all, or any one entry's {@code
-     *     dayOfWeek} cannot be resolved (distinct from an empty, valid list) so the caller reports
-     *     every date {@code UNAVAILABLE} rather than asserting a closure the data does not actually
-     *     confirm
-     */
-    private @Nullable Map<DayOfWeek, RawOperatingHoursEntry> parseOperatingHours(UUID locationId, String json) {
-        try {
-            List<RawOperatingHoursEntry> entries =
-                    objectMapper.readValue(json, new TypeReference<List<RawOperatingHoursEntry>>() {});
-            Map<DayOfWeek, RawOperatingHoursEntry> byDayOfWeek = new EnumMap<>(DayOfWeek.class);
-            for (RawOperatingHoursEntry entry : entries) {
-                if (entry == null || entry.dayOfWeek() == null) {
-                    log.warn(
-                            "Location {} has an operatingHours entry with no dayOfWeek; treating the whole payload"
-                                    + " as unparsable so no weekday is silently reported CLOSED",
-                            locationId);
-                    return null;
-                }
-                try {
-                    byDayOfWeek.put(DayOfWeek.valueOf(entry.dayOfWeek()), entry);
-                } catch (IllegalArgumentException e) {
-                    log.warn(
-                            "Location {} operatingHours entry has an unrecognised dayOfWeek '{}'; treating the whole"
-                                    + " payload as unparsable so that weekday is UNAVAILABLE, never CLOSED",
-                            locationId,
-                            entry.dayOfWeek());
-                    return null;
-                }
-            }
-            return byDayOfWeek;
-        } catch (Exception e) {
-            log.warn(
-                    "Location {} has unparsable operatingHours; capacity days are reported UNAVAILABLE", locationId, e);
-            return null;
-        }
-    }
-
-    /**
-     * Parses the replicated {@code holiday_closures} JSON into date-keyed reasons. A malformed
-     * payload degrades to "no closures known" rather than failing the whole request — this is
-     * supplementary information layered on top of an otherwise-assemblable day, not a precondition
-     * for assembling it.
-     */
-    private Map<LocalDate, String> parseHolidayClosures(UUID locationId, @Nullable String json) {
-        if (json == null) {
-            return Map.of();
-        }
-        try {
-            List<RawHolidayClosure> entries =
-                    objectMapper.readValue(json, new TypeReference<List<RawHolidayClosure>>() {});
-            Map<LocalDate, String> byDate = new HashMap<>();
-            for (RawHolidayClosure entry : entries) {
-                if (entry == null || entry.date() == null) {
-                    continue;
-                }
-                byDate.put(LocalDate.parse(entry.date()), entry.reason());
-            }
-            return byDate;
-        } catch (Exception e) {
-            log.warn("Location {} has unparsable holidayClosures; treating the range as having none", locationId, e);
-            return Map.of();
         }
     }
 
@@ -552,12 +475,6 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
     private Instant minInstant(Instant a, Instant b) {
         return a.isBefore(b) ? a : b;
     }
-
-    /** Raw shape of one {@code operating_hours} array element, deserialized as strings only. */
-    private record RawOperatingHoursEntry(String dayOfWeek, String openTime, String closeTime) {}
-
-    /** Raw shape of one {@code holiday_closures} array element, deserialized as strings only. */
-    private record RawHolidayClosure(String date, String reason) {}
 
     private record DayAssembly(
             LocalDate date,

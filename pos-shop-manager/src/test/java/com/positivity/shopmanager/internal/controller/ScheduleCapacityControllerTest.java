@@ -14,6 +14,7 @@ import com.positivity.shopmanager.internal.enums.ScheduleCapacityDayStatus;
 import com.positivity.shopmanager.internal.exception.ScheduleCapacityRangeExceededException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.service.AppointmentsService;
+import com.positivity.shopmanager.internal.service.OpeningSearchService;
 import com.positivity.shopmanager.internal.service.ScheduleCapacityService;
 import java.lang.reflect.Method;
 import java.time.Clock;
@@ -80,6 +81,9 @@ class ScheduleCapacityControllerTest {
 
     @MockitoBean
     private ScheduleCapacityService scheduleCapacityService;
+
+    @MockitoBean
+    private OpeningSearchService openingSearchService;
 
     @Test
     @WithMockUser(authorities = "shop:schedule:view")

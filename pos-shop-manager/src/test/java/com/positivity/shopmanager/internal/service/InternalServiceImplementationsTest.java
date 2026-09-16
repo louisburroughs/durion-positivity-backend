@@ -3,7 +3,6 @@ package com.positivity.shopmanager.internal.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
 import java.util.UUID;
@@ -21,17 +20,6 @@ class InternalServiceImplementationsTest {
         assertEquals("APPROVED", service.getEstimateStatus("EST-1", "FAC-1"));
         assertEquals("OPEN", service.getWorkOrderStatus("WO-1", "FAC-1"));
         assertNull(service.getExistingAppointmentId("ESTIMATE", "EST-1", "FAC-1"));
-    }
-
-    @Test
-    void conflictDetectionService_returnsExpectedDefaults() {
-        ConflictDetectionServiceImpl service = new ConflictDetectionServiceImpl();
-
-        service.detectConflicts(null, UUID.fromString("00000000-0000-0000-0000-000000000001"));
-
-        assertTrue(service.isWithinOperatingHours("FAC-1", "start", "end", "UTC"));
-        assertTrue(service.checkMechanicAvailability("FAC-1", "start", "end").isEmpty());
-        assertTrue(service.checkBayAvailability("FAC-1", "start", "end").isEmpty());
     }
 
     @Test

@@ -89,9 +89,6 @@ public class RescheduleHistory extends TenantScopedEntity {
     @Column(name = "rescheduled_at", nullable = false, updatable = false)
     private Instant rescheduledAt;
 
-    @Column(name = "conflict_overridden", nullable = false, updatable = false)
-    private boolean conflictOverridden;
-
     @Column(name = "assignment_status", length = 50, updatable = false)
     private String assignmentStatus;
 

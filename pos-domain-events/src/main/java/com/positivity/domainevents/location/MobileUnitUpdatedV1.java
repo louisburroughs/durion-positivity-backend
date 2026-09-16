@@ -1,5 +1,6 @@
 package com.positivity.domainevents.location;
 
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -27,22 +28,37 @@ import org.jspecify.annotations.Nullable;
  * {@link MobileUnitDeletedV1} followed by an update — the tombstone path is an unguarded delete,
  * and an out-of-order pair would resurrect or drop the row.
  *
- * <p>New fields may be added additively within schema version 1; a consumer reads null as "the
- * publisher predates this field".
+ * <p>New fields are added additively; a consumer reads null as "the publisher predates this
+ * field". v2 adds {@code serviceCapabilityCodes} (CAP-325 D14).
  *
  * @param mobileUnitId mobile unit identifier (also the envelope aggregateId)
  * @param baseLocationId owning base site identifier
  * @param name unit display name
  * @param status raw lifecycle status, {@code ACTIVE} or {@code INACTIVE}
+ * @param serviceCapabilityCodes catalog operation codes the unit can perform off-site (v2); null
+ *     from a v1 publisher
  */
 public record MobileUnitUpdatedV1(
         @NonNull UUID mobileUnitId,
         @Nullable UUID baseLocationId,
         @Nullable String name,
-        @Nullable String status) {
-
+        @Nullable String status,
+        @Nullable List<String> serviceCapabilityCodes) {
     public static final String EVENT_TYPE = "location.mobile-unit.updated";
-    public static final int SCHEMA_VERSION = 1;
+
+    /**
+     * v2 (CAP-325 D14, additive per ADR-0044 §3): {@code serviceCapabilityCodes}, the catalog
+     * operation codes the unit can perform off-site — the same vocabulary as {@link
+     * BayUpdatedV1#serviceCapabilityCodes()}. Null on a v1 payload; a consumer treats null and
+     * empty alike as "claims nothing".
+     */
+    public static final int SCHEMA_VERSION = 2;
+
+    /** The v1 shape, for a caller that carries no capability list. */
+    public MobileUnitUpdatedV1(
+            @NonNull UUID mobileUnitId, @Nullable UUID baseLocationId, @Nullable String name, @Nullable String status) {
+        this(mobileUnitId, baseLocationId, name, status, null);
+    }
 
     public MobileUnitUpdatedV1 {
         if (mobileUnitId == null) {

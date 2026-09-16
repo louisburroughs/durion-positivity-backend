@@ -203,6 +203,23 @@ public class LocationEventsListener {
                 .bayType(mergeField(
                         payloadNode, "bayType", payload.bayType(), existing == null ? null : existing.getBayType()))
                 .active(isActiveStatus(payload.status()))
+                // Same rule for the CAP-325 eligibility fields, which arrived later still: absent from
+                // the payload means "not published", so the replicated value stands.
+                .serviceCapabilityCodes(mergeField(
+                        payloadNode,
+                        "serviceCapabilityCodes",
+                        payload.serviceCapabilityCodes(),
+                        existing == null ? null : existing.getServiceCapabilityCodes()))
+                .maxConcurrentVehicles(mergeField(
+                        payloadNode,
+                        "maxConcurrentVehicles",
+                        payload.maxConcurrentVehicles(),
+                        existing == null ? null : existing.getMaxConcurrentVehicles()))
+                .maxDutyClass(mergeField(
+                        payloadNode,
+                        "maxDutyClass",
+                        payload.maxDutyClass(),
+                        existing == null ? null : existing.getMaxDutyClass()))
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());

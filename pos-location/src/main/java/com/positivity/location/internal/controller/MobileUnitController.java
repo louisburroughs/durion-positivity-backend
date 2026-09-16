@@ -48,7 +48,7 @@ public class MobileUnitController {
              "status":"ACTIVE",
              "travelBufferPolicyId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a02",
              "notes":"Equipped with hydraulic lift",
-             "capabilityIds":["018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10"],
+             "serviceCapabilityCodes":["OIL-CHANGE-FULL-SYNTHETIC","BATTERY-REPLACEMENT"],
              "coverageRules":[{"serviceAreaId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a03",
                                "ruleType":"SERVICE_AREA","priority":1,"validFrom":"2026-06-18"}]}
             """;
@@ -68,12 +68,14 @@ public class MobileUnitController {
                     patchMobileUnit, which updates an existing unit, and change coverage later with \
                     replaceCoverageRules.
                     Preconditions: a unit created with status ACTIVE must include travelBufferPolicyId, \
-                    capabilityIds and coverageRules; the travel buffer policy must exist, capability ids or codes \
-                    must resolve to registered capabilities, DISTANCE_TIER coverage rules must be strictly \
+                    serviceCapabilityCodes and coverageRules; the travel buffer policy must exist, every \
+                    serviceCapabilityCode must be an active catalog operationCode known to the location service's \
+                    catalog replica, DISTANCE_TIER coverage rules must be strictly \
                     ascending by maxDistance and end with a null catch-all tier, and the name must be unique at \
                     the base location.
                     Required inputs: name; status defaults to INACTIVE when omitted, and baseLocationId, \
-                    travelBufferPolicyId, notes, capabilityIds and coverageRules are optional for inactive units.
+                    travelBufferPolicyId, notes, serviceCapabilityCodes and coverageRules are optional for inactive \
+                    units.
                     Emits a LOCATION_MOBILE_UNIT_CREATE event and persists any supplied coverage rules in the \
                     same transaction.
                     Returns 201 with the created unit and 409 when the name is already taken at the base \

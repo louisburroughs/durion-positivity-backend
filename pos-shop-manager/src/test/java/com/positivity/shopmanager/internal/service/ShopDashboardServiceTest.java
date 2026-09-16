@@ -667,7 +667,7 @@ class ShopDashboardServiceTest {
 
     private void persistMechanic(UUID personId, String firstName, String lastName) {
         em.persist(Mechanic.builder()
-                .personId(personId.toString())
+                .personId(personId)
                 .firstName(firstName)
                 .lastName(lastName)
                 .status(MechanicStatus.ACTIVE)

@@ -23,7 +23,8 @@ permissions:
   - name: "people:skill:edit"
     description: "Edit skill assignments"
   - name: "people:skill:view"
-    description: "View employee skills"
+    description: "Read the skill registry (CAP-328): codes, competences, GVWR class ranges and vendor cross-references"
+    grantTo: ["DISPATCHER", "SHOP_MANAGER", "SUPPORT", "LOCATION_MANAGER", "GENERAL_MANAGER", "SERVICE_ADVISOR"]
   - name: "people:timeAdjustment:approve"
     description: "Approve timeAdjustment"
   - name: "people:timeAdjustment:create"

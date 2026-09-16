@@ -34,6 +34,14 @@ public final class ShopPermissions {
      */
     public static final String DASHBOARD_VIEW = "shop:dashboard:view";
 
+    /**
+     * Record a manager's acceptance of a SOFT scheduling conflict (CAP-326, DECISION-SHOPMGMT-002,
+     * spec D12). Granted to LOCATION_MANAGER, GENERAL_MANAGER and SHOP_MANAGER in the role template
+     * — a permission rather than a three-way {@code hasRole} so the grant can move without a code
+     * change. Location scope still bounds where a holder may use it (ADR-0061, DECISION-012).
+     */
+    public static final String CONFLICT_OVERRIDE = "shop:conflict:override";
+
     /** Edit shop schedules. */
     public static final String SCHEDULE_EDIT = "shop:schedule:edit";
 

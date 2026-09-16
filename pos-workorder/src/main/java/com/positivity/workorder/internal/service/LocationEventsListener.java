@@ -228,6 +228,10 @@ public class LocationEventsListener {
                 .locationId(payload.locationId())
                 .name(payload.name())
                 .active(isActiveStatus(payload.status()))
+                .bayType(payload.bayType())
+                .serviceCapabilityCodes(payload.serviceCapabilityCodes())
+                .maxConcurrentVehicles(payload.maxConcurrentVehicles())
+                .maxDutyClass(payload.maxDutyClass())
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());

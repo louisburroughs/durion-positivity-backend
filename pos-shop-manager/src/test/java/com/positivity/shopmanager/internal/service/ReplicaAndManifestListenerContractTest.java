@@ -115,6 +115,10 @@ class ReplicaAndManifestListenerContractTest {
     private ExtPersonReplicaRepository personRepository;
 
     @Mock
+    private com.positivity.shopmanager.internal.repository.ExtPersonCredentialReplicaRepository
+            credentialReplicaRepository;
+
+    @Mock
     private ExtWorkorderReplicaRepository workorderRepository;
 
     @Mock
@@ -197,7 +201,7 @@ class ReplicaAndManifestListenerContractTest {
                         id -> """
                             {"vehicleId":"%s","accountId":"%s","vin":"1HGCM82633A004352",
                              "unitNumber":"U1","description":"d","licensePlate":"AB-123",
-                             "year":2024,"make":"Toyota","model":"Tacoma","active":true}""".formatted(id, ID),
+                             "year":2024,"make":"Toyota","model":"Tacoma","gvwrClass":3,"active":true}""".formatted(id, ID),
                         new VehicleEventsListener(
                                 clock,
                                 objectMapper,
@@ -222,6 +226,7 @@ class ReplicaAndManifestListenerContractTest {
                                 assignmentRepository,
                                 mechanicSyncService,
                                 personRepository,
+                                credentialReplicaRepository,
                                 org.mockito.Mockito.mock(ObjectProvider.class))::onPeopleEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(assignmentRepository)
@@ -402,6 +407,7 @@ class ReplicaAndManifestListenerContractTest {
             assertThat(saved.getVin()).isEqualTo("1HGCM82633A004352");
             assertThat(saved.getLicensePlate()).isEqualTo("AB-123");
             assertThat(saved.getMake()).isEqualTo("Toyota");
+            assertThat(saved.getGvwrClass()).isEqualTo(3);
             assertThat(saved.isActive()).isTrue();
         }
 
@@ -512,6 +518,26 @@ class ReplicaAndManifestListenerContractTest {
             // Equal version re-applies: it is an emission-timestamp hint over a full snapshot.
             replica.dispatch().accept(envelope(replica, "evt-2", ID.toString()));
             verify(vehicleRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("vehicle: a fact without the gvwrClass field keeps the class already replicated (CAP-327)")
+        void vehicleGvwrClassAbsentKeepsExisting() {
+            when(vehicleRepository.findById(ID))
+                    .thenReturn(Optional.of(ExtVehicleReplica.builder()
+                            .vehicleId(ID)
+                            .gvwrClass(5)
+                            .aggregateVersion(1)
+                            .build()));
+            Replica replica = replica("vehicle");
+            String preChangePayload = replica.payload().apply(ID.toString()).replace("\"gvwrClass\":3,", "");
+
+            replica.dispatch().accept("""
+                            {"eventId":"evt-3","eventType":"%s","aggregateVersion":2,"payload":%s}""".formatted(replica.eventType(), preChangePayload));
+
+            ArgumentCaptor<ExtVehicleReplica> captor = ArgumentCaptor.forClass(ExtVehicleReplica.class);
+            verify(vehicleRepository).save(captor.capture());
+            assertThat(captor.getValue().getGvwrClass()).isEqualTo(5);
         }
     }
 

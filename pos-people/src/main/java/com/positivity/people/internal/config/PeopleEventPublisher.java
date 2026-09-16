@@ -2,13 +2,18 @@ package com.positivity.people.internal.config;
 
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.people.EmployeeUpdatedV1;
+import com.positivity.domainevents.people.PersonCredentialUpdatedV1;
+import com.positivity.domainevents.people.SkillUpdatedV1;
 import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpsertRequestedV1;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
+import com.positivity.people.internal.entity.PersonCredential;
+import com.positivity.people.internal.entity.Skill;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -112,6 +117,72 @@ public class PeopleEventPublisher {
                 assignment.getLocationId());
     }
 
+    /** Queue a {@code people.person-credential.updated} fact for the credential's current state (CAP-328). */
+    public void publishPersonCredentialUpdated(@NonNull PersonCredential credential) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        Skill skill = credential.getSkill();
+        PersonCredentialUpdatedV1 payload = new PersonCredentialUpdatedV1(
+                credential.getId(),
+                credential.getPersonId(),
+                skill.getId(),
+                skill.getCode(),
+                skill.getCompetenceCode(),
+                skill.getMinGvwrClass(),
+                skill.getMaxGvwrClass(),
+                credential.getIssuer(),
+                credential.getSourceCode(),
+                credential.getSourceCredentialCode(),
+                credential.getIssuedOn(),
+                credential.getExpiresOn(),
+                credential.getProficiency(),
+                credential.effectiveStatus(LocalDate.now(clock)).name(),
+                credential.getEvidenceRef(),
+                credential.getSupersededBy());
+        writer.publish(
+                eventsTopic,
+                envelope(
+                        PersonCredentialUpdatedV1.EVENT_TYPE,
+                        PersonCredentialUpdatedV1.SCHEMA_VERSION,
+                        credential.getId(),
+                        payload));
+        log.debug(
+                "Queued people.person-credential.updated credentialId={} personId={} skill={}",
+                credential.getId(),
+                credential.getPersonId(),
+                skill.getCode());
+    }
+
+    /**
+     * Queue a {@code people.skill.updated} fact for one registry row (CAP-329). Versioned by the
+     * row's {@code updatedAt} rather than the clock, so republishing the registry at every
+     * startup converges on consumers instead of moving their replica forward for no change, and
+     * a re-seed that touches the row reaches them as a genuinely newer version.
+     */
+    public void publishSkillUpdated(@NonNull Skill skill) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        SkillUpdatedV1 payload = new SkillUpdatedV1(
+                skill.getId(),
+                skill.getCode(),
+                skill.getName(),
+                skill.getCompetenceCode(),
+                skill.getMinGvwrClass(),
+                skill.getMaxGvwrClass(),
+                skill.isActive());
+        long version = skill.getUpdatedAt() != null
+                ? skill.getUpdatedAt().toEpochMilli()
+                : Instant.now(clock).toEpochMilli();
+        writer.publish(
+                eventsTopic,
+                envelope(SkillUpdatedV1.EVENT_TYPE, SkillUpdatedV1.SCHEMA_VERSION, skill.getId(), version, payload));
+        log.debug("Queued people.skill.updated skillId={} code={} version={}", skill.getId(), skill.getCode(), version);
+    }
+
     /**
      * Queue an identity upsert command toward pos-people-contact (ADR-0044 §2). The command
      * message is the plain {@code {commandType, eventId, payload}} shape the command listeners
@@ -139,16 +210,14 @@ public class PeopleEventPublisher {
     }
 
     private <T> DomainEventEnvelope<T> envelope(String eventType, int schemaVersion, UUID aggregateId, T payload) {
+        return envelope(
+                eventType, schemaVersion, aggregateId, Instant.now(clock).toEpochMilli(), payload);
+    }
+
+    private <T> DomainEventEnvelope<T> envelope(
+            String eventType, int schemaVersion, UUID aggregateId, long aggregateVersion, T payload) {
         return DomainEventEnvelope.of(
-                eventType,
-                schemaVersion,
-                aggregateId,
-                Instant.now(clock).toEpochMilli(),
-                "pos-people",
-                null,
-                null,
-                payload,
-                clock);
+                eventType, schemaVersion, aggregateId, aggregateVersion, "pos-people", null, null, payload, clock);
     }
 
     /** Command message shape consumed by {@code people-contact.commands.v1} (see #874 listener). */

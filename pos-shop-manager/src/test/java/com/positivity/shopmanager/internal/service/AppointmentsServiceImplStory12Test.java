@@ -111,6 +111,11 @@ class AppointmentsServiceImplStory12Test {
     private static final String ESTIMATE_ID = "EST-001";
     private static final String WORKORDER_ID = "WO-001";
 
+    private final SchedulingConflictEvaluator conflictEvaluator =
+            org.mockito.Mockito.mock(SchedulingConflictEvaluator.class);
+    private final SchedulingConflictRecorder conflictRecorder =
+            org.mockito.Mockito.mock(SchedulingConflictRecorder.class);
+
     @BeforeEach
     void setUp() {
         appointmentsService = new AppointmentsServiceImpl(
@@ -127,7 +132,9 @@ class AppointmentsServiceImplStory12Test {
                 sourceEligibilityService,
                 mock(ExtPersonReplicaRepository.class),
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
-                mock(WorkOrderAppointmentMappingRepository.class));
+                mock(WorkOrderAppointmentMappingRepository.class),
+                conflictEvaluator,
+                conflictRecorder);
 
         // Stub CRM clients for tests that reach the CRM call path (before source
         // validation)
@@ -438,7 +445,8 @@ class AppointmentsServiceImplStory12Test {
                         .build()));
 
         AppointmentCreateRequest request = buildRequest(null, null);
-        AppointmentResponse response = appointmentsService.createAppointment(request, "test-key", null);
+        AppointmentResponse response =
+                appointmentsService.createAppointment(request, "test-key", null).appointment();
 
         assertThat(response.getAppointmentId()).isEqualTo(existing.getAppointmentId());
         verify(appointmentRepository, never()).save(any());
@@ -505,7 +513,9 @@ class AppointmentsServiceImplStory12Test {
 
         // This should not throw an exception, even with a missing shop/timezone.
         // The service defaults to UTC internally.
-        var response = appointmentsService.createAppointment(buildRequest(null, null), null, null);
+        var response = appointmentsService
+                .createAppointment(buildRequest(null, null), null, null)
+                .appointment();
         assertThat(response.getAppointmentId()).isEqualTo(SAVED_APPOINTMENT_ID);
     }
 
@@ -519,7 +529,9 @@ class AppointmentsServiceImplStory12Test {
             return apt;
         });
 
-        var response = appointmentsService.createAppointment(buildRequest(null, null), null, null);
+        var response = appointmentsService
+                .createAppointment(buildRequest(null, null), null, null)
+                .appointment();
 
         assertThat(response.getCustomerSnapshot()).isEmpty();
     }

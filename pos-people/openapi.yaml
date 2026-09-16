@@ -14,6 +14,8 @@ tags:
   name: People - Staffing Assignments
 - description: Reporting endpoints for people and attendance data
   name: People Reports API
+- description: Platform skill registry and vendor cross-references
+  name: Skill Registry API
 - description: Operations for querying people availability
   name: People Availability API
 - description: Operations for managing work sessions and breaks
@@ -22,6 +24,8 @@ tags:
   name: Time Entry Approval API
 - description: Pay-period lifecycle management for timekeeping approval
   name: Time Period Management API
+- description: Bulk import of the credentials people hold
+  name: Person Credential Bulk Ingest API
 - description: Identity-compliance reports (ADR-0015 §4)
   name: People Compliance API
 - description: Bulk import person-to-location assignments
@@ -38,6 +42,8 @@ tags:
   name: People - Exceptions
 - description: Bulk import employee records
   name: People Bulk Ingest API
+- description: The credentials a person holds or held
+  name: Person Credential API
 paths:
   /v1/people/availability:
     get:
@@ -208,6 +214,76 @@ paths:
       - People Compliance API
       x-required-permissions:
       - people:compliance:view
+  /v1/people/credentials/bulk-ingest:
+    post:
+      description: 'Records many credentials at once, resolving each row''s employee number to a person and its vendor code (sourceCode + sourceCredentialCode, such as ASE T4-BRAKES) to a registry skill through the cross-reference, or taking a Durion skillCode such as DOT-INSPECTOR directly.
+
+        Use this tool when loading an HR feed''s certifications or seeding an environment; read the registry at GET /v1/people/skills instead of guessing codes.
+
+        Preconditions: each employee number must resolve to a person with an employee record, and each vendor code must be in the cross-reference — an unknown code rejects its row rather than becoming a skill nobody holds.
+
+        Required inputs: jobId, and per record employeeNumber, issuer, issuedOn and either skillCode or sourceCode + sourceCredentialCode; expiresOn, proficiency (1-5) and evidenceRef are optional, and expiresOn may not precede issuedOn.
+
+        Semantics: upsert by natural key (person, skill, issuer, issuedOn), so a re-send updates the expiry, proficiency and evidence, a renewal with a later issuedOn is a new row, and status is derived from the dates rather than taken from the row.
+
+        With supersedeAbsent=true, each person in the batch has their credentials from this job''s sourceSystem that the batch no longer lists marked SUPERSEDED — never deleted.
+
+        Emits a PEOPLE_CREDENTIAL_BULK_INGEST event and a person-credential fact per row written.
+
+        Returns 200 with a per-record result, where a refused row carries CREDENTIAL_EMPLOYEE_UNKNOWN or CREDENTIAL_INGEST_REJECTED with the reason.
+
+        '
+      operationId: bulkIngestPersonCredentials
+      requestBody:
+        content:
+          application/json:
+            examples:
+              HR certifications:
+                description: HR certifications
+                value:
+                  jobId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a00
+                  locationId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a10
+                  operatorId: seed-operator
+                  records:
+                  - employeeNumber: EMP-0006
+                    expiresOn: '2029-03-15'
+                    issuedOn: '2024-03-15'
+                    proficiency: 4
+                    sourceCode: ASE
+                    sourceCredentialCode: T4-BRAKES
+                  - employeeNumber: EMP-0008
+                    expiresOn: '2027-01-10'
+                    issuedOn: '2025-01-10'
+                    issuer: SHOP
+                    skillCode: DOT-INSPECTOR
+            schema:
+              $ref: '#/components/schemas/BulkIngestRequestPersonCredentialBulkIngestRecord'
+        description: Credentials to record.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkIngestResponse'
+          description: Batch processed; inspect per-record results
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid request payload
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Forbidden
+      summary: Record People's Credentials in Bulk
+      tags:
+      - Person Credential Bulk Ingest API
+      x-required-permissions:
+      - people:employee:edit
   /v1/people/employees:
     get:
       description: 'Returns a paged list of slim employee rows matching a case-insensitive substring search across first name, last name, preferred name, and employee number.
@@ -1125,6 +1201,39 @@ paths:
       - People Reports API
       x-required-permissions:
       - accounting:time:export
+  /v1/people/skills:
+    get:
+      description: 'Returns every active skill in the platform registry with the vendor codes (ASE) that map onto it and the FHWA GVWR class range it certifies work on.
+
+        Use this tool to name a skill when reading or entering a technician''s credentials, or when reading a service''s skill requirement; do not try to create or edit skills through the API, the registry is seeded reference data shared by every tenant.
+
+        Preconditions: the caller holds people:skill:view.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the list, ordered by code, and 403 when the caller lacks the authority.
+
+        '
+      operationId: listSkills
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/SkillDto'
+                type: array
+          description: The active registry.
+      security:
+      - bearerAuth:
+        - people:skill:view
+      summary: List the Skill Registry
+      tags:
+      - Skill Registry API
+      x-required-permissions:
+      - people:skill:view
   /v1/people/staffing/assignments:
     get:
       description: 'Lists every staffing assignment for a person, including ENDED ones, across all locations and roles.
@@ -2560,6 +2669,47 @@ paths:
       - Work Sessions API
       x-required-permissions:
       - AUTHENTICATED
+  /v1/people/{personId}/credentials:
+    get:
+      description: 'Returns every credential the person holds or held, newest issue first, each with the registry skill it certifies and its status as of today: ACTIVE or EXPIRED from the dates, REVOKED or SUPERSEDED when set deliberately. A renewal appears as its own row beside the one it renewed, so a past date''s qualification stays visible.
+
+        Use this tool to see what a technician is certified to do, or to audit an inspector''s qualification on a past date; for a shop''s roster use shop management''s technician roster instead, which reads a replica of the same credentials.
+
+        Preconditions: the caller holds people:employee:view.
+
+        Required inputs: personId (UUID) as a path parameter; there is no request body.
+
+        No events are emitted and no state changes; this is a read-only projection.
+
+        Returns 200 with the list, empty when the person holds none, and 403 without the authority.
+
+        '
+      operationId: listPersonCredentials
+      parameters:
+      - description: Person id
+        in: path
+        name: personId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/PersonCredentialResponse'
+                type: array
+          description: The person's credentials.
+      security:
+      - bearerAuth:
+        - people:employee:view
+      summary: List a Person's Credentials
+      tags:
+      - Person Credential API
+      x-required-permissions:
+      - people:employee:view
   /v1/people/{personId}/locations:
     get:
       description: 'Lists a given person''s staffing assignments that are active today, primary first.
@@ -2907,6 +3057,34 @@ components:
           description: The records to ingest (at least one); shape depends on the target domain
           items:
             $ref: '#/components/schemas/PersonBulkIngestRecord'
+          minItems: 1
+          type: array
+      required:
+      - jobId
+      - locationId
+      - records
+      type: object
+    BulkIngestRequestPersonCredentialBulkIngestRecord:
+      description: 'Generic bulk ingest request: a batch of records for a job scoped to a location'
+      properties:
+        jobId:
+          description: Identifier of the bulk ingest job
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        locationId:
+          description: Location the records are ingested for
+          example: 01960003-0000-7000-8000-000000000002
+          format: uuid
+          type: string
+        operatorId:
+          description: Identifier of the operator submitting the batch
+          example: user-jdoe
+          type: string
+        records:
+          description: The records to ingest (at least one); shape depends on the target domain
+          items:
+            $ref: '#/components/schemas/PersonCredentialBulkIngestRecord'
           minItems: 1
           type: array
       required:
@@ -3611,6 +3789,127 @@ components:
       - hireDate
       - lastName
       type: object
+    PersonCredentialBulkIngestRecord:
+      description: 'One person''s credential: what it certifies, who issued it, and when'
+      properties:
+        employeeNumber:
+          description: Employee number resolving to the person
+          example: EMP-0006
+          minLength: 1
+          type: string
+        evidenceRef:
+          description: Retained evidence document id
+          format: uuid
+          type: string
+        expiresOn:
+          description: Expiry date; omit when it does not expire
+          example: '2029-03-15'
+          format: date
+          type: string
+        issuedOn:
+          description: Issue date
+          example: '2024-03-15'
+          format: date
+          type: string
+        issuer:
+          description: Issuer; defaults to sourceCode
+          example: ASE
+          type: string
+        proficiency:
+          description: Display metadata only, 1-5
+          example: 4
+          format: int32
+          maximum: 5
+          minimum: 1
+          type: integer
+        skillCode:
+          description: Durion skill code, when the credential is not a vendor's (e.g. DOT-INSPECTOR). Either this or sourceCode + sourceCredentialCode.
+          example: DOT-INSPECTOR
+          type: string
+        sourceCode:
+          description: Vendor code system
+          example: ASE
+          type: string
+        sourceCredentialCode:
+          description: Vendor's code, resolved through the cross-reference
+          example: T4-BRAKES
+          type: string
+      required:
+      - employeeNumber
+      - issuedOn
+      type: object
+    PersonCredentialResponse:
+      description: A credential a person holds
+      properties:
+        competenceCode:
+          example: BRAKES
+          type: string
+        credentialId:
+          format: uuid
+          type: string
+        evidenceRef:
+          description: Retained evidence document (49 CFR 396.19)
+          format: uuid
+          type: string
+        expiresOn:
+          description: 'Null: does not expire'
+          format: date
+          type: string
+        issuedOn:
+          format: date
+          type: string
+        issuer:
+          example: ASE
+          type: string
+        maxGvwrClass:
+          description: Highest FHWA GVWR class the skill certifies work on
+          format: int32
+          type: integer
+        minGvwrClass:
+          description: Lowest FHWA GVWR class the skill certifies work on
+          format: int32
+          type: integer
+        personId:
+          format: uuid
+          type: string
+        proficiency:
+          description: Display metadata only; nothing thresholds on it
+          format: int32
+          type: integer
+        skillCode:
+          description: Durion skill code
+          example: BRAKES-MEDIUM_HEAVY
+          type: string
+        skillId:
+          format: uuid
+          type: string
+        sourceCode:
+          description: Vendor code system the credential arrived under
+          example: ASE
+          type: string
+        sourceCredentialCode:
+          example: T4-BRAKES
+          type: string
+        status:
+          description: ACTIVE or EXPIRED as the dates say today; REVOKED or SUPERSEDED when set deliberately
+          enum:
+          - ACTIVE
+          - EXPIRED
+          - REVOKED
+          - SUPERSEDED
+          type: string
+      required:
+      - competenceCode
+      - credentialId
+      - issuedOn
+      - issuer
+      - maxGvwrClass
+      - minGvwrClass
+      - personId
+      - skillCode
+      - skillId
+      - status
+      type: object
     PrimaryLocationResponse:
       description: Primary location resolved from the authenticated user's active staffing assignments
       properties:
@@ -3642,6 +3941,51 @@ components:
           type: string
       required:
       - reason
+      type: object
+    SkillDto:
+      description: 'A registry skill: a competence and the GVWR class range it certifies work on'
+      properties:
+        code:
+          description: Durion skill code
+          example: BRAKES-LIGHT
+          type: string
+        competenceCode:
+          description: The competence regardless of duty class
+          example: BRAKES
+          type: string
+        maxGvwrClass:
+          description: Highest FHWA GVWR class covered (1-8)
+          example: 3
+          format: int32
+          type: integer
+        minGvwrClass:
+          description: Lowest FHWA GVWR class covered (1-8)
+          example: 1
+          format: int32
+          type: integer
+        name:
+          description: Display name
+          example: Brakes (light duty)
+          type: string
+        skillId:
+          description: Registry id
+          format: uuid
+          type: string
+        sourceCodes:
+          description: Vendor codes that map onto this skill, as SOURCE:CODE
+          example:
+          - ASE:A5-BRAKES
+          items:
+            type: string
+          type: array
+      required:
+      - code
+      - competenceCode
+      - maxGvwrClass
+      - minGvwrClass
+      - name
+      - skillId
+      - sourceCodes
       type: object
     StaffingAssignmentBulkIngestRecord:
       description: One person's assignment to a location for a role

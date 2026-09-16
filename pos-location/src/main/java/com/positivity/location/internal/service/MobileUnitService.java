@@ -18,7 +18,7 @@ public interface MobileUnitService {
 
     MobileUnitResponse createMobileUnit(MobileUnitRequest request);
 
-    void validateCapabilityIds(List<?> capabilityIds);
+    void validateServiceCapabilityCodes(List<?> serviceCapabilityCodes);
 
     void validateDistanceTiers(List<?> tiers);
 
