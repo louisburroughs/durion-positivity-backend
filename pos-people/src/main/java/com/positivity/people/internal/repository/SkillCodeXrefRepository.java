@@ -9,7 +9,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface SkillCodeXrefRepository extends JpaRepository<SkillCodeXref, UUID> {
     /** Callers normalise to upper-case and trim first; stored values already are (spec D8). */
-    Optional<SkillCodeXref> findBySourceCodeAndSourceSkillCode(@NonNull String sourceCode, @NonNull String sourceSkillCode);
+    Optional<SkillCodeXref> findBySourceCodeAndSourceSkillCode(
+            @NonNull String sourceCode, @NonNull String sourceSkillCode);
 
     @NonNull
     List<SkillCodeXref> findAllByOrderBySourceCodeAscSourceSkillCodeAsc();

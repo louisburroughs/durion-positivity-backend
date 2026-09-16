@@ -49,7 +49,8 @@ class SkillRegistryServiceImplTest {
     @Test
     @DisplayName("resolve: an unmapped code fails loudly, naming source and code")
     void resolveUnknownFailsLoudly() {
-        when(xrefRepository.findBySourceCodeAndSourceSkillCode("ASE", "T3-ALIGN")).thenReturn(Optional.empty());
+        when(xrefRepository.findBySourceCodeAndSourceSkillCode("ASE", "T3-ALIGN"))
+                .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.resolve("ASE", "T3-ALIGN"))
                 .isInstanceOf(UnknownSkillCodeException.class)

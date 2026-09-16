@@ -1,10 +1,14 @@
 package com.positivity.vehicle.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.positivity.shared.dto.CreateVehicleRequest;
+import com.positivity.shared.dto.UpdateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
+import com.positivity.vehicle.internal.enums.GvwrClassSource;
 import com.positivity.vehicle.internal.enums.OdometerUnit;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import java.time.Instant;
@@ -15,10 +19,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import com.positivity.shared.dto.CreateVehicleRequest;
-import com.positivity.shared.dto.UpdateVehicleRequest;
-import com.positivity.vehicle.internal.enums.GvwrClassSource;
-import static org.mockito.ArgumentMatchers.any;
 
 /**
  * Response-mapping contract for the odometer snapshot consumed by pos-warranty claim intake

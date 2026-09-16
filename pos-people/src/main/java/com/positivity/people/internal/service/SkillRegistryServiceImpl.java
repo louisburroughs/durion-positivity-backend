@@ -26,10 +26,13 @@ public class SkillRegistryServiceImpl implements SkillRegistryService {
     @Override
     @Transactional(readOnly = true)
     public @NonNull List<SkillDto> listActive() {
-        Map<UUID, List<String>> sourceCodesBySkill = skillCodeXrefRepository.findAllByOrderBySourceCodeAscSourceSkillCodeAsc().stream()
-                .collect(Collectors.groupingBy(
-                        xref -> xref.getSkill().getId(),
-                        Collectors.mapping(xref -> xref.getSourceCode() + ":" + xref.getSourceSkillCode(), Collectors.toList())));
+        Map<UUID, List<String>> sourceCodesBySkill =
+                skillCodeXrefRepository.findAllByOrderBySourceCodeAscSourceSkillCodeAsc().stream()
+                        .collect(Collectors.groupingBy(
+                                xref -> xref.getSkill().getId(),
+                                Collectors.mapping(
+                                        xref -> xref.getSourceCode() + ":" + xref.getSourceSkillCode(),
+                                        Collectors.toList())));
         return skillRepository.findAllByActiveTrueOrderByCodeAsc().stream()
                 .map(skill -> SkillDto.builder()
                         .skillId(skill.getId())

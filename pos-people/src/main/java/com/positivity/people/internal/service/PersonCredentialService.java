@@ -16,7 +16,8 @@ public interface PersonCredentialService {
      * and fails loudly on an unknown code. Publishes the fact.
      */
     @NonNull
-    PersonCredentialResponse upsert(@NonNull UUID personId, @NonNull CredentialUpsertCommand command, @NonNull String actor);
+    PersonCredentialResponse upsert(
+            @NonNull UUID personId, @NonNull CredentialUpsertCommand command, @NonNull String actor);
 
     /**
      * Marks the person's credentials from {@code sourceSystem} that are not in {@code retainedIds}
@@ -24,7 +25,10 @@ public interface PersonCredentialService {
      * deletes it. Returns how many rows changed. Already superseded or revoked rows are left alone.
      */
     int supersedeAbsent(
-            @NonNull UUID personId, @NonNull String sourceSystem, @NonNull Set<UUID> retainedIds, @NonNull String supersededBy);
+            @NonNull UUID personId,
+            @NonNull String sourceSystem,
+            @NonNull Set<UUID> retainedIds,
+            @NonNull String supersededBy);
 
     /** Every credential the person holds or held, newest issue first, with today's derived status. */
     @NonNull

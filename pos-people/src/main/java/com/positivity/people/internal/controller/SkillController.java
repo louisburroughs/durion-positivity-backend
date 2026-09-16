@@ -29,12 +29,11 @@ public class SkillController {
 
     @GetMapping
     @EmitEvent(id = "PEOPLE_SKILL_LIST", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {"people:skill:view"})
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:skill:view"})
     @PreAuthorize("hasAuthority('" + PeoplePermissions.SKILL_VIEW + "')")
-    @Operation(
-            operationId = "listSkills",
-            summary = "List the Skill Registry",
-            description = """
+    @Operation(operationId = "listSkills", summary = "List the Skill Registry", description = """
                     Returns every active skill in the platform registry with the vendor codes (ASE) that map \
                     onto it and the FHWA GVWR class range it certifies work on.
                     Use this tool to name a skill when reading or entering a technician's credentials, or when \
@@ -46,7 +45,10 @@ public class SkillController {
     @ApiResponse(
             responseCode = "200",
             description = "The active registry.",
-            content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = SkillDto.class))))
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = SkillDto.class))))
     public ResponseEntity<List<SkillDto>> listSkills() {
         return ResponseEntity.ok(skillRegistryService.listActive());
     }

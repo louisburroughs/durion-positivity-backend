@@ -39,7 +39,10 @@ public class PersonCredentialResponse {
     @Schema(example = "ASE", requiredMode = REQUIRED)
     String issuer;
 
-    @Schema(description = "Vendor code system the credential arrived under", example = "ASE", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Vendor code system the credential arrived under",
+            example = "ASE",
+            requiredMode = NOT_REQUIRED)
     String sourceCode;
 
     @Schema(example = "T4-BRAKES", requiredMode = NOT_REQUIRED)

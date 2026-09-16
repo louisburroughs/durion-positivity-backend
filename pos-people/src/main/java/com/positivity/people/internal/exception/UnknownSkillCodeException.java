@@ -8,7 +8,8 @@ package com.positivity.people.internal.exception;
  */
 public class UnknownSkillCodeException extends SemanticValidationException {
     public UnknownSkillCodeException(String sourceCode, String sourceSkillCode) {
-        super("Unknown " + sourceCode + " credential code '" + sourceSkillCode
-                + "': not in skill_code_xref. Add the cross-reference to the skill registry seed or correct the source.");
+        super(
+                "Unknown " + sourceCode + " credential code '" + sourceSkillCode
+                        + "': not in skill_code_xref. Add the cross-reference to the skill registry seed or correct the source.");
     }
 }

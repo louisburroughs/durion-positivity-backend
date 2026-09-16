@@ -73,7 +73,9 @@ public class VehicleEventPublisher {
                 odometerValue,
                 odometerUnit,
                 vehicle.getGvwrClass(),
-                vehicle.getGvwrClassSource() == null ? null : vehicle.getGvwrClassSource().name(),
+                vehicle.getGvwrClassSource() == null
+                        ? null
+                        : vehicle.getGvwrClassSource().name(),
                 vehicle.getCreatedAt(),
                 vehicle.getUpdatedAt());
         DomainEventEnvelope<VehicleUpdatedV1> envelope = DomainEventEnvelope.of(

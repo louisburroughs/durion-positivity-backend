@@ -16,7 +16,8 @@ public enum CredentialStatus {
     SUPERSEDED;
 
     /** What the dates say on {@code onDate}: ACTIVE, or EXPIRED once {@code expiresOn} has passed. */
-    public static @NonNull CredentialStatus derive(@NonNull LocalDate issuedOn, @Nullable LocalDate expiresOn, @NonNull LocalDate onDate) {
+    public static @NonNull CredentialStatus derive(
+            @NonNull LocalDate issuedOn, @Nullable LocalDate expiresOn, @NonNull LocalDate onDate) {
         if (expiresOn != null && expiresOn.isBefore(onDate)) {
             return EXPIRED;
         }

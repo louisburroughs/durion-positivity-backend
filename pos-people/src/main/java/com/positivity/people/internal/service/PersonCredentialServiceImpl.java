@@ -131,7 +131,8 @@ public class PersonCredentialServiceImpl implements PersonCredentialService {
         if (command.getSourceCode() != null && !command.getSourceCode().isBlank()) {
             return normalize(command.getSourceCode());
         }
-        throw new RequestValidationException("issuer is required for a credential named by skillCode (" + skill.getCode() + ")");
+        throw new RequestValidationException(
+                "issuer is required for a credential named by skillCode (" + skill.getCode() + ")");
     }
 
     private static String normalize(String value) {

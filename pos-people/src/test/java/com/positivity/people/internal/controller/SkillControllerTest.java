@@ -11,17 +11,17 @@ import com.positivity.people.internal.service.SkillRegistryService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 
 /** The registry read over HTTP: the gate and the shape (CAP-328). */
 @WebMvcTest(SkillController.class)

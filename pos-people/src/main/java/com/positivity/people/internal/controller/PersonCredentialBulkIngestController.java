@@ -50,7 +50,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/people/credentials")
 @RequiredArgsConstructor
 @Tag(name = "Person Credential Bulk Ingest API", description = "Bulk import of the credentials people hold")
-public class PersonCredentialBulkIngestController extends AbstractBulkIngestController<PersonCredentialBulkIngestRecord> {
+public class PersonCredentialBulkIngestController
+        extends AbstractBulkIngestController<PersonCredentialBulkIngestRecord> {
 
     static final String UNKNOWN_EMPLOYEE = "CREDENTIAL_EMPLOYEE_UNKNOWN";
     static final String REJECTED = "CREDENTIAL_INGEST_REJECTED";
@@ -97,7 +98,10 @@ public class PersonCredentialBulkIngestController extends AbstractBulkIngestCont
     @ApiResponse(
             responseCode = "200",
             description = "Batch processed; inspect per-record results",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = BulkIngestResponse.class)))
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = BulkIngestResponse.class)))
     @ApiResponse(
             responseCode = "400",
             description = "Invalid request payload",
@@ -113,7 +117,10 @@ public class PersonCredentialBulkIngestController extends AbstractBulkIngestCont
                             content =
                                     @Content(
                                             mediaType = "application/json",
-                                            examples = @ExampleObject(name = "HR certifications", value = BULK_INGEST_EXAMPLE)))
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "HR certifications",
+                                                            value = BULK_INGEST_EXAMPLE)))
                     @Valid
                     @RequestBody
                     @NonNull
@@ -142,7 +149,8 @@ public class PersonCredentialBulkIngestController extends AbstractBulkIngestCont
         return process(request, false);
     }
 
-    private BulkIngestResponse process(BulkIngestRequest<PersonCredentialBulkIngestRecord> request, boolean supersedeAbsent) {
+    private BulkIngestResponse process(
+            BulkIngestRequest<PersonCredentialBulkIngestRecord> request, boolean supersedeAbsent) {
         List<BulkIngestResult> results = new ArrayList<>();
         int successCount = 0;
         int failureCount = 0;
@@ -166,7 +174,9 @@ public class PersonCredentialBulkIngestController extends AbstractBulkIngestCont
                 }
                 PersonCredentialResponse written =
                         personCredentialService.upsert(personId.get(), toCommand(record, sourceSystem), actor);
-                writtenByPerson.computeIfAbsent(personId.get(), id -> new HashSet<>()).add(written.getCredentialId());
+                writtenByPerson
+                        .computeIfAbsent(personId.get(), id -> new HashSet<>())
+                        .add(written.getCredentialId());
                 results.add(BulkIngestResult.builder()
                         .rowIndex(i)
                         .entityId(written.getCredentialId())

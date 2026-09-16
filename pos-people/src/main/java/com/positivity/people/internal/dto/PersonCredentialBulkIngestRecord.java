@@ -31,7 +31,10 @@ public class PersonCredentialBulkIngestRecord {
     @Schema(description = "Vendor code system", example = "ASE", requiredMode = NOT_REQUIRED)
     private String sourceCode;
 
-    @Schema(description = "Vendor's code, resolved through the cross-reference", example = "T4-BRAKES", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Vendor's code, resolved through the cross-reference",
+            example = "T4-BRAKES",
+            requiredMode = NOT_REQUIRED)
     private String sourceCredentialCode;
 
     @Schema(description = "Issuer; defaults to sourceCode", example = "ASE", requiredMode = NOT_REQUIRED)
@@ -41,7 +44,10 @@ public class PersonCredentialBulkIngestRecord {
     @NotNull
     private LocalDate issuedOn;
 
-    @Schema(description = "Expiry date; omit when it does not expire", example = "2029-03-15", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Expiry date; omit when it does not expire",
+            example = "2029-03-15",
+            requiredMode = NOT_REQUIRED)
     private LocalDate expiresOn;
 
     @Schema(description = "Display metadata only, 1-5", example = "4", requiredMode = NOT_REQUIRED)

@@ -69,7 +69,8 @@ class PersonCredentialServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new PersonCredentialServiceImpl(repository, employeeRepository, skillRegistryService, publisher, CLOCK);
+        service =
+                new PersonCredentialServiceImpl(repository, employeeRepository, skillRegistryService, publisher, CLOCK);
         lenient().when(employeeRepository.findByPersonId(PERSON)).thenReturn(Optional.of(new Employee()));
         lenient().when(skillRegistryService.resolve("ASE", "T4-BRAKES")).thenReturn(T4);
         lenient().when(repository.save(any())).thenAnswer(invocation -> {
@@ -82,12 +83,15 @@ class PersonCredentialServiceImplTest {
     }
 
     @Test
-    @DisplayName("a new credential is inserted with the derived status, the issuer defaulted to the source, and published")
+    @DisplayName(
+            "a new credential is inserted with the derived status, the issuer defaulted to the source, and published")
     void insertsAndPublishes() {
-        when(repository.findByPersonIdAndSkill_IdAndIssuerAndIssuedOn(PERSON, T4.getId(), "ASE", LocalDate.of(2024, 3, 15)))
+        when(repository.findByPersonIdAndSkill_IdAndIssuerAndIssuedOn(
+                        PERSON, T4.getId(), "ASE", LocalDate.of(2024, 3, 15)))
                 .thenReturn(Optional.empty());
 
-        PersonCredentialResponse response = service.upsert(PERSON, ase("T4-BRAKES", LocalDate.of(2024, 3, 15), LocalDate.of(2029, 3, 15)), "hr-feed");
+        PersonCredentialResponse response = service.upsert(
+                PERSON, ase("T4-BRAKES", LocalDate.of(2024, 3, 15), LocalDate.of(2029, 3, 15)), "hr-feed");
 
         assertThat(response.getSkillCode()).isEqualTo("BRAKES-MEDIUM_HEAVY");
         assertThat(response.getIssuer()).isEqualTo("ASE");
@@ -101,11 +105,14 @@ class PersonCredentialServiceImplTest {
     @Test
     @DisplayName("a re-send with the same natural key updates the row in place — same id, new expiry")
     void resendUpdatesInPlace() {
-        PersonCredential existing = credential(LocalDate.of(2024, 3, 15), LocalDate.of(2029, 3, 15), CredentialStatus.ACTIVE);
-        when(repository.findByPersonIdAndSkill_IdAndIssuerAndIssuedOn(PERSON, T4.getId(), "ASE", LocalDate.of(2024, 3, 15)))
+        PersonCredential existing =
+                credential(LocalDate.of(2024, 3, 15), LocalDate.of(2029, 3, 15), CredentialStatus.ACTIVE);
+        when(repository.findByPersonIdAndSkill_IdAndIssuerAndIssuedOn(
+                        PERSON, T4.getId(), "ASE", LocalDate.of(2024, 3, 15)))
                 .thenReturn(Optional.of(existing));
 
-        PersonCredentialResponse response = service.upsert(PERSON, ase("T4-BRAKES", LocalDate.of(2024, 3, 15), LocalDate.of(2030, 3, 15)), "hr-feed");
+        PersonCredentialResponse response = service.upsert(
+                PERSON, ase("T4-BRAKES", LocalDate.of(2024, 3, 15), LocalDate.of(2030, 3, 15)), "hr-feed");
 
         assertThat(response.getCredentialId()).isEqualTo(existing.getId());
         assertThat(response.getExpiresOn()).isEqualTo(LocalDate.of(2030, 3, 15));
@@ -114,7 +121,8 @@ class PersonCredentialServiceImplTest {
     @Test
     @DisplayName("a renewal — a later issue date — is a new row beside the old one, never an overwrite")
     void renewalIsANewRow() {
-        when(repository.findByPersonIdAndSkill_IdAndIssuerAndIssuedOn(PERSON, T4.getId(), "ASE", LocalDate.of(2029, 3, 1)))
+        when(repository.findByPersonIdAndSkill_IdAndIssuerAndIssuedOn(
+                        PERSON, T4.getId(), "ASE", LocalDate.of(2029, 3, 1)))
                 .thenReturn(Optional.empty());
 
         service.upsert(PERSON, ase("T4-BRAKES", LocalDate.of(2029, 3, 1), LocalDate.of(2034, 3, 1)), "hr-feed");
@@ -128,9 +136,11 @@ class PersonCredentialServiceImplTest {
     @Test
     @DisplayName("status comes from the dates, not the feed: a past expiry is EXPIRED on write and on read")
     void expiredDerivesFromDates() {
-        when(repository.findByPersonIdAndSkill_IdAndIssuerAndIssuedOn(any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(repository.findByPersonIdAndSkill_IdAndIssuerAndIssuedOn(any(), any(), any(), any()))
+                .thenReturn(Optional.empty());
 
-        PersonCredentialResponse response = service.upsert(PERSON, ase("T4-BRAKES", LocalDate.of(2020, 6, 30), LocalDate.of(2025, 6, 30)), "hr-feed");
+        PersonCredentialResponse response = service.upsert(
+                PERSON, ase("T4-BRAKES", LocalDate.of(2020, 6, 30), LocalDate.of(2025, 6, 30)), "hr-feed");
 
         assertThat(response.getStatus()).isEqualTo("EXPIRED");
     }
@@ -138,9 +148,11 @@ class PersonCredentialServiceImplTest {
     @Test
     @DisplayName("no expiry means it does not expire — never EXPIRED")
     void nullExpiryNeverExpires() {
-        when(repository.findByPersonIdAndSkill_IdAndIssuerAndIssuedOn(any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(repository.findByPersonIdAndSkill_IdAndIssuerAndIssuedOn(any(), any(), any(), any()))
+                .thenReturn(Optional.empty());
 
-        PersonCredentialResponse response = service.upsert(PERSON, ase("T4-BRAKES", LocalDate.of(2010, 1, 1), null), "hr-feed");
+        PersonCredentialResponse response =
+                service.upsert(PERSON, ase("T4-BRAKES", LocalDate.of(2010, 1, 1), null), "hr-feed");
 
         assertThat(response.getStatus()).isEqualTo("ACTIVE");
     }
@@ -148,11 +160,14 @@ class PersonCredentialServiceImplTest {
     @Test
     @DisplayName("a revocation is the one thing a re-send does not undo")
     void revokedStaysRevoked() {
-        PersonCredential revoked = credential(LocalDate.of(2024, 3, 15), LocalDate.of(2029, 3, 15), CredentialStatus.REVOKED);
-        when(repository.findByPersonIdAndSkill_IdAndIssuerAndIssuedOn(PERSON, T4.getId(), "ASE", LocalDate.of(2024, 3, 15)))
+        PersonCredential revoked =
+                credential(LocalDate.of(2024, 3, 15), LocalDate.of(2029, 3, 15), CredentialStatus.REVOKED);
+        when(repository.findByPersonIdAndSkill_IdAndIssuerAndIssuedOn(
+                        PERSON, T4.getId(), "ASE", LocalDate.of(2024, 3, 15)))
                 .thenReturn(Optional.of(revoked));
 
-        PersonCredentialResponse response = service.upsert(PERSON, ase("T4-BRAKES", LocalDate.of(2024, 3, 15), LocalDate.of(2029, 3, 15)), "hr-feed");
+        PersonCredentialResponse response = service.upsert(
+                PERSON, ase("T4-BRAKES", LocalDate.of(2024, 3, 15), LocalDate.of(2029, 3, 15)), "hr-feed");
 
         assertThat(response.getStatus()).isEqualTo("REVOKED");
     }
@@ -160,7 +175,8 @@ class PersonCredentialServiceImplTest {
     @Test
     @DisplayName("an unknown vendor code fails loudly before anything is written")
     void unknownCodeFailsLoudly() {
-        when(skillRegistryService.resolve("ASE", "T3-ALIGN")).thenThrow(new UnknownSkillCodeException("ASE", "T3-ALIGN"));
+        when(skillRegistryService.resolve("ASE", "T3-ALIGN"))
+                .thenThrow(new UnknownSkillCodeException("ASE", "T3-ALIGN"));
 
         assertThatThrownBy(() -> service.upsert(PERSON, ase("T3-ALIGN", LocalDate.of(2024, 1, 1), null), "hr-feed"))
                 .isInstanceOf(UnknownSkillCodeException.class);
@@ -174,11 +190,15 @@ class PersonCredentialServiceImplTest {
         when(skillRegistryService.requireByCode("DOT-INSPECTOR")).thenReturn(T4);
         assertThatThrownBy(() -> service.upsert(
                         PERSON,
-                        CredentialUpsertCommand.builder().skillCode("DOT-INSPECTOR").issuedOn(LocalDate.of(2025, 1, 1)).build(),
+                        CredentialUpsertCommand.builder()
+                                .skillCode("DOT-INSPECTOR")
+                                .issuedOn(LocalDate.of(2025, 1, 1))
+                                .build(),
                         "hr-feed"))
                 .isInstanceOf(RequestValidationException.class)
                 .hasMessageContaining("issuer");
-        assertThatThrownBy(() -> service.upsert(PERSON, ase("T4-BRAKES", LocalDate.of(2025, 1, 1), LocalDate.of(2024, 1, 1)), "hr-feed"))
+        assertThatThrownBy(() -> service.upsert(
+                        PERSON, ase("T4-BRAKES", LocalDate.of(2025, 1, 1), LocalDate.of(2024, 1, 1)), "hr-feed"))
                 .isInstanceOf(RequestValidationException.class)
                 .hasMessageContaining("expiresOn");
         verify(repository, never()).save(any());
@@ -194,12 +214,14 @@ class PersonCredentialServiceImplTest {
     }
 
     @Test
-    @DisplayName("supersedeAbsent marks this source's rows the feed no longer sends SUPERSEDED — never deleted, revoked left alone")
+    @DisplayName(
+            "supersedeAbsent marks this source's rows the feed no longer sends SUPERSEDED — never deleted, revoked left alone")
     void supersedeAbsent() {
         PersonCredential kept = credential(LocalDate.of(2024, 3, 15), null, CredentialStatus.ACTIVE);
         PersonCredential dropped = credential(LocalDate.of(2022, 1, 1), null, CredentialStatus.ACTIVE);
         PersonCredential revoked = credential(LocalDate.of(2021, 1, 1), null, CredentialStatus.REVOKED);
-        when(repository.findByPersonIdAndSourceSystem(PERSON, "bulk-ingest:job-1")).thenReturn(List.of(kept, dropped, revoked));
+        when(repository.findByPersonIdAndSourceSystem(PERSON, "bulk-ingest:job-1"))
+                .thenReturn(List.of(kept, dropped, revoked));
 
         int changed = service.supersedeAbsent(PERSON, "bulk-ingest:job-1", Set.of(kept.getId()), "bulk-ingest:job-1");
 
@@ -230,7 +252,8 @@ class PersonCredentialServiceImplTest {
     @Test
     @DisplayName("qualifiedOn is the facility-local date test the scheduler will use")
     void qualifiedOn() {
-        PersonCredential credential = credential(LocalDate.of(2024, 3, 15), LocalDate.of(2026, 9, 16), CredentialStatus.ACTIVE);
+        PersonCredential credential =
+                credential(LocalDate.of(2024, 3, 15), LocalDate.of(2026, 9, 16), CredentialStatus.ACTIVE);
         assertThat(credential.qualifiedOn(LocalDate.of(2026, 9, 16))).isTrue();
         assertThat(credential.qualifiedOn(LocalDate.of(2026, 9, 17))).isFalse();
         assertThat(credential.qualifiedOn(LocalDate.of(2024, 3, 14))).isFalse();

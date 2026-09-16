@@ -32,12 +32,11 @@ public class PersonCredentialController {
 
     @GetMapping
     @EmitEvent(id = "PEOPLE_CREDENTIAL_LIST", apiVersion = "1")
-    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth", scopes = {"people:employee:view"})
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"people:employee:view"})
     @PreAuthorize("hasAuthority('" + PeoplePermissions.EMPLOYEE_VIEW + "')")
-    @Operation(
-            operationId = "listPersonCredentials",
-            summary = "List a Person's Credentials",
-            description = """
+    @Operation(operationId = "listPersonCredentials", summary = "List a Person's Credentials", description = """
                     Returns every credential the person holds or held, newest issue first, each with the registry \
                     skill it certifies and its status as of today: ACTIVE or EXPIRED from the dates, REVOKED or \
                     SUPERSEDED when set deliberately. A renewal appears as its own row beside the one it renewed, \
@@ -50,7 +49,10 @@ public class PersonCredentialController {
     @ApiResponse(
             responseCode = "200",
             description = "The person's credentials.",
-            content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = PersonCredentialResponse.class))))
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = PersonCredentialResponse.class))))
     public ResponseEntity<List<PersonCredentialResponse>> listCredentials(
             @Parameter(description = "Person id", required = true) @PathVariable UUID personId) {
         return ResponseEntity.ok(personCredentialService.listByPerson(personId));

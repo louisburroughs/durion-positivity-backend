@@ -7,11 +7,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.positivity.location.BaseContractIntegrationTest;
 import com.positivity.location.internal.entity.BayEntity;
-import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.ExtCatalogServiceReplica;
+import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.repository.BayRepository;
-import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.ExtCatalogServiceReplicaRepository;
+import com.positivity.location.internal.repository.LocationRepository;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

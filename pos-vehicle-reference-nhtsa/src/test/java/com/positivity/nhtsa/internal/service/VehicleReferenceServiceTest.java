@@ -79,6 +79,7 @@ class VehicleReferenceServiceTest {
      * and the suite passed while every real call 404'd.
      */
     private static final String BASE = "https://vpic.nhtsa.dot.gov/api/vehicles";
+
     private static final UUID MANUFACTURER_ID = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
     private static final UUID MAKE_ID = UUID.fromString("00000000-0000-0000-0000-0000000000d2");
 

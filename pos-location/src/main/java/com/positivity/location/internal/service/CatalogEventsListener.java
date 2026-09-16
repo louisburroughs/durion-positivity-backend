@@ -68,7 +68,8 @@ public class CatalogEventsListener {
             log.warn("Skipping unparsable catalog event", e);
             return;
         }
-        if (!CatalogServiceUpdatedV1.EVENT_TYPE.equals(envelope.path("eventType").stringValue(null))) {
+        if (!CatalogServiceUpdatedV1.EVENT_TYPE.equals(
+                envelope.path("eventType").stringValue(null))) {
             return;
         }
         String eventId = envelope.path("eventId").stringValue(null);

@@ -12,14 +12,14 @@ import static org.mockito.Mockito.when;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.people.EmployeeUpdatedV1;
 import com.positivity.domainevents.people.PersonCredentialUpdatedV1;
-import com.positivity.people.internal.entity.PersonCredential;
-import com.positivity.people.internal.entity.Skill;
-import com.positivity.people.internal.enums.CredentialStatus;
 import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpsertRequestedV1;
 import com.positivity.people.internal.entity.Employee;
 import com.positivity.people.internal.entity.EmployeeLocationAssignment;
+import com.positivity.people.internal.entity.PersonCredential;
+import com.positivity.people.internal.entity.Skill;
 import com.positivity.people.internal.enums.AssignmentStatus;
+import com.positivity.people.internal.enums.CredentialStatus;
 import com.positivity.people.internal.enums.EmployeeStatus;
 import java.time.Clock;
 import java.time.Instant;
@@ -202,7 +202,8 @@ class PeopleEventPublisherTest {
         }
 
         @Test
-        @DisplayName("people.person-credential.updated carries the credential and its registry skill, status as of today")
+        @DisplayName(
+                "people.person-credential.updated carries the credential and its registry skill, status as of today")
         void credentialFact() {
             publisher.publishPersonCredentialUpdated(credential());
 

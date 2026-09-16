@@ -3,10 +3,10 @@ package com.positivity.vehicle.internal.service;
 import com.positivity.shared.dto.CreateVehicleRequest;
 import com.positivity.shared.dto.UpdateVehicleRequest;
 import com.positivity.shared.dto.VehicleResponse;
-import com.positivity.vehicle.internal.enums.DutyCategory;
-import com.positivity.vehicle.internal.enums.GvwrClassSource;
 import com.positivity.vehicle.internal.config.VehicleEventPublisher;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
+import com.positivity.vehicle.internal.enums.DutyCategory;
+import com.positivity.vehicle.internal.enums.GvwrClassSource;
 import com.positivity.vehicle.internal.exception.VehicleVinConflictException;
 import com.positivity.vehicle.internal.repository.VehicleRecordRepository;
 import com.positivity.vehicle.internal.util.VinUtils;
@@ -185,11 +185,14 @@ public class VehicleServiceImpl implements VehicleService {
                 .trim(vehicle.getTrim())
                 .gvwrClass(vehicle.getGvwrClass())
                 .gvwrClassSource(
-                        vehicle.getGvwrClassSource() == null ? null : vehicle.getGvwrClassSource().name())
+                        vehicle.getGvwrClassSource() == null
+                                ? null
+                                : vehicle.getGvwrClassSource().name())
                 .dutyCategory(
                         vehicle.getGvwrClass() == null
                                 ? null
-                                : DutyCategory.fromGvwrClass(vehicle.getGvwrClass()).name())
+                                : DutyCategory.fromGvwrClass(vehicle.getGvwrClass())
+                                        .name())
                 .odometerValue(
                         odometer == null || odometer.getValue() == null ? null : Math.toIntExact(odometer.getValue()))
                 .odometerUnit(

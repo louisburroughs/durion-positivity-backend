@@ -15,16 +15,33 @@ import org.jspecify.annotations.Nullable;
 @Value
 @Builder
 public class CredentialUpsertCommand {
-    @Nullable String skillCode;
-    @Nullable String sourceCode;
-    @Nullable String sourceCredentialCode;
-    @Nullable String issuer;
+    @Nullable
+    String skillCode;
 
-    @NonNull LocalDate issuedOn;
+    @Nullable
+    String sourceCode;
 
-    @Nullable LocalDate expiresOn;
-    @Nullable Integer proficiency;
-    @Nullable UUID evidenceRef;
-    @Nullable String sourceSystem;
-    @Nullable String sourceVersion;
+    @Nullable
+    String sourceCredentialCode;
+
+    @Nullable
+    String issuer;
+
+    @NonNull
+    LocalDate issuedOn;
+
+    @Nullable
+    LocalDate expiresOn;
+
+    @Nullable
+    Integer proficiency;
+
+    @Nullable
+    UUID evidenceRef;
+
+    @Nullable
+    String sourceSystem;
+
+    @Nullable
+    String sourceVersion;
 }

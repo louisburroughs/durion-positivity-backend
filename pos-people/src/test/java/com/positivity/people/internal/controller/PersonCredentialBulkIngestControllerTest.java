@@ -33,13 +33,13 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 
 /** The credential ingest over HTTP (CAP-328): resolution, rejection codes, supersession switch. */
 @WebMvcTest(PersonCredentialBulkIngestController.class)
@@ -87,14 +87,19 @@ class PersonCredentialBulkIngestControllerTest {
 
     private void employeeExists(String number) {
         when(employeeService.resolveByEmployeeNumber(number))
-                .thenReturn(Optional.of(EmployeeIdentityDto.builder().personId(PERSON_ID).employeeNumber(number).build()));
+                .thenReturn(Optional.of(EmployeeIdentityDto.builder()
+                        .personId(PERSON_ID)
+                        .employeeNumber(number)
+                        .build()));
     }
 
     @Test
     void bulkIngest_resolvesTheEmployeeAndWritesTheCredential() throws Exception {
         employeeExists("EMP-0006");
         when(personCredentialService.upsert(eq(PERSON_ID), any(), anyString()))
-                .thenReturn(PersonCredentialResponse.builder().credentialId(CREDENTIAL_ID).build());
+                .thenReturn(PersonCredentialResponse.builder()
+                        .credentialId(CREDENTIAL_ID)
+                        .build());
 
         mockMvc.perform(post(PATH)
                         .header("X-Authorities", "people:employee:edit")
@@ -130,7 +135,9 @@ class PersonCredentialBulkIngestControllerTest {
         employeeExists("EMP-0006");
         when(personCredentialService.upsert(eq(PERSON_ID), any(), anyString()))
                 .thenThrow(new UnknownSkillCodeException("ASE", "T3-ALIGN"))
-                .thenReturn(PersonCredentialResponse.builder().credentialId(CREDENTIAL_ID).build());
+                .thenReturn(PersonCredentialResponse.builder()
+                        .credentialId(CREDENTIAL_ID)
+                        .build());
 
         mockMvc.perform(post(PATH)
                         .header("X-Authorities", "people:employee:edit")
@@ -140,7 +147,8 @@ class PersonCredentialBulkIngestControllerTest {
                 .andExpect(jsonPath("$.failureCount").value(1))
                 .andExpect(jsonPath("$.successCount").value(1))
                 .andExpect(jsonPath("$.results[0].errorCode").value("CREDENTIAL_INGEST_REJECTED"))
-                .andExpect(jsonPath("$.results[0].errorMessage").value(org.hamcrest.Matchers.containsString("T3-ALIGN")))
+                .andExpect(
+                        jsonPath("$.results[0].errorMessage").value(org.hamcrest.Matchers.containsString("T3-ALIGN")))
                 .andExpect(jsonPath("$.results[1].success").value(true));
     }
 
@@ -148,7 +156,9 @@ class PersonCredentialBulkIngestControllerTest {
     void bulkIngest_withSupersedeAbsent_supersedesThisSourcesRowsTheBatchNoLongerLists() throws Exception {
         employeeExists("EMP-0006");
         when(personCredentialService.upsert(eq(PERSON_ID), any(), anyString()))
-                .thenReturn(PersonCredentialResponse.builder().credentialId(CREDENTIAL_ID).build());
+                .thenReturn(PersonCredentialResponse.builder()
+                        .credentialId(CREDENTIAL_ID)
+                        .build());
 
         mockMvc.perform(post(PATH + "?supersedeAbsent=true")
                         .header("X-Authorities", "people:employee:edit")
