@@ -11,7 +11,7 @@ import org.jspecify.annotations.NonNull;
  * posting funnel ({@code LedgerPostingServiceImpl}); a DB-level check is
  * impractical against an append-only ledger.
  *
- * <p>See {@code pos-inventory/docs/negative-stock-policy.md} for the full
+ * <p>See {@code durion/domains/inventory/negative-stock-policy.md} for the full
  * matrix table with per-row rationale.
  */
 public enum NegativeStockPolicy {

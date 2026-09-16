@@ -23,7 +23,7 @@ import org.springframework.test.context.ActiveProfiles;
  * Per-event-type integration tests for the negative-stock policy matrix
  * enforced inside the ledger posting funnel (odoo-parity K1, issue #1027).
  *
- * <p>Matrix under test (see {@code docs/negative-stock-policy.md}):
+ * <p>Matrix under test (see {@code durion/domains/inventory/negative-stock-policy.md}):
  * <ul>
  *   <li>GOODS_ISSUE / WORKORDER_CONSUMPTION / TRANSFER_OUT — blocked below zero
  *       ({@link InsufficientStockException}, pre-K1 error contract);</li>

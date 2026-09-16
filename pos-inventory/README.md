@@ -159,7 +159,7 @@ location suggestion, and (from parity-F5) replenishment source selection via
 ## Category-based putaway (#1514)
 
 Putaway routes on what the item *is* and on what the destination is *fit to hold*, rather than on
-per-SKU replenishment configuration. Full rules: `pos-inventory/docs/putaway-validation-rules.md`.
+per-SKU replenishment configuration. Full rules: [Putaway Validation Business Rules](https://github.com/louisburroughs/durion/blob/master/domains/inventory/putaway-validation-rules.md).
 
 - **Rules match per line**, in the strict precedence `SKU > SUBCATEGORY > CATEGORY > ANY`;
   `priority` only breaks ties within a tier. `putaway_rule.match_type` / `match_value` (V42)

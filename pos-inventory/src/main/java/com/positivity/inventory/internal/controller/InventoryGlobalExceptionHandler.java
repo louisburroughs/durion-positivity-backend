@@ -277,7 +277,7 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(ScrapInsufficientStockException.class)
     public ResponseEntity<ApiError> handleScrapInsufficientStock(ScrapInsufficientStockException ex) {
         // odoo-parity D1 (#1030): guided-reconciliation 422 mirroring the putaway
-        // source-on-hand rule (docs/putaway-validation-rules.md).
+        // source-on-hand rule (durion/domains/inventory/putaway-validation-rules.md).
         return build(HttpStatus.valueOf(422), ScrapInsufficientStockException.ERROR_CODE, ex.getMessage());
     }
 

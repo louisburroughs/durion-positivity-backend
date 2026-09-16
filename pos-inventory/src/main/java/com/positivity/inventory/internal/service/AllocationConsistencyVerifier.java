@@ -185,7 +185,7 @@ public class AllocationConsistencyVerifier {
             violationCounter.increment(violations);
             log.error(
                     "Allocation consistency violations detected: perAllocation={} perLocation={} (detailed above,"
-                            + " capped at {}) — investigate per docs/allocation-consistency.md; corrections are new"
+                            + " capped at {}) — investigate per durion/domains/inventory/allocation-consistency.md; corrections are new"
                             + " ledger entries (DECISION-INVENTORY-005), never edits",
                     perAllocation.size(),
                     perLocation.size(),

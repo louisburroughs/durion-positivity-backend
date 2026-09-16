@@ -7,7 +7,7 @@ import java.util.UUID;
  * authorized negative-stock override was supplied (odoo-parity D1, issue #1030).
  *
  * <p>Surfaced as a deterministic 422 ({@link #ERROR_CODE}) with a guided-reconciliation message
- * mirroring the putaway source-on-hand rule ({@code docs/putaway-validation-rules.md}): the
+ * mirroring the putaway source-on-hand rule ({@code durion/domains/inventory/putaway-validation-rules.md}): the
  * caller must reconcile inventory (cycle count or adjustment) before scrapping, or re-submit
  * with an explicit override under {@code inventory:adjustment:override}.
  */

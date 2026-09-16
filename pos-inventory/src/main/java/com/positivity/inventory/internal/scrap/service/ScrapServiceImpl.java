@@ -347,7 +347,7 @@ public class ScrapServiceImpl implements ScrapService {
         } catch (NegativeStockPolicyViolationException e) {
             if (NegativeStockPolicyViolationException.OVERRIDE_REQUIRED.equals(e.getErrorCode())) {
                 // Guided-reconciliation 422 mirroring the putaway source-on-hand
-                // rule (docs/putaway-validation-rules.md).
+                // rule (durion/domains/inventory/putaway-validation-rules.md).
                 throw new ScrapInsufficientStockException(
                         scrap.getStockItemId(), postingLocationId, scrap.getQuantity());
             }

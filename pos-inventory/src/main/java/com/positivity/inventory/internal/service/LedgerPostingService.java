@@ -17,7 +17,7 @@ import org.jspecify.annotations.NonNull;
  *
  * <p>Since odoo-parity K1 (issue #1027) the funnel is also the single
  * enforcement point of the per-event-type negative-stock policy matrix (see
- * {@code NegativeStockPolicy} and {@code docs/negative-stock-policy.md}): a
+ * {@code NegativeStockPolicy} and {@code durion/domains/inventory/negative-stock-policy.md}): a
  * posting that would take a key's on-hand below zero is rejected for blocked
  * and floor-at-zero event types. Other validation, {@code quantityAfter}
  * computation, and fact publishing remain the caller's responsibility.

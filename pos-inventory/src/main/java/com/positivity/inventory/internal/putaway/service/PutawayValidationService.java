@@ -37,7 +37,7 @@ public interface PutawayValidationService {
      *
      * <p>
      * A replenishment policy is <em>not</em> required; temperature class is not consulted. See
-     * {@code pos-inventory/docs/putaway-validation-rules.md}.
+     * {@code durion/domains/inventory/putaway-validation-rules.md}.
      *
      * @param destinationLocationId the destination location to validate
      * @param skuId                 the SKU being put away
