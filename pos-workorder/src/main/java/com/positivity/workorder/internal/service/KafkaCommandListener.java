@@ -43,7 +43,8 @@ import tools.jackson.databind.node.ObjectNode;
  * {@code WorkorderUpdatedV1} (issue #2021 AC8). Distinct from outbox replay, which can only re-send
  * facts already in {@code event_outbox}: a workorder that started before this contract slot existed
  * has outbox history with neither field, so replay alone cannot reach it. Optional
- * {@code payload.afterId} resumes a bounded run from the cursor a previous run logged.</li>
+ * {@code payload.afterId} together with {@code payload.tenantId} resumes a bounded run from the
+ * cursor a previous run logged; a cursor belongs to one tenant's id space, so both are needed.</li>
  * </ul>
  * </p>
  */
@@ -266,27 +267,33 @@ public class KafkaCommandListener {
      */
     private void handleFactBackfillRequested(@NonNull JsonNode root) {
         JsonNode payloadNode = root.get(PAYLOAD);
-        UUID afterId = parseBackfillCursor(payloadNode);
-        WorkorderFactBackfillService.BackfillResult result = workorderFactBackfillService.backfillForCaller(afterId);
+        UUID afterId = parseBackfillCursor(payloadNode, "afterId");
+        UUID tenantId = parseBackfillCursor(payloadNode, "tenantId");
+        WorkorderFactBackfillService.BackfillResult result =
+                workorderFactBackfillService.backfillForCaller(afterId, tenantId);
         log.info(
-                "Fact backfill command processed afterId={} published={} lastId={} more={}",
+                "Fact backfill command processed afterId={} tenantId={} published={} lastId={} more={}",
                 afterId,
+                tenantId,
                 result.published(),
                 result.lastId(),
                 result.more());
         if (result.more()) {
             // A run stops at the configured bound so it cannot outlive max.poll.interval.ms and get
-            // the consumer evicted. The operator re-sends the command with afterId set to the cursor
-            // logged here; the run is idempotent, so an overlapping resume is harmless.
+            // the consumer evicted. The operator re-sends the command with the tenant and cursor
+            // logged here; the run is idempotent, so an overlapping resume is harmless. Both are
+            // needed: a cursor belongs to one tenant's id space, so a resume without the tenant
+            // would restart the fleet and never finish a tenant larger than one run's budget.
             log.warn(
                     "Fact backfill hit its per-run bound; re-send workorder.fact-backfill.requested "
-                            + "with payload.afterId={} to continue",
+                            + "with payload.tenantId={} and payload.afterId={} to continue",
+                    result.tenantId(),
                     result.lastId());
         }
     }
 
-    private @Nullable UUID parseBackfillCursor(@Nullable JsonNode payloadNode) {
-        String value = payloadNode == null ? null : payloadNode.path("afterId").stringValue(null);
+    private @Nullable UUID parseBackfillCursor(@Nullable JsonNode payloadNode, String field) {
+        String value = payloadNode == null ? null : payloadNode.path(field).stringValue(null);
         if (value == null || value.isBlank()) {
             return null;
         }
@@ -295,7 +302,7 @@ public class KafkaCommandListener {
         } catch (IllegalArgumentException _) {
             // Resuming from the beginning is safe -- the run is idempotent -- but say so, because
             // silently restarting a large walk is not what the operator asked for.
-            log.warn("Malformed payload.afterId={} on fact backfill command; starting from the beginning", value);
+            log.warn("Malformed payload.{}={} on fact backfill command; ignoring it", field, value);
             return null;
         }
     }

@@ -67,7 +67,7 @@ class WorkorderFactBackfillServiceImplTest {
         when(pagePublisher.publishPage(null, 2)).thenReturn(List.of(ids.get(0), ids.get(1)));
         when(pagePublisher.publishPage(ids.get(1), 2)).thenReturn(List.of(ids.get(2)));
 
-        BackfillResult result = TenantTestSupport.asTenant(TENANT_A, () -> service.backfillForCaller(null));
+        BackfillResult result = TenantTestSupport.asTenant(TENANT_A, () -> service.backfillForCaller(null, null));
 
         assertThat(result.published()).isEqualTo(3);
         assertThat(result.lastId()).isEqualTo(ids.get(2));
@@ -84,7 +84,7 @@ class WorkorderFactBackfillServiceImplTest {
         when(pagePublisher.publishPage(null, 2)).thenReturn(List.of(ids.get(0), ids.get(1)));
         when(pagePublisher.publishPage(ids.get(1), 2)).thenReturn(List.of());
 
-        TenantTestSupport.asTenant(TENANT_A, () -> service.backfillForCaller(null));
+        TenantTestSupport.asTenant(TENANT_A, () -> service.backfillForCaller(null, null));
 
         verify(pagePublisher).publishPage(ids.get(1), 2);
     }
@@ -94,7 +94,7 @@ class WorkorderFactBackfillServiceImplTest {
     void emptySelectionIsNoOp() {
         when(pagePublisher.publishPage(any(), eq(2))).thenReturn(List.of());
 
-        BackfillResult result = TenantTestSupport.asTenant(TENANT_A, () -> service.backfillForCaller(null));
+        BackfillResult result = TenantTestSupport.asTenant(TENANT_A, () -> service.backfillForCaller(null, null));
 
         assertThat(result.published()).isZero();
         assertThat(result.more()).isFalse();
@@ -107,7 +107,7 @@ class WorkorderFactBackfillServiceImplTest {
         List<UUID> ids = ids(2);
         when(pagePublisher.publishPage(null, 2)).thenReturn(List.of(ids.get(0), ids.get(1)));
 
-        BackfillResult result = TenantTestSupport.asTenant(TENANT_A, () -> service.backfillForCaller(null));
+        BackfillResult result = TenantTestSupport.asTenant(TENANT_A, () -> service.backfillForCaller(null, null));
 
         assertThat(result.published()).isEqualTo(2);
         assertThat(result.more()).isTrue();
@@ -122,7 +122,7 @@ class WorkorderFactBackfillServiceImplTest {
         List<UUID> ids = ids(2);
         when(pagePublisher.publishPage(ids.get(0), 2)).thenReturn(List.of());
 
-        BackfillResult result = TenantTestSupport.asTenant(TENANT_A, () -> service.backfillForCaller(ids.get(0)));
+        BackfillResult result = TenantTestSupport.asTenant(TENANT_A, () -> service.backfillForCaller(ids.get(0), null));
 
         assertThat(result.published()).isZero();
         verify(pagePublisher).publishPage(ids.get(0), 2);
@@ -147,7 +147,8 @@ class WorkorderFactBackfillServiceImplTest {
     @Test
     @DisplayName("#2021 refuses to run with no tenant bound rather than guessing whose rows to backfill")
     void unboundCallerFailsClosed() {
-        assertThatThrownBy(() -> service.backfillForCaller(null)).isInstanceOf(TenantContextMissingException.class);
+        assertThatThrownBy(() -> service.backfillForCaller(null, null))
+                .isInstanceOf(TenantContextMissingException.class);
         verifyNoMoreInteractions(pagePublisher);
     }
 
@@ -165,7 +166,8 @@ class WorkorderFactBackfillServiceImplTest {
                 .thenReturn(List.of(tenantAIds.get(0)))
                 .thenReturn(List.of(tenantBId));
 
-        BackfillResult result = TenantTestSupport.asTenant(PlatformTenant.ID, () -> service.backfillForCaller(null));
+        BackfillResult result =
+                TenantTestSupport.asTenant(PlatformTenant.ID, () -> service.backfillForCaller(null, null));
 
         // One tenant's worth of published rows from each of the two tenants in the registry.
         assertThat(result.published()).isEqualTo(2);
@@ -181,7 +183,7 @@ class WorkorderFactBackfillServiceImplTest {
 
         UUID suppliedCursor = UUID.randomUUID();
         BackfillResult result =
-                TenantTestSupport.asTenant(PlatformTenant.ID, () -> service.backfillForCaller(suppliedCursor));
+                TenantTestSupport.asTenant(PlatformTenant.ID, () -> service.backfillForCaller(suppliedCursor, null));
 
         assertThat(result.published()).isZero();
         // Every tenant's own walk still starts at the beginning -- the supplied cursor is never
@@ -190,16 +192,68 @@ class WorkorderFactBackfillServiceImplTest {
     }
 
     @Test
-    @DisplayName("#2021 a run that reaches its bound for any tenant reports more work remaining")
-    void platformFanOutReportsMoreWhenAnyTenantHitsItsBound() {
+    @DisplayName("#2021 one command spends one budget across tenants, not one budget per tenant")
+    void platformFanOutSpendsASingleBudgetAcrossTenants() {
         ReflectionTestUtils.setField(service, "maxRowsPerRun", 1);
         List<UUID> ids = ids(1);
         when(pagePublisher.publishPage(null, 1)).thenReturn(List.of(ids.get(0)));
 
-        BackfillResult result = TenantTestSupport.asTenant(PlatformTenant.ID, () -> service.backfillForCaller(null));
+        BackfillResult result =
+                TenantTestSupport.asTenant(PlatformTenant.ID, () -> service.backfillForCaller(null, null));
 
-        assertThat(result.published()).isEqualTo(2);
+        // The first tenant spends the whole budget, so the second is not walked at all. Budgeting per
+        // tenant instead would do maxRowsPerRun x tenantCount rows of work on the listener thread,
+        // which is the consumer eviction the bound exists to prevent.
+        assertThat(result.published()).isEqualTo(1);
         assertThat(result.more()).isTrue();
+    }
+
+    @Test
+    @DisplayName("#2021 a fan-out that runs out of budget names the tenant and cursor to resume from")
+    void platformFanOutReportsAResumePoint() {
+        ReflectionTestUtils.setField(service, "maxRowsPerRun", 1);
+        List<UUID> ids = ids(1);
+        when(pagePublisher.publishPage(null, 1)).thenReturn(List.of(ids.get(0)));
+
+        BackfillResult result =
+                TenantTestSupport.asTenant(PlatformTenant.ID, () -> service.backfillForCaller(null, null));
+
+        // Without both of these the run is unfinishable: a platform caller's bare afterId is ignored,
+        // so every re-send would restart the fleet and a tenant holding more rows than one budget
+        // would republish its first page forever.
+        assertThat(result.more()).isTrue();
+        assertThat(result.tenantId()).isNotNull();
+        assertThat(result.lastId()).isEqualTo(ids.get(0));
+    }
+
+    @Test
+    @DisplayName("#2021 a platform operator resumes one named tenant from its own cursor")
+    void platformOperatorResumesANamedTenant() {
+        List<UUID> ids = ids(1);
+        UUID cursor = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+        when(pagePublisher.publishPage(cursor, 2)).thenReturn(List.of(ids.get(0)));
+
+        BackfillResult result =
+                TenantTestSupport.asTenant(PlatformTenant.ID, () -> service.backfillForCaller(cursor, TENANT_A));
+
+        assertThat(result.published()).isEqualTo(1);
+        assertThat(result.tenantId()).isEqualTo(TENANT_A);
+        // Only the named tenant is walked, and from the supplied cursor rather than the beginning.
+        verify(pagePublisher).publishPage(cursor, 2);
+        verify(pagePublisher, org.mockito.Mockito.never()).publishPage(null, 2);
+    }
+
+    @Test
+    @DisplayName("#2021 a non-platform caller naming another tenant is refused, not silently run")
+    void nonPlatformCallerCannotBackfillAnotherTenant() {
+        UUID otherTenant = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+
+        BackfillResult result =
+                TenantTestSupport.asTenant(TENANT_A, () -> service.backfillForCaller(null, otherTenant));
+
+        assertThat(result.published()).isZero();
+        assertThat(result.more()).isFalse();
+        verifyNoMoreInteractions(pagePublisher);
     }
 
     @Test
@@ -207,7 +261,8 @@ class WorkorderFactBackfillServiceImplTest {
     void emptyRegistryIsANoOp() {
         useRegistry(List.of());
 
-        BackfillResult result = TenantTestSupport.asTenant(PlatformTenant.ID, () -> service.backfillForCaller(null));
+        BackfillResult result =
+                TenantTestSupport.asTenant(PlatformTenant.ID, () -> service.backfillForCaller(null, null));
 
         assertThat(result.published()).isZero();
         assertThat(result.more()).isFalse();

@@ -8,8 +8,10 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -69,10 +71,17 @@ public class WorkorderFactBackfillServiceImpl implements WorkorderFactBackfillSe
     }
 
     @Override
-    public BackfillResult backfillForCaller(@Nullable UUID afterId) {
+    public @NonNull BackfillResult backfillForCaller(@Nullable UUID afterId, @Nullable UUID tenantId) {
         UUID caller = TenantContext.require();
         if (!PlatformTenant.isPlatform(caller)) {
-            BackfillResult result = pageThrough(afterId);
+            if (tenantId != null && !tenantId.equals(caller)) {
+                // Never run as a tenant the caller is not bound to: the command arrives over Kafka
+                // and naming another tenant here would be a cross-tenant write past ADR-0062 §3.
+                log.warn(
+                        "Refusing fact backfill for tenantId={} requested by non-platform tenant {}", tenantId, caller);
+                return new BackfillResult(0, null, null, false);
+            }
+            BackfillResult result = pageThrough(afterId, maxRowsPerRun, caller);
             log.info(
                     "Workorder fact backfill run complete tenant={} published={} lastId={} more={}",
                     caller,
@@ -81,29 +90,65 @@ public class WorkorderFactBackfillServiceImpl implements WorkorderFactBackfillSe
                     result.more());
             return result;
         }
+        if (tenantId != null) {
+            // A platform operator resuming one tenant's walk, which is how a tenant with more rows
+            // than one run's budget is finished: the fan-out below reports the tenant it stopped in
+            // and that tenant's own cursor, and the operator sends them straight back.
+            BackfillResult result = TenantContext.callAs(tenantId, () -> pageThrough(afterId, maxRowsPerRun, tenantId));
+            log.info(
+                    "Workorder fact backfill run complete for a platform operator on one tenant tenant={} "
+                            + "published={} lastId={} more={}",
+                    tenantId,
+                    result.published(),
+                    result.lastId(),
+                    result.more());
+            return result;
+        }
         if (afterId != null) {
-            // A cursor cannot span tenants: each has its own independent id space, so honoring the
-            // caller's cursor here would resume an arbitrary tenant's walk while restarting every
-            // other tenant's from the beginning.
+            // A cursor cannot span tenants: each has its own independent id space. Resuming a
+            // specific tenant needs payload.tenantId alongside it, handled above.
             log.warn(
-                    "Ignoring payload.afterId={} on a platform-tenant fact backfill: a cursor cannot span "
-                            + "tenants, so each tenant's run starts from the beginning of its own bound",
+                    "Ignoring payload.afterId={} on a platform-tenant fan-out with no payload.tenantId: a "
+                            + "cursor belongs to one tenant's id space. Re-send with payload.tenantId to resume.",
                     afterId);
         }
+        // One budget for the whole command, not one per tenant. Budgeting per tenant would let a
+        // single command do maxRowsPerRun x tenantCount rows of work on the Kafka listener thread,
+        // which is the eviction this bound exists to prevent.
         AtomicInteger published = new AtomicInteger();
+        AtomicInteger remaining = new AtomicInteger(maxRowsPerRun);
+        AtomicReference<UUID> stoppedInTenant = new AtomicReference<>();
+        AtomicReference<UUID> stoppedAfterId = new AtomicReference<>();
         AtomicBoolean more = new AtomicBoolean(false);
-        int tenants = tenantIterator.forEachActiveTenant(tenantId -> {
-            BackfillResult tenantResult = pageThrough(null);
+        int tenants = tenantIterator.forEachActiveTenant(tenant -> {
+            if (remaining.get() <= 0) {
+                // Budget already spent by an earlier tenant. This tenant has not been walked at all,
+                // so the run is not finished and the operator must resume from the tenant recorded
+                // below; saying more=true without a resume point is what made this loop unfinishable.
+                more.set(true);
+                return;
+            }
+            // Deliberately null, not afterId: a bare cursor was rejected above precisely because it
+            // belongs to one tenant's id space, and applying it to every tenant would skip every row
+            // below it in all the others. Resuming a specific tenant goes through payload.tenantId.
+            BackfillResult tenantResult = pageThrough(null, remaining.get(), tenant);
             published.addAndGet(tenantResult.published());
+            remaining.addAndGet(-tenantResult.published());
             if (tenantResult.more()) {
                 more.set(true);
+                stoppedInTenant.compareAndSet(null, tenant);
+                stoppedAfterId.compareAndSet(null, tenantResult.lastId());
             }
         });
-        BackfillResult aggregate = new BackfillResult(published.get(), null, more.get());
+        BackfillResult aggregate =
+                new BackfillResult(published.get(), stoppedAfterId.get(), stoppedInTenant.get(), more.get());
         log.info(
-                "Workorder fact backfill run complete for a platform operator tenants={} published={} more={}",
+                "Workorder fact backfill run complete for a platform operator tenants={} published={} "
+                        + "resumeTenant={} resumeAfterId={} more={}",
                 tenants,
                 aggregate.published(),
+                aggregate.tenantId(),
+                aggregate.lastId(),
                 aggregate.more());
         return aggregate;
     }
@@ -116,22 +161,22 @@ public class WorkorderFactBackfillServiceImpl implements WorkorderFactBackfillSe
      * matching mid-run (there is no such write path today, but none is required for the keyset
      * property to matter) cannot shift a surviving row out of the walk the way an offset page would.
      */
-    private BackfillResult pageThrough(@Nullable UUID afterId) {
+    private BackfillResult pageThrough(@Nullable UUID afterId, int budget, @Nullable UUID tenantId) {
         int published = 0;
         UUID cursor = afterId;
-        while (published < maxRowsPerRun) {
-            int request = Math.min(pageSize, maxRowsPerRun - published);
+        while (published < budget) {
+            int request = Math.min(pageSize, budget - published);
             List<UUID> page = pagePublisher.publishPage(cursor, request);
             if (page.isEmpty()) {
-                return new BackfillResult(published, cursor, false);
+                return new BackfillResult(published, cursor, tenantId, false);
             }
             published += page.size();
             cursor = page.get(page.size() - 1);
             if (page.size() < request) {
                 // A short page means the selection is exhausted; no further query is needed.
-                return new BackfillResult(published, cursor, false);
+                return new BackfillResult(published, cursor, tenantId, false);
             }
         }
-        return new BackfillResult(published, cursor, true);
+        return new BackfillResult(published, cursor, tenantId, true);
     }
 }

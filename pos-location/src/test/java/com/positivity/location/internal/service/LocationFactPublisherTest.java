@@ -604,6 +604,40 @@ class LocationFactPublisherTest {
     }
 
     @Test
+    @DisplayName("#2023 a literal JSON null in operating_hours degrades to not-configured, it does not throw")
+    void literalJsonNullOperatingHoursDoesNotThrow() {
+        Location location = locationWithId();
+        // "null" is *valid* JSON, so readValue succeeds and hands back a null list rather than
+        // throwing. Iterating that would NPE past every catch in the parser and fail the publish,
+        // instead of degrading to "not configured" the way the parser's contract promises.
+        location.setOperatingHours("null");
+        location.setHolidayClosures("[{\"date\":\"2026-12-25\",\"reason\":\"Christmas Day\"}]");
+
+        LocationUpdatedV1 fact = publishAndCapture(location);
+
+        assertThat(fact.operatingHours()).isNull();
+        assertThat(fact.holidayClosures())
+                .containsExactly(new LocationUpdatedV1.HolidayClosure(LocalDate.of(2026, 12, 25), "Christmas Day"));
+        assertThat(logAppender.list).anySatisfy(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+            assertThat(event.getFormattedMessage()).contains(location.getId().toString());
+        });
+    }
+
+    @Test
+    @DisplayName("#2023 a literal JSON null in holiday_closures degrades to not-configured, it does not throw")
+    void literalJsonNullHolidayClosuresDoesNotThrow() {
+        Location location = locationWithId();
+        location.setOperatingHours("[{\"dayOfWeek\":\"MONDAY\",\"openTime\":\"08:00\",\"closeTime\":\"17:00\"}]");
+        location.setHolidayClosures("null");
+
+        LocationUpdatedV1 fact = publishAndCapture(location);
+
+        assertThat(fact.holidayClosures()).isNull();
+        assertThat(fact.operatingHours()).hasSize(1);
+    }
+
+    @Test
     @DisplayName("#2023 malformed holiday_closures JSON does not null the operatingHours column")
     void malformedHolidayClosuresDoesNotAffectOperatingHours() {
         Location location = locationWithId();

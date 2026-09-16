@@ -207,6 +207,13 @@ public class LocationFactPublisher {
             log.error("Unparseable operating_hours JSON for location {}: {}", location.getId(), json, e);
             return null;
         }
+        if (raw == null) {
+            // The literal JSON `null` parses successfully and yields a null list. Without this the
+            // loop below would throw an NPE past every catch in this method, failing the publish
+            // instead of degrading to "not configured" the way this parser promises.
+            log.error("Null operating_hours JSON literal for location {}", location.getId());
+            return null;
+        }
         // EnumMap always iterates in DayOfWeek ordinal order regardless of insertion order, so this
         // also satisfies the "sorted by DayOfWeek ordinal" contract without a separate sort step.
         Map<DayOfWeek, LocationUpdatedV1.OperatingHoursEntry> byDay = new EnumMap<>(DayOfWeek.class);
@@ -268,6 +275,11 @@ public class LocationFactPublisher {
             raw = JSON_MAPPER.readValue(json, new TypeReference<List<HolidayClosureJsonEntry>>() {});
         } catch (JsonProcessingException e) {
             log.error("Unparseable holiday_closures JSON for location {}: {}", location.getId(), json, e);
+            return null;
+        }
+        if (raw == null) {
+            // See parseOperatingHours: the literal JSON `null` parses to a null list.
+            log.error("Null holiday_closures JSON literal for location {}", location.getId());
             return null;
         }
         List<LocationUpdatedV1.HolidayClosure> parsed = new ArrayList<>(raw.size());

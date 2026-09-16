@@ -48,8 +48,9 @@ class WorkorderKafkaCommandListenerTest {
         org.springframework.test.util.ReflectionTestUtils.setField(
                 listener, "replayMaxLookback", java.time.Duration.ofDays(30));
         org.mockito.Mockito.lenient()
-                .when(workorderFactBackfillService.backfillForCaller(org.mockito.ArgumentMatchers.any()))
-                .thenReturn(new BackfillResult(0, null, false));
+                .when(workorderFactBackfillService.backfillForCaller(
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new BackfillResult(0, null, null, false));
     }
 
     @Test
@@ -287,7 +288,7 @@ class WorkorderKafkaCommandListenerTest {
                 {"commandType":"workorder.fact-backfill.requested","payload":{}}
                 """);
 
-        verify(workorderFactBackfillService).backfillForCaller(null);
+        verify(workorderFactBackfillService).backfillForCaller(null, null);
     }
 
     @Test
@@ -299,7 +300,7 @@ class WorkorderKafkaCommandListenerTest {
                 {"commandType":"WORKORDER_FACT_BACKFILL_REQUESTED","payload":{"afterId":"%s"}}
                 """.formatted(afterId));
 
-        verify(workorderFactBackfillService).backfillForCaller(afterId);
+        verify(workorderFactBackfillService).backfillForCaller(afterId, null);
     }
 
     @Test
@@ -310,7 +311,7 @@ class WorkorderKafkaCommandListenerTest {
                 """);
 
         // The run is idempotent, so restarting is safe -- but it must still happen.
-        verify(workorderFactBackfillService).backfillForCaller(null);
+        verify(workorderFactBackfillService).backfillForCaller(null, null);
     }
 
     @Test
@@ -320,7 +321,33 @@ class WorkorderKafkaCommandListenerTest {
                 {"commandType":"workorder.fact-backfill.requested"}
                 """);
 
-        verify(workorderFactBackfillService).backfillForCaller(null);
+        verify(workorderFactBackfillService).backfillForCaller(null, null);
+    }
+
+    @Test
+    @DisplayName("#2021 - a fact backfill command carrying tenantId resumes that tenant's own walk")
+    void backfillCommandResumesANamedTenant() {
+        UUID afterId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+        UUID tenantId = UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+
+        listener.onCommand("""
+                {"commandType":"workorder.fact-backfill.requested",\
+                "payload":{"afterId":"%s","tenantId":"%s"}}
+                """.formatted(afterId, tenantId));
+
+        // Both halves must arrive: a cursor belongs to one tenant's id space, so a resume that drops
+        // the tenant restarts the fleet and never finishes a tenant larger than one run's budget.
+        verify(workorderFactBackfillService).backfillForCaller(afterId, tenantId);
+    }
+
+    @Test
+    @DisplayName("#2021 - a malformed tenantId is ignored rather than dropping the command")
+    void backfillCommandWithMalformedTenantIdStillRuns() {
+        listener.onCommand("""
+                {"commandType":"workorder.fact-backfill.requested","payload":{"tenantId":"not-a-uuid"}}
+                """);
+
+        verify(workorderFactBackfillService).backfillForCaller(null, null);
     }
 
     @Test
@@ -330,6 +357,6 @@ class WorkorderKafkaCommandListenerTest {
                 {"commandType":"workorder.outbox.replay-requested","payload":{"since":"2026-07-08T10:00:00Z"}}
                 """);
 
-        verify(workorderFactBackfillService, never()).backfillForCaller(any());
+        verify(workorderFactBackfillService, never()).backfillForCaller(any(), any());
     }
 }
