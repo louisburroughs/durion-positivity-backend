@@ -1,6 +1,7 @@
 package com.positivity.shopmanager.internal.controller;
 
 import com.positivity.events.EmitEvent;
+import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shopmanager.internal.dto.ShopResponse;
 import com.positivity.shopmanager.internal.dto.ShopUpsertRequest;
@@ -68,6 +69,10 @@ public class ShopController {
     @PutMapping("/{locationId}")
     public ResponseEntity<ShopResponse> upsertShop(
             @PathVariable UUID locationId, @Valid @RequestBody ShopUpsertRequest request) {
+        // locationId names the site being configured; a scoped caller must have it in reach
+        // (ADR-0061 §3, #1872). Without this a caller scoped to one site could make any other
+        // site schedulable, or retime its day. Spring has already rejected a malformed id.
+        SecurityContextHelper.locationScope().require(ShopPermissions.SCHEDULE_EDIT, locationId);
         return ResponseEntity.ok(shopConfigurationService.upsert(locationId, request));
     }
 }

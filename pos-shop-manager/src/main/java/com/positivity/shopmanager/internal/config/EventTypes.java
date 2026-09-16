@@ -16,7 +16,7 @@ public final class EventTypes {
 
     /**
      * All event type registrations for the shop manager module.
-     * Total: 20 event types.
+     * Total: 21 event types.
      */
     public static List<EventTypeRegistration> all() {
         return List.of(
@@ -106,6 +106,11 @@ public final class EventTypes {
                 EventTypeRegistration.search(
                                 "SHOPMGR_SHOP_DASHBOARD_VIEW",
                                 "View the aggregate shop dashboard: units, their workorders, and open work")
+                        .apiVersion("1")
+                        .build(),
+                // ShopController - 1 event
+                EventTypeRegistration.write(
+                                "SHOPMGR_SHOP_UPSERT", "Create or replace a location's scheduling configuration")
                         .apiVersion("1")
                         .build());
     }

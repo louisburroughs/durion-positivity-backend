@@ -68,11 +68,21 @@ the location roster, and `--bootstrap-location` creates it from `locations.csv` 
 the gateway API when the roster is empty (that row then reports one expected
 duplicate failure in the LOCATION job).
 
-All but two of the packs load this way. The exceptions are marked with an `@` name in the
-driver and call the gateway directly: `location/site-defaults.csv` (`@site-defaults`), one
-idempotent upsert per site (`PUT /v1/locations/{id}/defaults`), and `location/mobile-units.csv`
-(`@mobile-units`), one `POST /v1/mobile-units` per unit carrying its policy, capabilities and
-coverage rules — see the mobile-unit note under `location/` below for why the loader cannot.
+Most packs load this way. The exceptions are marked with an `@` name in the driver and call
+the gateway directly: `location/site-defaults.csv` (`@site-defaults`), one idempotent upsert
+per site (`PUT /v1/locations/{id}/defaults`); `location/mobile-units.csv` (`@mobile-units`),
+one `POST /v1/mobile-units` per unit carrying its policy, capabilities and coverage rules —
+see the mobile-unit note under `location/` below for why the loader cannot;
+`catalog/tier0-service-skill-requirements.csv` (`@service-skill-requirements`); and
+`shop-manager/shops.csv` (`@shops`), one idempotent upsert per site
+(`PUT /v1/shops/{locationId}`), because there is no `SHOP` bulk-loader domain.
+
+An `@` pack is authorized as the caller itself, not through the loader's relay, so the token
+needs that endpoint's own authority: `@shops` needs `shop:schedule:edit` **covering every
+location in `shop-manager/shops.csv`** (the endpoint is location-scoped, ADR-0061),
+`@site-defaults` needs `location:write`, and `@mobile-units` needs
+`location:mobile_unit:manage`. A token without them gets a 403 per row, and the pack reports
+every row as a failure rather than loading anything.
 
 Nothing in any pack is an environment-specific id. Files name what they reference — a
 location code, a storage location's name, an employee number, a SKU, a catalog class — and

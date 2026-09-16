@@ -42,3 +42,7 @@ decisions:
     shape: gate
     permission: shop:technician:view
     reason: the path locationId is the boundary the technician-person lookup is addressed through; denied outside the caller's reach before the lookup runs.
+  - operation: ShopController.upsertShop
+    shape: gate
+    permission: shop:schedule:edit
+    reason: the path locationId names the site whose scheduling configuration is written; denied outside the caller's reach, so a scoped caller cannot make another site schedulable or retime its day.
