@@ -90,7 +90,8 @@ public class UpdateVehicleRequest {
                 || year != null
                 || make != null
                 || model != null
-                || trim != null;
+                || trim != null
+                || gvwrClass != null;
     }
 
     @AssertTrue(message = "unitNumber must not be blank when provided")
