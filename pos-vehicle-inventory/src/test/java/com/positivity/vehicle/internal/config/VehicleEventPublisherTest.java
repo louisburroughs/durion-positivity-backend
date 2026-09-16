@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.vehicle.VehicleUpdatedV1;
 import com.positivity.vehicle.internal.entity.VehicleRecord;
+import com.positivity.vehicle.internal.enums.GvwrClassSource;
 import com.positivity.vehicle.internal.enums.OdometerUnit;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
@@ -83,6 +84,27 @@ class VehicleEventPublisherTest {
         assertThat(payload.accountId()).isEqualTo(ACCOUNT_ID);
         assertThat(payload.vin()).isEqualTo("1HGBH41JXMN109186");
         assertThat(payload.active()).isTrue();
+        // Undetermined class rides as nulls, never as a guess (CAP-327 D13).
+        assertThat(payload.gvwrClass()).isNull();
+        assertThat(payload.gvwrClassSource()).isNull();
+    }
+
+    @Test
+    @DisplayName("Carries the GVWR class and its source verbatim on the fact (CAP-327)")
+    void gvwrClassRidesTheFact() {
+        when(writerProvider.getIfAvailable()).thenReturn(writer);
+        VehicleRecord classified = vehicle();
+        classified.setGvwrClass(6);
+        classified.setGvwrClassSource(GvwrClassSource.OPERATOR_SET);
+
+        publisher.publishVehicleUpdated(classified);
+
+        @SuppressWarnings("rawtypes")
+        ArgumentCaptor<DomainEventEnvelope> envelope = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        verify(writer).publish(any(), envelope.capture());
+        VehicleUpdatedV1 payload = (VehicleUpdatedV1) envelope.getValue().payload();
+        assertThat(payload.gvwrClass()).isEqualTo(6);
+        assertThat(payload.gvwrClassSource()).isEqualTo("OPERATOR_SET");
     }
 
     @Test

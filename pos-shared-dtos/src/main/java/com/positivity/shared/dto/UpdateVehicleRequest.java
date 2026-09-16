@@ -68,6 +68,18 @@ public class UpdateVehicleRequest {
     @Schema(description = "Vehicle trim.", example = "LT", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String trim;
 
+    @Min(1)
+    @Max(8)
+    @Schema(
+            description = "FHWA GVWR class 1-8 (CAP-327). Null leaves the current class unchanged; a value"
+                    + " replaces it and records the source as OPERATOR_SET, which a later decode never"
+                    + " overrides.",
+            example = "6",
+            minimum = "1",
+            maximum = "8",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private Integer gvwrClass;
+
     @AssertTrue(message = "At least one field must be provided for update")
     private boolean isAtLeastOneFieldProvided() {
         return accountId != null

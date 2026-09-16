@@ -57,6 +57,14 @@ public class ExtVehicleReplica extends TenantScopedEntity {
     @Column(name = "model")
     private String model;
 
+    /**
+     * Owner's FHWA GVWR class 1–8 (CAP-327 D13); NULL when the owner has not determined it or has
+     * not yet published it. The eligibility tier compares it against a bay's {@code maxDutyClass}
+     * ceiling; the duty category (LIGHT 1–3, MEDIUM 4–6, HEAVY 7–8) is derived, never stored.
+     */
+    @Column(name = "gvwr_class")
+    private Integer gvwrClass;
+
     @Column(name = "active", nullable = false)
     private boolean active;
 

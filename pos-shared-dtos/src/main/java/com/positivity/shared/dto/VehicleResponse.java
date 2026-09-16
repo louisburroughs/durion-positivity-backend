@@ -76,6 +76,27 @@ public class VehicleResponse {
     @Schema(description = "Vehicle trim.", example = "XL", requiredMode = NOT_REQUIRED)
     private String trim;
 
+    @Schema(
+            description = "FHWA GVWR class 1-8 (CAP-327); null when undetermined.",
+            example = "2",
+            requiredMode = NOT_REQUIRED)
+    private Integer gvwrClass;
+
+    @Schema(
+            description = "Where the current gvwrClass came from: OPERATOR_SET or DECODED. Null when undetermined.",
+            example = "OPERATOR_SET",
+            allowableValues = {"OPERATOR_SET", "DECODED"},
+            requiredMode = NOT_REQUIRED)
+    private String gvwrClassSource;
+
+    @Schema(
+            description = "Duty category derived from gvwrClass: LIGHT (1-3), MEDIUM (4-6), HEAVY (7-8)."
+                    + " Never stored; null when the class is undetermined.",
+            example = "LIGHT",
+            allowableValues = {"LIGHT", "MEDIUM", "HEAVY"},
+            requiredMode = NOT_REQUIRED)
+    private String dutyCategory;
+
     @Schema(description = "Last recorded odometer reading value.", example = "45210", requiredMode = NOT_REQUIRED)
     private Integer odometerValue;
 
