@@ -9,8 +9,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.location.internal.entity.BayEntity;
+import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.MobileUnitEntity;
 import com.positivity.location.internal.repository.BayRepository;
+import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.MobileUnitRepository;
 import jakarta.persistence.EntityManager;
 import java.util.List;
@@ -30,11 +32,12 @@ class FactBackfillPagePublisherTest {
 
     private final BayRepository bayRepository = mock(BayRepository.class);
     private final MobileUnitRepository mobileUnitRepository = mock(MobileUnitRepository.class);
+    private final LocationRepository locationRepository = mock(LocationRepository.class);
     private final LocationFactPublisher locationFactPublisher = mock(LocationFactPublisher.class);
     private final EntityManager entityManager = mock(EntityManager.class);
 
-    private final FactBackfillPagePublisher publisher =
-            new FactBackfillPagePublisher(bayRepository, mobileUnitRepository, locationFactPublisher, entityManager);
+    private final FactBackfillPagePublisher publisher = new FactBackfillPagePublisher(
+            bayRepository, mobileUnitRepository, locationRepository, locationFactPublisher, entityManager);
 
     @Test
     @DisplayName("#1668 publishes a fact for every bay on the page")
@@ -100,5 +103,36 @@ class FactBackfillPagePublisherTest {
 
         assertThat(page).containsExactly(unit);
         verify(locationFactPublisher).mobileUnitChangedFromCommittedState(unit);
+    }
+
+    @Test
+    @DisplayName("#2023 publishes a fact for every location on the page, from committed state without flushing per row")
+    void publishesEveryLocationOnThePage() {
+        Location first = new Location();
+        first.setId(UUID.randomUUID());
+        Location second = new Location();
+        second.setId(UUID.randomUUID());
+        when(locationRepository.findBackfillPage(any(), any())).thenReturn(List.of(first, second));
+
+        List<Location> page = publisher.publishLocationPage(null, 500);
+
+        assertThat(page).containsExactly(first, second);
+        verify(locationFactPublisher).locationChangedFromCommittedState(first);
+        verify(locationFactPublisher).locationChangedFromCommittedState(second);
+        // A page flushes once at the end, not per row -- the committed-state entry point itself
+        // must never flush (see LocationFactPublisherTest.committedStateEntryPointsDoNotFlush).
+        verify(entityManager).flush();
+    }
+
+    @Test
+    @DisplayName("#2023 a null cursor starts the location walk at the minimum UUID too")
+    void locationNullCursorStartsAtMinimumUuid() {
+        when(locationRepository.findBackfillPage(any(), any())).thenReturn(List.of());
+
+        publisher.publishLocationPage(null, 250);
+
+        ArgumentCaptor<UUID> cursor = ArgumentCaptor.forClass(UUID.class);
+        verify(locationRepository).findBackfillPage(cursor.capture(), any());
+        assertThat(cursor.getValue()).isEqualTo(MIN_UUID);
     }
 }

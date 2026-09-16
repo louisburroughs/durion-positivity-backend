@@ -41,6 +41,7 @@ class LocationCommandListenerTest {
         listener = new LocationCommandListener(TEST_CLOCK, new ObjectMapper(), replayService, factBackfillService);
         lenient().when(factBackfillService.backfillBays(any())).thenReturn(new BackfillResult(0, null, false));
         lenient().when(factBackfillService.backfillMobileUnits(any())).thenReturn(new BackfillResult(0, null, false));
+        lenient().when(factBackfillService.backfillLocations(any())).thenReturn(new BackfillResult(0, null, false));
         ReflectionTestUtils.setField(listener, "replayMaxLookback", Duration.ofDays(30));
     }
 
@@ -112,21 +113,23 @@ class LocationCommandListenerTest {
     }
 
     @Test
-    @DisplayName("#1668 backfill command with no aggregate selector seeds both replicas")
+    @DisplayName("#1668 backfill command with no aggregate selector seeds all replicas, locations included (#2023)")
     void backfillDefaultsToAll() {
         listener.onCommand(backfillCommand(null));
 
         verify(factBackfillService).backfillBays(null);
         verify(factBackfillService).backfillMobileUnits(null);
+        verify(factBackfillService).backfillLocations(null);
     }
 
     @Test
-    @DisplayName("#1668 backfill command scoped to one aggregate leaves the other alone")
+    @DisplayName("#1668 backfill command scoped to one aggregate leaves the others alone")
     void backfillScopedToOneAggregate() {
         listener.onCommand(backfillCommand("bay"));
 
         verify(factBackfillService).backfillBays(null);
         verify(factBackfillService, never()).backfillMobileUnits(any());
+        verify(factBackfillService, never()).backfillLocations(any());
     }
 
     @Test
@@ -136,6 +139,17 @@ class LocationCommandListenerTest {
 
         verify(factBackfillService).backfillMobileUnits(null);
         verify(factBackfillService, never()).backfillBays(any());
+        verify(factBackfillService, never()).backfillLocations(any());
+    }
+
+    @Test
+    @DisplayName("#2023 backfill command scoped to location dispatches to backfillLocations only")
+    void backfillLocationOnly() {
+        listener.onCommand(backfillCommand("location"));
+
+        verify(factBackfillService).backfillLocations(null);
+        verify(factBackfillService, never()).backfillBays(any());
+        verify(factBackfillService, never()).backfillMobileUnits(any());
     }
 
     @Test
@@ -146,6 +160,7 @@ class LocationCommandListenerTest {
 
         verify(factBackfillService, never()).backfillBays(any());
         verify(factBackfillService, never()).backfillMobileUnits(any());
+        verify(factBackfillService, never()).backfillLocations(any());
     }
 
     @Test
@@ -155,6 +170,7 @@ class LocationCommandListenerTest {
 
         verify(factBackfillService, never()).backfillBays(any());
         verify(factBackfillService, never()).backfillMobileUnits(any());
+        verify(factBackfillService, never()).backfillLocations(any());
     }
 
     @Test

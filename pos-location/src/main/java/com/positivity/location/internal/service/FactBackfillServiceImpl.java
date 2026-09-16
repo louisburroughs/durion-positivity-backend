@@ -81,6 +81,17 @@ public class FactBackfillServiceImpl implements FactBackfillService {
         return result;
     }
 
+    @Override
+    public BackfillResult backfillLocations(@Nullable UUID afterId) {
+        BackfillResult result = pageThrough(afterId, pagePublisher::publishLocationPage, location -> location.getId());
+        log.info(
+                "Location fact backfill run complete: {} facts queued, lastId={}, more={}",
+                result.published(),
+                result.lastId(),
+                result.more());
+        return result;
+    }
+
     /**
      * Walk pages from {@code afterId} until the table is exhausted or the per-run bound is reached.
      *

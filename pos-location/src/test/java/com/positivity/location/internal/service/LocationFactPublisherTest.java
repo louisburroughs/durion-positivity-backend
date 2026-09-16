@@ -8,6 +8,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.location.BayDeletedV1;
 import com.positivity.domainevents.location.BayUpdatedV1;
@@ -30,14 +34,19 @@ import com.positivity.location.internal.enums.StorageLocationType;
 import com.positivity.location.internal.repository.LocationParentRepository;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 
 /**
@@ -56,12 +65,21 @@ class LocationFactPublisherTest {
 
     private LocationFactPublisher publisher;
 
+    private final ListAppender<ILoggingEvent> logAppender = new ListAppender<>();
+
     @BeforeEach
     void setUp() {
         when(writerProvider.getIfAvailable()).thenReturn(writer);
         when(locationParentRepository.findByChild_Id(any())).thenReturn(List.of());
         publisher = new LocationFactPublisher(
                 writerProvider, locationParentRepository, TEST_CLOCK, "location.events.v1", entityManager);
+        logAppender.start();
+        ((Logger) LoggerFactory.getLogger(LocationFactPublisher.class)).addAppender(logAppender);
+    }
+
+    @AfterEach
+    void tearDown() {
+        ((Logger) LoggerFactory.getLogger(LocationFactPublisher.class)).detachAppender(logAppender);
     }
 
     @Test
@@ -448,6 +466,175 @@ class LocationFactPublisherTest {
         // pos-workorder rejects a site-less fact onto replica.payload.rejected, the producer
         // contract-drift metric, and pos-shop-manager would store an unreachable row.
         verify(writer, never()).publish(any(), any());
+        verify(entityManager, never()).flush();
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Operating hours / holiday closures / buffer minutes (issue #2023)
+    // ---------------------------------------------------------------------------------------
+
+    private static Location locationWithId() {
+        Location location = new Location();
+        location.setId(UUID.randomUUID());
+        return location;
+    }
+
+    private LocationUpdatedV1 publishAndCapture(Location location) {
+        publisher.locationChanged(location);
+        ArgumentCaptor<DomainEventEnvelope<?>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        verify(writer).publish(eq("location.events.v1"), captor.capture());
+        return (LocationUpdatedV1) captor.getValue().payload();
+    }
+
+    @Test
+    @DisplayName("#2023 hours, closures and both buffers land on the fact, canonicalized and sorted")
+    void operatingHoursAndClosuresLandOnFact() {
+        Location location = locationWithId();
+        location.setVersion(1L);
+        // Deliberately out of day order and mixed case, to prove canonicalization and sorting.
+        location.setOperatingHours("[{\"dayOfWeek\":\"TUESDAY\",\"openTime\":\"09:00\",\"closeTime\":\"18:00\"},"
+                + "{\"dayOfWeek\":\"monday\",\"openTime\":\"08:00\",\"closeTime\":\"17:00\"}]");
+        location.setHolidayClosures("[{\"date\":\"2026-12-25\",\"reason\":\"Christmas Day\"},"
+                + "{\"date\":\"2026-01-01\",\"reason\":\"New Year\"}]");
+        location.setCheckInBufferMinutes(15);
+        location.setCleanupBufferMinutes(10);
+
+        LocationUpdatedV1 fact = publishAndCapture(location);
+
+        assertThat(fact.operatingHours())
+                .containsExactly(
+                        new LocationUpdatedV1.OperatingHoursEntry(
+                                DayOfWeek.MONDAY, LocalTime.of(8, 0), LocalTime.of(17, 0)),
+                        new LocationUpdatedV1.OperatingHoursEntry(
+                                DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(18, 0)));
+        assertThat(fact.holidayClosures())
+                .containsExactly(
+                        new LocationUpdatedV1.HolidayClosure(LocalDate.of(2026, 1, 1), "New Year"),
+                        new LocationUpdatedV1.HolidayClosure(LocalDate.of(2026, 12, 25), "Christmas Day"));
+        assertThat(fact.checkInBufferMinutes()).isEqualTo(15);
+        assertThat(fact.cleanupBufferMinutes()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("#2023 a lowercase day name canonicalizes to the DayOfWeek enum")
+    void lowercaseDayNameCanonicalizes() {
+        Location location = locationWithId();
+        location.setOperatingHours("[{\"dayOfWeek\":\"monday\",\"openTime\":\"08:00\",\"closeTime\":\"17:00\"}]");
+
+        LocationUpdatedV1 fact = publishAndCapture(location);
+
+        assertThat(fact.operatingHours())
+                .containsExactly(new LocationUpdatedV1.OperatingHoursEntry(
+                        DayOfWeek.MONDAY, LocalTime.of(8, 0), LocalTime.of(17, 0)));
+    }
+
+    @Test
+    @DisplayName("#2023 an unparseable day name nulls operatingHours, leaves holidayClosures populated, and logs ERROR")
+    void unparseableDayNameNullsOperatingHoursOnly() {
+        Location location = locationWithId();
+        location.setOperatingHours("[{\"dayOfWeek\":\"Frotz\",\"openTime\":\"08:00\",\"closeTime\":\"17:00\"}]");
+        location.setHolidayClosures("[{\"date\":\"2026-12-25\",\"reason\":\"Christmas Day\"}]");
+
+        LocationUpdatedV1 fact = publishAndCapture(location);
+
+        assertThat(fact.operatingHours()).isNull();
+        assertThat(fact.holidayClosures())
+                .containsExactly(new LocationUpdatedV1.HolidayClosure(LocalDate.of(2026, 12, 25), "Christmas Day"));
+        assertThat(logAppender.list).anySatisfy(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+            assertThat(event.getFormattedMessage()).contains(location.getId().toString());
+        });
+    }
+
+    @Test
+    @DisplayName("#2023 two entries colliding on the same day after canonicalization null the whole list")
+    void collidingDaysAfterCanonicalizationNullTheList() {
+        Location location = locationWithId();
+        location.setOperatingHours("[{\"dayOfWeek\":\"Monday\",\"openTime\":\"08:00\",\"closeTime\":\"12:00\"},"
+                + "{\"dayOfWeek\":\"MONDAY\",\"openTime\":\"13:00\",\"closeTime\":\"17:00\"}]");
+
+        LocationUpdatedV1 fact = publishAndCapture(location);
+
+        assertThat(fact.operatingHours()).isNull();
+        assertThat(logAppender.list)
+                .anySatisfy(event -> assertThat(event.getLevel()).isEqualTo(Level.ERROR));
+    }
+
+    @Test
+    @DisplayName("#2023 a null column publishes null; an empty JSON array publishes an empty list — distinguishable")
+    void nullColumnVersusEmptyArrayAreDistinguishable() {
+        Location notConfigured = locationWithId();
+        // operatingHours / holidayClosures left null.
+        Location configuredClosedAllWeek = locationWithId();
+        configuredClosedAllWeek.setOperatingHours("[]");
+        configuredClosedAllWeek.setHolidayClosures("[]");
+
+        publisher.locationChanged(notConfigured);
+        publisher.locationChanged(configuredClosedAllWeek);
+
+        ArgumentCaptor<DomainEventEnvelope<?>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        verify(writer, org.mockito.Mockito.times(2)).publish(eq("location.events.v1"), captor.capture());
+        LocationUpdatedV1 notConfiguredFact =
+                (LocationUpdatedV1) captor.getAllValues().get(0).payload();
+        LocationUpdatedV1 closedFact =
+                (LocationUpdatedV1) captor.getAllValues().get(1).payload();
+
+        assertThat(notConfiguredFact.operatingHours()).isNull();
+        assertThat(notConfiguredFact.holidayClosures()).isNull();
+        assertThat(closedFact.operatingHours()).isNotNull().isEmpty();
+        assertThat(closedFact.holidayClosures()).isNotNull().isEmpty();
+    }
+
+    @Test
+    @DisplayName("#2023 malformed JSON in one column does not fail the publish or null the other column")
+    void malformedJsonInOneColumnDoesNotAffectTheOther() {
+        Location location = locationWithId();
+        location.setOperatingHours("not valid json");
+        location.setHolidayClosures("[{\"date\":\"2026-12-25\",\"reason\":\"Christmas Day\"}]");
+
+        LocationUpdatedV1 fact = publishAndCapture(location);
+
+        assertThat(fact.operatingHours()).isNull();
+        assertThat(fact.holidayClosures())
+                .containsExactly(new LocationUpdatedV1.HolidayClosure(LocalDate.of(2026, 12, 25), "Christmas Day"));
+        assertThat(logAppender.list).anySatisfy(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+            assertThat(event.getFormattedMessage()).contains(location.getId().toString());
+        });
+    }
+
+    @Test
+    @DisplayName("#2023 malformed holiday_closures JSON does not null the operatingHours column")
+    void malformedHolidayClosuresDoesNotAffectOperatingHours() {
+        Location location = locationWithId();
+        location.setOperatingHours("[{\"dayOfWeek\":\"MONDAY\",\"openTime\":\"08:00\",\"closeTime\":\"17:00\"}]");
+        location.setHolidayClosures("not valid json");
+
+        LocationUpdatedV1 fact = publishAndCapture(location);
+
+        assertThat(fact.operatingHours())
+                .containsExactly(new LocationUpdatedV1.OperatingHoursEntry(
+                        DayOfWeek.MONDAY, LocalTime.of(8, 0), LocalTime.of(17, 0)));
+        assertThat(fact.holidayClosures()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2023 the committed-state entry point publishes hours/closures/buffers without flushing")
+    void committedStateEntryPointPublishesNewFieldsWithoutFlushing() {
+        Location location = locationWithId();
+        location.setVersion(5L);
+        location.setOperatingHours("[{\"dayOfWeek\":\"MONDAY\",\"openTime\":\"08:00\",\"closeTime\":\"17:00\"}]");
+        location.setCheckInBufferMinutes(20);
+
+        publisher.locationChangedFromCommittedState(location);
+
+        ArgumentCaptor<DomainEventEnvelope<?>> captor = ArgumentCaptor.forClass(DomainEventEnvelope.class);
+        verify(writer).publish(eq("location.events.v1"), captor.capture());
+        LocationUpdatedV1 fact = (LocationUpdatedV1) captor.getValue().payload();
+        assertThat(fact.operatingHours())
+                .containsExactly(new LocationUpdatedV1.OperatingHoursEntry(
+                        DayOfWeek.MONDAY, LocalTime.of(8, 0), LocalTime.of(17, 0)));
+        assertThat(fact.checkInBufferMinutes()).isEqualTo(20);
         verify(entityManager, never()).flush();
     }
 }

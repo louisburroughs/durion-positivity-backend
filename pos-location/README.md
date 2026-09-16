@@ -169,11 +169,37 @@ envelope's `aggregateVersion`, which strictly advances per committed mutation so
 guard is sound (#1486). Tombstones publish at `version + 1` — one past every fact the aggregate has
 published — because consumers delete without consulting a version.
 
-### Backfilling existing bays and mobile units
+### Operating hours and holiday closures on `location.location.updated` (#2023)
+
+`LocationUpdatedV1` (also on `location.events.v1`) carries four additional fields so
+pos-shop-manager can read a location's capacity window without a synchronous call to pos-location
+(ADR-0044 §6): `operatingHours`, `holidayClosures`, `checkInBufferMinutes`, `cleanupBufferMinutes`.
+`checkInBufferMinutes` / `cleanupBufferMinutes` are read straight off the entity; `operatingHours`
+and `holidayClosures` are parsed from the canonical JSON `LocationServiceImpl` writes into the
+`operating_hours` / `holiday_closures` columns.
+
+`operatingHours.dayOfWeek` is canonicalized case-insensitively against `java.time.DayOfWeek` on the
+way out, because the write path does not validate it today (#2020 F1) — `"MONDAY"`, `"Monday"` and
+`"monday"` all persist as-is. **If any entry cannot be canonicalized** — malformed JSON, an
+unparseable day name, or two entries that collide on the same day once canonicalized — the publisher
+logs an ERROR naming the location and the offending value, and publishes `operatingHours: null` for
+the whole list rather than a partial one: a partial list would let a consumer read a real, configured
+day as `CLOSED`, which is worse than reporting the week as unknown. `holidayClosures` is parsed and
+validated independently, so a bad entry in one column never nulls the other.
+
+**`null` and `[]` are different facts, not interchangeable.** A `null` column means *not
+configured*; an empty JSON array means *configured as closed every day* / *configured with no
+closures*. The fact preserves that distinction rather than collapsing both to `null` or both to `[]`.
+
+### Backfilling existing bays, mobile units and locations
 
 `location.outbox.replay-requested` **cannot** seed these replicas: it re-queues rows already in
 `event_outbox`, and every bay and mobile unit that existed before #1668 has no outbox history. A
-forward-only stream would leave those units permanently invisible.
+forward-only stream would leave those units permanently invisible. A location has the opposite
+problem for the same reason: `LocationUpdatedV1` gained `operatingHours`, `holidayClosures`,
+`checkInBufferMinutes` and `cleanupBufferMinutes` (#2023), so a location that last published
+*before* that change has only the old, frozen payload shape sitting in `event_outbox` — replaying
+it would just re-send that stale shape, never the new fields.
 
 Use the regenerate-from-state command on `location.commands.v1` instead:
 
@@ -181,8 +207,8 @@ Use the regenerate-from-state command on `location.commands.v1` instead:
 {"commandType": "location.fact-backfill.requested", "payload": {"aggregate": "all"}}
 ```
 
-`payload.aggregate` accepts `bay`, `mobile-unit`, or `all` (the default when omitted); an
-unrecognised value backfills nothing rather than everything. The run pages through the owner's
+`payload.aggregate` accepts `bay`, `mobile-unit`, `location`, or `all` (the default when omitted);
+an unrecognised value backfills nothing rather than everything. The run pages through the owner's
 tables (`pos.location.fact-backfill.page-size`, default 500), one transaction per page, and is
 idempotent — a replica applies an equal version and skips only a strictly-greater one, so re-running
 repairs a stale replica without duplicating rows.

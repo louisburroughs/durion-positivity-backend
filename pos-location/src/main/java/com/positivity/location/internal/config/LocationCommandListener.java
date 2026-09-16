@@ -26,11 +26,14 @@ import tools.jackson.databind.ObjectMapper;
  * <li>{@code location.outbox.replay-requested} — consumer-initiated drift repair and replica
  * bootstrap: re-queues published outbox events created in the requested window for
  * re-publication; consumers dedupe by eventId so replay is idempotent.</li>
- * <li>{@code location.fact-backfill.requested} — regenerate-from-state seeding for bay and
- * mobile-unit replicas (issue #1668). Distinct from outbox replay, which can only re-send facts
- * that were published at least once: bays and mobile units that existed before #1668 have no
- * outbox history, so replay cannot reach them. {@code payload.aggregate} selects
- * {@code bay}, {@code mobile-unit}, or {@code all} (the default); optional
+ * <li>{@code location.fact-backfill.requested} — regenerate-from-state seeding for bay,
+ * mobile-unit and location replicas (issue #1668, and #2023 for locations). Distinct from outbox
+ * replay, which can only re-send facts that were published at least once: bays and mobile units
+ * that existed before #1668 have no outbox history, and a location that last published before
+ * {@code LocationUpdatedV1} gained its operating-hours fields (#2023) has only the old, frozen
+ * payload shape in its outbox history — replay could only re-send that stale shape. Regenerating
+ * from current state picks up the new columns. {@code payload.aggregate} selects {@code bay},
+ * {@code mobile-unit}, {@code location}, or {@code all} (the default); optional
  * {@code payload.afterId} resumes a bounded run from the cursor the previous run logged.</li>
  * </ul>
  */
@@ -48,6 +51,7 @@ public class LocationCommandListener {
 
     private static final String AGGREGATE_BAY = "bay";
     private static final String AGGREGATE_MOBILE_UNIT = "mobile-unit";
+    private static final String AGGREGATE_LOCATION = "location";
     private static final String AGGREGATE_ALL = "all";
 
     /** Covers the sub-millisecond skew between outbox createdAt and the eventId timestamp. */
@@ -145,7 +149,8 @@ public class LocationCommandListener {
 
         if (!AGGREGATE_ALL.equals(aggregate)
                 && !AGGREGATE_BAY.equals(aggregate)
-                && !AGGREGATE_MOBILE_UNIT.equals(aggregate)) {
+                && !AGGREGATE_MOBILE_UNIT.equals(aggregate)
+                && !AGGREGATE_LOCATION.equals(aggregate)) {
             // Unknown selector: a typo must not silently backfill everything.
             log.warn("Ignoring fact backfill command with unsupported payload.aggregate={}", rawAggregate);
             return;
@@ -154,27 +159,33 @@ public class LocationCommandListener {
         UUID afterId = parseUuid(payloadNode);
         BackfillResult bays = null;
         BackfillResult mobileUnits = null;
+        BackfillResult locations = null;
         if (AGGREGATE_ALL.equals(aggregate) || AGGREGATE_BAY.equals(aggregate)) {
             bays = factBackfillService.backfillBays(afterId);
         }
         if (AGGREGATE_ALL.equals(aggregate) || AGGREGATE_MOBILE_UNIT.equals(aggregate)) {
             mobileUnits = factBackfillService.backfillMobileUnits(afterId);
         }
+        if (AGGREGATE_ALL.equals(aggregate) || AGGREGATE_LOCATION.equals(aggregate)) {
+            locations = factBackfillService.backfillLocations(afterId);
+        }
         // A run stops at the configured bound so it cannot outlive max.poll.interval.ms and get the
         // consumer evicted. When rows remain, the operator re-sends the command with afterId set to
         // the cursor logged here; the run is idempotent, so an overlapping resume is harmless.
         log.info(
-                "Fact backfill command processed aggregate={} afterId={} bays={} mobileUnits={}",
+                "Fact backfill command processed aggregate={} afterId={} bays={} mobileUnits={} locations={}",
                 aggregate,
                 afterId,
                 describe(bays),
-                describe(mobileUnits));
-        if (hasMore(bays) || hasMore(mobileUnits)) {
+                describe(mobileUnits),
+                describe(locations));
+        if (hasMore(bays) || hasMore(mobileUnits) || hasMore(locations)) {
             log.warn(
                     "Fact backfill hit its per-run bound; re-send location.fact-backfill.requested "
-                            + "with payload.afterId to continue (bays={}, mobileUnits={})",
+                            + "with payload.afterId to continue (bays={}, mobileUnits={}, locations={})",
                     describe(bays),
-                    describe(mobileUnits));
+                    describe(mobileUnits),
+                    describe(locations));
         }
     }
 
