@@ -562,9 +562,9 @@ paths:
 
         Preconditions: the day window and hours come from the location''s replicated timezone and weekly operating hours (fed by pos-location facts), not from this module''s Shop.timezone column; a location this module has not yet replicated, or whose timezone is unknown or blank, reports every requested date UNAVAILABLE rather than assuming UTC.
 
-        Required inputs: locationId (UUID), from and to (YYYY-MM-DD, inclusive, to on or after from). The span must not exceed 42 days; a longer span, including a full year, is rejected.
+        Required inputs: locationId (UUID), and from and to (YYYY-MM-DD, inclusive, to on or after from) spanning at most 42 days — a longer span, including a full year, is rejected.
 
-        Emits exactly one SHOPMGR_SCHEDULE_CAPACITY_VIEW audit event per call, never one per day; no state changes occur. A bay with zero appointments on a date is still listed with occupiedMinutes 0 — free capacity is the reason this endpoint exists. A date is never omitted from the response, even when it cannot be assembled.
+        Emits exactly one SHOPMGR_SCHEDULE_CAPACITY_VIEW audit event per call, never one per day; no state changes occur. A bay with zero appointments on a date is still listed with occupiedMinutes 0 — free capacity is the reason this endpoint exists — and a date is never omitted from the response, even when it cannot be assembled.
 
         A caller whose shop:schedule:view grant is location-scoped must have locationId within reach (ADR-0061).
 

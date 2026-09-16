@@ -903,9 +903,18 @@ jobs:
         # one offender per nightly run turns a ten-minute fix into a ten-day queue. The gate is
         # not weakened: JaCoCo still evaluates every rule and logs each violation, and the step
         # below fails the job with the complete list.
+        #
+        # --fail-at-end is the same argument one level up. Without it the reactor is fail-fast:
+        # a single test failure marks every module not yet dispatched SKIPPED, none of them
+        # writes a jacoco.csv, and the floor-drift step reports them all NO-DATA. Run 35057994389
+        # lost 25 modules' coverage to one sentence-count finding in pos-openapi-validation. With
+        # it, modules that do not depend on the failed one still build, test and report; the
+        # build still fails, and modules downstream of the failure (the aggregate included) are
+        # still skipped, so nothing is uploaded as if it were whole.
         run: |
           set -o pipefail
           ./mvnw -pl ${{ env.COVERAGE_AGGREGATE_MODULE }} -am -DskipITs -Darchunit.skipTests=true verify -T 1C -B \
+            --fail-at-end \
             -Djacoco.check.haltOnFailure=false \
             org.sonarsource.scanner.maven:sonar-maven-plugin:${{ env.SONAR_MAVEN_PLUGIN_VERSION }}:sonar \
             -Dsonar.projectKey=louisburroughs_durion-positivity-backend \
