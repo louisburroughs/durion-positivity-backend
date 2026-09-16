@@ -77,6 +77,9 @@ class CatalogFactPublisherTest {
     private SubstitutionGroupMemberRepository substitutionGroupMemberRepository;
 
     @Mock
+    private ServiceRequirementProjector serviceRequirementProjector;
+
+    @Mock
     private EntityManager entityManager;
 
     private CatalogFactPublisher publisher;
@@ -91,6 +94,7 @@ class CatalogFactPublisherTest {
                 outboxEventWriterProvider,
                 productUomRepository,
                 substitutionGroupMemberRepository,
+                serviceRequirementProjector,
                 entityManager);
     }
 
@@ -244,8 +248,8 @@ class CatalogFactPublisherTest {
 
             DomainEventEnvelope<?> envelope = capturedServiceEnvelope();
             assertThat(envelope.eventType()).isEqualTo("catalog.service.updated");
-            // Schema v2 (#1569): the additive operation-taxonomy bump.
-            assertThat(envelope.schemaVersion()).isEqualTo(2);
+            // Schema v3 (CAP-329): the additive requirement-profile bump on top of v2's taxonomy.
+            assertThat(envelope.schemaVersion()).isEqualTo(3);
             assertThat(envelope.aggregateId()).isEqualTo(entity.getId());
             // Flushed before the version is read (#1486), so the fact carries the entity's current
             // @Version rather than the retired updatedAt-epoch-millis value.
@@ -262,6 +266,47 @@ class CatalogFactPublisherTest {
             assertThat(payload.path("longDescription").stringValue(null)).isEqualTo("Four wheel alignment");
             assertThat(payload.path("active").booleanValue()).isTrue();
             assertThat(payload.path("createdAt").isNull()).isFalse();
+        }
+
+        @Test
+        @DisplayName("an unconfigured service publishes null requirement fields — not configured, not unconstrained")
+        void unconfiguredServicePublishesNullRequirements() throws Exception {
+            publisher.publishServiceUpdated(serviceEntity());
+
+            JsonNode payload = objectMapper
+                    .readTree(objectMapper.writeValueAsString(capturedServiceEnvelope()))
+                    .path("payload");
+            assertThat(payload.path("requirementsConfiguredAt").isNull()).isTrue();
+            assertThat(payload.path("requiredSkills").isNull()).isTrue();
+        }
+
+        @Test
+        @DisplayName("a configured service publishes its requirement profile on the fact (CAP-329, v3)")
+        void configuredServicePublishesRequiredSkills() throws Exception {
+            ServiceEntity entity = serviceEntity();
+            when(serviceRequirementProjector.load(entity.getId()))
+                    .thenReturn(java.util.Optional.of(new ServiceRequirementProjector.RequirementProfileView(
+                            NOW.minusSeconds(30),
+                            java.util.List.of(com.positivity.catalog.internal.dto.RequiredSkillDto.builder()
+                                    .skillId(UUID.fromString("01960011-0000-7000-8000-000000000041"))
+                                    .skillCode("BRAKES-MEDIUM_HEAVY")
+                                    .competenceCode("BRAKES")
+                                    .minGvwrClass(4)
+                                    .maxGvwrClass(8)
+                                    .skillActive(true)
+                                    .build()))));
+
+            publisher.publishServiceUpdated(entity);
+
+            JsonNode payload = objectMapper
+                    .readTree(objectMapper.writeValueAsString(capturedServiceEnvelope()))
+                    .path("payload");
+            assertThat(payload.path("requirementsConfiguredAt").isNull()).isFalse();
+            JsonNode skill = payload.path("requiredSkills").get(0);
+            assertThat(skill.path("skillId").stringValue(null)).isEqualTo("01960011-0000-7000-8000-000000000041");
+            assertThat(skill.path("skillCode").stringValue(null)).isEqualTo("BRAKES-MEDIUM_HEAVY");
+            assertThat(skill.path("minGvwrClass").intValue()).isEqualTo(4);
+            assertThat(skill.path("maxGvwrClass").intValue()).isEqualTo(8);
         }
 
         @Test

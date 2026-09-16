@@ -64,6 +64,9 @@ permissions:
     description: "View a product's alternate units of measure"
   - name: "catalog:service:ingest"
     description: "Bulk import service operations through the seed pipeline"
+  - name: "catalog:service_requirement:manage"
+    description: "Declare the skills a catalog service requires, conditioned on vehicle GVWR class (CAP-329)"
+    grantTo: ["ADMIN", "GENERAL_MANAGER"]
   - name: "catalog:service_package:manage"
     description: "Define service packages and fleet requirement sets, and compose their members"
   - name: "catalog:service_package:view"

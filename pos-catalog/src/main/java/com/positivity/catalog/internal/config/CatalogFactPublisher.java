@@ -61,6 +61,7 @@ public class CatalogFactPublisher {
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
     private final ProductUomRepository productUomRepository;
     private final SubstitutionGroupMemberRepository substitutionGroupMemberRepository;
+    private final ServiceRequirementProjector serviceRequirementProjector;
     private final EntityManager entityManager;
 
     public CatalogFactPublisher(
@@ -68,11 +69,13 @@ public class CatalogFactPublisher {
             ObjectProvider<OutboxEventWriter> outboxEventWriter,
             ProductUomRepository productUomRepository,
             SubstitutionGroupMemberRepository substitutionGroupMemberRepository,
+            ServiceRequirementProjector serviceRequirementProjector,
             EntityManager entityManager) {
         this.clock = clock;
         this.outboxEventWriter = outboxEventWriter;
         this.productUomRepository = productUomRepository;
         this.substitutionGroupMemberRepository = substitutionGroupMemberRepository;
+        this.serviceRequirementProjector = serviceRequirementProjector;
         this.entityManager = entityManager;
     }
 
@@ -232,6 +235,10 @@ public class CatalogFactPublisher {
             boolean active,
             @Nullable Instant updatedAt,
             long aggregateVersion) {
+        // CAP-329: the requirement profile rides the fact (schema v3). Absent profile = not
+        // configured, published as nulls; a profile with no skills = unconstrained, an empty list.
+        ServiceRequirementProjector.RequirementProfileView requirements =
+                active ? serviceRequirementProjector.load(service.getId()).orElse(null) : null;
         CatalogServiceUpdatedV1 payload = new CatalogServiceUpdatedV1(
                 service.getId(),
                 service.getName(),
@@ -244,7 +251,17 @@ public class CatalogFactPublisher {
                 service.getOperationCategory() == null
                         ? null
                         : service.getOperationCategory().name(),
-                service.getDefaultLaborHours());
+                service.getDefaultLaborHours(),
+                requirements == null ? null : requirements.configuredAt(),
+                requirements == null
+                        ? null
+                        : requirements.requiredSkills().stream()
+                                .map(skill -> new CatalogServiceUpdatedV1.RequiredSkill(
+                                        skill.getSkillId(),
+                                        skill.getSkillCode(),
+                                        skill.getMinGvwrClass(),
+                                        skill.getMaxGvwrClass()))
+                                .toList());
         DomainEventEnvelope<CatalogServiceUpdatedV1> envelope = DomainEventEnvelope.of(
                 CatalogServiceUpdatedV1.EVENT_TYPE,
                 CatalogServiceUpdatedV1.SCHEMA_VERSION,

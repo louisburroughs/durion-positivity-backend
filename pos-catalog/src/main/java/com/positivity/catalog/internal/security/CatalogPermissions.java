@@ -251,6 +251,9 @@ public final class CatalogPermissions {
      */
     public static final String SERVICE_INGEST = "catalog:service:ingest";
 
+    /** Declare the skills a service requires, per GVWR class (CAP-329). */
+    public static final String SERVICE_REQUIREMENT_MANAGE = "catalog:service_requirement:manage";
+
     // ── Service packages (#1575 Tier 0) ─────────────────────────────────────────────────
 
     /** Define service packages and fleet requirement sets, and compose their members. */

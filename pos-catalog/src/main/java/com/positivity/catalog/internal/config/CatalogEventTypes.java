@@ -42,6 +42,11 @@ public final class CatalogEventTypes {
                 EventTypeRegistration.approval(
                                 "CATALOG_PRODUCT_FACT_REPLAY", "Re-emit product facts for event-fed replica consumers")
                         .build(),
+                EventTypeRegistration.write(
+                                "CATALOG_SERVICE_REQUIREMENTS_SET",
+                                "Declare the skills a service requires, per vehicle GVWR class (CAP-329)")
+                        .apiVersion("1")
+                        .build(),
                 // Replica seeding / repair for service facts (#1306), same approval-grade budget as
                 // CATALOG_PRODUCT_FACT_REPLAY: one call queues up to a thousand facts, so a write
                 // threshold would alert on every healthy replay.

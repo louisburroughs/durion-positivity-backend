@@ -1,6 +1,7 @@
 package com.positivity.catalog.internal.service;
 
 import com.positivity.catalog.internal.config.CatalogFactPublisher;
+import com.positivity.catalog.internal.config.ServiceRequirementProjector;
 import com.positivity.catalog.internal.dto.CatalogDto;
 import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
 import com.positivity.catalog.internal.dto.CatalogItemResponseDto;
@@ -44,18 +45,21 @@ public class CatalogServiceImpl implements CatalogService {
     private final NonInventoryProductRepository nonInventoryProductRepository;
     private final CatalogRepository catalogRepository;
     private final CatalogFactPublisher catalogFactPublisher;
+    private final ServiceRequirementProjector serviceRequirementProjector;
 
     public CatalogServiceImpl(
             ProductRepository productRepository,
             ServiceRepository serviceRepository,
             NonInventoryProductRepository nonInventoryProductRepository,
             CatalogRepository catalogRepository,
-            CatalogFactPublisher catalogFactPublisher) {
+            CatalogFactPublisher catalogFactPublisher,
+            ServiceRequirementProjector serviceRequirementProjector) {
         this.productRepository = productRepository;
         this.serviceRepository = serviceRepository;
         this.nonInventoryProductRepository = nonInventoryProductRepository;
         this.catalogRepository = catalogRepository;
         this.catalogFactPublisher = catalogFactPublisher;
+        this.serviceRequirementProjector = serviceRequirementProjector;
     }
 
     @Override
@@ -75,15 +79,15 @@ public class CatalogServiceImpl implements CatalogService {
     @Override
     @Transactional(readOnly = true)
     public Optional<ServiceDto> getServiceById(UUID serviceId) {
-        return serviceRepository.findById(serviceId).map(this::toServiceDto);
+        return serviceRepository.findById(serviceId).map(this::toServiceDto).map(this::withRequirements);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ServiceDto> getServicesByName(String name) {
-        return serviceRepository.findByName(name).stream()
+        return withRequirements(serviceRepository.findByName(name).stream()
                 .map(this::toServiceDto)
-                .toList();
+                .toList());
     }
 
     @Override
@@ -93,10 +97,10 @@ public class CatalogServiceImpl implements CatalogService {
             return Collections.emptyList();
         }
         int capped = Math.max(1, Math.min(limit, 100));
-        return serviceRepository.findByNameContainingIgnoreCaseOrderByNameAsc(q.trim()).stream()
+        return withRequirements(serviceRepository.findByNameContainingIgnoreCaseOrderByNameAsc(q.trim()).stream()
                 .map(this::toServiceDto)
                 .limit(capped)
-                .toList();
+                .toList());
     }
 
     @Override
@@ -522,6 +526,32 @@ public class CatalogServiceImpl implements CatalogService {
                         : entity.getOperationCategory().name());
         dto.setDefaultLaborHours(entity.getDefaultLaborHours());
         return dto;
+    }
+
+    /**
+     * CAP-329: the requirement profile on the read model. Null {@code requirementsConfiguredAt}
+     * and null {@code requiredSkills} = never configured; a timestamp with an empty list =
+     * declared unconstrained. Every service read endpoint carries it, so a consumer never has to
+     * ask a second question.
+     */
+    private ServiceDto withRequirements(ServiceDto dto) {
+        return withRequirements(List.of(dto)).getFirst();
+    }
+
+    private List<ServiceDto> withRequirements(List<ServiceDto> dtos) {
+        if (dtos.isEmpty()) {
+            return dtos;
+        }
+        var profiles = serviceRequirementProjector.loadAll(
+                dtos.stream().map(ServiceDto::getId).toList());
+        for (ServiceDto dto : dtos) {
+            var profile = profiles.get(dto.getId());
+            if (profile != null) {
+                dto.setRequirementsConfiguredAt(profile.configuredAt());
+                dto.setRequiredSkills(profile.requiredSkills());
+            }
+        }
+        return dtos;
     }
 
     private NonInventoryProductDto toNonInventoryProductDto(NonInventoryProductEntity entity) {

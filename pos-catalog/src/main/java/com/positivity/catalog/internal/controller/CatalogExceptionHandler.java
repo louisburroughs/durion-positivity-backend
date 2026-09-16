@@ -3,6 +3,7 @@ package com.positivity.catalog.internal.controller;
 import com.positivity.catalog.internal.exception.CatalogBusinessRuleException;
 import com.positivity.catalog.internal.exception.CatalogForbiddenOperationException;
 import com.positivity.catalog.internal.exception.CatalogNotFoundException;
+import com.positivity.catalog.internal.exception.CatalogUnprocessableException;
 import com.positivity.catalog.internal.exception.CatalogValidationException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -112,6 +113,12 @@ public class CatalogExceptionHandler {
     public ResponseEntity<ApiError> handleBadRequest(CatalogValidationException ex, HttpServletRequest request) {
         String correlationId = resolveCorrelationId(request);
         return buildResponse(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage(), correlationId);
+    }
+
+    @ExceptionHandler(CatalogUnprocessableException.class)
+    public ResponseEntity<ApiError> handleUnprocessable(CatalogUnprocessableException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        return buildResponse(HttpStatus.UNPROCESSABLE_ENTITY, ex.getCode(), ex.getMessage(), correlationId);
     }
 
     @ExceptionHandler(CatalogBusinessRuleException.class)

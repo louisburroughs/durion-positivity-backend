@@ -2,6 +2,8 @@ package com.positivity.catalog.internal.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.Data;
 
@@ -32,4 +34,15 @@ public class ServiceDto {
 
     @Schema(description = "Vehicle-agnostic fallback labor hours in tenths", example = "1.5")
     private BigDecimal defaultLaborHours;
+
+    @Schema(
+            description = "When the skill requirements were last declared (CAP-329); null means never configured,"
+                    + " which consumers warn about rather than deny on",
+            example = "2026-09-16T12:00:00Z")
+    private Instant requirementsConfiguredAt;
+
+    @Schema(
+            description = "Skills the service requires per GVWR class range; empty with a non-null"
+                    + " requirementsConfiguredAt declares the service unconstrained, null means not configured")
+    private List<RequiredSkillDto> requiredSkills;
 }

@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.positivity.catalog.internal.config.CatalogFactPublisher;
+import com.positivity.catalog.internal.config.ServiceRequirementProjector;
 import com.positivity.catalog.internal.dto.CatalogItemRequestDto;
 import com.positivity.catalog.internal.dto.CatalogItemResponseDto;
 import com.positivity.catalog.internal.entity.ServiceEntity;
@@ -42,6 +43,9 @@ class CatalogServiceImplTaxonomyTest {
     private static final UUID OTHER_SERVICE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9b02");
 
     @Mock
+    private ServiceRequirementProjector serviceRequirementProjector;
+
+    @Mock
     private ProductRepository productRepository;
 
     @Mock
@@ -65,7 +69,8 @@ class CatalogServiceImplTaxonomyTest {
                 serviceRepository,
                 nonInventoryProductRepository,
                 catalogRepository,
-                catalogFactPublisher);
+                catalogFactPublisher,
+                serviceRequirementProjector);
         when(serviceRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
         when(serviceRepository.findByOperationCode(any())).thenReturn(Optional.empty());
     }

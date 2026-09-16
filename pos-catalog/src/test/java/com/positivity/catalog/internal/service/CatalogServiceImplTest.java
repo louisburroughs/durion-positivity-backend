@@ -38,6 +38,9 @@ class CatalogServiceImplTest {
     @Mock
     private CatalogFactPublisher catalogFactPublisher;
 
+    @Mock
+    private com.positivity.catalog.internal.config.ServiceRequirementProjector serviceRequirementProjector;
+
     @InjectMocks
     private CatalogServiceImpl catalogService;
 

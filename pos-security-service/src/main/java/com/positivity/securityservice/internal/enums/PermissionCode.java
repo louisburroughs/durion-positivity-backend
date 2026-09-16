@@ -997,13 +997,15 @@ public enum PermissionCode {
     // (pos-security-service, platform tenant only)
     PLATFORM__TENANT__IMPERSONATE(530, "platform:tenant:impersonate"),
     // ── Shop (new) ─────────────────────────────────────────────────────────────
-    SHOP__CONFLICT__OVERRIDE(531, "shop:conflict:override");
+    SHOP__CONFLICT__OVERRIDE(531, "shop:conflict:override"),
+    // ── Catalog (new) ──────────────────────────────────────────────────────────
+    CATALOG__SERVICE_REQUIREMENT__MANAGE(532, "catalog:service_requirement:manage");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 87;
+    public static final int CATALOG_VERSION = 88;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));
