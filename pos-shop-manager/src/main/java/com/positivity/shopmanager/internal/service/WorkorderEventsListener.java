@@ -142,7 +142,8 @@ public class WorkorderEventsListener {
     }
 
     private void applyWorkorderUpdated(JsonNode envelope, String eventId) {
-        WorkorderUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), WorkorderUpdatedV1.class);
+        JsonNode payloadNode = envelope.path("payload");
+        WorkorderUpdatedV1 payload = objectMapper.treeToValue(payloadNode, WorkorderUpdatedV1.class);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         ExtWorkorderReplica existing =
                 extWorkorderReplicaRepository.findById(payload.workorderId()).orElse(null);
@@ -151,6 +152,13 @@ public class WorkorderEventsListener {
         }
         String previousStatus = existing == null ? null : existing.getStatus();
 
+        // The actual-time block (workStartedAt/completedAt/expectedEndAt) is additive within
+        // schema v1 (#2021): a fact serialized by a pre-#2021 producer has no such field at all,
+        // and rebuilding the row straight from the payload would read that absence as an explicit
+        // null and erase actuals already replicated during a rolling deploy or replay of an older
+        // stored event (#2023 F4). mergeField keeps the existing value when the field is genuinely
+        // absent from the raw envelope, and only clears it when the fact carries an explicit JSON
+        // null.
         extWorkorderReplicaRepository.save(ExtWorkorderReplica.builder()
                 .workorderId(payload.workorderId())
                 .workorderNumber(payload.workorderNumber())
@@ -166,6 +174,21 @@ public class WorkorderEventsListener {
                 .mechanicIds(serializeMechanicIds(payload.mechanicIds()))
                 .promisedAt(payload.promisedAt())
                 .scheduledDate(payload.scheduledDate())
+                .workStartedAt(mergeField(
+                        payloadNode,
+                        "workStartedAt",
+                        payload.workStartedAt(),
+                        existing == null ? null : existing.getWorkStartedAt()))
+                .completedAt(mergeField(
+                        payloadNode,
+                        "completedAt",
+                        payload.completedAt(),
+                        existing == null ? null : existing.getCompletedAt()))
+                .expectedEndAt(mergeField(
+                        payloadNode,
+                        "expectedEndAt",
+                        payload.expectedEndAt(),
+                        existing == null ? null : existing.getExpectedEndAt()))
                 .aggregateVersion(aggregateVersion)
                 .updatedAt(Instant.now(clock))
                 .build());
@@ -225,5 +248,20 @@ public class WorkorderEventsListener {
             log.warn("Unknown workorder resourceType '{}' from the owner; treating as unassigned kind", resourceType);
             return null;
         }
+    }
+
+    /**
+     * Distinguishes a field <em>absent</em> from the raw envelope (a pre-#2021 producer that
+     * predates the actual-time block entirely) from one carrying an <em>explicit</em> JSON
+     * {@code null} (#2023 F4). {@code JsonNode.has} is true for either a present non-null value or
+     * an explicit {@code null} node, and false only when the field is missing outright — exactly
+     * the "was this field ever serialized" question a rolling deploy or replay of an older stored
+     * event needs answered before applying it. Absent keeps whatever this replica already holds;
+     * present (including an explicit null) always takes {@code newValue}, clearing the column when
+     * that is what the fact says.
+     */
+    private <T> @Nullable T mergeField(
+            JsonNode payloadNode, String fieldName, @Nullable T newValue, @Nullable T existingValue) {
+        return payloadNode.has(fieldName) ? newValue : existingValue;
     }
 }

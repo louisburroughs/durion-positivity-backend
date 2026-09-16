@@ -74,13 +74,12 @@ import tools.jackson.databind.ObjectMapper;
  *       live call is the expensive one, which is the reverse of the usual trade.
  * </ol>
  *
- * <p><strong>The honest consequence:</strong> pos-location's {@code LocationFactPublisher} does not
- * publish bay or mobile-unit facts yet — it emits {@code location.location.*} and
- * {@code location.storage-location.updated} and nothing else. So these two tables start empty and
- * stay empty until that publisher exists, and until then the dashboard's {@code units[]} is empty
- * while {@code openWorkorders[]} is fully populated. A live read would have returned units today
- * at the price above. The upstream publisher is the cross-repo follow-up that closes the gap for
- * both this module and pos-workorder at once.
+ * <p><strong>Update (#2023 F5):</strong> the paragraph above once said pos-location did not publish
+ * bay or mobile-unit facts and that {@code ext_bay} / {@code ext_mobile_unit} would start empty and
+ * stay empty. That has been false since issue #1668: this listener has handled {@code
+ * BayUpdatedV1}/{@code BayDeletedV1}/{@code MobileUnitUpdatedV1}/{@code MobileUnitDeletedV1} ever
+ * since, and {@link ReplicaAndManifestListenerContractTest} exercises all four. The bay roster is
+ * available to the dashboard today.
  *
  * <p>Consumer contract as per this module's other replica listeners: {@code processed_events}
  * idempotency in the apply transaction, strictly-below {@code aggregateVersion} stale guard,
@@ -185,7 +184,8 @@ public class LocationEventsListener {
     }
 
     private void applyBayUpdated(JsonNode envelope) {
-        BayUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), BayUpdatedV1.class);
+        JsonNode payloadNode = envelope.path("payload");
+        BayUpdatedV1 payload = objectMapper.treeToValue(payloadNode, BayUpdatedV1.class);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         ExtBayReplica existing =
                 extBayReplicaRepository.findById(payload.bayId()).orElse(null);
@@ -196,6 +196,12 @@ public class LocationEventsListener {
                 .bayId(payload.bayId())
                 .locationId(payload.locationId())
                 .name(payload.name())
+                // bayType was added after this listener started running (#2023/#2021): a fact
+                // serialized by a pre-change producer has no such field at all, which must not be
+                // read as "clear the bayType already replicated" during a rolling deploy or replay
+                // of an older stored event (#2023 F2).
+                .bayType(mergeField(
+                        payloadNode, "bayType", payload.bayType(), existing == null ? null : existing.getBayType()))
                 .active(isActiveStatus(payload.status()))
                 .bayType(payload.bayType())
                 .serviceCapabilityCodes(payload.serviceCapabilityCodes())
@@ -235,13 +241,21 @@ public class LocationEventsListener {
     }
 
     private void applyLocationUpdated(JsonNode envelope) {
-        LocationUpdatedV1 payload = objectMapper.treeToValue(envelope.path("payload"), LocationUpdatedV1.class);
+        JsonNode payloadNode = envelope.path("payload");
+        LocationUpdatedV1 payload = objectMapper.treeToValue(payloadNode, LocationUpdatedV1.class);
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         ExtLocationReplica existing =
                 extLocationReplicaRepository.findById(payload.locationId()).orElse(null);
         if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
             return;
         }
+        // timezone/operatingHours/holidayClosures/both buffers were added to this fact after this
+        // listener started running (#2023/#2021). A pre-change producer's serialized event has no
+        // such field at all, and rebuilding the row straight from the payload would read that
+        // absence as an explicit null and overwrite an already-replicated value during a rolling
+        // deploy or replay of an older stored event (#2023 F2). mergeField keeps the existing value
+        // when the field is genuinely absent from the raw envelope, and only clears it when the
+        // fact carries an explicit JSON null.
         extLocationReplicaRepository.save(ExtLocationReplica.builder()
                 .locationId(payload.locationId())
                 .code(payload.code())
@@ -249,6 +263,28 @@ public class LocationEventsListener {
                 .active(payload.active())
                 .aggregateVersion(aggregateVersion)
                 .syncedAt(Instant.now(clock))
+                .timezone(mergeField(
+                        payloadNode, "timezone", payload.timezone(), existing == null ? null : existing.getTimezone()))
+                .operatingHours(mergeField(
+                        payloadNode,
+                        "operatingHours",
+                        serializeJson(payload.operatingHours()),
+                        existing == null ? null : existing.getOperatingHours()))
+                .holidayClosures(mergeField(
+                        payloadNode,
+                        "holidayClosures",
+                        serializeJson(payload.holidayClosures()),
+                        existing == null ? null : existing.getHolidayClosures()))
+                .checkInBufferMinutes(mergeField(
+                        payloadNode,
+                        "checkInBufferMinutes",
+                        payload.checkInBufferMinutes(),
+                        existing == null ? null : existing.getCheckInBufferMinutes()))
+                .cleanupBufferMinutes(mergeField(
+                        payloadNode,
+                        "cleanupBufferMinutes",
+                        payload.cleanupBufferMinutes(),
+                        existing == null ? null : existing.getCleanupBufferMinutes()))
                 .build());
 
         // The fact carries the child's full typed parent-edge set — replace, don't merge.
@@ -295,5 +331,31 @@ public class LocationEventsListener {
      */
     private static boolean isActiveStatus(@Nullable String status) {
         return status != null && "ACTIVE".equalsIgnoreCase(status.strip());
+    }
+
+    /**
+     * Snapshots a fact's list field as raw JSON text, preserving the null-versus-empty distinction
+     * load-bearing for {@code operatingHours} / {@code holidayClosures} (#2023,
+     * DECISION-LOCATION-004/005): a {@code null} list stores {@code null} ("never configured"), an
+     * empty list stores {@code "[]"} ("configured as empty"), and the two must never collapse into
+     * one another.
+     */
+    private @Nullable String serializeJson(@Nullable List<?> list) {
+        return list == null ? null : objectMapper.writeValueAsString(list);
+    }
+
+    /**
+     * Distinguishes a field <em>absent</em> from the raw envelope (a pre-change producer that
+     * predates the field entirely) from one carrying an <em>explicit</em> JSON {@code null} (#2023
+     * F2). {@code JsonNode.has} is true for either a present non-null value or an explicit
+     * {@code null} node, and false only when the field is missing outright — exactly the "was this
+     * field ever serialized" question a rolling deploy or replay of an older stored event needs
+     * answered before applying it. Absent keeps whatever this replica already holds; present
+     * (including an explicit null) always takes {@code newValue}, clearing the column when that is
+     * what the fact says.
+     */
+    private <T> @Nullable T mergeField(
+            JsonNode payloadNode, String fieldName, @Nullable T newValue, @Nullable T existingValue) {
+        return payloadNode.has(fieldName) ? newValue : existingValue;
     }
 }

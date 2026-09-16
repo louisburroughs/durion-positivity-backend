@@ -12,6 +12,7 @@ import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.MechanicReplicationPendingException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
+import com.positivity.shopmanager.internal.exception.ScheduleCapacityRangeExceededException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.exception.SourceNotEligibleException;
 import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
@@ -333,7 +334,10 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleMechanicReplicationPending", (HandlerInvocation)
                             request -> sut.handleMechanicReplicationPending(
                                     new MechanicReplicationPendingException(PERSON_ID, "not visible here yet"),
-                                    request)));
+                                    request)),
+                    Named.of("handleScheduleCapacityRangeExceeded", (HandlerInvocation)
+                            request -> sut.handleScheduleCapacityRangeExceeded(
+                                    new ScheduleCapacityRangeExceededException(42, 43), request)));
         }
 
         @ParameterizedTest

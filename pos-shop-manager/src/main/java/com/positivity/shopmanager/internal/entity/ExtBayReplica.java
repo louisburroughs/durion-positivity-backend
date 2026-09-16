@@ -50,6 +50,10 @@ public class ExtBayReplica extends TenantScopedEntity {
     @Column(name = "name")
     private String name;
 
+    /** Owner's bay type discriminator, stored verbatim (#2023/#2021). */
+    @Column(name = "bay_type", length = 64)
+    private String bayType;
+
     @Column(name = "active", nullable = false)
     private boolean active;
 

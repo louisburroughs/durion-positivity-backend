@@ -29,6 +29,7 @@ import com.positivity.shopmanager.internal.exception.AppointmentNotFoundExceptio
 import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.internal.service.AppointmentsService;
 import com.positivity.shopmanager.internal.service.MechanicRosterQueryService;
+import com.positivity.shopmanager.internal.service.ScheduleCapacityService;
 import com.positivity.shopmanager.internal.service.ShopDashboardService;
 import com.positivity.shopmanager.internal.service.TechnicianPersonService;
 import java.time.Clock;
@@ -145,6 +146,9 @@ class LocationScopeControllerTest {
 
     @MockitoBean
     private ShopDashboardService shopDashboardService;
+
+    @MockitoBean
+    private ScheduleCapacityService scheduleCapacityService;
 
     @MockitoBean
     private MechanicRosterQueryService mechanicRosterQueryService;

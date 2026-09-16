@@ -3,10 +3,12 @@ package com.positivity.shopmanager.internal.controller;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
+import com.positivity.shopmanager.internal.dto.ScheduleCapacityResponse;
 import com.positivity.shopmanager.internal.dto.ScheduleViewRequest;
 import com.positivity.shopmanager.internal.dto.ScheduleViewResponse;
 import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.internal.service.AppointmentsService;
+import com.positivity.shopmanager.internal.service.ScheduleCapacityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -40,6 +42,7 @@ public class ScheduleController {
                     + " (ApiError.code LOCATION_SCOPE_DENIED, see docs/ERROR_ENVELOPE.md)";
 
     private final AppointmentsService appointmentsService;
+    private final ScheduleCapacityService scheduleCapacityService;
 
     @Operation(operationId = "viewSchedule", summary = "View the Daily Schedule for a Location", description = """
                     Builds the read-only schedule board for one location and date, grouping appointments into \
@@ -106,6 +109,71 @@ public class ScheduleController {
                 range,
                 correlationId);
         ScheduleViewResponse response = appointmentsService.getScheduleView(request, correlationId);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(
+            operationId = "getScheduleCapacity",
+            summary = "Get per-day, per-bay occupancy for a location across a date range",
+            description = """
+                    Returns, for every date in [from, to], the location's day status (OK, CLOSED, HOLIDAY or \
+                    UNAVAILABLE) and, on an OK date, every active bay with its occupied-minutes total and an \
+                    hourly occupancy count array — never appointment identifiers, customer snapshots, titles or \
+                    conflict details.
+                    Use this tool to render a week or month capacity calendar in one call; use viewSchedule \
+                    instead when a single day's full appointment board, including conflicts, is needed.
+                    Preconditions: the day window and hours come from the location's replicated timezone and \
+                    weekly operating hours (fed by pos-location facts), not from this module's Shop.timezone \
+                    column; a location this module has not yet replicated, or whose timezone is unknown or \
+                    blank, reports every requested date UNAVAILABLE rather than assuming UTC.
+                    Required inputs: locationId (UUID), from and to (YYYY-MM-DD, inclusive, to on or after \
+                    from). The span must not exceed 42 days; a longer span, including a full year, is rejected.
+                    Emits exactly one SHOPMGR_SCHEDULE_CAPACITY_VIEW audit event per call, never one per day; no \
+                    state changes occur. A bay with zero appointments on a date is still listed with \
+                    occupiedMinutes 0 — free capacity is the reason this endpoint exists. A date is never \
+                    omitted from the response, even when it cannot be assembled.
+                    A caller whose shop:schedule:view grant is location-scoped must have locationId within \
+                    reach (ADR-0061).
+                    Returns 400 when locationId, from or to is malformed or to is before from, 403 \
+                    LOCATION_SCOPE_DENIED when the caller's location scope does not cover locationId, and 422 \
+                    CAPACITY_RANGE_EXCEEDED when the span exceeds 42 days.
+                    """)
+    @ApiResponse(responseCode = "200", description = "Capacity view retrieved successfully.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "locationId, from or to is malformed, or to is before from.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = LOCATION_SCOPE_DENIED_DESCRIPTION,
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description =
+                    "The [from, to] span exceeds the 42-day policy limit (ApiError.code " + "CAPACITY_RANGE_EXCEEDED).",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @GetMapping("/schedules/capacity")
+    @EmitEvent(id = "SHOPMGR_SCHEDULE_CAPACITY_VIEW", apiVersion = "1")
+    @PreAuthorize("hasAuthority('" + ShopPermissions.SCHEDULE_VIEW + "')")
+    public ResponseEntity<ScheduleCapacityResponse> getScheduleCapacity(
+            @Parameter(description = "Location ID", required = true) @RequestParam UUID locationId,
+            @Parameter(description = "First date in the range, inclusive (YYYY-MM-DD)", required = true) @RequestParam
+                    LocalDate from,
+            @Parameter(description = "Last date in the range, inclusive (YYYY-MM-DD)", required = true) @RequestParam
+                    LocalDate to,
+            @Parameter(description = "Correlation ID for request tracing")
+                    @RequestHeader(value = "X-Correlation-Id", required = false)
+                    UUID correlationId) {
+        // locationId names the board being read; a scoped caller must have it in reach
+        // (ADR-0061 §3, #1872). Spring has already rejected a malformed id with a 400.
+        SecurityContextHelper.locationScope().require(ShopPermissions.SCHEDULE_VIEW, locationId);
+        log.info(
+                "Schedule capacity requested. locationId={}, from={}, to={}, X-Correlation-Id={}",
+                locationId,
+                from,
+                to,
+                correlationId);
+        ScheduleCapacityResponse response = scheduleCapacityService.getCapacity(locationId, from, to);
         return ResponseEntity.ok(response);
     }
 }

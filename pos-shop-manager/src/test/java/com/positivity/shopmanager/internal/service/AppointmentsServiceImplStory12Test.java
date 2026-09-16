@@ -29,6 +29,7 @@ import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestR
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.RescheduleHistoryRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
+import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappingRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -125,7 +126,8 @@ class AppointmentsServiceImplStory12Test {
                 shopRepository,
                 sourceEligibilityService,
                 mock(ExtPersonReplicaRepository.class),
-                Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
+                Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
+                mock(WorkOrderAppointmentMappingRepository.class));
 
         // Stub CRM clients for tests that reach the CRM call path (before source
         // validation)

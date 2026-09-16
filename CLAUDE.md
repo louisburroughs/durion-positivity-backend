@@ -14,6 +14,29 @@ Each service owns its own database schema; there are no cross-service foreign ke
 - Messaging: Kafka (Spring Kafka)
 - Build: Maven via `./mvnw` (root wrapper)
 
+## Cross-Repo Resources (`../durion`)
+
+The sibling `durion` orchestration repo holds the platform knowledge and tooling this repo depends
+on. Start at the knowledge catalog to locate a module, ADR, or domain before reading it.
+
+| Path | What it holds |
+| ---- | ------------- |
+| `../durion/knowledge-catalog/backend/` | Pointer entry per `pos-*` module — first stop for locating a module |
+| `../durion/knowledge-catalog/adr/`, `../durion/knowledge-catalog/domains/` | ADR and domain indexes |
+| `../durion/docs/adr/` | The ADRs themselves — compliance is mandatory, see `AGENTS.md` |
+| `../durion/domains/` | Domain business rules and capability definitions |
+| `../durion/.claude/skills/` | Backend workflow skills (below) |
+| `../durion/.claude/agents/` | Agent definitions the orchestrator skills delegate to |
+| `../durion/AGENTS.md`, `../durion/CLAUDE.md` | Cross-repo platform rules — closer scope wins on conflict |
+
+Backend-relevant skills: `/backend-story`, `/backend-story-rewrite`, `/api-orchestrate`,
+`/adr-compliance`, `/format-java`, `/sonarqube-fix`, `/jpa-plan`, `/mcp-sweep`, `/generate`,
+`/apply`, `/pr-review`, `/pull-request`, `/capability-completion`, `/create-adr`, `/java-mcp`.
+
+**Those skills and agents load only when `durion` is also a session root** — a session opened on this
+repo alone sees none of them, and the only local skill is `.claude/skills/caveman/`. Open
+`../durion/durion.code-workspace`, or add the `durion` repo to the session, before relying on them.
+
 ## Build, Test, and Lint Commands
 
 ```bash
@@ -223,6 +246,7 @@ Chat responses in this repo default to compressed "caveman" style (adopted from 
 ## Further Reading
 
 - `AGENTS.md` — full code templates for the patterns above (event registries, initializers, ArchUnit rules)
+- `../durion/knowledge-catalog/` — workspace navigation layer (modules, ADRs, domains)
 - `docs/ARCHITECTURE_GUIDE.md` — Docker, ports, inter-service communication, observability stack
 - `docs/DEVELOPMENT_GUIDE.md` — OpenAPI generation, version bumping, Spring Boot 4 migration notes
 - `docs/OPERATIONS_RUNBOOK.md` — RBAC, permission registration, troubleshooting

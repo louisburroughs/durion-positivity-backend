@@ -20,6 +20,20 @@ public class WorkorderStatusEventServiceImpl implements WorkorderStatusEventServ
 
     private static final Logger log = LoggerFactory.getLogger(WorkorderStatusEventServiceImpl.class);
 
+    /**
+     * {@code "COMPLETED" -> QUALITY_CHECK} is deliberate, not a mapping bug (#2021 F7/AC9,
+     * confirmed against the locked {@code handleWorkorderStatusChanged_completedStatus_mapsToQualityCheck}
+     * test below, itself "per spec" for CAP-140 #63 AC5). Workexec's {@code COMPLETED} means the
+     * labour is finished, not that the vehicle is ready to leave: the appointment still needs a
+     * quality check before it can be marked {@code READY_FOR_PICKUP}, the same gate
+     * {@code AWAITING_APPROVAL} maps to. {@link AppointmentStatus#COMPLETED} is therefore never
+     * reached from this feed by design — it names a shopmgmt-owned event (the customer has
+     * collected the vehicle) that workexec's lifecycle has no equivalent for and does not publish;
+     * nothing in {@code STATUS_MAPPING} should ever produce it. #2021's new {@code actualEndAt}
+     * (sourced from the workorder's {@code completedAt}, not from the appointment's own status)
+     * is what a caller reads to know the job is actually done — it does not depend on, and must
+     * not be confused with, the appointment reaching {@code QUALITY_CHECK} here.
+     */
     private static final Map<String, AppointmentStatus> STATUS_MAPPING = Map.of(
             "DRAFT", AppointmentStatus.SCHEDULED,
             "ASSIGNED", AppointmentStatus.CHECKED_IN,
