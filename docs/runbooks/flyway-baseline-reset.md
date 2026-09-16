@@ -68,8 +68,10 @@ Record:
 - extensions required (`pgvector`, `timescaledb`, etc.)
 - custom Flyway config or H2 split migration paths
 
-For `pos-accounting`, see
-[pos-accounting/docs/flyway-baseline-reset-plan.md](../../pos-accounting/docs/flyway-baseline-reset-plan.md).
+For `pos-accounting`, start with the
+[current schema references](https://github.com/louisburroughs/durion/blob/master/domains/accounting/implementation-reference.md#schema-and-migration-references).
+The [earlier reset plan](https://github.com/louisburroughs/durion/blob/master/domains/accounting/archive/flyway-baseline-reset-plan.md)
+is retained as history; its baseline filename and migration chain are superseded.
 
 ### 2. Create Scratch Database
 

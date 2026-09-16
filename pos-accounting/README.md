@@ -1,5 +1,9 @@
 # pos-accounting
 
+Canonical accounting documentation lives in [durion](https://github.com/louisburroughs/durion/blob/master/domains/accounting/index.md).
+See the [reconciled implementation reference](https://github.com/louisburroughs/durion/blob/master/domains/accounting/implementation-reference.md)
+for bill matching, GL event ingestion, outboxes and schema history. The local `docs/` files are compatibility pointers.
+
 General-ledger accounting service for the Durion Positivity ETSMS platform. Manages chart of accounts, journal entries, GL posting rules, payment application, AP payments, vendor bills, credit memos, and financial reporting. Consumes settled-payment facts from `payment.events.v1` and produces posted accounting entries through a transactional outbox pattern.
 
 ## Responsibilities
