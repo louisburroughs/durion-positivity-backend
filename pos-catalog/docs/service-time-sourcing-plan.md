@@ -31,7 +31,8 @@ Next: Phase 2 (licensed aggregator) is gated on procurement per
 [#1575](https://github.com/louisburroughs/durion-positivity-backend/issues/1575)
 (repair specifications and book-time data strategy).
 **Location note:** parked in `pos-catalog/docs/` per module-plan convention
-(`pos-accounting/docs/flyway-baseline-reset-plan.md`, `pos-people/docs/PLAN-726-*`). The
+(`pos-people/docs/PLAN-726-*`; the earlier accounting reset plan now lives in
+[durion](https://github.com/louisburroughs/durion/blob/master/domains/accounting/archive/flyway-baseline-reset-plan.md)). The
 parts-fitment track (§9) may later split into `pos-vehicle-fitment/docs/` once vetted.
 
 ---
