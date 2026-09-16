@@ -345,6 +345,11 @@ class RolePermissionBaselineTest {
                         // load; the operational staff roles all hold this, so it is not
                         // dispatch-specific capability, it is the floor under the exact list.
                         "people:self:view",
+                        // CAP-328/CAP-329. The mechanic roster and the opening search filter by
+                        // skill code, and an assignment parked AWAITING_SKILL_FULFILLMENT names
+                        // the skills it is missing; a dispatcher has to read the skill registry
+                        // to act on either. Read only — the registry is pos-people's to edit.
+                        "people:skill:view",
                         // #1612 reference-data reads. A dispatcher assigning a technician to a job
                         // has to resolve the customer, the vehicle and the order behind it first,
                         // and could not: these six reads were the single permission standing
