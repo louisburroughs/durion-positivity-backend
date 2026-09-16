@@ -109,22 +109,27 @@ class PlatformImpersonationIT extends BaseContractIntegrationTest {
 
     private UUID operatorId;
 
+    /** One hook, so the order of the two halves is fixed rather than left to JUnit's discovery. */
+    @BeforeEach
+    void buildMockMvcAndSeed() {
+        addTenantFilter();
+        seed();
+    }
+
     /**
      * {@code webAppContextSetup} carries only the security chain, so the tenancy filter that turns
      * {@code X-Tenant-Id} into a binding (and clears it afterwards) is added here, ahead of Spring
      * Security as in the servlet container. No default authentication headers: every request below
      * says exactly which gateway headers it carries.
      */
-    @BeforeEach
-    void addTenantFilter() {
+    private void addTenantFilter() {
         this.mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext)
                 .addFilters(tenantContextFilter)
                 .apply(springSecurity())
                 .build();
     }
 
-    @BeforeEach
-    void seed() {
+    private void seed() {
         extTenantRepository.save(ExtTenant.builder()
                 .tenantId(targetTenant)
                 .slug("alpha")

@@ -617,7 +617,10 @@ jobs:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
 
       - name: Install dependencies
-        run: npm ci
+        # --ignore-scripts: a transitive dependency's lifecycle script must not get to run
+        # arbitrary code on a runner that holds this workflow's push token. The generator
+        # fetches its JAR on first use, so nothing here depends on a postinstall hook.
+        run: npm ci --ignore-scripts
 
       - name: Generate SDK clients
         id: generate
@@ -823,7 +826,10 @@ jobs:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
 
       - name: Install dependencies
-        run: npm ci
+        # --ignore-scripts: a transitive dependency's lifecycle script must not get to run
+        # arbitrary code on a runner that holds this workflow's push token. The generator
+        # fetches its JAR on first use, so nothing here depends on a postinstall hook.
+        run: npm ci --ignore-scripts
 
       - name: Generate Angular SDK clients
         id: generate
@@ -1178,7 +1184,10 @@ jobs:
         run: npm run sdk:install
 
       - name: Install Chromium for the Vitest browser runner
-        run: npx playwright install chromium --with-deps
+        # --no-install pins this to the playwright already in node_modules at the version the
+        # frontend's lockfile resolved, instead of letting npx fetch whatever the registry serves
+        # today; --ignore-scripts keeps a fetched package from running lifecycle code regardless.
+        run: npx --no-install --ignore-scripts playwright install chromium --with-deps
 
       - name: Compile frontend against the regenerated SDK
         # A type error against a changed client surfaces here as a compiler
@@ -1188,7 +1197,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/frontend-results"
-          npx ng build --configuration development 2>&1 | tee "${RUNNER_TEMP}/frontend-results/build.log"
+          # --no-install --ignore-scripts: see the Chromium step above.
+          npx --no-install --ignore-scripts ng build --configuration development 2>&1 \
+            | tee "${RUNNER_TEMP}/frontend-results/build.log"
 
       - name: Run contract coverage tests
         id: contract_tests
@@ -1204,7 +1215,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/frontend-results"
-          npx ng test --no-watch --browsers=ChromiumHeadless --runner-config vitest.config.ts 2>&1 \
+          # --no-install --ignore-scripts: see the Chromium step above.
+          npx --no-install --ignore-scripts ng test --no-watch --browsers=ChromiumHeadless \
+            --runner-config vitest.config.ts 2>&1 \
             | tee "${RUNNER_TEMP}/frontend-results/unit-tests.log"
 
       - name: Summarize frontend results

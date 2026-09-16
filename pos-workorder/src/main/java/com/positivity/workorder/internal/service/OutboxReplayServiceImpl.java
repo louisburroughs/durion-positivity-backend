@@ -83,8 +83,13 @@ public class OutboxReplayServiceImpl implements OutboxReplayService {
     }
 
     private int markForReplayInOwnTransaction(@NonNull UUID tenantId, @NonNull Instant since) {
-        Integer count = perTenantTransaction.execute(_ -> outboxEventRepository.markForReplaySince(tenantId, since));
-        return count == null ? 0 : count;
+        // The count is carried out of the callback rather than returned through execute(..): the
+        // repository hands back a primitive, so the boxed result could never be null and the
+        // null-guard that used to stand here was dead code.
+        AtomicInteger marked = new AtomicInteger();
+        perTenantTransaction.executeWithoutResult(
+                _ -> marked.set(outboxEventRepository.markForReplaySince(tenantId, since)));
+        return marked.get();
     }
 
     @Override

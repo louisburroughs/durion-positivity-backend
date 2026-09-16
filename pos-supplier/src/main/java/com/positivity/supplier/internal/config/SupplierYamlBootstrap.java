@@ -45,7 +45,6 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -106,12 +105,12 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
     }
 
     /**
-     * Reconciles the database to the given YAML configuration. Runs inside the
-     * startup
-     * transaction of {@link #run(ApplicationArguments)}; flushes before leaving the
-     * {@link AuditActorContext} scope so {@code @PreUpdate} auditing records the
-     * bootstrap
-     * actor.
+     * Reconciles the database to the given YAML configuration. The caller supplies the
+     * transaction — {@link #run(ApplicationArguments)} opens one per tenant through a
+     * {@link TransactionTemplate} — rather than {@code @Transactional} here: {@code run} reaches this
+     * method by self-invocation, so the proxy would never apply the annotation and the write would
+     * silently depend on whatever transaction happened to be current. Flushes before leaving the
+     * {@link AuditActorContext} scope so {@code @PreUpdate} auditing records the bootstrap actor.
      *
      * @param configuration the bound {@code supplier.profiles} configuration;
      *                      {@code null}
@@ -121,7 +120,6 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
      *                                        YAML is invalid or collides with an
      *                                        {@code ADMIN}-managed profile
      */
-    @Transactional
     public void reconcile(@Nullable SupplierProfileProperties configuration) {
         List<ProfileSpec> specs =
                 configuration == null || configuration.profiles() == null ? List.of() : configuration.profiles();

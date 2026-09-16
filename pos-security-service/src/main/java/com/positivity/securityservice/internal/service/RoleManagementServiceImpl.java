@@ -379,8 +379,13 @@ public class RoleManagementServiceImpl implements RoleManagementService {
 
     /**
      * Get effective role assignments for a user.
+     *
+     * <p>Carries the same read-only transaction as {@link #getAssignmentsForUser}: the delegation
+     * below is a self-invocation, so the proxy never applies that method's own {@code @Transactional}
+     * and the lazy {@code Role} reads would otherwise run outside a transaction entirely.
      */
     @Override
+    @Transactional(readOnly = true)
     public List<RoleAssignmentDto> getEffectiveRoleAssignments(@NonNull UUID userId) {
         return getAssignmentsForUser(userId, false);
     }

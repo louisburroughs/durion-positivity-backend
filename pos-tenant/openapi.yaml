@@ -1239,7 +1239,7 @@ components:
           description: New human-readable name, unique across the registry case- and whitespace-insensitively; omitted or null leaves it unchanged
           maxLength: 200
           minLength: 0
-          pattern: .*\S.*
+          pattern: \s*\S[\s\S]*
           type: string
       type: object
   securitySchemes:

@@ -83,7 +83,7 @@ final class WindowPhraseClassifier {
 
     /** "last month", "the previous quarter" — exactly one whole period that has ended. */
     private static final Pattern PRIOR_COMPLETE_PHRASE = Pattern.compile(
-            "\\b(?:last|previous|prior)\\s+(week|month|quarter|year)\\b(?!\\s*[,]?\\s*(?:compared|versus|vs))",
+            "\\b(?:last|previous|prior)\\s+(week|month|quarter|year)\\b(?!\\s*+,?\\s*+(?:compared|versus|vs))",
             Pattern.CASE_INSENSITIVE);
 
     /** "this quarter", "year to date". */

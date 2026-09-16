@@ -17,6 +17,8 @@ import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
@@ -107,6 +109,14 @@ class TenantAwareDataSourceTest {
         assertThat(connection.getAutoCommit()).isTrue();
         assertThat(connection.isWrapperFor(Connection.class)).isTrue();
         assertThat(connection.unwrap(Connection.class)).isSameAs(connection);
-        assertThat(connection).isEqualTo(connection).hasSameHashCodeAs(connection);
+
+        // Identity, not delegation: the handler answers equals/hashCode for the proxy itself, so two
+        // proxies over the same raw connection stay distinct keys. Were either call forwarded to the
+        // target mock instead, the two would collapse onto one entry here.
+        Connection second = dataSource().getConnection();
+        Map<Connection, String> byConnection = new HashMap<>();
+        byConnection.put(connection, "first");
+        byConnection.put(second, "second");
+        assertThat(byConnection).hasSize(2).containsEntry(connection, "first").containsEntry(second, "second");
     }
 }

@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -65,7 +66,8 @@ public class RemoteTenantRegistry implements TenantRegistry, TenantRegistryFresh
 
     private volatile @Nullable Instant lastAttempt;
     private volatile @Nullable Instant lastSuccess;
-    private volatile long consecutiveFailures;
+    /** Counted with an atomic rather than a volatile: the increment below is read-modify-write. */
+    private final AtomicLong consecutiveFailures = new AtomicLong();
 
     /**
      * @param properties {@code pos.tenancy.*}; the static list seeds the snapshot and {@code
@@ -142,7 +144,7 @@ public class RemoteTenantRegistry implements TenantRegistry, TenantRegistryFresh
 
     /** Fetch failures since the last success; {@code 0} while healthy. */
     public long consecutiveFailures() {
-        return consecutiveFailures;
+        return consecutiveFailures.get();
     }
 
     /**
@@ -170,7 +172,7 @@ public class RemoteTenantRegistry implements TenantRegistry, TenantRegistryFresh
         try {
             fetched = fetch();
         } catch (RuntimeException e) {
-            long failures = ++consecutiveFailures;
+            long failures = consecutiveFailures.incrementAndGet();
             // Same list, completeness turned off, published in one write: a reader mid-dereference
             // of snapshot() never pairs the pre-failure list with a stale "complete" verdict.
             List<UUID> keptTenantIds = snapshot.tenantIds();
@@ -190,9 +192,8 @@ public class RemoteTenantRegistry implements TenantRegistry, TenantRegistryFresh
         }
         snapshot = new TenantRegistry.Snapshot(fetched, true);
         lastSuccess = now;
-        long failures = consecutiveFailures;
+        long failures = consecutiveFailures.getAndSet(0);
         if (failures > 0) {
-            consecutiveFailures = 0;
             log.info(
                     "Tenant registry refresh from {} recovered after {} consecutive failures; {} active tenants",
                     url,
