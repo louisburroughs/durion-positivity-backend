@@ -50,11 +50,27 @@ Shop operations service for the Durion Positivity ETSMS platform. Manages shop a
 - `GET /v1/shop-manager/{locationId}/technicians/{personId}/person` — technician person detail
 - `GET /v1/shop-dashboard?locationId={uuid}&date={yyyy-MM-dd}` — aggregate shop dashboard
 
-Both roster endpoints require `shop:technician:view` and support optional exact
-`status` and `skillCode` filters. Status defaults to `ACTIVE`. The location roster
-is ordered by mechanic last name, first name, and person ID before pagination, so
-it accepts `page` and `size` but ignores `sort`; the mechanic roster honours `sort`
-and defaults to that same ordering.
+Both roster endpoints require `shop:technician:view` and support optional `status`
+and `skillCode` filters. Status defaults to `ACTIVE`. The location roster lists
+mechanics whose person holds an ACTIVE `TECHNICIAN` staffing assignment at the
+location (the `ext_people_staffing_assignment` replica); it is ordered by mechanic
+last name, first name, and person ID before pagination, so it accepts `page` and
+`size` but ignores `sort`. The mechanic roster honours `sort` and defaults to that
+same ordering.
+
+Competence is read from the `ext_person_credential` replica of the People domain's
+credential aggregate (CAP-328) and never stored here. Each entry carries
+`credentials`: every credential the person holds, with `skillCode`, the issuer's own
+`sourceCredentialCode`, `issuedOn`, `expiresOn`, display-only `proficiency`, and a
+`status` judged on the roster's reference date — the facility's local date for the
+location roster (DECISION-SHOPMGMT-015), the clock's date for the mechanic roster.
+An expired, revoked or superseded credential is listed with that status, not dropped
+and not read as held. `skillCode` matches either the Durion skill code or the
+issuer's code (`T4-BRAKES`), uppercase-and-trimmed on both sides, and counts only
+credentials held on that date. The former `mechanic_skill` and `certification` tables,
+the `PUT .../skills` and `POST /mechanics/bulk-ingest` endpoints and the `technician`
+table are gone; credentials are ingested in pos-people
+(`POST /v1/people/credentials/bulk-ingest`).
 
 Both emit audit events registered in `internal/config/EventTypes` —
 `SHOPMGR_MECHANIC_ROSTER_LIST` and `SHOPMGR_LOCATION_TECHNICIAN_LIST`, each with
@@ -136,6 +152,7 @@ but the event consumer writes them, and no synchronous call crosses a domain wal
 | `ext_customer_party` | `customer.events.v1` | `CustomerEventsListener` |
 | `ext_vehicle` | `vehicle.events.v1` | `VehicleEventsListener` |
 | `ext_people_staffing_assignment` | `people.events.v1` | `PeopleEventsListener` |
+| `ext_person_credential` | `people.events.v1` | `PeopleEventsListener` |
 | `ext_people_contact_person` | `people-contact.events.v1` | `PeopleContactEventsListener` |
 | `ext_workorder` | `workorder.events.v1` | `WorkorderEventsListener` |
 | `ext_bay`, `ext_mobile_unit` | `location.events.v1` | `LocationEventsListener` |

@@ -5,9 +5,9 @@ import com.positivity.shared.error.ApiError;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
 import com.positivity.shopmanager.internal.dto.AppointmentCreation;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
-import com.positivity.shopmanager.internal.exception.KeylessDuplicateReplayException;
 import com.positivity.shopmanager.internal.dto.CancelAppointmentRequest;
 import com.positivity.shopmanager.internal.dto.RescheduleAppointmentRequest;
+import com.positivity.shopmanager.internal.exception.KeylessDuplicateReplayException;
 import com.positivity.shopmanager.internal.security.LocationScopeGuard;
 import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.internal.service.AppointmentsService;
@@ -105,8 +105,7 @@ public class AppointmentsController {
                     + " resubmission of the same booking (CAP-326). No new appointment was created.")
     @ApiResponse(
             responseCode = "400",
-            description =
-                    "Validation error — duplicate source appointment, or request fields are invalid.",
+            description = "Validation error — duplicate source appointment, or request fields are invalid.",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",

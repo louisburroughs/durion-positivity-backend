@@ -22,16 +22,14 @@ import com.positivity.bulkloader.internal.domain.LaborRateAdjustmentLoaderRecord
 import com.positivity.bulkloader.internal.domain.LaborRateAdjustmentLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LaborRateLoaderRecord;
 import com.positivity.bulkloader.internal.domain.LaborRateLoaderStrategy;
+import com.positivity.bulkloader.internal.domain.LoaderValues;
 import com.positivity.bulkloader.internal.domain.LocationLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationRecord;
-import com.positivity.bulkloader.internal.domain.LoaderValues;
-import com.positivity.bulkloader.internal.domain.MechanicSkillLoaderRecord;
-import com.positivity.bulkloader.internal.domain.MechanicSkillLoaderStrategy;
-import com.positivity.bulkloader.internal.domain.PersonCredentialLoaderRecord;
-import com.positivity.bulkloader.internal.domain.PersonCredentialLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.MobileUnitLoaderRecord;
 import com.positivity.bulkloader.internal.domain.MobileUnitLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.NumberedRecord;
+import com.positivity.bulkloader.internal.domain.PersonCredentialLoaderRecord;
+import com.positivity.bulkloader.internal.domain.PersonCredentialLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.PersonLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.PersonRecord;
 import com.positivity.bulkloader.internal.domain.PutawayRuleLoaderRecord;
@@ -114,7 +112,6 @@ public class BatchConfiguration {
     private final RolePermissionLoaderStrategy rolePermissionLoaderStrategy;
     private final SecurityUserLoaderStrategy securityUserLoaderStrategy;
     private final UserPersonLinkLoaderStrategy userPersonLinkLoaderStrategy;
-    private final MechanicSkillLoaderStrategy mechanicSkillLoaderStrategy;
     private final PersonCredentialLoaderStrategy personCredentialLoaderStrategy;
     private final CatalogServiceLoaderStrategy catalogServiceLoaderStrategy;
     private final ServiceLaborStandardLoaderStrategy serviceLaborStandardLoaderStrategy;
@@ -1198,64 +1195,6 @@ public class BatchConfiguration {
     }
 
     @Bean
-    public Job mechanicSkillBulkLoadJob(Step mechanicSkillBulkLoadStep) {
-        return jobFactory.job("mechanicSkillBulkLoadJob", mechanicSkillBulkLoadStep);
-    }
-
-    @Bean
-    public Step mechanicSkillBulkLoadStep(
-            ItemStreamReader<MechanicSkillLoaderRecord> mechanicSkillReader,
-            ItemProcessor<MechanicSkillLoaderRecord, NumberedRecord<MechanicSkillLoaderRecord>>
-                    mechanicSkillItemProcessor,
-            ItemWriter<NumberedRecord<MechanicSkillLoaderRecord>> mechanicSkillBulkIngestWriter) {
-        return jobFactory.step(
-                "mechanicSkillBulkLoadStep",
-                mechanicSkillReader,
-                mechanicSkillItemProcessor,
-                mechanicSkillBulkIngestWriter);
-    }
-
-    @Bean
-    @StepScope
-    public ItemStreamReader<MechanicSkillLoaderRecord> mechanicSkillReader(
-            @Value("#{jobParameters['storagePath']}") String storagePath,
-            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam) {
-        return jobFactory.reader(mechanicSkillLoaderStrategy, storagePath, jobIdParam);
-    }
-
-    @Bean
-    @StepScope
-    public ItemProcessor<MechanicSkillLoaderRecord, NumberedRecord<MechanicSkillLoaderRecord>>
-            mechanicSkillItemProcessor(
-                    @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-                    @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
-                    @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam) {
-        return jobFactory.processor(
-                mechanicSkillLoaderStrategy,
-                jobFactory.parseJobId(jobIdParam),
-                jobFactory.resolutionContext(restClientBuilder, locationIdParam));
-    }
-
-    @Bean
-    @StepScope
-    public ItemWriter<NumberedRecord<MechanicSkillLoaderRecord>> mechanicSkillBulkIngestWriter(
-            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder restClientBuilder,
-            @Value("#{jobParameters['jobId'] ?: null}") String jobIdParam,
-            @Value("#{jobParameters['locationId'] ?: null}") String locationIdParam,
-            @Value("#{jobParameters['operatorId'] ?: null}") String operatorId) {
-        return writerFactory.create(
-                restClientBuilder,
-                new Target(
-                        "mechanicSkillBulkIngestWriter",
-                        DomainType.MECHANIC_SKILL,
-                        shopManagerServiceId,
-                        "/v1/shop-manager/mechanics/bulk-ingest",
-                        "shop:schedule:edit"),
-                new JobParams(jobIdParam, locationIdParam, operatorId),
-                this::mapMechanicSkillPayloads);
-    }
-
-    @Bean
     public Job personCredentialBulkLoadJob(Step personCredentialBulkLoadStep) {
         return jobFactory.job("personCredentialBulkLoadJob", personCredentialBulkLoadStep);
     }
@@ -1872,19 +1811,6 @@ public class BatchConfiguration {
 
     private record UserPersonLinkWriterPayload(String username, UUID personId) {}
 
-    private List<MechanicSkillWriterPayload> mapMechanicSkillPayloads(List<MechanicSkillLoaderRecord> items) {
-        List<MechanicSkillWriterPayload> payloads = new ArrayList<>(items.size());
-        for (MechanicSkillLoaderRecord item : items) {
-            payloads.add(new MechanicSkillWriterPayload(
-                    item.getPersonId().trim(),
-                    item.getSkillCode(),
-                    Integer.parseInt(item.getProficiencyLevel().trim())));
-        }
-        return payloads;
-    }
-
-    private record MechanicSkillWriterPayload(String personId, String skillCode, int proficiencyLevel) {}
-
     private List<PersonCredentialWriterPayload> mapPersonCredentialPayloads(List<PersonCredentialLoaderRecord> items) {
         List<PersonCredentialWriterPayload> payloads = new ArrayList<>(items.size());
         for (PersonCredentialLoaderRecord item : items) {
@@ -1896,7 +1822,9 @@ public class BatchConfiguration {
                     blankToNull(item.getIssuer()),
                     item.getIssuedOn().trim(),
                     blankToNull(item.getExpiresOn()),
-                    LoaderValues.isBlank(item.getProficiency()) ? null : Integer.parseInt(item.getProficiency().trim()),
+                    LoaderValues.isBlank(item.getProficiency())
+                            ? null
+                            : Integer.parseInt(item.getProficiency().trim()),
                     blankToNull(item.getEvidenceRef())));
         }
         return payloads;

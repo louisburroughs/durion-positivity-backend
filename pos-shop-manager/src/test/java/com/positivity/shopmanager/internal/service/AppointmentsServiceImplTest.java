@@ -399,7 +399,8 @@ class AppointmentsServiceImplTest {
                         .serviceEntityId(serviceRequestId)
                         .build()));
 
-        AppointmentResponse response = appointmentsService.createAppointment(request, null, null).appointment();
+        AppointmentResponse response =
+                appointmentsService.createAppointment(request, null, null).appointment();
 
         assertEquals(appointmentId, response.getAppointmentId());
         assertEquals(AppointmentStatus.SCHEDULED.name(), response.getStatus());
@@ -483,7 +484,9 @@ class AppointmentsServiceImplTest {
                         .serviceEntityId(serviceRequestId)
                         .build()));
 
-        AppointmentResponse response = appointmentsService.createAppointment(request, idempotencyKey, null).appointment();
+        AppointmentResponse response = appointmentsService
+                .createAppointment(request, idempotencyKey, null)
+                .appointment();
 
         assertEquals(appointmentId, response.getAppointmentId());
         verify(appointmentRepository, never()).save(any(Appointment.class));

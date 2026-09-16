@@ -115,6 +115,10 @@ class ReplicaAndManifestListenerContractTest {
     private ExtPersonReplicaRepository personRepository;
 
     @Mock
+    private com.positivity.shopmanager.internal.repository.ExtPersonCredentialReplicaRepository
+            credentialReplicaRepository;
+
+    @Mock
     private ExtWorkorderReplicaRepository workorderRepository;
 
     @Mock
@@ -222,6 +226,7 @@ class ReplicaAndManifestListenerContractTest {
                                 assignmentRepository,
                                 mechanicSyncService,
                                 personRepository,
+                                credentialReplicaRepository,
                                 org.mockito.Mockito.mock(ObjectProvider.class))::onPeopleEvent,
                         () -> doThrow(new QueryTimeoutException("lock wait"))
                                 .when(assignmentRepository)
@@ -527,8 +532,7 @@ class ReplicaAndManifestListenerContractTest {
             Replica replica = replica("vehicle");
             String preChangePayload = replica.payload().apply(ID.toString()).replace("\"gvwrClass\":3,", "");
 
-            replica.dispatch()
-                    .accept("""
+            replica.dispatch().accept("""
                             {"eventId":"evt-3","eventType":"%s","aggregateVersion":2,"payload":%s}""".formatted(replica.eventType(), preChangePayload));
 
             ArgumentCaptor<ExtVehicleReplica> captor = ArgumentCaptor.forClass(ExtVehicleReplica.class);

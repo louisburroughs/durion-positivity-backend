@@ -3,7 +3,6 @@ package com.positivity.shopmanager.internal.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.positivity.shopmanager.internal.dto.AppointmentCreateModel;
 import java.util.UUID;

@@ -37,8 +37,13 @@ public class Mechanic extends TenantScopedEntity {
     @Column(name = "mechanic_id", columnDefinition = "UUID")
     private UUID mechanicId;
 
+    /**
+     * The People domain's person id — the one identity this module has for a technician
+     * (CAP-328; DECISION-SHOPMGMT-009). The staffing-assignment and credential replicas key on
+     * the same value, so rosters join without a cast.
+     */
     @Column(name = "person_id", nullable = false, unique = true)
-    private String personId;
+    private UUID personId;
 
     @Column(name = "first_name")
     private String firstName;

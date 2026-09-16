@@ -105,12 +105,21 @@ class SchedulingConflictEvaluatorTest {
             return severity == null ? Optional.empty() : Optional.of(rule(code, severity, true));
         });
         // The happy shop: open, bay free, one mechanic rostered, ten bays.
-        lenient().when(extLocationReplicaRepository.findById(LOCATION)).thenReturn(Optional.of(location(CHICAGO, HOURS, CLOSURES)));
-        lenient().when(appointmentRepository.findHeldOverlappingForResource(any(), any(), any(), any())).thenReturn(List.of());
-        lenient().when(appointmentRepository.findHeldOverlappingAtLocation(any(), any(), any(), any())).thenReturn(List.of());
-        lenient().when(staffingRepository.findByLocationIdAndStatus(LOCATION, "ACTIVE"))
+        lenient()
+                .when(extLocationReplicaRepository.findById(LOCATION))
+                .thenReturn(Optional.of(location(CHICAGO, HOURS, CLOSURES)));
+        lenient()
+                .when(appointmentRepository.findHeldOverlappingForResource(any(), any(), any(), any()))
+                .thenReturn(List.of());
+        lenient()
+                .when(appointmentRepository.findHeldOverlappingAtLocation(any(), any(), any(), any()))
+                .thenReturn(List.of());
+        lenient()
+                .when(staffingRepository.findByLocationIdAndStatus(LOCATION, "ACTIVE"))
                 .thenReturn(List.of(staffing(LocalDate.of(2026, 1, 1), null)));
-        lenient().when(extBayReplicaRepository.findActiveByLocationOrdered(LOCATION)).thenReturn(bays(10));
+        lenient()
+                .when(extBayReplicaRepository.findActiveByLocationOrdered(LOCATION))
+                .thenReturn(bays(10));
     }
 
     @Test
@@ -170,10 +179,12 @@ class SchedulingConflictEvaluatorTest {
 
         @Test
         void hoursNeverPublishedFireNoHoursRule_andTheRestStillRuns() {
-            when(extLocationReplicaRepository.findById(LOCATION)).thenReturn(Optional.of(location(CHICAGO, null, null)));
+            when(extLocationReplicaRepository.findById(LOCATION))
+                    .thenReturn(Optional.of(location(CHICAGO, null, null)));
             Instant sun10 = Instant.parse("2026-06-14T15:00:00Z");
 
-            assertThat(evaluator.evaluate(attempt(sun10, sun10.plusSeconds(3600), null))).isEmpty();
+            assertThat(evaluator.evaluate(attempt(sun10, sun10.plusSeconds(3600), null)))
+                    .isEmpty();
             verify(appointmentRepository).findHeldOverlappingForResource(any(), any(), any(), any());
         }
 
@@ -197,7 +208,9 @@ class SchedulingConflictEvaluatorTest {
         @Test
         void aHeldOverlapOnTheSameResourceIsBayDoubleBooked() {
             when(appointmentRepository.findHeldOverlappingForResource(eq(BAY), eq(TUE_10), eq(TUE_11), any()))
-                    .thenReturn(List.of(Appointment.builder().appointmentId(UUID.randomUUID()).build()));
+                    .thenReturn(List.of(Appointment.builder()
+                            .appointmentId(UUID.randomUUID())
+                            .build()));
 
             List<DetectedConflict> detected = evaluator.evaluate(attempt(TUE_10, TUE_11, null));
 
@@ -209,15 +222,18 @@ class SchedulingConflictEvaluatorTest {
         @Test
         void theAppointmentBeingRescheduledDoesNotCountAgainstItself() {
             when(appointmentRepository.findHeldOverlappingForResource(eq(BAY), eq(TUE_10), eq(TUE_11), any()))
-                    .thenReturn(List.of(Appointment.builder().appointmentId(SELF).build()));
+                    .thenReturn(
+                            List.of(Appointment.builder().appointmentId(SELF).build()));
 
             assertThat(evaluator.evaluate(attempt(TUE_10, TUE_11, SELF))).isEmpty();
         }
 
         @Test
         void unassignedOrBlankResourceIsNotABay() {
-            assertThat(evaluator.evaluate(new BookingAttempt(LOCATION, "UNASSIGNED", TUE_10, TUE_11, null))).isEmpty();
-            assertThat(evaluator.evaluate(new BookingAttempt(LOCATION, null, TUE_10, TUE_11, null))).isEmpty();
+            assertThat(evaluator.evaluate(new BookingAttempt(LOCATION, "UNASSIGNED", TUE_10, TUE_11, null)))
+                    .isEmpty();
+            assertThat(evaluator.evaluate(new BookingAttempt(LOCATION, null, TUE_10, TUE_11, null)))
+                    .isEmpty();
             verify(appointmentRepository, never()).findHeldOverlappingForResource(any(), any(), any(), any());
         }
     }
@@ -227,15 +243,18 @@ class SchedulingConflictEvaluatorTest {
     class Mechanic {
         @Test
         void nobodyRosteredAtTheLocationIsMechanicUnavailable() {
-            when(staffingRepository.findByLocationIdAndStatus(LOCATION, "ACTIVE")).thenReturn(List.of());
-            assertThat(codes(evaluator.evaluate(attempt(TUE_10, TUE_11, null)))).containsExactly("MECHANIC_UNAVAILABLE");
+            when(staffingRepository.findByLocationIdAndStatus(LOCATION, "ACTIVE"))
+                    .thenReturn(List.of());
+            assertThat(codes(evaluator.evaluate(attempt(TUE_10, TUE_11, null))))
+                    .containsExactly("MECHANIC_UNAVAILABLE");
         }
 
         @Test
         void anAssignmentThatEndedBeforeTheDayDoesNotCount() {
             when(staffingRepository.findByLocationIdAndStatus(LOCATION, "ACTIVE"))
                     .thenReturn(List.of(staffing(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 6, 15))));
-            assertThat(codes(evaluator.evaluate(attempt(TUE_10, TUE_11, null)))).containsExactly("MECHANIC_UNAVAILABLE");
+            assertThat(codes(evaluator.evaluate(attempt(TUE_10, TUE_11, null))))
+                    .containsExactly("MECHANIC_UNAVAILABLE");
         }
 
         @Test
@@ -253,7 +272,9 @@ class SchedulingConflictEvaluatorTest {
         void fillingTheLastOfTwoBaysIsNearCapacity_soft() {
             when(extBayReplicaRepository.findActiveByLocationOrdered(LOCATION)).thenReturn(bays(2));
             when(appointmentRepository.findHeldOverlappingAtLocation(eq(LOCATION), eq(TUE_10), eq(TUE_11), any()))
-                    .thenReturn(List.of(Appointment.builder().appointmentId(UUID.randomUUID()).build()));
+                    .thenReturn(List.of(Appointment.builder()
+                            .appointmentId(UUID.randomUUID())
+                            .build()));
 
             List<DetectedConflict> detected = evaluator.evaluate(attempt(TUE_10, TUE_11, null));
 
@@ -264,7 +285,9 @@ class SchedulingConflictEvaluatorTest {
         @Test
         void oneOfTenIsNot() {
             when(appointmentRepository.findHeldOverlappingAtLocation(eq(LOCATION), eq(TUE_10), eq(TUE_11), any()))
-                    .thenReturn(List.of(Appointment.builder().appointmentId(UUID.randomUUID()).build()));
+                    .thenReturn(List.of(Appointment.builder()
+                            .appointmentId(UUID.randomUUID())
+                            .build()));
             assertThat(evaluator.evaluate(attempt(TUE_10, TUE_11, null))).isEmpty();
         }
 
@@ -282,7 +305,8 @@ class SchedulingConflictEvaluatorTest {
         void aSwitchedOffRuleDoesNotFire() {
             when(conflictRuleRepository.findByCode("MECHANIC_UNAVAILABLE"))
                     .thenReturn(Optional.of(rule("MECHANIC_UNAVAILABLE", ConflictSeverity.HARD, false)));
-            when(staffingRepository.findByLocationIdAndStatus(LOCATION, "ACTIVE")).thenReturn(List.of());
+            when(staffingRepository.findByLocationIdAndStatus(LOCATION, "ACTIVE"))
+                    .thenReturn(List.of());
 
             assertThat(evaluator.evaluate(attempt(TUE_10, TUE_11, null))).isEmpty();
         }
@@ -290,7 +314,8 @@ class SchedulingConflictEvaluatorTest {
         @Test
         void aRuleMissingFromTheSeedIsADeploymentDefect() {
             when(conflictRuleRepository.findByCode("MECHANIC_UNAVAILABLE")).thenReturn(Optional.empty());
-            when(staffingRepository.findByLocationIdAndStatus(LOCATION, "ACTIVE")).thenReturn(List.of());
+            when(staffingRepository.findByLocationIdAndStatus(LOCATION, "ACTIVE"))
+                    .thenReturn(List.of());
 
             assertThatThrownBy(() -> evaluator.evaluate(attempt(TUE_10, TUE_11, null)))
                     .isInstanceOf(IllegalStateException.class)
@@ -355,7 +380,11 @@ class SchedulingConflictEvaluatorTest {
 
     private static List<ExtBayReplica> bays(int count) {
         return IntStream.range(0, count)
-                .mapToObj(i -> ExtBayReplica.builder().bayId(UUID.randomUUID()).locationId(LOCATION).active(true).build())
+                .mapToObj(i -> ExtBayReplica.builder()
+                        .bayId(UUID.randomUUID())
+                        .locationId(LOCATION)
+                        .active(true)
+                        .build())
                 .collect(Collectors.toList());
     }
 }

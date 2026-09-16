@@ -158,6 +158,8 @@ public class SchedulingConflictRecorder {
     }
 
     private static List<UUID> normalize(List<UUID> ids) {
-        return ids == null ? List.of() : ids.stream().filter(Objects::nonNull).distinct().sorted().toList();
+        return ids == null
+                ? List.of()
+                : ids.stream().filter(Objects::nonNull).distinct().sorted().toList();
     }
 }

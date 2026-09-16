@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.shopmanager.internal.dto.LocationTechnicianRosterEntryResponse;
+import com.positivity.shopmanager.internal.dto.TechnicianCredentialResponse;
+import com.positivity.shopmanager.internal.enums.CredentialStatus;
 import com.positivity.shopmanager.internal.enums.MechanicStatus;
 import com.positivity.shopmanager.internal.service.MechanicRosterQueryService;
 import com.positivity.shopmanager.internal.service.TechnicianPersonService;
@@ -49,14 +51,16 @@ class TechnicianControllerTest {
     @Test
     @WithMockUser(authorities = "shop:technician:view")
     void listLocationTechniciansMapsFiltersAndReturnsPage() throws Exception {
-        UUID technicianId = UUID.fromString("01960011-0000-7000-8000-000000000004");
         UUID personId = UUID.fromString("01960011-0000-7000-8000-000000000002");
         LocationTechnicianRosterEntryResponse entry = LocationTechnicianRosterEntryResponse.builder()
-                .technicianId(technicianId)
                 .locationId(LOCATION_ID)
                 .personId(personId)
                 .status(MechanicStatus.ON_LEAVE)
-                .skills(List.of("BRAKES"))
+                .credentials(List.of(TechnicianCredentialResponse.builder()
+                        .skillCode("BRAKES-MEDIUM_HEAVY")
+                        .sourceCredentialCode("T4-BRAKES")
+                        .status(CredentialStatus.ACTIVE)
+                        .build()))
                 .build();
         when(mechanicRosterQueryService.listLocationTechnicians(
                         eq(LOCATION_ID), eq(MechanicStatus.ON_LEAVE), eq("BRAKES"), any()))
@@ -66,7 +70,9 @@ class TechnicianControllerTest {
                         .param("status", "ON_LEAVE")
                         .param("skillCode", "BRAKES"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].technicianId").value(technicianId.toString()))
+                .andExpect(jsonPath("$.content[0].personId").value(personId.toString()))
+                .andExpect(jsonPath("$.content[0].credentials[0].skillCode").value("BRAKES-MEDIUM_HEAVY"))
+                .andExpect(jsonPath("$.content[0].credentials[0].status").value("ACTIVE"))
                 .andExpect(jsonPath("$.content[0].locationId").value(LOCATION_ID.toString()))
                 .andExpect(jsonPath("$.content[0].status").value("ON_LEAVE"))
                 .andExpect(jsonPath("$.page.totalElements").value(1));

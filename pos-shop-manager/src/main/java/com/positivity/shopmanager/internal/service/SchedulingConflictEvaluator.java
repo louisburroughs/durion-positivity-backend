@@ -94,7 +94,10 @@ public class SchedulingConflictEvaluator {
             @Nullable UUID excludeAppointmentId) {}
 
     /** One rule that fired, with the resource it names and its template rendered for this attempt. */
-    public record DetectedConflict(@NonNull ConflictRule rule, @Nullable String resourceId, @NonNull String detail) {
+    public record DetectedConflict(
+            @NonNull ConflictRule rule,
+            @Nullable String resourceId,
+            @NonNull String detail) {
         public String code() {
             return rule.getCode();
         }
@@ -186,7 +189,9 @@ public class SchedulingConflictEvaluator {
                         && localEnd.toLocalDate().equals(date.plusDays(1))
                         && close.equals(LocalTime.MAX.withNano(0)));
         boolean startsEarly = localStart.toLocalTime().isBefore(open);
-        boolean endsLate = !localEnd.toLocalDate().equals(date) ? spansMidnight : localEnd.toLocalTime().isAfter(close);
+        boolean endsLate = !localEnd.toLocalDate().equals(date)
+                ? spansMidnight
+                : localEnd.toLocalTime().isAfter(close);
         if (spansMidnight || startsEarly || endsLate) {
             fire(CODE_OUTSIDE_OPERATING_HOURS, attempt, zone, null, detected);
         }
@@ -212,7 +217,8 @@ public class SchedulingConflictEvaluator {
     // ── MECHANIC ────────────────────────────────────────────────────────────────────────────────
 
     private void evaluateStaffing(BookingAttempt attempt, @Nullable ZoneId zone, List<DetectedConflict> detected) {
-        LocalDate localDate = attempt.startAt().atZone(zone == null ? ZoneOffset.UTC : zone).toLocalDate();
+        LocalDate localDate =
+                attempt.startAt().atZone(zone == null ? ZoneOffset.UTC : zone).toLocalDate();
         boolean anyonePresent =
                 staffingAssignmentRepository.findByLocationIdAndStatus(attempt.locationId(), STAFFING_ACTIVE).stream()
                         .anyMatch(assignment -> covers(assignment, localDate));
@@ -222,15 +228,19 @@ public class SchedulingConflictEvaluator {
     }
 
     private static boolean covers(ExtStaffingAssignmentReplica assignment, LocalDate date) {
-        boolean started = assignment.getEffectiveFrom() == null || !assignment.getEffectiveFrom().isAfter(date);
-        boolean notEnded = assignment.getEffectiveTo() == null || !assignment.getEffectiveTo().isBefore(date);
+        boolean started = assignment.getEffectiveFrom() == null
+                || !assignment.getEffectiveFrom().isAfter(date);
+        boolean notEnded = assignment.getEffectiveTo() == null
+                || !assignment.getEffectiveTo().isBefore(date);
         return started && notEnded;
     }
 
     // ── CAPACITY ────────────────────────────────────────────────────────────────────────────────
 
     private void evaluateCapacity(BookingAttempt attempt, @Nullable ZoneId zone, List<DetectedConflict> detected) {
-        int bays = extBayReplicaRepository.findActiveByLocationOrdered(attempt.locationId()).size();
+        int bays = extBayReplicaRepository
+                .findActiveByLocationOrdered(attempt.locationId())
+                .size();
         if (bays == 0) {
             return;
         }
@@ -259,7 +269,8 @@ public class SchedulingConflictEvaluator {
         if (rule.isEmpty()) {
             return;
         }
-        detected.add(new DetectedConflict(rule.get(), attempt.resourceId(), render(rule.get(), attempt, zone, closureReason)));
+        detected.add(new DetectedConflict(
+                rule.get(), attempt.resourceId(), render(rule.get(), attempt, zone, closureReason)));
     }
 
     /** Empty when the platform has switched the rule off; absent from the seed is a deployment defect. */
@@ -282,7 +293,8 @@ public class SchedulingConflictEvaluator {
     }
 
     /** Renders the rule's {@code {placeholders}} in facility-local time when the zone is known. */
-    static String render(ConflictRule rule, BookingAttempt attempt, @Nullable ZoneId zone, @Nullable String closureReason) {
+    static String render(
+            ConflictRule rule, BookingAttempt attempt, @Nullable ZoneId zone, @Nullable String closureReason) {
         ZoneId renderZone = zone == null ? ZoneOffset.UTC : zone;
         ZonedDateTime start = attempt.startAt().atZone(renderZone);
         ZonedDateTime end = attempt.endAt().atZone(renderZone);

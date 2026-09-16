@@ -6,9 +6,11 @@ import static com.positivity.tenancy.testing.TenantTestSupport.asTenant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.positivity.shopmanager.internal.entity.Certification;
-import com.positivity.shopmanager.internal.repository.CertificationRepository;
+import com.positivity.shopmanager.internal.entity.ExtPersonCredentialReplica;
+import com.positivity.shopmanager.internal.repository.ExtPersonCredentialReplicaRepository;
 import com.positivity.tenancy.TenantContext;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
@@ -28,7 +30,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class TenantIsolationIT extends PostgresTenancyTestBase {
 
     @Autowired
-    private CertificationRepository certifications;
+    private ExtPersonCredentialReplicaRepository credentials;
 
     @Autowired
     private DataSource dataSource;
@@ -40,58 +42,73 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
 
     @Test
     void aRowWrittenAsOneTenantIsInvisibleToAnotherAndToNoTenant() {
-        String aseCode = "isolation-" + UUID.randomUUID();
+        String skillCode = "iso-" + UUID.randomUUID();
+        UUID credentialId = UUID.randomUUID();
         UUID id = asTenant(
                 TENANT_A,
-                () -> certifications
-                        .saveAndFlush(Certification.builder()
-                                .aseCode(aseCode)
-                                .description("isolation")
+                () -> credentials
+                        .saveAndFlush(ExtPersonCredentialReplica.builder()
+                                .credentialId(credentialId)
+                                .personId(UUID.randomUUID())
+                                .skillId(UUID.randomUUID())
+                                .skillCode(skillCode)
+                                .competenceCode("ISOLATION")
+                                .minGvwrClass(1)
+                                .maxGvwrClass(8)
+                                .issuer("SHOP")
+                                .issuedOn(LocalDate.now())
+                                .status("ACTIVE")
+                                .aggregateVersion(1)
+                                .updatedAt(Instant.now())
                                 .build())
-                        .getId());
+                        .getCredentialId());
 
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         asTenant(TENANT_A, () -> {
-            assertThat(certifications.findById(id))
+            assertThat(credentials.findById(id))
                     .as("owner reads through the repository")
                     .isPresent();
-            assertThat(certifications.findById(id).orElseThrow().getTenantId()).isEqualTo(TENANT_A);
-            assertThat(countByCode(jdbc, aseCode))
+            assertThat(credentials.findById(id).orElseThrow().getTenantId()).isEqualTo(TENANT_A);
+            assertThat(countBySkillCode(jdbc, skillCode))
                     .as("owner reads through raw SQL")
                     .isEqualTo(1);
         });
 
         asTenant(TENANT_B, () -> {
-            assertThat(certifications.findById(id))
+            assertThat(credentials.findById(id))
                     .as("Hibernate filter hides the other tenant's row")
                     .isEmpty();
-            assertThat(countByCode(jdbc, aseCode))
+            assertThat(countBySkillCode(jdbc, skillCode))
                     .as("RLS hides it from raw SQL too")
                     .isZero();
-            assertThat(jdbc.update("UPDATE certification SET description = 'stolen' WHERE id = ?", id))
+            assertThat(jdbc.update("UPDATE ext_person_credential SET issuer = 'stolen' WHERE credential_id = ?", id))
                     .as("RLS makes the row unreachable for UPDATE")
                     .isZero();
         });
 
         // Unbound: the pool RESETs app.current_tenant, so pos_app sees an empty table and cannot insert.
-        assertThat(countByCode(jdbc, aseCode)).isZero();
+        assertThat(countBySkillCode(jdbc, skillCode)).isZero();
         assertThatThrownBy(() -> jdbc.update(
-                        "INSERT INTO certification (id, ase_code, created_at, updated_at) VALUES (?, ?, now(), now())",
-                        UUID.randomUUID(),
-                        "unbound-" + UUID.randomUUID()))
+                        """
+                        INSERT INTO ext_person_credential
+                            (credential_id, person_id, skill_id, skill_code, competence_code,
+                             min_gvwr_class, max_gvwr_class, issuer, issued_on, status,
+                             aggregate_version, updated_at)
+                        VALUES (?, ?, ?, ?, 'ISOLATION', 1, 8, 'SHOP', now(), 'ACTIVE', 1, now())
+                        """, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "unbound-" + UUID.randomUUID()))
                 .as("no tenant bound: the NOT NULL default is NULL and the policy's WITH CHECK refuses the row")
                 .isInstanceOf(DataAccessException.class);
 
         asTenant(
                 TENANT_A,
-                () -> assertThat(certifications.findById(id).orElseThrow().getDescription())
+                () -> assertThat(credentials.findById(id).orElseThrow().getIssuer())
                         .as("tenant B's UPDATE touched nothing")
-                        .isEqualTo("isolation"));
+                        .isEqualTo("SHOP"));
     }
 
-    private static int countByCode(JdbcTemplate jdbc, String aseCode) {
-        Integer count =
-                jdbc.queryForObject("SELECT count(*) FROM certification WHERE ase_code = ?", Integer.class, aseCode);
+    private static int countBySkillCode(JdbcTemplate jdbc, String skillCode) {
+        Integer count = jdbc.queryForObject(
+                "SELECT count(*) FROM ext_person_credential WHERE skill_code = ?", Integer.class, skillCode);
         return count == null ? 0 : count;
     }
 }

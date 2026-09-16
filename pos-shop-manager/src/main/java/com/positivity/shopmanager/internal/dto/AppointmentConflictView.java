@@ -37,7 +37,9 @@ public class AppointmentConflictView {
     @Schema(description = "The contended resource, when the rule names one", requiredMode = NOT_REQUIRED)
     String resourceId;
 
-    @Schema(description = "Whether a manager may still override it (SOFT and not yet overridden)", requiredMode = REQUIRED)
+    @Schema(
+            description = "Whether a manager may still override it (SOFT and not yet overridden)",
+            requiredMode = REQUIRED)
     boolean overridable;
 
     @Schema(description = "Whether a manager has recorded an override", requiredMode = REQUIRED)

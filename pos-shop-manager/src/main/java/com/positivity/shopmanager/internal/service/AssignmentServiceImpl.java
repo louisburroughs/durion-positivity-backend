@@ -87,7 +87,7 @@ public class AssignmentServiceImpl implements AssignmentService {
         List<Mechanic> resolvedMechanics = new ArrayList<>(mechanics.size());
         for (MechanicAssignmentItem item : mechanics) {
             var mechanic = mechanicRepository
-                    .findByPersonId(item.getMechanicPersonId())
+                    .findByPersonId(parsePersonId(item.getMechanicPersonId()))
                     .orElseThrow(() -> new ShopManagerValidationException(
                             "Mechanic not found for personId: " + item.getMechanicPersonId()));
             resolvedMechanics.add(mechanic);
@@ -178,5 +178,14 @@ public class AssignmentServiceImpl implements AssignmentService {
                 .assignedAt(assignment.getCreatedAt())
                 .lastUpdatedAt(assignment.getUpdatedAt())
                 .build();
+    }
+
+    /** Person ids are the People domain's UUIDs (CAP-328); anything else names nobody. */
+    private static UUID parsePersonId(String personId) {
+        try {
+            return UUID.fromString(personId == null ? "" : personId.trim());
+        } catch (IllegalArgumentException notAUuid) {
+            throw new ShopManagerValidationException("mechanicPersonId is not a UUID: " + personId);
+        }
     }
 }

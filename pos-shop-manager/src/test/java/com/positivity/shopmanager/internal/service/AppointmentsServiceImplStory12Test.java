@@ -445,7 +445,8 @@ class AppointmentsServiceImplStory12Test {
                         .build()));
 
         AppointmentCreateRequest request = buildRequest(null, null);
-        AppointmentResponse response = appointmentsService.createAppointment(request, "test-key", null).appointment();
+        AppointmentResponse response =
+                appointmentsService.createAppointment(request, "test-key", null).appointment();
 
         assertThat(response.getAppointmentId()).isEqualTo(existing.getAppointmentId());
         verify(appointmentRepository, never()).save(any());
@@ -512,7 +513,9 @@ class AppointmentsServiceImplStory12Test {
 
         // This should not throw an exception, even with a missing shop/timezone.
         // The service defaults to UTC internally.
-        var response = appointmentsService.createAppointment(buildRequest(null, null), null, null).appointment();
+        var response = appointmentsService
+                .createAppointment(buildRequest(null, null), null, null)
+                .appointment();
         assertThat(response.getAppointmentId()).isEqualTo(SAVED_APPOINTMENT_ID);
     }
 
@@ -526,7 +529,9 @@ class AppointmentsServiceImplStory12Test {
             return apt;
         });
 
-        var response = appointmentsService.createAppointment(buildRequest(null, null), null, null).appointment();
+        var response = appointmentsService
+                .createAppointment(buildRequest(null, null), null, null)
+                .appointment();
 
         assertThat(response.getCustomerSnapshot()).isEmpty();
     }

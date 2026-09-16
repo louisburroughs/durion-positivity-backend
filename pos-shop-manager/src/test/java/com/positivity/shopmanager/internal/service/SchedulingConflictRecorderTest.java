@@ -88,51 +88,62 @@ class SchedulingConflictRecorderTest {
 
         @BeforeEach
         void anExistingBooking() {
-            lenient().when(appointmentRepository.findHeldOverlappingAtLocation(any(), any(), any(), any()))
+            lenient()
+                    .when(appointmentRepository.findHeldOverlappingAtLocation(any(), any(), any(), any()))
                     .thenReturn(List.of(existing(e -> {})));
-            lenient().when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(EXISTING))
+            lenient()
+                    .when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(EXISTING))
                     .thenReturn(List.of(serviceRequest(SR_A), serviceRequest(SR_B)));
         }
 
         @Test
         void anExactResubmissionIsFound_serviceRequestOrderIgnored() {
             AppointmentCreateRequest request = request(r -> r.setServiceRequestIds(List.of(SR_B, SR_A)));
-            assertThat(recorder.findKeylessDuplicate(request)).map(Appointment::getAppointmentId).contains(EXISTING);
+            assertThat(recorder.findKeylessDuplicate(request))
+                    .map(Appointment::getAppointmentId)
+                    .contains(EXISTING);
         }
 
         @Test
         void aDifferentCustomerIsNotADuplicate() {
-            assertThat(recorder.findKeylessDuplicate(request(r -> r.setCrmCustomerId(UUID.randomUUID())))).isEmpty();
+            assertThat(recorder.findKeylessDuplicate(request(r -> r.setCrmCustomerId(UUID.randomUUID()))))
+                    .isEmpty();
         }
 
         @Test
         void aDifferentVehicleIsNotADuplicate() {
-            assertThat(recorder.findKeylessDuplicate(request(r -> r.setCrmVehicleId(UUID.randomUUID())))).isEmpty();
+            assertThat(recorder.findKeylessDuplicate(request(r -> r.setCrmVehicleId(UUID.randomUUID()))))
+                    .isEmpty();
         }
 
         @Test
         void aDifferentStartIsNotADuplicate() {
-            assertThat(recorder.findKeylessDuplicate(request(r -> r.setStartAt(START.plusSeconds(60))))).isEmpty();
+            assertThat(recorder.findKeylessDuplicate(request(r -> r.setStartAt(START.plusSeconds(60)))))
+                    .isEmpty();
         }
 
         @Test
         void aDifferentEndIsNotADuplicate() {
-            assertThat(recorder.findKeylessDuplicate(request(r -> r.setEndAt(END.plusSeconds(60))))).isEmpty();
+            assertThat(recorder.findKeylessDuplicate(request(r -> r.setEndAt(END.plusSeconds(60)))))
+                    .isEmpty();
         }
 
         @Test
         void aDifferentResourceIsNotADuplicate() {
-            assertThat(recorder.findKeylessDuplicate(request(r -> r.setResourceId("bay-2")))).isEmpty();
+            assertThat(recorder.findKeylessDuplicate(request(r -> r.setResourceId("bay-2"))))
+                    .isEmpty();
         }
 
         @Test
         void aDifferentWorkorderLinkIsNotADuplicate() {
-            assertThat(recorder.findKeylessDuplicate(request(r -> r.setWorkorderLinkRef("WO-other")))).isEmpty();
+            assertThat(recorder.findKeylessDuplicate(request(r -> r.setWorkorderLinkRef("WO-other"))))
+                    .isEmpty();
         }
 
         @Test
         void differentServiceRequestsAreNotADuplicate() {
-            assertThat(recorder.findKeylessDuplicate(request(r -> r.setServiceRequestIds(List.of(SR_A))))).isEmpty();
+            assertThat(recorder.findKeylessDuplicate(request(r -> r.setServiceRequestIds(List.of(SR_A)))))
+                    .isEmpty();
         }
 
         @Test
@@ -220,13 +231,15 @@ class SchedulingConflictRecorderTest {
         UUID second = UUID.fromString("00000000-0000-0000-0000-0000000000c2");
         SchedulingConflict earlier = conflictRow(first, "MECHANIC_OVERTIME", Instant.parse("2026-06-15T10:00:00Z"));
         SchedulingConflict later = conflictRow(second, "FACILITY_NEAR_CAPACITY", Instant.parse("2026-06-15T11:00:00Z"));
-        when(schedulingConflictRepository.findByAppointment_AppointmentId(EXISTING)).thenReturn(List.of(later, earlier));
+        when(schedulingConflictRepository.findByAppointment_AppointmentId(EXISTING))
+                .thenReturn(List.of(later, earlier));
         when(conflictOverrideRepository.existsByConflict_Id(first)).thenReturn(true);
         when(conflictOverrideRepository.existsByConflict_Id(second)).thenReturn(false);
 
         List<AppointmentConflictView> views = recorder.viewsFor(EXISTING);
 
-        assertThat(views).extracting(AppointmentConflictView::getCode)
+        assertThat(views)
+                .extracting(AppointmentConflictView::getCode)
                 .containsExactly("MECHANIC_OVERTIME", "FACILITY_NEAR_CAPACITY");
         assertThat(views.get(0).isOverridden()).isTrue();
         assertThat(views.get(0).isOverridable()).isFalse();
@@ -268,7 +281,9 @@ class SchedulingConflictRecorderTest {
     }
 
     private static AppointmentServiceRequest serviceRequest(UUID serviceEntityId) {
-        return AppointmentServiceRequest.builder().serviceEntityId(serviceEntityId).build();
+        return AppointmentServiceRequest.builder()
+                .serviceEntityId(serviceEntityId)
+                .build();
     }
 
     private static DetectedConflict detected(String code, ConflictSeverity severity) {

@@ -2,32 +2,29 @@ package com.positivity.shopmanager.internal.controller;
 
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
-import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
 import com.positivity.shopmanager.internal.dto.ConflictResponse;
-import com.positivity.shopmanager.internal.exception.ConflictOverrideStateException;
-import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
+import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
 import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
+import com.positivity.shopmanager.internal.exception.ConflictOverrideStateException;
 import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundException;
 import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
-import com.positivity.shopmanager.internal.exception.MechanicReplicationPendingException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.ScheduleCapacityRangeExceededException;
+import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.exception.SourceNotEligibleException;
 import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -43,27 +40,12 @@ public class GlobalExceptionHandler {
 
     private static final String CODE_CRM_UNAVAILABLE = "CRM_UNAVAILABLE";
     private static final String CODE_HR_UNAVAILABLE = "HR_UNAVAILABLE";
-    private static final String CODE_MECHANIC_REPLICATION_PENDING = "MECHANIC_REPLICATION_PENDING";
     private static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
-    private static final String RETRY_AFTER_HEADER = "Retry-After";
 
     private final Clock clock;
 
-    /**
-     * Seconds a caller is asked to wait before retrying a replication-pending write: the same
-     * window the service itself waits out, rounded up, never less than one second.
-     *
-     * <p>Derived rather than fixed, because each retry costs the server another full wait on a
-     * servlet thread. A client honouring a `Retry-After` shorter than that window would keep a
-     * thread near-permanently occupied on an id that never resolves.
-     */
-    private final String retryAfterSeconds;
-
-    public GlobalExceptionHandler(
-            @NonNull Clock clock,
-            @Value("${pos.shop-manager.mechanic-replication-wait:PT5S}") @NonNull Duration replicationWait) {
+    public GlobalExceptionHandler(@NonNull Clock clock) {
         this.clock = clock;
-        this.retryAfterSeconds = Long.toString(Math.max(1L, (long) Math.ceil(replicationWait.toMillis() / 1000d)));
     }
 
     @ExceptionHandler(CrmCustomerNotFoundException.class)
@@ -147,8 +129,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleConflictOverrideState(
             ConflictOverrideStateException exception, HttpServletRequest request) {
         UUID correlationId = resolveCorrelationId(request);
-        return respond(
-                HttpStatus.CONFLICT, ConflictOverrideStateException.CODE, exception.getMessage(), correlationId);
+        return respond(HttpStatus.CONFLICT, ConflictOverrideStateException.CODE, exception.getMessage(), correlationId);
     }
 
     @ExceptionHandler(AppointmentStateException.class)
@@ -209,35 +190,6 @@ public class GlobalExceptionHandler {
         UUID correlationId = resolveCorrelationId(request);
         return respond(
                 HttpStatus.SERVICE_UNAVAILABLE, CODE_CRM_UNAVAILABLE, "CRM service is unavailable", correlationId);
-    }
-
-    /**
-     * A write naming a person whose mechanic row this service has not received yet (#1987).
-     *
-     * <p>{@code 503} with a {@code Retry-After}, never {@code 404}: the person may well exist and
-     * the row may well arrive, so the caller is told to ask again rather than told the mechanic
-     * does not exist. A person this service does hold assignment history for, none of it making
-     * them a technician, still answers {@code 404} — that one is an answer, not a wait.
-     */
-    @ExceptionHandler(MechanicReplicationPendingException.class)
-    public ResponseEntity<ApiError> handleMechanicReplicationPending(
-            MechanicReplicationPendingException exception, HttpServletRequest request) {
-        UUID correlationId = resolveCorrelationId(request);
-        ApiError body = ApiError.guided(
-                CODE_MECHANIC_REPLICATION_PENDING,
-                exception.getMessage(),
-                HttpStatus.SERVICE_UNAVAILABLE.value(),
-                Instant.now(clock).toString(),
-                correlationId.toString(),
-                exception.getPersonId(),
-                "Retry the request; the mechanic record is created from a staffing assignment this service "
-                        + "receives asynchronously.",
-                "If it never resolves, check that the person holds an active TECHNICIAN staffing assignment "
-                        + "and that this service is consuming people.events.v1.");
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .header(CORRELATION_ID_HEADER, correlationId.toString())
-                .header(RETRY_AFTER_HEADER, retryAfterSeconds)
-                .body(body);
     }
 
     @ExceptionHandler(UnsupportedOperationException.class)
@@ -333,8 +285,7 @@ public class GlobalExceptionHandler {
                     "RESOURCE_NOT_FOUND" -> HttpStatus.NOT_FOUND.value();
             case "VEHICLE_CUSTOMER_MISMATCH", "INVALID_APPOINTMENT_STATE", ConflictOverrideStateException.CODE ->
                 HttpStatus.CONFLICT.value();
-            case CODE_CRM_UNAVAILABLE, CODE_HR_UNAVAILABLE, CODE_MECHANIC_REPLICATION_PENDING ->
-                HttpStatus.SERVICE_UNAVAILABLE.value();
+            case CODE_CRM_UNAVAILABLE, CODE_HR_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE.value();
             case "NOT_IMPLEMENTED" -> HttpStatus.NOT_IMPLEMENTED.value();
             case "SOURCE_NOT_ELIGIBLE",
                     "ESTIMATE_NOT_ELIGIBLE",

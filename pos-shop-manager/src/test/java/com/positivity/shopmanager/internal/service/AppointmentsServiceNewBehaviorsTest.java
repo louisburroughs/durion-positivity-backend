@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -16,26 +18,23 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.shopmanager.internal.dto.AppointmentCreateRequest;
 import com.positivity.shopmanager.internal.dto.AppointmentCreation;
-import com.positivity.shopmanager.internal.entity.ConflictRule;
-import com.positivity.shopmanager.internal.enums.ConflictResourceType;
-import com.positivity.shopmanager.internal.enums.ConflictSeverity;
-import com.positivity.shopmanager.internal.exception.KeylessDuplicateReplayException;
-import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
-import org.springframework.dao.DataIntegrityViolationException;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import com.positivity.shopmanager.internal.dto.AppointmentResponse;
 import com.positivity.shopmanager.internal.dto.CancelAppointmentRequest;
 import com.positivity.shopmanager.internal.dto.RescheduleAppointmentRequest;
 import com.positivity.shopmanager.internal.entity.Appointment;
+import com.positivity.shopmanager.internal.entity.ConflictRule;
 import com.positivity.shopmanager.internal.enums.AppointmentStatus;
 import com.positivity.shopmanager.internal.enums.CancellationReasonCode;
+import com.positivity.shopmanager.internal.enums.ConflictResourceType;
+import com.positivity.shopmanager.internal.enums.ConflictSeverity;
 import com.positivity.shopmanager.internal.enums.RescheduleReasonCode;
 import com.positivity.shopmanager.internal.event.AppointmentCreatedEvent;
 import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
 import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
+import com.positivity.shopmanager.internal.exception.KeylessDuplicateReplayException;
+import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
 import com.positivity.shopmanager.internal.repository.AppointmentAuditRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
 import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
@@ -58,6 +57,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 class AppointmentsServiceNewBehaviorsTest {
@@ -316,7 +316,6 @@ class AppointmentsServiceNewBehaviorsTest {
         assertEquals("WO-456", entityCaptor.getValue().getWorkorderLinkRef());
     }
 
-
     // Coverage gap: createAppointment_Failure_NoServiceRequests (above) never
     // actually reaches the serviceRequestIds==null branch — its bare request has
     // no startAt/endAt, so validateTimeRange throws first and the test's
@@ -362,17 +361,13 @@ class AppointmentsServiceNewBehaviorsTest {
             return apt;
         });
 
-        AppointmentResponse response = appointmentsService.createAppointment(request, "fresh-key", null).appointment();
+        AppointmentResponse response = appointmentsService
+                .createAppointment(request, "fresh-key", null)
+                .appointment();
 
         assertEquals(savedId, response.getAppointmentId());
         verify(appointmentRepository).save(any(Appointment.class));
     }
-
-
-
-
-
-
 
     // PRCR-102b: workorderLinkRef set in request must appear in
     // AppointmentCreatedEvent
@@ -551,11 +546,12 @@ class AppointmentsServiceNewBehaviorsTest {
         when(conflictRecorder.recordRefusedOverlap(any())).thenReturn(overlap);
 
         assertThatThrownBy(() -> appointmentsService.createAppointment(bookingRequest(), null, null))
-                .isInstanceOfSatisfying(SchedulingConflictException.class, exception -> assertThat(
-                                exception.getConflictResponse().getConflicts())
-                        .singleElement()
-                        .extracting(c -> c.getCode())
-                        .isEqualTo("BAY_DOUBLE_BOOKED"));
+                .isInstanceOfSatisfying(
+                        SchedulingConflictException.class,
+                        exception -> assertThat(exception.getConflictResponse().getConflicts())
+                                .singleElement()
+                                .extracting(c -> c.getCode())
+                                .isEqualTo("BAY_DOUBLE_BOOKED"));
         // The race check came first, on the recorder's own connection.
         verify(conflictRecorder, times(2)).findKeylessDuplicate(any());
     }
@@ -570,8 +566,9 @@ class AppointmentsServiceNewBehaviorsTest {
         when(conflictRecorder.findKeylessDuplicate(any())).thenReturn(Optional.empty(), Optional.of(twin));
 
         assertThatThrownBy(() -> appointmentsService.createAppointment(bookingRequest(), null, null))
-                .isInstanceOfSatisfying(KeylessDuplicateReplayException.class, raced ->
-                        assertEquals(twin.getAppointmentId(), raced.getExistingAppointmentId()));
+                .isInstanceOfSatisfying(
+                        KeylessDuplicateReplayException.class,
+                        raced -> assertEquals(twin.getAppointmentId(), raced.getExistingAppointmentId()));
         verify(conflictRecorder, never()).recordRefusedOverlap(any());
     }
 

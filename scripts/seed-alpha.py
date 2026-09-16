@@ -88,7 +88,6 @@ PACK_FILES = [
     ("people/staffing-assignments.csv", "STAFFING_ASSIGNMENT"),
     ("people/credentials.csv", "PERSON_CREDENTIAL"),
     ("security/user-person-links.csv", "USER_PERSON_LINK"),
-    ("shop-manager/mechanic-skills.csv", "MECHANIC_SKILL"),
     ("customer/person-customers.csv", "CUSTOMER"),
     ("customer/commercial-customers.csv", "COMMERCIAL_CUSTOMER"),
     ("vehicle/vehicles.csv", "VEHICLE"),
@@ -124,8 +123,8 @@ POLL_INTERVAL_SECONDS = 5
 #
 # Re-running is safe for the packs this can fire for, and the property has to be established before
 # adding any pack that might see this code: STAFFING_ASSIGNMENT refuses a row overlapping one
-# already stored, so a landed row cannot be written twice, and MECHANIC_SKILL replaces a mechanic's
-# whole skill set, so a replay converges rather than accumulating. Absent both, a retry duplicates.
+# already stored, so a landed row cannot be written twice, and PERSON_CREDENTIAL upserts by its
+# natural key, so a replay converges rather than accumulating. Absent both, a retry duplicates.
 REPLICATION_PENDING_CODE = "REPLICATION_PENDING"
 MAX_REPLICATION_ATTEMPTS = 4
 REPLICATION_BACKOFF_SECONDS = 5

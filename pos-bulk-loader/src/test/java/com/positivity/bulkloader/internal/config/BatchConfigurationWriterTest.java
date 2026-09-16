@@ -29,10 +29,9 @@ import com.positivity.bulkloader.internal.domain.CycleCountPlanLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.InventoryStockCountLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.LocationRecord;
-import com.positivity.bulkloader.internal.domain.MechanicSkillLoaderStrategy;
-import com.positivity.bulkloader.internal.domain.PersonCredentialLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.MobileUnitLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.NumberedRecord;
+import com.positivity.bulkloader.internal.domain.PersonCredentialLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.PersonLoaderStrategy;
 import com.positivity.bulkloader.internal.domain.PersonRecord;
 import com.positivity.bulkloader.internal.domain.PutawayRuleLoaderStrategy;
@@ -134,9 +133,6 @@ class BatchConfigurationWriterTest {
     UserPersonLinkLoaderStrategy userPersonLinkLoaderStrategy;
 
     @Mock
-    MechanicSkillLoaderStrategy mechanicSkillLoaderStrategy;
-
-    @Mock
     PersonCredentialLoaderStrategy personCredentialLoaderStrategy;
 
     @Mock
@@ -207,7 +203,6 @@ class BatchConfigurationWriterTest {
                 rolePermissionLoaderStrategy,
                 securityUserLoaderStrategy,
                 userPersonLinkLoaderStrategy,
-                mechanicSkillLoaderStrategy,
                 personCredentialLoaderStrategy,
                 // The Tier 0 strategies are read by the reader and processor beans, never by a
                 // writer bean, so these tests hand them nothing rather than mocking six objects

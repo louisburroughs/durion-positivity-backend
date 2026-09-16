@@ -2,16 +2,22 @@ package com.positivity.shopmanager.internal.service;
 
 import com.positivity.shopmanager.internal.dto.LocationTechnicianRosterEntryResponse;
 import com.positivity.shopmanager.internal.dto.MechanicRosterEntryResponse;
+import com.positivity.shopmanager.internal.dto.TechnicianCredentialResponse;
+import com.positivity.shopmanager.internal.entity.ExtPersonCredentialReplica;
 import com.positivity.shopmanager.internal.entity.Mechanic;
-import com.positivity.shopmanager.internal.entity.MechanicSkill;
-import com.positivity.shopmanager.internal.entity.Technician;
+import com.positivity.shopmanager.internal.entity.Shop;
 import com.positivity.shopmanager.internal.enums.MechanicStatus;
+import com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository;
+import com.positivity.shopmanager.internal.repository.ExtPersonCredentialReplicaRepository;
 import com.positivity.shopmanager.internal.repository.MechanicRepository;
-import com.positivity.shopmanager.internal.repository.MechanicSkillRepository;
 import com.positivity.shopmanager.internal.repository.ShopRepository;
-import com.positivity.shopmanager.internal.repository.TechnicianRepository;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -25,24 +31,45 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * Roster projections over the one person identity this module holds (CAP-328). Competence comes
+ * from the {@code ext_person_credential} replica and is projected as credentials with a status,
+ * never flattened to codes: an expired certification is listed as EXPIRED, not as a held skill.
+ *
+ * <p>The reference date for "held" is the facility's local date for a location roster
+ * (DECISION-SHOPMGMT-015) and the clock's date for the location-less mechanic roster.
+ */
 @Service
 @RequiredArgsConstructor
 public class MechanicRosterQueryServiceImpl implements MechanicRosterQueryService {
 
     private final MechanicRepository mechanicRepository;
-    private final MechanicSkillRepository mechanicSkillRepository;
-    private final TechnicianRepository technicianRepository;
+    private final ExtPersonCredentialReplicaRepository credentialRepository;
     private final ShopRepository shopRepository;
+    private final ExtLocationReplicaRepository locationReplicaRepository;
+    private final LocationHoursParser hoursParser;
+    private final Clock clock;
 
     @Override
     @Transactional(readOnly = true)
     public @NonNull Page<MechanicRosterEntryResponse> listMechanics(
             @Nullable MechanicStatus status, @Nullable String skillCode, @NonNull Pageable pageable) {
         MechanicStatus effectiveStatus = status == null ? MechanicStatus.ACTIVE : status;
-        Page<Mechanic> mechanics = mechanicRepository.findRoster(effectiveStatus, skillCode, pageable);
-        Map<UUID, List<String>> skillsByMechanicId = loadSkills(mechanics.getContent());
-        return mechanics.map(
-                mechanic -> toResponse(mechanic, skillsByMechanicId.getOrDefault(mechanic.getMechanicId(), List.of())));
+        LocalDate onDate = LocalDate.now(clock);
+        Page<Mechanic> mechanics = mechanicRepository.findRoster(effectiveStatus, skillCode, onDate, pageable);
+        Map<UUID, List<TechnicianCredentialResponse>> credentialsByPerson =
+                loadCredentials(mechanics.getContent(), onDate);
+        return mechanics.map(mechanic -> MechanicRosterEntryResponse.builder()
+                .mechanicId(mechanic.getMechanicId())
+                .personId(mechanic.getPersonId())
+                .firstName(mechanic.getFirstName())
+                .lastName(mechanic.getLastName())
+                .status(mechanic.getStatus())
+                .hireDate(mechanic.getHireDate())
+                .terminationDate(mechanic.getTerminationDate())
+                .lastSyncedAt(mechanic.getLastSyncedAt())
+                .credentials(credentialsByPerson.getOrDefault(mechanic.getPersonId(), List.of()))
+                .build());
     }
 
     @Override
@@ -52,79 +79,76 @@ public class MechanicRosterQueryServiceImpl implements MechanicRosterQueryServic
             @Nullable MechanicStatus status,
             @Nullable String skillCode,
             @NonNull Pageable pageable) {
-        if (!shopRepository.existsById(locationId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "SHOP_NOT_FOUND");
-        }
+        Shop shop = shopRepository
+                .findById(locationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SHOP_NOT_FOUND"));
         MechanicStatus effectiveStatus = status == null ? MechanicStatus.ACTIVE : status;
+        LocalDate onDate = LocalDate.now(clock.withZone(facilityZone(locationId, shop)));
         Pageable fixedOrderPageable = pageable.isPaged()
                 ? PageRequest.of(pageable.getPageNumber(), pageable.getPageSize())
                 : Pageable.unpaged();
-        Page<Technician> technicians =
-                technicianRepository.findRosterByLocation(locationId, effectiveStatus, skillCode, fixedOrderPageable);
-        Map<String, Mechanic> mechanicsByPersonId = loadMechanics(technicians.getContent());
-        Map<UUID, List<String>> skillsByMechanicId =
-                loadSkills(mechanicsByPersonId.values().stream().toList());
-        return technicians.map(technician -> toLocationResponse(
-                locationId,
-                technician,
-                mechanicsByPersonId.get(technician.getPersonId().toString()),
-                skillsByMechanicId));
+        Page<Mechanic> mechanics = mechanicRepository.findRosterByLocation(
+                locationId, effectiveStatus, skillCode, onDate, fixedOrderPageable);
+        Map<UUID, List<TechnicianCredentialResponse>> credentialsByPerson =
+                loadCredentials(mechanics.getContent(), onDate);
+        return mechanics.map(mechanic -> LocationTechnicianRosterEntryResponse.builder()
+                .locationId(locationId)
+                .mechanicId(mechanic.getMechanicId())
+                .personId(mechanic.getPersonId())
+                .firstName(mechanic.getFirstName())
+                .lastName(mechanic.getLastName())
+                .status(mechanic.getStatus())
+                .hireDate(mechanic.getHireDate())
+                .terminationDate(mechanic.getTerminationDate())
+                .lastSyncedAt(mechanic.getLastSyncedAt())
+                .credentials(credentialsByPerson.getOrDefault(mechanic.getPersonId(), List.of()))
+                .build());
     }
 
-    private Map<UUID, List<String>> loadSkills(List<Mechanic> mechanics) {
-        List<UUID> mechanicIds = mechanics.stream().map(Mechanic::getMechanicId).toList();
-        if (mechanicIds.isEmpty()) {
-            return Map.of();
+    /**
+     * The facility's zone: the location replica's timezone (the owner's fact, CAP-326 D10), else
+     * this module's own {@code Shop.timezone}, else UTC — the same fallback the schedule uses when
+     * the owner has not said.
+     */
+    private ZoneId facilityZone(UUID locationId, Shop shop) {
+        ZoneId fromReplica = locationReplicaRepository
+                .findById(locationId)
+                .map(replica -> hoursParser.parseZone(locationId, replica.getTimezone()))
+                .orElse(null);
+        if (fromReplica != null) {
+            return fromReplica;
         }
-        return mechanicSkillRepository.findAllByMechanicIdIn(mechanicIds).stream()
-                .collect(Collectors.groupingBy(
-                        MechanicSkill::getMechanicId,
-                        Collectors.mapping(MechanicSkill::getSkillCode, Collectors.toList())));
+        ZoneId fromShop = hoursParser.parseZone(locationId, shop.getTimezone());
+        return fromShop != null ? fromShop : ZoneOffset.UTC;
     }
 
-    private Map<String, Mechanic> loadMechanics(List<Technician> technicians) {
-        List<String> personIds = technicians.stream()
-                .map(Technician::getPersonId)
-                .map(UUID::toString)
+    private Map<UUID, List<TechnicianCredentialResponse>> loadCredentials(List<Mechanic> mechanics, LocalDate onDate) {
+        List<UUID> personIds = mechanics.stream()
+                .map(Mechanic::getPersonId)
+                .filter(Objects::nonNull)
                 .toList();
         if (personIds.isEmpty()) {
             return Map.of();
         }
-        return mechanicRepository.findAllByPersonIdIn(personIds).stream()
-                .collect(Collectors.toMap(Mechanic::getPersonId, mechanic -> mechanic));
+        return credentialRepository.findByPersonIdInOrderByIssuedOnDesc(personIds).stream()
+                .collect(Collectors.groupingBy(
+                        ExtPersonCredentialReplica::getPersonId,
+                        Collectors.mapping(credential -> toCredential(credential, onDate), Collectors.toList())));
     }
 
-    private MechanicRosterEntryResponse toResponse(Mechanic mechanic, List<String> skills) {
-        return MechanicRosterEntryResponse.builder()
-                .mechanicId(mechanic.getMechanicId())
-                .personId(UUID.fromString(mechanic.getPersonId()))
-                .firstName(mechanic.getFirstName())
-                .lastName(mechanic.getLastName())
-                .status(mechanic.getStatus())
-                .hireDate(mechanic.getHireDate())
-                .terminationDate(mechanic.getTerminationDate())
-                .lastSyncedAt(mechanic.getLastSyncedAt())
-                .skills(skills)
-                .build();
-    }
-
-    private LocationTechnicianRosterEntryResponse toLocationResponse(
-            UUID locationId, Technician technician, Mechanic mechanic, Map<UUID, List<String>> skillsByMechanicId) {
-        if (mechanic == null) {
-            throw new IllegalStateException("Roster query returned a technician without a matching mechanic");
-        }
-        return LocationTechnicianRosterEntryResponse.builder()
-                .technicianId(technician.getId())
-                .locationId(locationId)
-                .mechanicId(mechanic.getMechanicId())
-                .personId(technician.getPersonId())
-                .firstName(mechanic.getFirstName())
-                .lastName(mechanic.getLastName())
-                .status(mechanic.getStatus())
-                .hireDate(mechanic.getHireDate())
-                .terminationDate(mechanic.getTerminationDate())
-                .lastSyncedAt(mechanic.getLastSyncedAt())
-                .skills(skillsByMechanicId.getOrDefault(mechanic.getMechanicId(), List.of()))
+    private static TechnicianCredentialResponse toCredential(ExtPersonCredentialReplica credential, LocalDate onDate) {
+        return TechnicianCredentialResponse.builder()
+                .credentialId(credential.getCredentialId())
+                .skillCode(credential.getSkillCode())
+                .competenceCode(credential.getCompetenceCode())
+                .minGvwrClass(credential.getMinGvwrClass())
+                .maxGvwrClass(credential.getMaxGvwrClass())
+                .issuer(credential.getIssuer())
+                .sourceCredentialCode(credential.getSourceCredentialCode())
+                .issuedOn(credential.getIssuedOn())
+                .expiresOn(credential.getExpiresOn())
+                .proficiency(credential.getProficiency())
+                .status(credential.statusOn(onDate))
                 .build();
     }
 }

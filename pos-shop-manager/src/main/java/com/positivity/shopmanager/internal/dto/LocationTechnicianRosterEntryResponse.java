@@ -15,10 +15,11 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Location-scoped technician assignment enriched from the HR-synchronized mechanic roster")
+@Schema(
+        description =
+                "A technician with an ACTIVE staffing assignment at the location, from the HR-synchronized mechanic roster")
 public class LocationTechnicianRosterEntryResponse {
 
-    private UUID technicianId;
     private UUID locationId;
     private UUID mechanicId;
     private UUID personId;
@@ -28,5 +29,10 @@ public class LocationTechnicianRosterEntryResponse {
     private LocalDate hireDate;
     private LocalDate terminationDate;
     private Instant lastSyncedAt;
-    private List<String> skills;
+    /**
+     * Every credential the person holds, each with its status on the roster's reference date —
+     * a facility-local date for the location roster (CAP-328; DECISION-SHOPMGMT-015). Expired,
+     * revoked and superseded credentials are listed with that status rather than dropped.
+     */
+    private List<TechnicianCredentialResponse> credentials;
 }

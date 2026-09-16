@@ -49,7 +49,10 @@ public class ConflictOverrideResponse {
                 requiredMode = REQUIRED)
         String ruleCode;
 
-        @Schema(description = "Always SOFT: a HARD conflict is never overridden", example = "SOFT", requiredMode = REQUIRED)
+        @Schema(
+                description = "Always SOFT: a HARD conflict is never overridden",
+                example = "SOFT",
+                requiredMode = REQUIRED)
         String severity;
     }
 }

@@ -60,7 +60,10 @@ class PersonCredentialLoaderStrategyTest {
         assertThat(strategy.validate(strategy.mapRow(dot))).isEmpty();
 
         dot.put("issuer", "");
-        assertThat(strategy.validate(strategy.mapRow(dot))).singleElement().asString().contains("issuer");
+        assertThat(strategy.validate(strategy.mapRow(dot)))
+                .singleElement()
+                .asString()
+                .contains("issuer");
     }
 
     @Test
@@ -90,7 +93,10 @@ class PersonCredentialLoaderStrategyTest {
 
         Map<String, String> notANumber = aseRow();
         notANumber.put("proficiency", "high");
-        assertThat(strategy.validate(strategy.mapRow(notANumber))).singleElement().asString().contains("whole number");
+        assertThat(strategy.validate(strategy.mapRow(notANumber)))
+                .singleElement()
+                .asString()
+                .contains("whole number");
     }
 
     @Test

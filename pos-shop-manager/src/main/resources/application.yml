@@ -90,12 +90,6 @@ pos:
   customer:
     service-id: ${POS_CUSTOMER_SERVICE_ID:customer}
   shop-manager:
-    # How long a skills write waits for the mechanic projection when the staffing assignment that
-    # creates it has not been consumed yet (#1987). The wait covers the Kafka round trip for a
-    # caller that assigns a technician and immediately sets their skills; past it the write answers
-    # 503 MECHANIC_REPLICATION_PENDING rather than a 404 that would read as "no such person".
-    # Set to PT0S to refuse immediately.
-    mechanic-replication-wait: ${POS_SHOP_MANAGER_MECHANIC_REPLICATION_WAIT:PT5S}
     kafka:
       # Staffing-assignment replica feed + reconciliation (ADR-0044 §6, #877; manifest listener #1537)
       enabled: ${POS_SHOP_MANAGER_KAFKA_ENABLED:false}

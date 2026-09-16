@@ -26,5 +26,10 @@ public class MechanicRosterEntryResponse {
     private LocalDate hireDate;
     private LocalDate terminationDate;
     private Instant lastSyncedAt;
-    private List<String> skills;
+    /**
+     * Every credential the person holds, each with its status on the roster's reference date —
+     * a facility-local date for the location roster (CAP-328; DECISION-SHOPMGMT-015). Expired,
+     * revoked and superseded credentials are listed with that status rather than dropped.
+     */
+    private List<TechnicianCredentialResponse> credentials;
 }

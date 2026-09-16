@@ -87,11 +87,11 @@ class AssignmentServiceTest {
                 .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .mechanics(List.of(
                         MechanicAssignmentItem.builder()
-                                .mechanicPersonId("P1")
+                                .mechanicPersonId("01960011-0000-7000-8000-000000000001")
                                 .role(MechanicRole.ASSIST)
                                 .build(),
                         MechanicAssignmentItem.builder()
-                                .mechanicPersonId("P2")
+                                .mechanicPersonId("01960011-0000-7000-8000-000000000002")
                                 .role(MechanicRole.ASSIST)
                                 .build()))
                 .build();
@@ -112,11 +112,11 @@ class AssignmentServiceTest {
                 .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .mechanics(List.of(
                         MechanicAssignmentItem.builder()
-                                .mechanicPersonId("P1")
+                                .mechanicPersonId("01960011-0000-7000-8000-000000000001")
                                 .role(MechanicRole.LEAD)
                                 .build(),
                         MechanicAssignmentItem.builder()
-                                .mechanicPersonId("P2")
+                                .mechanicPersonId("01960011-0000-7000-8000-000000000002")
                                 .role(null)
                                 .build()))
                 .build();
@@ -134,7 +134,7 @@ class AssignmentServiceTest {
     @Test
     void appointmentNotFound_throwsAppointmentNotFoundException() {
         UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        var request = buildSingleLeadRequest(appointmentId, "P-001");
+        var request = buildSingleLeadRequest(appointmentId, "01960011-0000-7000-8000-000000000101");
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.empty());
 
@@ -151,7 +151,7 @@ class AssignmentServiceTest {
     void ac6_appointmentCancelled_throwsIllegalStateException() {
         UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         var appointment = buildAppointment(appointmentId, AppointmentStatus.CANCELLED);
-        var request = buildSingleLeadRequest(appointmentId, "P-001");
+        var request = buildSingleLeadRequest(appointmentId, "01960011-0000-7000-8000-000000000101");
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
 
@@ -169,7 +169,7 @@ class AssignmentServiceTest {
         UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         var appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
         var existingAssignment = buildSavedAssignment(appointmentId);
-        var request = buildSingleLeadRequest(appointmentId, "P-001");
+        var request = buildSingleLeadRequest(appointmentId, "01960011-0000-7000-8000-000000000101");
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
         when(assignmentRepository.findByAppointment_AppointmentIdAndStatusIn(
@@ -183,16 +183,35 @@ class AssignmentServiceTest {
         verify(assignmentRepository, never()).save(any());
     }
 
+    // --- mechanicPersonId must be a UUID ---
+
+    @Test
+    void mechanicPersonIdNotAUuid_throwsValidationExceptionAndSavesNothing() {
+        UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        var appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
+        var request = buildSingleLeadRequest(appointmentId, "not-a-uuid");
+
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOf(ShopManagerValidationException.class)
+                .hasMessageContaining("not a UUID");
+
+        verify(mechanicRepository, never()).findByPersonId(any());
+        verify(assignmentRepository, never()).save(any());
+    }
+
     // --- AC-1: happy-path single LEAD mechanic ---
 
     @Test
     void ac7_mechanicNotFound_throwsValidationException() {
         UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         var appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
-        var request = buildSingleLeadRequest(appointmentId, "P-UNKNOWN");
+        var request = buildSingleLeadRequest(appointmentId, "01960011-0000-7000-8000-0000000000ff");
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-        when(mechanicRepository.findByPersonId("P-UNKNOWN")).thenReturn(Optional.empty());
+        when(mechanicRepository.findByPersonId(UUID.fromString("01960011-0000-7000-8000-0000000000ff")))
+                .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(request))
                 .isInstanceOf(ShopManagerValidationException.class)
@@ -207,7 +226,7 @@ class AssignmentServiceTest {
     void ac1_singleLead_createsConfirmedAssignment() {
         UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID mechanicId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        var mechanic = buildMechanic(mechanicId, "P-001");
+        var mechanic = buildMechanic(mechanicId, "01960011-0000-7000-8000-000000000101");
         var appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
         var savedAssignment = Assignment.builder()
                 .assignmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
@@ -224,10 +243,11 @@ class AssignmentServiceTest {
                 .role(MechanicRoleEnum.LEAD)
                 .build();
 
-        var request = buildSingleLeadRequest(appointmentId, "P-001");
+        var request = buildSingleLeadRequest(appointmentId, "01960011-0000-7000-8000-000000000101");
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-        when(mechanicRepository.findByPersonId("P-001")).thenReturn(Optional.of(mechanic));
+        when(mechanicRepository.findByPersonId(UUID.fromString("01960011-0000-7000-8000-000000000101")))
+                .thenReturn(Optional.of(mechanic));
         when(assignmentRepository.save(any())).thenReturn(savedAssignment);
         when(assignmentMechanicRepository.save(any())).thenReturn(savedMechLink);
         when(assignmentMechanicRepository.findByAssignment_AssignmentId(savedAssignment.getAssignmentId()))
@@ -249,7 +269,7 @@ class AssignmentServiceTest {
     void ac5_overrideFieldRoundTrips() {
         UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID mechanicId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        var mechanic = buildMechanic(mechanicId, "P-001");
+        var mechanic = buildMechanic(mechanicId, "01960011-0000-7000-8000-000000000101");
         var appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
         var savedAssignment = Assignment.builder()
                 .assignmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
@@ -271,7 +291,7 @@ class AssignmentServiceTest {
         var request = CreateAssignmentRequest.builder()
                 .appointmentId(appointmentId)
                 .mechanics(List.of(MechanicAssignmentItem.builder()
-                        .mechanicPersonId("P-001")
+                        .mechanicPersonId("01960011-0000-7000-8000-000000000101")
                         .role(MechanicRole.LEAD)
                         .build()))
                 .override(true)
@@ -279,7 +299,8 @@ class AssignmentServiceTest {
                 .build();
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-        when(mechanicRepository.findByPersonId("P-001")).thenReturn(Optional.of(mechanic));
+        when(mechanicRepository.findByPersonId(UUID.fromString("01960011-0000-7000-8000-000000000101")))
+                .thenReturn(Optional.of(mechanic));
         when(assignmentRepository.save(any())).thenReturn(savedAssignment);
         when(assignmentMechanicRepository.save(any())).thenReturn(savedMechLink);
         when(assignmentMechanicRepository.findByAssignment_AssignmentId(savedAssignment.getAssignmentId()))
@@ -356,7 +377,7 @@ class AssignmentServiceTest {
     private static Mechanic buildMechanic(UUID mechanicId, String personId) {
         return Mechanic.builder()
                 .mechanicId(mechanicId)
-                .personId(personId)
+                .personId(UUID.fromString(personId))
                 .firstName("Test")
                 .lastName("Mechanic")
                 .build();
@@ -400,18 +421,19 @@ class AssignmentServiceTest {
         var request = CreateAssignmentRequest.builder()
                 .appointmentId(appointmentId)
                 .mechanics(List.of(MechanicAssignmentItem.builder()
-                        .mechanicPersonId("P-001")
+                        .mechanicPersonId("01960011-0000-7000-8000-000000000101")
                         .role(null)
                         .build()))
                 .build();
 
         var appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
-        var mechanic = buildMechanic(mechanicId, "P-001");
+        var mechanic = buildMechanic(mechanicId, "01960011-0000-7000-8000-000000000101");
         var savedAssignment = buildSavedAssignment(appointmentId);
         var savedLink = buildMechLink(savedAssignment.getAssignmentId(), mechanicId, MechanicRoleEnum.LEAD);
 
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
-        when(mechanicRepository.findByPersonId("P-001")).thenReturn(Optional.of(mechanic));
+        when(mechanicRepository.findByPersonId(UUID.fromString("01960011-0000-7000-8000-000000000101")))
+                .thenReturn(Optional.of(mechanic));
         when(assignmentRepository.save(any())).thenReturn(savedAssignment);
         when(assignmentMechanicRepository.save(any())).thenReturn(savedLink);
         when(assignmentMechanicRepository.findByAssignment_AssignmentId(savedAssignment.getAssignmentId()))
@@ -432,11 +454,11 @@ class AssignmentServiceTest {
                 .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .mechanics(List.of(
                         MechanicAssignmentItem.builder()
-                                .mechanicPersonId("P1")
+                                .mechanicPersonId("01960011-0000-7000-8000-000000000001")
                                 .role(MechanicRole.LEAD)
                                 .build(),
                         MechanicAssignmentItem.builder()
-                                .mechanicPersonId("P2")
+                                .mechanicPersonId("01960011-0000-7000-8000-000000000002")
                                 .role(MechanicRole.LEAD)
                                 .build()))
                 .build();
@@ -457,7 +479,7 @@ class AssignmentServiceTest {
         var request = CreateAssignmentRequest.builder()
                 .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .mechanics(List.of(MechanicAssignmentItem.builder()
-                        .mechanicPersonId("P-001")
+                        .mechanicPersonId("01960011-0000-7000-8000-000000000101")
                         .role(MechanicRole.LEAD)
                         .build()))
                 .override(true)
@@ -479,7 +501,7 @@ class AssignmentServiceTest {
         var request = CreateAssignmentRequest.builder()
                 .appointmentId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .mechanics(List.of(MechanicAssignmentItem.builder()
-                        .mechanicPersonId("P-001")
+                        .mechanicPersonId("01960011-0000-7000-8000-000000000101")
                         .role(MechanicRole.LEAD)
                         .build()))
                 .override(true)

@@ -3,25 +3,23 @@ package com.positivity.shopmanager.internal.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.shared.error.ApiError;
+import com.positivity.shopmanager.internal.dto.ConflictResponse;
 import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
 import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
+import com.positivity.shopmanager.internal.exception.ConflictOverrideStateException;
 import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundException;
 import com.positivity.shopmanager.internal.exception.CrmUnavailableException;
 import com.positivity.shopmanager.internal.exception.CrmVehicleNotFoundException;
 import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
-import com.positivity.shopmanager.internal.exception.MechanicReplicationPendingException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.ScheduleCapacityRangeExceededException;
-import com.positivity.shopmanager.internal.dto.ConflictResponse;
-import com.positivity.shopmanager.internal.exception.ConflictOverrideStateException;
 import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.exception.SourceNotEligibleException;
 import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
 import java.lang.reflect.Method;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Arrays;
@@ -60,11 +58,8 @@ class GlobalExceptionHandlerTest {
     private static final UUID APPOINTMENT_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3fcc03");
     private static final UUID LOCATION_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3fcc04");
     private static final UUID CORRELATION_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3fcc05");
-    private static final String PERSON_ID = "018f0a1b-2c3d-7e4f-8a9b-0c1d2e3fcc06";
-    private static final Duration REPLICATION_WAIT = Duration.ofSeconds(5);
 
-    private final GlobalExceptionHandler handler =
-            new GlobalExceptionHandler(Clock.fixed(NOW, ZoneOffset.UTC), REPLICATION_WAIT);
+    private final GlobalExceptionHandler handler = new GlobalExceptionHandler(Clock.fixed(NOW, ZoneOffset.UTC));
 
     private static MockHttpServletRequest request() {
         return new MockHttpServletRequest("GET", "/v1/shop-manager/appointments");
@@ -280,34 +275,28 @@ class GlobalExceptionHandlerTest {
         interface HandlerInvocation {
 
             ResponseEntity<?> invoke(MockHttpServletRequest request);
-
         }
 
-
         /**
-
+         *
          * Every handler answers with a body that carries the correlation id, but two shapes do:
-
+         *
          * the {@link ApiError} envelope and DECISION-SHOPMGMT-002's {@link ConflictResponse}.
-
+         *
          */
-
         private static String bodyCorrelationId(Object body) {
 
             if (body instanceof ApiError apiError) {
 
                 return apiError.correlationId();
-
             }
 
             if (body instanceof ConflictResponse envelope) {
 
                 return envelope.getCorrelationId();
-
             }
 
             throw new AssertionError("unexpected response body " + body);
-
         }
 
         /**
@@ -317,7 +306,7 @@ class GlobalExceptionHandlerTest {
          * PER_CLASS} test instance lifecycle.
          */
         private static Stream<Named<HandlerInvocation>> handlerInvocations() throws NoSuchMethodException {
-            GlobalExceptionHandler sut = new GlobalExceptionHandler(Clock.fixed(NOW, ZoneOffset.UTC), REPLICATION_WAIT);
+            GlobalExceptionHandler sut = new GlobalExceptionHandler(Clock.fixed(NOW, ZoneOffset.UTC));
             BindingResult bindingResult = new BeanPropertyBindingResult(new Object(), "request");
             bindingResult.addError(new org.springframework.validation.FieldError(
                     "request", "locationId", null, false, null, null, "locationId is required"));
@@ -364,10 +353,6 @@ class GlobalExceptionHandlerTest {
                     }),
                     Named.of("handleShopManagerValidation", (HandlerInvocation) request ->
                             sut.handleShopManagerValidation(new ShopManagerValidationException("bad id"), request)),
-                    Named.of("handleMechanicReplicationPending", (HandlerInvocation)
-                            request -> sut.handleMechanicReplicationPending(
-                                    new MechanicReplicationPendingException(PERSON_ID, "not visible here yet"),
-                                    request)),
                     Named.of("handleScheduleCapacityRangeExceeded", (HandlerInvocation)
                             request -> sut.handleScheduleCapacityRangeExceeded(
                                     new ScheduleCapacityRangeExceededException(42, 43), request)),

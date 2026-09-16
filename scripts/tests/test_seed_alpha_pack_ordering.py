@@ -1,6 +1,6 @@
 """Pins the pack ordering and the replication-aware retry in seed-alpha.py.
 
-STAFFING_ASSIGNMENT and MECHANIC_SKILL both name a person that people/employees.csv creates, so
+STAFFING_ASSIGNMENT and PERSON_CREDENTIAL both name a person that people/employees.csv creates, so
 they have to run after PERSON. Until #1987 they also lost a race against replication when they ran
 too soon after it: pos-people gated an assignment on its ext_people_contact_person replica rather
 than on the employee row it owns, and pos-shop-manager refused a skills write outright while the
@@ -23,7 +23,7 @@ import unittest
 _DRIVER_PATH = pathlib.Path(__file__).resolve().parents[1] / "seed-alpha.py"
 
 # Packs that name a person people/employees.csv created, and the pack that creates them.
-_PERSON_DEPENDENT_PACKS = ("STAFFING_ASSIGNMENT", "MECHANIC_SKILL")
+_PERSON_DEPENDENT_PACKS = ("STAFFING_ASSIGNMENT", "PERSON_CREDENTIAL")
 _PERSON_PACK = "PERSON"
 
 
@@ -103,7 +103,7 @@ class FailuresAreAllReplicationPendingTest(unittest.TestCase):
         # Re-running would just produce the same answer for the row that was genuinely refused,
         # and would hide it behind a second round of output.
         self.assertFalse(
-            self._classify([_failed("REPLICATION_PENDING"), _failed("MECHANIC_SKILL_INGEST_FAILED")])
+            self._classify([_failed("REPLICATION_PENDING"), _failed("CREDENTIAL_INGEST_REJECTED")])
         )
 
     def test_aServerFaultIsNotRetryable(self):

@@ -1,6 +1,5 @@
 package com.positivity.shopmanager.internal.service;
 
-import com.positivity.shopmanager.internal.service.LocationHoursParser.RawOperatingHoursEntry;
 import com.positivity.shopmanager.internal.dto.ScheduleCapacityResponse;
 import com.positivity.shopmanager.internal.entity.Appointment;
 import com.positivity.shopmanager.internal.entity.ExtBayReplica;
@@ -13,6 +12,7 @@ import com.positivity.shopmanager.internal.repository.ExtBayReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.shopmanager.internal.repository.WorkOrderAppointmentMappingRepository;
 import com.positivity.shopmanager.internal.repository.WorkorderActuals;
+import com.positivity.shopmanager.internal.service.LocationHoursParser.RawOperatingHoursEntry;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -124,10 +124,12 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
 
         ZoneId zoneId = resolveZoneId(location);
         boolean hoursNeverConfigured = location == null || location.getOperatingHours() == null;
-        Map<DayOfWeek, RawOperatingHoursEntry> hoursByDow =
-                hoursNeverConfigured ? null : locationHoursParser.parseOperatingHours(locationId, location.getOperatingHours());
-        Map<LocalDate, String> closuresByDate =
-                location == null ? Map.of() : locationHoursParser.parseHolidayClosures(locationId, location.getHolidayClosures());
+        Map<DayOfWeek, RawOperatingHoursEntry> hoursByDow = hoursNeverConfigured
+                ? null
+                : locationHoursParser.parseOperatingHours(locationId, location.getOperatingHours());
+        Map<LocalDate, String> closuresByDate = location == null
+                ? Map.of()
+                : locationHoursParser.parseHolidayClosures(locationId, location.getHolidayClosures());
 
         List<LocalDate> dates = from.datesUntil(to.plusDays(1)).toList();
         List<DayAssembly> assemblies = dates.stream()

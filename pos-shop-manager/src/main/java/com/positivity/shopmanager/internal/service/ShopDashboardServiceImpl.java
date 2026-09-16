@@ -294,16 +294,10 @@ public class ShopDashboardServiceImpl implements ShopDashboardService {
         }
 
         Map<UUID, String> names = new HashMap<>();
-        for (Mechanic mechanic : mechanicRepository.findAllByPersonIdIn(
-                personIds.stream().map(UUID::toString).toList())) {
+        for (Mechanic mechanic : mechanicRepository.findAllByPersonIdIn(personIds)) {
             String name = displayName(mechanic.getFirstName(), mechanic.getLastName());
             if (name != null) {
-                try {
-                    names.put(UUID.fromString(mechanic.getPersonId()), name);
-                } catch (IllegalArgumentException e) {
-                    log.debug(
-                            "Mechanic {} has a non-UUID personId; skipped for name resolution", mechanic.getPersonId());
-                }
+                names.put(mechanic.getPersonId(), name);
             }
         }
         for (ExtPersonReplica person : extPersonReplicaRepository.findAllById(personIds)) {

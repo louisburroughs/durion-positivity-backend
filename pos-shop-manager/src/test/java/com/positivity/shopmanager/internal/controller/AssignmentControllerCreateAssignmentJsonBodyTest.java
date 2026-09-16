@@ -9,13 +9,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.shopmanager.internal.enums.AssignmentStatusEnum;
 import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
 import com.positivity.shopmanager.internal.security.ShopPermissions;
 import com.positivity.shopmanager.internal.service.AssignmentService;
 import com.positivity.shopmanager.internal.service.dto.AssignedMechanicInfo;
 import com.positivity.shopmanager.internal.service.dto.AssignmentResponse;
 import com.positivity.shopmanager.internal.service.dto.CreateAssignmentRequest;
-import com.positivity.shopmanager.internal.enums.AssignmentStatusEnum;
 import com.positivity.shopmanager.internal.service.enums.MechanicRole;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.time.Clock;

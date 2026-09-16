@@ -33,7 +33,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class MechanicAvailabilityServiceTest {
 
-    private static final String PERSON_ID = "HR-7001";
+    private static final String PERSON_ID = "01960011-0000-7000-8000-000000000701";
 
     // Window: 10:00–14:00 on 2026-06-15
     private static final Instant WINDOW_START = Instant.parse("2026-06-15T10:00:00Z");
@@ -71,7 +71,7 @@ class MechanicAvailabilityServiceTest {
     @Test
     void ac1_fullyAvailableWithCoveringShift_returnsAvailable() {
         Mechanic mechanic = buildMechanic();
-        when(mechanicRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(mechanic));
+        when(mechanicRepository.findByPersonId(UUID.fromString(PERSON_ID))).thenReturn(Optional.of(mechanic));
         // HR returns one SHIFT block that fully covers the window
         when(staffingScheduleService.getScheduleBlocks(eq(PERSON_ID), any(), any()))
                 .thenReturn(List.of(HrScheduleBlock.builder()
@@ -102,7 +102,7 @@ class MechanicAvailabilityServiceTest {
     @Test
     void ac2_mechanicOnPto_returnsUnavailableWithPtoConflict() {
         Mechanic mechanic = buildMechanic();
-        when(mechanicRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(mechanic));
+        when(mechanicRepository.findByPersonId(UUID.fromString(PERSON_ID))).thenReturn(Optional.of(mechanic));
         when(staffingScheduleService.getScheduleBlocks(eq(PERSON_ID), any(), any()))
                 .thenReturn(List.of(HrScheduleBlock.builder()
                         .blockType("PTO")
@@ -131,7 +131,7 @@ class MechanicAvailabilityServiceTest {
     @Test
     void ac3_offShift_returnsUnavailableWithOffShiftConflict() {
         Mechanic mechanic = buildMechanic();
-        when(mechanicRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(mechanic));
+        when(mechanicRepository.findByPersonId(UUID.fromString(PERSON_ID))).thenReturn(Optional.of(mechanic));
         // HR returns empty schedule — no shifts, no PTO
         when(staffingScheduleService.getScheduleBlocks(eq(PERSON_ID), any(), any()))
                 .thenReturn(List.of());
@@ -158,7 +158,7 @@ class MechanicAvailabilityServiceTest {
     @Test
     void ac4_appointmentPartiallyOverlaps_returnsPartiallyAvailable() {
         Mechanic mechanic = buildMechanic();
-        when(mechanicRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(mechanic));
+        when(mechanicRepository.findByPersonId(UUID.fromString(PERSON_ID))).thenReturn(Optional.of(mechanic));
         when(staffingScheduleService.getScheduleBlocks(eq(PERSON_ID), any(), any()))
                 .thenReturn(List.of(HrScheduleBlock.builder()
                         .blockType("SHIFT")
@@ -190,7 +190,7 @@ class MechanicAvailabilityServiceTest {
     @Test
     void ac5_travelBlockOverlaps_returnsTravelBlockConflict() {
         Mechanic mechanic = buildMechanic();
-        when(mechanicRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.of(mechanic));
+        when(mechanicRepository.findByPersonId(UUID.fromString(PERSON_ID))).thenReturn(Optional.of(mechanic));
         when(staffingScheduleService.getScheduleBlocks(eq(PERSON_ID), any(), any()))
                 .thenReturn(List.of(HrScheduleBlock.builder()
                         .blockType("SHIFT")
@@ -247,7 +247,7 @@ class MechanicAvailabilityServiceTest {
      */
     @Test
     void mechanicNotFound_throwsValidationException() {
-        when(mechanicRepository.findByPersonId(PERSON_ID)).thenReturn(Optional.empty());
+        when(mechanicRepository.findByPersonId(UUID.fromString(PERSON_ID))).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.queryAvailability(PERSON_ID, WINDOW_START, WINDOW_END))
                 .isInstanceOf(ShopManagerValidationException.class)
@@ -263,7 +263,7 @@ class MechanicAvailabilityServiceTest {
     private Mechanic buildMechanic() {
         return Mechanic.builder()
                 .mechanicId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
-                .personId(PERSON_ID)
+                .personId(UUID.fromString(PERSON_ID))
                 .firstName("Test")
                 .lastName("Mechanic")
                 .status(MechanicStatus.ACTIVE)

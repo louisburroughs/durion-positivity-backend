@@ -7,7 +7,6 @@ import com.positivity.shopmanager.internal.service.enums.HrEventType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.Data;
@@ -48,23 +47,6 @@ public class HrMechanicEvent {
     @Schema(description = "Event payload carrying mechanic attributes", requiredMode = NOT_REQUIRED)
     private Payload payload;
 
-    /**
-     * Whether this event came from an operator editing shop-manager's own enrichment rather than
-     * from the people feed (#1987).
-     *
-     * <p>It decides whether {@code version} participates in feed ordering. Feed events carry the
-     * producer's {@code aggregateVersion} — a small monotonic per-aggregate sequence — and the
-     * stale guard compares against it. An operator edit has no place in that sequence: it is
-     * stamped with epoch-millis because nothing else is available, and letting that land in the
-     * mechanic's {@code version} would leave every later feed event (a name refresh, the
-     * deactivation when the technician's assignment ends) below it and silently discarded as
-     * {@code DISCARDED_STALE}. Skills are shop-manager-owned enrichment the feed never carries, so
-     * an operator edit is ordered against other operator edits by execution order and leaves the
-     * feed's version line untouched.
-     */
-    @Schema(hidden = true)
-    private boolean operatorEdit;
-
     @Data
     @Builder
     @Schema(description = "Payload of an HR mechanic event")
@@ -78,20 +60,5 @@ public class HrMechanicEvent {
 
         @Schema(description = "Mechanic hire date (ISO-8601)", example = "2024-03-15", requiredMode = NOT_REQUIRED)
         private LocalDate hireDate;
-
-        @Schema(description = "Mechanic skills with proficiency levels", requiredMode = NOT_REQUIRED)
-        private List<Skill> skills;
-
-        @Data
-        @Builder
-        @Schema(description = "A single mechanic skill and proficiency level")
-        public static class Skill {
-
-            @Schema(description = "Skill code", example = "BRAKES", requiredMode = REQUIRED)
-            private String skillCode;
-
-            @Schema(description = "Proficiency level for the skill", example = "4", requiredMode = REQUIRED)
-            private int proficiencyLevel;
-        }
     }
 }

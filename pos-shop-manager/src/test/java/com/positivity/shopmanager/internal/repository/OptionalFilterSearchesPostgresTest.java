@@ -3,15 +3,16 @@ package com.positivity.shopmanager.internal.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.positivity.shopmanager.PostgresSliceTestBase;
+import com.positivity.shopmanager.internal.entity.ExtPersonCredentialReplica;
+import com.positivity.shopmanager.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.shopmanager.internal.entity.Mechanic;
-import com.positivity.shopmanager.internal.entity.MechanicSkill;
 import com.positivity.shopmanager.internal.entity.Shop;
 import com.positivity.shopmanager.internal.entity.ShopAuditEntry;
-import com.positivity.shopmanager.internal.entity.Technician;
 import com.positivity.shopmanager.internal.enums.MechanicStatus;
 import com.positivity.shopmanager.internal.enums.ShopAuditEventType;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -62,6 +63,7 @@ class OptionalFilterSearchesPostgresTest extends PostgresSliceTestBase {
     private static final Instant WINDOW_START = Instant.parse("2026-05-01T00:00:00Z");
     private static final Instant WINDOW_END = Instant.parse("2026-06-01T00:00:00Z");
     private static final Instant RECORDED_AT = Instant.parse("2026-05-15T12:00:00Z");
+    private static final LocalDate ON_DATE = LocalDate.of(2026, 6, 15);
 
     private static final String BRAKES = "BRAKES";
     private static final String ALIGNMENT = "ALIGNMENT";
@@ -76,10 +78,10 @@ class OptionalFilterSearchesPostgresTest extends PostgresSliceTestBase {
     private MechanicRepository mechanics;
 
     @Autowired
-    private MechanicSkillRepository mechanicSkills;
+    private ExtPersonCredentialReplicaRepository credentials;
 
     @Autowired
-    private TechnicianRepository technicians;
+    private ExtStaffingAssignmentReplicaRepository staffingAssignments;
 
     @Autowired
     private ShopRepository shops;
@@ -111,7 +113,7 @@ class OptionalFilterSearchesPostgresTest extends PostgresSliceTestBase {
         return auditEntries.findById(saved.getId()).orElseThrow();
     }
 
-    private Mechanic mechanic(String personId, MechanicStatus status, String skillCode) {
+    private Mechanic mechanic(UUID personId, MechanicStatus status, String skillCode) {
         Mechanic mechanic = mechanics.saveAndFlush(Mechanic.builder()
                 .personId(personId)
                 .firstName("Given-" + personId)
@@ -119,13 +121,43 @@ class OptionalFilterSearchesPostgresTest extends PostgresSliceTestBase {
                 .status(status)
                 .build());
         if (skillCode != null) {
-            mechanicSkills.saveAndFlush(MechanicSkill.builder()
-                    .mechanic(mechanic)
-                    .skillCode(skillCode)
-                    .proficiencyLevel(3)
-                    .build());
+            credential(personId, skillCode, null, null, "ACTIVE");
         }
         return mechanic;
+    }
+
+    private ExtPersonCredentialReplica credential(
+            UUID personId, String skillCode, String sourceCredentialCode, LocalDate expiresOn, String status) {
+        return credentials.saveAndFlush(ExtPersonCredentialReplica.builder()
+                .credentialId(UUID.randomUUID())
+                .personId(personId)
+                .skillId(UUID.randomUUID())
+                .skillCode(skillCode)
+                .competenceCode("TEST")
+                .minGvwrClass(1)
+                .maxGvwrClass(8)
+                .issuer("TEST")
+                .sourceCredentialCode(sourceCredentialCode)
+                .issuedOn(LocalDate.of(2020, 1, 1))
+                .expiresOn(expiresOn)
+                .status(status)
+                .aggregateVersion(1)
+                .updatedAt(Instant.now())
+                .build());
+    }
+
+    private void assignTechnician(UUID personId, UUID locationId) {
+        staffingAssignments.saveAndFlush(ExtStaffingAssignmentReplica.builder()
+                .assignmentId(UUID.randomUUID())
+                .employeeId(UUID.randomUUID())
+                .personId(personId)
+                .locationId(locationId)
+                .role("TECHNICIAN")
+                .primary(true)
+                .status("ACTIVE")
+                .aggregateVersion(1)
+                .updatedAt(Instant.now())
+                .build());
     }
 
     @Nested
@@ -213,11 +245,11 @@ class OptionalFilterSearchesPostgresTest extends PostgresSliceTestBase {
         @Test
         @DisplayName("an absent skill filter returns every mechanic in the status")
         void absentSkillReturnsEveryMechanic() {
-            Mechanic skilled = mechanic("PER-1", MechanicStatus.ACTIVE, BRAKES);
-            Mechanic unskilled = mechanic("PER-2", MechanicStatus.ACTIVE, null);
+            Mechanic skilled = mechanic(UUID.randomUUID(), MechanicStatus.ACTIVE, BRAKES);
+            Mechanic unskilled = mechanic(UUID.randomUUID(), MechanicStatus.ACTIVE, null);
 
             assertThat(mechanics
-                            .findRoster(MechanicStatus.ACTIVE, null, PageRequest.of(0, 50))
+                            .findRoster(MechanicStatus.ACTIVE, null, ON_DATE, PageRequest.of(0, 50))
                             .getContent())
                     .contains(skilled, unskilled);
         }
@@ -225,11 +257,11 @@ class OptionalFilterSearchesPostgresTest extends PostgresSliceTestBase {
         @Test
         @DisplayName("a supplied skill filter narrows to those holding it")
         void suppliedSkillNarrows() {
-            Mechanic skilled = mechanic("PER-3", MechanicStatus.ACTIVE, ALIGNMENT);
-            Mechanic otherSkill = mechanic("PER-4", MechanicStatus.ACTIVE, BRAKES);
+            Mechanic skilled = mechanic(UUID.randomUUID(), MechanicStatus.ACTIVE, ALIGNMENT);
+            Mechanic otherSkill = mechanic(UUID.randomUUID(), MechanicStatus.ACTIVE, BRAKES);
 
             assertThat(mechanics
-                            .findRoster(MechanicStatus.ACTIVE, ALIGNMENT, PageRequest.of(0, 50))
+                            .findRoster(MechanicStatus.ACTIVE, ALIGNMENT, ON_DATE, PageRequest.of(0, 50))
                             .getContent())
                     .contains(skilled)
                     .doesNotContain(otherSkill);
@@ -238,10 +270,10 @@ class OptionalFilterSearchesPostgresTest extends PostgresSliceTestBase {
         @Test
         @DisplayName("the status filter keeps an inactive mechanic off the roster")
         void statusFilterExcludesInactive() {
-            Mechanic inactive = mechanic("PER-5", MechanicStatus.INACTIVE, BRAKES);
+            Mechanic inactive = mechanic(UUID.randomUUID(), MechanicStatus.INACTIVE, BRAKES);
 
             assertThat(mechanics
-                            .findRoster(MechanicStatus.ACTIVE, null, PageRequest.of(0, 50))
+                            .findRoster(MechanicStatus.ACTIVE, null, ON_DATE, PageRequest.of(0, 50))
                             .getContent())
                     .doesNotContain(inactive);
         }
@@ -249,26 +281,25 @@ class OptionalFilterSearchesPostgresTest extends PostgresSliceTestBase {
         @Test
         @DisplayName("an unpaged roster returns every match rather than failing")
         void unpagedRosterReturnsEveryMatch() {
-            Mechanic mechanic = mechanic("PER-6", MechanicStatus.ACTIVE, null);
+            Mechanic mechanic = mechanic(UUID.randomUUID(), MechanicStatus.ACTIVE, null);
 
             // Pageable.unpaged() reports a page size of zero, which PageRequest.of rejects; the
             // count query has to carry the unpaged case through rather than throw.
             assertThat(mechanics
-                            .findRoster(MechanicStatus.ACTIVE, null, Pageable.unpaged())
+                            .findRoster(MechanicStatus.ACTIVE, null, ON_DATE, Pageable.unpaged())
                             .getContent())
                     .contains(mechanic);
         }
     }
 
     @Nested
-    @DisplayName("TechnicianRepository.findRosterByLocation — one location's technicians")
+    @DisplayName("MechanicRepository.findRosterByLocation — one location's technicians")
     class LocationTechnicianRoster {
 
-        private Technician technicianAt(Shop shop, Mechanic mechanic) {
-            return technicians.saveAndFlush(Technician.builder()
-                    .personId(UUID.fromString(mechanic.getPersonId()))
-                    .shop(shop)
-                    .build());
+        private Mechanic technicianAt(Shop shop, MechanicStatus status, String skillCode) {
+            Mechanic mechanic = mechanic(UUID.randomUUID(), status, skillCode);
+            assignTechnician(mechanic.getPersonId(), shop.getId());
+            return mechanic;
         }
 
         private Shop shop() {
@@ -278,19 +309,16 @@ class OptionalFilterSearchesPostgresTest extends PostgresSliceTestBase {
                     .build());
         }
 
-        private Mechanic mechanicWithUuidPersonId(MechanicStatus status, String skillCode) {
-            return mechanic(UUID.randomUUID().toString(), status, skillCode);
-        }
-
         @Test
         @DisplayName("an absent skill filter returns every technician at the location")
         void absentSkillReturnsEveryTechnician() {
             Shop shop = shop();
-            Technician skilled = technicianAt(shop, mechanicWithUuidPersonId(MechanicStatus.ACTIVE, BRAKES));
-            Technician unskilled = technicianAt(shop, mechanicWithUuidPersonId(MechanicStatus.ACTIVE, null));
+            Mechanic skilled = technicianAt(shop, MechanicStatus.ACTIVE, BRAKES);
+            Mechanic unskilled = technicianAt(shop, MechanicStatus.ACTIVE, null);
 
-            assertThat(technicians
-                            .findRosterByLocation(shop.getId(), MechanicStatus.ACTIVE, null, PageRequest.of(0, 50))
+            assertThat(mechanics
+                            .findRosterByLocation(
+                                    shop.getId(), MechanicStatus.ACTIVE, null, ON_DATE, PageRequest.of(0, 50))
                             .getContent())
                     .containsExactlyInAnyOrder(skilled, unskilled);
         }
@@ -299,11 +327,12 @@ class OptionalFilterSearchesPostgresTest extends PostgresSliceTestBase {
         @DisplayName("a supplied skill filter narrows to those holding it")
         void suppliedSkillNarrows() {
             Shop shop = shop();
-            Technician skilled = technicianAt(shop, mechanicWithUuidPersonId(MechanicStatus.ACTIVE, ALIGNMENT));
-            Technician otherSkill = technicianAt(shop, mechanicWithUuidPersonId(MechanicStatus.ACTIVE, BRAKES));
+            Mechanic skilled = technicianAt(shop, MechanicStatus.ACTIVE, ALIGNMENT);
+            Mechanic otherSkill = technicianAt(shop, MechanicStatus.ACTIVE, BRAKES);
 
-            assertThat(technicians
-                            .findRosterByLocation(shop.getId(), MechanicStatus.ACTIVE, ALIGNMENT, PageRequest.of(0, 50))
+            assertThat(mechanics
+                            .findRosterByLocation(
+                                    shop.getId(), MechanicStatus.ACTIVE, ALIGNMENT, ON_DATE, PageRequest.of(0, 50))
                             .getContent())
                     .containsExactly(skilled)
                     .doesNotContain(otherSkill);
@@ -314,11 +343,12 @@ class OptionalFilterSearchesPostgresTest extends PostgresSliceTestBase {
         void otherLocationsAreExcluded() {
             Shop shop = shop();
             Shop elsewhere = shop();
-            Technician here = technicianAt(shop, mechanicWithUuidPersonId(MechanicStatus.ACTIVE, null));
-            Technician there = technicianAt(elsewhere, mechanicWithUuidPersonId(MechanicStatus.ACTIVE, null));
+            Mechanic here = technicianAt(shop, MechanicStatus.ACTIVE, null);
+            Mechanic there = technicianAt(elsewhere, MechanicStatus.ACTIVE, null);
 
-            assertThat(technicians
-                            .findRosterByLocation(shop.getId(), MechanicStatus.ACTIVE, null, PageRequest.of(0, 50))
+            assertThat(mechanics
+                            .findRosterByLocation(
+                                    shop.getId(), MechanicStatus.ACTIVE, null, ON_DATE, PageRequest.of(0, 50))
                             .getContent())
                     .containsExactly(here)
                     .doesNotContain(there);
@@ -328,10 +358,11 @@ class OptionalFilterSearchesPostgresTest extends PostgresSliceTestBase {
         @DisplayName("an unpaged roster returns every match rather than failing")
         void unpagedRosterReturnsEveryMatch() {
             Shop shop = shop();
-            Technician technician = technicianAt(shop, mechanicWithUuidPersonId(MechanicStatus.ACTIVE, null));
+            Mechanic technician = technicianAt(shop, MechanicStatus.ACTIVE, null);
 
-            assertThat(technicians
-                            .findRosterByLocation(shop.getId(), MechanicStatus.ACTIVE, null, Pageable.unpaged())
+            assertThat(mechanics
+                            .findRosterByLocation(
+                                    shop.getId(), MechanicStatus.ACTIVE, null, ON_DATE, Pageable.unpaged())
                             .getContent())
                     .containsExactly(technician);
         }
@@ -341,10 +372,41 @@ class OptionalFilterSearchesPostgresTest extends PostgresSliceTestBase {
         void emptyLocationIsAnEmptyRoster() {
             Shop shop = shop();
 
-            assertThat(technicians
-                            .findRosterByLocation(shop.getId(), MechanicStatus.ACTIVE, BRAKES, PageRequest.of(0, 50))
+            assertThat(mechanics
+                            .findRosterByLocation(
+                                    shop.getId(), MechanicStatus.ACTIVE, BRAKES, ON_DATE, PageRequest.of(0, 50))
                             .getContent())
                     .isEmpty();
+        }
+
+        @Test
+        @DisplayName("an expired credential does not satisfy the skill filter")
+        void expiredCredentialDoesNotSatisfyTheSkillFilter() {
+            Shop shop = shop();
+            Mechanic mechanic = mechanic(UUID.randomUUID(), MechanicStatus.ACTIVE, null);
+            assignTechnician(mechanic.getPersonId(), shop.getId());
+            credential(mechanic.getPersonId(), BRAKES, null, ON_DATE.minusDays(1), "ACTIVE");
+
+            assertThat(mechanics
+                            .findRosterByLocation(
+                                    shop.getId(), MechanicStatus.ACTIVE, BRAKES, ON_DATE, PageRequest.of(0, 50))
+                            .getContent())
+                    .doesNotContain(mechanic);
+        }
+
+        @Test
+        @DisplayName("the filter matches the issuer's sourceCredentialCode too")
+        void filterMatchesSourceCredentialCode() {
+            Shop shop = shop();
+            Mechanic mechanic = mechanic(UUID.randomUUID(), MechanicStatus.ACTIVE, null);
+            assignTechnician(mechanic.getPersonId(), shop.getId());
+            credential(mechanic.getPersonId(), "BRAKES-MEDIUM_HEAVY", "T4-BRAKES", null, "ACTIVE");
+
+            assertThat(mechanics
+                            .findRosterByLocation(
+                                    shop.getId(), MechanicStatus.ACTIVE, "t4-brakes", ON_DATE, PageRequest.of(0, 50))
+                            .getContent())
+                    .containsExactly(mechanic);
         }
     }
 }

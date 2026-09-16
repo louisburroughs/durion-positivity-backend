@@ -55,7 +55,8 @@ public class PersonCredentialLoaderStrategy implements DomainLoaderStrategy<Pers
             errors.add("employeeNumber is required");
         }
         boolean byCode = LoaderValues.isPresent(item.getSkillCode());
-        boolean byVendor = LoaderValues.isPresent(item.getSourceCode()) && LoaderValues.isPresent(item.getSourceCredentialCode());
+        boolean byVendor =
+                LoaderValues.isPresent(item.getSourceCode()) && LoaderValues.isPresent(item.getSourceCredentialCode());
         if (!byCode && !byVendor) {
             errors.add("either skillCode or sourceCode + sourceCredentialCode is required");
         }

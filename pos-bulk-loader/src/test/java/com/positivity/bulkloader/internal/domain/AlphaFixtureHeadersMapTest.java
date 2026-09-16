@@ -74,7 +74,6 @@ class AlphaFixtureHeadersMapTest {
                 Arguments.of("security/role-permissions.csv", DomainType.SECURITY_ROLE_PERMISSION, Set.<String>of()),
                 Arguments.of("security/users.csv", DomainType.SECURITY_USER, Set.<String>of()),
                 Arguments.of("security/user-person-links.csv", DomainType.USER_PERSON_LINK, Set.<String>of()),
-                Arguments.of("shop-manager/mechanic-skills.csv", DomainType.MECHANIC_SKILL, Set.<String>of()),
                 Arguments.of("price/base-prices.csv", DomainType.BASE_PRICE, Set.<String>of()),
                 // Tier 0 packs (#1575). Every column is named by its record; the resolvable keys
                 // (ownerLocationCode, fleetCustomerName, locationCode) are record fields too, so

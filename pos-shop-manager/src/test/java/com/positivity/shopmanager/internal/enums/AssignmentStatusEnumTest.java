@@ -61,8 +61,7 @@ class AssignmentStatusEnumTest {
     @Test
     @DisplayName("COMPLETED and CANCELLED are the terminal states, and only they are")
     void terminalStates() {
-        assertThat(EnumSet.allOf(AssignmentStatusEnum.class).stream()
-                        .filter(AssignmentStatusEnum::isTerminal))
+        assertThat(EnumSet.allOf(AssignmentStatusEnum.class).stream().filter(AssignmentStatusEnum::isTerminal))
                 .containsExactlyInAnyOrder(COMPLETED, CANCELLED);
     }
 

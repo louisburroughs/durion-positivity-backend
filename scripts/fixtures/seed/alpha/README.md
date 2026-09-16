@@ -161,22 +161,14 @@ roster, then `createStaffingAssignment` — employees and locations must load fi
 - The Flyway seed (`R__seed_people_operational_data.sql`) was deleted in #1554
   along with the location operational seed it referenced by fixed location UUID.
 
-### `shop-manager/` — from `pos-shop-manager R__seed_shop_manager_mechanics.sql`
+### `shop-manager/` — nothing to seed
 
-| File | Rows | Target |
-|---|---|---|
-| `mechanic-skills.csv` | 23 skills across 7 technicians | gateway API pack (`PUT /shop-manager/mechanics/by-person/{personId}/skills` per mechanic) |
-
-Skills are the seed's one piece of genuine shop-manager data (proficiency/ASE codes
-exist nowhere else); the mechanic *rows* themselves are projected from TECHNICIAN
-staffing assignments over Kafka and are not seeded. The endpoint routes the edit
-through the same HR-feed path as the projection (a synthetic
-MECHANIC_SKILLS_UPDATED event), so dedupe/stale-guard/audit apply uniformly and
-each PUT replace-sets the mechanic's skills — re-runs converge. **Ordering:** the
-pack runs after the staffing assignments, but mechanics materialize
-asynchronously from Kafka; a 404 means the projection hasn't caught up — re-run
-this pack alone (`--only shop-manager/mechanic-skills.csv`) once it has. Delta:
-the seed's `certified_date` is not carried (the skill payload has no such field).
+The former `mechanic-skills.csv` (23 skills across 7 technicians) is now
+`people/credentials.csv`: competence is the People domain's credential aggregate
+(CAP-328), `pos-shop-manager` reads it from its `ext_person_credential` replica over
+Kafka, and the `PUT /shop-manager/mechanics/by-person/{personId}/skills` pack is gone
+with the tables it fed. Mechanic *rows* are still projected from TECHNICIAN staffing
+assignments and are not seeded.
 
 ### `vehicle/` — from `pos-vehicle-inventory R__seed_vehicle_inventory_operational_data.sql`
 

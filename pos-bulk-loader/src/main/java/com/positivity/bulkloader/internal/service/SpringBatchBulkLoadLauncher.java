@@ -136,7 +136,6 @@ public class SpringBatchBulkLoadLauncher implements BulkLoadBatchLauncher {
                     case SECURITY_ROLE_PERMISSION -> "securityRolePermissionBulkLoadJob";
                     case SECURITY_USER -> "securityUserBulkLoadJob";
                     case USER_PERSON_LINK -> "userPersonLinkBulkLoadJob";
-                    case MECHANIC_SKILL -> "mechanicSkillBulkLoadJob";
                     case PERSON_CREDENTIAL -> "personCredentialBulkLoadJob";
                     case CATALOG_SERVICE -> "catalogServiceBulkLoadJob";
                     case SERVICE_LABOR_STANDARD -> "serviceLaborStandardBulkLoadJob";

@@ -6,9 +6,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.positivity.shopmanager.internal.enums.AssignmentStatusEnum;
 import com.positivity.shopmanager.internal.service.AssignmentService;
 import com.positivity.shopmanager.internal.service.dto.AssignmentResponse;
-import com.positivity.shopmanager.internal.enums.AssignmentStatusEnum;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

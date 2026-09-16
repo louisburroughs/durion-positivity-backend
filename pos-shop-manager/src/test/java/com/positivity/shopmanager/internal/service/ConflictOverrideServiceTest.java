@@ -115,7 +115,8 @@ class ConflictOverrideServiceTest {
             return saved;
         });
 
-        ConflictOverrideResponse response = service.execute(APPT_ID, request(List.of(CONFLICT_A, CONFLICT_B), "Customer waiting"));
+        ConflictOverrideResponse response =
+                service.execute(APPT_ID, request(List.of(CONFLICT_A, CONFLICT_B), "Customer waiting"));
 
         ArgumentCaptor<ConflictOverride> captor = ArgumentCaptor.forClass(ConflictOverride.class);
         verify(conflictOverrideRepository, times(2)).save(captor.capture());
@@ -133,7 +134,8 @@ class ConflictOverrideServiceTest {
         assertThat(response.getOverrides())
                 .extracting(ConflictOverrideResponse.OverrideEntry::getRuleCode)
                 .containsExactly("MECHANIC_OVERTIME", "FACILITY_NEAR_CAPACITY");
-        assertThat(response.getOverrides()).allSatisfy(entry -> assertThat(entry.getSeverity()).isEqualTo("SOFT"));
+        assertThat(response.getOverrides())
+                .allSatisfy(entry -> assertThat(entry.getSeverity()).isEqualTo("SOFT"));
         assertThat(response.getAppointmentId()).isEqualTo(APPT_ID);
         assertThat(response.getOverriddenBy()).isEqualTo(MANAGER);
         assertThat(response.getApprovedAt()).isEqualTo(Instant.now(FIXED_CLOCK));
@@ -219,7 +221,10 @@ class ConflictOverrideServiceTest {
     }
 
     private static ConflictOverrideRequest request(List<UUID> ids, String reason) {
-        return ConflictOverrideRequest.builder().conflictIds(ids).overrideReason(reason).build();
+        return ConflictOverrideRequest.builder()
+                .conflictIds(ids)
+                .overrideReason(reason)
+                .build();
     }
 
     private static Appointment appointment(UUID id) {

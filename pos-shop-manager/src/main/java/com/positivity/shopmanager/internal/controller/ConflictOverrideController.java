@@ -51,8 +51,7 @@ public class ConflictOverrideController {
     @Operation(
             operationId = "executeConflictOverride",
             summary = "Override SOFT scheduling conflicts on an appointment",
-            description =
-                    """
+            description = """
                     Records a manager's acceptance of one or more SOFT scheduling conflicts already recorded \
                     against the appointment (DECISION-SHOPMGMT-002), writing one immutable override row per \
                     conflict with the acting manager as both overrider and approver (DECISION-SHOPMGMT-007).
@@ -87,7 +86,8 @@ public class ConflictOverrideController {
             responseCode = "409",
             description = "A named conflict is HARD (scheduling-conflict envelope, nothing written) or already"
                     + " overridden (ApiError CONFLICT_ALREADY_OVERRIDDEN).",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ConflictResponse.class)))
+            content =
+                    @Content(mediaType = "application/json", schema = @Schema(implementation = ConflictResponse.class)))
     public @NonNull ConflictOverrideResponse executeOverride(
             @Parameter(description = "Appointment ID", required = true) @PathVariable @NonNull UUID appointmentId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -97,9 +97,7 @@ public class ConflictOverrideController {
                                     @Content(
                                             mediaType = "application/json",
                                             examples =
-                                                    @ExampleObject(
-                                                            name = "Accept an overtime warning",
-                                                            value = """
+                                                    @ExampleObject(name = "Accept an overtime warning", value = """
                                                                     {"conflictIds":["01960003-0000-7000-8000-000000000010"],
                                                                      "overrideReason":"Customer waiting on-site; second technician arrives at 10:00"}
                                                                     """)))

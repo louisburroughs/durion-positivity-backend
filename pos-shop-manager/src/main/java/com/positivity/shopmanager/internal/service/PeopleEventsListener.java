@@ -1,9 +1,12 @@
 package com.positivity.shopmanager.internal.service;
 
 import com.positivity.domainevents.people.EmployeeUpdatedV1;
+import com.positivity.domainevents.people.PersonCredentialUpdatedV1;
 import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
+import com.positivity.shopmanager.internal.entity.ExtPersonCredentialReplica;
 import com.positivity.shopmanager.internal.entity.ExtStaffingAssignmentReplica;
 import com.positivity.shopmanager.internal.entity.ProcessedEvent;
+import com.positivity.shopmanager.internal.repository.ExtPersonCredentialReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtPersonReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ExtStaffingAssignmentReplicaRepository;
 import com.positivity.shopmanager.internal.repository.ProcessedEventRepository;
@@ -51,6 +54,7 @@ public class PeopleEventsListener {
     private final ExtStaffingAssignmentReplicaRepository assignmentReplicaRepository;
     private final MechanicSyncService mechanicSyncService;
     private final ExtPersonReplicaRepository personReplicaRepository;
+    private final ExtPersonCredentialReplicaRepository credentialReplicaRepository;
     private final Counter payloadRejectedCounter;
 
     public PeopleEventsListener(
@@ -60,6 +64,7 @@ public class PeopleEventsListener {
             ExtStaffingAssignmentReplicaRepository assignmentReplicaRepository,
             MechanicSyncService mechanicSyncService,
             ExtPersonReplicaRepository personReplicaRepository,
+            ExtPersonCredentialReplicaRepository credentialReplicaRepository,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.clock = clock;
         this.objectMapper = objectMapper;
@@ -67,6 +72,7 @@ public class PeopleEventsListener {
         this.assignmentReplicaRepository = assignmentReplicaRepository;
         this.mechanicSyncService = mechanicSyncService;
         this.personReplicaRepository = personReplicaRepository;
+        this.credentialReplicaRepository = credentialReplicaRepository;
         MeterRegistry registry = meterRegistry.getIfAvailable();
         this.payloadRejectedCounter = registry == null
                 ? null
@@ -104,6 +110,7 @@ public class PeopleEventsListener {
             switch (eventType == null ? "" : eventType) {
                 case StaffingAssignmentUpdatedV1.EVENT_TYPE -> applyStaffingAssignmentUpdated(envelope, eventId);
                 case EmployeeUpdatedV1.EVENT_TYPE -> applyEmployeeUpdated(envelope, eventId);
+                case PersonCredentialUpdatedV1.EVENT_TYPE -> applyPersonCredentialUpdated(envelope, eventId);
                 default -> log.debug("Ignoring people event type={} eventId={}", eventType, eventId);
             }
         } catch (TransientDataAccessException e) {
@@ -196,6 +203,50 @@ public class PeopleEventsListener {
         long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
         mechanicSyncService.processHrEvent(
                 hrEvent(eventId, HrEventType.MECHANIC_DEACTIVATED, payload.personId(), aggregateVersion, null));
+    }
+
+    /**
+     * Mirrors a credential fact into {@code ext_person_credential} (CAP-328, ADR-0044 §6). Each
+     * credential is its own aggregate in the owner — a renewal arrives as a new id, a superseded
+     * or revoked one as a status change on its own id — so the replica is a straight upsert by
+     * credential id under the usual stale guard. The status is stored as received; expiry is
+     * judged on read, against the date being asked about, never taken from here.
+     */
+    private void applyPersonCredentialUpdated(@NonNull JsonNode envelope, @NonNull String eventId)
+            throws DatabindException {
+        PersonCredentialUpdatedV1 payload =
+                objectMapper.treeToValue(envelope.path("payload"), PersonCredentialUpdatedV1.class);
+        long aggregateVersion = envelope.path("aggregateVersion").longValue(0);
+        ExtPersonCredentialReplica existing =
+                credentialReplicaRepository.findById(payload.credentialId()).orElse(null);
+        if (existing != null && existing.getAggregateVersion() > aggregateVersion) {
+            log.debug(
+                    "Ignoring stale credential event credentialId={} version={} eventId={}",
+                    payload.credentialId(),
+                    aggregateVersion,
+                    eventId);
+            return;
+        }
+        credentialReplicaRepository.save(ExtPersonCredentialReplica.builder()
+                .credentialId(payload.credentialId())
+                .personId(payload.personId())
+                .skillId(payload.skillId())
+                .skillCode(payload.skillCode())
+                .competenceCode(payload.competenceCode())
+                .minGvwrClass(payload.minGvwrClass())
+                .maxGvwrClass(payload.maxGvwrClass())
+                .issuer(payload.issuer())
+                .sourceCode(payload.sourceCode())
+                .sourceCredentialCode(payload.sourceCredentialCode())
+                .issuedOn(payload.issuedOn())
+                .expiresOn(payload.expiresOn())
+                .proficiency(payload.proficiency())
+                .status(payload.status())
+                .evidenceRef(payload.evidenceRef())
+                .supersededBy(payload.supersededBy())
+                .aggregateVersion(aggregateVersion)
+                .updatedAt(Instant.now(clock))
+                .build());
     }
 
     private boolean hasActiveTechnicianAssignment(@NonNull UUID personId) {
