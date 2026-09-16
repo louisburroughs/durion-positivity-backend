@@ -45,6 +45,13 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * consumer knows a workorder changed but not what it occupies or who is on it, and would have to
  * call back into this module synchronously, which ADR-0044 R1 forbids.
  *
+ * <p>The fact also carries the actual-time block — {@code workStartedAt}, {@code completedAt},
+ * {@code expectedEndAt} (#2021) — so pos-shop-manager's dispatch board can show the promise against
+ * the reality: the appointment's own {@code startAt}/{@code endAt} stay the planned window, and these
+ * three carry the actual one. {@code expectedEndAt} is declared but never populated here — see
+ * {@link com.positivity.domainevents.workorder.WorkorderUpdatedV1} for why, and do not "fix" it by
+ * deriving it from {@code now()}.
+ *
  * <p>{@code mechanicIds} (#2015) is the workorder's current {@code technician_assignment} first,
  * followed by any {@code mechanic_ids} entry not already named — the same rule
  * {@code DashboardServiceImpl.assignedMechanics} applies for the dispatch board. The technician
@@ -170,7 +177,16 @@ public class WorkorderFactPublisher {
                     // The owner has no promise-time field yet (#1658); the contract carries the
                     // slot so consumers can sort on it the day the column exists.
                     null,
-                    workorder.getScheduledDate());
+                    workorder.getScheduledDate(),
+                    // Actual-time block (#2021): the real window the job occupied its resource for,
+                    // as distinct from the appointment's planned startAt/endAt.
+                    workorder.getWorkStartedAt(),
+                    workorder.getCompletedAt(),
+                    // expectedEndAt is never synthesised from now(): a projected finish needs
+                    // estimated remaining labour (ADR-0058/ADR-0059, both PROPOSED and not built), and
+                    // a guessed projection would be indistinguishable from a known one to a consumer.
+                    // Same precedent as promisedAt above — null until the owner actually has the field.
+                    null);
             writer.publish(
                     WorkorderUpdatedV1.EVENT_TYPE,
                     WorkorderUpdatedV1.SCHEMA_VERSION,

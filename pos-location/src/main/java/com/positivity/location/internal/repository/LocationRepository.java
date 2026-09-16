@@ -11,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface LocationRepository extends JpaRepository<Location, UUID> {
 
@@ -47,4 +48,21 @@ public interface LocationRepository extends JpaRepository<Location, UUID> {
     List<Location> findActiveHierarchyRoots();
 
     Optional<Location> findFirstByActiveTrueOrderByIdAsc();
+
+    /**
+     * One keyset page of locations for the fact backfill (issue #2023), ordered by id and locked.
+     *
+     * <p>Keyset, not offset: a backfill runs while the module keeps taking writes, and deleting any
+     * row below an offset shifts every later row back one position, so the next offset page skips a
+     * surviving location. Paging on {@code id > :afterId} is stable under concurrent deletes.
+     *
+     * <p>{@code PESSIMISTIC_READ} (a shared lock) is what makes the backfill safe against a
+     * concurrent delete — see {@code BayRepository.findBackfillPage} for the full rationale, which
+     * applies identically here: without it, a backfill row inserted early but committed late could
+     * be published after a tombstone that committed first, and because a delete leaves no version
+     * behind, the consumer's stale guard cannot reject the resurrected row.
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("SELECT l FROM Location l WHERE l.id > :afterId ORDER BY l.id ASC")
+    List<Location> findBackfillPage(@Param("afterId") UUID afterId, Pageable pageable);
 }

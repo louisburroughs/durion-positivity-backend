@@ -4,7 +4,8 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Regenerates bay and mobile-unit facts from current owner state (ADR-0044 §6, issue #1668).
+ * Regenerates bay, mobile-unit and location facts from current owner state (ADR-0044 §6, issue
+ * #1668, and #2023 for locations).
  *
  * <p>Distinct from {@link OutboxReplayService}, and not interchangeable with it. Outbox replay
  * re-queues rows that are already in {@code event_outbox}, so it can only re-send facts that were
@@ -18,6 +19,17 @@ import org.jspecify.annotations.Nullable;
  * It is idempotent by the platform's consumer rule: a replica applies an equal version and skips
  * only a strictly-greater one, so re-running a backfill over rows a consumer already holds is a
  * no-op, while a replica holding a version but wrong or missing data is repaired.
+ *
+ * <p>{@link #backfillLocations} exists for a different reason than the bay/mobile-unit backfills,
+ * but needs the same regenerate-from-state shape rather than outbox replay (issue #2023, AC10):
+ * {@code LocationUpdatedV1} gained {@code operatingHours}, {@code holidayClosures} and the two
+ * buffer-minutes fields, but a location that existed and last published <em>before</em> that change
+ * has only the old, frozen payload bytes sitting in {@code event_outbox}. Replaying that row would
+ * re-send the old shape verbatim, with none of the new fields — it can only ever re-emit what was
+ * already written. Regenerating from the current row picks up the new columns as of now.
+ *
+ * <p>{@code Location} does not need the mobile-unit-style "site-less" skip: every location is
+ * publishable, so {@link #backfillLocations} emits one fact per row unconditionally.
  *
  * <p>Each run is <strong>bounded</strong> and resumable. It executes on the Kafka command-listener
  * thread, which is shared with {@code location.outbox.replay-requested}: an unbounded walk of every
@@ -53,4 +65,12 @@ public interface FactBackfillService {
      * @param afterId exclusive cursor; null starts from the beginning
      */
     BackfillResult backfillMobileUnits(@Nullable UUID afterId);
+
+    /**
+     * Emit current-state {@code location.location.updated} facts, starting after {@code afterId}
+     * (issue #2023, AC10).
+     *
+     * @param afterId exclusive cursor; null starts from the beginning
+     */
+    BackfillResult backfillLocations(@Nullable UUID afterId);
 }

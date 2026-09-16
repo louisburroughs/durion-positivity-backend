@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.location.internal.config.FactBackfillService.BackfillResult;
 import com.positivity.location.internal.entity.BayEntity;
+import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.MobileUnitEntity;
 import java.util.List;
 import java.util.UUID;
@@ -46,6 +47,12 @@ class FactBackfillServiceImplTest {
 
     private static MobileUnitEntity unit(UUID id) {
         return MobileUnitEntity.builder().id(id).name("Van " + id).build();
+    }
+
+    private static Location location(UUID id) {
+        Location location = new Location();
+        location.setId(id);
+        return location;
     }
 
     /** Ids that sort in creation order, so the cursor assertions are meaningful. */
@@ -154,6 +161,19 @@ class FactBackfillServiceImplTest {
         assertThat(result.published()).isEqualTo(1);
         assertThat(result.lastId()).isEqualTo(ids.get(0));
         verify(pagePublisher).publishMobileUnitPage(null, 2);
+    }
+
+    @Test
+    @DisplayName("#2023 locations walk the same way, through their own page publisher")
+    void locationsUseTheirOwnPagePublisher() {
+        List<UUID> ids = ids(1);
+        when(pagePublisher.publishLocationPage(null, 2)).thenReturn(List.of(location(ids.get(0))));
+
+        BackfillResult result = service.backfillLocations(null);
+
+        assertThat(result.published()).isEqualTo(1);
+        assertThat(result.lastId()).isEqualTo(ids.get(0));
+        verify(pagePublisher).publishLocationPage(null, 2);
     }
 
     @Test

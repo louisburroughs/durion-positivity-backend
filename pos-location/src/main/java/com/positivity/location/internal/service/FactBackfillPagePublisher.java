@@ -1,8 +1,10 @@
 package com.positivity.location.internal.service;
 
 import com.positivity.location.internal.entity.BayEntity;
+import com.positivity.location.internal.entity.Location;
 import com.positivity.location.internal.entity.MobileUnitEntity;
 import com.positivity.location.internal.repository.BayRepository;
+import com.positivity.location.internal.repository.LocationRepository;
 import com.positivity.location.internal.repository.MobileUnitRepository;
 import jakarta.persistence.EntityManager;
 import java.util.List;
@@ -45,6 +47,7 @@ public class FactBackfillPagePublisher {
 
     private final BayRepository bayRepository;
     private final MobileUnitRepository mobileUnitRepository;
+    private final LocationRepository locationRepository;
     private final LocationFactPublisher locationFactPublisher;
     private final EntityManager entityManager;
 
@@ -63,6 +66,15 @@ public class FactBackfillPagePublisher {
         List<MobileUnitEntity> page =
                 mobileUnitRepository.findBackfillPage(cursor(afterId), PageRequest.ofSize(pageSize));
         page.forEach(locationFactPublisher::mobileUnitChangedFromCommittedState);
+        flushAndClear();
+        return page;
+    }
+
+    /** Publish one page of location facts and return the rows published, in id order. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public List<Location> publishLocationPage(UUID afterId, int pageSize) {
+        List<Location> page = locationRepository.findBackfillPage(cursor(afterId), PageRequest.ofSize(pageSize));
+        page.forEach(locationFactPublisher::locationChangedFromCommittedState);
         flushAndClear();
         return page;
     }
