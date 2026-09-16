@@ -311,6 +311,7 @@ product landed uncategorized.
 | `tier0-labor-standards.csv` | 21 vehicle-keyed labor standards | `POST /v1/catalog/labor-standards/bulk-ingest` (`SERVICE_LABOR_STANDARD`) |
 | `tier0-service-packages.csv` | 4 packages and 1 fleet requirement set | `POST /v1/service-packages/bulk-ingest` (`SERVICE_PACKAGE`) |
 | `tier0-service-package-members.csv` | 21 memberships | `POST /v1/service-package-members/bulk-ingest` (`SERVICE_PACKAGE_MEMBER`) |
+| `tier0-service-skill-requirements.csv` | 8 requirements over 5 operations (CAP-329): brake jobs and the 4-wheel alignment class-forked (`*-LIGHT` on GVWR 1–3, `*-MEDIUM_HEAVY` on 4–8), `DOT-ANNUAL-INSPECTION` → `DOT-INSPECTOR` on any class, `FLEET-PM-B-SERVICE` → `PMI-MEDIUM_HEAVY` | API pack: `PUT /v1/products/services/{id}/requirements` once per operation, the service resolved by name and each skill by its registry code (`GET /v1/people/skills`); needs `catalog:service_requirement:manage`, `catalog:service_type:view`, `people:skill:view` |
 
 **Every number in these four files is invented** — the SDK seeder's 11 services included:
 their default labor hours are derived from the seeder's own placeholder sell prices, not from

@@ -117,6 +117,17 @@ holders present but every one already the technician on an overlapping held appo
 `MECHANIC_UNAVAILABLE` alone, never a competence failure (#2035 answer 5). Neither rule
 withholds a booking; both are manager-overridable (`shop:conflict:override`).
 
+### Assignment and competence (spec D10 (c), CAP-329)
+
+Booking only warns; assignment is where competence has a consequence. `POST /v1/assignments`
+resolves the appointment's service requests and vehicle class through `SkillRequirementResolver`
+and, when a required skill is held by none of the assigned mechanics on the appointment's
+facility-local date, creates the assignment in `AWAITING_SKILL_FULFILLMENT`
+(DECISION-SHOPMGMT-010) rather than `ASSIGNED`; a request carrying an authorised `override`
+(`shop:schedule:edit`, with a reason) assigns anyway. No requirement — none configured, or none
+for this vehicle class — parks nothing. The status machine already allows
+`AWAITING_SKILL_FULFILLMENT → ASSIGNED` once a holder is assigned.
+
 ## Opening search (`GET /v1/schedules/openings`, #2022)
 
 "When is the next slot that fits a 90-minute alignment?" answered in one call, from replicas

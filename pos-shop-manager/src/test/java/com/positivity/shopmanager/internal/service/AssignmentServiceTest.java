@@ -3,6 +3,7 @@ package com.positivity.shopmanager.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -17,8 +18,10 @@ import com.positivity.shopmanager.internal.enums.MechanicRoleEnum;
 import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.repository.AppointmentRepository;
+import com.positivity.shopmanager.internal.repository.AppointmentServiceRequestRepository;
 import com.positivity.shopmanager.internal.repository.AssignmentMechanicRepository;
 import com.positivity.shopmanager.internal.repository.AssignmentRepository;
+import com.positivity.shopmanager.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.shopmanager.internal.repository.MechanicRepository;
 import com.positivity.shopmanager.internal.service.dto.AssignmentResponse;
 import com.positivity.shopmanager.internal.service.dto.CreateAssignmentRequest;
@@ -28,7 +31,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,6 +67,15 @@ class AssignmentServiceTest {
     @Mock
     private AssignmentMechanicRepository assignmentMechanicRepository;
 
+    @Mock
+    private AppointmentServiceRequestRepository appointmentServiceRequestRepository;
+
+    @Mock
+    private ExtLocationReplicaRepository extLocationReplicaRepository;
+
+    @Mock
+    private SkillRequirementResolver skillRequirementResolver;
+
     private AssignmentServiceImpl service;
 
     @BeforeEach
@@ -71,6 +85,10 @@ class AssignmentServiceTest {
                 mechanicRepository,
                 assignmentRepository,
                 assignmentMechanicRepository,
+                appointmentServiceRequestRepository,
+                extLocationReplicaRepository,
+                new LocationHoursParser(new com.fasterxml.jackson.databind.ObjectMapper()),
+                skillRequirementResolver,
                 FIXED_CLOCK);
     }
 
@@ -351,6 +369,89 @@ class AssignmentServiceTest {
     }
 
     // --- helpers ---
+
+    // --- Spec D10 (c), CAP-329: competence has a consequence at assignment ---
+
+    @org.junit.jupiter.api.Nested
+    class SkillFulfillment {
+        private final UUID appointmentId = UUID.fromString("00000000-0000-0000-0000-0000000000c1");
+        private final UUID mechanicId = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
+        private final UUID personId = UUID.fromString("01960011-0000-7000-8000-0000000000e1");
+        private final UUID brakeJob = UUID.fromString("0196cf6f-c8dd-7ee0-93e7-f48a5698a535");
+        private final UUID brakesHeavy = UUID.fromString("01960011-0000-7000-8000-000000000041");
+
+        @org.junit.jupiter.api.BeforeEach
+        void appointmentWithABrakeJob() {
+            Appointment appointment = buildAppointment(appointmentId, AppointmentStatus.SCHEDULED);
+            when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+            when(assignmentRepository.findByAppointment_AppointmentIdAndStatusIn(eq(appointmentId), any()))
+                    .thenReturn(Optional.empty());
+            when(mechanicRepository.findByPersonId(personId))
+                    .thenReturn(Optional.of(buildMechanic(mechanicId, personId.toString())));
+            when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId))
+                    .thenReturn(List.of(com.positivity.shopmanager.internal.entity.AppointmentServiceRequest.builder()
+                            .serviceEntityId(brakeJob)
+                            .build()));
+            // lenient: the no-service-requests case never reaches the resolver, by design.
+            org.mockito.Mockito.lenient()
+                    .when(skillRequirementResolver.requiredSkills(eq(List.of(brakeJob)), any()))
+                    .thenReturn(Map.of("BRAKES-MEDIUM_HEAVY", brakesHeavy));
+            when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        }
+
+        @Test
+        void mechanicHoldingEveryRequiredSkillIsAssigned() {
+            when(skillRequirementResolver.holdersBySkill(eq(List.of(personId)), any(), any()))
+                    .thenReturn(Map.of("BRAKES-MEDIUM_HEAVY", Set.of(personId)));
+
+            AssignmentResponse response = service.create(buildSingleLeadRequest(appointmentId, personId.toString()));
+
+            assertThat(response.getStatus()).isEqualTo(AssignmentStatusEnum.ASSIGNED);
+        }
+
+        @Test
+        void mechanicLackingARequiredSkillIsParkedAwaitingSkillFulfillment() {
+            when(skillRequirementResolver.holdersBySkill(eq(List.of(personId)), any(), any()))
+                    .thenReturn(Map.of());
+
+            AssignmentResponse response = service.create(buildSingleLeadRequest(appointmentId, personId.toString()));
+
+            assertThat(response.getStatus()).isEqualTo(AssignmentStatusEnum.AWAITING_SKILL_FULFILLMENT);
+        }
+
+        @Test
+        void anAuthorisedOverrideAssignsDespiteTheGap() {
+            when(skillRequirementResolver.holdersBySkill(eq(List.of(personId)), any(), any()))
+                    .thenReturn(Map.of());
+            SecurityContextHolder.getContext()
+                    .setAuthentication(new org.springframework.security.authentication.TestingAuthenticationToken(
+                            "manager", "n/a", AssignmentServiceImpl.ASSIGNMENT_OVERRIDE_AUTHORITY));
+            CreateAssignmentRequest request = CreateAssignmentRequest.builder()
+                    .appointmentId(appointmentId)
+                    .mechanics(List.of(MechanicAssignmentItem.builder()
+                            .mechanicPersonId(personId.toString())
+                            .role(MechanicRole.LEAD)
+                            .build()))
+                    .override(true)
+                    .overrideReason("Truck brake job; Sam has done these under supervision")
+                    .build();
+
+            AssignmentResponse response = service.create(request);
+
+            assertThat(response.getStatus()).isEqualTo(AssignmentStatusEnum.ASSIGNED);
+        }
+
+        @Test
+        void anAppointmentWithoutServiceRequestsRequiresNothing() {
+            when(appointmentServiceRequestRepository.findByAppointment_AppointmentId(appointmentId))
+                    .thenReturn(List.of());
+
+            AssignmentResponse response = service.create(buildSingleLeadRequest(appointmentId, personId.toString()));
+
+            assertThat(response.getStatus()).isEqualTo(AssignmentStatusEnum.ASSIGNED);
+            verify(skillRequirementResolver, never()).requiredSkills(any(), any());
+        }
+    }
 
     private static CreateAssignmentRequest buildSingleLeadRequest(UUID appointmentId, String personId) {
         return CreateAssignmentRequest.builder()

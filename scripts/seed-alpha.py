@@ -45,7 +45,9 @@ inventory:putaway_rule:view/inventory:putaway_rule:manage, and for the on-hand
 pack inventory:adjustment:create and inventory:adjustment:approve, and for the
 cycle-count-plans pack
 inventory:cycle_count:view and inventory:cycle_count:initiate, for the Tier 0 catalog packs
-catalog:service:ingest, catalog:labor_standard:import and catalog:service_package:manage, and
+catalog:service:ingest, catalog:labor_standard:import and catalog:service_package:manage, for the
+service-skill-requirements pack catalog:service_requirement:manage plus catalog:service_type:view and
+people:skill:view to resolve the services and skills it names, and
 for the labor-rate packs pricing:labor_rate:manage). The mobile-units pack additionally needs
 location:mobile-unit:manage and location:mobile-unit:read to create and list the units, plus
 location:travel-buffer-policy:read and location:service-area:read to resolve the policy and
@@ -99,6 +101,10 @@ PACK_FILES = [
     ("catalog/tier0-labor-standards.csv", "SERVICE_LABOR_STANDARD"),
     ("catalog/tier0-service-packages.csv", "SERVICE_PACKAGE"),
     ("catalog/tier0-service-package-members.csv", "SERVICE_PACKAGE_MEMBER"),
+    # CAP-329: which skills each operation needs, per GVWR class range. Declared through the
+    # catalog's own endpoint (validated against its skill-registry replica), so it follows the
+    # operations it names and the people pack that published the registry.
+    ("catalog/tier0-service-skill-requirements.csv", "@service-skill-requirements"),
     ("price/base-prices.csv", "BASE_PRICE"),
     ("price/labor-rates.csv", "LABOR_RATE"),
     ("price/labor-rate-adjustments.csv", "LABOR_RATE_ADJUSTMENT"),
@@ -534,9 +540,74 @@ def run_mobile_units(gateway, relative_path, _location_id):
     return failures == 0
 
 
+def run_service_skill_requirements(gateway, relative_path, _location_id):
+    """API pack: declare each service's skill requirement (CAP-329, spec D8/D13).
+
+    The requirement is a function of (service, GVWR class range): BRAKE-PAD-REPLACE-FRONT needs
+    BRAKES-LIGHT on classes 1-3 and BRAKES-MEDIUM_HEAVY on 4-8 — one SKU, class-conditional
+    competence — while DOT-ANNUAL-INSPECTION needs DOT-INSPECTOR whatever the class (both bounds
+    blank). PUT /v1/products/services/{id}/requirements replaces the whole set for a service, so the
+    rows are grouped by operation and sent once each; the catalog validates every skill against its
+    registry replica and refuses an unknown or retired code with 422, which fails that operation's
+    row group and nothing else.
+
+    Operations are keyed by operationCode as every other Tier 0 fixture keys them; the catalog
+    resolves a service by exact name, so the name is read off tier0-services.csv. Skills are keyed
+    by the Durion code the registry publishes (people/skills), never by a vendor code."""
+    names_by_operation = {row["operationCode"]: row["name"] for row in read_fixture_rows("catalog/tier0-services.csv")}
+    status_code, skills = gateway.get("/people/people/skills", allow_error=True)
+    if status_code != 200:
+        print(f"  WARN: cannot list the skill registry (HTTP {status_code}) — check people:skill:view on the token")
+        return False
+    skill_ids = {entry["code"]: entry["skillId"] for entry in skills or []}
+
+    grouped = {}
+    for row in read_fixture_rows(relative_path):
+        grouped.setdefault(row["operationCode"], []).append(row)
+
+    ok = True
+    for operation, rows in grouped.items():
+        name = names_by_operation.get(operation)
+        if name is None:
+            print(f"  WARN: {operation}: not in tier0-services.csv; skipped")
+            ok = False
+            continue
+        status_code, services = gateway.get(f"/catalog/products/services/name/{urllib.parse.quote(name, safe='')}", allow_error=True)
+        if status_code != 200 or not services:
+            print(f"  WARN: {operation}: catalog has no service named {name!r} (HTTP {status_code}); skipped")
+            ok = False
+            continue
+        service_id = services[0]["id"]
+        required = []
+        for row in rows:
+            skill_id = skill_ids.get(row["skillCode"])
+            if skill_id is None:
+                print(f"  WARN: {operation}: skill {row['skillCode']} is not in the registry; skipped")
+                ok = False
+                required = None
+                break
+            required.append({
+                "skillId": skill_id,
+                "minGvwrClass": int(row["minGvwrClass"]) if row.get("minGvwrClass") else None,
+                "maxGvwrClass": int(row["maxGvwrClass"]) if row.get("maxGvwrClass") else None,
+            })
+        if required is None:
+            continue
+        status_code, body = gateway.put_json(
+            f"/catalog/products/services/{service_id}/requirements", {"requiredSkills": required}, allow_error=True)
+        if status_code != 200:
+            detail = body if isinstance(body, str) else json.dumps(body)[:300]
+            print(f"  WARN: {operation}: requirements refused (HTTP {status_code}): {detail}")
+            ok = False
+            continue
+        print(f"  {operation}: {len(required)} requirement(s) declared")
+    return ok
+
+
 API_PACKS = {
     "@site-defaults": run_site_defaults,
     "@mobile-units": run_mobile_units,
+    "@service-skill-requirements": run_service_skill_requirements,
 }
 
 

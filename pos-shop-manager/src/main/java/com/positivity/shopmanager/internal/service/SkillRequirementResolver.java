@@ -148,6 +148,25 @@ public class SkillRequirementResolver {
                 .toList();
     }
 
+    /**
+     * The codes to name when no single person in {@code persons} holds everything: the codes nobody
+     * holds, or — when every code is held by someone but by no one person — the codes the first
+     * person lacks, so the message always names at least one concrete gap.
+     */
+    public static @NonNull List<String> missingFor(
+            @NonNull Collection<String> required,
+            @NonNull Map<String, Set<UUID>> holders,
+            @NonNull Collection<UUID> persons) {
+        List<String> nobodyHolds = missing(required, holders);
+        if (!nobodyHolds.isEmpty() || persons.isEmpty()) {
+            return nobodyHolds;
+        }
+        UUID first = persons.iterator().next();
+        return required.stream()
+                .filter(code -> !holders.getOrDefault(code, Set.of()).contains(first))
+                .toList();
+    }
+
     /** Whether the assignment is an ACTIVE technician posting (any date). */
     public static boolean isTechnician(@NonNull ExtStaffingAssignmentReplica assignment) {
         return STAFFING_ACTIVE.equalsIgnoreCase(assignment.getStatus())
