@@ -26,7 +26,13 @@ public class VehicleReferenceService {
     private final Clock clock;
 
     private static final Duration CACHE_EXPIRY = Duration.ofHours(24);
-    private static final String NHTSA_API_BASE = "https://vpic.nhtsa.dot.gov/v1/vehicles";
+    /**
+     * vPIC API base. Must be {@code /api/vehicles} — this previously read
+     * {@code /v1/vehicles}, which is not a vPIC path, so every call below returned 404 and this
+     * module had never run against live vPIC. Verified against
+     * {@code https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/5UXWX7C5*BA?format=xml&modelyear=2011}.
+     */
+    private static final String NHTSA_API_BASE = "https://vpic.nhtsa.dot.gov/api/vehicles";
 
     private final ManufacturerRepository manufacturerRepository;
     private final MakeRepository makeRepository;

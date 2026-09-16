@@ -29,7 +29,7 @@ public interface MechanicRepository extends JpaRepository<Mechanic, UUID> {
                                         SELECT skill.id
                                         FROM MechanicSkill skill
                                         WHERE skill.mechanic = mechanic
-                                            AND skill.skillCode = :skillCode))
+                                            AND UPPER(TRIM(skill.skillCode)) = UPPER(TRIM(:skillCode))))
                         """)
     @NonNull
     Page<Mechanic> findRoster(

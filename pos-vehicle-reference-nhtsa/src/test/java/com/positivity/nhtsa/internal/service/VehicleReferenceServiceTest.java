@@ -73,7 +73,12 @@ import org.springframework.web.client.RestClient;
 class VehicleReferenceServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-08-12T12:00:00Z");
-    private static final String BASE = "https://vpic.nhtsa.dot.gov/v1/vehicles";
+    /**
+     * Must match {@code VehicleReferenceService.NHTSA_API_BASE}. This constant previously
+     * duplicated the service's wrong {@code /v1/vehicles} path, so the mock agreed with the bug
+     * and the suite passed while every real call 404'd.
+     */
+    private static final String BASE = "https://vpic.nhtsa.dot.gov/api/vehicles";
     private static final UUID MANUFACTURER_ID = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
     private static final UUID MAKE_ID = UUID.fromString("00000000-0000-0000-0000-0000000000d2");
 

@@ -27,7 +27,7 @@ public interface TechnicianRepository extends JpaRepository<Technician, UUID> {
                 SELECT skill.id
                 FROM MechanicSkill skill
                 WHERE skill.mechanic = mechanic
-                  AND skill.skillCode = :skillCode))
+                  AND UPPER(TRIM(skill.skillCode)) = UPPER(TRIM(:skillCode))))
             ORDER BY mechanic.lastName, mechanic.firstName, mechanic.personId
             """)
     @NonNull
