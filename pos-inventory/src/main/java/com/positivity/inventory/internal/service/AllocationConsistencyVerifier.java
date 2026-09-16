@@ -104,7 +104,10 @@ public class AllocationConsistencyVerifier {
     private final InventoryStockSummaryRepository summaryRepository;
     private final Counter violationCounter;
 
-    /** ADR-0062 section 3: verified once per active tenant, each pass in its own read-only transaction. */
+    /**
+     * ADR-0062 section 3: verified once per active tenant, each pass in its own
+     * read-only transaction.
+     */
     private final TenantIterator tenantIterator;
 
     private final TransactionTemplate readOnlyTransaction;
@@ -123,11 +126,10 @@ public class AllocationConsistencyVerifier {
         this.violationCounter = meterRegistry.counter("inventory.allocation.consistency.violations.total");
     }
 
-    @Scheduled(
-            fixedDelayString = "${pos.inventory.allocation-verify.interval-ms:3600000}",
-            initialDelayString = "${pos.inventory.allocation-verify.initial-delay-ms:600000}")
+    @Scheduled(fixedDelayString = "${pos.inventory.allocation-verify.interval-ms:3600000}", initialDelayString = "${pos.inventory.allocation-verify.initial-delay-ms:600000}")
     public void verifyScheduled() {
-        // The transaction opens inside the tenant binding, so its connection carries the tenant.
+        // The transaction opens inside the tenant binding, so its connection carries
+        // the tenant.
         tenantIterator.forEachActiveTenant(
                 tenantId -> readOnlyTransaction.executeWithoutResult(status -> verifyForTenant()));
     }
@@ -148,10 +150,10 @@ public class AllocationConsistencyVerifier {
         String created = InventoryLedgerEventType.ALLOCATION_CREATED.name();
         String released = InventoryLedgerEventType.ALLOCATION_RELEASED.name();
 
-        List<AllocationRepository.AllocationConsistencyRow> perAllocation =
-                allocationRepository.findConsistencyViolations(created, released);
-        List<InventoryStockSummaryRepository.AllocatedDriftRow> perLocation =
-                summaryRepository.findAllocatedDriftByLocation(created, released);
+        List<AllocationRepository.AllocationConsistencyRow> perAllocation = allocationRepository
+                .findConsistencyViolations(created, released);
+        List<InventoryStockSummaryRepository.AllocatedDriftRow> perLocation = summaryRepository
+                .findAllocatedDriftByLocation(created, released);
 
         int logged = 0;
         for (AllocationRepository.AllocationConsistencyRow row : perAllocation) {

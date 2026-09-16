@@ -102,11 +102,11 @@ public class InventoryGlobalExceptionHandler {
     }
 
     @ExceptionHandler({
-        MethodArgumentTypeMismatchException.class,
-        HttpMessageNotReadableException.class,
-        ConstraintViolationException.class,
-        InvalidInventoryAvailabilityRequestException.class,
-        IllegalArgumentException.class
+            MethodArgumentTypeMismatchException.class,
+            HttpMessageNotReadableException.class,
+            ConstraintViolationException.class,
+            InvalidInventoryAvailabilityRequestException.class,
+            IllegalArgumentException.class
     })
     public ResponseEntity<ApiError> handleBadRequest(Exception ex) {
         return build(HttpStatus.BAD_REQUEST, VALIDATION_ERROR, ex.getMessage());
@@ -128,8 +128,10 @@ public class InventoryGlobalExceptionHandler {
     }
 
     /**
-     * A second enabled ANY putaway rule was requested (#1514). ANY matches every line, so only the
-     * first one the priority order reaches can ever fire; a second is unreachable configuration
+     * A second enabled ANY putaway rule was requested (#1514). ANY matches every
+     * line, so only the
+     * first one the priority order reaches can ever fire; a second is unreachable
+     * configuration
      * rather than a bad request, hence 409.
      */
     @ExceptionHandler(DuplicateEnabledAnyPutawayRuleException.class)
@@ -152,7 +154,7 @@ public class InventoryGlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
     }
 
-    @ExceptionHandler({ResourceNotFoundException.class, ProductNotFoundException.class, LocationNotFoundException.class
+    @ExceptionHandler({ ResourceNotFoundException.class, ProductNotFoundException.class, LocationNotFoundException.class
     })
     public ResponseEntity<ApiError> handleResourceNotFound(RuntimeException ex) {
         return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
@@ -199,7 +201,8 @@ public class InventoryGlobalExceptionHandler {
 
     @ExceptionHandler(AsOfInFutureException.class)
     public ResponseEntity<ApiError> handleAsOfInFuture(AsOfInFutureException ex) {
-        // odoo-parity A3 (#1029): deterministic 422 for future-dated point-in-time queries.
+        // odoo-parity A3 (#1029): deterministic 422 for future-dated point-in-time
+        // queries.
         return build(HttpStatus.valueOf(422), "AS_OF_IN_FUTURE", ex.getMessage());
     }
 
@@ -253,7 +256,8 @@ public class InventoryGlobalExceptionHandler {
 
     @ExceptionHandler(CrossSiteTransferRequiresOrderException.class)
     public ResponseEntity<ApiError> handleCrossSiteTransferRequiresOrder(CrossSiteTransferRequiresOrderException ex) {
-        // odoo-parity C2/spec C7 (#1036): immediate stock movements are intra-site only.
+        // odoo-parity C2/spec C7 (#1036): immediate stock movements are intra-site
+        // only.
         return build(HttpStatus.valueOf(422), CrossSiteTransferRequiresOrderException.ERROR_CODE, ex.getMessage());
     }
 
@@ -287,24 +291,27 @@ public class InventoryGlobalExceptionHandler {
     }
 
     @ExceptionHandler({
-        LocationNotValidForSkuException.class,
-        LocationAtCapacityException.class,
-        NoOnHandAtSourceLocationException.class,
-        PutawayValidationException.class
+            LocationNotValidForSkuException.class,
+            LocationAtCapacityException.class,
+            NoOnHandAtSourceLocationException.class,
+            PutawayValidationException.class
     })
     public ResponseEntity<ApiError> handlePutawayValidation(PutawayValidationException ex) {
         return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
     }
 
-    @ExceptionHandler({SourceDocumentNotFoundException.class, ReceivingSessionNotFoundException.class})
+    @ExceptionHandler({ SourceDocumentNotFoundException.class, ReceivingSessionNotFoundException.class })
     public ResponseEntity<ApiError> handleReceivingNotFound(RuntimeException ex) {
         return build(HttpStatus.NOT_FOUND, NOT_FOUND, ex.getMessage());
     }
 
     /**
-     * A receiving session named a purchase order id absent from the projection (#1492). The header
-     * and its lines are projected atomically and ADR-0044 forbids a synchronous check against
-     * pos-order, so this module cannot tell replication lag from an unknown id — 409, with a
+     * A receiving session named a purchase order id absent from the projection
+     * (#1492). The header
+     * and its lines are projected atomically and ADR-0044 forbids a synchronous
+     * check against
+     * pos-order, so this module cannot tell replication lag from an unknown id —
+     * 409, with a
      * nextAction that says both.
      */
     @ExceptionHandler(SourceDocumentLinesUnavailableException.class)
@@ -320,8 +327,10 @@ public class InventoryGlobalExceptionHandler {
     }
 
     /**
-     * A source document type receiving cannot resolve (#1480). 422: the request is well-formed,
-     * the type simply has no owning service — saying so beats a 404 that reads as "no such PO".
+     * A source document type receiving cannot resolve (#1480). 422: the request is
+     * well-formed,
+     * the type simply has no owning service — saying so beats a 404 that reads as
+     * "no such PO".
      */
     @ExceptionHandler(UnsupportedSourceDocumentTypeException.class)
     public ResponseEntity<ApiError> handleUnsupportedSourceDocumentType(UnsupportedSourceDocumentTypeException ex) {
@@ -351,8 +360,10 @@ public class InventoryGlobalExceptionHandler {
 
     @ExceptionHandler(FractionalQuantityNotAllowedException.class)
     public ResponseEntity<ApiError> handleFractionalQuantityNotAllowed(FractionalQuantityNotAllowedException ex) {
-        // ADR-0055 (#1414): the posted quantity carries more decimals than the product's catalog
-        // declaration allows. 422, not 400 — the request is well-formed and passes its bounds;
+        // ADR-0055 (#1414): the posted quantity carries more decimals than the
+        // product's catalog
+        // declaration allows. 422, not 400 — the request is well-formed and passes its
+        // bounds;
         // what it violates can only be known after looking the product up. Same code as
         // pos-workorder's demand-side gate (#1413), because it is the same invariant.
         return build(HttpStatus.valueOf(422), FractionalQuantityNotAllowedException.ERROR_CODE, ex.getMessage());
@@ -360,29 +371,35 @@ public class InventoryGlobalExceptionHandler {
 
     @ExceptionHandler(UomConversionUndefinedException.class)
     public ResponseEntity<ApiError> handleUomConversionUndefined(UomConversionUndefinedException ex) {
-        // odoo-parity B1/B4 (#1033): no conversion path to base UoM is a deterministic 422,
+        // odoo-parity B1/B4 (#1033): no conversion path to base UoM is a deterministic
+        // 422,
         // never a silent 1:1 assumption.
         return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
     }
 
     @ExceptionHandler(LotNumberRequiredException.class)
     public ResponseEntity<ApiError> handleLotNumberRequired(LotNumberRequiredException ex) {
-        // odoo-parity E1 (#1038): a receipt of a LOT-tracked product without a lot number is a
-        // deterministic 422, never a silently untracked posting. Since E2 (#1042) the same
-        // code gates the outbound flows (pick confirm, consumption, transfer dispatch, scrap).
+        // odoo-parity E1 (#1038): a receipt of a LOT-tracked product without a lot
+        // number is a
+        // deterministic 422, never a silently untracked posting. Since E2 (#1042) the
+        // same
+        // code gates the outbound flows (pick confirm, consumption, transfer dispatch,
+        // scrap).
         return build(HttpStatus.valueOf(422), LotNumberRequiredException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(LotUnknownException.class)
     public ResponseEntity<ApiError> handleLotUnknown(LotUnknownException ex) {
-        // odoo-parity E2 (#1042): outbound flows never create lots — an unknown lot number is
+        // odoo-parity E2 (#1042): outbound flows never create lots — an unknown lot
+        // number is
         // a deterministic 422.
         return build(HttpStatus.valueOf(422), LotUnknownException.ERROR_CODE, ex.getMessage());
     }
 
     @ExceptionHandler(LotNotAvailableException.class)
     public ResponseEntity<ApiError> handleLotNotAvailable(LotNotAvailableException ex) {
-        // odoo-parity E2 (#1042): QUARANTINED/RECALLED/CONSUMED lots cannot leave stock.
+        // odoo-parity E2 (#1042): QUARANTINED/RECALLED/CONSUMED lots cannot leave
+        // stock.
         return build(HttpStatus.valueOf(422), LotNotAvailableException.ERROR_CODE, ex.getMessage());
     }
 
@@ -394,7 +411,8 @@ public class InventoryGlobalExceptionHandler {
 
     @ExceptionHandler(SerialCountMismatchException.class)
     public ResponseEntity<ApiError> handleSerialCountMismatch(SerialCountMismatchException ex) {
-        // odoo-parity E4 (#1050): a serialized posting must enumerate exactly |quantity| serials —
+        // odoo-parity E4 (#1050): a serialized posting must enumerate exactly
+        // |quantity| serials —
         // a deterministic 422, the whole posting rolls back.
         return build(HttpStatus.valueOf(422), SerialCountMismatchException.ERROR_CODE, ex.getMessage());
     }
@@ -406,7 +424,8 @@ public class InventoryGlobalExceptionHandler {
 
     @ExceptionHandler(SerialNotAvailableException.class)
     public ResponseEntity<ApiError> handleSerialNotAvailable(SerialNotAvailableException ex) {
-        // odoo-parity E4 (#1050): an outbound posting naming an unknown or already-consumed serial
+        // odoo-parity E4 (#1050): an outbound posting naming an unknown or
+        // already-consumed serial
         // (double-issue) is a deterministic 422.
         return build(HttpStatus.valueOf(422), SerialNotAvailableException.ERROR_CODE, ex.getMessage());
     }
@@ -414,13 +433,15 @@ public class InventoryGlobalExceptionHandler {
     @ExceptionHandler(PurchaseSuggestionConversionException.class)
     public ResponseEntity<ApiError> handlePurchaseSuggestionConversion(PurchaseSuggestionConversionException ex) {
         // odoo-parity F4 (#1044): deterministic per-case 422 for convert preconditions
-        // (NOT_ACCEPTED / VENDOR_MISMATCH / SITE_MISMATCH / MISSING_VENDOR / MISSING_UNIT_COST).
+        // (NOT_ACCEPTED / VENDOR_MISMATCH / SITE_MISMATCH / MISSING_VENDOR /
+        // MISSING_UNIT_COST).
         return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
     }
 
     @ExceptionHandler(PurchaseSuggestionStateException.class)
     public ResponseEntity<ApiError> handlePurchaseSuggestionState(PurchaseSuggestionStateException ex) {
-        // odoo-parity F4 (#1044): accept/dismiss from a terminal status is a 409 conflict.
+        // odoo-parity F4 (#1044): accept/dismiss from a terminal status is a 409
+        // conflict.
         return build(HttpStatus.CONFLICT, PurchaseSuggestionStateException.ERROR_CODE, ex.getMessage());
     }
 
@@ -436,21 +457,31 @@ public class InventoryGlobalExceptionHandler {
         return build(HttpStatus.valueOf(422), ex.getErrorCode(), ex.getMessage());
     }
 
-    // No @ExceptionHandler(Exception.class) here (issue #1768, ADR-0056 §1): Spring's
-    // ExceptionHandlerExceptionResolver picks the first applicable advice bean that has ANY
-    // matching handler method, not the most specific handler across advices. A blanket catch-all
-    // in this module-local advice therefore swallowed every unmapped exception before
+    // No @ExceptionHandler(Exception.class) here (issue #1768, ADR-0056 §1):
+    // Spring's
+    // ExceptionHandlerExceptionResolver picks the first applicable advice bean that
+    // has ANY
+    // matching handler method, not the most specific handler across advices. A
+    // blanket catch-all
+    // in this module-local advice therefore swallowed every unmapped exception
+    // before
     // pos-web-common's platform-wide GlobalApiExceptionHandler could run.
     //
     // Being ApiError-shaped did not make that safe. What it cost was ADR-0056 §2's
-    // DataIntegrityViolationException classification, which this advice never mapped: a
-    // unique-constraint or FK collision in this module answered 500 INTERNAL_ERROR instead of
-    // 409 DUPLICATE_RESOURCE. Anything not handled above now falls through to the shared advice,
-    // which answers a generic, correlated 500 for the genuinely unexpected and classifies
+    // DataIntegrityViolationException classification, which this advice never
+    // mapped: a
+    // unique-constraint or FK collision in this module answered 500 INTERNAL_ERROR
+    // instead of
+    // 409 DUPLICATE_RESOURCE. Anything not handled above now falls through to the
+    // shared advice,
+    // which answers a generic, correlated 500 for the genuinely unexpected and
+    // classifies
     // integrity violations properly.
     //
-    // This module was the last holdout; the six remediated in #1694 all deleted theirs.
-    // GlobalExceptionHandlerEnforcementTest.noModuleShadowsTheSharedCatchAll now fails the build
+    // This module was the last holdout; the six remediated in #1694 all deleted
+    // theirs.
+    // GlobalExceptionHandlerEnforcementTest.noModuleShadowsTheSharedCatchAll now
+    // fails the build
     // if one comes back.
 
     private ResponseEntity<ApiError> build(HttpStatus status, String code, String message) {
@@ -458,10 +489,14 @@ public class InventoryGlobalExceptionHandler {
     }
 
     /**
-     * Single response-building helper for every handler in this advice (issue #1729): sets the
-     * correlation id in both the {@code ApiError} body and the {@code X-Correlation-Id} header, and
-     * threads the optional guided fields for handlers that need {@code referenceId}/{@code
-     * nextAction}/{@code supportAction} (e.g. {@link #handleSourceDocumentLinesUnavailable}).
+     * Single response-building helper for every handler in this advice (issue
+     * #1729): sets the
+     * correlation id in both the {@code ApiError} body and the
+     * {@code X-Correlation-Id} header, and
+     * threads the optional guided fields for handlers that need
+     * {@code referenceId}/{@code
+     * nextAction}/{@code supportAction} (e.g.
+     * {@link #handleSourceDocumentLinesUnavailable}).
      */
     private ResponseEntity<ApiError> build(
             HttpStatus status,

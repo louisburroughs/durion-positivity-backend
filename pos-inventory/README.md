@@ -91,7 +91,7 @@ storage-location (bin) id resolves to its site's ancestors through `ext_storage_
 narrowed query admits a bin through its `site_id`, so covering a site covers every bin in it.
 `LocationScopeService` is the single entry point (`require`, `narrowTo`, `withinLocations`);
 endpoints guarded by `hasAnyAuthority(a, b)` deny only when no held alternate covers the location
-and narrow only when every held alternate is scoped. A caller who holds *none* of the alternates
+and narrow only when every held alternate is scoped. A caller who holds _none_ of the alternates
 has no scope to read, so neither decision applies — `@PreAuthorize` guarantees a held alternate on
 every HTTP path, so that state only arises with no caller at all.
 
@@ -158,7 +158,7 @@ location suggestion, and (from parity-F5) replenishment source selection via
 
 ## Category-based putaway (#1514)
 
-Putaway routes on what the item *is* and on what the destination is *fit to hold*, rather than on
+Putaway routes on what the item _is_ and on what the destination is _fit to hold_, rather than on
 per-SKU replenishment configuration. Full rules: [Putaway Validation Business Rules](https://github.com/louisburroughs/durion/blob/master/domains/inventory/putaway-validation-rules.md).
 
 - **Rules match per line**, in the strict precedence `SKU > SUBCATEGORY > CATEGORY > ANY`;
@@ -170,7 +170,7 @@ per-SKU replenishment configuration. Full rules: [Putaway Validation Business Ru
   brand-new uncategorised SKU never dead-ends, and it replaced a hardcoded default-location UUID no
   environment ever had. Its absence raises `NO_PUTAWAY_RULE_MATCH` (422) naming the remedy.
 - **Destination eligibility is `storage_compatibility`** (V43): a Flyway matrix of
-  (catalog category or subcategory id) → accepted storage classes, with subcategory rows *replacing*
+  (catalog category or subcategory id) → accepted storage classes, with subcategory rows _replacing_
   their parent's. `STAGING` and `QUARANTINE` accept nothing — they are putaway sources.
   `BATTERY_RACK` and `OIL_STORAGE` require the destination to declare `hazard_containment`, and an
   item whose every accepted class demands containment carries that requirement itself, so it is
@@ -184,7 +184,7 @@ per-SKU replenishment configuration. Full rules: [Putaway Validation Business Ru
 `ext_storage_location.storage_category_code`/`hazard_containment`/`allow_new_product` **empty, with
 no backfill**. Category matching has nothing to match on until a pos-catalog product-fact replay and
 a pos-location storage-location republish have run — and pos-location's generic outbox replay does
-*not* work for this, because it re-emits stored payloads that predate the fields. See
+_not_ work for this, because it re-emits stored payloads that predate the fields. See
 `docs/OPERATIONS_RUNBOOK.md` → "Replica seeding and drift repair (replay)" →
 "Issue #1514: rehydrating the putaway replica columns".
 
@@ -345,7 +345,7 @@ both. `PUT .../{toleranceId}` replaces the bounds and active flag; `GET`/`GET ..
 most-specific-first:** product+location, then product alone, then location alone, then the global
 default, then — if nothing matches — zero tolerance (today's pre-#1416 behavior, unchanged). When
 both an absolute and a percentage bound are configured, a count is within tolerance if it fits
-under *either* — the effective allowance is the larger of the two, the conventional "±50 gal or
+under _either_ — the effective allowance is the larger of the two, the conventional "±50 gal or
 ±1%, whichever is greater" shape of real tank-tolerance policy. See
 `CycleCountToleranceResolver`'s class javadoc for the full reasoning.
 
@@ -372,7 +372,7 @@ tolerance and compares `|measured − book|` against it:
 (`expectedQuantity`), measured quantity (`measuredQuantity` + `unitOfMeasure`), measurement method,
 measurement timestamp (`countedAt`), variance quantity and percentage, the resolved tolerance
 snapshot (`allowedToleranceAbsolute`/`allowedTolerancePercentage`), `withinTolerance`, and an
-optional `varianceReason`. Adjustment quantity and approval status are deliberately *not*
+optional `varianceReason`. Adjustment quantity and approval status are deliberately _not_
 duplicated onto the count — they live on the linked `CycleCountAdjustment`, queryable by
 `cycleCountTaskId`, since a count and its adjustment are separate records for separate
 transactions.
@@ -383,7 +383,7 @@ clamping a bulk product's downward variance to zero rather than surfacing it. Re
 mechanism (`LedgerPostingServiceImpl.rejectNegativeProjection`) shows it does the opposite —
 it **throws** `NegativeStockPolicyViolationException` rather than clamping, and does so on a
 `quantityAfter` that is algebraically guaranteed non-negative for this path: an adjustment posts a
-*to-measured* change (`quantityAfter = currentOnHand + quantityChange`, recomputed against current
+_to-measured_ change (`quantityAfter = currentOnHand + quantityChange`, recomputed against current
 on-hand immediately before posting), and the measured quantity behind that change is validated
 `>= 0` at every entry point. The floor is kept as-is — structurally unreachable defense-in-depth
 for this path, not dead weight — documented and pinned by test rather than silently inherited. See
@@ -420,15 +420,15 @@ What that costs is a constraint on the rollout, and it is stated rather than mit
 
 ## Configuration
 
-| Property                                             | Default  | Description                                            |
-| ---------------------------------------------------- | -------- | ------------------------------------------------------ |
-| `SPRING_DATASOURCE_URL`                              | required | PostgreSQL connection URL                              |
-| `EUREKA_SERVER_URL`                                  | required | Eureka service discovery URL                           |
-| `POS_INVENTORY_SUPPLIER_HINT_STALENESS_CEILING`      | `PT24H`  | Age past which a supplier hint reads as unknown        |
-| `POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_ENABLED`     | `false`  | Run the EAN resolution sweep against pos-catalog       |
-| `POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_BATCH_SIZE`  | `200`    | Hints resolved per pass                                |
-| `POS_INVENTORY_SKU_CATEGORY_RESOLVE_FROM_REPLICA`    | `false`  | Resolve the `SkuCategoryProvider` SPI from the catalog replica. Off by default — enabling it makes the `SKU_CATEGORY` scope of `sku_cost_method_config` and of `sourcing_strategy_config` reachable, changing both costing method and sourcing strategy for matching SKUs. Audit first with `GET /v1/inventory/valuation/methods/sku-category-impact` (valid while the flag is off), then follow "SKU_CATEGORY costing and sourcing cut-over (#1535)" in `docs/OPERATIONS_RUNBOOK.md`. Putaway does not use this SPI. |
-| `POS_INVENTORY_SKU_CATEGORY_IMPACT_SKU_CAP`          | `5000`   | Maximum products the SKU_CATEGORY impact report scans. Past this it sets `truncated: true` rather than silently shortening; raise it and re-run. |
+| Property                                            | Default  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SPRING_DATASOURCE_URL`                             | required | PostgreSQL connection URL                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `EUREKA_SERVER_URL`                                 | required | Eureka service discovery URL                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `POS_INVENTORY_SUPPLIER_HINT_STALENESS_CEILING`     | `PT24H`  | Age past which a supplier hint reads as unknown                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_ENABLED`    | `false`  | Run the EAN resolution sweep against pos-catalog                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `POS_INVENTORY_SUPPLIER_HINT_RESOLUTION_BATCH_SIZE` | `200`    | Hints resolved per pass                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `POS_INVENTORY_SKU_CATEGORY_RESOLVE_FROM_REPLICA`   | `false`  | Resolve the `SkuCategoryProvider` SPI from the catalog replica. Off by default — enabling it makes the `SKU_CATEGORY` scope of `sku_cost_method_config` and of `sourcing_strategy_config` reachable, changing both costing method and sourcing strategy for matching SKUs. Audit first with `GET /v1/inventory/valuation/methods/sku-category-impact` (valid while the flag is off), then follow "SKU_CATEGORY costing and sourcing cut-over (#1535)" in `docs/OPERATIONS_RUNBOOK.md`. Putaway does not use this SPI. |
+| `POS_INVENTORY_SKU_CATEGORY_IMPACT_SKU_CAP`         | `5000`   | Maximum products the SKU_CATEGORY impact report scans. Past this it sets `truncated: true` rather than silently shortening; raise it and re-run.                                                                                                                                                                                                                                                                                                                                                                      |
 
 ## Multitenancy (ADR-0062, WS3 wave 1)
 
@@ -446,9 +446,9 @@ The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_
 
 Platform-scoped schedulers (run with no tenant bound; touch only global tables):
 
-| Job | Why |
-| --- | --- |
-| `OutboxPublisher.publishPending` | Drains `event_outbox`; each row's `tenant_id` becomes the record header |
+| Job                                    | Why                                                                                                                                                                                                        |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OutboxPublisher.publishPending`       | Drains `event_outbox`; each row's `tenant_id` becomes the record header                                                                                                                                    |
 | `ManifestPublisher.publishDueManifest` | Groups the window's `event_outbox` rows by `tenant_id` and publishes one manifest per tenant, stamped with that tenant; every active tenant of the registry gets one, zero-count when it published nothing |
 
 Per-tenant schedulers run once per tenant of the registry (`TenantIterator.forEachActiveTenant`; the
