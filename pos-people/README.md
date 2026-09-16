@@ -16,8 +16,15 @@ ADR-0044 Phase 3 split (#874/#875); this module reads them from event-fed
 - Record work sessions (clock-in/clock-out) and compute job time totals
 - Manage staffing assignments across locations
 - Evaluate employee availability for scheduling
-- Publish `people.employee.updated` / `people.staffing-assignment.updated` facts on
-  `people.events.v1` via a transactional outbox (ADR-0044)
+- Publish `people.employee.updated` / `people.staffing-assignment.updated` /
+  `people.person-credential.updated` facts on `people.events.v1` via a transactional
+  outbox (ADR-0044)
+- Publish the `@TenantGlobal` skill registry as `people.skill.updated` facts once the
+  application is ready (`SkillRegistryFactPublisher`, CAP-329): the registry has no write
+  endpoint, so this is the only way a consumer's replica (pos-catalog's `ext_skill`) is
+  fed. Each row is versioned by its `updated_at`, so a restart converges and a re-seed
+  arrives as a newer version; with no resolvable tenant the publication is skipped with
+  a warning.
 - Translate between user identity and person records (`UserPersonTranslationService`)
 - Ingest timekeeping data from external sources (`TimekeepingIngestionService`)
 - Support bulk employee import via `POST /v1/people/bulk-ingest`

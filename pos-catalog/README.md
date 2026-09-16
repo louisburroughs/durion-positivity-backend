@@ -88,6 +88,18 @@ Product mutations queue a `catalog.product.updated` fact (payload `ProductUpdate
 
 Issue #1514 added `subcategoryId` and `subcategory` additively within schema version 2, following the precedent set when `productCode` was added: pos-inventory replicates the product's category *and* subcategory so putaway rules can route on them, and the subcategory level is what carries hazard containment (`Batteries` is a subcategory of `Electrical System`). Consumers match on the **id**, not the name — pos-catalog publishes product facts, not category facts, so a category rename only reaches a replica after a product replay, which makes the name an un-refreshed snapshot.
 
+### Consumed: the skill registry (CAP-329)
+
+`PeopleEventsListener` consumes `people.events.v1` for one fact, `people.skill.updated`, and
+mirrors it into `ext_skill` — a replica of the People domain's `@TenantGlobal` skill registry,
+global like its source (`db/tenancy-global-tables.txt`). A service's skill requirement is
+validated against this table, never by a synchronous call into pos-people (ADR-0044 §6). Rows are
+upserted by skill id under the usual aggregate-version stale guard; a retirement
+(`active=false`) keeps the row, so a requirement that still names the skill can be told the
+vocabulary moved rather than that the skill never existed. Every other people fact on the topic
+is acknowledged and ignored. Config: `pos.catalog.kafka.people-events-topic` /
+`people-events-consumer-group`.
+
 ## Category and subcategory resolution (#1514)
 
 `CategoryNameResolver` resolves human-authored category and subcategory **names** to ids for ingest paths that carry names rather than ids, against the Flyway-seeded reference taxonomy (`R__seed_reference_catalog.sql`: 12 categories, 40 subcategories).

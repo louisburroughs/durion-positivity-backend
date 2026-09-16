@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.people.EmployeeUpdatedV1;
 import com.positivity.domainevents.people.PersonCredentialUpdatedV1;
+import com.positivity.domainevents.people.SkillUpdatedV1;
 import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpsertRequestedV1;
 import com.positivity.people.internal.entity.Employee;
@@ -221,6 +222,29 @@ class PeopleEventPublisherTest {
             assertThat(payload.expiresOn()).isEqualTo(LocalDate.of(2026, 3, 15));
             // The publisher's clock is 2026-08-11: the row's ACTIVE column is not trusted, the dates decide.
             assertThat(payload.status()).isEqualTo("EXPIRED");
+        }
+
+        @Test
+        @DisplayName("people.skill.updated carries the registry row, versioned by its updatedAt rather than the clock")
+        void skillFact() {
+            Skill skill = credential().getSkill();
+            skill.setName("Brakes (medium/heavy duty)");
+            skill.setUpdatedAt(Instant.parse("2026-06-01T00:00:00Z"));
+
+            publisher.publishSkillUpdated(skill);
+
+            DomainEventEnvelope<?> envelope = captureEnvelope();
+            assertThat(envelope.eventType()).isEqualTo(SkillUpdatedV1.EVENT_TYPE);
+            assertThat(envelope.aggregateId()).isEqualTo(UUID.fromString("00000000-0000-0000-0000-0000000000f4"));
+            assertThat(envelope.aggregateVersion())
+                    .isEqualTo(Instant.parse("2026-06-01T00:00:00Z").toEpochMilli());
+            SkillUpdatedV1 payload = (SkillUpdatedV1) envelope.payload();
+            assertThat(payload.code()).isEqualTo("BRAKES-MEDIUM_HEAVY");
+            assertThat(payload.name()).isEqualTo("Brakes (medium/heavy duty)");
+            assertThat(payload.competenceCode()).isEqualTo("BRAKES");
+            assertThat(payload.minGvwrClass()).isEqualTo(4);
+            assertThat(payload.maxGvwrClass()).isEqualTo(8);
+            assertThat(payload.active()).isTrue();
         }
 
         @Test

@@ -3,6 +3,7 @@ package com.positivity.people.internal.config;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.people.EmployeeUpdatedV1;
 import com.positivity.domainevents.people.PersonCredentialUpdatedV1;
+import com.positivity.domainevents.people.SkillUpdatedV1;
 import com.positivity.domainevents.people.StaffingAssignmentUpdatedV1;
 import com.positivity.domainevents.peoplecontact.PersonUpsertRequestedV1;
 import com.positivity.people.internal.entity.Employee;
@@ -155,6 +156,34 @@ public class PeopleEventPublisher {
     }
 
     /**
+     * Queue a {@code people.skill.updated} fact for one registry row (CAP-329). Versioned by the
+     * row's {@code updatedAt} rather than the clock, so republishing the registry at every
+     * startup converges on consumers instead of moving their replica forward for no change, and
+     * a re-seed that touches the row reaches them as a genuinely newer version.
+     */
+    public void publishSkillUpdated(@NonNull Skill skill) {
+        OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
+        if (writer == null) {
+            return;
+        }
+        SkillUpdatedV1 payload = new SkillUpdatedV1(
+                skill.getId(),
+                skill.getCode(),
+                skill.getName(),
+                skill.getCompetenceCode(),
+                skill.getMinGvwrClass(),
+                skill.getMaxGvwrClass(),
+                skill.isActive());
+        long version = skill.getUpdatedAt() != null
+                ? skill.getUpdatedAt().toEpochMilli()
+                : Instant.now(clock).toEpochMilli();
+        writer.publish(
+                eventsTopic,
+                envelope(SkillUpdatedV1.EVENT_TYPE, SkillUpdatedV1.SCHEMA_VERSION, skill.getId(), version, payload));
+        log.debug("Queued people.skill.updated skillId={} code={} version={}", skill.getId(), skill.getCode(), version);
+    }
+
+    /**
      * Queue an identity upsert command toward pos-people-contact (ADR-0044 §2). The command
      * message is the plain {@code {commandType, eventId, payload}} shape the command listeners
      * use, not a fact envelope; the eventId is the receiver's idempotency key.
@@ -181,16 +210,14 @@ public class PeopleEventPublisher {
     }
 
     private <T> DomainEventEnvelope<T> envelope(String eventType, int schemaVersion, UUID aggregateId, T payload) {
+        return envelope(
+                eventType, schemaVersion, aggregateId, Instant.now(clock).toEpochMilli(), payload);
+    }
+
+    private <T> DomainEventEnvelope<T> envelope(
+            String eventType, int schemaVersion, UUID aggregateId, long aggregateVersion, T payload) {
         return DomainEventEnvelope.of(
-                eventType,
-                schemaVersion,
-                aggregateId,
-                Instant.now(clock).toEpochMilli(),
-                "pos-people",
-                null,
-                null,
-                payload,
-                clock);
+                eventType, schemaVersion, aggregateId, aggregateVersion, "pos-people", null, null, payload, clock);
     }
 
     /** Command message shape consumed by {@code people-contact.commands.v1} (see #874 listener). */
