@@ -1357,6 +1357,8 @@ paths:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1appointments~1{appointmentId}~1conflict-override
   /v1/appointments/{appointmentId}/reschedule:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1appointments~1{appointmentId}~1reschedule
+  /v1/schedules/capacity:
+    $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1schedules~1capacity
   /v1/schedules/view:
     $ref: ../../pos-shop-manager/openapi.yaml#/paths/~1v1~1schedules~1view
   /v1/shop-dashboard:
