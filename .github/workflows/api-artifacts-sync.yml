@@ -1181,6 +1181,12 @@ jobs:
         # repo, no DURION_SDK_ANGULAR_PATH), so the installer takes its tarball
         # path and installs exactly what was imported above.
         id: sdk_install
+        env:
+          # The installer shells out to its own `npm install` of the tarballs, which no flag on this
+          # line would reach. npm reads this as the --ignore-scripts config, and child npm processes
+          # inherit it, so the packed SDK cannot run lifecycle code on a runner holding the push
+          # token either. The tarballs arrive already built, so nothing here needs a hook to run.
+          npm_config_ignore_scripts: "true"
         run: npm run sdk:install
 
       - name: Install Chromium for the Vitest browser runner

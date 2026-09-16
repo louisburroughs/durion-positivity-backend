@@ -200,6 +200,39 @@ class PlatformControllersWebMvcTest {
                 .andExpect(status().isOk());
     }
 
+    /**
+     * The blank half of {@code TenantUpdateRequest}'s {@code @Pattern}, exercised through Bean
+     * Validation rather than through the service: {@code TenantServiceImplTest} rejects a blank name
+     * too, but it calls the service directly and so never runs the constraint that produces this 400.
+     */
+    @Test
+    void whitespaceOnlyDisplayNameIsRejectedByValidation() throws Exception {
+        mockMvc.perform(authed(
+                        patch("/v1/platform/tenants/{id}", TENANT_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"displayName\":\"   \"}"),
+                        "platform:tenant:update"))
+                .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * Pins the one behavioural difference between {@code \s*\S[\s\S]*} and the {@code .*\S.*} it
+     * replaced: a name carrying a line break is not blank, so validation admits it and the service
+     * normalizes it as usual. The old pattern rejected it only as a side effect of {@code .} not
+     * matching a line terminator. Asserted here so the published OpenAPI pattern, the SDK clients
+     * compiled from it, and the runtime cannot drift apart unnoticed.
+     */
+    @Test
+    void displayNameCarryingALineBreakIsNotBlankAndIsAccepted() throws Exception {
+        when(tenantService.update(eq(TENANT_ID), any())).thenReturn(tenant(TenantStatus.ACTIVE));
+        mockMvc.perform(authed(
+                        patch("/v1/platform/tenants/{id}", TENANT_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"displayName\":\"Acme\\nTire\"}"),
+                        "platform:tenant:update"))
+                .andExpect(status().isOk());
+    }
+
     @Test
     void accountsCrud() throws Exception {
         AccountResponse account = AccountResponse.builder()
