@@ -93,8 +93,7 @@ class BayContractBehaviorIT extends BaseContractIntegrationTest {
           "capacity": {
             "maxConcurrentVehicles": 2
           },
-          "serviceCapabilityIds": ["cap-tire-rotation"],
-          "skillRequirementIds": ["skill-ase-tire"]
+          "serviceCapabilityCodes": ["cap-tire-rotation"]
         }
         """;
 

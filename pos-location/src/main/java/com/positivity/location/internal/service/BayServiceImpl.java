@@ -78,7 +78,7 @@ public class BayServiceImpl implements BayService {
             throw new DuplicateResourceException(BAY_NAME_TAKEN);
         }
 
-        List<String> validatedCapabilityCodes = validateServiceCapabilityIds(request.getServiceCapabilityIds());
+        List<String> validatedCapabilityCodes = validateServiceCapabilityIds(request.getServiceCapabilityCodes());
 
         BayEntity entity = BayEntity.builder()
                 .location(location)
@@ -87,9 +87,8 @@ public class BayServiceImpl implements BayService {
                 .bayType(bayType)
                 .status(status)
                 .maxConcurrentVehicles(maxConcurrentVehicles)
-                .serviceCapabilityIds(validatedCapabilityCodes)
-                .skillRequirementIds(
-                        request.getSkillRequirementIds() == null ? List.of() : request.getSkillRequirementIds())
+                .serviceCapabilityCodes(validatedCapabilityCodes)
+                .maxDutyClass(request.getMaxDutyClass())
                 .build();
 
         try {
@@ -172,11 +171,11 @@ public class BayServiceImpl implements BayService {
             existing.setMaxConcurrentVehicles(maxConcurrentVehicles);
         }
 
-        if (patch.getServiceCapabilityIds() != null) {
-            existing.setServiceCapabilityIds(validateServiceCapabilityIds(patch.getServiceCapabilityIds()));
+        if (patch.getServiceCapabilityCodes() != null) {
+            existing.setServiceCapabilityCodes(validateServiceCapabilityIds(patch.getServiceCapabilityCodes()));
         }
-        if (patch.getSkillRequirementIds() != null) {
-            existing.setSkillRequirementIds(patch.getSkillRequirementIds());
+        if (patch.getMaxDutyClass() != null) {
+            existing.setMaxDutyClass(patch.getMaxDutyClass());
         }
 
         try {
@@ -346,7 +345,7 @@ public class BayServiceImpl implements BayService {
 
     private void throwIfInvalidServiceCapabilityIds(Set<String> invalidCodes) {
         if (!invalidCodes.isEmpty()) {
-            throw new IllegalArgumentException("Invalid serviceCapabilityIds: " + String.join(", ", invalidCodes));
+            throw new IllegalArgumentException("Invalid serviceCapabilityCodes: " + String.join(", ", invalidCodes));
         }
     }
 
@@ -385,10 +384,9 @@ public class BayServiceImpl implements BayService {
                 .bayType(entity.getBayType())
                 .status(entity.getStatus())
                 .maxConcurrentVehicles(entity.getMaxConcurrentVehicles())
-                .serviceCapabilityIds(
-                        entity.getServiceCapabilityIds() == null ? List.of() : entity.getServiceCapabilityIds())
-                .skillRequirementIds(
-                        entity.getSkillRequirementIds() == null ? List.of() : entity.getSkillRequirementIds())
+                .serviceCapabilityCodes(
+                        entity.getServiceCapabilityCodes() == null ? List.of() : entity.getServiceCapabilityCodes())
+                .maxDutyClass(entity.getMaxDutyClass())
                 .createdAt(entity.getCreatedAt())
                 .lastModifiedAt(entity.getUpdatedAt())
                 .build();

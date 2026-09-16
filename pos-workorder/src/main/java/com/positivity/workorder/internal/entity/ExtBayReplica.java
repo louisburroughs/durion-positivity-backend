@@ -8,11 +8,14 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * Read-only service-bay replica fed by {@code location.events.v1} (ADR-0044 §6, #1656).
@@ -54,6 +57,27 @@ public class ExtBayReplica extends TenantScopedEntity {
 
     @Column(name = "active", nullable = false)
     private boolean active;
+
+    /** Owner's bay type discriminator. Display-only once the two fields below exist (CAP-325 D5). */
+    @Column(name = "bay_type", length = 50)
+    private String bayType;
+
+    /**
+     * Catalog operation codes this bay type is the only one able to perform (CAP-325 D14). Empty
+     * means a general bay — eligible for every operation no specialty bay claims. NULL means the
+     * publisher predates the field and nothing may be inferred; never read NULL as "none".
+     */
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "service_capability_codes", columnDefinition = "text[]")
+    private List<String> serviceCapabilityCodes;
+
+    /** How many vehicles the bay physically holds; NULL until the publisher emits it. */
+    @Column(name = "max_concurrent_vehicles")
+    private Integer maxConcurrentVehicles;
+
+    /** Heaviest GVWR class (1–8) the bay accepts; NULL when unconstrained or not yet published (D13). */
+    @Column(name = "max_duty_class")
+    private Integer maxDutyClass;
 
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;

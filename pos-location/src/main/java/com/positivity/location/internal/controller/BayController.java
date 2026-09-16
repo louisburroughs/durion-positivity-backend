@@ -47,8 +47,8 @@ public class BayController {
             {"name":"Bay A1",
              "bayType":"GENERAL_SERVICE",
              "capacity":{"maxConcurrentVehicles":2},
-             "serviceCapabilityIds":["ALIGNMENT"],
-             "skillRequirementIds":["018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a20"],
+             "serviceCapabilityCodes":["WHEEL-ALIGNMENT-4-WHEEL"],
+             "maxDutyClass":3,
              "status":"ACTIVE"}
             """;
 

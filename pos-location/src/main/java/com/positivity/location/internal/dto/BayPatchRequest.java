@@ -5,6 +5,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.util.List;
 import lombok.AllArgsConstructor;
@@ -49,14 +50,20 @@ public class BayPatchRequest {
     private BayCapacityRequest capacity;
 
     @Schema(
-            description = "Identifiers of service capabilities supported by the bay",
-            example = "[\"01960003-0000-7000-8000-000000000010\"]",
+            description = "Catalog operation codes this bay type is the only one able to perform "
+                    + "(CAP-325 D14). Null leaves unchanged; an empty list clears to general. Each value must "
+                    + "be an active catalog operationCode; unknown codes are rejected 422.",
+            example = "[\"WHEEL-ALIGNMENT-4-WHEEL\"]",
             requiredMode = NOT_REQUIRED)
-    private List<String> serviceCapabilityIds;
+    private List<String> serviceCapabilityCodes;
 
     @Schema(
-            description = "Identifiers of skills required to operate the bay",
-            example = "[\"01960003-0000-7000-8000-000000000020\"]",
+            description = "Heaviest GVWR class (1–8) the bay accepts (CAP-325 D13). Null leaves unchanged.",
+            example = "3",
+            minimum = "1",
+            maximum = "8",
             requiredMode = NOT_REQUIRED)
-    private List<String> skillRequirementIds;
+    @Min(1)
+    @Max(8)
+    private Integer maxDutyClass;
 }

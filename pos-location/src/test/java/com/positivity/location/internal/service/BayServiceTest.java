@@ -376,8 +376,7 @@ class BayServiceTest {
     void createBay_successWithCapabilitiesAndSkills_savesAndReturnsResponse() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayRequest request = validCreateRequest();
-        request.setServiceCapabilityIds(List.of("ALIGN", "TIRE"));
-        request.setSkillRequirementIds(List.of("ASE-A1"));
+        request.setServiceCapabilityCodes(List.of("ALIGN", "TIRE"));
         request.setStatus("active");
 
         when(locationRepository.findById(locationId))
@@ -397,17 +396,16 @@ class BayServiceTest {
 
         assertThat(response.getLocationId()).isEqualTo(locationId);
         assertThat(response.getStatus()).isEqualTo("ACTIVE");
-        assertThat(response.getServiceCapabilityIds()).containsExactly("ALIGN", "TIRE");
-        assertThat(response.getSkillRequirementIds()).containsExactly("ASE-A1");
+        assertThat(response.getServiceCapabilityCodes()).containsExactly("ALIGN", "TIRE");
         verify(bayRepository).save(any(BayEntity.class));
     }
 
     @Test
-    @DisplayName("createBay_invalidServiceCapabilityIds_throwsIllegalArgumentException")
-    void createBay_invalidServiceCapabilityIds_throwsIllegalArgumentException() {
+    @DisplayName("createBay_invalidServiceCapabilityCodes_throwsIllegalArgumentException")
+    void createBay_invalidServiceCapabilityCodes_throwsIllegalArgumentException() {
         UUID locationId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         BayRequest request = validCreateRequest();
-        request.setServiceCapabilityIds(List.of("ALIGN", "UNKNOWN_CAP"));
+        request.setServiceCapabilityCodes(List.of("ALIGN", "UNKNOWN_CAP"));
 
         when(locationRepository.findById(locationId))
                 .thenReturn(Optional.of(Location.builder().id(locationId).build()));
@@ -426,7 +424,7 @@ class BayServiceTest {
 
         assertThatThrownBy(() -> bayService.createBay(locationId, request))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid serviceCapabilityIds: UNKNOWN_CAP");
+                .hasMessage("Invalid serviceCapabilityCodes: UNKNOWN_CAP");
     }
 
     @Test
@@ -690,8 +688,7 @@ class BayServiceTest {
         existing.setId(bayId);
 
         BayPatchRequest patch = BayPatchRequest.builder()
-                .serviceCapabilityIds(List.of("ALIGN", "BRAKE"))
-                .skillRequirementIds(List.of("ASE-A4"))
+                .serviceCapabilityCodes(List.of("ALIGN", "BRAKE"))
                 .build();
 
         when(locationRepository.existsById(locationId)).thenReturn(true);
@@ -701,8 +698,7 @@ class BayServiceTest {
 
         BayResponse response = bayService.patchBay(locationId, bayId, patch);
 
-        assertThat(response.getServiceCapabilityIds()).containsExactly("ALIGN", "BRAKE");
-        assertThat(response.getSkillRequirementIds()).containsExactly("ASE-A4");
+        assertThat(response.getServiceCapabilityCodes()).containsExactly("ALIGN", "BRAKE");
         verify(bayRepository).save(any(BayEntity.class));
     }
 
@@ -748,8 +744,7 @@ class BayServiceTest {
                 .bayType(BayType.GENERAL_SERVICE.name())
                 .status("ACTIVE")
                 .maxConcurrentVehicles(2)
-                .serviceCapabilityIds(List.of())
-                .skillRequirementIds(List.of())
+                .serviceCapabilityCodes(List.of())
                 .build();
     }
 

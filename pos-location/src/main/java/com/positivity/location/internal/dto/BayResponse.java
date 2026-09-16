@@ -56,16 +56,21 @@ public class BayResponse {
     private Integer maxConcurrentVehicles;
 
     @Schema(
-            description = "Identifiers of service capabilities supported by the bay",
-            example = "[\"01960003-0000-7000-8000-000000000010\"]",
+            description = "Catalog operation codes this bay type is the only one able to perform "
+                    + "(CAP-325 D14). Empty for a general bay, which is eligible for every operation no "
+                    + "specialty bay claims. Values are catalog operationCodes, UPPER-DASH per ADR-0059 §3.",
+            example = "[\"WHEEL-ALIGNMENT-4-WHEEL\"]",
             requiredMode = NOT_REQUIRED)
-    private List<String> serviceCapabilityIds;
+    private List<String> serviceCapabilityCodes;
 
     @Schema(
-            description = "Identifiers of skills required to operate the bay",
-            example = "[\"01960003-0000-7000-8000-000000000020\"]",
+            description = "Heaviest GVWR class (1–8) the bay accepts; null when unconstrained (CAP-325 D13). "
+                    + "Light = 1–3, Medium = 4–6, Heavy = 7–8.",
+            example = "3",
+            minimum = "1",
+            maximum = "8",
             requiredMode = NOT_REQUIRED)
-    private List<String> skillRequirementIds;
+    private Integer maxDutyClass;
 
     @Schema(
             description = "Timestamp when the bay was created (ISO 8601)",

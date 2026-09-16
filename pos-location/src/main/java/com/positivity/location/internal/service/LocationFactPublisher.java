@@ -423,8 +423,15 @@ public class LocationFactPublisher {
     }
 
     private void publishBayFact(@NonNull OutboxEventWriter writer, @NonNull BayEntity bay) {
-        BayUpdatedV1 payload =
-                new BayUpdatedV1(bay.getId(), bay.getLocationId(), bay.getName(), bay.getBayType(), bay.getStatus());
+        BayUpdatedV1 payload = new BayUpdatedV1(
+                bay.getId(),
+                bay.getLocationId(),
+                bay.getName(),
+                bay.getBayType(),
+                bay.getStatus(),
+                bay.getServiceCapabilityCodes(),
+                bay.getMaxConcurrentVehicles(),
+                bay.getMaxDutyClass());
         publish(writer, BayUpdatedV1.EVENT_TYPE, BayUpdatedV1.SCHEMA_VERSION, bay.getId(), payload, bay.getVersion());
     }
 
