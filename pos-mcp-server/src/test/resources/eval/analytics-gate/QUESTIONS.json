@@ -20,7 +20,7 @@
       "q16",
       "q17"
     ],
-    "rationale": "Every question whose serving endpoints have shipped (Wave 1 and Wave 2, analytics-capability-plan.md §3/§4) AND whose ground truth is computable on the TRACKB seed AND whose Wave 2 call count is inside its §6 budget. The other eight are excluded for a stated reason on their own entry — an unbuilt Wave 3 composition, an over-budget Wave 2 loop, or a BLOCKED ground truth. The set is the Wave 2 exit gate (docs/gate-runs/wave-2/README.md) plus Wave 1's q13.",
+    "rationale": "Every question whose serving endpoints have shipped (Wave 1 and Wave 2, analytics-capability-plan.md §3/§4) AND whose ground truth is computable on the TRACKB seed AND whose Wave 2 call count is inside its §6 budget. The other eight are excluded for a stated reason on their own entry — an unbuilt Wave 3 composition, an over-budget Wave 2 loop, or a BLOCKED ground truth. The set is the Wave 2 exit gate (durion/domains/general/mcp-server/archive/gate-runs/wave-2/README.md) plus Wave 1's q13.",
     "endpoint": "POST /mcp-server/v1/mcp/chat"
   },
   "window_shapes": {

@@ -125,7 +125,8 @@ public class ToolRegistrationServiceImpl implements ToolRegistrationService {
         // partial and tool-empty still emits the discovery_partial_total signal.
         List<String> failedPrefixes = discovered.failedPrefixes();
         if (!failedPrefixes.isEmpty()) {
-            // #1632: alertable partial-discovery signal (see docs/alerts/tool-discovery-alerts.md).
+            // #1632: alertable partial-discovery signal (see
+            // durion/domains/general/mcp-server/operations/alerts/tool-discovery-alerts.md).
             discoveryPartialTotal.increment(failedPrefixes.size());
         }
         if (specifications.isEmpty()) {

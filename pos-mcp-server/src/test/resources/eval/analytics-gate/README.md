@@ -1,6 +1,6 @@
 # Analytics gate — fixture dataset & ground truth
 
-Serves `pos-mcp-server/docs/analytics-capability-plan.md` §2 (test-gate methodology), §2.3
+Serves `durion/domains/general/mcp-server/analytics-capability-plan.md` §2 (test-gate methodology), §2.3
 (fixture dataset) and §6 (the twenty-question gate matrix).
 
 This directory holds the live, deploy-and-run acceptance gate — the one document that says what
@@ -224,7 +224,7 @@ an empty A/R aging report and a silently wrong Q13.
    **Seed data written to the previous instruction is now wrong.** Any fixture built to age by
    `invoice_created_at` (null `due_date`s, or due dates chosen to be ignored) will produce
    different buckets under the corrected rule and must be revisited before it is used as ground
-   truth. See `docs/gate-runs/2026-09-01-ar-aging-basis-change.md`.
+   truth. See `durion/domains/general/mcp-server/archive/gate-runs/2026-09-01-ar-aging-basis-change.md`.
 
 ## How windows are graded
 

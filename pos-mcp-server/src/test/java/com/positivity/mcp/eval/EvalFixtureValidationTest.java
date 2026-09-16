@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
  * Gate 0 evaluation harness — structural half.
  *
  * <p>Validates every eval fixture file against the structural rules in
- * {@code docs/phase0-fixtures-and-telemetry.md} without requiring a running Ollama / Spring
+ * {@code durion/domains/general/mcp-server/archive/phase0-fixtures-and-telemetry.md} without requiring a running Ollama / Spring
  * context. This is the CI-safe portion of the harness: it makes malformed or drifting fixtures
  * fail loudly and actionably.
  *
@@ -49,7 +49,7 @@ class EvalFixtureValidationTest {
     private static final Set<String> TOOL_RESPONSE_OUTCOMES = Set.of("realistic-response", "no-tool-available");
     private static final Set<String> GAP_HYPOTHESES = Set.of("new-tool", "description-gap", "n/a");
 
-    // Gate 0 completeness minimums (docs/implementation_phase_gates.md).
+    // Gate 0 completeness minimums (durion/domains/general/mcp-server/archive/implementation_phase_gates.md).
     private static final int MIN_TOOL_SELECTION = 100;
     private static final int MIN_RAG_RETRIEVAL = 50;
     private static final int MIN_WRITE_SAFETY = 30;
@@ -75,8 +75,9 @@ class EvalFixtureValidationTest {
     @Test
     @DisplayName("pending tool-selection fixtures are structurally valid and stay out of scoring")
     void toolSelectionPendingFixturesValid() throws IOException {
-        // Analytics gate (docs/analytics-capability-plan.md §6): questions whose backing endpoints do
-        // not exist yet still get a fixture, but they must not count as regressions today. They live in
+        // Analytics gate (durion/domains/general/mcp-server/analytics-capability-plan.md §6): questions whose
+        // backing endpoints do not exist yet still get a fixture, but they must not count as regressions today.
+        // They live in
         // this sibling directory rather than in tool-selection/ because both scorers — BaselineCaptureIT
         // and scripts/eval_live.py — discover suites by directory glob (eval/tool-selection/*.json), so a
         // second file there would be scored against the hit@5 / MRR floors and turn unimplemented Wave 2

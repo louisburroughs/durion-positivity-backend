@@ -186,7 +186,8 @@ class BaselineCaptureIT {
         // Set with margin below observed. Override with -Dmcp.eval.min-hit5 / -Dmcp.eval.min-mrr.
         //
         // PROVISIONAL — these floors have never been validated against THIS harness (#1606
-        // finding 2; determination in docs/gate-runs/2026-08-31-baseline-determination.md).
+        // finding 2; determination in
+        // durion/domains/general/mcp-server/archive/gate-runs/2026-08-31-baseline-determination.md).
         // The 0.76 / 0.7222 observation above comes from scripts/eval_live.py, which by its own
         // header caveat scores the RAW ANN order; this IT scores the output of
         // ToolRegistryService.resolveCandidateTools — admin fast path, ToolScorer re-rank and

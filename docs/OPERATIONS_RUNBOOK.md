@@ -411,7 +411,7 @@ DELETE FROM mcp_tool_priority;          -- RLS confines this to the bound tenant
 COMMIT;
 ```
 
-Its requests fall back to the global row until the next live run (`pos-mcp-server/README.md`,
+Its requests fall back to the global row until the next live run (durion `domains/general/mcp-server/architecture.md`,
 "Per-tenant tool priorities").
 
 ### Dashboard Access

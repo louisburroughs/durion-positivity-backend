@@ -843,7 +843,7 @@ python3 scripts/rag_gap_harness.py calibrate --judge ollama
 Pure decision logic lives in the `scripts/gap_harness/` package and is unit-tested
 (`scripts/tests/test_gap_harness.py`); `replay`, `emit-fixture`, and `calibrate` on a set carrying
 `predicted_verdict` run offline. Full docs: [`scripts/gap_harness/README.md`](gap_harness/README.md). Design:
-`pos-mcp-server/docs/rag-corpus-gap-harness-design.md`.
+`durion/domains/general/mcp-server/archive/rag-corpus-gap-harness-design.md`.
 
 ---
 
@@ -853,7 +853,7 @@ Live HTTP verification harness for the NLTI phase gates (#1367). Where `eval_liv
 Postgres/pgvector directly, this one exercises the real `pos-mcp-server` HTTP surface through
 `pos-api-gateway` as N configured personas, harvests the `nlti.request.telemetry` stream from Loki
 via LogQL, and emits both a JSON result file and a paste-ready markdown evidence block shaped like
-the gate blocks in `pos-mcp-server/docs/implementation_checklist.md`.
+the gate blocks in `durion/domains/general/mcp-server/archive/implementation_checklist.md`.
 
 Suites (`--suite a,b` is repeatable; `--suite all` runs everything): `equivalence` (Gate 2A /
 #1214), `persona` (Gate 1 / #1213), `workflow` (Gate 2C / #1215), `router` (Gate 4 / #1216),
@@ -911,7 +911,7 @@ python3 scripts/nlti_live_verify.py --suite write-gate --allow-writes \
   old UNKNOWN dead-end (#1218 product gap) is a real FAIL.
 - Exit codes: `0` all executed checks passed (or `--dry-run`), `1` a check failed, `2` configuration
   error, `3` infrastructure error (auth/gateway/Loki unreachable).
-- Plan: `pos-mcp-server/docs/gate-closeout-plan-1212-1219.md` (Wave 0.3).
+- Plan: `durion/domains/general/mcp-server/archive/gate-closeout-plan-1212-1219.md` (Wave 0.3).
 
 ---
 
@@ -953,7 +953,7 @@ ENV_FILE=/opt/durion/alpha/.env python3 scripts/rag_lock_sweep.py
 - Exit codes: `0` every document locked (or `--dry-run`), `1` drift detected, `2` configuration
   error, `3` infrastructure error (driver missing, DB unreachable) — non-zero on drift so it can be
   wired into CI.
-- Plan: `pos-mcp-server/docs/gate-closeout-plan-1212-1219.md` (Wave 0.2, run in Wave 1 step 2).
+- Plan: `durion/domains/general/mcp-server/archive/gate-closeout-plan-1212-1219.md` (Wave 0.2, run in Wave 1 step 2).
 
 ---
 
