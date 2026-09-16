@@ -37,10 +37,12 @@ public class SkillController {
                     Returns every active skill in the platform registry with the vendor codes (ASE) that map \
                     onto it and the FHWA GVWR class range it certifies work on.
                     Use this tool to name a skill when reading or entering a technician's credentials, or when \
-                    reading a service's skill requirement; it is reference data shared by every tenant and is \
-                    never edited through the API.
+                    reading a service's skill requirement; do not try to create or edit skills through the API, \
+                    the registry is seeded reference data shared by every tenant.
                     Preconditions: the caller holds people:skill:view.
-                    Returns 200 with the list, ordered by code; 403 when the caller lacks the authority.
+                    Required inputs: none; there are no parameters and no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with the list, ordered by code, and 403 when the caller lacks the authority.
                     """)
     @ApiResponse(
             responseCode = "200",

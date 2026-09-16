@@ -42,9 +42,12 @@ public class PersonCredentialController {
                     SUPERSEDED when set deliberately. A renewal appears as its own row beside the one it renewed, \
                     so a past date's qualification stays visible.
                     Use this tool to see what a technician is certified to do, or to audit an inspector's \
-                    qualification on a past date; the roster views in shop management read a replica of the same.
+                    qualification on a past date; for a shop's roster use shop management's technician roster \
+                    instead, which reads a replica of the same credentials.
                     Preconditions: the caller holds people:employee:view.
-                    Returns 200 with the list, empty when the person holds none; 403 without the authority.
+                    Required inputs: personId (UUID) as a path parameter; there is no request body.
+                    No events are emitted and no state changes; this is a read-only projection.
+                    Returns 200 with the list, empty when the person holds none, and 403 without the authority.
                     """)
     @ApiResponse(
             responseCode = "200",

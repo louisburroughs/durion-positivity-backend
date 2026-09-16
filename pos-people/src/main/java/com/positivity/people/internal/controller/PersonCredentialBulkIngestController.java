@@ -79,21 +79,24 @@ public class PersonCredentialBulkIngestController
             summary = "Record People's Credentials in Bulk",
             description = """
                     Records many credentials at once, resolving each row's employee number to a person and its \
-                    vendor code (sourceCode + sourceCredentialCode, e.g. ASE T4-BRAKES) to a registry skill \
-                    through the cross-reference, or taking a Durion skillCode directly (e.g. DOT-INSPECTOR).
-                    Use this tool when loading an HR feed's certifications or seeding an environment; the \
-                    registry is read at GET /v1/people/skills.
-                    Preconditions: each employee number must resolve to a person with an employee record; each \
-                    vendor code must be in the cross-reference — an unknown code rejects its row rather than \
-                    becoming a skill nobody holds; issuedOn is required and expiresOn, when given, is not before it.
+                    vendor code (sourceCode + sourceCredentialCode, such as ASE T4-BRAKES) to a registry skill \
+                    through the cross-reference, or taking a Durion skillCode such as DOT-INSPECTOR directly.
+                    Use this tool when loading an HR feed's certifications or seeding an environment; read the \
+                    registry at GET /v1/people/skills instead of guessing codes.
+                    Preconditions: each employee number must resolve to a person with an employee record, and \
+                    each vendor code must be in the cross-reference — an unknown code rejects its row rather than \
+                    becoming a skill nobody holds.
+                    Required inputs: jobId, and per record employeeNumber, issuer, issuedOn and either skillCode \
+                    or sourceCode + sourceCredentialCode; expiresOn, proficiency (1-5) and evidenceRef are optional, \
+                    and expiresOn may not precede issuedOn.
                     Semantics: upsert by natural key (person, skill, issuer, issuedOn), so a re-send updates the \
-                    expiry, proficiency and evidence and a renewal with a later issuedOn is a new row. Status is \
-                    derived from the dates, never taken from the row. With supersedeAbsent=true, each person in the \
-                    batch has their credentials from this job's sourceSystem that the batch no longer lists marked \
-                    SUPERSEDED — never deleted.
+                    expiry, proficiency and evidence, a renewal with a later issuedOn is a new row, and status is \
+                    derived from the dates rather than taken from the row.
+                    With supersedeAbsent=true, each person in the batch has their credentials from this job's \
+                    sourceSystem that the batch no longer lists marked SUPERSEDED — never deleted.
                     Emits a PEOPLE_CREDENTIAL_BULK_INGEST event and a person-credential fact per row written.
-                    Returns 200 with a per-record result; a row refused carries CREDENTIAL_EMPLOYEE_UNKNOWN or \
-                    CREDENTIAL_INGEST_REJECTED with the reason.
+                    Returns 200 with a per-record result, where a refused row carries CREDENTIAL_EMPLOYEE_UNKNOWN \
+                    or CREDENTIAL_INGEST_REJECTED with the reason.
                     """)
     @ApiResponse(
             responseCode = "200",
