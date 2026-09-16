@@ -107,6 +107,10 @@ pos:
       people-contact-manifest-topic: ${POS_LOCATION_PC_MANIFEST_TOPIC:people-contact.manifest.v1}
       people-contact-manifest-consumer-group: ${POS_LOCATION_PC_MANIFEST_CONSUMER_GROUP:pos-location-people-contact-manifests}
       people-contact-commands-topic: ${POS_LOCATION_PC_COMMANDS_TOPIC:people-contact.commands.v1}
+      # Catalog service-vocabulary replica feed (ADR-0044 §6, CAP-325) — validates bay specialty
+      # claims against catalog operation codes. Consume-only: no manifest, no commands.
+      catalog-events-topic: ${POS_LOCATION_CATALOG_EVENTS_TOPIC:catalog.events.v1}
+      catalog-events-consumer-group: ${POS_LOCATION_CATALOG_EVENTS_CONSUMER_GROUP:pos-location-catalog-events}
     manifest:
       topic: ${POS_LOCATION_MANIFEST_TOPIC:location.manifest.v1}
       window: ${POS_LOCATION_MANIFEST_WINDOW:PT1H}
