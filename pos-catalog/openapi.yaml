@@ -46,6 +46,8 @@ tags:
   name: Product MSRP API
 - description: 'Curation report: pairs of active labor standards from different sources that would answer for the same vehicle and time type but disagree.'
   name: Labor Standard Conflicts
+- description: Skill requirements a catalog service declares (CAP-329)
+  name: Service Requirements
 - description: API for managing catalogs
   name: Catalog API
 - description: Manage price books, pricing rules, and resolution
@@ -3179,6 +3181,76 @@ paths:
       - Products API
       x-required-permissions:
       - catalog:service_type:view
+  /v1/products/services/{serviceId}/requirements:
+    put:
+      description: 'Replaces the whole skill requirement declaration of one catalog service, each required skill scoped to a GVWR class range (1-8) or to ANY class when both bounds are omitted.
+
+        Use this tool when a service needs competence that differs by vehicle class — the same brake job requiring A-series brakes on classes 1-3 and T-series on 4-8 — or to declare a service unconstrained by sending an empty list; do not create a second SKU for a competence-only difference, fork at the SKU only when labor time or price differs.
+
+        Preconditions: the service exists, and every skillId is an active row of the skill registry (read it at GET /v1/people/skills) whose own class range covers the range declared here.
+
+        Required inputs: serviceId (UUID) as a path parameter and a requiredSkills list, possibly empty, of {skillId, minGvwrClass, maxGvwrClass}.
+
+        Emits a CATALOG_SERVICE_REQUIREMENTS_SET audit event and a catalog.service.updated fact (schema v3) carrying requirementsConfiguredAt and requiredSkills, so schedulers resolve the requirement from their replica without calling back.
+
+        Returns 200 with the service, 404 when the service does not exist, and 422 with SKILL_UNKNOWN, SKILL_RETIRED, SKILL_DUPLICATE or SKILL_CLASS_RANGE_INVALID naming the offending value.
+
+        '
+      operationId: setServiceRequirements
+      parameters:
+      - description: Catalog service id
+        in: path
+        name: serviceId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Class-conditional brake competence:
+                description: Class-conditional brake competence
+                value:
+                  requiredSkills:
+                  - maxGvwrClass: 3
+                    minGvwrClass: 1
+                    skillId: 01960011-0000-7000-8000-000000000040
+                  - maxGvwrClass: 8
+                    minGvwrClass: 4
+                    skillId: 01960011-0000-7000-8000-000000000041
+            schema:
+              $ref: '#/components/schemas/ServiceRequirementsRequest'
+        description: Replace-set list of required skills; empty declares the service unconstrained
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceDto'
+          description: Requirements declared; the service with its requirement profile
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Service not found
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A skill is unknown, retired, duplicated, or its class range is invalid
+      security:
+      - bearerAuth:
+        - ROLE_ADMIN
+        - catalog:service_requirement:manage
+      summary: Declare the Skills a Service Requires
+      tags:
+      - Service Requirements
+      x-required-permissions:
+      - catalog:service_requirement:manage
   /v1/products/substitution-groups:
     get:
       description: 'Returns every substitution group with its name, notes and member product ids ordered by when each member joined.
@@ -7696,6 +7768,61 @@ components:
       - replacementId
       - replacementProductId
       type: object
+    RequiredSkillDto:
+      description: A skill the service requires, conditioned on the vehicle's GVWR class
+      properties:
+        competenceCode:
+          description: Competence the skill certifies
+          example: BRAKES
+          type: string
+        maxGvwrClass:
+          description: Highest GVWR class (1-8) the requirement applies to; null with minGvwrClass null means ANY
+          example: 8
+          format: int32
+          type: integer
+        minGvwrClass:
+          description: Lowest GVWR class (1-8) the requirement applies to; null with maxGvwrClass null means ANY class
+          example: 4
+          format: int32
+          type: integer
+        skillActive:
+          description: False when the registry has since retired the skill; the requirement still names it
+          example: true
+          type: boolean
+        skillCode:
+          description: Registry skill code
+          example: BRAKES-MEDIUM_HEAVY
+          type: string
+        skillId:
+          description: Registry skill id
+          example: 01960011-0000-7000-8000-000000000041
+          format: uuid
+          type: string
+      type: object
+    RequiredSkillRequest:
+      description: One required skill with the GVWR class range it applies to; both bounds null means ANY
+      properties:
+        maxGvwrClass:
+          description: Highest GVWR class (1-8) the requirement applies to; omit both bounds for ANY
+          example: 8
+          format: int32
+          maximum: 8
+          minimum: 1
+          type: integer
+        minGvwrClass:
+          description: Lowest GVWR class (1-8) the requirement applies to; omit both bounds for ANY
+          example: 4
+          format: int32
+          maximum: 8
+          minimum: 1
+          type: integer
+        skillId:
+          description: Registry skill id
+          format: uuid
+          type: string
+      required:
+      - skillId
+      type: object
     ResolvePriceRequestDto:
       description: Request to resolve the reference/list price for a product in a given context (catalog reference role per ADR-0054; transactional sell prices are resolved by pos-price)
       properties:
@@ -7797,6 +7924,16 @@ components:
         operationCode:
           description: Durion operation code
           example: BRAKE-PAD-FRONT
+          type: string
+        requiredSkills:
+          description: Skills the service requires per GVWR class range; empty with a non-null requirementsConfiguredAt declares the service unconstrained, null means not configured
+          items:
+            $ref: '#/components/schemas/RequiredSkillDto'
+          type: array
+        requirementsConfiguredAt:
+          description: When the skill requirements were last declared (CAP-329); null means never configured, which consumers warn about rather than deny on
+          example: '2026-09-16T12:00:00Z'
+          format: date-time
           type: string
         shortDescription:
           description: Short service description
@@ -8317,6 +8454,17 @@ components:
           description: Authored labor hours for the package as sold
           example: 1.2
           type: number
+      type: object
+    ServiceRequirementsRequest:
+      description: Replace-set declaration of the skills a service requires; empty declares it unconstrained
+      properties:
+        requiredSkills:
+          description: Required skills; empty means unconstrained
+          items:
+            $ref: '#/components/schemas/RequiredSkillRequest'
+          type: array
+      required:
+      - requiredSkills
       type: object
     SortObject:
       properties:

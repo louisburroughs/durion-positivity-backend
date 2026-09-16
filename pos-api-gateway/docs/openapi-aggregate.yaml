@@ -357,6 +357,8 @@ paths:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1services~1search
   /v1/products/services/{serviceId}:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1services~1{serviceId}
+  /v1/products/services/{serviceId}/requirements:
+    $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1services~1{serviceId}~1requirements
   /v1/products/substitution-groups:
     $ref: ../../pos-catalog/openapi.yaml#/paths/~1v1~1products~1substitution-groups
   /v1/products/substitution-groups/{groupId}:
