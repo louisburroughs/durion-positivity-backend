@@ -79,7 +79,7 @@ Last Updated: 2026-03-10
 | `pos-location` | `Location` | `defaultStagingLocationId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne StorageLocationEntity defaultStagingLocation` on 2026-03-10. |
 | `pos-location` | `Location` | `defaultQuarantineLocationId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne StorageLocationEntity defaultQuarantineLocation` on 2026-03-10. |
 | `pos-location` | `MobileUnitEntity` | `baseLocationId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Location baseLocation` (nullable) on 2026-03-10. |
-| `pos-shop-manager` | `OverrideRecord` | `appointmentId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Appointment` on 2026-03-10. |
+| `pos-shop-manager` | `OverrideRecord` | `appointmentId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Appointment` on 2026-03-10. Entity retired by CAP-326 (`conflict_override` replaces `override_record`). |
 | `pos-shop-manager` | `RescheduleHistory` | `appointmentId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Appointment` on 2026-03-10. |
 | `pos-shop-manager` | `WorkOrderAppointmentMapping` | `appointmentId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Appointment` on 2026-03-10. |
 | `pos-shop-manager` | `AppointmentAudit` | `appointmentId` | `CONVERT_NOW` | `DONE` | Converted to `@ManyToOne Appointment` on 2026-03-10. |

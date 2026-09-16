@@ -100,14 +100,6 @@ public class Appointment extends TenantScopedEntity {
     private String cancellationNotes;
 
     /**
-     * Set to {@code true} when this appointment was scheduled despite a detected
-     * conflict.
-     */
-    @Builder.Default
-    @Column(name = "is_conflict_override", nullable = false)
-    private boolean isConflictOverride = false;
-
-    /**
      * Source type identifying the workexec entity (ESTIMATE or WORK_ORDER) from
      * which this appointment was created. Null when booked directly.
      */

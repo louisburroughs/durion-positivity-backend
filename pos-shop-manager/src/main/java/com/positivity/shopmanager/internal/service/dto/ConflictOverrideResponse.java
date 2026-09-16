@@ -4,42 +4,52 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.Value;
 
-/** Response returned after a successful conflict override. */
+/** The override rows written for one request, with the rule each one accepted. */
 @Value
 @Builder
-@Schema(description = "Response returned after a successful scheduling conflict override")
+@Schema(description = "Result of a manager override of SOFT scheduling conflicts")
 public class ConflictOverrideResponse {
-    @Schema(
-            description = "Unique override record identifier",
-            example = "01960003-0000-7000-8000-000000000001",
-            requiredMode = REQUIRED)
-    UUID overrideId;
 
-    @Schema(
-            description = "Appointment identifier whose conflict was overridden",
-            example = "01960003-0000-7000-8000-000000000002",
-            requiredMode = REQUIRED)
+    @Schema(description = "Appointment the conflicts belong to", requiredMode = REQUIRED)
     UUID appointmentId;
 
     @Schema(
-            description = "User identifier of the manager who performed the override",
-            example = "01960003-0000-7000-8000-000000000020",
+            description = "Manager who recorded the override; also the approver (single-actor approval)",
+            example = "jane.manager",
             requiredMode = REQUIRED)
-    String overriddenByUserId;
+    String overriddenBy;
 
-    @Schema(
-            description = "Instant the override was performed in UTC (ISO-8601)",
-            example = "2026-06-18T08:00:00Z",
-            requiredMode = REQUIRED)
-    Instant overrideTimestamp;
+    @Schema(description = "When the override was recorded and approved, UTC", requiredMode = REQUIRED)
+    Instant approvedAt;
 
-    @Schema(
-            description = "Reason recorded for the override",
-            example = "Customer waiting on-site",
-            requiredMode = REQUIRED)
+    @Schema(description = "Justification as recorded", requiredMode = REQUIRED)
     String overrideReason;
+
+    @Schema(description = "One entry per conflict accepted", requiredMode = REQUIRED)
+    List<OverrideEntry> overrides;
+
+    @Value
+    @Builder
+    @Schema(description = "One accepted conflict")
+    public static class OverrideEntry {
+        @Schema(description = "The immutable override row", requiredMode = REQUIRED)
+        UUID overrideId;
+
+        @Schema(description = "The conflict accepted", requiredMode = REQUIRED)
+        UUID conflictId;
+
+        @Schema(
+                description = "The rule that fired — the API reason code verbatim",
+                example = "MECHANIC_OVERTIME",
+                requiredMode = REQUIRED)
+        String ruleCode;
+
+        @Schema(description = "Always SOFT: a HARD conflict is never overridden", example = "SOFT", requiredMode = REQUIRED)
+        String severity;
+    }
 }

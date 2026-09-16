@@ -398,7 +398,6 @@ public class AppointmentsServiceImpl implements AppointmentsService {
                 .rescheduleReasonNotes(request.getRescheduleReasonNotes())
                 .rescheduledBy(actorId)
                 .rescheduledAt(rescheduledAt)
-                .conflictOverridden(false)
                 .notifyCustomer(request.isNotifyCustomer())
                 .createdAt(rescheduledAt)
                 .build());

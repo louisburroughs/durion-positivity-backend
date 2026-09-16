@@ -13,6 +13,9 @@ import com.positivity.shopmanager.internal.exception.LocationNotFoundException;
 import com.positivity.shopmanager.internal.exception.MechanicReplicationPendingException;
 import com.positivity.shopmanager.internal.exception.ResourceNotFoundException;
 import com.positivity.shopmanager.internal.exception.ScheduleCapacityRangeExceededException;
+import com.positivity.shopmanager.internal.dto.ConflictResponse;
+import com.positivity.shopmanager.internal.exception.ConflictOverrideStateException;
+import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
 import com.positivity.shopmanager.internal.exception.ShopManagerValidationException;
 import com.positivity.shopmanager.internal.exception.SourceNotEligibleException;
 import com.positivity.shopmanager.internal.exception.VehicleCustomerMismatchException;
@@ -22,6 +25,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -274,7 +278,36 @@ class GlobalExceptionHandlerTest {
 
         @FunctionalInterface
         interface HandlerInvocation {
-            ResponseEntity<ApiError> invoke(MockHttpServletRequest request);
+
+            ResponseEntity<?> invoke(MockHttpServletRequest request);
+
+        }
+
+
+        /**
+
+         * Every handler answers with a body that carries the correlation id, but two shapes do:
+
+         * the {@link ApiError} envelope and DECISION-SHOPMGMT-002's {@link ConflictResponse}.
+
+         */
+
+        private static String bodyCorrelationId(Object body) {
+
+            if (body instanceof ApiError apiError) {
+
+                return apiError.correlationId();
+
+            }
+
+            if (body instanceof ConflictResponse envelope) {
+
+                return envelope.getCorrelationId();
+
+            }
+
+            throw new AssertionError("unexpected response body " + body);
+
         }
 
         /**
@@ -337,44 +370,51 @@ class GlobalExceptionHandlerTest {
                                     request)),
                     Named.of("handleScheduleCapacityRangeExceeded", (HandlerInvocation)
                             request -> sut.handleScheduleCapacityRangeExceeded(
-                                    new ScheduleCapacityRangeExceededException(42, 43), request)));
+                                    new ScheduleCapacityRangeExceededException(42, 43), request)),
+                    Named.of("handleSchedulingConflict", (HandlerInvocation) request -> sut.handleSchedulingConflict(
+                            new SchedulingConflictException(new ConflictResponse(
+                                    "SCHEDULING_CONFLICT", "bay is booked", null, null, List.of())),
+                            request)),
+                    Named.of("handleConflictOverrideState", (HandlerInvocation)
+                            request -> sut.handleConflictOverrideState(
+                                    new ConflictOverrideStateException("already overridden"), request)));
         }
 
         @ParameterizedTest
         @MethodSource("handlerInvocations")
         @DisplayName("echoes the inbound X-Correlation-Id in both header and body")
         void echoesInboundCorrelationId(HandlerInvocation invocation) {
-            ResponseEntity<ApiError> response = invocation.invoke(requestWithCorrelationId(CORRELATION_ID.toString()));
+            ResponseEntity<?> response = invocation.invoke(requestWithCorrelationId(CORRELATION_ID.toString()));
 
             assertThat(response.getHeaders().getFirst("X-Correlation-Id")).isEqualTo(CORRELATION_ID.toString());
             assertThat(response.getBody()).isNotNull();
             assertThat(response.getHeaders().getFirst("X-Correlation-Id"))
-                    .isEqualTo(response.getBody().correlationId());
+                    .isEqualTo(bodyCorrelationId(response.getBody()));
         }
 
         @ParameterizedTest
         @MethodSource("handlerInvocations")
         @DisplayName("generates a non-blank X-Correlation-Id, consistent between header and body, when absent")
         void generatesCorrelationIdWhenAbsent(HandlerInvocation invocation) {
-            ResponseEntity<ApiError> response = invocation.invoke(request());
+            ResponseEntity<?> response = invocation.invoke(request());
 
             String header = response.getHeaders().getFirst("X-Correlation-Id");
             assertThat(header).isNotBlank();
             assertThat(response.getBody()).isNotNull();
-            assertThat(header).isEqualTo(response.getBody().correlationId());
+            assertThat(header).isEqualTo(bodyCorrelationId(response.getBody()));
         }
 
         @ParameterizedTest
         @MethodSource("handlerInvocations")
         @DisplayName("generates a fresh X-Correlation-Id when the inbound header is blank")
         void generatesCorrelationIdWhenInboundIsBlank(HandlerInvocation invocation) {
-            ResponseEntity<ApiError> response = invocation.invoke(requestWithCorrelationId("   "));
+            ResponseEntity<?> response = invocation.invoke(requestWithCorrelationId("   "));
 
             String header = response.getHeaders().getFirst("X-Correlation-Id");
             assertThat(header).isNotBlank();
             assertThat(header).isNotEqualTo("   ");
             assertThat(response.getBody()).isNotNull();
-            assertThat(header).isEqualTo(response.getBody().correlationId());
+            assertThat(header).isEqualTo(bodyCorrelationId(response.getBody()));
         }
 
         @Test

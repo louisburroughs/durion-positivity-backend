@@ -3,6 +3,9 @@ package com.positivity.shopmanager.internal.controller;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shopmanager.internal.exception.AppointmentNotFoundException;
+import com.positivity.shopmanager.internal.dto.ConflictResponse;
+import com.positivity.shopmanager.internal.exception.ConflictOverrideStateException;
+import com.positivity.shopmanager.internal.exception.SchedulingConflictException;
 import com.positivity.shopmanager.internal.exception.AppointmentStateException;
 import com.positivity.shopmanager.internal.exception.AppointmentValidationException;
 import com.positivity.shopmanager.internal.exception.CrmCustomerNotFoundException;
@@ -115,6 +118,37 @@ public class GlobalExceptionHandler {
                 ScheduleCapacityRangeExceededException.CODE,
                 exception.getMessage(),
                 correlationId);
+    }
+
+    /**
+     * DECISION-SHOPMGMT-002's conflict envelope (CAP-326, spec D17/§9.2): a HARD conflict at
+     * create, reschedule or override answers 409 with the conflicts themselves, not an {@link
+     * ApiError}. The service fills the conflicts and the timestamp; the correlation id is the
+     * request's, resolved here like every other envelope.
+     */
+    @ExceptionHandler(SchedulingConflictException.class)
+    public ResponseEntity<ConflictResponse> handleSchedulingConflict(
+            SchedulingConflictException exception, HttpServletRequest request) {
+        UUID correlationId = resolveCorrelationId(request);
+        ConflictResponse body = exception.getConflictResponse();
+        if (body.getCorrelationId() == null) {
+            body.setCorrelationId(correlationId.toString());
+        }
+        if (body.getTimestamp() == null) {
+            body.setTimestamp(Instant.now(clock));
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .header(CORRELATION_ID_HEADER, correlationId.toString())
+                .body(body);
+    }
+
+    /** A conflict that already carries an override cannot take a second one (CAP-326). */
+    @ExceptionHandler(ConflictOverrideStateException.class)
+    public ResponseEntity<ApiError> handleConflictOverrideState(
+            ConflictOverrideStateException exception, HttpServletRequest request) {
+        UUID correlationId = resolveCorrelationId(request);
+        return respond(
+                HttpStatus.CONFLICT, ConflictOverrideStateException.CODE, exception.getMessage(), correlationId);
     }
 
     @ExceptionHandler(AppointmentStateException.class)
@@ -297,7 +331,8 @@ public class GlobalExceptionHandler {
                     "APPOINTMENT_NOT_FOUND",
                     "LOCATION_NOT_FOUND",
                     "RESOURCE_NOT_FOUND" -> HttpStatus.NOT_FOUND.value();
-            case "VEHICLE_CUSTOMER_MISMATCH", "INVALID_APPOINTMENT_STATE" -> HttpStatus.CONFLICT.value();
+            case "VEHICLE_CUSTOMER_MISMATCH", "INVALID_APPOINTMENT_STATE", ConflictOverrideStateException.CODE ->
+                HttpStatus.CONFLICT.value();
             case CODE_CRM_UNAVAILABLE, CODE_HR_UNAVAILABLE, CODE_MECHANIC_REPLICATION_PENDING ->
                 HttpStatus.SERVICE_UNAVAILABLE.value();
             case "NOT_IMPLEMENTED" -> HttpStatus.NOT_IMPLEMENTED.value();

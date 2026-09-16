@@ -1262,15 +1262,6 @@ Scalar UUID/String Id candidates:
 - mechanicId
 
 
-## pos-shop-manager/src/main/java/com/positivity/shopmanager/internal/entity/OverrideRecord.java
-
-Scalar UUID/String Id candidates:
-
-- overrideId
-- appointmentId
-- overriddenByUserId
-
-
 ## pos-shop-manager/src/main/java/com/positivity/shopmanager/internal/entity/RescheduleHistory.java
 
 Scalar UUID/String Id candidates:

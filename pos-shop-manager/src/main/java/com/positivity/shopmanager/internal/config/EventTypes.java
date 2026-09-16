@@ -65,7 +65,7 @@ public final class EventTypes {
                 // ConflictOverrideController - 1 event
                 EventTypeRegistration.write(
                                 "SHOPMGR_APPOINTMENT_CONFLICT_OVERRIDE_CREATE",
-                                "Override appointment scheduling conflict with manager permission")
+                                "Record a manager override of SOFT scheduling conflicts on an appointment (shop:conflict:override)")
                         .build(),
                 // AssignmentController - 2 events
                 EventTypeRegistration.write(

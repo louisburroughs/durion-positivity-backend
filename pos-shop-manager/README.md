@@ -18,7 +18,7 @@ Shop operations service for the Durion Positivity ETSMS platform. Manages shop a
 
 - `AppointmentsService` — appointment lifecycle (create, reschedule, cancel)
 - `ConflictDetectionService` — checks for overlapping bay/mechanic/mobile unit bookings
-- `ConflictOverrideService` — records operator overrides for detected conflicts
+- `ConflictOverrideService` — records a manager's override of SOFT scheduling conflicts (`shop:conflict:override`; HARD is never overridable)
 - `MechanicAvailabilityService` — evaluates technician availability windows
 - `WorkorderOperationalContextService` — assembles the full operational context for a workorder
 - `ShopDashboardService` — the single-call dashboard read model over this module's local replicas

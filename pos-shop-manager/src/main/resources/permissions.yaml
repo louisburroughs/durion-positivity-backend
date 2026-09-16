@@ -32,6 +32,9 @@ permissions:
     supersededBy: "location:bay:manage"
   - name: "shop:bay:assign"
     description: "Assign work to bays"
+  - name: "shop:conflict:override"
+    description: "Record a manager override of a SOFT scheduling conflict on an appointment"
+    grantTo: ["LOCATION_MANAGER", "GENERAL_MANAGER", "SHOP_MANAGER"]
   - name: "shop:dashboard:view"
     description: "View the aggregate shop manager dashboard for a location"
   - name: "shop:technician:view"
