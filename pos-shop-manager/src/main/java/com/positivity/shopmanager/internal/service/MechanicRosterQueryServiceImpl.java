@@ -56,7 +56,8 @@ public class MechanicRosterQueryServiceImpl implements MechanicRosterQueryServic
             @Nullable MechanicStatus status, @Nullable String skillCode, @NonNull Pageable pageable) {
         MechanicStatus effectiveStatus = status == null ? MechanicStatus.ACTIVE : status;
         LocalDate onDate = LocalDate.now(clock);
-        Page<Mechanic> mechanics = mechanicRepository.findRoster(effectiveStatus, skillCode, onDate, pageable);
+        Page<Mechanic> mechanics =
+                mechanicRepository.findRoster(effectiveStatus, skillFilter(skillCode), onDate, pageable);
         Map<UUID, List<TechnicianCredentialResponse>> credentialsByPerson =
                 loadCredentials(mechanics.getContent(), onDate);
         return mechanics.map(mechanic -> MechanicRosterEntryResponse.builder()
@@ -88,7 +89,7 @@ public class MechanicRosterQueryServiceImpl implements MechanicRosterQueryServic
                 ? PageRequest.of(pageable.getPageNumber(), pageable.getPageSize())
                 : Pageable.unpaged();
         Page<Mechanic> mechanics = mechanicRepository.findRosterByLocation(
-                locationId, effectiveStatus, skillCode, onDate, fixedOrderPageable);
+                locationId, effectiveStatus, skillFilter(skillCode), onDate, fixedOrderPageable);
         Map<UUID, List<TechnicianCredentialResponse>> credentialsByPerson =
                 loadCredentials(mechanics.getContent(), onDate);
         return mechanics.map(mechanic -> LocationTechnicianRosterEntryResponse.builder()
@@ -120,6 +121,17 @@ public class MechanicRosterQueryServiceImpl implements MechanicRosterQueryServic
         }
         ZoneId fromShop = hoursParser.parseZone(locationId, shop.getTimezone());
         return fromShop != null ? fromShop : ZoneOffset.UTC;
+    }
+
+    /**
+     * The skill filter as the repository expects it: uppercase-and-trimmed (the same reading
+     * {@link SkillRequirementResolver#normalize} gives every skill code), or null when absent or
+     * blank so the query's {@code :skillCode IS NULL} branch applies. The repository binds the
+     * parameter bare — see {@code MechanicRepository} for why.
+     */
+    private static @Nullable String skillFilter(@Nullable String skillCode) {
+        String normalized = SkillRequirementResolver.normalize(skillCode);
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private Map<UUID, List<TechnicianCredentialResponse>> loadCredentials(List<Mechanic> mechanics, LocalDate onDate) {
