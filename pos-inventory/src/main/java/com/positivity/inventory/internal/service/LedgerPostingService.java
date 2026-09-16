@@ -7,7 +7,8 @@ import org.jspecify.annotations.NonNull;
 /**
  * Single posting path for the inventory ledger (issue #1024, odoo-parity A1).
  *
- * <p>Every {@link InventoryLedgerEntry} append MUST flow through this service:
+ * <p>
+ * Every {@link InventoryLedgerEntry} append MUST flow through this service:
  * it persists the entry and maintains the {@code inventory_stock_summary}
  * derived balance row for the entry's (stockItemId, locationId) key in the
  * same transaction. Writing ledger entries directly through
@@ -15,14 +16,17 @@ import org.jspecify.annotations.NonNull;
  * drift (caught by {@code StockSummaryDriftVerifier} and forbidden by the
  * {@code ArchitectureTest} funnel rule).
  *
- * <p>Since odoo-parity K1 (issue #1027) the funnel is also the single
+ * <p>
+ * Since odoo-parity K1 (issue #1027) the funnel is also the single
  * enforcement point of the per-event-type negative-stock policy matrix (see
- * {@code NegativeStockPolicy} and {@code docs/negative-stock-policy.md}): a
+ * {@code NegativeStockPolicy} and
+ * {@code durion/domains/inventory/negative-stock-policy.md}): a
  * posting that would take a key's on-hand below zero is rejected for blocked
  * and floor-at-zero event types. Other validation, {@code quantityAfter}
  * computation, and fact publishing remain the caller's responsibility.
  *
- * <p>The {@code negativeStockOverride} variants exist for the single
+ * <p>
+ * The {@code negativeStockOverride} variants exist for the single
  * overridable row of the matrix (SCRAP_OUT): the caller performs its own
  * {@code inventory:adjustment:override} permission check and passes the
  * explicit flag — the funnel itself never consults the security context.

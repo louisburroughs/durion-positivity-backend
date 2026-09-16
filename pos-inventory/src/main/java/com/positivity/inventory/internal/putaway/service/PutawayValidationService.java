@@ -28,16 +28,20 @@ public interface PutawayValidationService {
      * <ul>
      * <li>The destination is the target of an enabled putaway rule</li>
      * <li>The destination's storage class accepts the item's catalog class, per the
-     * {@code storage_compatibility} matrix — subcategory rows replacing their parent category's</li>
-     * <li>{@code STAGING} and {@code QUARANTINE} destinations are refused: they are putaway
+     * {@code storage_compatibility} matrix — subcategory rows replacing their
+     * parent category's</li>
+     * <li>{@code STAGING} and {@code QUARANTINE} destinations are refused: they are
+     * putaway
      * sources</li>
-     * <li>Hazard containment is declared where the matched class, or the item's own class, requires
+     * <li>Hazard containment is declared where the matched class, or the item's own
+     * class, requires
      * it</li>
      * </ul>
      *
      * <p>
-     * A replenishment policy is <em>not</em> required; temperature class is not consulted. See
-     * {@code pos-inventory/docs/putaway-validation-rules.md}.
+     * A replenishment policy is <em>not</em> required; temperature class is not
+     * consulted. See
+     * {@code durion/domains/inventory/putaway-validation-rules.md}.
      *
      * @param destinationLocationId the destination location to validate
      * @param skuId                 the SKU being put away
