@@ -1,7 +1,8 @@
 # pos-mcp-server Documentation
 
 Canonical pos-mcp-server design and operations documentation lives in
-[durion/domains/general/mcp-server](https://github.com/louisburroughs/durion/blob/master/domains/general/index.md)
+[durion/domains/general/mcp-server](https://github.com/louisburroughs/durion/tree/master/domains/general/mcp-server)
+(start at the [general domain index](https://github.com/louisburroughs/durion/blob/master/domains/general/index.md))
 and is indexed in the
 [knowledge catalog](https://github.com/louisburroughs/durion/blob/master/knowledge-catalog/domains/general.md).
 
