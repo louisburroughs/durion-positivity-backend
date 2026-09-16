@@ -356,8 +356,8 @@ public class ScrapServiceImpl implements ScrapService {
      */
     private void postApprovedScrap(ScrapRecord scrap, boolean overrideRequested) {
         boolean negativeStockOverride = resolveNegativeStockOverride(overrideRequested);
-        UUID postingLocationId = scrap.getStorageLocationId() != null ? scrap.getStorageLocationId()
-                : scrap.getLocationId();
+        UUID postingLocationId =
+                scrap.getStorageLocationId() != null ? scrap.getStorageLocationId() : scrap.getLocationId();
 
         BigDecimal currentOnHand = Quantities.nz(
                 ledgerRepository.calculateOnHandQuantityAtLocation(scrap.getStockItemId(), postingLocationId));
@@ -471,8 +471,8 @@ public class ScrapServiceImpl implements ScrapService {
      */
     private void evaluateReplenishment(ScrapRecord scrap, UUID postingLocationId) {
         try {
-            var result = replenishmentService.evaluatePickFaceForReplenishment(scrap.getStockItemId(),
-                    postingLocationId);
+            var result =
+                    replenishmentService.evaluatePickFaceForReplenishment(scrap.getStockItemId(), postingLocationId);
             log.info(
                     "Replenishment evaluation for scrapped SKU {} at {}: {}",
                     scrap.getStockItemId(),
@@ -525,6 +525,5 @@ public class ScrapServiceImpl implements ScrapService {
     }
 
     private record CostSnapshot(
-            @Nullable BigDecimal unitCost, @NonNull ScrapCostSource source) {
-    }
+            @Nullable BigDecimal unitCost, @NonNull ScrapCostSource source) {}
 }
