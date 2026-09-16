@@ -127,8 +127,13 @@ final class ChatResponseText {
     }
 
     private static final ObjectMapper PAYLOAD_MAPPER = new ObjectMapper();
+    /**
+     * The padding inside the fence is left to the caller's {@code strip()} rather than matched here:
+     * under {@code (?s)} the {@code \s*} guards and the lazy body could both take the same
+     * whitespace, and resolving that ambiguity costs a pass per character of a long fenced reply.
+     */
     private static final Pattern JSON_FENCE =
-            Pattern.compile("(?s)\\A```(?:json)?\\s*(.*?)\\s*```\\z", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("(?s)\\A```(?:json)?(.*?)```\\z", Pattern.CASE_INSENSITIVE);
 
     /**
      * Whether {@code content} is nothing but a serialised JSON object or array (#1708).

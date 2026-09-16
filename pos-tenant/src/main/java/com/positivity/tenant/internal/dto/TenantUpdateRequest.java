@@ -27,7 +27,12 @@ public class TenantUpdateRequest {
     // @Size(min = 1) counted whitespace, so "   " passed it and normalized to the empty string —
     // a tenant with no name, unmatchable by a three-character search. @Pattern ignores null, so
     // the field stays optional and null still means "leave it unchanged".
-    @Pattern(regexp = ".*\\S.*", message = "must not be blank")
+    //
+    // "Leading whitespace, then a non-whitespace character, then anything": \s and \S are disjoint,
+    // so the match is a single left-to-right pass. The equivalent `.*\S.*` overlapped itself and
+    // re-partitioned an all-whitespace value quadratically in its length. Kept to plain regex
+    // constructs — this pattern is published in openapi.yaml and compiled by the SDK clients.
+    @Pattern(regexp = "\\s*\\S[\\s\\S]*", message = "must not be blank")
     @Size(max = 200)
     private String displayName;
 

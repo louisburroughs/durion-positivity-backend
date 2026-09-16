@@ -43,8 +43,11 @@ class PlatformOperatorGrantsTest {
             "..", "pos-security-service", "src", "main", "resources", "db", "migration", "R__seed_tenant_template.sql");
 
     /** {@code ('PLATFORM_ADMIN', 'some:permission:name')}, the seed's grant-tuple shape. */
-    private static final Pattern GRANT_TUPLE =
-            Pattern.compile("\\(\\s*'PLATFORM_ADMIN'\\s*,\\s*'([a-zA-Z][\\w.-]*(?::[\\w.:-]+)+)'\\s*\\)");
+    private static final Pattern GRANT_TUPLE = Pattern.compile(
+            // Each colon-separated segment excludes the colon, so one segment can never be split two
+            // ways between the repetition and the class inside it — the ambiguity that made the
+            // earlier `[\w.:-]+` backtrack exponentially on a near-miss tuple.
+            "\\(\\s*+'PLATFORM_ADMIN'\\s*+,\\s*+'([a-zA-Z][\\w.-]*+(?::[\\w.-]++)+)'\\s*+\\)");
 
     /** {@code hasAuthority('x')} inside a {@code @PreAuthorize} expression. */
     private static final Pattern HAS_AUTHORITY = Pattern.compile("hasAuthority\\(\\s*'([^']+)'\\s*\\)");

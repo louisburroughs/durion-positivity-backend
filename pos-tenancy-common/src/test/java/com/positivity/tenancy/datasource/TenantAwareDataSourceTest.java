@@ -107,6 +107,12 @@ class TenantAwareDataSourceTest {
         assertThat(connection.getAutoCommit()).isTrue();
         assertThat(connection.isWrapperFor(Connection.class)).isTrue();
         assertThat(connection.unwrap(Connection.class)).isSameAs(connection);
-        assertThat(connection).isEqualTo(connection).hasSameHashCodeAs(connection);
+
+        // Identity, not delegation: the handler answers equals/hashCode for the proxy itself. Both
+        // assertions are against the *target*, which is what tells the two implementations apart —
+        // comparing two proxies would not, because the mock's own equals is identity too, so a
+        // handler forwarding to it would also report them unequal.
+        assertThat(connection).isNotEqualTo(raw); // a forwarding handler would answer raw.equals(raw)
+        assertThat(connection.hashCode()).isEqualTo(System.identityHashCode(connection));
     }
 }

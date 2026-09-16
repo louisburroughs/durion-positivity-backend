@@ -168,7 +168,7 @@ class NegativeStockPolicyEnforcementTest {
         seed(sku, location, new BigDecimal("3"));
 
         assertThatCode(() -> ledgerPostingService.post(
-                entry(sku, location, InventoryLedgerEventType.SCRAP_OUT, new BigDecimal("-3"))))
+                        entry(sku, location, InventoryLedgerEventType.SCRAP_OUT, new BigDecimal("-3"))))
                 .doesNotThrowAnyException();
 
         assertThat(onHand(sku, location)).isZero();
@@ -185,8 +185,8 @@ class NegativeStockPolicyEnforcementTest {
         assertThatExceptionOfType(NegativeStockPolicyViolationException.class)
                 .isThrownBy(() -> ledgerPostingService.post(
                         entry(sku, location, InventoryLedgerEventType.ADJUSTMENT_OUT, new BigDecimal("-3")), true))
-                .satisfies(ex -> assertThat(ex.getErrorCode())
-                        .isEqualTo(NegativeStockPolicyViolationException.FLOOR_VIOLATION));
+                .satisfies(ex ->
+                        assertThat(ex.getErrorCode()).isEqualTo(NegativeStockPolicyViolationException.FLOOR_VIOLATION));
 
         assertThat(onHand(sku, location)).isEqualByComparingTo("2");
     }
@@ -211,8 +211,8 @@ class NegativeStockPolicyEnforcementTest {
         assertThatExceptionOfType(NegativeStockPolicyViolationException.class)
                 .isThrownBy(() -> ledgerPostingService.post(
                         entry(sku, location, InventoryLedgerEventType.COUNT_VARIANCE_OUT, new BigDecimal("-5"))))
-                .satisfies(ex -> assertThat(ex.getErrorCode())
-                        .isEqualTo(NegativeStockPolicyViolationException.FLOOR_VIOLATION));
+                .satisfies(ex ->
+                        assertThat(ex.getErrorCode()).isEqualTo(NegativeStockPolicyViolationException.FLOOR_VIOLATION));
 
         // Counts set reality: zeroing the balance is legitimate.
         ledgerPostingService.post(
@@ -235,10 +235,10 @@ class NegativeStockPolicyEnforcementTest {
     @DisplayName("ADR-0055 stage 4: COUNT_VARIANCE_OUT and ADJUST_CYCLE_COUNT remain FLOOR_AT_ZERO, not BLOCKED")
     void floorAtZeroDecision_countVarianceOutAndAdjustCycleCount_pinnedExplicitly() {
         assertThat(com.positivity.inventory.internal.enums.NegativeStockPolicy.forEventType(
-                InventoryLedgerEventType.COUNT_VARIANCE_OUT))
+                        InventoryLedgerEventType.COUNT_VARIANCE_OUT))
                 .isEqualTo(com.positivity.inventory.internal.enums.NegativeStockPolicy.FLOOR_AT_ZERO);
         assertThat(com.positivity.inventory.internal.enums.NegativeStockPolicy.forEventType(
-                InventoryLedgerEventType.ADJUST_CYCLE_COUNT))
+                        InventoryLedgerEventType.ADJUST_CYCLE_COUNT))
                 .isEqualTo(com.positivity.inventory.internal.enums.NegativeStockPolicy.FLOOR_AT_ZERO);
     }
 
@@ -290,11 +290,11 @@ class NegativeStockPolicyEnforcementTest {
         UUID location = UUID.randomUUID();
 
         assertThatCode(() -> ledgerPostingService.postAll(List.of(
-                entry(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("1")),
-                entry(sku, location, InventoryLedgerEventType.TRANSFER_IN, new BigDecimal("1")),
-                entry(sku, location, InventoryLedgerEventType.RETURN_TO_STOCK, new BigDecimal("1")),
-                entry(sku, location, InventoryLedgerEventType.ADJUSTMENT_IN, new BigDecimal("1")),
-                entry(sku, location, InventoryLedgerEventType.COUNT_VARIANCE_IN, new BigDecimal("1")))))
+                        entry(sku, location, InventoryLedgerEventType.GOODS_RECEIPT, new BigDecimal("1")),
+                        entry(sku, location, InventoryLedgerEventType.TRANSFER_IN, new BigDecimal("1")),
+                        entry(sku, location, InventoryLedgerEventType.RETURN_TO_STOCK, new BigDecimal("1")),
+                        entry(sku, location, InventoryLedgerEventType.ADJUSTMENT_IN, new BigDecimal("1")),
+                        entry(sku, location, InventoryLedgerEventType.COUNT_VARIANCE_IN, new BigDecimal("1")))))
                 .doesNotThrowAnyException();
 
         assertThat(onHand(sku, location)).isEqualByComparingTo("5");
@@ -311,10 +311,10 @@ class NegativeStockPolicyEnforcementTest {
         // Reservations/allocations far beyond on-hand are an ATP concern
         // (InsufficientAtpException at the caller), never a negative-stock one.
         assertThatCode(() -> ledgerPostingService.postAll(List.of(
-                entry(sku, location, InventoryLedgerEventType.RESERVATION_CREATED, new BigDecimal("100")),
-                entry(sku, location, InventoryLedgerEventType.ALLOCATION_CREATED, new BigDecimal("100")),
-                entry(sku, location, InventoryLedgerEventType.BACKORDER_CREATED, new BigDecimal("100")),
-                entry(sku, location, InventoryLedgerEventType.PICK_TASK_CREATED, new BigDecimal("100")))))
+                        entry(sku, location, InventoryLedgerEventType.RESERVATION_CREATED, new BigDecimal("100")),
+                        entry(sku, location, InventoryLedgerEventType.ALLOCATION_CREATED, new BigDecimal("100")),
+                        entry(sku, location, InventoryLedgerEventType.BACKORDER_CREATED, new BigDecimal("100")),
+                        entry(sku, location, InventoryLedgerEventType.PICK_TASK_CREATED, new BigDecimal("100")))))
                 .doesNotThrowAnyException();
 
         assertThat(onHand(sku, location)).isEqualByComparingTo("1");
@@ -338,9 +338,9 @@ class NegativeStockPolicyEnforcementTest {
         // as an empty zero-balance row.)
         assertThat(ledgerRepository.findByStockItemIdOrderByTimestampAsc(sku)).isEmpty();
         assertThat(summaryRepository
-                .findByStockItemIdAndLocationId(sku, location)
-                .map(row -> row.getOnHand())
-                .orElse(BigDecimal.ZERO))
+                        .findByStockItemIdAndLocationId(sku, location)
+                        .map(row -> row.getOnHand())
+                        .orElse(BigDecimal.ZERO))
                 .isZero();
     }
 

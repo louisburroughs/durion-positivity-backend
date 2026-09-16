@@ -23,17 +23,25 @@ import java.util.stream.Stream;
  */
 final class CatchAllAdviceScanner {
 
-    /** Matches the catch-all declaration and the handler signature that follows it. */
+    /**
+     * Matches the catch-all declaration and the handler signature that follows it.
+     *
+     * <p>Every run of optional whitespace is possessive, and each additional mapped type is matched
+     * as whole dot-separated segments ending in {@code class} rather than as a {@code [\w.]+} blob
+     * that could also swallow the {@code .class} suffix. Both spellings accept the same input; the
+     * first one made the engine re-partition a near-miss declaration many ways before giving up,
+     * which is a super-linear scan over every source file in the reactor.
+     */
     private static final Pattern CATCH_ALL_HANDLER = Pattern.compile(
             // The declaration. Spring treats several spellings as the same catch-all, and the rule is
             // worth nothing if one of them slips past: the brace form is already used elsewhere in the
             // reactor for multi-type handlers, and a Throwable mapping matches every Exception.
-            "@ExceptionHandler\\(\\s*(?:value\\s*=\\s*)?\\{?\\s*"
+            "@ExceptionHandler\\(\\s*+(?:value\\s*+=\\s*+)?\\{?\\s*+"
                     + "(?:Exception|Throwable)\\.class"
-                    + "(?:\\s*,\\s*[\\w.]+\\.class)*\\s*\\}?\\s*\\)"
-                    + "(?:\\s*@\\w[\\w.]*(?:\\([^)]*\\))?)*" // any further annotations on the method
-                    + "\\s*(?:public|protected|private)?\\s*" // optional visibility modifier
-                    + "([^;{]*?)\\s*\\w+\\s*\\(", // the return type, up to the method name
+                    + "(?:\\s*+,\\s*+(?:\\w++\\.)++class)*+\\s*+\\}?\\s*+\\)"
+                    + "(?:\\s*+@\\w[\\w.]*+(?:\\([^)]*+\\))?)*+" // any further annotations on the method
+                    + "\\s*+(?:(?:public|protected|private)\\s++)?" // optional visibility modifier
+                    + "([^;{]*?)\\s*+\\w++\\s*+\\(", // the return type, up to the method name
             Pattern.DOTALL);
 
     /** Java line and block comments, stripped before matching so tombstone prose is not a hit. */
